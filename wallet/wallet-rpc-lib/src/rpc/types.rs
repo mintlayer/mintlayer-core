@@ -20,7 +20,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         signature::DestinationSigError,
-        tokens::{self, IsTokenFreezable, Metadata, TokenCreator},
+        tokens::{self, IsTokenFreezable, Metadata, TokenCreator, TokenId},
         ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
     },
@@ -34,12 +34,14 @@ use crypto::{
     vrf::VRFPublicKey,
 };
 use rpc::description::{HasValueHint, ValueHint as VH};
-use serialization::hex::HexEncode;
 use wallet::account::PoolData;
 
-pub use common::primitives::amount::{RpcAmountIn, RpcAmountOut};
+pub use common::{
+    address::RpcAddress,
+    primitives::amount::{RpcAmountIn, RpcAmountOut},
+};
 pub use mempool_types::tx_options::TxOptionsOverrides;
-pub use rpc::types::RpcString;
+pub use rpc::types::{RpcHexString, RpcString};
 pub use serde_json::Value as JsonValue;
 pub use serialization::hex_encoded::HexEncoded;
 pub use wallet_controller::types::{
@@ -144,7 +146,7 @@ impl AddressInfo {
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct AddressWithUsageInfo {
-    pub address: String,
+    pub address: RpcAddress<Destination>,
     pub index: String,
     pub used: bool,
 }
@@ -152,49 +154,39 @@ pub struct AddressWithUsageInfo {
 impl AddressWithUsageInfo {
     pub fn new(child_number: ChildNumber, address: Address<Destination>, used: bool) -> Self {
         Self {
-            address: address.to_string(),
+            address: address.into(),
             index: child_number.to_string(),
             used,
         }
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct PublicKeyInfo {
-    pub public_key_hex: String,
-    pub public_key_address: String,
+    pub public_key_hex: PublicKey,
+    pub public_key_address: RpcAddress<Destination>,
 }
 
 impl PublicKeyInfo {
     pub fn new(pub_key: PublicKey, chain_config: &ChainConfig) -> Self {
+        let public_key_address =
+            RpcAddress::new(chain_config, &Destination::PublicKey(pub_key.clone()))
+                .expect("addressable");
         Self {
-            public_key_hex: pub_key.hex_encode(),
-            public_key_address: Address::new(chain_config, &Destination::PublicKey(pub_key))
-                .expect("addressable")
-                .to_string(),
+            public_key_hex: pub_key,
+            public_key_address,
         }
     }
 }
 
-impl rpc::description::HasValueHint for PublicKeyInfo {
-    const HINT_SER: VH = VH::Object(&[
-        ("public_key_hex", &VH::HEX_STRING),
-        ("public_key_address", &VH::BECH32_STRING),
-    ]);
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct LegacyVrfPublicKeyInfo {
     pub vrf_public_key: String,
 }
 
-impl rpc::description::HasValueHint for LegacyVrfPublicKeyInfo {
-    const HINT_SER: VH = VH::Object(&[("vrf_public_key", &VH::STRING)]);
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct VrfPublicKeyInfo {
-    pub vrf_public_key: String,
+    pub vrf_public_key: RpcAddress<VRFPublicKey>,
     pub child_number: u32,
     pub used: bool,
 }
@@ -202,19 +194,11 @@ pub struct VrfPublicKeyInfo {
 impl VrfPublicKeyInfo {
     pub fn new(pub_key: Address<VRFPublicKey>, child_number: ChildNumber, used: bool) -> Self {
         Self {
-            vrf_public_key: pub_key.to_string(),
+            vrf_public_key: pub_key.into(),
             child_number: child_number.get_index().into_u32(),
             used,
         }
     }
-}
-
-impl rpc::description::HasValueHint for VrfPublicKeyInfo {
-    const HINT_SER: VH = VH::Object(&[
-        ("vrf_public_key", &VH::HEX_STRING),
-        ("child_number", &u32::HINT_SER),
-        ("used", &bool::HINT_SER),
-    ]);
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -254,14 +238,14 @@ pub struct TransactionOptions {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct PoolInfo {
-    pub pool_id: String,
+    pub pool_id: RpcAddress<PoolId>,
     pub pledge: RpcAmountOut,
     pub balance: RpcAmountOut,
     pub height: BlockHeight,
     pub block_timestamp: BlockTimestamp,
-    pub vrf_public_key: String,
-    pub decommission_key: String,
-    pub staker: String,
+    pub vrf_public_key: RpcAddress<VRFPublicKey>,
+    pub decommission_key: RpcAddress<Destination>,
+    pub staker: RpcAddress<Destination>,
 }
 
 impl PoolInfo {
@@ -277,48 +261,31 @@ impl PoolInfo {
         let pledge = RpcAmountOut::from_amount_no_padding(pledge, decimals);
 
         Self {
-            pool_id: Address::new(chain_config, &pool_id).expect("addressable").to_string(),
+            pool_id: RpcAddress::new(chain_config, &pool_id).expect("addressable"),
             balance,
             pledge,
             height: pool_data.creation_block.height,
             block_timestamp: pool_data.creation_block.timestamp,
-            vrf_public_key: Address::new(chain_config, &pool_data.vrf_public_key)
-                .expect("addressable")
-                .to_string(),
-            decommission_key: Address::new(chain_config, &pool_data.decommission_key)
-                .expect("addressable")
-                .to_string(),
-            staker: Address::new(chain_config, &pool_data.stake_destination)
-                .expect("addressable")
-                .to_string(),
+            vrf_public_key: RpcAddress::new(chain_config, &pool_data.vrf_public_key)
+                .expect("addressable"),
+            decommission_key: RpcAddress::new(chain_config, &pool_data.decommission_key)
+                .expect("addressable"),
+            staker: RpcAddress::new(chain_config, &pool_data.stake_destination)
+                .expect("addressable"),
         }
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct NewDelegation {
     pub tx_id: Id<Transaction>,
-    pub delegation_id: String,
+    pub delegation_id: RpcAddress<DelegationId>,
 }
 
-impl rpc::description::HasValueHint for NewDelegation {
-    const HINT_SER: VH = VH::Object(&[
-        ("tx_id", &<Id<Transaction>>::HINT_SER),
-        ("delegation_id", &VH::BECH32_STRING),
-    ]);
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct DelegationInfo {
-    pub delegation_id: String,
+    pub delegation_id: RpcAddress<DelegationId>,
     pub balance: RpcAmountOut,
-}
-
-impl rpc::description::HasValueHint for DelegationInfo {
-    const HINT_SER: VH =
-        VH::Object(&[("delegation_id", &VH::BECH32_STRING), ("balance", &RpcAmountOut::HINT_SER)]);
-    const HINT_DE: VH =
-        VH::Object(&[("delegation_id", &VH::BECH32_STRING), ("balance", &RpcAmountOut::HINT_DE)]);
 }
 
 impl DelegationInfo {
@@ -327,10 +294,7 @@ impl DelegationInfo {
         let balance = RpcAmountOut::from_amount_no_padding(balance, decimals);
 
         Self {
-            delegation_id: Address::new(chain_config, &delegation_id)
-                .expect("addressable")
-                .get()
-                .to_owned(),
+            delegation_id: RpcAddress::new(chain_config, &delegation_id).expect("addressable"),
             balance,
         }
     }
@@ -412,15 +376,10 @@ pub struct StakePoolBalance {
     pub balance: Option<String>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RpcTokenId {
-    pub token_id: String,
+    pub token_id: RpcAddress<TokenId>,
     pub tx_id: Id<Transaction>,
-}
-
-impl rpc::description::HasValueHint for RpcTokenId {
-    const HINT_SER: VH =
-        VH::Object(&[("token_id", &VH::BECH32_STRING), ("tx_id", &VH::HEX_STRING)]);
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]

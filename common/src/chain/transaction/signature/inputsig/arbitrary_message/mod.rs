@@ -76,6 +76,14 @@ impl ArbitraryMessageSignature {
         hex::encode(self.raw_signature)
     }
 
+    pub fn as_raw(&self) -> &[u8] {
+        &self.raw_signature
+    }
+
+    pub fn into_raw(self) -> Vec<u8> {
+        self.raw_signature
+    }
+
     pub fn verify_signature(
         &self,
         chain_config: &ChainConfig,

@@ -27,6 +27,7 @@ use common::{
 use crypto::key::hdkd::u31::U31;
 use node_comm::node_traits::NodeInterface;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
+use rpc::types::RpcHexString;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded, json_encoded::JsonEncoded};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
@@ -61,11 +62,14 @@ pub struct WalletRpcHandlesClient<N: Clone> {
 
 #[derive(thiserror::Error, Debug)]
 pub enum WalletRpcHandlesClientError<N: NodeInterface> {
-    #[error("{0}")]
+    #[error(transparent)]
     WalletRpcError(#[from] wallet_rpc_lib::RpcError<N>),
 
-    #[error("{0}")]
+    #[error(transparent)]
     SerializationError(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    HexEncodingError(#[from] hex::FromHexError),
 }
 
 impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcHandlesClient<N> {
@@ -272,7 +276,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         address: String,
     ) -> Result<PublicKeyInfo, Self::Error> {
         self.wallet_rpc
-            .find_public_key(account_index, address)
+            .find_public_key(account_index, address.into())
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -330,7 +334,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         address: String,
     ) -> Result<String, Self::Error> {
         self.wallet_rpc
-            .sign_challenge(account_index, challenge.into_bytes(), address)
+            .sign_challenge(account_index, challenge.into_bytes(), address.into())
             .await
             .map(|result| result.to_hex())
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
@@ -348,10 +352,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         self.wallet_rpc
             .request_send_coins(
                 account_index,
-                address,
+                address.into(),
                 amount.into(),
                 selected_utxo,
-                change_address,
+                change_address.map(Into::into),
                 config,
             )
             .await
@@ -367,7 +371,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         transaction: String,
     ) -> Result<InspectTransaction, Self::Error> {
         self.wallet_rpc
-            .transaction_inspect(transaction)
+            .transaction_inspect(RpcHexString::from_str(&transaction)?)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -380,7 +384,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
     ) -> Result<String, Self::Error> {
         let challenge = hex::decode(challenge).map_err(|_| RpcError::<N>::InvalidHexData)?;
         self.wallet_rpc
-            .sign_challenge(account_index, challenge, address)
+            .sign_challenge(account_index, challenge, address.into())
             .await
             .map(|result| result.to_hex())
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
@@ -395,7 +399,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         let signed_challenge =
             hex::decode(signed_challenge).map_err(|_| RpcError::<N>::InvalidHexData)?;
         self.wallet_rpc
-            .verify_challenge(message.into_bytes(), signed_challenge, address)
+            .verify_challenge(message.into_bytes(), signed_challenge, address.into())
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
@@ -409,7 +413,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         let signed_challenge =
             hex::decode(signed_challenge).map_err(|_| RpcError::<N>::InvalidHexData)?;
         self.wallet_rpc
-            .verify_challenge(message, signed_challenge, address)
+            .verify_challenge(message, signed_challenge, address.into())
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
@@ -440,7 +444,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         self.wallet_rpc
             .send_coins(
                 account_index,
-                address,
+                address.into(),
                 amount.into(),
                 selected_utxos,
                 config,
@@ -457,7 +461,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .sweep_addresses(account_index, destination_address, from_addresses, config)
+            .sweep_addresses(
+                account_index,
+                destination_address.into(),
+                from_addresses.into_iter().map(Into::into).collect(),
+                config,
+            )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -470,7 +479,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .sweep_delegation(account_index, destination_address, delegation_id, config)
+            .sweep_delegation(
+                account_index,
+                destination_address.into(),
+                delegation_id.into(),
+                config,
+            )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -490,7 +504,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
                 amount.into(),
                 cost_per_block.into(),
                 margin_ratio_per_thousand,
-                decommission_address,
+                decommission_address.into(),
                 config,
             )
             .await
@@ -505,7 +519,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .decommission_stake_pool(account_index, pool_id, output_address, config)
+            .decommission_stake_pool(
+                account_index,
+                pool_id.into(),
+                output_address.map(Into::into),
+                config,
+            )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -518,7 +537,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<HexEncoded<PartiallySignedTransaction>, Self::Error> {
         self.wallet_rpc
-            .decommission_stake_pool_request(account_index, pool_id, output_address, config)
+            .decommission_stake_pool_request(
+                account_index,
+                pool_id.into(),
+                output_address.map(Into::into),
+                config,
+            )
             .await
             .map(HexEncoded::new)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
@@ -532,7 +556,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewDelegation, Self::Error> {
         self.wallet_rpc
-            .create_delegation(account_index, address, pool_id, config)
+            .create_delegation(account_index, address.into(), pool_id.into(), config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -545,7 +569,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .delegate_staking(account_index, amount.into(), delegation_id, config)
+            .delegate_staking(account_index, amount.into(), delegation_id.into(), config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -559,7 +583,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .withdraw_from_delegation(account_index, address, amount.into(), delegation_id, config)
+            .withdraw_from_delegation(
+                account_index,
+                address.into(),
+                amount.into(),
+                delegation_id.into(),
+                config,
+            )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -604,7 +634,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
 
     async fn stake_pool_balance(&self, pool_id: String) -> Result<StakePoolBalance, Self::Error> {
         self.wallet_rpc
-            .stake_pool_balance(pool_id)
+            .stake_pool_balance(pool_id.into())
             .await
             .map(|balance| StakePoolBalance { balance })
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
@@ -670,7 +700,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         self.wallet_rpc
             .issue_new_nft(
                 account_index,
-                destination_address,
+                destination_address.into(),
                 metadata.into_metadata(),
                 config,
             )
@@ -691,7 +721,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .issue_new_token(
                 account_index,
                 metadata.number_of_decimals,
-                destination_address,
+                destination_address.into(),
                 metadata.token_ticker.into_bytes(),
                 metadata.metadata_uri.into_bytes(),
                 token_supply,
@@ -710,7 +740,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .change_token_authority(account_index, token_id, address, config)
+            .change_token_authority(account_index, token_id.into(), address.into(), config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -724,7 +754,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .mint_tokens(account_index, token_id, address, amount.into(), config)
+            .mint_tokens(
+                account_index,
+                token_id.into(),
+                address.into(),
+                amount.into(),
+                config,
+            )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -737,7 +773,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .unmint_tokens(account_index, token_id, amount.into(), config)
+            .unmint_tokens(account_index, token_id.into(), amount.into(), config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -749,7 +785,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .lock_token_supply(account_index, token_id, config)
+            .lock_token_supply(account_index, token_id.into(), config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -767,7 +803,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             IsTokenUnfreezable::No
         };
         self.wallet_rpc
-            .freeze_token(account_index, token_id, is_unfreezable, config)
+            .freeze_token(account_index, token_id.into(), is_unfreezable, config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -779,7 +815,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .unfreeze_token(account_index, token_id, config)
+            .unfreeze_token(account_index, token_id.into(), config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -793,7 +829,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
-            .send_tokens(account_index, token_id, address, amount.into(), config)
+            .send_tokens(
+                account_index,
+                token_id.into(),
+                address.into(),
+                amount.into(),
+                config,
+            )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -962,7 +1004,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         limit: usize,
     ) -> Result<Vec<TxInfo>, Self::Error> {
         self.wallet_rpc
-            .mainchain_transactions(account_index, address, limit)
+            .mainchain_transactions(account_index, address.map(Into::into), limit)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -1015,7 +1057,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         config: ControllerConfig,
     ) -> Result<PartialOrSignedTx, Self::Error> {
         self.wallet_rpc
-            .sign_raw_transaction(account_index, raw_tx, config)
+            .sign_raw_transaction(account_index, RpcHexString::from_str(&raw_tx)?, config)
             .await
             .map(|ptx| {
                 if ptx.is_fully_signed() {

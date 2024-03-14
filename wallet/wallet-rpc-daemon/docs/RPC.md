@@ -178,7 +178,7 @@ Parameters:
 ```
 {
     "account": number,
-    "address": string,
+    "address": bech32 string,
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
@@ -208,8 +208,8 @@ Parameters:
 ```
 {
     "account": number,
-    "destination_address": string,
-    "from_addresses": [ string, .. ],
+    "destination_address": bech32 string,
+    "from_addresses": [ bech32 string, .. ],
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -229,8 +229,8 @@ Parameters:
 ```
 {
     "account": number,
-    "destination_address": string,
-    "delegation_id": string,
+    "destination_address": bech32 string,
+    "delegation_id": bech32 string,
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -256,7 +256,7 @@ Parameters:
 ```
 {
     "account": number,
-    "address": string,
+    "address": bech32 string,
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
@@ -267,7 +267,7 @@ Parameters:
         "index": number,
     },
     "change_address": EITHER OF
-         1) string
+         1) bech32 string
          2) null,
     "options": { "in_top_x_mb": number },
 }
@@ -297,7 +297,7 @@ Print the summary of the transaction
 
 Parameters:
 ```
-{ "transaction": string }
+{ "transaction": hex string }
 ```
 
 Returns:
@@ -352,7 +352,7 @@ Parameters:
          1) { "atoms": number string }
          2) { "decimal": decimal string },
     "margin_ratio_per_thousand": string,
-    "decommission_address": string,
+    "decommission_address": bech32 string,
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -372,9 +372,9 @@ Parameters:
 ```
 {
     "account": number,
-    "pool_id": string,
+    "pool_id": bech32 string,
     "output_address": EITHER OF
-         1) string
+         1) bech32 string
          2) null,
     "options": { "in_top_x_mb": number },
 }
@@ -397,9 +397,9 @@ Parameters:
 ```
 {
     "account": number,
-    "pool_id": string,
+    "pool_id": bech32 string,
     "output_address": EITHER OF
-         1) string
+         1) bech32 string
          2) null,
     "options": { "in_top_x_mb": number },
 }
@@ -422,8 +422,8 @@ Parameters:
 ```
 {
     "account": number,
-    "address": string,
-    "pool_id": string,
+    "address": bech32 string,
+    "pool_id": bech32 string,
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -448,7 +448,7 @@ Parameters:
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
-    "delegation_id": string,
+    "delegation_id": bech32 string,
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -468,11 +468,11 @@ Parameters:
 ```
 {
     "account": number,
-    "address": string,
+    "address": bech32 string,
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
-    "delegation_id": string,
+    "delegation_id": bech32 string,
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -542,7 +542,7 @@ Parameters:
 Returns:
 ```
 [ {
-    "pool_id": string,
+    "pool_id": bech32 string,
     "pledge": {
         "atoms": number string,
         "decimal": decimal string,
@@ -553,9 +553,9 @@ Returns:
     },
     "height": number,
     "block_timestamp": { "timestamp": number },
-    "vrf_public_key": string,
-    "decommission_key": string,
-    "staker": string,
+    "vrf_public_key": bech32 string,
+    "decommission_key": bech32 string,
+    "staker": bech32 string,
 }, .. ]
 ```
 
@@ -572,7 +572,7 @@ Parameters:
 Returns:
 ```
 [ {
-    "pool_id": string,
+    "pool_id": bech32 string,
     "pledge": {
         "atoms": number string,
         "decimal": decimal string,
@@ -583,9 +583,9 @@ Returns:
     },
     "height": number,
     "block_timestamp": { "timestamp": number },
-    "vrf_public_key": string,
-    "decommission_key": string,
-    "staker": string,
+    "vrf_public_key": bech32 string,
+    "decommission_key": bech32 string,
+    "staker": bech32 string,
 }, .. ]
 ```
 
@@ -596,7 +596,7 @@ Print the balance of available staking pools
 
 Parameters:
 ```
-{ "pool_id": string }
+{ "pool_id": bech32 string }
 ```
 
 Returns:
@@ -655,7 +655,7 @@ Parameters:
 ```
 {
     "account": number,
-    "destination_address": string,
+    "destination_address": bech32 string,
     "metadata": {
         "media_hash": string,
         "name": EITHER OF
@@ -704,7 +704,7 @@ Parameters:
 ```
 {
     "account": number,
-    "destination_address": string,
+    "destination_address": bech32 string,
     "metadata": {
         "token_ticker": EITHER OF
              1) string
@@ -742,8 +742,8 @@ Parameters:
 ```
 {
     "account": number,
-    "token_id": string,
-    "address": string,
+    "token_id": bech32 string,
+    "address": bech32 string,
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -762,8 +762,8 @@ Parameters:
 ```
 {
     "account": number,
-    "token_id": string,
-    "address": string,
+    "token_id": bech32 string,
+    "address": bech32 string,
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
@@ -787,7 +787,7 @@ Parameters:
 ```
 {
     "account": number,
-    "token_id": string,
+    "token_id": bech32 string,
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
@@ -810,7 +810,7 @@ Parameters:
 ```
 {
     "account_index": number,
-    "token_id": string,
+    "token_id": bech32 string,
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -832,7 +832,7 @@ Parameters:
 ```
 {
     "account": number,
-    "token_id": string,
+    "token_id": bech32 string,
     "is_unfreezable": bool,
     "options": { "in_top_x_mb": number },
 }
@@ -855,7 +855,7 @@ Parameters:
 ```
 {
     "account": number,
-    "token_id": string,
+    "token_id": bech32 string,
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -874,8 +874,8 @@ Parameters:
 ```
 {
     "account": number,
-    "token_id": string,
-    "address": string,
+    "token_id": bech32 string,
+    "address": bech32 string,
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
@@ -898,7 +898,7 @@ Parameters:
 ```
 {
     "account": number,
-    "data": string,
+    "data": hex string,
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -1239,7 +1239,7 @@ Parameters:
 {
     "account": number,
     "address": EITHER OF
-         1) string
+         1) bech32 string
          2) null,
     "limit": number,
 }
@@ -1287,7 +1287,7 @@ Parameters:
 
 Returns:
 ```
-string
+hex string
 ```
 
 ### Method `transaction_get_signed_raw`
@@ -1305,7 +1305,7 @@ Parameters:
 
 Returns:
 ```
-string
+hex string
 ```
 
 ### Method `transaction_compose`
@@ -1435,13 +1435,13 @@ Get a block by its hash, represented with hex encoded bytes
 
 Parameters:
 ```
-{ "block_id": string }
+{ "block_id": hex string }
 ```
 
 Returns:
 ```
 EITHER OF
-     1) string
+     1) hex string
      2) null
 ```
 
@@ -1733,7 +1733,7 @@ Parameters:
 Returns:
 ```
 [ {
-    "address": string,
+    "address": bech32 string,
     "index": string,
     "used": bool,
 }, .. ]
@@ -1768,7 +1768,7 @@ Parameters:
 ```
 {
     "account": number,
-    "address": string,
+    "address": bech32 string,
 }
 ```
 
@@ -1797,7 +1797,7 @@ Parameters:
 Returns:
 ```
 {
-    "vrf_public_key": hex string,
+    "vrf_public_key": bech32 string,
     "child_number": number,
     "used": bool,
 }
@@ -1835,7 +1835,7 @@ Parameters:
 Returns:
 ```
 [ {
-    "vrf_public_key": hex string,
+    "vrf_public_key": bech32 string,
     "child_number": number,
     "used": bool,
 }, .. ]
@@ -1853,7 +1853,7 @@ Parameters:
 ```
 {
     "account": number,
-    "raw_tx": string,
+    "raw_tx": hex string,
     "options": { "in_top_x_mb": number },
 }
 ```
@@ -1876,13 +1876,13 @@ Parameters:
 {
     "account": number,
     "challenge": string,
-    "address": string,
+    "address": bech32 string,
 }
 ```
 
 Returns:
 ```
-string
+hex string
 ```
 
 ### Method `challenge_sign_hex`
@@ -1894,14 +1894,14 @@ Parameters:
 ```
 {
     "account": number,
-    "challenge": string,
-    "address": string,
+    "challenge": hex string,
+    "address": bech32 string,
 }
 ```
 
 Returns:
 ```
-string
+hex string
 ```
 
 ### Method `challenge_verify_plain`
@@ -1913,8 +1913,8 @@ Parameters:
 ```
 {
     "message": string,
-    "signed_challenge": string,
-    "address": string,
+    "signed_challenge": hex string,
+    "address": bech32 string,
 }
 ```
 
@@ -1931,9 +1931,9 @@ Verifies a signed challenge against an address destination
 Parameters:
 ```
 {
-    "message": string,
-    "signed_challenge": string,
-    "address": string,
+    "message": hex string,
+    "signed_challenge": hex string,
+    "address": bech32 string,
 }
 ```
 

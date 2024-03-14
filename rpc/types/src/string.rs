@@ -28,11 +28,23 @@ impl RpcHexString {
     pub fn into_bytes(self) -> Vec<u8> {
         self.0
     }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl std::str::FromStr for RpcHexString {
+    type Err = hex::FromHexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        hex::decode(s).map(Self)
+    }
 }
 
 impl AsRef<[u8]> for RpcHexString {
     fn as_ref(&self) -> &[u8] {
-        &self.0
+        self.as_bytes()
     }
 }
 
@@ -45,6 +57,18 @@ impl From<Vec<u8>> for RpcHexString {
 impl From<RpcHexString> for Vec<u8> {
     fn from(value: RpcHexString) -> Self {
         value.into_bytes()
+    }
+}
+
+impl std::fmt::Display for RpcHexString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        hex::encode(self.as_bytes()).fmt(f)
+    }
+}
+
+impl std::fmt::LowerHex for RpcHexString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        <Self as std::fmt::Display>::fmt(self, f)
     }
 }
 
@@ -65,7 +89,7 @@ impl TryFrom<HexStringSerde> for RpcHexString {
     type Error = hex::FromHexError;
 
     fn try_from(value: HexStringSerde) -> Result<Self, Self::Error> {
-        Ok(RpcHexString::from_bytes(hex::decode(value.0)?))
+        value.0.parse()
     }
 }
 

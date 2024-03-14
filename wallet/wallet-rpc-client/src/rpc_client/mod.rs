@@ -34,6 +34,12 @@ pub enum WalletRpcError {
     ResponseError(ClientError),
 }
 
+impl From<hex::FromHexError> for WalletRpcError {
+    fn from(value: hex::FromHexError) -> Self {
+        Self::DecodingError(value.into())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ClientWalletRpc {
     http_client: RpcHttpClient,

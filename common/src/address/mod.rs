@@ -16,6 +16,7 @@
 pub mod dehexify;
 pub mod hexified;
 pub mod pubkeyhash;
+pub mod rpc;
 pub mod traits;
 
 use crate::chain::ChainConfig;
@@ -24,6 +25,7 @@ use std::fmt::Display;
 use utils::qrcode::{qrcode_from_str, QrCode, QrCodeError};
 
 use self::traits::Addressable;
+pub use rpc::RpcAddress;
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq, Clone, PartialOrd, Ord)]
 pub enum AddressError {
@@ -126,6 +128,12 @@ impl<T: Addressable> Address<T> {
             )
         };
         Ok(result)
+    }
+}
+
+impl<T> Address<T> {
+    pub fn into_string(self) -> String {
+        self.address
     }
 }
 

@@ -19,11 +19,11 @@ use chainstate::ChainInfo;
 use common::{
     address::dehexify::{dehexify_all_addresses, to_dehexified_json},
     chain::{
-        signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
-        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        tokens::{IsTokenUnfreezable, TokenId},
+        Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
+        TxOutput, UtxoOutPoint,
     },
-    primitives::{time::Time, BlockHeight, Id, Idable, H256},
+    primitives::{time::Time, BlockHeight, Id, Idable},
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
@@ -44,9 +44,9 @@ use crate::{
         AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction,
         CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
         MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-        NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcTokenId, StakePoolBalance,
-        StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides, UtxoInfo,
-        VrfPublicKeyInfo,
+        NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcTokenId,
+        StakePoolBalance, StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides,
+        UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError,
 };
@@ -168,7 +168,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
     async fn reveal_public_key(
         &self,
         account_arg: AccountArg,
-        address: String,
+        address: RpcAddress<Destination>,
     ) -> rpc::RpcResult<PublicKeyInfo> {
         rpc::handle_result(self.find_public_key(account_arg.index::<N>()?, address).await)
     }
@@ -204,7 +204,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
     async fn sign_raw_transaction(
         &self,
         account_arg: AccountArg,
-        raw_tx: String,
+        raw_tx: RpcHexString,
         options: TransactionOptions,
     ) -> rpc::RpcResult<MaybeSignedTransaction> {
         let config = ControllerConfig {
@@ -232,50 +232,46 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
         &self,
         account_arg: AccountArg,
         challenge: String,
-        address: String,
-    ) -> rpc::RpcResult<String> {
+        address: RpcAddress<Destination>,
+    ) -> rpc::RpcResult<RpcHexString> {
         rpc::handle_result(
             self.sign_challenge(account_arg.index::<N>()?, challenge.into_bytes(), address)
                 .await
-                .map(ArbitraryMessageSignature::to_hex),
+                .map(|m| RpcHexString::from_bytes(m.into_raw())),
         )
     }
 
     async fn sign_challenge_hex(
         &self,
         account_arg: AccountArg,
-        challenge: String,
-        address: String,
-    ) -> rpc::RpcResult<String> {
-        let challenge = hex::decode(challenge).map_err(|_| RpcError::<N>::InvalidHexData)?;
+        challenge: RpcHexString,
+        address: RpcAddress<Destination>,
+    ) -> rpc::RpcResult<RpcHexString> {
         rpc::handle_result(
-            self.sign_challenge(account_arg.index::<N>()?, challenge, address)
+            self.sign_challenge(account_arg.index::<N>()?, challenge.into_bytes(), address)
                 .await
-                .map(ArbitraryMessageSignature::to_hex),
+                .map(|m| RpcHexString::from_bytes(m.into_raw())),
         )
     }
 
     async fn verify_challenge(
         &self,
         message: String,
-        signed_challenge: String,
-        address: String,
+        signed_challenge: RpcHexString,
+        address: RpcAddress<Destination>,
     ) -> rpc::RpcResult<()> {
-        let signed_challenge =
-            hex::decode(signed_challenge).map_err(|_| RpcError::<N>::InvalidHexData)?;
+        let signed_challenge = signed_challenge.into_bytes();
         rpc::handle_result(self.verify_challenge(message.into_bytes(), signed_challenge, address))
     }
 
     async fn verify_challenge_hex(
         &self,
-        message: String,
-        signed_challenge: String,
-        address: String,
+        message: RpcHexString,
+        signed_challenge: RpcHexString,
+        address: RpcAddress<Destination>,
     ) -> rpc::RpcResult<()> {
-        let message = hex::decode(message).map_err(|_| RpcError::<N>::InvalidHexData)?;
-        let signed_challenge =
-            hex::decode(signed_challenge).map_err(|_| RpcError::<N>::InvalidHexData)?;
-        rpc::handle_result(self.verify_challenge(message, signed_challenge, address))
+        let signed_challenge = signed_challenge.into_bytes();
+        rpc::handle_result(self.verify_challenge(message.into_bytes(), signed_challenge, address))
     }
 }
 
@@ -350,7 +346,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn send_coins(
         &self,
         account_arg: AccountArg,
-        address: String,
+        address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         selected_utxos: Vec<UtxoOutPoint>,
         options: TransactionOptions,
@@ -374,8 +370,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn sweep_addresses(
         &self,
         account: AccountArg,
-        destination_address: String,
-        from_addresses: Vec<String>,
+        destination_address: RpcAddress<Destination>,
+        from_addresses: Vec<RpcAddress<Destination>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -396,8 +392,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn sweep_delegation(
         &self,
         account: AccountArg,
-        destination_address: String,
-        delegation_id: String,
+        destination_address: RpcAddress<Destination>,
+        delegation_id: RpcAddress<DelegationId>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -418,10 +414,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn transaction_from_cold_input(
         &self,
         account_arg: AccountArg,
-        address: String,
+        address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         selected_utxo: UtxoOutPoint,
-        change_address: Option<String>,
+        change_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<ComposedTransaction> {
         let config = ControllerConfig {
@@ -445,7 +441,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         )
     }
 
-    async fn transaction_inspect(&self, transaction: String) -> rpc::RpcResult<InspectTransaction> {
+    async fn transaction_inspect(
+        &self,
+        transaction: RpcHexString,
+    ) -> rpc::RpcResult<InspectTransaction> {
         rpc::handle_result(self.transaction_inspect(transaction).await)
     }
 
@@ -455,7 +454,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         amount: RpcAmountIn,
         cost_per_block: RpcAmountIn,
         margin_ratio_per_thousand: String,
-        decommission_address: String,
+        decommission_address: RpcAddress<Destination>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -478,8 +477,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn decommission_stake_pool(
         &self,
         account_arg: AccountArg,
-        pool_id: String,
-        output_address: Option<String>,
+        pool_id: RpcAddress<PoolId>,
+        output_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -500,8 +499,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn decommission_stake_pool_request(
         &self,
         account_arg: AccountArg,
-        pool_id: String,
-        output_address: Option<String>,
+        pool_id: RpcAddress<PoolId>,
+        output_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<HexEncoded<PartiallySignedTransaction>> {
         let config = ControllerConfig {
@@ -523,8 +522,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn create_delegation(
         &self,
         account_arg: AccountArg,
-        address: String,
-        pool_id: String,
+        address: RpcAddress<Destination>,
+        pool_id: RpcAddress<PoolId>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewDelegation> {
         let config = ControllerConfig {
@@ -541,7 +540,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         &self,
         account_arg: AccountArg,
         amount: RpcAmountIn,
-        delegation_id: String,
+        delegation_id: RpcAddress<DelegationId>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -557,9 +556,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn withdraw_from_delegation(
         &self,
         account_arg: AccountArg,
-        address: String,
+        address: RpcAddress<Destination>,
         amount: RpcAmountIn,
-        delegation_id: String,
+        delegation_id: RpcAddress<DelegationId>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -618,7 +617,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn issue_new_nft(
         &self,
         account_arg: AccountArg,
-        destination_address: String,
+        destination_address: RpcAddress<Destination>,
         metadata: NftMetadata,
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcTokenId> {
@@ -641,7 +640,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn issue_new_token(
         &self,
         account_arg: AccountArg,
-        destination_address: String,
+        destination_address: RpcAddress<Destination>,
         metadata: TokenMetadata,
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcTokenId> {
@@ -670,8 +669,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn change_token_authority(
         &self,
         account_arg: AccountArg,
-        token_id: String,
-        address: String,
+        token_id: RpcAddress<TokenId>,
+        address: RpcAddress<Destination>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -688,8 +687,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn mint_tokens(
         &self,
         account_arg: AccountArg,
-        token_id: String,
-        address: String,
+        token_id: RpcAddress<TokenId>,
+        address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
@@ -707,7 +706,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn unmint_tokens(
         &self,
         account_arg: AccountArg,
-        token_id: String,
+        token_id: RpcAddress<TokenId>,
         amount: RpcAmountIn,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
@@ -724,7 +723,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn lock_token_supply(
         &self,
         account_arg: AccountArg,
-        token_id: String,
+        token_id: RpcAddress<TokenId>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -740,7 +739,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn freeze_token(
         &self,
         account_arg: AccountArg,
-        token_id: String,
+        token_id: RpcAddress<TokenId>,
         is_unfreezable: bool,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
@@ -764,7 +763,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn unfreeze_token(
         &self,
         account_arg: AccountArg,
-        token_id: String,
+        token_id: RpcAddress<TokenId>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -778,8 +777,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn send_tokens(
         &self,
         account_arg: AccountArg,
-        token_id: String,
-        address: String,
+        token_id: RpcAddress<TokenId>,
+        address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
@@ -797,7 +796,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn deposit_data(
         &self,
         account_arg: AccountArg,
-        data: String,
+        data: RpcHexString,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -805,11 +804,15 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
             broadcast_to_mempool: true,
         };
 
-        let data = hex::decode(data).map_err(|_| RpcError::<N>::InvalidHexData)?;
-        rpc::handle_result(self.deposit_data(account_arg.index::<N>()?, data, config).await)
+        rpc::handle_result(
+            self.deposit_data(account_arg.index::<N>()?, data.into_bytes(), config).await,
+        )
     }
 
-    async fn stake_pool_balance(&self, pool_id: String) -> rpc::RpcResult<StakePoolBalance> {
+    async fn stake_pool_balance(
+        &self,
+        pool_id: RpcAddress<PoolId>,
+    ) -> rpc::RpcResult<StakePoolBalance> {
         rpc::handle_result(
             self.stake_pool_balance(pool_id)
                 .await
@@ -915,7 +918,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn list_transactions_by_address(
         &self,
         account_arg: AccountArg,
-        address: Option<String>,
+        address: Option<RpcAddress<Destination>>,
         limit: usize,
     ) -> rpc::RpcResult<Vec<TxInfo>> {
         rpc::handle_result(
@@ -926,40 +929,38 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn get_transaction(
         &self,
         account_arg: AccountArg,
-        transaction_id: HexEncoded<Id<Transaction>>,
+        transaction_id: Id<Transaction>,
     ) -> rpc::RpcResult<serde_json::Value> {
         rpc::handle_result(
-            self.get_transaction(account_arg.index::<N>()?, transaction_id.take())
-                .await
-                .map(|tx| {
-                    let str = JsonEncoded::new((tx.get_transaction(), tx.state())).to_string();
-                    let str = dehexify_all_addresses(&self.chain_config, &str);
-                    serde_json::from_str::<serde_json::Value>(&str)
-                }),
+            self.get_transaction(account_arg.index::<N>()?, transaction_id).await.map(|tx| {
+                let str = JsonEncoded::new((tx.get_transaction(), tx.state())).to_string();
+                let str = dehexify_all_addresses(&self.chain_config, &str);
+                serde_json::from_str::<serde_json::Value>(&str)
+            }),
         )
     }
 
     async fn get_raw_transaction(
         &self,
         account_arg: AccountArg,
-        transaction_id: HexEncoded<Id<Transaction>>,
-    ) -> rpc::RpcResult<String> {
+        transaction_id: Id<Transaction>,
+    ) -> rpc::RpcResult<HexEncoded<Transaction>> {
         rpc::handle_result(
-            self.get_transaction(account_arg.index::<N>()?, transaction_id.take())
+            self.get_transaction(account_arg.index::<N>()?, transaction_id)
                 .await
-                .map(|tx| HexEncode::hex_encode(tx.get_transaction())),
+                .map(|tx| HexEncoded::new(tx.into_transaction())),
         )
     }
 
     async fn get_raw_signed_transaction(
         &self,
         account_arg: AccountArg,
-        transaction_id: HexEncoded<Id<Transaction>>,
-    ) -> rpc::RpcResult<String> {
+        transaction_id: Id<Transaction>,
+    ) -> rpc::RpcResult<HexEncoded<SignedTransaction>> {
         rpc::handle_result(
-            self.get_transaction(account_arg.index::<N>()?, transaction_id.take())
+            self.get_transaction(account_arg.index::<N>()?, transaction_id)
                 .await
-                .map(|tx| HexEncode::hex_encode(tx.get_signed_transaction())),
+                .map(|tx| HexEncoded::new(tx.into_signed_transaction())),
         )
     }
 
@@ -1015,12 +1016,11 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         )
     }
 
-    async fn node_block(&self, block_id: String) -> rpc::RpcResult<Option<String>> {
-        let hash = H256::from_str(&block_id).map_err(|_| RpcError::<N>::InvalidBlockId)?;
+    async fn node_block(&self, block_id: Id<Block>) -> rpc::RpcResult<Option<HexEncoded<Block>>> {
         rpc::handle_result(
-            self.get_node_block(hash.into())
+            self.get_node_block(block_id)
                 .await
-                .map(|block_opt| block_opt.map(|block| block.hex_encode())),
+                .map(|block_opt| block_opt.map(HexEncoded::new)),
         )
     }
 
