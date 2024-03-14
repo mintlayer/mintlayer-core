@@ -445,6 +445,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
     }
 
+    /// Enforce checkpoints for the passed header.
+    /// The header's parent block must be known.
     #[log_error]
     fn enforce_checkpoints(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
         let prev_block_index = self.get_previous_block_index_for_check_block(header)?;
@@ -477,6 +479,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
+    /// Enforce checkpoints for `headers_to_check`.
+    /// The parent block of `checked_header` must be known.
+    /// Headers in `headers_to_check` must be connected to each other and to `checked_header`.
     #[log_error]
     pub fn enforce_checkpoints_for_header_chain(
         &self,
