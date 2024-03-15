@@ -199,13 +199,13 @@ impl WalletInterface for ClientWalletRpc {
             .map_err(WalletRpcError::ResponseError)
     }
 
-    async fn add_separate_address(
+    async fn add_standalone_address(
         &self,
         account_index: U31,
         address: String,
         label: Option<String>,
     ) -> Result<(), Self::Error> {
-        WalletRpcClient::add_separate_address(
+        WalletRpcClient::add_standalone_address(
             &self.http_client,
             account_index.into(),
             address,
@@ -215,13 +215,13 @@ impl WalletInterface for ClientWalletRpc {
         .map_err(WalletRpcError::ResponseError)
     }
 
-    async fn add_separate_private_key(
+    async fn add_standalone_private_key(
         &self,
         account_index: U31,
         private_key: HexEncoded<PrivateKey>,
         label: Option<String>,
     ) -> Result<(), Self::Error> {
-        WalletRpcClient::add_separate_private_key(
+        WalletRpcClient::add_standalone_private_key(
             &self.http_client,
             account_index.into(),
             private_key,

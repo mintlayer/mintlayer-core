@@ -20,7 +20,7 @@ use crypto::key::extended::ExtendedPublicKey;
 use utils::maybe_encrypted::MaybeEncrypted;
 use wallet_types::{
     account_id::AccountAddress,
-    account_info::{AccountSeparateKey, AccountVrfKeys},
+    account_info::{AccountStandaloneKey, AccountVrfKeys},
     keys::{RootKeyConstant, RootKeys},
     seed_phrase::{SeedPhraseConstant, SerializableSeedPhrase},
     AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
@@ -54,7 +54,7 @@ storage::decl_schema! {
         pub DBUnconfirmedTxCounters: Map<AccountId, u64>,
         /// Store for each account's legacy VRF public key
         pub DBVRFPublicKeys: Map<AccountId, AccountVrfKeys>,
-        /// Store for separate keys added to accounts
-        pub DBSeparateKeys: Map<AccountAddress, AccountSeparateKey>,
+        /// Store for standalone keys added to accounts
+        pub DBStandaloneKeys: Map<AccountAddress, AccountStandaloneKey>,
     }
 }

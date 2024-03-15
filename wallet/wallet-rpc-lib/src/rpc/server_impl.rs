@@ -302,25 +302,25 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         rpc::handle_result(self.update_account_name(account_arg.index::<N>()?, name).await)
     }
 
-    async fn add_separate_address(
+    async fn add_standalone_address(
         &self,
         account_arg: AccountArg,
         address: String,
         label: Option<String>,
     ) -> rpc::RpcResult<()> {
         rpc::handle_result(
-            self.add_separate_address(account_arg.index::<N>()?, address, label).await,
+            self.add_standalone_address(account_arg.index::<N>()?, address, label).await,
         )
     }
 
-    async fn add_separate_private_key(
+    async fn add_standalone_private_key(
         &self,
         account_arg: AccountArg,
         private_key: HexEncoded<PrivateKey>,
         label: Option<String>,
     ) -> rpc::RpcResult<()> {
         rpc::handle_result(
-            self.add_separate_private_key(account_arg.index::<N>()?, private_key.take(), label)
+            self.add_standalone_private_key(account_arg.index::<N>()?, private_key.take(), label)
                 .await,
         )
     }

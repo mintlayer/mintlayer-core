@@ -1489,24 +1489,24 @@ impl Account {
         Ok(())
     }
 
-    /// Add a separate address not derived from this account's key chain to be watched
-    pub fn add_separate_address(
+    /// Add a standalone address not derived from this account's key chain to be watched
+    pub fn add_standalone_address(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         address: PublicKeyHash,
         label: Option<String>,
     ) -> WalletResult<()> {
-        Ok(self.key_chain.add_separate_address(db_tx, address, label)?)
+        Ok(self.key_chain.add_standalone_address(db_tx, address, label)?)
     }
 
-    /// Add a separate private key not derived from this account's key chain to be watched
-    pub fn add_separate_private_key(
+    /// Add a standalone private key not derived from this account's key chain to be watched
+    pub fn add_standalone_private_key(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         private_key: PrivateKey,
         label: Option<String>,
     ) -> WalletResult<()> {
-        Ok(self.key_chain.add_separate_private_key(db_tx, private_key, label)?)
+        Ok(self.key_chain.add_standalone_private_key(db_tx, private_key, label)?)
     }
 
     /// Get a new address that hasn't been used before

@@ -33,7 +33,7 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
 };
 use wallet_types::account_id::AccountPrefixedId;
-use wallet_types::account_info::AccountSeparateKey;
+use wallet_types::account_info::AccountStandaloneKey;
 use wallet_types::keys::KeyPurpose;
 use wallet_types::{AccountId, AccountInfo, KeychainUsageState};
 
@@ -58,8 +58,8 @@ pub struct AccountKeyChain {
     /// VRF key chain
     vrf_chain: VrfKeySoftChain,
 
-    /// Separate keys added by the user not derived from this account's chain
-    separate_keys: BTreeMap<PublicKeyHash, AccountSeparateKey>,
+    /// Standalone keys added by the user not derived from this account's chain
+    standalone_keys: BTreeMap<PublicKeyHash, AccountStandaloneKey>,
 
     /// The number of unused addresses that need to be checked after the last used address
     lookahead_size: ConstValue<u32>,
@@ -135,7 +135,7 @@ impl AccountKeyChain {
             account_vrf_public_key: account_vrf_pub_key.into(),
             sub_chains,
             vrf_chain,
-            separate_keys: BTreeMap::new(),
+            standalone_keys: BTreeMap::new(),
             lookahead_size: lookahead_size.into(),
         };
 
@@ -188,8 +188,8 @@ impl AccountKeyChain {
             account_info.lookahead_size(),
         )?;
 
-        let separate_keys = db_tx
-            .get_account_separate_keys(&AccountId::new_from_xpub(account_info.account_key()))?;
+        let standalone_keys = db_tx
+            .get_account_standalone_keys(&AccountId::new_from_xpub(account_info.account_key()))?;
 
         Ok(AccountKeyChain {
             chain_config,
@@ -198,7 +198,7 @@ impl AccountKeyChain {
             account_vrf_public_key: vrf_chain.get_account_vrf_public_key().clone().into(),
             sub_chains,
             vrf_chain,
-            separate_keys,
+            standalone_keys,
             lookahead_size: account_info.lookahead_size().into(),
         })
     }
@@ -405,39 +405,39 @@ impl AccountKeyChain {
             .any(|purpose| self.get_leaf_key_chain(*purpose).is_public_key_hash_mine(pubkey_hash))
     }
 
-    // Return true if the provided public key hash is one the separately added keys
+    // Return true if the provided public key hash is one the standalone added keys
     pub fn is_public_key_hash_watched(&self, pubkey_hash: &PublicKeyHash) -> bool {
-        self.separate_keys.contains_key(pubkey_hash)
+        self.standalone_keys.contains_key(pubkey_hash)
     }
 
     // Return true if the provided public key hash belongs to this key chain
-    // or is one the separately added keys
+    // or is one the standalone added keys
     pub fn is_public_key_hash_mine_or_watched(&self, pubkey_hash: &PublicKeyHash) -> bool {
         self.is_public_key_hash_mine(pubkey_hash) || self.is_public_key_hash_watched(pubkey_hash)
     }
 
-    ///  Adds a new public key hash to be watched, separate from the keys derived from this account
-    pub fn add_separate_address(
+    ///  Adds a new public key hash to be watched, standalone from the keys derived from this account
+    pub fn add_standalone_address(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         new_address: PublicKeyHash,
         label: Option<String>,
     ) -> KeyChainResult<()> {
         let id = AccountPrefixedId::new(self.get_account_id(), new_address);
-        let key = AccountSeparateKey::V0 {
+        let key = AccountStandaloneKey::V0 {
             label,
             public_key: None,
             private_key: None,
         };
 
-        db_tx.set_separate_key(&id, &key)?;
-        self.separate_keys.insert(id.into_item_id(), key);
+        db_tx.set_standalone_key(&id, &key)?;
+        self.standalone_keys.insert(id.into_item_id(), key);
 
         Ok(())
     }
 
-    ///  Adds a new private key to be watched, separate from the keys derived from this account
-    pub fn add_separate_private_key(
+    ///  Adds a new private key to be watched, standalone from the keys derived from this account
+    pub fn add_standalone_private_key(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         new_private_key: PrivateKey,
@@ -446,14 +446,14 @@ impl AccountKeyChain {
         let pub_key = PublicKey::from_private_key(&new_private_key);
         let pkh = PublicKeyHash::from(&pub_key);
         let id = AccountPrefixedId::new(self.get_account_id(), pkh);
-        let key = AccountSeparateKey::V0 {
+        let key = AccountStandaloneKey::V0 {
             label,
             public_key: Some(pub_key),
             private_key: Some(new_private_key),
         };
 
-        db_tx.set_separate_key(&id, &key)?;
-        self.separate_keys.insert(id.into_item_id(), key);
+        db_tx.set_standalone_key(&id, &key)?;
+        self.standalone_keys.insert(id.into_item_id(), key);
 
         Ok(())
     }
