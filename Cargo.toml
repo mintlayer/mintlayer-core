@@ -166,7 +166,7 @@ hyper = "0.14"
 iced = "0.10"
 iced_aw = "0.7"
 itertools = "0.12"
-jsonrpsee = { version = "0.21", default-features = false }
+jsonrpsee = { version = "0.22", default-features = false }
 lazy_static = "1.4"
 libtest-mimic = "0.7"
 log = "0.4"

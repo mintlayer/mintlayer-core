@@ -177,7 +177,9 @@ fn gen_random_string(rng: &mut impl Rng, not_equal_to: &str) -> String {
 
 fn assert_unauthorized(result: anyhow::Result<()>) {
     let error = result.expect_err("Expected error, got success");
-    assert!(error.to_string().contains("status code: 401"));
+    // We can't test for much more because apparently every different system is returning a different message,
+    // but the common thing between them all is the status code "401"
+    assert!(error.to_string().contains("401"));
 }
 
 #[rstest]

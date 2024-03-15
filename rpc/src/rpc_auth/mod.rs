@@ -125,7 +125,7 @@ impl<B> ValidateRequest<B> for RpcAuth {
                     status.canonical_reason().unwrap_or_default(),
                     None::<()>,
                 );
-                let payload = types::ResponsePayload::error(err_obj);
+                let payload = types::ResponsePayload::<()>::error(err_obj);
                 let response = types::Response::new(payload, types::Id::Null);
                 let body = serde_json::to_string(&response).expect("constant object");
 
