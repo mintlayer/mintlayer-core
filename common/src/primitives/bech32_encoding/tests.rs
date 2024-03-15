@@ -15,6 +15,7 @@
 
 use bitcoin_bech32::WitnessProgram;
 use crypto::random::{distributions::Alphanumeric, make_pseudo_rng, Rng};
+use hex::FromHex;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
@@ -263,4 +264,41 @@ fn bech32m_hrp_is_empty(#[case] seed: Seed) {
         super::bech32m_encode("", random_bytes).unwrap_err(),
         super::error::Bech32Error::HrpEmpty
     );
+}
+
+#[rstest]
+#[trace]
+#[case("deadbeef", "xyz1m6kmamccq67n2")]
+#[trace]
+#[case("1234567890abcdef", "xyz1zg69v7ys40x77cekyn6")]
+#[trace]
+#[case("00", "xyz1qqwwem8x")]
+#[trace]
+#[case("cf1c9ab7e2bd40589abc7912220d", "xyz1euwf4dlzh4q93x4u0yfzyrgk4c8q4")]
+#[trace]
+#[case(
+    "ec89075bcaa0d9f382f2e4cfcc273d8554",
+    "xyz1ajyswk725rvl8qhjun8ucfeas42qkhytmv"
+)]
+#[trace]
+#[case(
+    "0000000000000000000000000000000000000000000000000000000000000000000000",
+    "xyz1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqv6jtcs"
+)]
+#[trace]
+#[case(
+    "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+    "xyz1lllllllllllllllllllllllllllllllllllllllllllllllllllsez7a5y"
+)]
+#[trace]
+#[case("99", "xyz1nyklvypd")]
+#[trace]
+#[case(
+    "9999999999999999999999999999999999999999999999999999999999",
+    "xyz1nxvenxvenxvenxvenxvenxvenxvenxvenxvenxvenxvenxgtl8rpx"
+)]
+fn selected_data_back_and_forth(#[case] hex_data: &str, #[case] expected_addr: &str) {
+    let decoded_hex: Vec<u8> = FromHex::from_hex(hex_data).unwrap();
+    let addr = super::bech32m_encode("xyz", decoded_hex).unwrap();
+    assert_eq!(addr, expected_addr);
 }
