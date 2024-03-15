@@ -85,17 +85,6 @@ impl<T: Addressable> Address<T> {
         Ok(result)
     }
 
-    /// Decode an address without verifying the hrp
-    /// This is used only for the case of json deserialization, which is done as a compromise as the alternative
-    /// would be to not serialize at all. This is because chain config cannot be passed to the json serializer/deserializer.
-    fn from_str_no_hrp_verify(address: impl AsRef<str>) -> Result<T, AddressError> {
-        let data = encoding::decode(address)?;
-        let raw_data = data.data();
-        let result = T::decode_from_bytes_from_address(raw_data)
-            .map_err(|e| AddressError::DecodingError(e.to_string()))?;
-        Ok(result)
-    }
-
     pub fn from_str(cfg: &ChainConfig, address: &str) -> Result<Self, AddressError> {
         let address = Self {
             address: address.to_owned(),
@@ -154,7 +143,6 @@ mod tests {
     };
     use pubkeyhash::PublicKeyHash;
     use rstest::rstest;
-    use serialization::Encode;
     use test_utils::random::Seed;
 
     #[rstest]
@@ -172,25 +160,6 @@ mod tests {
             .decode_object(&cfg)
             .expect("Failed to extract public key hash from address");
         assert_eq!(public_key_hash_restored_dest, public_key_hash_dest);
-    }
-
-    #[test]
-    fn example_mainnet_address() {
-        let address = "mtc1q9aaqkulkth7qp7mqtyv0rpgdwdytdewdu6ykrsj";
-        let dest = Address::<Destination>::from_str_no_hrp_verify(address).unwrap();
-        let hex = hex::encode(dest.encode());
-        assert_eq!(hex, "017bd05b9fb2efe007db02c8c78c286b9a45b72e6f");
-    }
-
-    #[test]
-    fn example_mainnet_vrf() {
-        let address = "mvrfpk1qqyxcl4tc6y9amf2vmv6sgu8x5jwqlxawx73vhgemkduag9c8ku57m03mze";
-        let dest = Address::<VRFPublicKey>::from_str_no_hrp_verify(address).unwrap();
-        let hex = hex::encode(dest.encode());
-        assert_eq!(
-            hex,
-            "00086c7eabc6885eed2a66d9a823873524e07cdd71bd165d19dd9bcea0b83db94f"
-        );
     }
 
     #[test]
