@@ -56,8 +56,8 @@ fn check_invalid_addresses() {
             }
         }
 
-        match super::bech32_decode(s) {
-            Ok(decoded) => match super::bech32_encode(decoded.hrp(), decoded.data()) {
+        match super::bech32m_decode(s) {
+            Ok(decoded) => match super::bech32m_encode(decoded.hrp(), decoded.data()) {
                 Ok(encoded) => {
                     assert_eq!(s.to_lowercase(), encoded.to_lowercase())
                 }
@@ -83,9 +83,9 @@ fn check_valid_strings() {
             "split1checkupstagehandshakeupstreamerranterredcaperredlc445v",
             "?1v759aa",
     ].iter().for_each(|s| {
-            match super::bech32_decode(s) {
+            match super::bech32m_decode(s) {
                Ok(decoded) => {
-                   match super::bech32_encode(decoded.hrp(), decoded.data()) {
+                   match super::bech32m_encode(decoded.hrp(), decoded.data()) {
                        Ok(encoded) => { assert_eq!(s.to_lowercase(), encoded.to_lowercase()) }
                        Err(e) => { panic!("Did not encode: {s:?} Reason: {e:?}") }
                    }
@@ -137,7 +137,7 @@ fn check_invalid_strings() {
         ("tb1qgk665m2auw09rc7pqyf7aulcuhmatz9xqtr5mxew7zuysacaascqs9v0vn", Bech32Error::DecodeChecksumError("the checksum residue is not valid for the data".to_string()))
     ]
     .iter()
-    .for_each(|(s, b_err)| match super::bech32_decode(*s) {
+    .for_each(|(s, b_err)| match super::bech32m_decode(*s) {
         Ok(_) => {
             panic!("Should be invalid: {s:?}")
         }
@@ -158,8 +158,8 @@ fn check_arbitraty_data_convertion() {
         Vec::<u8>::new(),
     ];
     for test_data in &dataset {
-        let encoded_data = super::bech32_encode(test_hrp, test_data).unwrap();
-        let decoded_data = super::bech32_decode(encoded_data).unwrap();
+        let encoded_data = super::bech32m_encode(test_hrp, test_data).unwrap();
+        let decoded_data = super::bech32m_decode(encoded_data).unwrap();
         assert_eq!(test_data, decoded_data.data());
         assert_eq!(test_hrp, decoded_data.hrp());
     }
@@ -188,8 +188,8 @@ fn check_bech32m_convertion_to_arbitraty_chosen_data() {
         let test_data = test_data_and_expected_result.0;
         let expected_result_hex = test_data_and_expected_result.1;
         let expected_result = hex::decode(expected_result_hex).unwrap();
-        let decoded_data = super::bech32_decode(test_data).unwrap();
-        let encoded_data = super::bech32_encode(test_hrp, decoded_data.data()).unwrap();
+        let decoded_data = super::bech32m_decode(test_data).unwrap();
+        let encoded_data = super::bech32m_encode(test_hrp, decoded_data.data()).unwrap();
 
         assert_eq!(decoded_data.hrp(), "hrp");
         assert_eq!(decoded_data.data(), expected_result);
@@ -207,8 +207,8 @@ fn bech32m_test_random_data(rng: &mut impl Rng, data_length: usize) {
         .to_lowercase();
     let random_bytes: Vec<u8> = (0..data_length).map(|_| rng.gen::<u8>()).collect();
 
-    let encoded_data = super::bech32_encode(&test_hrp, &random_bytes).unwrap();
-    let decoded_data = super::bech32_decode(encoded_data).unwrap();
+    let encoded_data = super::bech32m_encode(&test_hrp, &random_bytes).unwrap();
+    let decoded_data = super::bech32m_decode(encoded_data).unwrap();
     assert_eq!(random_bytes, decoded_data.data());
     assert_eq!(test_hrp, decoded_data.hrp());
 }
@@ -227,7 +227,7 @@ fn bech32m_empty_hrp_is_empty() {
     let random_bytes: Vec<u8> = (0..data_length).map(|_| rng.gen::<u8>()).collect();
 
     assert_eq!(
-        super::bech32_encode("", random_bytes).unwrap_err(),
+        super::bech32m_encode("", random_bytes).unwrap_err(),
         super::error::Bech32Error::HrpEmpty
     );
 }

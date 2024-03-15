@@ -17,7 +17,7 @@ mod error;
 use bech32::{primitives::decode::CheckedHrpstring, Bech32m, Hrp};
 pub use error::*;
 
-pub fn bech32_decode(s: impl AsRef<str>) -> Result<DecodedBech32, Bech32Error> {
+pub fn bech32m_decode(s: impl AsRef<str>) -> Result<DecodedBech32, Bech32Error> {
     let (hrp, data) = bech32::decode(s.as_ref())?;
 
     // To ensure that the encoding is bech32m, this should be done separately, as bech32::decode() works for both bech32 and bech32m
@@ -28,7 +28,7 @@ pub fn bech32_decode(s: impl AsRef<str>) -> Result<DecodedBech32, Bech32Error> {
     Ok(result)
 }
 
-pub fn bech32_encode(
+pub fn bech32m_encode(
     hrp: impl AsRef<str>,
     data: impl AsRef<[u8]>,
 ) -> Result<String, error::Bech32Error> {

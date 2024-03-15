@@ -52,12 +52,12 @@ pub struct Address<T> {
 impl<T: Addressable> Address<T> {
     pub fn new(cfg: &ChainConfig, object: T) -> Result<Self, AddressError> {
         let hrp = object.address_prefix(cfg);
-        let address = bech32_encoding::bech32_encode(hrp, object.encode_to_bytes_for_address())?;
+        let address = bech32_encoding::bech32m_encode(hrp, object.encode_to_bytes_for_address())?;
         Ok(Self { address, object })
     }
 
     pub fn from_string(cfg: &ChainConfig, address: String) -> Result<Self, AddressError> {
-        let data = bech32_encoding::bech32_decode(&address)?;
+        let data = bech32_encoding::bech32m_decode(&address)?;
         let object = T::decode_from_bytes_from_address(data.data())
             .map_err(|e| AddressError::DecodingError(e.to_string()))?;
 
