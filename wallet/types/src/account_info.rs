@@ -108,7 +108,7 @@ pub struct AccountVrfKeys {
 }
 
 #[derive(Debug, Clone, Encode, Decode)]
-pub enum AccountSeparateKey {
+pub enum AccountStandaloneKey {
     #[codec(index = 0)]
     V0 {
         label: Option<String>,

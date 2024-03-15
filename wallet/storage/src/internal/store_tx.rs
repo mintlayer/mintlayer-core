@@ -33,7 +33,7 @@ use utils::{
 };
 use wallet_types::{
     account_id::AccountAddress,
-    account_info::{AccountSeparateKey, AccountVrfKeys},
+    account_info::{AccountStandaloneKey, AccountVrfKeys},
     chain_info::ChainInfo,
     keys::{RootKeyConstant, RootKeys},
     seed_phrase::{SeedPhraseConstant, SerializableSeedPhrase},
@@ -239,16 +239,16 @@ macro_rules! impl_read_ops {
                 self.read::<db::DBVRFPublicKeys, _, _>(account_id)
             }
 
-            fn get_account_separate_keys(
+            fn get_account_standalone_keys(
                 &self,
                 account_id: &AccountId,
-            ) -> crate::Result<BTreeMap<PublicKeyHash, AccountSeparateKey>> {
+            ) -> crate::Result<BTreeMap<PublicKeyHash, AccountStandaloneKey>> {
                 self.storage
-                    .get::<db::DBSeparateKeys, _>()
+                    .get::<db::DBStandaloneKeys, _>()
                     .prefix_iter_decoded(account_id)
                     .map_err(crate::Error::from)
                     .map(|iter| {
-                        iter.map(|(key, value): (AccountAddress, AccountSeparateKey)| {
+                        iter.map(|(key, value): (AccountAddress, AccountStandaloneKey)| {
                             (key.into_item_id(), value)
                         })
                         .collect()
@@ -472,12 +472,12 @@ macro_rules! impl_write_ops {
                 self.storage.get_mut::<db::DBUserTx, _>().del(id).map_err(Into::into)
             }
 
-            fn set_separate_key(
+            fn set_standalone_key(
                 &mut self,
                 id: &AccountAddress,
-                key: &AccountSeparateKey,
+                key: &AccountStandaloneKey,
             ) -> crate::Result<()> {
-                self.write::<db::DBSeparateKeys, _, _, _>(id, key)
+                self.write::<db::DBStandaloneKeys, _, _, _>(id, key)
             }
 
             fn set_account(&mut self, id: &AccountId, tx: &AccountInfo) -> crate::Result<()> {

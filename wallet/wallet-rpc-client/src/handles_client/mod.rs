@@ -253,26 +253,26 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
-    async fn add_separate_address(
+    async fn add_standalone_address(
         &self,
         account_index: U31,
         address: String,
         label: Option<String>,
     ) -> Result<(), Self::Error> {
         self.wallet_rpc
-            .add_separate_address(account_index, address, label)
+            .add_standalone_address(account_index, address, label)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
-    async fn add_separate_private_key(
+    async fn add_standalone_private_key(
         &self,
         account_index: U31,
         private_key: HexEncoded<PrivateKey>,
         label: Option<String>,
     ) -> Result<(), Self::Error> {
         self.wallet_rpc
-            .add_separate_private_key(account_index, private_key.take(), label)
+            .add_standalone_private_key(account_index, private_key.take(), label)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }

@@ -1082,25 +1082,25 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(block_ids)
     }
 
-    pub fn add_separate_address(
+    pub fn add_standalone_address(
         &mut self,
         account_index: U31,
         public_key_hash: PublicKeyHash,
         label: Option<String>,
     ) -> WalletResult<()> {
         self.for_account_rw(account_index, |account, db_tx| {
-            account.add_separate_address(db_tx, public_key_hash, label)
+            account.add_standalone_address(db_tx, public_key_hash, label)
         })
     }
 
-    pub fn add_separate_private_key(
+    pub fn add_standalone_private_key(
         &mut self,
         account_index: U31,
         private_key: PrivateKey,
         label: Option<String>,
     ) -> WalletResult<()> {
         self.for_account_rw(account_index, |account, db_tx| {
-            account.add_separate_private_key(db_tx, private_key, label)
+            account.add_standalone_private_key(db_tx, private_key, label)
         })
     }
 

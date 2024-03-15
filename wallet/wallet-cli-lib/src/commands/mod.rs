@@ -251,19 +251,19 @@ pub enum WalletCommand {
         utxo_states: Vec<CliUtxoState>,
     },
 
-    #[clap(name = "account-add-separate-address")]
-    AddSeparateKey {
-        /// The new separate address to be added to the selected account
+    #[clap(name = "account-add-standalone-address")]
+    AddStandaloneKey {
+        /// The new standalone address to be added to the selected account
         address: String,
 
         /// Optionally specify a label to the new address
         label: Option<String>,
     },
 
-    #[clap(name = "account-add-separate-private-key")]
-    AddSeparatePrivateKey {
-        /// The new separate private key to be added to the selected account
-        private_key: HexEncoded<PrivateKey>,
+    #[clap(name = "account-add-standalone-private-key-as-hex")]
+    AddStandalonePrivateKey {
+        /// The new hex encoded standalone private key to be added to the selected account
+        hex_private_key: HexEncoded<PrivateKey>,
 
         /// Optionally specify a label to the new address
         label: Option<String>,

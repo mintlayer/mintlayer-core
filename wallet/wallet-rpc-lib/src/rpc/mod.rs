@@ -225,7 +225,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         Ok(NewAccountInfo::new(num, name))
     }
 
-    pub async fn add_separate_address(
+    pub async fn add_standalone_address(
         &self,
         account_index: U31,
         address: String,
@@ -251,14 +251,14 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 Box::pin(async move {
                     w.synced_controller(account_index, config)
                         .await?
-                        .add_separate_address(pkh, label)
+                        .add_standalone_address(pkh, label)
                 })
             })
             .await??;
         Ok(())
     }
 
-    pub async fn add_separate_private_key(
+    pub async fn add_standalone_private_key(
         &self,
         account_index: U31,
         private_key: PrivateKey,
@@ -273,7 +273,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 Box::pin(async move {
                     w.synced_controller(account_index, config)
                         .await?
-                        .add_separate_private_key(private_key, label)
+                        .add_standalone_private_key(private_key, label)
                 })
             })
             .await??;

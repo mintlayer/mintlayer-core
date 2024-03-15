@@ -101,9 +101,9 @@ Returns:
 }
 ```
 
-### Method `account_add_separate_address`
+### Method `account_add_standalone_address`
 
-Add a new separate address not derived from the selected account's key chain to be watched
+Add a new standalone address not derived from the selected account's key chain to be watched
 
 
 Parameters:
@@ -122,9 +122,9 @@ Returns:
 nothing
 ```
 
-### Method `account_add_separate_private_key`
+### Method `account_add_standalone_private_key`
 
-Add a new separate private key not derived from the selected account's key chain to be watched
+Add a new standalone private key not derived from the selected account's key chain to be watched
 
 
 Parameters:
