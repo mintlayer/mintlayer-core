@@ -121,7 +121,7 @@ macro_rules! const_nz_isize {
 #[macro_export]
 macro_rules! const_nz_impl {
     ($non_zero_type:ty, $value:expr) => {
-        paste::paste! {
+        $crate::const_nonzero::paste_re_exported! {
             {
                 const RET: std::num::$non_zero_type = {
                     match std::num::$non_zero_type::new($value) {
@@ -136,3 +136,8 @@ macro_rules! const_nz_impl {
         }
     };
 }
+
+// Note: if we used `paste` directly, crates that call `const_nz_...` would have to depend
+// on the `paste` crate explicitly. When a re-exported `paste` is used, the dependency is
+// propagated implicitly.
+pub use paste::paste as paste_re_exported;
