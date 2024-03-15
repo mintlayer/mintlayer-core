@@ -14,8 +14,8 @@
 // limitations under the License.
 
 pub mod amount;
+pub mod bech32_encoding;
 pub mod compact;
-pub mod encoding;
 pub mod error;
 pub mod height;
 pub mod id;
@@ -29,8 +29,8 @@ pub mod version_tag;
 mod hash_encoded;
 
 pub use amount::{Amount, DecimalAmount, DisplayAmount};
+pub use bech32_encoding::Bech32Error;
 pub use compact::Compact;
-pub use encoding::{Bech32Error, DecodedArbitraryDataFromBech32};
 pub use height::{BlockCount, BlockDistance, BlockHeight};
 pub use id::{Id, Idable, H256};
 pub use version_tag::VersionTag;

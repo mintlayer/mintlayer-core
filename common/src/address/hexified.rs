@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::chain::ChainConfig;
+use crate::{chain::ChainConfig, primitives::bech32_encoding};
 
-use super::{encoding, traits::Addressable, Address};
+use super::{traits::Addressable, Address};
 use regex::Regex;
 use serde::{de::Error, Deserialize};
 use serialization::DecodeAll;
@@ -127,7 +127,7 @@ impl<'a, A: Addressable + DecodeAll + 'a> HexifiedAddress<'a, A> {
     /// the alternative would be to not serialize at all. This is because chain config cannot be
     /// passed to the json serializer/deserializer.
     fn decode_no_hrp_verify<E: Error>(address: &str) -> Result<A, E> {
-        let data = encoding::decode(address).map_err(E::custom)?;
+        let data = bech32_encoding::bech32_decode(address).map_err(E::custom)?;
         let raw_data = data.data();
         let result = A::decode_from_bytes_from_address(raw_data).map_err(E::custom)?;
         Ok(result)

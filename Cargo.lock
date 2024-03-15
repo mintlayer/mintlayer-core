@@ -718,6 +718,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d86b93f97252c47b41663388e6d155714a9d0c398b99f1005cbc5f978b29f445"
 
 [[package]]
+name = "bech32"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d965446196e3b7decd44aa7ee49e31d630118f90ef12f97900f262eb915c951d"
+
+[[package]]
 name = "beef"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -768,7 +774,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f764aae1214365b0317fa9d7c99e17e0ebf226200850767e4cd1fb84eec4087"
 dependencies = [
- "bech32",
+ "bech32 0.9.1",
 ]
 
 [[package]]
@@ -1450,7 +1456,7 @@ name = "common"
 version = "0.3.0"
 dependencies = [
  "anyhow",
- "bech32",
+ "bech32 0.11.0",
  "bitcoin-bech32",
  "chrono",
  "clap",
