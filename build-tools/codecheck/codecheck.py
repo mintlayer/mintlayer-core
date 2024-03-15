@@ -165,7 +165,7 @@ def get_from_nested_dicts(nested_dicts, keys_list) -> bool:
 def internal_check_dependency_versions(root_node, dependencies_name: str, file_path) -> bool:
     res = True
 
-    # list of crates, whose version can have patch version
+    # list of crates, whose version may not have a minor version or may have a patch version
     exempted_crates = [
         # left here as an example, remove if you ever add one crate that is exempt
         # 'ctor'
@@ -190,17 +190,22 @@ def internal_check_dependency_versions(root_node, dependencies_name: str, file_p
             else:
                 version = None
 
-            if version is not None and len(version.split('.')) > 2:
-                print((f"In {dependencies_name} of '{file_path}' "
-                       f"{dep} has patch version: {version}"))
-                res = False
+            if version is not None:
+                if len(version.split('.')) < 2:
+                    print((f"In {dependencies_name} of '{file_path}' "
+                           f"{dep} doesn't have a minor version: {version}"))
+                    res = False
+                elif len(version.split('.')) > 2:
+                    print((f"In {dependencies_name} of '{file_path}' "
+                           f"{dep} has a patch version: {version}"))
+                    res = False
 
     return res
 
 
-# Ensure that the versions in all Cargo.toml don't have patch version
+# Ensure that the versions in all Cargo.toml have a minor version but not a patch version.
 def check_dependency_versions_patch_version():
-    print("==== Ensuring that all versions in Cargo.toml don't have patch version")
+    print("==== Ensuring that all versions in Cargo.toml have a minor version but not a patch version")
 
     # list of files exempt from patch version check
     exempted_files = [
