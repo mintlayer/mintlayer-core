@@ -31,6 +31,7 @@ pub mod graph_traversals;
 pub mod log_utils;
 pub mod maybe_encrypted;
 pub mod newtype;
+pub mod nonzero_const;
 pub mod once_destructor;
 pub mod qrcode;
 pub mod rust_backtrace;

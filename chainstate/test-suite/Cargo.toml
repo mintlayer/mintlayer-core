@@ -28,6 +28,7 @@ utxo = { path = '../../utxo' }
 
 hex.workspace = true
 itertools.workspace = true
+paste.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

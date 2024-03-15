@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::NonZeroUsize;
-
 use crypto::{
     kdf::{
         argon2::Argon2Config, hash_from_challenge, hash_password, KdfChallenge, KdfConfig,
@@ -23,6 +21,7 @@ use crypto::{
     random::make_true_rng,
     symkey::{key_size, SymmetricKey, SymmetricKeyKind},
 };
+use utils::const_nz_usize;
 
 /// Converts a password into a symmetric encryption key and generates a KDF challenge.
 ///
@@ -44,9 +43,8 @@ pub fn password_to_sym_key(password: &String) -> crate::Result<(SymmetricKey, Kd
     let config = KdfConfig::Argon2id {
         // TODO: hardcoded values
         config: Argon2Config::new(16384, 4, 4),
-        hash_length: NonZeroUsize::new(key_size(SymmetricKeyKind::XChacha20Poly1305))
-            .expect("not 0"),
-        salt_length: NonZeroUsize::new(32).expect("not 0"),
+        hash_length: const_nz_usize!(key_size(SymmetricKeyKind::XChacha20Poly1305)),
+        salt_length: const_nz_usize!(32),
     };
     let kdf_result = hash_password(&mut rng, config, password.as_bytes())
         .map_err(|_| crate::Error::WalletInvalidPassword)?;

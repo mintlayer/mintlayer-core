@@ -24,6 +24,7 @@ base64.workspace = true
 http.workspace = true
 hyper.workspace = true
 jsonrpsee = { workspace = true, features = ["server", "server-core", "http-client", "ws-client", "macros"] }
+paste.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
