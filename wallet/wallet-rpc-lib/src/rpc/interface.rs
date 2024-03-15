@@ -245,18 +245,18 @@ trait WalletRpc {
         name: Option<String>,
     ) -> rpc::RpcResult<NewAccountInfo>;
 
-    /// Add a new separate address not derived from the selected account's key chain to be watched
-    #[method(name = "account_add_separate_address")]
-    async fn add_separate_address(
+    /// Add a new standalone address not derived from the selected account's key chain to be watched
+    #[method(name = "account_add_standalone_address")]
+    async fn add_standalone_address(
         &self,
         account: AccountArg,
         address: String,
         label: Option<String>,
     ) -> rpc::RpcResult<()>;
 
-    /// Add a new separate private key not derived from the selected account's key chain to be watched
-    #[method(name = "account_add_separate_private_key")]
-    async fn add_separate_private_key(
+    /// Add a new standalone private key not derived from the selected account's key chain to be watched
+    #[method(name = "account_add_standalone_private_key")]
+    async fn add_standalone_private_key(
         &self,
         account: AccountArg,
         private_key: HexEncoded<PrivateKey>,

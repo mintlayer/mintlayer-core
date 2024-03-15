@@ -108,14 +108,14 @@ pub trait WalletInterface {
         name: Option<String>,
     ) -> Result<NewAccountInfo, Self::Error>;
 
-    async fn add_separate_address(
+    async fn add_standalone_address(
         &self,
         account_index: U31,
         address: String,
         label: Option<String>,
     ) -> Result<(), Self::Error>;
 
-    async fn add_separate_private_key(
+    async fn add_standalone_private_key(
         &self,
         account_index: U31,
         private_key: HexEncoded<PrivateKey>,

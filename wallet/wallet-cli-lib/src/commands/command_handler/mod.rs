@@ -604,9 +604,9 @@ where
                 })
             }
 
-            WalletCommand::AddSeparateKey { address, label } => {
+            WalletCommand::AddStandaloneKey { address, label } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-                wallet.add_separate_address(selected_account, address, label).await?;
+                wallet.add_standalone_address(selected_account, address, label).await?;
 
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status().await?,
@@ -614,9 +614,12 @@ where
                 })
             }
 
-            WalletCommand::AddSeparatePrivateKey { private_key, label } => {
+            WalletCommand::AddStandalonePrivateKey {
+                hex_private_key: private_key,
+                label,
+            } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-                wallet.add_separate_private_key(selected_account, private_key, label).await?;
+                wallet.add_standalone_private_key(selected_account, private_key, label).await?;
 
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status().await?,

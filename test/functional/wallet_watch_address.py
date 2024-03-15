@@ -14,16 +14,16 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Wallet watch separate address test
+"""Wallet watch standalone address test
 
 Check that:
 * We can create a new wallet,
 * get an address
 * send coins to the wallet's address
 * create a new wallet
-* add the an address from wallet 1 to wallet 2 to be watched
+* add an address from wallet 1 to wallet 2 to be watched
 * send coins to wallet 1's address
-* check that walelt 2 is keeping truck of transactions using that address in inputs or outputs
+* check that wallet 2 is keeping truck of transactions using that address in inputs or outputs
 """
 
 from test_framework.test_framework import BitcoinTestFramework
@@ -136,7 +136,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             await wallet.create_wallet('wallet2')
             assert_in("Success", await wallet.sync())
 
-            assert_in("Success, the new address has been added to the account", await wallet.add_separate_address(address_from_wallet1))
+            assert_in("Success, the new address has been added to the account", await wallet.add_standalone_address(address_from_wallet1))
 
             await wallet.close_wallet()
             await wallet.open_wallet('wallet1')

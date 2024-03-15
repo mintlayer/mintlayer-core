@@ -4514,7 +4514,7 @@ fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_add_separate_private_key(#[case] seed: Seed) {
+fn test_add_standalone_private_key(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 
@@ -4527,7 +4527,7 @@ fn test_add_separate_private_key(#[case] seed: Seed) {
         crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::Secp256k1Schnorr);
 
     wallet
-        .add_separate_private_key(DEFAULT_ACCOUNT_INDEX, private_key, None)
+        .add_standalone_private_key(DEFAULT_ACCOUNT_INDEX, private_key, None)
         .unwrap();
 
     // get the destination address from the new private key and send some coins to it
