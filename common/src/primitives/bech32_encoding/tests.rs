@@ -16,6 +16,7 @@
 use bitcoin_bech32::WitnessProgram;
 use crypto::random::{distributions::Alphanumeric, make_pseudo_rng, Rng};
 use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
 
 use super::Bech32Error;
 
@@ -194,36 +195,35 @@ fn check_arbitraty_data_convertion() {
     }
 }
 
-#[test]
-fn check_bech32m_convertion_to_arbitraty_chosen_data() {
+#[rstest]
+#[trace]
+#[case(
+    "hrp1g9pyx3z9ger5sj22fdxy6nj02pg4y56524t9wkzetgqqazk6",
+    "4142434445464748494a4b4c4d4e4f505152535455565758595a"
+)]
+#[trace]
+#[case(
+    "hrp10gs8jgrcypmjqa3qw5s8ggrnypezqufqwqsx7grwypkjqmpqdvsx5grfyp5zqeeqvcsx2gryyp3jqc3qvyq7p8jc","7a2079207820772076207520742073207220712070206f206e206d206c206b206a206920682067206620652064206320622061"
+)]
+#[trace]
+#[case("hrp1xyerxdp4xcmnswfs3y3n8w", "31323334353637383930")]
+#[trace]
+#[case("hrp1qqh9dn75", "00")]
+#[trace]
+#[case("hrp1etsu3g", "")]
+fn check_bech32m_convertion_to_arbitraty_chosen_data(
+    #[case] test_data: &str,
+    #[case] expected_result_hex: &str,
+) {
     let test_hrp = "hrp";
-    let dataset = [
-        "hrp1g9pyx3z9ger5sj22fdxy6nj02pg4y56524t9wkzetgqqazk6",
-        "hrp10gs8jgrcypmjqa3qw5s8ggrnypezqufqwqsx7grwypkjqmpqdvsx5grfyp5zqeeqvcsx2gryyp3jqc3qvyq7p8jc",
-        "hrp1xyerxdp4xcmnswfs3y3n8w",
-        "hrp1qqh9dn75",
-        "hrp1etsu3g",
-    ];
 
-    let expected_results = [
-        "4142434445464748494a4b4c4d4e4f505152535455565758595a",
-        "7a2079207820772076207520742073207220712070206f206e206d206c206b206a206920682067206620652064206320622061",
-        "31323334353637383930",
-        "00",
-        ""
-    ];
+    let expected_result = hex::decode(expected_result_hex).unwrap();
+    let decoded_data = super::bech32m_decode(test_data).unwrap();
+    let encoded_data = super::bech32m_encode(test_hrp, decoded_data.data()).unwrap();
 
-    for test_data_and_expected_result in dataset.iter().zip(expected_results) {
-        let test_data = test_data_and_expected_result.0;
-        let expected_result_hex = test_data_and_expected_result.1;
-        let expected_result = hex::decode(expected_result_hex).unwrap();
-        let decoded_data = super::bech32m_decode(test_data).unwrap();
-        let encoded_data = super::bech32m_encode(test_hrp, decoded_data.data()).unwrap();
-
-        assert_eq!(decoded_data.hrp(), "hrp");
-        assert_eq!(decoded_data.data(), expected_result);
-        assert_eq!(*test_data, encoded_data);
-    }
+    assert_eq!(decoded_data.hrp(), "hrp");
+    assert_eq!(decoded_data.data(), expected_result);
+    assert_eq!(*test_data, encoded_data);
 }
 
 fn bech32m_test_random_data(rng: &mut impl Rng, data_length: usize) {
@@ -242,16 +242,20 @@ fn bech32m_test_random_data(rng: &mut impl Rng, data_length: usize) {
     assert_eq!(test_hrp, decoded_data.hrp());
 }
 
-#[test]
-fn bech32m_check_random_data_convertion_back_and_forth() {
-    let mut rng = make_pseudo_rng();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn bech32m_check_random_data_convertion_back_and_forth(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let data_length = rng.gen::<usize>() % 100;
     bech32m_test_random_data(&mut rng, data_length);
 }
 
-#[test]
-fn bech32m_empty_hrp_is_empty() {
-    let mut rng = make_pseudo_rng();
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn bech32m_hrp_is_empty(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let data_length = 10 + rng.gen::<usize>() % 100;
     let random_bytes: Vec<u8> = (0..data_length).map(|_| rng.gen::<u8>()).collect();
 
