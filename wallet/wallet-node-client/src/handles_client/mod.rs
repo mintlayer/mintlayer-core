@@ -135,7 +135,7 @@ impl NodeInterface for WalletHandlesClient {
         &self,
         start_height: BlockHeight,
         end_height: BlockHeight,
-        step: usize,
+        step: NonZeroUsize,
     ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
         let block_ids = self
             .chainstate

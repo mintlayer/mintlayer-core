@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use std::{
+    num::NonZeroUsize,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -232,7 +233,7 @@ impl NodeInterface for MockNode {
         &self,
         start_height: BlockHeight,
         end_height: BlockHeight,
-        step: usize,
+        step: NonZeroUsize,
     ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
         Ok(self
             .tf

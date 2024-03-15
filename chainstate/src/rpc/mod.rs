@@ -20,6 +20,7 @@ mod types;
 use std::{
     convert::Infallible,
     io::{Read, Write},
+    num::NonZeroUsize,
     sync::Arc,
 };
 
@@ -78,7 +79,7 @@ trait ChainstateRpc {
         &self,
         start_height: BlockHeight,
         end_height: BlockHeight,
-        step: usize,
+        step: NonZeroUsize,
     ) -> RpcResult<Vec<(BlockHeight, Id<GenBlock>)>>;
 
     /// Returns the TxOutput for a specified UtxoOutPoint.
@@ -233,7 +234,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         &self,
         start_height: BlockHeight,
         end_height: BlockHeight,
-        step: usize,
+        step: NonZeroUsize,
     ) -> RpcResult<Vec<(BlockHeight, Id<GenBlock>)>> {
         rpc::handle_result(
             self.call(move |this| {

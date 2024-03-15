@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
 
 use crate::{
     detail::{
@@ -221,7 +221,7 @@ where
         &self,
         start_height: BlockHeight,
         end_height: BlockHeight,
-        step: usize,
+        step: NonZeroUsize,
     ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, ChainstateError> {
         self.chainstate
             .query()

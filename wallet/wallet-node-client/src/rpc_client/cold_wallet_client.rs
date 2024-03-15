@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::{num::NonZeroUsize, time::Duration};
 
 use chainstate::ChainInfo;
 use common::{
@@ -78,7 +78,7 @@ impl NodeInterface for ColdWalletClient {
         &self,
         _start_height: BlockHeight,
         _end_height: BlockHeight,
-        _step: usize,
+        _step: NonZeroUsize,
     ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }

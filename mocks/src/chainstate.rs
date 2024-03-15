@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{num::NonZeroUsize, sync::Arc};
 
 use chainstate::{
     BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, Locator,
@@ -77,7 +77,7 @@ mockall::mock! {
             &self,
             start_height: BlockHeight,
             end_height: BlockHeight,
-            step: usize,
+            step: NonZeroUsize,
         ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, ChainstateError>;
         fn get_mainchain_headers_by_locator(
             &self,

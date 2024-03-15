@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::NonZeroUsize;
+
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
@@ -166,7 +168,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         start_height: BlockHeight,
         end_height: BlockHeight,
-        step: usize,
+        step: NonZeroUsize,
     ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, PropertyQueryError> {
         ensure!(
             end_height >= start_height,
@@ -175,7 +177,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 end: end_height
             }
         );
-        ensure!(step > 0, PropertyQueryError::InvalidStep(step));
 
         let max_height = self.chainstate_ref.get_best_block_index()?.block_height();
 
@@ -186,13 +187,16 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let start_height = std::cmp::min(start_height, max_height);
         let end_height = std::cmp::min(end_height, max_height.next_height());
 
-        let iter = (start_height.into_int()..end_height.into_int()).step_by(step).map(|height| {
-            let height = BlockHeight::new(height);
-            Ok((
-                height,
-                self.chainstate_ref.get_existing_block_id_by_height(&height)?,
-            ))
-        });
+        let iter =
+            (start_height.into_int()..end_height.into_int())
+                .step_by(step.into())
+                .map(|height| {
+                    let height = BlockHeight::new(height);
+                    Ok((
+                        height,
+                        self.chainstate_ref.get_existing_block_id_by_height(&height)?,
+                    ))
+                });
 
         itertools::process_results(iter, |iter| iter.collect::<Vec<_>>())
     }

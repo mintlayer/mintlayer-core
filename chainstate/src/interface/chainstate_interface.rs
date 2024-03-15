@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
 
 use crate::{detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
@@ -100,7 +99,7 @@ pub trait ChainstateInterface: Send + Sync {
         &self,
         start_height: BlockHeight,
         end_height: BlockHeight,
-        step: usize,
+        step: NonZeroUsize,
     ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, ChainstateError>;
 
     /// Returns a list of mainchain block headers starting from the locator's highest block that

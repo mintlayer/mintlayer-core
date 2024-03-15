@@ -59,8 +59,6 @@ pub enum PropertyQueryError {
         start: BlockHeight,
         end: BlockHeight,
     },
-    #[error("Invalid step: {0}")]
-    InvalidStep(usize),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

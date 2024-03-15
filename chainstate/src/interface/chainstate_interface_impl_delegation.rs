@@ -15,6 +15,7 @@
 
 use std::{
     collections::BTreeMap,
+    num::NonZeroUsize,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -141,7 +142,7 @@ where
         &self,
         start_height: BlockHeight,
         end_height: BlockHeight,
-        step: usize,
+        step: NonZeroUsize,
     ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, ChainstateError> {
         self.deref().get_block_ids_as_checkpoints(start_height, end_height, step)
     }

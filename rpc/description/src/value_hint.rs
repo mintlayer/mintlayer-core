@@ -13,6 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::{
+    NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU128,
+    NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU8, NonZeroUsize,
+};
+
 pub use rpc_description_macro::HasValueHint;
 
 /// Value hint associated with given type
@@ -54,6 +59,7 @@ impl ValueHint {
     pub const NULL: VH = VH::Prim("null");
     pub const BOOL: VH = VH::Prim("bool");
     pub const NUMBER: VH = VH::Prim("number");
+    pub const NONZERO_NUMBER: VH = VH::Prim("non-zero number");
     pub const STRING: VH = VH::Prim("string");
     pub const NUMBER_STRING: VH = VH::Prim("number string");
     pub const DECIMAL_STRING: VH = VH::Prim("decimal string");
@@ -153,6 +159,18 @@ impl_value_hint!({
     u128 => VH::NUMBER;
     isize => VH::NUMBER;
     usize => VH::NUMBER;
+    NonZeroI8 => VH::NONZERO_NUMBER;
+    NonZeroU8 => VH::NONZERO_NUMBER;
+    NonZeroI16 => VH::NONZERO_NUMBER;
+    NonZeroU16 => VH::NONZERO_NUMBER;
+    NonZeroI32 => VH::NONZERO_NUMBER;
+    NonZeroU32 => VH::NONZERO_NUMBER;
+    NonZeroI64 => VH::NONZERO_NUMBER;
+    NonZeroU64 => VH::NONZERO_NUMBER;
+    NonZeroI128 => VH::NONZERO_NUMBER;
+    NonZeroU128 => VH::NONZERO_NUMBER;
+    NonZeroIsize => VH::NONZERO_NUMBER;
+    NonZeroUsize => VH::NONZERO_NUMBER;
     String => VH::STRING;
     std::path::Path => VH::STRING;
     std::net::SocketAddr => VH::STRING;

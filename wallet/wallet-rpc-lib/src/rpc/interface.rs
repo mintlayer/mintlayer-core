@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::NonZeroUsize;
+
 use chainstate::ChainInfo;
 use common::{
     chain::{Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
@@ -727,6 +729,6 @@ trait WalletRpc {
         &self,
         start_height: BlockHeight,
         end_height: BlockHeight,
-        step: usize,
+        step: NonZeroUsize,
     ) -> rpc::RpcResult<Vec<(BlockHeight, Id<GenBlock>)>>;
 }

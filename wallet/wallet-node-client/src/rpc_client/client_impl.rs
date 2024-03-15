@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::{num::NonZeroUsize, time::Duration};
 
 use blockprod::rpc::BlockProductionRpcClient;
 use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
@@ -80,7 +80,7 @@ impl NodeInterface for NodeRpcClient {
         &self,
         start_height: BlockHeight,
         end_height: BlockHeight,
-        step: usize,
+        step: NonZeroUsize,
     ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
         ChainstateRpcClient::get_block_ids_as_checkpoints(
             &self.http_client,

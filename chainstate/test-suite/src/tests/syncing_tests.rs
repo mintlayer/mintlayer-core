@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, iter, time::Duration};
+use std::{collections::BTreeMap, iter, num::NonZeroUsize, time::Duration};
 
 use rstest::rstest;
 
@@ -872,8 +872,10 @@ fn get_block_ids_as_checkpoints(#[case] seed: Seed) {
 
         let start = 10.into();
         let end = 0.into();
-        let bad_range_error =
-            btf.chainstate.get_block_ids_as_checkpoints(start, end, 1).unwrap_err();
+        let bad_range_error = btf
+            .chainstate
+            .get_block_ids_as_checkpoints(start, end, NonZeroUsize::new(1).unwrap())
+            .unwrap_err();
         assert_eq!(
             bad_range_error,
             ChainstateError::FailedToReadProperty(PropertyQueryError::InvalidBlockHeightRange {
@@ -882,17 +884,10 @@ fn get_block_ids_as_checkpoints(#[case] seed: Seed) {
             })
         );
 
-        let step = 0;
-        let bad_step_error = btf
+        let result = btf
             .chainstate
-            .get_block_ids_as_checkpoints(0.into(), 10.into(), step)
-            .unwrap_err();
-        assert_eq!(
-            bad_step_error,
-            ChainstateError::FailedToReadProperty(PropertyQueryError::InvalidStep(step))
-        );
-
-        let result = btf.chainstate.get_block_ids_as_checkpoints(0.into(), 5.into(), 1).unwrap();
+            .get_block_ids_as_checkpoints(0.into(), 5.into(), NonZeroUsize::new(1).unwrap())
+            .unwrap();
         assert_eq!(
             result,
             [
@@ -906,7 +901,7 @@ fn get_block_ids_as_checkpoints(#[case] seed: Seed) {
 
         let result = btf
             .chainstate
-            .get_block_ids_as_checkpoints(0.into(), 1000000.into(), 20)
+            .get_block_ids_as_checkpoints(0.into(), 1000000.into(), NonZeroUsize::new(20).unwrap())
             .unwrap();
         assert_eq!(
             result,
@@ -920,18 +915,28 @@ fn get_block_ids_as_checkpoints(#[case] seed: Seed) {
             ]
         );
 
-        let result = btf.chainstate.get_block_ids_as_checkpoints(2.into(), 10.into(), 3).unwrap();
+        let result = btf
+            .chainstate
+            .get_block_ids_as_checkpoints(2.into(), 10.into(), NonZeroUsize::new(3).unwrap())
+            .unwrap();
         assert_eq!(
             result,
             [(2.into(), block_ids[1]), (5.into(), block_ids[4]), (8.into(), block_ids[7]),]
         );
 
-        let result = btf.chainstate.get_block_ids_as_checkpoints(10.into(), 10.into(), 1).unwrap();
+        let result = btf
+            .chainstate
+            .get_block_ids_as_checkpoints(10.into(), 10.into(), NonZeroUsize::new(1).unwrap())
+            .unwrap();
         assert_eq!(result, []);
 
         let result = btf
             .chainstate
-            .get_block_ids_as_checkpoints(1000000.into(), 2000000.into(), 1)
+            .get_block_ids_as_checkpoints(
+                1000000.into(),
+                2000000.into(),
+                NonZeroUsize::new(1).unwrap(),
+            )
             .unwrap();
         assert_eq!(result, []);
     });

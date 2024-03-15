@@ -159,7 +159,7 @@ Parameters:
 {
     "start_height": number,
     "end_height": number,
-    "step": number,
+    "step": non-zero number,
 }
 ```
 
