@@ -15,136 +15,165 @@
 
 use bitcoin_bech32::WitnessProgram;
 use crypto::random::{distributions::Alphanumeric, make_pseudo_rng, Rng};
+use rstest::rstest;
 
 use super::Bech32Error;
 
-#[test]
-fn check_invalid_addresses() {
-    vec![
-        (
-            "bc10d3rmtg62h747en5j6fju5g5qyvsransrkty6ghh96pu647wumctejlsngh9pf26cy3srxa6",
-            "invalid length",
-        ),
-        (
-            "bc10rmfwl8nxdweeyc4sf89t0tn9fv9w6qpyzsnl2r4k48vjqh03qas9asdje0rlr0phqv9smnx",
-            "invalid length",
-        ),
-        (
-            "bc1qxmf2d6aerjzam3rur0zufqxqnyqfts5we6pfe",
-            "invalid padding",
-        ),
-        ("bcrt1r5x6gpyc", "invalid padding"),
-        (
-            "tb13h83rtwq62udrhwpn87uely7cyxcjrj0azz6a4r3n9s87x5uj98ys6ufp83",
-            "invalid script version",
-        ),
-        (
-            "tb130lvl2lyugsk2tf3zhwcjjv39dmwt2tt7ytqaexy8edwcuwks6p5scll5kz",
-            "invalid script version",
-        ),
-        (
-            "tb13c553hwygcgj48qwmr9f8q0hgdcfklyaye5sxzcpcjnmxv4z506xs90tchn",
-            "invalid script version",
-        ),
-    ]
-    .iter()
-    .for_each(|&(s, e)| {
-        match WitnessProgram::from_address(s) {
-            Ok(_) => panic!("this should fail, because the address is invalid."),
-            Err(err) => {
-                assert_eq!(&err.to_string(), e);
-            }
+#[rstest]
+#[trace]
+#[case(
+    "bc10d3rmtg62h747en5j6fju5g5qyvsransrkty6ghh96pu647wumctejlsngh9pf26cy3srxa6",
+    "invalid length"
+)]
+#[trace]
+#[case(
+    "bc10rmfwl8nxdweeyc4sf89t0tn9fv9w6qpyzsnl2r4k48vjqh03qas9asdje0rlr0phqv9smnx",
+    "invalid length"
+)]
+#[trace]
+#[case("bc1qxmf2d6aerjzam3rur0zufqxqnyqfts5we6pfe", "invalid padding")]
+#[trace]
+#[case("bcrt1r5x6gpyc", "invalid padding")]
+#[trace]
+#[case(
+    "tb13h83rtwq62udrhwpn87uely7cyxcjrj0azz6a4r3n9s87x5uj98ys6ufp83",
+    "invalid script version"
+)]
+#[trace]
+#[case(
+    "tb130lvl2lyugsk2tf3zhwcjjv39dmwt2tt7ytqaexy8edwcuwks6p5scll5kz",
+    "invalid script version"
+)]
+#[trace]
+#[case(
+    "tb13c553hwygcgj48qwmr9f8q0hgdcfklyaye5sxzcpcjnmxv4z506xs90tchn",
+    "invalid script version"
+)]
+fn check_invalid_addresses(#[case] addr: &str, #[case] e: &str) {
+    match WitnessProgram::from_address(addr) {
+        Ok(_) => panic!("this should fail, because the address is invalid."),
+        Err(err) => {
+            assert_eq!(&err.to_string(), e);
         }
+    }
 
-        match super::bech32m_decode(s) {
-            Ok(decoded) => match super::bech32m_encode(decoded.hrp(), decoded.data()) {
-                Ok(encoded) => {
-                    assert_eq!(s.to_lowercase(), encoded.to_lowercase())
-                }
-                Err(e) => {
-                    panic!("Did not encode: {s:?} Reason: {e:?}")
-                }
-            },
+    match super::bech32m_decode(addr) {
+        Ok(decoded) => match super::bech32m_encode(decoded.hrp(), decoded.data()) {
+            Ok(encoded) => {
+                assert_eq!(addr.to_lowercase(), encoded.to_lowercase())
+            }
             Err(e) => {
-                panic!("Did not decode: {s:?} Reason: {e:?}")
+                panic!("Did not encode: {addr:?} Reason: {e:?}")
             }
+        },
+        Err(e) => {
+            panic!("Did not decode: {addr:?} Reason: {e:?}")
         }
-    });
+    }
 }
 
-#[test]
-fn check_valid_strings() {
-    [
-            "A1LQFN3A",
-            "a1lqfn3a",
-            "an83characterlonghumanreadablepartthatcontainsthetheexcludedcharactersbioandnumber11sg7hg6",
-            "abcdef1l7aum6echk45nj3s0wdvt2fg8x9yrzpqzd3ryx",
-            "11lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllu30cxdc",
-            "split1checkupstagehandshakeupstreamerranterredcaperredlc445v",
-            "?1v759aa",
-    ].iter().for_each(|s| {
-            match super::bech32m_decode(s) {
-               Ok(decoded) => {
-                   match super::bech32m_encode(decoded.hrp(), decoded.data()) {
-                       Ok(encoded) => { assert_eq!(s.to_lowercase(), encoded.to_lowercase()) }
-                       Err(e) => { panic!("Did not encode: {s:?} Reason: {e:?}") }
-                   }
-               }
-               Err(e) => {
-                   panic!("Did not decode: {s:?} Reason: {e:?}")
-               }
-           }
-        });
+#[rstest]
+#[trace]
+#[case("bc10d3rmtg62h747en5j6fju5g5qyvsransrkty6ghh96pu647wumctejlsngh9pf26cy3srxa6")]
+#[trace]
+#[case("A1LQFN3A")]
+#[trace]
+#[case("a1lqfn3a")]
+#[trace]
+#[case(
+    "an83characterlonghumanreadablepartthatcontainsthetheexcludedcharactersbioandnumber11sg7hg6"
+)]
+#[trace]
+#[case("abcdef1l7aum6echk45nj3s0wdvt2fg8x9yrzpqzd3ryx")]
+#[trace]
+#[case(
+    "11lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllu30cxdc"
+)]
+#[trace]
+#[case("split1checkupstagehandshakeupstreamerranterredcaperredlc445v")]
+#[trace]
+#[case("?1v759aa")]
+fn check_valid_strings(#[case] addr: &str) {
+    match super::bech32m_decode(addr) {
+        Ok(decoded) => match super::bech32m_encode(decoded.hrp(), decoded.data()) {
+            Ok(encoded) => {
+                assert_eq!(addr.to_lowercase(), encoded.to_lowercase())
+            }
+            Err(e) => {
+                panic!("Did not encode: {addr:?} Reason: {e:?}")
+            }
+        },
+        Err(e) => {
+            panic!("Did not decode: {addr:?} Reason: {e:?}")
+        }
+    }
 }
 
-#[test]
-fn check_invalid_strings() {
-    vec![
-        (
-            " 1xj0phk",
-            Bech32Error::DecodeParsingError("invalid human-readable part".to_string()),
-        ),
-        (
-            "\u{7F}1g6xzxy",
-            Bech32Error::DecodeParsingError("invalid human-readable part".to_string()),
-        ),
-        (
-            "\u{80}1vctc34",
-            Bech32Error::DecodeParsingError("invalid human-readable part".to_string()),
-        ),
-        ("an84characterslonghumanreadablepartthatcontainsthetheexcludedcharactersbioandnumber11d6pts4", Bech32Error::DecodeParsingError("invalid human-readable part".to_string())),
-        ("qyrz8wqd2c9m", Bech32Error::DecodeParsingError("character error".to_string())),
-        ("1qyrz8wqd2c9m", Bech32Error::DecodeParsingError("invalid human-readable part".to_string())),
-        ("y1b0jsk6g", Bech32Error::DecodeParsingError("character error".to_string())),
-        ("lt1igcx5c0", Bech32Error::DecodeParsingError("character error".to_string())),
-        ("in1muywd", Bech32Error::DecodeChecksumError("the checksummed string is not a valid length".to_string())),
-        ("mm1crxm3i", Bech32Error::DecodeParsingError("character error".to_string())),
-        ("au1s5cgom", Bech32Error::DecodeParsingError("character error".to_string())),
-        ("M1VUXWEZ", Bech32Error::DecodeChecksumError("the checksum residue is not valid for the data".to_string())),
-        ("16plkw9", Bech32Error::DecodeParsingError("invalid human-readable part".to_string())),
-        ("1p2gdwpf", Bech32Error::DecodeParsingError("invalid human-readable part".to_string())),
-        // This is a bech32, not bech32m, address
-        ("bech321qqqsyrhqy2a", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string())),
-        // invalid addresses
-        ("bcrt1q8p08mv8echkf3es027u4cdswxlylm3th76ls8v6y4zy4vwsavngpr4e4td", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string())),
-        ("bc1q5cuatynjmk4szh40mmunszfzh7zrc5xm9w8ccy", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string())),
-        ("bc1qkw7lz3ahms6e0ajv27mzh7g62tchjpmve4afc29u7w49tddydy2syv0087", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string())),
-        ("tb1q74fxwnvhsue0l8wremgq66xzvn48jlc5zthsvz", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string())),
-        ("tb1qpt7cqgq8ukv92dcraun9c3n0s3aswrt62vtv8nqmkfpa2tjfghesv9ln74", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string())),
-        ("tb1q0sqzfp3zj42u0perxr6jahhu4y03uw4dypk6sc", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string())),
-        ("tb1q9jv4qnawnuevqaeadn47gkq05ev78m4qg3zqejykdr9u0cm7yutq6gu5dj", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string())),
-        ("bc1qz377zwe5awr68dnggengqx9vrjt05k98q3sw2n", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string())),
-        ("tb1qgk665m2auw09rc7pqyf7aulcuhmatz9xqtr5mxew7zuysacaascqs9v0vn", Bech32Error::DecodeChecksumError("the checksum residue is not valid for the data".to_string()))
-    ]
-    .iter()
-    .for_each(|(s, b_err)| match super::bech32m_decode(*s) {
+#[rstest]
+#[trace]
+#[case(
+    " 1xj0phk",
+    Bech32Error::DecodeParsingError("invalid human-readable part".to_string())
+)]
+#[trace]
+#[case("\u{7F}1g6xzxy",
+Bech32Error::DecodeParsingError("invalid human-readable part".to_string()))]
+#[trace]
+#[case("\u{80}1vctc34",
+Bech32Error::DecodeParsingError("invalid human-readable part".to_string()))]
+#[trace]
+#[case("an84characterslonghumanreadablepartthatcontainsthetheexcludedcharactersbioandnumber11d6pts4", Bech32Error::DecodeParsingError("invalid human-readable part".to_string()))]
+#[trace]
+#[case("qyrz8wqd2c9m", Bech32Error::DecodeParsingError("character error".to_string()))]
+#[trace]
+#[case("1qyrz8wqd2c9m", Bech32Error::DecodeParsingError("invalid human-readable part".to_string()))]
+#[trace]
+#[case("y1b0jsk6g", Bech32Error::DecodeParsingError("character error".to_string()))]
+#[trace]
+#[case("lt1igcx5c0", Bech32Error::DecodeParsingError("character error".to_string()))]
+#[trace]
+#[case("in1muywd", Bech32Error::DecodeChecksumError("the checksummed string is not a valid length".to_string()))]
+#[trace]
+#[case("mm1crxm3i", Bech32Error::DecodeParsingError("character error".to_string()))]
+#[trace]
+#[case("au1s5cgom", Bech32Error::DecodeParsingError("character error".to_string()))]
+#[trace]
+#[case("M1VUXWEZ", Bech32Error::DecodeChecksumError("the checksum residue is not valid for the data".to_string()))]
+#[trace]
+#[case("16plkw9", Bech32Error::DecodeParsingError("invalid human-readable part".to_string()))]
+#[trace]
+#[case("1p2gdwpf", Bech32Error::DecodeParsingError("invalid human-readable part".to_string()))]
+#[trace]
+// This is a bech32, not bech32m, address
+#[case("bech321qqqsyrhqy2a", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string()))]
+// invalid addresses
+#[trace]
+#[case("bcrt1q8p08mv8echkf3es027u4cdswxlylm3th76ls8v6y4zy4vwsavngpr4e4td", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string()))]
+#[trace]
+#[case("bc1q5cuatynjmk4szh40mmunszfzh7zrc5xm9w8ccy", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string()))]
+#[trace]
+#[case("bc1qkw7lz3ahms6e0ajv27mzh7g62tchjpmve4afc29u7w49tddydy2syv0087", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string()))]
+#[trace]
+#[case("tb1q74fxwnvhsue0l8wremgq66xzvn48jlc5zthsvz", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string()))]
+#[trace]
+#[case("tb1qpt7cqgq8ukv92dcraun9c3n0s3aswrt62vtv8nqmkfpa2tjfghesv9ln74", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string()))]
+#[trace]
+#[case("tb1q0sqzfp3zj42u0perxr6jahhu4y03uw4dypk6sc", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string()))]
+#[trace]
+#[case("tb1q9jv4qnawnuevqaeadn47gkq05ev78m4qg3zqejykdr9u0cm7yutq6gu5dj", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string()))]
+#[trace]
+#[case("bc1qz377zwe5awr68dnggengqx9vrjt05k98q3sw2n", Bech32Error::VariantCheckChecksumError("the checksum residue is not valid for the data".to_string()))]
+#[trace]
+#[case("tb1qgk665m2auw09rc7pqyf7aulcuhmatz9xqtr5mxew7zuysacaascqs9v0vn", Bech32Error::DecodeChecksumError("the checksum residue is not valid for the data".to_string()))]
+fn check_invalid_strings(#[case] addr: &str, #[case] b_err: Bech32Error) {
+    match super::bech32m_decode(addr) {
         Ok(_) => {
-            panic!("Should be invalid: {s:?}")
+            panic!("Should be invalid: {addr:?}")
         }
         Err(e) => {
-            assert_eq!(*b_err, e)
+            assert_eq!(b_err, e)
         }
-    });
+    }
 }
 
 #[test]
