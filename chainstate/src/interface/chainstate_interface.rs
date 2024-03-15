@@ -50,13 +50,12 @@ pub trait ChainstateInterface: Send + Sync {
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
 
     /// Check the headers. The first header's parent block must be known.
-    /// Each of the "other" headers must be connected to the previous one and the first of them
-    /// should be connected to `first_header`. These headers only get the most basic checks (e.g.
-    /// checkpoint enforcement).
+    /// Each following header must be connected to the previous one.
+    /// The first header is fully checked; for others, only the most basic checks are performed
+    /// (e.g. checkpoint enforcement).
     fn preliminary_headers_check(
         &self,
-        first_header: &SignedBlockHeader,
-        other_headers: &[SignedBlockHeader],
+        headers: &[SignedBlockHeader],
     ) -> Result<(), ChainstateError>;
 
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;

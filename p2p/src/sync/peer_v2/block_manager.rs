@@ -681,18 +681,11 @@ where
         }
 
         // Now use preliminary_headers_check; this can be done because the first header
-        // is now known to be connected to the chainstate.
+        // is known to be connected to the chainstate.
         {
             let new_block_headers = new_block_headers.clone();
             self.chainstate_handle
-                .call(move |c| {
-                    let (first_header, other_headers) = new_block_headers
-                        .split_first()
-                        // This is OK because of the `new_block_headers.is_empty()` check above.
-                        .expect("Headers shouldn't be empty");
-
-                    Ok(c.preliminary_headers_check(first_header, other_headers)?)
-                })
+                .call(move |c| Ok(c.preliminary_headers_check(&new_block_headers)?))
                 .await?;
         }
 

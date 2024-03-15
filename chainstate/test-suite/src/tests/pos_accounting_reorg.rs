@@ -539,11 +539,15 @@ fn pos_reorg_simple(#[case] seed: Seed) {
 
     // Try to switch to a new branch
 
-    tf1.chainstate.preliminary_headers_check(block_b.header(), &[]).unwrap();
+    tf1.chainstate
+        .preliminary_headers_check(std::slice::from_ref(block_b.header()))
+        .unwrap();
     let block_b = tf1.chainstate.preliminary_block_check(block_b).unwrap();
     tf1.process_block(block_b, BlockSource::Peer).unwrap();
 
-    tf1.chainstate.preliminary_headers_check(block_c.header(), &[]).unwrap();
+    tf1.chainstate
+        .preliminary_headers_check(std::slice::from_ref(block_c.header()))
+        .unwrap();
     let block_c = tf1.chainstate.preliminary_block_check(block_c).unwrap();
     tf1.process_block(block_c, BlockSource::Peer).unwrap().unwrap();
 
@@ -957,7 +961,9 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
     assert_eq!(block_e_id, tf.best_block_id());
 
     // Submit block_c that was saved and check that it's valid and reorg happened because it's a denser chain
-    tf.chainstate.preliminary_headers_check(block_c.header(), &[]).unwrap();
+    tf.chainstate
+        .preliminary_headers_check(std::slice::from_ref(block_c.header()))
+        .unwrap();
     let block_c = tf.chainstate.preliminary_block_check(block_c).unwrap();
     assert_eq!(block_b_id, block_c.prev_block_id());
     tf.process_block(block_c, BlockSource::Local).unwrap().unwrap();

@@ -48,8 +48,7 @@ mockall::mock! {
         fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
         fn preliminary_headers_check(
             &self,
-            first_header: &SignedBlockHeader,
-            other_headers: &[SignedBlockHeader],
+            headers: &[SignedBlockHeader],
         )-> Result<(), ChainstateError>;
         fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;
         fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError>;

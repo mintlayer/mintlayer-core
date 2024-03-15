@@ -40,7 +40,7 @@ use common::{
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
 use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
-use utils::eventhandler::EventHandler;
+use utils::{displayable_option::DisplayableOption, eventhandler::EventHandler};
 use utils_networking::broadcaster;
 use utxo::{Utxo, UtxosView};
 
@@ -94,14 +94,16 @@ where
             .map_err(ChainstateError::BlockInvalidatorError)
     }
 
-    #[tracing::instrument(skip_all, fields(first_block_id = %first_header.get_id()))]
+    #[tracing::instrument(
+        skip_all,
+        fields(first_block_id = %headers.first().map(|header| header.get_id()).as_displayable())
+    )]
     fn preliminary_headers_check(
         &self,
-        first_header: &SignedBlockHeader,
-        other_headers: &[SignedBlockHeader],
+        headers: &[SignedBlockHeader],
     ) -> Result<(), ChainstateError> {
         BlockChecker::new(&self.chainstate)
-            .preliminary_headers_check(first_header, other_headers)
+            .preliminary_headers_check(headers)
             .map_err(ChainstateError::ProcessBlockError)
     }
 

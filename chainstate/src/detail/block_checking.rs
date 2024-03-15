@@ -42,13 +42,14 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockChecker<
 
     pub fn preliminary_headers_check(
         &self,
-        first_header: &SignedBlockHeader,
-        other_headers: &[SignedBlockHeader],
+        headers: &[SignedBlockHeader],
     ) -> Result<(), BlockError> {
-        let chainstate_ref = self.chainstate.make_db_tx_ro().map_err(BlockError::from)?;
+        if let Some((first_header, other_headers)) = headers.split_first() {
+            let chainstate_ref = self.chainstate.make_db_tx_ro().map_err(BlockError::from)?;
 
-        chainstate_ref.check_block_header(first_header)?;
-        chainstate_ref.enforce_checkpoints_for_header_chain(first_header, other_headers)?;
+            chainstate_ref.check_block_header(first_header)?;
+            chainstate_ref.enforce_checkpoints_for_header_chain(first_header, other_headers)?;
+        }
 
         Ok(())
     }
