@@ -193,9 +193,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
         Err(KeyChainError::LookAheadExceeded)
     );
 
-    if let Destination::PublicKeyHash(pkh) =
-        last_address.decode_object(chain_config.as_ref()).unwrap()
-    {
+    if let Destination::PublicKeyHash(pkh) = last_address.decode_object() {
         key_chain.mark_public_key_hash_as_used(&mut db_tx, &pkh).unwrap();
     } else {
         panic!("Address is not a public key hash destination");

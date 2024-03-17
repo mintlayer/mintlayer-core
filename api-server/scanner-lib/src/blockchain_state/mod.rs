@@ -266,7 +266,7 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
             let address = Address::<Destination>::new(chain_config, destination)
                 .expect("Unable to encode destination");
             let utxo = Utxo::new_with_info(locked_utxo, false);
-            db_tx.set_utxo_at_height(outpoint, utxo, address.get(), block_height).await?;
+            db_tx.set_utxo_at_height(outpoint, utxo, address.as_str(), block_height).await?;
         }
     }
 
@@ -1042,7 +1042,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
     for address_transaction in address_transactions {
         db_tx
             .set_address_transactions_at_height(
-                address_transaction.0.get(),
+                address_transaction.0.as_str(),
                 address_transaction.1.into_iter().collect(),
                 block_height,
             )
@@ -1208,7 +1208,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     );
                     let utxo = Utxo::new(output.clone(), token_decimals, false);
                     db_tx
-                        .set_utxo_at_height(outpoint, utxo, address.get(), block_height)
+                        .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
                         .await
                         .expect("Unable to set utxo");
                 }
@@ -1296,14 +1296,14 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 if already_unlocked {
                     let utxo = Utxo::new(output.clone(), token_decimals, false);
                     db_tx
-                        .set_utxo_at_height(outpoint, utxo, address.get(), block_height)
+                        .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
                         .await
                         .expect("Unable to set utxo");
                 } else {
                     let lock = UtxoLock::from_output_lock(*lock, median_time, block_height);
                     let utxo = LockedUtxo::new(output.clone(), token_decimals, lock);
                     db_tx
-                        .set_locked_utxo_at_height(outpoint, utxo, address.get(), block_height)
+                        .set_locked_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
                         .await
                         .expect("Unable to set locked utxo");
                 }
@@ -1314,7 +1314,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     for address_transaction in address_transactions {
         db_tx
             .set_address_transactions_at_height(
-                address_transaction.0.get(),
+                address_transaction.0.as_str(),
                 address_transaction.1,
                 block_height,
             )
@@ -1337,7 +1337,7 @@ async fn increase_address_amount<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
 ) {
     let current_balance = db_tx
-        .get_address_balance(address.get(), coin_or_token_id)
+        .get_address_balance(address.as_str(), coin_or_token_id)
         .await
         .expect("Unable to get balance")
         .unwrap_or(Amount::ZERO);
@@ -1345,7 +1345,7 @@ async fn increase_address_amount<T: ApiServerStorageWrite>(
     let new_amount = current_balance.add(*amount).expect("Balance should not overflow");
 
     db_tx
-        .set_address_balance_at_height(address.get(), new_amount, coin_or_token_id, block_height)
+        .set_address_balance_at_height(address.as_str(), new_amount, coin_or_token_id, block_height)
         .await
         .expect("Unable to update balance")
 }
@@ -1358,7 +1358,7 @@ async fn increase_locked_address_amount<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
 ) {
     let current_balance = db_tx
-        .get_address_locked_balance(address.get(), coin_or_token_id)
+        .get_address_locked_balance(address.as_str(), coin_or_token_id)
         .await
         .expect("Unable to get balance")
         .unwrap_or(Amount::ZERO);
@@ -1367,7 +1367,7 @@ async fn increase_locked_address_amount<T: ApiServerStorageWrite>(
 
     db_tx
         .set_address_locked_balance_at_height(
-            address.get(),
+            address.as_str(),
             new_amount,
             coin_or_token_id,
             block_height,
@@ -1384,7 +1384,7 @@ async fn decrease_address_amount<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
 ) {
     let current_balance = db_tx
-        .get_address_balance(address.get(), coin_or_token_id)
+        .get_address_balance(address.as_str(), coin_or_token_id)
         .await
         .expect("Unable to get balance")
         .unwrap_or(Amount::ZERO);
@@ -1392,7 +1392,7 @@ async fn decrease_address_amount<T: ApiServerStorageWrite>(
     let new_amount = current_balance.sub(*amount).expect("Balance should not overflow");
 
     db_tx
-        .set_address_balance_at_height(address.get(), new_amount, coin_or_token_id, block_height)
+        .set_address_balance_at_height(address.as_str(), new_amount, coin_or_token_id, block_height)
         .await
         .expect("Unable to update balance")
 }
@@ -1405,7 +1405,7 @@ async fn decrease_address_locked_amount<T: ApiServerStorageWrite>(
     block_height: BlockHeight,
 ) {
     let current_balance = db_tx
-        .get_address_locked_balance(address.get(), coin_or_token_id)
+        .get_address_locked_balance(address.as_str(), coin_or_token_id)
         .await
         .expect("Unable to get balance")
         .unwrap_or(Amount::ZERO);
@@ -1414,7 +1414,7 @@ async fn decrease_address_locked_amount<T: ApiServerStorageWrite>(
 
     db_tx
         .set_address_locked_balance_at_height(
-            address.get(),
+            address.as_str(),
             new_amount,
             coin_or_token_id,
             block_height,
@@ -1438,7 +1438,7 @@ async fn set_utxo<T: ApiServerStorageWrite>(
         let address = Address::<Destination>::new(chain_config, destination)
             .expect("Unable to encode destination");
         db_tx
-            .set_utxo_at_height(outpoint, utxo, address.get(), block_height)
+            .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
             .await
             .expect("Unable to set utxo");
     }

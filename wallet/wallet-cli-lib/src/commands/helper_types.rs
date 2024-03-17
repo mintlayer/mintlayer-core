@@ -232,10 +232,10 @@ pub fn parse_output<N: NodeInterface>(
     }
 
     let dest = Address::from_str(chain_config, parts[1])
-        .and_then(|addr| addr.decode_object(chain_config))
         .map_err(|err| {
             WalletCliError::<N>::InvalidInput(format!("invalid address {} {err}", parts[1]))
-        })?;
+        })?
+        .decode_object();
 
     let amount = DecimalAmount::from_str(parts[2])
         .map_err(|err| {

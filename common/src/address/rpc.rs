@@ -16,7 +16,7 @@
 use super::{Address, AddressError, Addressable, ChainConfig};
 
 /// Address string for use in RPC. Not guaranteed to hold a valid address.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
 pub struct RpcAddress<T> {
     address: String,
@@ -54,13 +54,13 @@ impl<T: Addressable> RpcAddress<T> {
     }
 
     /// Convert to an address, according to given chain config.
-    pub fn to_address(&self, cfg: &ChainConfig) -> Result<Address<T>, AddressError> {
-        Address::from_str(cfg, &self.address)
+    pub fn into_address(self, cfg: &ChainConfig) -> Result<Address<T>, AddressError> {
+        Address::from_string(cfg, self.address)
     }
 
     /// Convert to an object, according to given chain config.
     pub fn decode_object(&self, cfg: &ChainConfig) -> Result<T, AddressError> {
-        self.to_address(cfg)?.decode_object(cfg)
+        Ok(self.clone().into_address(cfg)?.decode_object())
     }
 }
 
@@ -79,6 +79,12 @@ impl<T> From<String> for RpcAddress<T> {
 impl<T> std::fmt::Display for RpcAddress<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.address.fmt(f)
+    }
+}
+
+impl<T> Clone for RpcAddress<T> {
+    fn clone(&self) -> Self {
+        Self::from_string(self.address.clone())
     }
 }
 

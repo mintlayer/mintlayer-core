@@ -399,7 +399,7 @@ where
         let bob_destination = Destination::PublicKeyHash(PublicKeyHash::from(&bob_pk));
         let bob_address = Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
 
-        let tx = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
+        let tx = db_tx.get_address_available_utxos(bob_address.as_str()).await.unwrap();
         assert!(tx.is_empty());
 
         drop(db_tx);
@@ -430,7 +430,7 @@ where
                 .set_locked_utxo_at_height(
                     outpoint.clone(),
                     locked_utxo,
-                    bob_address.get(),
+                    bob_address.as_str(),
                     block_height,
                 )
                 .await
@@ -473,7 +473,7 @@ where
                 .set_locked_utxo_at_height(
                     outpoint.clone(),
                     locked_utxo,
-                    bob_address.get(),
+                    bob_address.as_str(),
                     block_height,
                 )
                 .await
@@ -530,7 +530,7 @@ where
                 .set_locked_utxo_at_height(
                     outpoint.clone(),
                     locked_utxo,
-                    bob_address.get(),
+                    bob_address.as_str(),
                     block_height,
                 )
                 .await
@@ -542,7 +542,7 @@ where
                 .set_utxo_at_height(
                     outpoint.clone(),
                     utxo,
-                    bob_address.get(),
+                    bob_address.as_str(),
                     block_height.next_height(),
                 )
                 .await
@@ -554,7 +554,7 @@ where
                 .set_utxo_at_height(
                     outpoint.clone(),
                     spent_utxo,
-                    bob_address.get(),
+                    bob_address.as_str(),
                     block_height.next_height().next_height(),
                 )
                 .await
@@ -581,14 +581,14 @@ where
                 .set_locked_utxo_at_height(
                     locked_outpoint.clone(),
                     locked_utxo,
-                    bob_address.get(),
+                    bob_address.as_str(),
                     block_height,
                 )
                 .await
                 .unwrap();
 
             // should return only once the first utxo and also the locked utxo
-            let utxos = db_tx.get_address_all_utxos(bob_address.get()).await.unwrap();
+            let utxos = db_tx.get_address_all_utxos(bob_address.as_str()).await.unwrap();
             assert_eq!(utxos.len(), 2);
             assert_eq!(
                 utxos.iter().find(|utxo| utxo.0 == outpoint),
@@ -606,11 +606,11 @@ where
         // set one and get it
         {
             db_tx
-                .set_utxo_at_height(outpoint.clone(), utxo, bob_address.get(), block_height)
+                .set_utxo_at_height(outpoint.clone(), utxo, bob_address.as_str(), block_height)
                 .await
                 .unwrap();
 
-            let bob_utxos = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
+            let bob_utxos = db_tx.get_address_available_utxos(bob_address.as_str()).await.unwrap();
             assert_eq!(
                 bob_utxos,
                 vec![(
@@ -639,13 +639,13 @@ where
                 .set_utxo_at_height(
                     outpoint2.clone(),
                     utxo.clone(),
-                    bob_address.get(),
+                    bob_address.as_str(),
                     block_height,
                 )
                 .await
                 .unwrap();
 
-            let bob_utxos = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
+            let bob_utxos = db_tx.get_address_available_utxos(bob_address.as_str()).await.unwrap();
             let mut expected_utxos = BTreeMap::from_iter([
                 (outpoint, UtxoWithExtraInfo::new(output, None)),
                 (
@@ -664,11 +664,11 @@ where
             let utxo = Utxo::new(output2.clone(), None, true);
             expected_utxos.remove(&outpoint2);
             db_tx
-                .set_utxo_at_height(outpoint2, utxo, bob_address.get(), block_height)
+                .set_utxo_at_height(outpoint2, utxo, bob_address.as_str(), block_height)
                 .await
                 .unwrap();
 
-            let bob_utxos = db_tx.get_address_available_utxos(bob_address.get()).await.unwrap();
+            let bob_utxos = db_tx.get_address_available_utxos(bob_address.as_str()).await.unwrap();
             assert_eq!(bob_utxos.len(), 1);
 
             for (outpoint, output) in bob_utxos {

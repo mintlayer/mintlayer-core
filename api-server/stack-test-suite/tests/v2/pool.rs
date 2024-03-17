@@ -209,7 +209,7 @@ async fn ok(#[case] seed: Seed) {
         let decommission_key = Address::new(&chain_config, pool_data.decommission_key()).unwrap();
         assert_eq!(
             body.get("decommission_destination").unwrap(),
-            decommission_key.get(),
+            decommission_key.as_str(),
         );
         assert_eq!(
             body.get("staker_balance").unwrap(),
@@ -235,7 +235,7 @@ async fn ok(#[case] seed: Seed) {
         let vrf_key = Address::new(&chain_config, pool_data.vrf_public_key()).unwrap();
         assert_eq!(
             body.get("vrf_public_key").unwrap(),
-            &serde_json::json!(vrf_key.get())
+            &serde_json::json!(vrf_key.as_str())
         );
 
         let url = format!("/api/v2/pool/{pool_id}/delegations");
@@ -255,13 +255,13 @@ async fn ok(#[case] seed: Seed) {
             let resp = body
                 .iter()
                 .find(|d| {
-                    d.get("delegation_id").unwrap() == &serde_json::json!(delegation_id.get())
+                    d.get("delegation_id").unwrap() == &serde_json::json!(delegation_id.as_str())
                 })
                 .unwrap();
 
             assert_eq!(
                 resp.get("delegation_id").unwrap(),
-                &serde_json::json!(delegation_id.get())
+                &serde_json::json!(delegation_id.as_str())
             );
 
             assert_eq!(
@@ -270,7 +270,7 @@ async fn ok(#[case] seed: Seed) {
             );
 
             let destination = Address::new(&chain_config, &delegation.2).unwrap();
-            assert_eq!(resp.get("spend_destination").unwrap(), destination.get());
+            assert_eq!(resp.get("spend_destination").unwrap(), destination.as_str());
         }
 
         for (delegation_id, balance, destination, _) in delegations {
@@ -288,14 +288,14 @@ async fn ok(#[case] seed: Seed) {
 
             assert_eq!(
                 body.get("pool_id").unwrap(),
-                &serde_json::json!(pool_id.get())
+                &serde_json::json!(pool_id.as_str())
             );
             assert_eq!(
                 body.get("balance").unwrap(),
                 &serde_json::json!(amount_to_json(balance, chain_config.coin_decimals()))
             );
             let destination = Address::new(&chain_config, &destination).unwrap();
-            assert_eq!(body.get("spend_destination").unwrap(), destination.get());
+            assert_eq!(body.get("spend_destination").unwrap(), destination.as_str());
         }
     }
 

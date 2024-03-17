@@ -841,7 +841,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 WHERE delegation_id = $1
                 AND block_height = (SELECT MAX(block_height) FROM ml_delegations WHERE delegation_id = $1);
                 "#,
-                &[&delegation_id.get()],
+                &[&delegation_id.as_str()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -854,8 +854,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let pool_id: String = data.get(0);
         let pool_id = Address::<PoolId>::from_str(chain_config, &pool_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?
-            .decode_object(chain_config)
-            .expect("already checked");
+            .decode_object();
         let balance: String = data.get(1);
         let spend_destination: Vec<u8> = data.get(2);
         let next_nonce: Vec<u8> = data.get(3);
@@ -911,13 +910,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 let delegation_id: String = row.get(0);
                 let delegation_id = Address::<DelegationId>::from_str(chain_config, &delegation_id)
                     .map_err(|_| ApiServerStorageError::AddressableError)?
-                    .decode_object(chain_config)
-                    .expect("already checked");
+                    .decode_object();
                 let pool_id: String = row.get(1);
                 let pool_id = Address::<PoolId>::from_str(chain_config, &pool_id)
                     .map_err(|_| ApiServerStorageError::AddressableError)?
-                    .decode_object(chain_config)
-                    .expect("already checked");
+                    .decode_object();
                 let balance: String = row.get(2);
                 let spend_destination: Vec<u8> = row.get(3);
                 let next_nonce: Vec<u8> = row.get(4);
@@ -970,9 +967,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     SET pool_id = $3, balance = $4, spend_destination = $5, next_nonce = $6;
                 "#,
                 &[
-                    &delegation_id.get(),
+                    &delegation_id.as_str(),
                     &height,
-                    &pool_id.get(),
+                    &pool_id.as_str(),
                     &amount_to_str(*delegation.balance()),
                     &delegation.spend_destination().encode(),
                     &delegation.next_nonce().encode(),
@@ -1037,7 +1034,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     AND block_height != (SELECT COALESCE(MIN(block_height), 0) FROM ml_pool_data WHERE pool_id = $1)
                     AND staker_balance::NUMERIC != 0
                 "#,
-                &[&pool_id_str.get(), &from_height, &to_height],
+                &[&pool_id_str.as_str(), &from_height, &to_height],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -1065,7 +1062,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                                                             WHERE pool_id = $1
                                                             GROUP BY delegation_id)
                 "#,
-                &[&pool_id_str.get()],
+                &[&pool_id_str.as_str()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
@@ -1075,8 +1072,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 let delegation_id =
                     Address::<DelegationId>::from_str(chain_config, &delegation_id_str)
                         .map_err(|_| ApiServerStorageError::AddressableError)?
-                        .decode_object(chain_config)
-                        .expect("already checked");
+                        .decode_object();
                 let balance: String = row.get(1);
                 let spend_destination: Vec<u8> = row.get(2);
                 let next_nonce: Vec<u8> = row.get(3);
@@ -1125,7 +1121,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 ORDER BY block_height DESC
                 LIMIT 1;
             "#,
-                &[&pool_id.get()],
+                &[&pool_id.as_str()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
@@ -1176,8 +1172,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 let pool_id: String = row.get(0);
                 let pool_id = Address::<PoolId>::from_str(chain_config, &pool_id)
                     .map_err(|_| ApiServerStorageError::AddressableError)?
-                    .decode_object(chain_config)
-                    .expect("already checked");
+                    .decode_object();
                 let pool_data: Vec<u8> = row.get(1);
                 let pool_data = PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
@@ -1221,8 +1216,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 let pool_id: String = row.get(0);
                 let pool_id = Address::<PoolId>::from_str(chain_config, &pool_id)
                     .map_err(|_| ApiServerStorageError::AddressableError)?
-                    .decode_object(chain_config)
-                    .expect("already checked");
+                    .decode_object();
                 let pool_data: Vec<u8> = row.get(1);
                 let pool_data = PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
@@ -1254,7 +1248,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     INSERT INTO ml_pool_data (pool_id, block_height, staker_balance, data)
                     VALUES ($1, $2, $3, $4)
                 "#,
-                &[&pool_id.get(), &height, &amount_str, &pool_data.encode()],
+                &[&pool_id.as_str(), &height, &amount_str, &pool_data.encode()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;

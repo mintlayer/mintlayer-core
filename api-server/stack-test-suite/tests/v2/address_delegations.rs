@@ -55,7 +55,7 @@ async fn address_not_found(#[case] seed: Seed) {
     let address = Address::<Destination>::new(&chain_config, &destination).unwrap();
 
     let (task, response) =
-        spawn_webserver(&format!("/api/v2/address/{}/delegations", address.get())).await;
+        spawn_webserver(&format!("/api/v2/address/{}/delegations", address.as_str())).await;
 
     assert_eq!(response.status(), 200);
 
@@ -163,19 +163,19 @@ async fn ok(#[case] seed: Seed) {
 
                 _ = tx.send([
                     (
-                        alice_address.get().to_string(),
+                        alice_address.as_str().to_string(),
                         delegations
                             .into_iter()
                             .map(|(delegation_id, amount, _, _)| {
                                 json!({
                                 "delegation_id": Address::new(&chain_config, &delegation_id).expect(
                                     "no error in encoding"
-                                ).get(),
+                                ).as_str(),
                                 "pool_id": Address::new(&chain_config, &pool_id).expect(
                                     "no error in encoding"
-                                ).get(),
+                                ).as_str(),
                                 "next_nonce": AccountNonce::new(0),
-                                "spend_destination": alice_address.get(),
+                                "spend_destination": alice_address.as_str(),
                                 "balance": amount_to_json(amount, chain_config.coin_decimals()),
                             })})
                             .collect::<Vec<_>>()

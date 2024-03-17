@@ -206,7 +206,7 @@ impl LeafKeySoftChain {
         if self.last_used() == self.last_issued() {
             logging::log::debug!(
                 "new address: {}, index: {}, purpose {:?}",
-                address.get(),
+                address.as_str(),
                 new_issued_index,
                 self.purpose
             );
@@ -234,7 +234,7 @@ impl LeafKeySoftChain {
 
         logging::log::debug!(
             "new address: {}, index: {}, purpose {:?}",
-            address.get(),
+            address.as_str(),
             new_issued_index,
             self.purpose
         );

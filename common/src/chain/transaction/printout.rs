@@ -105,39 +105,34 @@ mod tests {
                 OutputValue::Coin(Amount::from_fixedpoint_str("123.15", 11).unwrap()),
                 Address::from_str(&cfg, "mtc1q9d860uag5swe78ac9c2lct9mkctfyftqvwj3ypa")
                     .unwrap()
-                    .decode_object(&cfg)
-                    .unwrap(),
+                    .decode_object(),
             ),
             TxOutput::LockThenTransfer(
                 OutputValue::Coin(Amount::from_fixedpoint_str("123.15", 11).unwrap()),
                 Address::from_str(&cfg, "mtc1q9d860uag5swe78ac9c2lct9mkctfyftqvwj3ypa")
                     .unwrap()
-                    .decode_object(&cfg)
-                    .unwrap(),
+                    .decode_object(),
                 OutputTimeLock::ForBlockCount(10),
             ),
             TxOutput::LockThenTransfer(
                 OutputValue::Coin(Amount::from_fixedpoint_str("123.15", 11).unwrap()),
                 Address::from_str(&cfg, "mtc1q9d860uag5swe78ac9c2lct9mkctfyftqvwj3ypa")
                     .unwrap()
-                    .decode_object(&cfg)
-                    .unwrap(),
+                    .decode_object(),
                 OutputTimeLock::ForSeconds(2000),
             ),
             TxOutput::LockThenTransfer(
                 OutputValue::Coin(Amount::from_fixedpoint_str("123.15", 11).unwrap()),
                 Address::from_str(&cfg, "mtc1q9d860uag5swe78ac9c2lct9mkctfyftqvwj3ypa")
                     .unwrap()
-                    .decode_object(&cfg)
-                    .unwrap(),
+                    .decode_object(),
                 OutputTimeLock::UntilHeight(1000.into()),
             ),
             TxOutput::LockThenTransfer(
                 OutputValue::Coin(Amount::from_fixedpoint_str("123.15", 11).unwrap()),
                 Address::from_str(&cfg, "mtc1q9d860uag5swe78ac9c2lct9mkctfyftqvwj3ypa")
                     .unwrap()
-                    .decode_object(&cfg)
-                    .unwrap(),
+                    .decode_object(),
                 OutputTimeLock::UntilTime(BlockTimestamp::from_time(
                     TimeGetter::default().get_time(),
                 )),

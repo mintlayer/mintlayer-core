@@ -90,11 +90,7 @@ pub fn view_delegation(
                 delegation_balance_grid = delegation_balance_grid
                     .push(
                         tooltip(
-                            field(
-                                delegation_address
-                                    .to_short_string(chain_config)
-                                    .expect("cannot fail"),
-                            ),
+                            field(delegation_address.to_short_string()),
                             delegation_address.to_string(),
                             Position::Bottom,
                         )
@@ -114,7 +110,7 @@ pub fn view_delegation(
                     )
                     .push(
                         tooltip(
-                            field(pool_address.to_short_string(chain_config).expect("cannot fail")),
+                            field(pool_address.to_short_string()),
                             pool_address.to_string(),
                             Position::Bottom,
                         )

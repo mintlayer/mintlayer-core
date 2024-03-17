@@ -49,7 +49,7 @@ async fn address_not_found(#[case] seed: Seed) {
     let address = Address::<Destination>::new(&chain_config, &destination).unwrap();
 
     let (task, response) =
-        spawn_webserver(&format!("/api/v2/address/{}/all-utxos", address.get())).await;
+        spawn_webserver(&format!("/api/v2/address/{}/all-utxos", address.as_str())).await;
 
     assert_eq!(response.status(), 200);
 
@@ -226,7 +226,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
 
                 _ = tx.send([
                     (
-                        alice_address.get().to_string(),
+                        alice_address.as_str().to_string(),
                         alice_utxos
                             .into_iter()
                             .map(|utxo| {
@@ -486,7 +486,7 @@ async fn ok(#[case] seed: Seed) {
 
                 _ = tx.send([
                     (
-                        alice_address.get().to_string(),
+                        alice_address.as_str().to_string(),
                         alice_utxos
                             .into_iter()
                             .map(|utxo| {

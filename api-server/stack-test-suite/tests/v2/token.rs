@@ -52,7 +52,7 @@ async fn token_not_found(#[case] seed: Seed) {
     let token_id = TokenId::new(H256::random_using(&mut rng));
     let token_id = Address::<TokenId>::new(&chain_config, &token_id).unwrap();
 
-    let (task, response) = spawn_webserver(&format!("/api/v2/token/{}", token_id.get())).await;
+    let (task, response) = spawn_webserver(&format!("/api/v2/token/{}", token_id.as_str())).await;
 
     assert_eq!(response.status(), 404);
 
@@ -138,7 +138,7 @@ async fn ok(#[case] seed: Seed) {
                     json!({
                         "authority": Address::new(&chain_config, &token_data.authority).expect(
                             "no error in encoding"
-                        ).get(),
+                        ).as_str(),
                         "is_locked": token_data.is_locked,
                         "circulating_supply": amount_to_json(token_data.circulating_supply, token_data.number_of_decimals),
                         "token_ticker": to_json_string(&token_data.token_ticker),

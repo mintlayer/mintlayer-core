@@ -53,28 +53,19 @@ pub struct SendRequest {
     fees: BTreeMap<Currency, Amount>,
 }
 
-pub fn make_address_output(
-    chain_config: &ChainConfig,
-    address: Address<Destination>,
-    amount: Amount,
-) -> WalletResult<TxOutput> {
-    let destination = address.decode_object(chain_config)?;
-
-    Ok(TxOutput::Transfer(OutputValue::Coin(amount), destination))
+pub fn make_address_output(address: Address<Destination>, amount: Amount) -> TxOutput {
+    TxOutput::Transfer(OutputValue::Coin(amount), address.decode_object())
 }
 
 pub fn make_address_output_token(
-    chain_config: &ChainConfig,
     address: Address<Destination>,
     amount: Amount,
     token_id: TokenId,
-) -> WalletResult<TxOutput> {
-    let destination = address.decode_object(chain_config)?;
-
-    Ok(TxOutput::Transfer(
+) -> TxOutput {
+    TxOutput::Transfer(
         OutputValue::TokenV1(token_id, amount),
-        destination,
-    ))
+        address.decode_object(),
+    )
 }
 
 pub fn make_issue_token_outputs(
@@ -92,12 +83,11 @@ pub fn make_mint_token_outputs(
     token_id: TokenId,
     amount: Amount,
     address: Address<Destination>,
-    chain_config: &ChainConfig,
-) -> WalletResult<Vec<TxOutput>> {
-    let destination = address.decode_object(chain_config)?;
+) -> Vec<TxOutput> {
+    let destination = address.decode_object();
     let mint_output = TxOutput::Transfer(OutputValue::TokenV1(token_id, amount), destination);
 
-    Ok(vec![mint_output])
+    vec![mint_output]
 }
 
 pub fn make_unmint_token_outputs(token_id: TokenId, amount: Amount) -> Vec<TxOutput> {
@@ -105,14 +95,8 @@ pub fn make_unmint_token_outputs(token_id: TokenId, amount: Amount) -> Vec<TxOut
     vec![burn_tokens]
 }
 
-pub fn make_create_delegation_output(
-    chain_config: &ChainConfig,
-    address: Address<Destination>,
-    pool_id: PoolId,
-) -> WalletResult<TxOutput> {
-    let destination = address.decode_object(chain_config)?;
-
-    Ok(TxOutput::CreateDelegationId(destination, pool_id))
+pub fn make_create_delegation_output(address: Address<Destination>, pool_id: PoolId) -> TxOutput {
+    TxOutput::CreateDelegationId(address.decode_object(), pool_id)
 }
 
 pub fn make_address_output_from_delegation(
@@ -120,16 +104,15 @@ pub fn make_address_output_from_delegation(
     address: Address<Destination>,
     amount: Amount,
     current_block_height: BlockHeight,
-) -> WalletResult<TxOutput> {
-    let destination = address.decode_object(chain_config)?;
+) -> TxOutput {
     let num_blocks_to_lock =
         chain_config.staking_pool_spend_maturity_block_count(current_block_height);
 
-    Ok(TxOutput::LockThenTransfer(
+    TxOutput::LockThenTransfer(
         OutputValue::Coin(amount),
-        destination,
+        address.decode_object(),
         ForBlockCount(num_blocks_to_lock.to_int()),
-    ))
+    )
 }
 
 pub fn make_decommission_stake_pool_output(

@@ -91,9 +91,7 @@ pub fn view_stake(
                 staking_balance_grid = staking_balance_grid
                     .push(
                         tooltip(
-                            field(
-                                pool_id_address.to_short_string(chain_config).expect("cannot fail"),
-                            ),
+                            field(pool_id_address.to_short_string()),
                             pool_id_address.to_string(),
                             Position::Bottom,
                         )

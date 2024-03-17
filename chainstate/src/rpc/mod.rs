@@ -299,9 +299,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             self.call(move |this| {
                 let chain_config = this.get_chain_config();
                 let id_result = Address::<PoolId>::from_str(chain_config, &pool_address);
-                let address_result =
-                    id_result.map(|address| address.decode_object(chain_config))?;
-                address_result.map(|address| this.get_stake_pool_balance(address))
+                id_result.map(|address| this.get_stake_pool_balance(address.decode_object()))
             })
             .await,
         )
@@ -313,7 +311,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                 let chain_config = this.get_chain_config();
                 let result: Result<Option<Amount>, _> =
                     dynamize_err(Address::<PoolId>::from_str(chain_config, &pool_address))
-                        .and_then(|address| dynamize_err(address.decode_object(chain_config)))
+                        .map(|address| address.decode_object())
                         .and_then(|pool_id| dynamize_err(this.get_stake_pool_data(pool_id)))
                         .and_then(|pool_data| {
                             dynamize_err(pool_data.map(|d| d.staker_balance()).transpose())
@@ -336,13 +334,13 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
                 let pool_id_result =
                     dynamize_err(Address::<PoolId>::from_str(chain_config, &pool_address))
-                        .and_then(|address| dynamize_err(address.decode_object(chain_config)));
+                        .map(|address| address.decode_object());
 
                 let delegation_id_result = dynamize_err(Address::<DelegationId>::from_str(
                     chain_config,
                     &delegation_address,
                 ))
-                .and_then(|address| dynamize_err(address.decode_object(chain_config)));
+                .map(|address| address.decode_object());
 
                 let ids = pool_id_result.and_then(|x| delegation_id_result.map(|y| (x, y)));
 
@@ -360,7 +358,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                 let chain_config = this.get_chain_config();
                 let token_info_result: Result<Option<RPCTokenInfo>, _> =
                     dynamize_err(Address::<TokenId>::from_str(chain_config, &token_id))
-                        .and_then(|address| dynamize_err(address.decode_object(chain_config)))
+                        .map(|address| address.decode_object())
                         .and_then(|token_id| dynamize_err(this.get_token_info_for_rpc(token_id)));
 
                 token_info_result

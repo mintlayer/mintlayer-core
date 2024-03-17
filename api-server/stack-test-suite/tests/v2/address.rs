@@ -48,7 +48,7 @@ async fn address_not_found(#[case] seed: Seed) {
     let destination = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
     let address = Address::<Destination>::new(&chain_config, &destination).unwrap();
 
-    let (task, response) = spawn_webserver(&format!("/api/v2/address/{}", address.get())).await;
+    let (task, response) = spawn_webserver(&format!("/api/v2/address/{}", address.as_str())).await;
 
     assert_eq!(response.status(), 404);
 
@@ -220,7 +220,7 @@ async fn multiple_outputs_to_single_address(#[case] seed: Seed) {
 
                 _ = tx.send([
                     (
-                        alice_address.get().to_string(),
+                        alice_address.as_str().to_string(),
                         json!({
                         "coin_balance": amount_to_json(alice_balance, chain_config.coin_decimals()),
                         "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
@@ -463,7 +463,7 @@ async fn test_unlocking_for_locked_utxos(#[case] seed: Seed) {
 
                 _ = tx.send([
                     (
-                        alice_address.get().to_string(),
+                        alice_address.as_str().to_string(),
                         json!({
                         "coin_balance": amount_to_json(alice_balance, chain_config.coin_decimals()),
                         "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),
@@ -686,7 +686,7 @@ async fn ok(#[case] seed: Seed) {
 
                 _ = tx.send([
                     (
-                        alice_address.get().to_string(),
+                        alice_address.as_str().to_string(),
                         json!({
                         "coin_balance": amount_to_json(alice_balance, chain_config.coin_decimals()),
                         "locked_coin_balance": amount_to_json(Amount::ZERO, chain_config.coin_decimals()),

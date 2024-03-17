@@ -22,7 +22,10 @@ pub mod traits;
 use crate::chain::ChainConfig;
 use crate::primitives::{encoding, Bech32Error};
 use std::fmt::Display;
-use utils::qrcode::{qrcode_from_str, QrCode, QrCodeError};
+use utils::{
+    ensure,
+    qrcode::{qrcode_from_str, QrCode, QrCodeError},
+};
 
 use self::traits::Addressable;
 pub use rpc::RpcAddress;
@@ -30,7 +33,7 @@ pub use rpc::RpcAddress;
 #[derive(thiserror::Error, Debug, Eq, PartialEq, Clone, PartialOrd, Ord)]
 pub enum AddressError {
     #[error("Bech32 encoding error: {0}")]
-    Bech32EncodingError(Bech32Error),
+    Bech32EncodingError(#[from] Bech32Error),
     #[error("Decoding error: {0}")]
     DecodingError(String),
     #[error("Invalid prefix: {0}")]
@@ -39,59 +42,53 @@ pub enum AddressError {
     QrCodeError(#[from] QrCodeError),
 }
 
-impl From<Bech32Error> for AddressError {
-    fn from(err: Bech32Error) -> Self {
-        AddressError::Bech32EncodingError(err)
-    }
-}
-
 #[must_use]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Address<T> {
     address: String,
-    _marker: std::marker::PhantomData<T>,
-}
-
-impl<T> Address<T> {
-    pub fn get(&self) -> &str {
-        &self.address
-    }
+    _marker: std::marker::PhantomData<fn() -> T>,
 }
 
 impl<T: Addressable> Address<T> {
     pub fn new(cfg: &ChainConfig, object: &T) -> Result<Self, AddressError> {
-        Self::new_with_hrp(
-            T::address_prefix(object, cfg),
-            object.encode_to_bytes_for_address(),
-        )
+        let hrp = object.address_prefix(cfg);
+        let address = encoding::encode(hrp, object.encode_to_bytes_for_address())?;
+        Ok(Self::new_internal(address))
     }
 
-    fn new_with_hrp<D: AsRef<[u8]>>(hrp: &str, data: D) -> Result<Self, AddressError> {
-        let d = encoding::encode(hrp, data)?;
-        Ok(Self {
-            address: d,
-            _marker: std::marker::PhantomData,
-        })
-    }
-
-    pub fn decode_object(&self, cfg: &ChainConfig) -> Result<T, AddressError> {
-        let data = encoding::decode(&self.address)?;
-        let raw_data = data.data();
-        let result = T::decode_from_bytes_from_address(raw_data)
+    pub fn from_string(cfg: &ChainConfig, address: String) -> Result<Self, AddressError> {
+        let data = encoding::decode(&address)?;
+        let object = T::decode_from_bytes_from_address(data.data())
             .map_err(|e| AddressError::DecodingError(e.to_string()))?;
-        if data.hrp() != T::address_prefix(&result, cfg) {
-            return Err(AddressError::InvalidPrefix(data.hrp().to_owned()));
-        }
-        Ok(result)
+
+        let hrp_ok = data.hrp() == object.address_prefix(cfg);
+        ensure!(hrp_ok, AddressError::InvalidPrefix(data.hrp().to_owned()));
+
+        Ok(Self::new_internal(address))
     }
 
-    pub fn from_str(cfg: &ChainConfig, address: &str) -> Result<Self, AddressError> {
-        let address = Self {
-            address: address.to_owned(),
-            _marker: std::marker::PhantomData,
-        };
-        address.decode_object(cfg)?;
-        Ok(address)
+    pub fn from_str(cfg: &ChainConfig, addr_str: &str) -> Result<Self, AddressError> {
+        Self::from_string(cfg, addr_str.to_owned())
+    }
+
+    pub fn decode_object(&self) -> T {
+        let data = encoding::decode(&self.address).expect("format checked on construction");
+        T::decode_from_bytes_from_address(data.data()).expect("validity checked on construction")
+    }
+}
+
+impl<T> Address<T> {
+    fn new_internal(address: String) -> Self {
+        let _marker = std::marker::PhantomData;
+        Self { address, _marker }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.address
+    }
+
+    pub fn into_string(self) -> String {
+        self.address
     }
 
     pub fn qrcode(&self) -> Result<impl QrCode + '_, AddressError> {
@@ -99,30 +96,16 @@ impl<T: Addressable> Address<T> {
         Ok(qrcode)
     }
 
-    pub fn to_short_string(&self, cfg: &ChainConfig) -> Result<String, AddressError> {
-        use std::str::from_utf8;
+    pub fn to_short_string(&self) -> String {
+        let hrp_len = self.address.find('1').unwrap_or(0);
+        let (prefix, rest) = self.address.split_at(hrp_len + 4);
 
-        let obj = self.decode_object(cfg)?;
-        let prefix_len = obj.address_prefix(cfg).len();
-
-        let result = if self.address.len() < prefix_len + 8 {
+        if rest.len() < 8 {
             self.to_string()
         } else {
-            // prefix + 4 first chars + ... + 4 last chars
-            let bytes = self.address.as_bytes();
-            format!(
-                "{}...{}",
-                from_utf8(&bytes[0..prefix_len + 4]).expect("ids are always ascii"),
-                from_utf8(&bytes[bytes.len() - 4..bytes.len()]).expect("ids are always ascii"),
-            )
-        };
-        Ok(result)
-    }
-}
-
-impl<T> Address<T> {
-    pub fn into_string(self) -> String {
-        self.address
+            let (_mid, suffix) = rest.split_at(rest.len() - 4);
+            format!("{prefix}...{suffix}")
+        }
     }
 }
 
@@ -156,9 +139,7 @@ mod tests {
         let public_key_hash_dest = Destination::PublicKeyHash(public_key_hash);
         let address = Address::<Destination>::new(&cfg, &public_key_hash_dest)
             .expect("Address from pubkeyhash failed");
-        let public_key_hash_restored_dest = address
-            .decode_object(&cfg)
-            .expect("Failed to extract public key hash from address");
+        let public_key_hash_restored_dest = address.decode_object();
         assert_eq!(public_key_hash_restored_dest, public_key_hash_dest);
     }
 
@@ -169,30 +150,27 @@ mod tests {
         let address =
             Address::<Destination>::from_str(&cfg, "rmt1qyyra5j3qduhyd43wa50lpn2ddpg9ql0u50ceu68")
                 .unwrap();
-        assert_eq!("rmt1qyy...eu68", address.to_short_string(&cfg).unwrap());
+        assert_eq!("rmt1qyy...eu68", address.to_short_string());
 
         let vrf = Address::<VRFPublicKey>::from_str(
             &cfg,
             "rvrfpk1qregu4v895mchautf84u46nsf9xel2507a37ksaf3stmuw44y3m4vc2kzme",
         )
         .unwrap();
-        assert_eq!("rvrfpk1qre...kzme", vrf.to_short_string(&cfg).unwrap());
+        assert_eq!("rvrfpk1qre...kzme", vrf.to_short_string());
 
         let pool_id = Address::<PoolId>::from_str(
             &cfg,
             "rpool1zg7yccqqjlz38cyghxlxyp5lp36vwecu2g7gudrf58plzjm75tzq99fr6v",
         )
         .unwrap();
-        assert_eq!("rpool1zg7...fr6v", pool_id.to_short_string(&cfg).unwrap());
+        assert_eq!("rpool1zg7...fr6v", pool_id.to_short_string());
 
         let delegation_id = Address::<DelegationId>::from_str(
             &cfg,
             "rdelg1zl206x6hkh6cmtmyhmjx3zhtc2qaunckcuvxsywpnervkclj2keq2wmdff",
         )
         .unwrap();
-        assert_eq!(
-            "rdelg1zl2...mdff",
-            delegation_id.to_short_string(&cfg).unwrap()
-        );
+        assert_eq!("rdelg1zl2...mdff", delegation_id.to_short_string());
     }
 }

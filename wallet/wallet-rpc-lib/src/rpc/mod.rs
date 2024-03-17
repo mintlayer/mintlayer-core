@@ -569,7 +569,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidPoolId)?;
         let destination_address = destination_address
-            .to_address(self.chain_config())
+            .into_address(self.chain_config())
             .map_err(|_| RpcError::InvalidAddress)?;
 
         self.wallet
@@ -598,7 +598,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let address =
-            address.to_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
+            address.into_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
 
         self.wallet
             .call_async(move |controller| {
@@ -627,9 +627,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let address =
-            address.to_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
+            address.into_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
         let change_address = change_address
-            .map(|change| change.to_address(&self.chain_config))
+            .map(|change| change.into_address(&self.chain_config))
             .transpose()
             .map_err(|_| RpcError::InvalidAddress)?;
 
@@ -689,7 +689,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
         let address =
-            address.to_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
+            address.into_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
 
         self.wallet
             .call_async(move |controller| {
@@ -817,7 +817,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         config: ControllerConfig,
     ) -> WRpcResult<NewDelegation, N> {
         let address =
-            address.to_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
+            address.into_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
 
         let pool_id =
             pool_id.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidPoolId)?;
@@ -881,7 +881,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let address =
-            address.to_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
+            address.into_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
         let delegation_id = delegation_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidDelegationId)?;
@@ -1011,7 +1011,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         );
 
         let destination_address = destination_address
-            .to_address(&self.chain_config)
+            .into_address(&self.chain_config)
             .map_err(|_| RpcError::InvalidAddress)?;
 
         self.wallet
@@ -1046,7 +1046,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         config: ControllerConfig,
     ) -> WRpcResult<RpcTokenId, N> {
         let address =
-            address.to_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
+            address.into_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
         self.wallet
             .call_async(move |w| {
                 Box::pin(async move {
@@ -1076,7 +1076,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
         let address =
-            address.to_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
+            address.into_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
 
         self.wallet
             .call_async(move |w| {
@@ -1216,7 +1216,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
         let address =
-            address.to_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
+            address.into_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
         self.wallet
             .call_async(move |w| {
                 Box::pin(async move {
