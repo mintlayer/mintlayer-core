@@ -551,7 +551,7 @@ async fn node_group_wait_for_connections_to(
     address: SocketAddress,
     min_connected_nodes_count: usize,
 ) {
-    super::helpers::node_group_wait_for_connections_to(
+    super::helpers::node_group_wait_for_connections_to_sock_addr(
         node_group,
         address,
         min_connected_nodes_count,
@@ -562,7 +562,7 @@ async fn node_group_wait_for_connections_to(
 }
 
 async fn node_wait_for_connection_to(node: &TestNode<Transport>, address: SocketAddress) {
-    super::helpers::node_wait_for_connection_to(
+    super::helpers::node_wait_for_connection_to_sock_addr(
         node,
         address,
         Some(peer_manager::HEARTBEAT_INTERVAL_MAX),

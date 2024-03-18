@@ -139,6 +139,12 @@ impl TestPeersInfo {
     pub fn count_peers_by_role(&self, role: PeerRole) -> usize {
         self.info.iter().filter(|(_, info)| info.role == role).count()
     }
+
+    pub fn count_peers_by_ip(&self, ip: IpAddr) -> usize {
+        let addr_first = SocketAddress::new(SocketAddr::new(ip, 0));
+        let addr_last = SocketAddress::new(SocketAddr::new(ip, u16::MAX));
+        self.info.range(addr_first..=addr_last).count()
+    }
 }
 
 pub struct TestDnsSeed {
@@ -158,7 +164,7 @@ impl DnsSeed for TestDnsSeed {
     }
 }
 
-pub async fn node_group_wait_for_connections_to<Transport>(
+pub async fn node_group_wait_for_connections_to_sock_addr<Transport>(
     node_group: &TestNodeGroup<Transport>,
     address: SocketAddress,
     min_connected_nodes_count: usize,
@@ -167,7 +173,7 @@ pub async fn node_group_wait_for_connections_to<Transport>(
 ) where
     Transport: TransportSocket,
 {
-    nodes_wait_for_connections(
+    nodes_wait_for_connections_to_sock_addrs(
         node_group.nodes(),
         address,
         min_connected_nodes_count..=usize::MAX,
@@ -177,7 +183,7 @@ pub async fn node_group_wait_for_connections_to<Transport>(
     .await
 }
 
-pub async fn node_wait_for_connection_to<Transport>(
+pub async fn node_wait_for_connection_to_sock_addr<Transport>(
     node: &TestNode<Transport>,
     address: SocketAddress,
     iteration_time_advancement: Option<Duration>,
@@ -185,7 +191,7 @@ pub async fn node_wait_for_connection_to<Transport>(
 ) where
     Transport: TransportSocket,
 {
-    nodes_wait_for_connections(
+    nodes_wait_for_connections_to_sock_addrs(
         std::slice::from_ref(node),
         address,
         1..=1,
@@ -195,7 +201,25 @@ pub async fn node_wait_for_connection_to<Transport>(
     .await
 }
 
-pub async fn node_wait_for_disconnection<Transport>(
+pub async fn node_wait_for_connection_to_ip_addr<Transport>(
+    node: &TestNode<Transport>,
+    address: IpAddr,
+    iteration_time_advancement: Option<Duration>,
+    iteration_sleep_duration: Option<Duration>,
+) where
+    Transport: TransportSocket,
+{
+    nodes_wait_for_connections_to_ip_addrs(
+        std::slice::from_ref(node),
+        address,
+        1..=1,
+        iteration_time_advancement.map(|dur| (node.time_getter(), dur)),
+        iteration_sleep_duration,
+    )
+    .await
+}
+
+pub async fn node_wait_for_disconnection_from_ip_addr<Transport>(
     node: &TestNode<Transport>,
     address: IpAddr,
     iteration_time_advancement: Option<Duration>,
@@ -205,9 +229,7 @@ pub async fn node_wait_for_disconnection<Transport>(
 {
     loop {
         let peers_info = node.get_peers_info().await;
-        let addr_first = SocketAddress::new(SocketAddr::new(address, 0));
-        let addr_last = SocketAddress::new(SocketAddr::new(address, u16::MAX));
-        if peers_info.info.range(addr_first..=addr_last).next().is_none() {
+        if peers_info.count_peers_by_ip(address) == 0 {
             break;
         }
 
@@ -221,7 +243,7 @@ pub async fn node_wait_for_disconnection<Transport>(
     }
 }
 
-pub async fn nodes_wait_for_connections<Transport>(
+pub async fn nodes_wait_for_connections_to_sock_addrs<Transport>(
     nodes: &[TestNode<Transport>],
     address: SocketAddress,
     required_connected_nodes_count: std::ops::RangeInclusive<usize>,
@@ -238,6 +260,37 @@ pub async fn nodes_wait_for_connections<Transport>(
             if peers_info.info.contains_key(&address) {
                 connected_nodes_count += 1;
             }
+        }
+
+        if required_connected_nodes_count.contains(&connected_nodes_count) {
+            break;
+        }
+
+        if let Some((time_getter, time_advancement)) = iteration_time_advancement {
+            time_getter.advance_time(time_advancement);
+        }
+
+        if let Some(iteration_sleep_duration) = iteration_sleep_duration {
+            tokio::time::sleep(iteration_sleep_duration).await;
+        }
+    }
+}
+
+pub async fn nodes_wait_for_connections_to_ip_addrs<Transport>(
+    nodes: &[TestNode<Transport>],
+    address: IpAddr,
+    required_connected_nodes_count: std::ops::RangeInclusive<usize>,
+    iteration_time_advancement: Option<(&P2pBasicTestTimeGetter, Duration)>,
+    iteration_sleep_duration: Option<Duration>,
+) where
+    Transport: TransportSocket,
+{
+    loop {
+        let mut connected_nodes_count = 0;
+
+        for node in nodes {
+            let peers_info = node.get_peers_info().await;
+            connected_nodes_count += peers_info.count_peers_by_ip(address);
         }
 
         if required_connected_nodes_count.contains(&connected_nodes_count) {
