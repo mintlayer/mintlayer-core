@@ -444,4 +444,59 @@ mod tests {
             serde_json::from_str::<PerThousand>("421").unwrap()
         );
     }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn json_range(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        {
+            // in range
+            let v = rng.gen_range(0..=DENOMINATOR);
+
+            // Serialize in all possible ways, and ensure it'll fail since it's larger than the max allowed value
+            let v1 = serde_json::from_str::<PerThousand>(&v.to_string()).unwrap();
+            let v2 = serde_json::from_str::<PerThousand>(&format!(
+                "\"{}%\"",
+                Amount::from_atoms(v.into()).into_fixedpoint_str(1)
+            ))
+            .unwrap();
+            let v3 = serde_json::from_str::<PerThousand>(&format!(
+                "\"{}\"",
+                Amount::from_atoms(v.into()).into_fixedpoint_str(3)
+            ))
+            .unwrap();
+
+            assert_eq!(PerThousand::new(v).unwrap(), v1);
+            assert_eq!(PerThousand::new(v).unwrap(), v2);
+            assert_eq!(PerThousand::new(v).unwrap(), v3);
+        }
+
+        {
+            // out of range
+            let v = rng.gen_range(DENOMINATOR + 1..u16::MAX);
+
+            // Serialize in all possible ways, and ensure it'll fail since it's larger than the max allowed value
+            let err1 = serde_json::from_str::<PerThousand>(&v.to_string()).unwrap_err();
+            let err2 = serde_json::from_str::<PerThousand>(&format!(
+                "\"{}%\"",
+                Amount::from_atoms(v.into()).into_fixedpoint_str(1)
+            ))
+            .unwrap_err();
+            let err3 = serde_json::from_str::<PerThousand>(&format!(
+                "\"{}\"",
+                Amount::from_atoms(v.into()).into_fixedpoint_str(3)
+            ))
+            .unwrap_err();
+
+            assert!(err1.to_string().contains("has invalid value for PerThousand"));
+            assert!(err2.to_string().contains("is not a valid percentage or decimal"));
+            assert!(err3.to_string().contains("is not a valid percentage or decimal"));
+        }
+
+        serde_json::from_str::<PerThousand>("1001").unwrap_err();
+        serde_json::from_str::<PerThousand>("1.01").unwrap_err();
+        serde_json::from_str::<PerThousand>("\"100.1%\"").unwrap_err();
+    }
 }
