@@ -23,6 +23,7 @@ use super::Amount;
 
 const DENOMINATOR: u16 = 1000;
 
+// DO NOT derive traits that construct Self, like Deserialize and Decode. This struct uses a non-trivial constructor.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Debug)]
 pub struct PerThousand(u16);
 
