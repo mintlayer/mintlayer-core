@@ -2248,6 +2248,9 @@ pub trait PeerManagerInterface {
     fn peers(&self) -> &BTreeMap<PeerId, PeerContext>;
 
     #[cfg(test)]
+    fn pending_outbound_conn_addrs(&self) -> Vec<SocketAddress>;
+
+    #[cfg(test)]
     fn peer_db(&self) -> &dyn peerdb::PeerDbInterface;
 
     #[cfg(test)]
@@ -2263,6 +2266,11 @@ where
     #[cfg(test)]
     fn peers(&self) -> &BTreeMap<PeerId, PeerContext> {
         &self.peers
+    }
+
+    #[cfg(test)]
+    fn pending_outbound_conn_addrs(&self) -> Vec<SocketAddress> {
+        self.pending_outbound_connects.keys().copied().collect()
     }
 
     #[cfg(test)]

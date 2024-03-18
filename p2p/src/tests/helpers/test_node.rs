@@ -324,6 +324,23 @@ where
         peers_info.info.keys().map(|addr| addr.ip_addr()).collect()
     }
 
+    // Get addresses of all peers, including pending outbound connections.
+    pub async fn get_all_peer_addresses(&self) -> BTreeSet<SocketAddress> {
+        query_peer_manager(&self.peer_mgr_event_sender, |peer_mgr| {
+            peer_mgr
+                .peers()
+                .values()
+                .map(|ctx| ctx.peer_address)
+                .chain(peer_mgr.pending_outbound_conn_addrs().into_iter())
+                .collect()
+        })
+        .await
+    }
+
+    pub async fn get_all_peer_ip_addresses(&self) -> BTreeSet<IpAddr> {
+        self.get_all_peer_addresses().await.iter().map(|addr| addr.ip_addr()).collect()
+    }
+
     pub async fn discover_peer(&mut self, address: SocketAddress) {
         mutate_peer_manager(&self.peer_mgr_event_sender, move |peer_mgr| {
             peer_mgr.peer_db_mut().peer_discovered(address);
