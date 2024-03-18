@@ -268,6 +268,17 @@ trait WalletRpc {
         label: Option<String>,
     ) -> rpc::RpcResult<()>;
 
+    /// Add a new standalone multi signature address
+    /// Use the `transaction_compose` command to use the new multisig address as input or output
+    #[method(name = "account_add_standalone_multisig")]
+    async fn add_standalone_multisig(
+        &self,
+        account: AccountArg,
+        min_required_signatures: u8,
+        public_keys: Vec<String>,
+        label: Option<String>,
+    ) -> rpc::RpcResult<String>;
+
     /// Get the total balance in the selected account in this wallet. See available options to include more categories, like locked coins.
     #[method(name = "account_balance")]
     async fn get_balance(

@@ -325,6 +325,24 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         )
     }
 
+    async fn add_standalone_multisig(
+        &self,
+        account_arg: AccountArg,
+        min_required_signatures: u8,
+        public_keys: Vec<String>,
+        label: Option<String>,
+    ) -> rpc::RpcResult<String> {
+        rpc::handle_result(
+            self.add_standalone_multisig(
+                account_arg.index::<N>()?,
+                min_required_signatures,
+                public_keys,
+                label,
+            )
+            .await,
+        )
+    }
+
     async fn get_balance(
         &self,
         account_arg: AccountArg,

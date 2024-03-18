@@ -18,6 +18,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use common::{
     address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
+        classic_multisig::ClassicMultisigChallenge,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCTokenInfo, TokenId, TokenIssuance,
@@ -192,6 +193,16 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<(), ControllerError<T>> {
         self.wallet
             .add_standalone_private_key(self.account_index, private_key, label)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn add_standalone_multisig(
+        &mut self,
+        challenge: ClassicMultisigChallenge,
+        label: Option<String>,
+    ) -> Result<PublicKeyHash, ControllerError<T>> {
+        self.wallet
+            .add_standalone_multisig(self.account_index, challenge, label)
             .map_err(ControllerError::WalletError)
     }
 

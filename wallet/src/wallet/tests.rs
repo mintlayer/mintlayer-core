@@ -4464,16 +4464,12 @@ fn test_add_standalone_private_key(#[case] seed: Seed) {
         .unwrap();
 
     // get the destination address from the new private key and send some coins to it
-    let address = Address::new(
-        &chain_config,
-        &Destination::PublicKeyHash((&pub_key).into()),
-    )
-    .unwrap();
+    let address =
+        Address::new(&chain_config, Destination::PublicKeyHash((&pub_key).into())).unwrap();
 
     // Generate a new block which sends reward to the new address
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let output =
-        make_address_output(chain_config.as_ref(), address.clone(), block1_amount).unwrap();
+    let output = make_address_output(address.clone(), block1_amount);
 
     let tx =
         SignedTransaction::new(Transaction::new(0, vec![], vec![output]).unwrap(), vec![]).unwrap();

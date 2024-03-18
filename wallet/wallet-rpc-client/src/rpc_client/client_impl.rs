@@ -231,6 +231,24 @@ impl WalletInterface for ClientWalletRpc {
         .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn add_standalone_multisig(
+        &self,
+        account_index: U31,
+        min_required_signatures: u8,
+        public_keys: Vec<String>,
+        label: Option<String>,
+    ) -> Result<String, Self::Error> {
+        WalletRpcClient::add_standalone_multisig(
+            &self.http_client,
+            account_index.into(),
+            min_required_signatures,
+            public_keys,
+            label,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn get_issued_addresses(
         &self,
         account_index: U31,

@@ -122,6 +122,14 @@ pub trait WalletInterface {
         label: Option<String>,
     ) -> Result<(), Self::Error>;
 
+    async fn add_standalone_multisig(
+        &self,
+        account_index: U31,
+        min_required_signatures: u8,
+        public_keys: Vec<String>,
+        label: Option<String>,
+    ) -> Result<String, Self::Error>;
+
     async fn get_issued_addresses(
         &self,
         options: U31,

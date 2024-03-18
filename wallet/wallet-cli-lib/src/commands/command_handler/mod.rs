@@ -651,6 +651,27 @@ where
                 })
             }
 
+            WalletCommand::AddStandaloneMultisig {
+                min_required_signatures,
+                public_keys,
+                label,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                let multisig_address = wallet
+                    .add_standalone_multisig(
+                        selected_account,
+                        min_required_signatures,
+                        public_keys,
+                        label,
+                    )
+                    .await?;
+
+                Ok(ConsoleCommand::SetStatus {
+                    status: self.repl_status().await?,
+                    print_message: format!("Success, the new multisig has been added to the account\n{multisig_address}")
+                })
+            }
+
             WalletCommand::SelectAccount { account_index } => {
                 self.set_selected_account(account_index).await?;
 

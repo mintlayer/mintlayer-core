@@ -19,6 +19,7 @@ use common::{
     address::Address,
     chain::{
         block::timestamp::BlockTimestamp,
+        classic_multisig::ClassicMultisigChallengeError,
         signature::DestinationSigError,
         tokens::{self, IsTokenFreezable, Metadata, TokenCreator, TokenId},
         ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
@@ -106,6 +107,12 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Invalid hex data deposit")]
     InvalidHexData,
+
+    #[error("Provided addresses to add a Multisig are not all public keys")]
+    MultisigNotPublicKey,
+
+    #[error("Invalid multisig: {0}")]
+    InvalidMultisigChallenge(#[from] ClassicMultisigChallengeError),
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {

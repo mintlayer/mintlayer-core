@@ -20,14 +20,14 @@ pub mod types;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
-    num::NonZeroUsize,
+    num::{NonZeroU8, NonZeroUsize},
     path::PathBuf,
     sync::Arc,
     time::Duration,
 };
 
 use chainstate::{tx_verifier::check_transaction, ChainInfo, TokenIssuanceError};
-use crypto::key::{hdkd::u31::U31, PrivateKey};
+use crypto::key::{hdkd::u31::U31, PrivateKey, PublicKey};
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
@@ -40,7 +40,9 @@ use wallet::{
 };
 
 use common::{
+    address::Address,
     chain::{
+        classic_multisig::ClassicMultisigChallenge,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
@@ -225,14 +227,15 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         Ok(NewAccountInfo::new(num, name))
     }
 
+    // FIXME: make this add_standalone_watchonly_address and support all destinations
     pub async fn add_standalone_address(
         &self,
         account_index: U31,
         address: String,
         label: Option<String>,
     ) -> WRpcResult<(), N> {
-        let dest = Address::from_str(&self.chain_config, &address)
-            .and_then(|addr| addr.decode_object(&self.chain_config))
+        let dest = Address::from_string(&self.chain_config, &address)
+            .map(|addr| addr.into_object())
             .map_err(|_| RpcError::InvalidAddress)?;
         let pkh = match dest {
             Destination::PublicKeyHash(pkh) => pkh,
@@ -278,6 +281,57 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             })
             .await??;
         Ok(())
+    }
+
+    pub async fn add_standalone_multisig(
+        &self,
+        account_index: U31,
+        min_required_signatures: u8,
+        public_keys: Vec<String>,
+        label: Option<String>,
+    ) -> WRpcResult<String, N> {
+        let config = ControllerConfig {
+            in_top_x_mb: 5,
+            broadcast_to_mempool: true,
+        }; // irrelevant for issuing addresses
+        let min_required_signatures =
+            NonZeroU8::new(min_required_signatures).ok_or(RpcError::InvalidAddress)?;
+
+        let public_keys = public_keys
+            .into_iter()
+            .map(|addr| {
+                Address::from_string(&self.chain_config, addr)
+                    .map_err(|_| RpcError::InvalidAddress)
+                    .and_then(|dest| match dest.into_object() {
+                        Destination::PublicKey(pk) => Ok(pk),
+                        _ => Err(RpcError::MultisigNotPublicKey),
+                    })
+            })
+            .collect::<WRpcResult<Vec<PublicKey>, N>>()?;
+
+        let challenge = ClassicMultisigChallenge::new(
+            &self.chain_config,
+            min_required_signatures,
+            public_keys,
+        )?;
+
+        let multisig_address = self
+            .wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    w.synced_controller(account_index, config)
+                        .await?
+                        .add_standalone_multisig(challenge, label)
+                })
+            })
+            .await??;
+        let address = Address::new(
+            &self.chain_config,
+            Destination::PublicKeyHash(multisig_address),
+        )
+        .expect("addressable");
+
+        Ok(address.to_string())
     }
 
     pub async fn issue_address(&self, account_index: U31) -> WRpcResult<AddressInfo, N> {
