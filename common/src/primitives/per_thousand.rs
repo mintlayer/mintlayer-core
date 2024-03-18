@@ -23,9 +23,7 @@ use super::Amount;
 
 const DENOMINATOR: u16 = 1000;
 
-#[derive(
-    PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Debug, serde::Serialize, serde::Deserialize,
-)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Debug)]
 pub struct PerThousand(u16);
 
 impl PerThousand {
@@ -98,6 +96,13 @@ pub struct PerThousandParseError {
     bad_value: String,
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+enum StringOrUInt {
+    String(String),
+    UInt(u16),
+}
+
 impl Decode for PerThousand {
     fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
         let decoded_value = u16::decode(input)?;
@@ -111,6 +116,33 @@ impl Decode for PerThousand {
 impl Display for PerThousand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.write_as_percentage_str(f)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PerThousand {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+
+        let value = match StringOrUInt::deserialize(deserializer)? {
+            StringOrUInt::String(s) => Self::from_decimal_str(&s).map_err(|e| {
+                D::Error::custom(format!(
+                    "Provided String for PerThousand ({s}) is not a valid percentage or decimal. Error: {e}"
+                ))
+            })?,
+            StringOrUInt::UInt(v) => {
+                Self::new(v).ok_or(D::Error::custom(format!(
+                    "Integer {} has invalid value for PerThousand",
+                    v
+                )))?
+            }
+        };
+        Ok(value)
+    }
+}
+
+impl serde::Serialize for PerThousand {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.into_percentage_str().serialize(serializer)
     }
 }
 
@@ -237,5 +269,178 @@ mod tests {
 
         let mut encoded_1001: &[u8] = b"\xE9\x03";
         PerThousand::decode(&mut encoded_1001).unwrap_err();
+    }
+
+    #[test]
+    fn test_json_basic() {
+        let v = PerThousand::new(15).unwrap();
+        let v_json = serde_json::to_string(&v).unwrap();
+        assert_eq!("\"1.5%\"", &v_json);
+        let v_decoded = serde_json::from_str::<PerThousand>(&v_json).unwrap();
+        assert_eq!(v_decoded, v);
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_json_roundtrip(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let v = PerThousand::new_from_rng(&mut rng);
+
+        let v_json = serde_json::to_string(&v).unwrap();
+        let v_decoded = serde_json::from_str::<PerThousand>(&v_json).unwrap();
+        assert_eq!(v_decoded, v);
+    }
+
+    #[test]
+    fn test_json_decoding() {
+        assert_eq!(
+            PerThousand::new(20).unwrap(),
+            serde_json::from_str::<PerThousand>("\"2.0%\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(20).unwrap(),
+            serde_json::from_str::<PerThousand>("\"2%\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(20).unwrap(),
+            serde_json::from_str::<PerThousand>("\"0.02\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(20).unwrap(),
+            serde_json::from_str::<PerThousand>("20").unwrap()
+        );
+
+        ////////////////////////////////////////////////////////////////////////
+
+        assert_eq!(
+            PerThousand::new(1000).unwrap(),
+            serde_json::from_str::<PerThousand>("\"100%\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(1000).unwrap(),
+            serde_json::from_str::<PerThousand>("\"100.%\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(1000).unwrap(),
+            serde_json::from_str::<PerThousand>("\"100.0%\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(1000).unwrap(),
+            serde_json::from_str::<PerThousand>("\"1\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(1000).unwrap(),
+            serde_json::from_str::<PerThousand>("\"1.\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(1000).unwrap(),
+            serde_json::from_str::<PerThousand>("1000").unwrap()
+        );
+
+        ////////////////////////////////////////////////////////////////////////
+
+        assert_eq!(
+            PerThousand::new(0).unwrap(),
+            serde_json::from_str::<PerThousand>("\"0%\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(0).unwrap(),
+            serde_json::from_str::<PerThousand>("\"0.%\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(0).unwrap(),
+            serde_json::from_str::<PerThousand>("\"0.0%\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(0).unwrap(),
+            serde_json::from_str::<PerThousand>("\"0.0\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(0).unwrap(),
+            serde_json::from_str::<PerThousand>("\"0.\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(0).unwrap(),
+            serde_json::from_str::<PerThousand>("\"0\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(0).unwrap(),
+            serde_json::from_str::<PerThousand>("\".0\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(0).unwrap(),
+            serde_json::from_str::<PerThousand>("0").unwrap()
+        );
+
+        ////////////////////////////////////////////////////////////////////////
+
+        assert_eq!(
+            PerThousand::new(1).unwrap(),
+            serde_json::from_str::<PerThousand>("\".1%\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(1).unwrap(),
+            serde_json::from_str::<PerThousand>("\"0.1%\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(1).unwrap(),
+            serde_json::from_str::<PerThousand>("\".1%\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(1).unwrap(),
+            serde_json::from_str::<PerThousand>("\"0.001\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(1).unwrap(),
+            serde_json::from_str::<PerThousand>("\".001\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(1).unwrap(),
+            serde_json::from_str::<PerThousand>("1").unwrap()
+        );
+
+        ////////////////////////////////////////////////////////////////////////
+
+        assert_eq!(
+            PerThousand::new(421).unwrap(),
+            serde_json::from_str::<PerThousand>("\"42.1%\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(421).unwrap(),
+            serde_json::from_str::<PerThousand>("\"0.421\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(421).unwrap(),
+            serde_json::from_str::<PerThousand>("\".421\"").unwrap()
+        );
+
+        assert_eq!(
+            PerThousand::new(421).unwrap(),
+            serde_json::from_str::<PerThousand>("421").unwrap()
+        );
     }
 }
