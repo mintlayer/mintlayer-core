@@ -21,7 +21,7 @@ use crate::{
     WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
 use common::{
-    address::{pubkeyhash::PublicKeyHash, Address},
+    address::Address,
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
@@ -242,7 +242,7 @@ macro_rules! impl_read_ops {
             fn get_account_standalone_keys(
                 &self,
                 account_id: &AccountId,
-            ) -> crate::Result<BTreeMap<PublicKeyHash, AccountStandaloneKey>> {
+            ) -> crate::Result<BTreeMap<Destination, AccountStandaloneKey>> {
                 self.storage
                     .get::<db::DBStandaloneKeys, _>()
                     .prefix_iter_decoded(account_id)

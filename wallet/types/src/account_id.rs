@@ -16,7 +16,7 @@
 use crate::keys::KeyPurpose;
 use common::{
     address::pubkeyhash::PublicKeyHash,
-    chain::{OutPointSourceId, Transaction},
+    chain::{Destination, OutPointSourceId, Transaction},
     primitives::Id,
 };
 use crypto::key::extended::ExtendedPublicKey;
@@ -81,4 +81,4 @@ pub type AccountWalletCreatedTxId = AccountPrefixedId<Id<Transaction>>;
 pub type AccountWalletTxId = AccountPrefixedId<OutPointSourceId>;
 pub type AccountDerivationPathId = AccountPrefixedId<DerivationPath>;
 pub type AccountKeyPurposeId = AccountPrefixedId<KeyPurpose>;
-pub type AccountAddress = AccountPrefixedId<PublicKeyHash>;
+pub type AccountAddress = AccountPrefixedId<Destination>;
