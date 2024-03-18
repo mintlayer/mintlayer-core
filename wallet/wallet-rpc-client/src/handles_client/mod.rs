@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, path::PathBuf, str::FromStr};
+use std::{fmt::Debug, num::NonZeroUsize, path::PathBuf, str::FromStr};
 
 use chainstate::ChainInfo;
 use common::{
@@ -1083,6 +1083,18 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .get_node_block(hash.into())
             .await
             .map(|block_opt| block_opt.map(|block| block.hex_encode()))
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn node_get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: NonZeroUsize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
+        self.wallet_rpc
+            .node_get_block_ids_as_checkpoints(start_height, end_height, step)
+            .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 }

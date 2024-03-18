@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::PathBuf;
+use std::{num::NonZeroUsize, path::PathBuf};
 
 use chainstate::ChainInfo;
 use common::{
@@ -491,4 +491,11 @@ pub trait WalletInterface {
     ) -> Result<(), Self::Error>;
 
     async fn node_block(&self, block_id: String) -> Result<Option<String>, Self::Error>;
+
+    async fn node_get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: NonZeroUsize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error>;
 }

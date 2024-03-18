@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{num::NonZeroUsize, sync::Arc};
 
 use chainstate::{
     BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, Locator,
@@ -46,7 +46,10 @@ mockall::mock! {
         fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
         fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
         fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
-        fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError>;
+        fn preliminary_headers_check(
+            &self,
+            headers: &[SignedBlockHeader],
+        )-> Result<(), ChainstateError>;
         fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;
         fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError>;
         fn get_best_block_header(&self) -> Result<SignedBlockHeader, ChainstateError>;
@@ -69,6 +72,12 @@ mockall::mock! {
         fn get_block_header(&self, block_id: Id<Block>) -> Result<Option<SignedBlockHeader>, ChainstateError>;
         fn get_locator(&self) -> Result<Locator, ChainstateError>;
         fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError>;
+        fn get_block_ids_as_checkpoints(
+            &self,
+            start_height: BlockHeight,
+            end_height: BlockHeight,
+            step: NonZeroUsize,
+        ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, ChainstateError>;
         fn get_mainchain_headers_by_locator(
             &self,
             locator: &Locator,

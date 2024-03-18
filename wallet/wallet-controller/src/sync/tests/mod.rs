@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use std::{
+    num::NonZeroUsize,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -226,6 +227,20 @@ impl NodeInterface for MockNode {
             .unwrap()
             .chainstate
             .get_mainchain_blocks(from, max_count)
+            .unwrap())
+    }
+    async fn get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: NonZeroUsize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
+        Ok(self
+            .tf
+            .lock()
+            .unwrap()
+            .chainstate
+            .get_block_ids_as_checkpoints(start_height, end_height, step)
             .unwrap())
     }
     async fn get_best_block_height(&self) -> Result<BlockHeight, Self::Error> {

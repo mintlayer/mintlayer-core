@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{fmt::Debug, num::NonZeroUsize, str::FromStr, time::Duration};
+
 use chainstate::ChainInfo;
 use common::{
     address::dehexify::{dehexify_all_addresses, to_dehexified_json},
@@ -25,7 +27,6 @@ use common::{
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
-use std::{fmt::Debug, str::FromStr, time::Duration};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
     account::{PartiallySignedTransaction, TxInfo},
@@ -1020,6 +1021,17 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
             self.get_node_block(hash.into())
                 .await
                 .map(|block_opt| block_opt.map(|block| block.hex_encode())),
+        )
+    }
+
+    async fn node_get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: NonZeroUsize,
+    ) -> rpc::RpcResult<Vec<(BlockHeight, Id<GenBlock>)>> {
+        rpc::handle_result(
+            self.node_get_block_ids_as_checkpoints(start_height, end_height, step).await,
         )
     }
 }

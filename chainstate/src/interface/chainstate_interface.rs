@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
 
 use crate::{detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
@@ -49,7 +48,16 @@ pub trait ChainstateInterface: Send + Sync {
     fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
     fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
-    fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError>;
+
+    /// Check the headers. The first header's parent block must be known.
+    /// Each following header must be connected to the previous one.
+    /// The first header is fully checked; for others, only the most basic checks are performed
+    /// (e.g. checkpoint enforcement).
+    fn preliminary_headers_check(
+        &self,
+        headers: &[SignedBlockHeader],
+    ) -> Result<(), ChainstateError>;
+
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;
     fn is_block_in_main_chain(&self, block_id: &Id<GenBlock>) -> Result<bool, ChainstateError>;
     fn get_min_height_with_allowed_reorg(&self) -> Result<BlockHeight, ChainstateError>;
@@ -83,6 +91,15 @@ pub trait ChainstateInterface: Send + Sync {
 
     /// Returns a locator starting from the specified height.
     fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError>;
+
+    /// Returns mainchain block ids with heights in the range start_height..end_height using
+    /// the given step;
+    fn get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: NonZeroUsize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, ChainstateError>;
 
     /// Returns a list of mainchain block headers starting from the locator's highest block that
     /// is in the main chain (or genesis, if there is no such block).

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{future::pending, path::PathBuf};
+use std::{future::pending, num::NonZeroUsize, path::PathBuf};
 
 use crate::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 
@@ -1103,5 +1103,21 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::node_block(&self.http_client, block_id)
             .await
             .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn node_get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: NonZeroUsize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
+        WalletRpcClient::node_get_block_ids_as_checkpoints(
+            &self.http_client,
+            start_height,
+            end_height,
+            step,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 }

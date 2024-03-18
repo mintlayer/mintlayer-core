@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::{num::NonZeroUsize, time::Duration};
 
 use chainstate::ChainInfo;
 use common::{
@@ -47,6 +47,12 @@ pub trait NodeInterface {
         from: BlockHeight,
         max_count: usize,
     ) -> Result<Vec<Block>, Self::Error>;
+    async fn get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: NonZeroUsize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error>;
     async fn get_best_block_height(&self) -> Result<BlockHeight, Self::Error>;
     async fn get_block_id_at_height(
         &self,

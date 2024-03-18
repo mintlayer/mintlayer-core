@@ -17,19 +17,21 @@ mod interface;
 mod server_impl;
 pub mod types;
 
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+    num::NonZeroUsize,
+    path::PathBuf,
+    sync::Arc,
+    time::Duration,
+};
+
 use chainstate::{tx_verifier::check_transaction, ChainInfo, TokenIssuanceError};
 use crypto::key::hdkd::u31::U31;
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt::Debug,
-    path::PathBuf,
-    sync::Arc,
-    time::Duration,
-};
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
@@ -1447,6 +1449,18 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
 
     pub async fn get_node_block(&self, block_id: Id<Block>) -> WRpcResult<Option<Block>, N> {
         self.node.get_block(block_id).await.map_err(RpcError::RpcError)
+    }
+
+    pub async fn node_get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: NonZeroUsize,
+    ) -> WRpcResult<Vec<(BlockHeight, Id<GenBlock>)>, N> {
+        self.node
+            .get_block_ids_as_checkpoints(start_height, end_height, step)
+            .await
+            .map_err(RpcError::RpcError)
     }
 }
 

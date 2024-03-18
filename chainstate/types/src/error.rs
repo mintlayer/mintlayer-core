@@ -54,6 +54,11 @@ pub enum PropertyQueryError {
     PoolBalanceReadError(PoolId),
     #[error("Invalid starting block height: {0}")]
     InvalidStartingBlockHeightForMainchainBlocks(BlockHeight),
+    #[error("Invalid block height range: {start}..{end}")]
+    InvalidBlockHeightRange {
+        start: BlockHeight,
+        end: BlockHeight,
+    },
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

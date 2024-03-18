@@ -13,19 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{iter, time::Duration};
+use std::{collections::BTreeMap, iter, num::NonZeroUsize, time::Duration};
 
 use rstest::rstest;
 
-use chainstate::{BlockSource, ChainstateConfig, ChainstateError};
+use chainstate::{BlockSource, ChainstateConfig, ChainstateError, CheckBlockError};
 use chainstate_test_framework::TestFramework;
 use chainstate_types::PropertyQueryError;
 use common::{
     chain::{
+        self,
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
         GenBlock,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable, H256},
+    Uint256,
 };
 use crypto::random::Rng;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -675,7 +677,10 @@ fn header_check_for_orphan(#[case] seed: Seed) {
         let block = tf.make_block_builder().make_orphan(&mut rng).build();
         let block_id = block.get_id();
 
-        let err = tf.chainstate.preliminary_header_check(block.header().clone()).unwrap_err();
+        let err = tf
+            .chainstate
+            .preliminary_headers_check(std::slice::from_ref(block.header()))
+            .unwrap_err();
         assert_eq!(
             err,
             ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
@@ -704,5 +709,228 @@ fn header_check_for_orphan(#[case] seed: Seed) {
                 chainstate::BlockError::PrevBlockNotFoundForNewBlock(block_id)
             )
         );
+    });
+}
+
+// Ensure that preliminary_headers_check succeeds when all headers satisfy the checkpoints
+// and fails when some of them do not.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn headers_check_with_checkpoints(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+
+        let (parent_block, block_headers) = {
+            let mut tf = TestFramework::builder(&mut rng).build();
+            let parent_block_id =
+                tf.create_chain_return_ids(&tf.genesis().get_id().into(), 1, &mut rng).unwrap()[0];
+            let parent_block = tf
+                .chainstate
+                .get_block(tf.to_chain_block_id(&parent_block_id))
+                .unwrap()
+                .unwrap();
+            let ids =
+                tf.create_chain_return_ids(&parent_block.get_id().into(), 10, &mut rng).unwrap();
+            let block_headers = ids
+                .iter()
+                .map(|id| {
+                    let id = tf.to_chain_block_id(id);
+                    tf.chainstate.get_block_header(id).unwrap().unwrap()
+                })
+                .collect::<Vec<_>>();
+            (parent_block, block_headers)
+        };
+
+        // All blocks are checkpointed; all checkpoints are satisfied.
+        {
+            let checkpoints = block_headers
+                .iter()
+                .enumerate()
+                .map(|(idx, header)| (BlockHeight::new(idx as u64 + 2), header.block_id().into()))
+                .collect::<BTreeMap<_, _>>();
+
+            let mut tf = TestFramework::builder(&mut rng)
+                .with_chain_config(
+                    chain::config::create_unit_test_config_builder()
+                        .checkpoints(checkpoints)
+                        .build(),
+                )
+                .build();
+            tf.process_block(parent_block.clone(), BlockSource::Local).unwrap();
+
+            tf.chainstate.preliminary_headers_check(&block_headers).unwrap();
+        }
+
+        // A few blocks are checkpointed; all checkpoints are satisfied.
+        {
+            let checkpoints = [
+                (BlockHeight::new(3), block_headers[1].block_id().into()),
+                (BlockHeight::new(7), block_headers[5].block_id().into()),
+            ]
+            .into_iter()
+            .collect::<BTreeMap<_, _>>();
+
+            let mut tf = TestFramework::builder(&mut rng)
+                .with_chain_config(
+                    chain::config::create_unit_test_config_builder()
+                        .checkpoints(checkpoints)
+                        .build(),
+                )
+                .build();
+            tf.process_block(parent_block.clone(), BlockSource::Local).unwrap();
+
+            tf.chainstate.preliminary_headers_check(&block_headers).unwrap();
+        }
+
+        // All blocks are checkpointed; some checkpoints are not satisfied.
+        {
+            let mut checkpoints = block_headers
+                .iter()
+                .enumerate()
+                .map(|(idx, header)| (BlockHeight::new(idx as u64 + 2), header.block_id().into()))
+                .collect::<BTreeMap<_, _>>();
+            let good_block_id = Id::new(Uint256::from_u64(12345).into());
+            let bad_block_id = checkpoints.insert(BlockHeight::new(5), good_block_id).unwrap();
+
+            let mut tf = TestFramework::builder(&mut rng)
+                .with_chain_config(
+                    chain::config::create_unit_test_config_builder()
+                        .checkpoints(checkpoints)
+                        .build(),
+                )
+                .build();
+            tf.process_block(parent_block.clone(), BlockSource::Local).unwrap();
+
+            let err = tf.chainstate.preliminary_headers_check(&block_headers).unwrap_err();
+            assert_eq!(
+                err,
+                ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckpointMismatch(
+                        tf.to_chain_block_id(&good_block_id),
+                        tf.to_chain_block_id(&bad_block_id)
+                    )
+                ))
+            );
+        }
+
+        // A few blocks are checkpointed; some checkpoints are not satisfied.
+        {
+            let good_block_id = Id::new(Uint256::from_u64(12345).into());
+            let bad_block_id = block_headers[5].block_id().into();
+            let checkpoints = [
+                (BlockHeight::new(3), block_headers[1].block_id().into()),
+                (BlockHeight::new(7), good_block_id),
+            ]
+            .into_iter()
+            .collect::<BTreeMap<_, _>>();
+
+            let mut tf = TestFramework::builder(&mut rng)
+                .with_chain_config(
+                    chain::config::create_unit_test_config_builder()
+                        .checkpoints(checkpoints)
+                        .build(),
+                )
+                .build();
+            tf.process_block(parent_block.clone(), BlockSource::Local).unwrap();
+
+            let err = tf.chainstate.preliminary_headers_check(&block_headers).unwrap_err();
+            assert_eq!(
+                err,
+                ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckpointMismatch(
+                        tf.to_chain_block_id(&good_block_id),
+                        tf.to_chain_block_id(&bad_block_id)
+                    )
+                ))
+            );
+        }
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_block_ids_as_checkpoints(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut btf = TestFramework::builder(&mut rng).build();
+
+        let locator = btf.chainstate.get_locator().unwrap();
+        assert_eq!(locator.len(), 1);
+        assert_eq!(&locator[0], &btf.genesis().get_id());
+
+        let genesis_id = btf.genesis().get_id().into();
+        let block_ids = btf.create_chain_return_ids(&genesis_id, 100, &mut rng).unwrap();
+
+        let start = 10.into();
+        let end = 0.into();
+        let bad_range_error = btf
+            .chainstate
+            .get_block_ids_as_checkpoints(start, end, NonZeroUsize::new(1).unwrap())
+            .unwrap_err();
+        assert_eq!(
+            bad_range_error,
+            ChainstateError::FailedToReadProperty(PropertyQueryError::InvalidBlockHeightRange {
+                start,
+                end,
+            })
+        );
+
+        let result = btf
+            .chainstate
+            .get_block_ids_as_checkpoints(0.into(), 5.into(), NonZeroUsize::new(1).unwrap())
+            .unwrap();
+        assert_eq!(
+            result,
+            [
+                (0.into(), genesis_id),
+                (1.into(), block_ids[0]),
+                (2.into(), block_ids[1]),
+                (3.into(), block_ids[2]),
+                (4.into(), block_ids[3]),
+            ]
+        );
+
+        let result = btf
+            .chainstate
+            .get_block_ids_as_checkpoints(0.into(), 1000000.into(), NonZeroUsize::new(20).unwrap())
+            .unwrap();
+        assert_eq!(
+            result,
+            [
+                (0.into(), genesis_id),
+                (20.into(), block_ids[19]),
+                (40.into(), block_ids[39]),
+                (60.into(), block_ids[59]),
+                (80.into(), block_ids[79]),
+                (100.into(), block_ids[99]),
+            ]
+        );
+
+        let result = btf
+            .chainstate
+            .get_block_ids_as_checkpoints(2.into(), 10.into(), NonZeroUsize::new(3).unwrap())
+            .unwrap();
+        assert_eq!(
+            result,
+            [(2.into(), block_ids[1]), (5.into(), block_ids[4]), (8.into(), block_ids[7]),]
+        );
+
+        let result = btf
+            .chainstate
+            .get_block_ids_as_checkpoints(10.into(), 10.into(), NonZeroUsize::new(1).unwrap())
+            .unwrap();
+        assert_eq!(result, []);
+
+        let result = btf
+            .chainstate
+            .get_block_ids_as_checkpoints(
+                1000000.into(),
+                2000000.into(),
+                NonZeroUsize::new(1).unwrap(),
+            )
+            .unwrap();
+        assert_eq!(result, []);
     });
 }

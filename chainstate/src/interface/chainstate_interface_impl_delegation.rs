@@ -15,6 +15,7 @@
 
 use std::{
     collections::BTreeMap,
+    num::NonZeroUsize,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
@@ -75,8 +76,11 @@ where
         self.deref().preliminary_block_check(block)
     }
 
-    fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError> {
-        self.deref().preliminary_header_check(header)
+    fn preliminary_headers_check(
+        &self,
+        headers: &[SignedBlockHeader],
+    ) -> Result<(), ChainstateError> {
+        self.deref().preliminary_headers_check(headers)
     }
 
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError> {
@@ -131,6 +135,15 @@ where
 
     fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError> {
         self.deref().get_locator_from_height(height)
+    }
+
+    fn get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: NonZeroUsize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, ChainstateError> {
+        self.deref().get_block_ids_as_checkpoints(start_height, end_height, step)
     }
 
     fn get_mainchain_headers_by_locator(

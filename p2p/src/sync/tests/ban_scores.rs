@@ -18,12 +18,16 @@ use tokio::sync::mpsc::unbounded_channel;
 use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, CheckBlockError};
 use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{
-    chain::{output_value::OutputValue, OutPointSourceId, TxInput, TxOutput},
-    primitives::{Amount, Id, Idable, H256},
+    chain::{
+        self, output_value::OutputValue, ChainConfig, GenBlock, OutPointSourceId, TxInput, TxOutput,
+    },
+    primitives::{Amount, BlockHeight, Id, Idable, H256},
+    Uint256,
 };
 use consensus::{ConsensusPoSError, ConsensusVerificationError};
 use crypto::random::Rng;
 use mempool::error::{MempoolPolicyError, TxValidationError};
+use p2p_test_utils::create_n_blocks;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
@@ -145,4 +149,87 @@ async fn receive_header_with_invalid_parent_block(#[case] seed: Seed) {
         node.join_subsystem_manager().await;
     })
     .await;
+}
+
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn receive_headers_1st_violates_checkpoint(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = make_chain_config_with_checkpoints(&[(
+            3.into(),
+            Id::new(Uint256::from_u64(12345).into()),
+        )]);
+
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+        tf.create_chain(&tf.genesis().get_id().into(), 2, &mut rng).unwrap();
+
+        let blocks = create_n_blocks(&mut tf, 10);
+        let headers = blocks.iter().map(|block| block.header().clone()).collect::<Vec<_>>();
+
+        let mut node = TestNode::builder(protocol_version)
+            .with_chainstate(tf.into_chainstate())
+            .build()
+            .await;
+
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
+
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(headers)))
+            .await;
+
+        let (adjusted_peer_id, ban_score_delta) = node.receive_adjust_peer_score_event().await;
+        assert_eq!(adjusted_peer_id, peer.get_id());
+        assert_eq!(ban_score_delta, 100);
+
+        node.join_subsystem_manager().await;
+    })
+    .await;
+}
+
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn receive_headers_nth_violates_checkpoint(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = make_chain_config_with_checkpoints(&[(
+            3.into(),
+            Id::new(Uint256::from_u64(12345).into()),
+        )]);
+
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+        let blocks = create_n_blocks(&mut tf, 10);
+        let headers = blocks.iter().map(|block| block.header().clone()).collect::<Vec<_>>();
+
+        let mut node = TestNode::builder(protocol_version)
+            .with_chainstate(tf.into_chainstate())
+            .build()
+            .await;
+
+        let peer = node.connect_peer(PeerId::new(), protocol_version).await;
+
+        peer.send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(headers)))
+            .await;
+
+        let (adjusted_peer_id, ban_score_delta) = node.receive_adjust_peer_score_event().await;
+        assert_eq!(adjusted_peer_id, peer.get_id());
+        assert_eq!(ban_score_delta, 100);
+
+        node.join_subsystem_manager().await;
+    })
+    .await;
+}
+
+fn make_chain_config_with_checkpoints(checkpoints: &[(BlockHeight, Id<GenBlock>)]) -> ChainConfig {
+    chain::config::create_unit_test_config_builder()
+        .checkpoints(checkpoints.iter().copied().collect())
+        .build()
 }

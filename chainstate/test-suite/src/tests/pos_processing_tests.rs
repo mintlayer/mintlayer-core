@@ -593,7 +593,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     let genesis = create_custom_genesis_with_stake_pool(staking_pk, vrf_pk);
-    let chain_config = ConfigBuilder::new(ChainType::Testnet)
+    let chain_config = ConfigBuilder::new(ChainType::Regtest)
         .consensus_upgrades(net_upgrades)
         .genesis_custom(genesis)
         .build();
@@ -1653,7 +1653,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
     let genesis = create_custom_genesis_with_stake_pool(staker_pk, vrf_pk);
 
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
-    let chain_config = ConfigBuilder::new(ChainType::Testnet)
+    let chain_config = ConfigBuilder::new(ChainType::Regtest)
         .consensus_upgrades(net_upgrades)
         .genesis_custom(genesis)
         .build();

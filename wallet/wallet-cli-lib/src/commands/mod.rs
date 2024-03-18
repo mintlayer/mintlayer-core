@@ -18,7 +18,7 @@ mod helper_types;
 
 pub use command_handler::CommandHandler;
 
-use std::{fmt::Debug, path::PathBuf, time::Duration};
+use std::{fmt::Debug, num::NonZeroUsize, path::PathBuf, time::Duration};
 
 use clap::Parser;
 
@@ -535,6 +535,7 @@ pub enum WalletCommand {
 
     /// Get connected peers in JSON format
     #[clap(name = "node-list-connected-peers-json")]
+    #[clap(hide = true)]
     ConnectedPeersJson,
 
     #[clap(name = "node-list-reserved-peers")]
@@ -594,6 +595,14 @@ pub enum WalletCommand {
     #[clap(name = "node-generate-blocks")]
     #[clap(hide = true)]
     GenerateBlocks { block_count: u32 },
+
+    #[clap(name = "node-get-block-ids-as-checkpoints")]
+    #[clap(hide = true)]
+    GetBlockIdsAsCheckpoints {
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: NonZeroUsize,
+    },
 
     #[clap(name = "transaction-compose")]
     TransactionCompose {

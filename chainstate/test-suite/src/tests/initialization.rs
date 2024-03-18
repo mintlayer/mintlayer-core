@@ -69,13 +69,13 @@ fn genesis_check_err(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
     // Two different configs with separate genesis IDs.
 
     use chainstate::ChainstateConfig;
-    let conf0 = ChainConfigBuilder::new(ChainType::Mainnet)
+    let conf0 = ChainConfigBuilder::new(ChainType::Regtest)
         .consensus_upgrades(NetUpgrades::unit_tests())
         .genesis_unittest(common::chain::Destination::ScriptHash(Id::new(
             [0x00; 32].into(),
         )))
         .build();
-    let conf1 = ChainConfigBuilder::new(ChainType::Mainnet)
+    let conf1 = ChainConfigBuilder::new(ChainType::Regtest)
         .consensus_upgrades(NetUpgrades::unit_tests())
         .genesis_unittest(common::chain::Destination::ScriptHash(Id::new(
             [0x01; 32].into(),

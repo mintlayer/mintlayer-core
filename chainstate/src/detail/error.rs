@@ -88,6 +88,8 @@ pub enum BlockError {
     InvariantErrorInvalidTip(Id<GenBlock>),
     #[error("Attempt to connect invalid block {0}")]
     InvariantErrorAttemptToConnectInvalidBlock(Id<GenBlock>),
+    #[error("Disconnected headers")]
+    InvariantErrorDisconnectedHeaders,
 }
 
 // Note: this enum isn't supposed to represent a complete error; this is why its elements

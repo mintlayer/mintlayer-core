@@ -74,6 +74,8 @@ impl BanScore for BlockError {
             BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => 0,
             BlockError::InvariantErrorInvalidTip(_) => 0,
             BlockError::InvariantErrorAttemptToConnectInvalidBlock(_) => 0,
+            BlockError::InvariantErrorDisconnectedHeaders => 0,
+
             BlockError::TokensAccountingError(err) => err.ban_score(),
         }
     }

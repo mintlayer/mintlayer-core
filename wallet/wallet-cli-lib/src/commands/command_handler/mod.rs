@@ -19,7 +19,10 @@ use std::{fmt::Write, str::FromStr};
 
 use common::{
     address::Address,
-    chain::{ChainConfig, Destination, SignedTransaction, TxOutput, UtxoOutPoint},
+    chain::{
+        config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, ChainConfig,
+        Destination, SignedTransaction, TxOutput, UtxoOutPoint,
+    },
     primitives::H256,
     text_summary::TextSummary,
 };
@@ -580,6 +583,22 @@ where
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 wallet.node_generate_blocks(selected_account, block_count).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
+            }
+
+            WalletCommand::GetBlockIdsAsCheckpoints {
+                start_height,
+                end_height,
+                step,
+            } => {
+                let block_ids = self
+                    .wallet()
+                    .await?
+                    .node_get_block_ids_as_checkpoints(start_height, end_height, step)
+                    .await?;
+
+                Ok(ConsoleCommand::Print(
+                    print_block_heights_ids_as_checkpoints_data(&block_ids),
+                ))
             }
 
             WalletCommand::CreateNewAccount { name } => {

@@ -23,6 +23,7 @@ pub mod const_value;
 pub mod cookie;
 pub mod counttracker;
 pub mod default_data_dir;
+pub mod displayable_option;
 pub mod ensure;
 pub mod eventhandler;
 pub mod exp_rand;

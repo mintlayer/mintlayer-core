@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
 
 use crate::{
     detail::{
@@ -40,7 +40,7 @@ use common::{
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
 use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
-use utils::eventhandler::EventHandler;
+use utils::{displayable_option::DisplayableOption, eventhandler::EventHandler};
 use utils_networking::broadcaster;
 use utxo::{Utxo, UtxosView};
 
@@ -94,10 +94,16 @@ where
             .map_err(ChainstateError::BlockInvalidatorError)
     }
 
-    #[tracing::instrument(skip_all, fields(block_id = %header.get_id()))]
-    fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError> {
+    #[tracing::instrument(
+        skip_all,
+        fields(first_block_id = %headers.first().map(|header| header.get_id()).as_displayable())
+    )]
+    fn preliminary_headers_check(
+        &self,
+        headers: &[SignedBlockHeader],
+    ) -> Result<(), ChainstateError> {
         BlockChecker::new(&self.chainstate)
-            .preliminary_header_check(header)
+            .preliminary_headers_check(headers)
             .map_err(ChainstateError::ProcessBlockError)
     }
 
@@ -209,6 +215,20 @@ where
             .query()
             .map_err(ChainstateError::from)?
             .get_locator_from_height(height)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: NonZeroUsize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_block_ids_as_checkpoints(start_height, end_height, step)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 

@@ -131,6 +131,19 @@ impl NodeInterface for WalletHandlesClient {
         Ok(blocks)
     }
 
+    async fn get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: NonZeroUsize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
+        let block_ids = self
+            .chainstate
+            .call(move |this| this.get_block_ids_as_checkpoints(start_height, end_height, step))
+            .await??;
+        Ok(block_ids)
+    }
+
     async fn get_best_block_height(&self) -> Result<BlockHeight, Self::Error> {
         let result = self.chainstate.call(move |this| this.get_best_block_height()).await??;
         Ok(result)

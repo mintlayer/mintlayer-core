@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::{num::NonZeroUsize, time::Duration};
 
 use chainstate::ChainInfo;
 use common::{
@@ -71,6 +71,15 @@ impl NodeInterface for ColdWalletClient {
         _from: BlockHeight,
         _max_count: usize,
     ) -> Result<Vec<Block>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn get_block_ids_as_checkpoints(
+        &self,
+        _start_height: BlockHeight,
+        _end_height: BlockHeight,
+        _step: NonZeroUsize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 

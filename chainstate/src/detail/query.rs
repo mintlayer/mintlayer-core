@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::num::NonZeroUsize;
+
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
@@ -27,6 +29,7 @@ use common::{
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 use tokens_accounting::TokensAccountingStorageRead;
+use utils::ensure;
 
 use super::{chainstateref, tx_verification_strategy::TransactionVerificationStrategy};
 
@@ -159,6 +162,43 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
             .map(Locator::new)
+    }
+
+    pub fn get_block_ids_as_checkpoints(
+        &self,
+        start_height: BlockHeight,
+        end_height: BlockHeight,
+        step: NonZeroUsize,
+    ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, PropertyQueryError> {
+        ensure!(
+            end_height >= start_height,
+            PropertyQueryError::InvalidBlockHeightRange {
+                start: start_height,
+                end: end_height
+            }
+        );
+
+        let max_height = self.chainstate_ref.get_best_block_index()?.block_height();
+
+        if start_height > max_height || start_height == end_height {
+            return Ok(Vec::new());
+        }
+
+        let start_height = std::cmp::min(start_height, max_height);
+        let end_height = std::cmp::min(end_height, max_height.next_height());
+
+        let iter =
+            (start_height.into_int()..end_height.into_int())
+                .step_by(step.into())
+                .map(|height| {
+                    let height = BlockHeight::new(height);
+                    Ok((
+                        height,
+                        self.chainstate_ref.get_existing_block_id_by_height(&height)?,
+                    ))
+                });
+
+        itertools::process_results(iter, |iter| iter.collect::<Vec<_>>())
     }
 
     pub fn is_block_in_main_chain(&self, id: &Id<GenBlock>) -> Result<bool, PropertyQueryError> {

@@ -149,11 +149,11 @@ fn test_process_block_with_bad_parent(#[case] seed: Seed) {
     });
 }
 
-// Check a preliminary_header_check failure due to a bad parent.
+// Check a preliminary_headers_check failure due to a bad parent.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_preliminary_header_check_with_bad_parent(#[case] seed: Seed) {
+fn test_preliminary_headers_check_with_bad_parent(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -169,7 +169,10 @@ fn test_preliminary_header_check_with_bad_parent(#[case] seed: Seed) {
         // Now create a good block, but using bad_block as the parent.
         let (block, _) = build_block_spend_parent_reward(&mut tf, &bad_block_id.into(), &mut rng);
 
-        let error = tf.chainstate.preliminary_header_check(block.header().clone()).unwrap_err();
+        let error = tf
+            .chainstate
+            .preliminary_headers_check(std::slice::from_ref(block.header()))
+            .unwrap_err();
         assert_eq!(
             error,
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
