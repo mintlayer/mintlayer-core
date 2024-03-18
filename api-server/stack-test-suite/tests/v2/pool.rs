@@ -42,7 +42,7 @@ async fn invalid_pool_id() {
 async fn pool_id_not_fund() {
     let pool_id = PoolId::new(H256::zero());
     let chain_config = create_unit_test_config();
-    let pool_id = Address::new(&chain_config, &pool_id).unwrap();
+    let pool_id = Address::new(&chain_config, pool_id).unwrap();
     let (task, response) = spawn_webserver(&format! {"/api/v2/pool/{pool_id}"}).await;
 
     assert_eq!(response.status(), 404);
@@ -190,7 +190,7 @@ async fn ok(#[case] seed: Seed) {
     let chain_config = create_unit_test_config();
     let pools = rx.await.unwrap();
     for (pool_id, pool_data, delegations, _) in pools {
-        let pool_id = Address::new(&chain_config, &pool_id).unwrap();
+        let pool_id = Address::new(&chain_config, pool_id).unwrap();
         let url = format!("/api/v2/pool/{pool_id}");
 
         // Given that the listener port is open, this will block until a
@@ -206,7 +206,8 @@ async fn ok(#[case] seed: Seed) {
         let body: serde_json::Value = serde_json::from_str(&body).unwrap();
         let body = body.as_object().unwrap();
 
-        let decommission_key = Address::new(&chain_config, pool_data.decommission_key()).unwrap();
+        let decommission_key =
+            Address::new(&chain_config, pool_data.decommission_key().clone()).unwrap();
         assert_eq!(
             body.get("decommission_destination").unwrap(),
             decommission_key.as_str(),
@@ -232,7 +233,7 @@ async fn ok(#[case] seed: Seed) {
             ))
         );
 
-        let vrf_key = Address::new(&chain_config, pool_data.vrf_public_key()).unwrap();
+        let vrf_key = Address::new(&chain_config, pool_data.vrf_public_key().clone()).unwrap();
         assert_eq!(
             body.get("vrf_public_key").unwrap(),
             &serde_json::json!(vrf_key.as_str())
@@ -251,7 +252,7 @@ async fn ok(#[case] seed: Seed) {
 
         assert_eq!(delegations.len(), body.len());
         for delegation in &delegations {
-            let delegation_id = Address::new(&chain_config, &delegation.0).unwrap();
+            let delegation_id = Address::new(&chain_config, delegation.0).unwrap();
             let resp = body
                 .iter()
                 .find(|d| {
@@ -269,12 +270,12 @@ async fn ok(#[case] seed: Seed) {
                 &serde_json::json!(amount_to_json(delegation.1, chain_config.coin_decimals()))
             );
 
-            let destination = Address::new(&chain_config, &delegation.2).unwrap();
+            let destination = Address::new(&chain_config, delegation.2.clone()).unwrap();
             assert_eq!(resp.get("spend_destination").unwrap(), destination.as_str());
         }
 
         for (delegation_id, balance, destination, _) in delegations {
-            let delegation_id = Address::new(&chain_config, &delegation_id).unwrap();
+            let delegation_id = Address::new(&chain_config, delegation_id).unwrap();
             let url = format!("/api/v2/delegation/{delegation_id}");
             let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
                 .await
@@ -294,7 +295,7 @@ async fn ok(#[case] seed: Seed) {
                 body.get("balance").unwrap(),
                 &serde_json::json!(amount_to_json(balance, chain_config.coin_decimals()))
             );
-            let destination = Address::new(&chain_config, &destination).unwrap();
+            let destination = Address::new(&chain_config, destination).unwrap();
             assert_eq!(body.get("spend_destination").unwrap(), destination.as_str());
         }
     }

@@ -188,7 +188,7 @@ impl<'a, A: Addressable + DecodeAll> regex::Replacer for AddressableReplacer<'a,
                 return;
             }
         };
-        let address = match Address::new(self.chain_config, &obj) {
+        let address = match Address::new(self.chain_config, obj) {
             Ok(address) => address,
             Err(_) => {
                 logging::log::error!(
@@ -269,7 +269,7 @@ mod tests {
         let res = HexifiedAddress::<Destination>::replace_with_address(&chain_config, &s);
         assert_eq!(
             res,
-            format!("{}", Address::new(&chain_config, &address).unwrap())
+            Address::new(&chain_config, address).unwrap().into_string(),
         );
     }
 
@@ -336,7 +336,7 @@ mod tests {
 
         let expected = strings
             .iter()
-            .zip(keys.iter())
+            .zip(keys.into_iter())
             .map(|(s, k)| {
                 let address_str = Address::new(&chain_config, k).unwrap();
                 s.clone() + &address_str.to_string()
@@ -477,7 +477,7 @@ mod tests {
 
         {
             // Do the replacement, which will make the hexified address become a real address
-            let expected_address = Address::new(&chain_config, &obj).unwrap();
+            let expected_address = Address::new(&chain_config, obj.clone()).unwrap();
             let obj_json_replaced =
                 HexifiedAddress::<Destination>::replace_with_address(&chain_config, &obj_json);
             assert_eq!(obj_json_replaced, format!("\"{expected_address}\""));

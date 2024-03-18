@@ -831,7 +831,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         delegation_id: DelegationId,
         chain_config: &ChainConfig,
     ) -> Result<Option<Delegation>, ApiServerStorageError> {
-        let delegation_id = Address::new(chain_config, &delegation_id)
+        let delegation_id = Address::new(chain_config, delegation_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
         let row = self
             .tx
@@ -852,9 +852,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         };
 
         let pool_id: String = data.get(0);
-        let pool_id = Address::<PoolId>::from_str(chain_config, &pool_id)
+        let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?
-            .decode_object();
+            .into_object();
         let balance: String = data.get(1);
         let spend_destination: Vec<u8> = data.get(2);
         let next_nonce: Vec<u8> = data.get(3);
@@ -910,11 +910,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 let delegation_id: String = row.get(0);
                 let delegation_id = Address::<DelegationId>::from_str(chain_config, &delegation_id)
                     .map_err(|_| ApiServerStorageError::AddressableError)?
-                    .decode_object();
+                    .into_object();
                 let pool_id: String = row.get(1);
-                let pool_id = Address::<PoolId>::from_str(chain_config, &pool_id)
+                let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
                     .map_err(|_| ApiServerStorageError::AddressableError)?
-                    .decode_object();
+                    .into_object();
                 let balance: String = row.get(2);
                 let spend_destination: Vec<u8> = row.get(3);
                 let next_nonce: Vec<u8> = row.get(4);
@@ -953,9 +953,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
-        let pool_id = Address::new(chain_config, delegation.pool_id())
+        let pool_id = Address::new(chain_config, *delegation.pool_id())
             .map_err(|_| ApiServerStorageError::AddressableError)?;
-        let delegation_id = Address::new(chain_config, &delegation_id)
+        let delegation_id = Address::new(chain_config, delegation_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
 
         self.tx
@@ -1023,7 +1023,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<Option<PoolBlockStats>, ApiServerStorageError> {
         let from_height = Self::block_height_to_postgres_friendly(block_range.0);
         let to_height = Self::block_height_to_postgres_friendly(block_range.1);
-        let pool_id_str = Address::new(chain_config, &pool_id)
+        let pool_id_str = Address::new(chain_config, pool_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
         let row = self
             .tx
@@ -1050,7 +1050,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         pool_id: PoolId,
         chain_config: &ChainConfig,
     ) -> Result<BTreeMap<DelegationId, Delegation>, ApiServerStorageError> {
-        let pool_id_str = Address::new(chain_config, &pool_id)
+        let pool_id_str = Address::new(chain_config, pool_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
         self.tx
             .query(
@@ -1072,7 +1072,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 let delegation_id =
                     Address::<DelegationId>::from_str(chain_config, &delegation_id_str)
                         .map_err(|_| ApiServerStorageError::AddressableError)?
-                        .decode_object();
+                        .into_object();
                 let balance: String = row.get(1);
                 let spend_destination: Vec<u8> = row.get(2);
                 let next_nonce: Vec<u8> = row.get(3);
@@ -1110,7 +1110,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         pool_id: PoolId,
         chain_config: &ChainConfig,
     ) -> Result<Option<PoolData>, ApiServerStorageError> {
-        let pool_id = Address::new(chain_config, &pool_id)
+        let pool_id = Address::new(chain_config, pool_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
         self.tx
             .query_opt(
@@ -1170,9 +1170,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .into_iter()
             .map(|row| -> Result<(PoolId, PoolData), ApiServerStorageError> {
                 let pool_id: String = row.get(0);
-                let pool_id = Address::<PoolId>::from_str(chain_config, &pool_id)
+                let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
                     .map_err(|_| ApiServerStorageError::AddressableError)?
-                    .decode_object();
+                    .into_object();
                 let pool_data: Vec<u8> = row.get(1);
                 let pool_data = PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
@@ -1214,9 +1214,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .into_iter()
             .map(|row| -> Result<(PoolId, PoolData), ApiServerStorageError> {
                 let pool_id: String = row.get(0);
-                let pool_id = Address::<PoolId>::from_str(chain_config, &pool_id)
+                let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
                     .map_err(|_| ApiServerStorageError::AddressableError)?
-                    .decode_object();
+                    .into_object();
                 let pool_data: Vec<u8> = row.get(1);
                 let pool_data = PoolData::decode_all(&mut pool_data.as_slice()).map_err(|e| {
                     ApiServerStorageError::DeserializationError(format!(
@@ -1239,7 +1239,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
         let amount_str = amount_to_str(pool_data.staker_balance().expect("no overflow"));
-        let pool_id = Address::new(chain_config, &pool_id)
+        let pool_id = Address::new(chain_config, pool_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
 
         self.tx

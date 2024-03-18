@@ -887,7 +887,7 @@ where
                 let mut output = format!("Coins amount: {coins}\n");
 
                 for (token_id, amount) in tokens {
-                    let token_id = Address::new(chain_config, &token_id)
+                    let token_id = Address::new(chain_config, token_id)
                         .expect("Encoding token id should never fail");
                     let amount = amount.decimal();
                     writeln!(&mut output, "Token: {token_id} amount: {amount}")
@@ -1385,7 +1385,7 @@ fn format_fees(output: &mut String, fees: Balances, chain_config: &ChainConfig) 
 
     for (token_id, amount) in tokens {
         let token_id =
-            Address::new(chain_config, &token_id).expect("Encoding token id should never fail");
+            Address::new(chain_config, token_id).expect("Encoding token id should never fail");
         let amount = amount.decimal();
         writeln!(output, "Token: {token_id} amount: {amount}")
             .expect("Writing to a memory buffer should not fail");

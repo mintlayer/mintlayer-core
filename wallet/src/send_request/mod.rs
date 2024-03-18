@@ -54,7 +54,7 @@ pub struct SendRequest {
 }
 
 pub fn make_address_output(address: Address<Destination>, amount: Amount) -> TxOutput {
-    TxOutput::Transfer(OutputValue::Coin(amount), address.decode_object())
+    TxOutput::Transfer(OutputValue::Coin(amount), address.into_object())
 }
 
 pub fn make_address_output_token(
@@ -64,7 +64,7 @@ pub fn make_address_output_token(
 ) -> TxOutput {
     TxOutput::Transfer(
         OutputValue::TokenV1(token_id, amount),
-        address.decode_object(),
+        address.into_object(),
     )
 }
 
@@ -84,7 +84,7 @@ pub fn make_mint_token_outputs(
     amount: Amount,
     address: Address<Destination>,
 ) -> Vec<TxOutput> {
-    let destination = address.decode_object();
+    let destination = address.into_object();
     let mint_output = TxOutput::Transfer(OutputValue::TokenV1(token_id, amount), destination);
 
     vec![mint_output]
@@ -96,7 +96,7 @@ pub fn make_unmint_token_outputs(token_id: TokenId, amount: Amount) -> Vec<TxOut
 }
 
 pub fn make_create_delegation_output(address: Address<Destination>, pool_id: PoolId) -> TxOutput {
-    TxOutput::CreateDelegationId(address.decode_object(), pool_id)
+    TxOutput::CreateDelegationId(address.into_object(), pool_id)
 }
 
 pub fn make_address_output_from_delegation(
@@ -110,7 +110,7 @@ pub fn make_address_output_from_delegation(
 
     TxOutput::LockThenTransfer(
         OutputValue::Coin(amount),
-        address.decode_object(),
+        address.into_object(),
         ForBlockCount(num_blocks_to_lock.to_int()),
     )
 }

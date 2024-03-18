@@ -46,14 +46,14 @@ pub enum AddressError {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Address<T> {
     address: String,
-    _marker: std::marker::PhantomData<fn() -> T>,
+    object: T,
 }
 
 impl<T: Addressable> Address<T> {
-    pub fn new(cfg: &ChainConfig, object: &T) -> Result<Self, AddressError> {
+    pub fn new(cfg: &ChainConfig, object: T) -> Result<Self, AddressError> {
         let hrp = object.address_prefix(cfg);
         let address = encoding::encode(hrp, object.encode_to_bytes_for_address())?;
-        Ok(Self::new_internal(address))
+        Ok(Self { address, object })
     }
 
     pub fn from_string(cfg: &ChainConfig, address: String) -> Result<Self, AddressError> {
@@ -64,31 +64,29 @@ impl<T: Addressable> Address<T> {
         let hrp_ok = data.hrp() == object.address_prefix(cfg);
         ensure!(hrp_ok, AddressError::InvalidPrefix(data.hrp().to_owned()));
 
-        Ok(Self::new_internal(address))
+        Ok(Self { address, object })
     }
 
     pub fn from_str(cfg: &ChainConfig, addr_str: &str) -> Result<Self, AddressError> {
         Self::from_string(cfg, addr_str.to_owned())
     }
-
-    pub fn decode_object(&self) -> T {
-        let data = encoding::decode(&self.address).expect("format checked on construction");
-        T::decode_from_bytes_from_address(data.data()).expect("validity checked on construction")
-    }
 }
 
 impl<T> Address<T> {
-    fn new_internal(address: String) -> Self {
-        let _marker = std::marker::PhantomData;
-        Self { address, _marker }
-    }
-
     pub fn as_str(&self) -> &str {
         &self.address
     }
 
     pub fn into_string(self) -> String {
         self.address
+    }
+
+    pub fn as_object(&self) -> &T {
+        &self.object
+    }
+
+    pub fn into_object(self) -> T {
+        self.object
     }
 
     pub fn qrcode(&self) -> Result<impl QrCode + '_, AddressError> {
@@ -137,9 +135,9 @@ mod tests {
         let (_priv_key, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let public_key_hash = PublicKeyHash::from(&pub_key);
         let public_key_hash_dest = Destination::PublicKeyHash(public_key_hash);
-        let address = Address::<Destination>::new(&cfg, &public_key_hash_dest)
+        let address = Address::<Destination>::new(&cfg, public_key_hash_dest.clone())
             .expect("Address from pubkeyhash failed");
-        let public_key_hash_restored_dest = address.decode_object();
+        let public_key_hash_restored_dest = address.into_object();
         assert_eq!(public_key_hash_restored_dest, public_key_hash_dest);
     }
 

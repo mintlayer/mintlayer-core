@@ -738,7 +738,7 @@ impl Account {
         let output_destination = if let Some(dest) = output_address {
             dest
         } else {
-            self.get_new_address(db_tx, KeyPurpose::ReceiveFunds)?.1.decode_object()
+            self.get_new_address(db_tx, KeyPurpose::ReceiveFunds)?.1.into_object()
         };
 
         let pool_data = self.output_cache.pool_data(pool_id)?;
@@ -1208,7 +1208,7 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let new_authority = address.decode_object();
+        let new_authority = address.into_object();
 
         let nonce = token_info.get_next_nonce()?;
         let tx_input = TxInput::AccountCommand(
@@ -1511,7 +1511,8 @@ impl Account {
             self.key_chain.issue_vrf_key(db_tx).map(|(child_number, vrf_key)| {
                 (
                     child_number,
-                    Address::new(&self.chain_config, vrf_key.public_key()).expect("addressable"),
+                    Address::new(&self.chain_config, vrf_key.public_key().clone())
+                        .expect("addressable"),
                 )
             })?,
         )
@@ -2192,7 +2193,7 @@ fn coin_and_token_output_change_fees(
     destination: Option<&Address<Destination>>,
 ) -> WalletResult<(Amount, Amount)> {
     let destination = if let Some(addr) = destination {
-        addr.decode_object()
+        addr.as_object().clone()
     } else {
         let pub_key_hash = PublicKeyHash::from_low_u64_ne(0);
         Destination::PublicKeyHash(pub_key_hash)

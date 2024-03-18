@@ -170,7 +170,7 @@ pub struct PublicKeyInfo {
 impl PublicKeyInfo {
     pub fn new(pub_key: PublicKey, chain_config: &ChainConfig) -> Self {
         let public_key_address =
-            RpcAddress::new(chain_config, &Destination::PublicKey(pub_key.clone()))
+            RpcAddress::new(chain_config, Destination::PublicKey(pub_key.clone()))
                 .expect("addressable");
         Self {
             public_key_hex: pub_key,
@@ -261,16 +261,16 @@ impl PoolInfo {
         let pledge = RpcAmountOut::from_amount_no_padding(pledge, decimals);
 
         Self {
-            pool_id: RpcAddress::new(chain_config, &pool_id).expect("addressable"),
+            pool_id: RpcAddress::new(chain_config, pool_id).expect("addressable"),
             balance,
             pledge,
             height: pool_data.creation_block.height,
             block_timestamp: pool_data.creation_block.timestamp,
-            vrf_public_key: RpcAddress::new(chain_config, &pool_data.vrf_public_key)
+            vrf_public_key: RpcAddress::new(chain_config, pool_data.vrf_public_key)
                 .expect("addressable"),
-            decommission_key: RpcAddress::new(chain_config, &pool_data.decommission_key)
+            decommission_key: RpcAddress::new(chain_config, pool_data.decommission_key)
                 .expect("addressable"),
-            staker: RpcAddress::new(chain_config, &pool_data.stake_destination)
+            staker: RpcAddress::new(chain_config, pool_data.stake_destination)
                 .expect("addressable"),
         }
     }
@@ -294,7 +294,7 @@ impl DelegationInfo {
         let balance = RpcAmountOut::from_amount_no_padding(balance, decimals);
 
         Self {
-            delegation_id: RpcAddress::new(chain_config, &delegation_id).expect("addressable"),
+            delegation_id: RpcAddress::new(chain_config, delegation_id).expect("addressable"),
             balance,
         }
     }

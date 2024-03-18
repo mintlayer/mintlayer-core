@@ -151,7 +151,7 @@ impl TextSummary for TxOutput {
                 OutputValue::TokenV1(id, amount) => {
                     format!(
                         "TokenV1({}, {amount:?})",
-                        Address::new(chain_config, id)
+                        Address::new(chain_config, *id)
                             .expect("Cannot fail due to TokenId being fixed size")
                     )
                 }
@@ -167,18 +167,20 @@ impl TextSummary for TxOutput {
                 format!("OutputTimeLock::ForSeconds({secs} seconds)")
             }
         };
-        let fmt_dest =
-            |d: &Destination| format!("{}", Address::new(chain_config, d).expect("addressable"));
-        let fmt_vrf =
-            |k: &VRFPublicKey| format!("{}", Address::new(chain_config, k).expect("addressable"));
+        let fmt_dest = |d: &Destination| {
+            Address::new(chain_config, d.clone()).expect("addressable").into_string()
+        };
+        let fmt_vrf = |k: &VRFPublicKey| {
+            Address::new(chain_config, k.clone()).expect("addressable").into_string()
+        };
         let fmt_poolid = |id: &PoolId| {
-            Address::new(chain_config, id).expect("Cannot fail because fixed size addressable")
+            Address::new(chain_config, *id).expect("Cannot fail because fixed size addressable")
         };
         let fmt_tknid = |id: &TokenId| {
-            Address::new(chain_config, id).expect("Cannot fail because fixed size addressable")
+            Address::new(chain_config, *id).expect("Cannot fail because fixed size addressable")
         };
         let fmt_delid = |id: &DelegationId| {
-            Address::new(chain_config, id).expect("Cannot fail because fixed size addressable")
+            Address::new(chain_config, *id).expect("Cannot fail because fixed size addressable")
         };
         let fmt_stakepooldata = |p: &StakePoolData| {
             let pledge = fmt_ml(&p.pledge());

@@ -40,7 +40,7 @@ async fn invalid_pool_id() {
 async fn from_to_not_specified() {
     let pool_id = PoolId::new(H256::zero());
     let chain_config = create_unit_test_config();
-    let pool_id = Address::new(&chain_config, &pool_id).unwrap();
+    let pool_id = Address::new(&chain_config, pool_id).unwrap();
     let (task, response) = spawn_webserver(&format! {"/api/v2/pool/{pool_id}/block-stats"}).await;
 
     assert_eq!(response.status(), 400);
@@ -58,7 +58,7 @@ async fn from_to_not_specified() {
 async fn pool_id_not_fund() {
     let pool_id = PoolId::new(H256::zero());
     let chain_config = create_unit_test_config();
-    let pool_id = Address::new(&chain_config, &pool_id).unwrap();
+    let pool_id = Address::new(&chain_config, pool_id).unwrap();
     let (task, response) =
         spawn_webserver(&format! {"/api/v2/pool/{pool_id}/block-stats?from=0&to=0"}).await;
 
@@ -175,7 +175,7 @@ async fn ok(#[case] seed: Seed) {
 
     let chain_config = create_regtest();
     let (pool_id, num_blocks, (from, to)) = rx.await.unwrap();
-    let pool_id = Address::new(&chain_config, &pool_id).unwrap();
+    let pool_id = Address::new(&chain_config, pool_id).unwrap();
     let url = format!("/api/v2/pool/{pool_id}/block-stats?from={from}&to={to}");
 
     // Given that the listener port is open, this will block until a

@@ -836,7 +836,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
             .map(|(tx, delegation_id)| NewDelegation {
                 tx_id: tx.transaction().get_id(),
-                delegation_id: RpcAddress::new(&self.chain_config, &delegation_id)
+                delegation_id: RpcAddress::new(&self.chain_config, delegation_id)
                     .expect("addressable delegation id"),
             })
     }
@@ -1033,7 +1033,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
             .map(|(tx, token_id)| RpcTokenId {
                 tx_id: tx.transaction().get_id(),
-                token_id: RpcAddress::new(&self.chain_config, &token_id)
+                token_id: RpcAddress::new(&self.chain_config, token_id)
                     .expect("Encoding token id should never fail"),
             })
     }
@@ -1059,7 +1059,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
             .map(|(tx, token_id)| RpcTokenId {
                 tx_id: tx.transaction().get_id(),
-                token_id: RpcAddress::new(&self.chain_config, &token_id)
+                token_id: RpcAddress::new(&self.chain_config, token_id)
                     .expect("Encoding token id should never fail"),
             })
     }

@@ -239,11 +239,11 @@ async fn ok(#[case] seed: Seed) {
         assert_eq!(body.len(), items);
 
         for ((pool_id, pool_data, _, _), json) in pools.iter().zip(body) {
-            let pool_id = Address::new(&chain_config, pool_id).unwrap();
+            let pool_id = Address::new(&chain_config, *pool_id).unwrap();
             assert_eq!(json.get("pool_id").unwrap(), pool_id.as_str(),);
 
             let decommission_key =
-                Address::new(&chain_config, pool_data.decommission_key()).unwrap();
+                Address::new(&chain_config, pool_data.decommission_key().clone()).unwrap();
             assert_eq!(
                 json.get("decommission_destination").unwrap(),
                 decommission_key.as_str(),
@@ -269,7 +269,7 @@ async fn ok(#[case] seed: Seed) {
                 ))
             );
 
-            let vrf_key = Address::new(&chain_config, pool_data.vrf_public_key()).unwrap();
+            let vrf_key = Address::new(&chain_config, pool_data.vrf_public_key().clone()).unwrap();
             assert_eq!(
                 json.get("vrf_public_key").unwrap(),
                 &serde_json::json!(vrf_key.as_str())
@@ -297,11 +297,11 @@ async fn ok(#[case] seed: Seed) {
         assert_eq!(body.len(), items);
 
         for ((pool_id, pool_data, _, _), json) in pools.iter().zip(body) {
-            let pool_id = Address::new(&chain_config, pool_id).unwrap();
+            let pool_id = Address::new(&chain_config, *pool_id).unwrap();
             assert_eq!(json.get("pool_id").unwrap(), pool_id.as_str(),);
 
             let decommission_key =
-                Address::new(&chain_config, pool_data.decommission_key()).unwrap();
+                Address::new(&chain_config, pool_data.decommission_key().clone()).unwrap();
             assert_eq!(
                 json.get("decommission_destination").unwrap(),
                 decommission_key.as_str(),
@@ -327,7 +327,7 @@ async fn ok(#[case] seed: Seed) {
                 ))
             );
 
-            let vrf_key = Address::new(&chain_config, pool_data.vrf_public_key()).unwrap();
+            let vrf_key = Address::new(&chain_config, pool_data.vrf_public_key().clone()).unwrap();
             assert_eq!(
                 json.get("vrf_public_key").unwrap(),
                 &serde_json::json!(vrf_key.as_str())

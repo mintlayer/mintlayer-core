@@ -52,7 +52,7 @@ async fn address_not_found(#[case] seed: Seed) {
 
     let (_, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
-    let address = Address::<Destination>::new(&chain_config, &destination).unwrap();
+    let address = Address::<Destination>::new(&chain_config, destination).unwrap();
 
     let (task, response) =
         spawn_webserver(&format!("/api/v2/address/{}/delegations", address.as_str())).await;
@@ -95,14 +95,14 @@ async fn ok(#[case] seed: Seed) {
 
                 let alice_destination = Destination::PublicKeyHash(PublicKeyHash::from(&alice_pk));
                 let alice_address =
-                    Address::<Destination>::new(&chain_config, &alice_destination).unwrap();
+                    Address::<Destination>::new(&chain_config, alice_destination.clone()).unwrap();
 
                 let (_bob_sk, bob_pk) =
                     PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
                 let bob_destination = Destination::PublicKeyHash(PublicKeyHash::from(&bob_pk));
                 let bob_address =
-                    Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
+                    Address::<Destination>::new(&chain_config, bob_destination).unwrap();
 
                 let stake_pool_outpoint = UtxoOutPoint::new(
                     OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
@@ -168,10 +168,10 @@ async fn ok(#[case] seed: Seed) {
                             .into_iter()
                             .map(|(delegation_id, amount, _, _)| {
                                 json!({
-                                "delegation_id": Address::new(&chain_config, &delegation_id).expect(
+                                "delegation_id": Address::new(&chain_config, delegation_id).expect(
                                     "no error in encoding"
                                 ).as_str(),
-                                "pool_id": Address::new(&chain_config, &pool_id).expect(
+                                "pool_id": Address::new(&chain_config, pool_id).expect(
                                     "no error in encoding"
                                 ).as_str(),
                                 "next_nonce": AccountNonce::new(0),

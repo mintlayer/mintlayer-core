@@ -49,7 +49,7 @@ impl<T> RpcAddress<T> {
 
 impl<T: Addressable> RpcAddress<T> {
     /// Construct from an addressable object
-    pub fn new(cfg: &ChainConfig, object: &T) -> Result<Self, AddressError> {
+    pub fn new(cfg: &ChainConfig, object: T) -> Result<Self, AddressError> {
         Ok(Self::from_address(Address::new(cfg, object)?))
     }
 
@@ -60,7 +60,7 @@ impl<T: Addressable> RpcAddress<T> {
 
     /// Convert to an object, according to given chain config.
     pub fn decode_object(&self, cfg: &ChainConfig) -> Result<T, AddressError> {
-        Ok(self.clone().into_address(cfg)?.decode_object())
+        Ok(self.clone().into_address(cfg)?.into_object())
     }
 }
 

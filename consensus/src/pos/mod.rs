@@ -224,7 +224,7 @@ pub fn stake(
         "Search for a valid block ({}..{}), pool_id: {}",
         block_timestamp,
         finalize_pos_data.max_block_timestamp(),
-        Address::new(chain_config, pos_data.stake_pool_id())
+        Address::new(chain_config, *pos_data.stake_pool_id())
             .expect("Pool id to address cannot fail")
     );
 

@@ -397,7 +397,8 @@ where
         let (_bob_sk, bob_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
         let bob_destination = Destination::PublicKeyHash(PublicKeyHash::from(&bob_pk));
-        let bob_address = Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
+        let bob_address =
+            Address::<Destination>::new(&chain_config, bob_destination.clone()).unwrap();
 
         let tx = db_tx.get_address_available_utxos(bob_address.as_str()).await.unwrap();
         assert!(tx.is_empty());
@@ -507,7 +508,8 @@ where
             let (_bob_sk, bob_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
             let bob_destination = Destination::PublicKeyHash(PublicKeyHash::from(&bob_pk));
-            let bob_address = Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
+            let bob_address =
+                Address::<Destination>::new(&chain_config, bob_destination.clone()).unwrap();
 
             let random_tx_id: Id<Transaction> =
                 Id::<Transaction>::new(H256::random_using(&mut rng));

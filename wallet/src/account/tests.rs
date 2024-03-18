@@ -155,7 +155,7 @@ fn sign_transaction(#[case] seed: Seed) {
 
             TxOutput::Transfer(
                 OutputValue::Coin(*a),
-                account.get_new_address(&mut db_tx, purpose).unwrap().1.decode_object(),
+                account.get_new_address(&mut db_tx, purpose).unwrap().1.into_object(),
             )
         })
         .collect();
@@ -196,7 +196,7 @@ fn sign_transaction(#[case] seed: Seed) {
         TxOutput::Burn(OutputValue::Coin(burn_amount)),
         TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(100)),
-            account.get_new_address(&mut db_tx, Change).unwrap().1.decode_object(),
+            account.get_new_address(&mut db_tx, Change).unwrap().1.into_object(),
         ),
     ];
 

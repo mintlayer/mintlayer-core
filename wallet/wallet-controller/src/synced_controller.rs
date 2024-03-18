@@ -221,7 +221,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                         number_of_decimals,
                         metadata_uri,
                         total_supply: token_total_supply,
-                        authority: address.decode_object(),
+                        authority: address.into_object(),
                         is_freezable,
                     }),
                     current_fee_rate,
@@ -565,7 +565,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                         Box::new(utxo_output.clone()),
                     ))
                 })?;
-            Address::new(self.chain_config, &utxo_dest).expect("addressable")
+            Address::new(self.chain_config, utxo_dest).expect("addressable")
         };
 
         let selected_inputs = SelectedInputs::Inputs(vec![(selected_utxo, utxo_output)]);

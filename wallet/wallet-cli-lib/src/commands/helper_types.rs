@@ -235,7 +235,7 @@ pub fn parse_output<N: NodeInterface>(
         .map_err(|err| {
             WalletCliError::<N>::InvalidInput(format!("invalid address {} {err}", parts[1]))
         })?
-        .decode_object();
+        .into_object();
 
     let amount = DecimalAmount::from_str(parts[2])
         .map_err(|err| {
