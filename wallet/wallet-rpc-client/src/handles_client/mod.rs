@@ -277,6 +277,19 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
+    async fn add_standalone_multisig(
+        &self,
+        account_index: U31,
+        min_required_signatures: u8,
+        public_keys: Vec<String>,
+        label: Option<String>,
+    ) -> Result<String, Self::Error> {
+        self.wallet_rpc
+            .add_standalone_multisig(account_index, min_required_signatures, public_keys, label)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
     async fn get_issued_addresses(
         &self,
         account_index: U31,

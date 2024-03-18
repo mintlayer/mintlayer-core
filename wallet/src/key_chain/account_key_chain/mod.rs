@@ -18,6 +18,7 @@ use crate::key_chain::with_purpose::WithPurpose;
 use crate::key_chain::{make_account_path, KeyChainError, KeyChainResult};
 use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
+use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
 use crypto::key::hdkd::child_number::ChildNumber;
@@ -427,7 +428,7 @@ impl AccountKeyChain {
             self.get_account_id(),
             Destination::PublicKeyHash(new_address),
         );
-        let key = AccountStandaloneKey::V0 {
+        let key = AccountStandaloneKey::Address {
             label,
             public_key: None,
             private_key: None,
@@ -449,7 +450,7 @@ impl AccountKeyChain {
         let pub_key = PublicKey::from_private_key(&new_private_key);
         let pkh = PublicKeyHash::from(&pub_key);
         let id = AccountPrefixedId::new(self.get_account_id(), Destination::PublicKeyHash(pkh));
-        let key = AccountStandaloneKey::V0 {
+        let key = AccountStandaloneKey::Address {
             label,
             public_key: Some(pub_key),
             private_key: Some(new_private_key),
@@ -459,6 +460,27 @@ impl AccountKeyChain {
         self.standalone_keys.insert(id.into_item_id(), key);
 
         Ok(())
+    }
+
+    ///  Adds a multisig to be watched
+    pub fn add_standalone_multisig(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        challenge: ClassicMultisigChallenge,
+        label: Option<String>,
+    ) -> KeyChainResult<PublicKeyHash> {
+        let destination_multisig: PublicKeyHash = (&challenge).into();
+
+        let id = AccountPrefixedId::new(
+            self.get_account_id(),
+            Destination::PublicKeyHash(destination_multisig),
+        );
+        let key = AccountStandaloneKey::MultiSig { label, challenge };
+
+        db_tx.set_standalone_key(&id, &key)?;
+        self.standalone_keys.insert(id.into_item_id(), key);
+
+        Ok(destination_multisig)
     }
 
     /// Find the corresponding public key for a given public key hash

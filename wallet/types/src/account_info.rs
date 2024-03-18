@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{ChainConfig, GenBlock},
+    chain::{classic_multisig::ClassicMultisigChallenge, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
 use crypto::{
@@ -110,9 +110,14 @@ pub struct AccountVrfKeys {
 #[derive(Debug, Clone, Encode, Decode)]
 pub enum AccountStandaloneKey {
     #[codec(index = 0)]
-    V0 {
+    Address {
         label: Option<String>,
         public_key: Option<PublicKey>,
         private_key: Option<PrivateKey>,
+    },
+    #[codec(index = 1)]
+    MultiSig {
+        label: Option<String>,
+        challenge: ClassicMultisigChallenge,
     },
 }

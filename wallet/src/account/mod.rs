@@ -20,6 +20,7 @@ mod utxo_selector;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
+use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::signature::inputsig::arbitrary_message::ArbitraryMessageSignature;
 use common::chain::{AccountCommand, AccountOutPoint, AccountSpending, TransactionCreationError};
 use common::primitives::id::WithId;
@@ -1507,6 +1508,16 @@ impl Account {
         label: Option<String>,
     ) -> WalletResult<()> {
         Ok(self.key_chain.add_standalone_private_key(db_tx, private_key, label)?)
+    }
+
+    /// Add a standalone multisig address to be watched
+    pub fn add_standalone_multisig(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        challenge: ClassicMultisigChallenge,
+        label: Option<String>,
+    ) -> WalletResult<PublicKeyHash> {
+        Ok(self.key_chain.add_standalone_multisig(db_tx, challenge, label)?)
     }
 
     /// Get a new address that hasn't been used before

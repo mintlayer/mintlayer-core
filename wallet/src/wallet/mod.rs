@@ -36,6 +36,7 @@ pub use bip39::{Language, Mnemonic};
 use common::address::pubkeyhash::PublicKeyHash;
 use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
+use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::signature::inputsig::arbitrary_message::{
     ArbitraryMessageSignature, SignArbitraryMessageError,
 };
@@ -1101,6 +1102,17 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<()> {
         self.for_account_rw(account_index, |account, db_tx| {
             account.add_standalone_private_key(db_tx, private_key, label)
+        })
+    }
+
+    pub fn add_standalone_multisig(
+        &mut self,
+        account_index: U31,
+        challenge: ClassicMultisigChallenge,
+        label: Option<String>,
+    ) -> WalletResult<PublicKeyHash> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.add_standalone_multisig(db_tx, challenge, label)
         })
     }
 

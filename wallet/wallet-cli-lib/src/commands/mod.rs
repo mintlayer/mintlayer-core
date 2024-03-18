@@ -269,6 +269,18 @@ pub enum WalletCommand {
         label: Option<String>,
     },
 
+    #[clap(name = "account-add-standalone-multisig")]
+    AddStandaloneMultisig {
+        /// The minimum required signatures out of the specified public keys
+        min_required_signatures: u8,
+
+        // Public keys from which to create the multisig challenge
+        public_keys: Vec<String>,
+
+        /// Optionally specify a label to the new address
+        label: Option<String>,
+    },
+
     #[clap(name = "token-nft-issue-new")]
     IssueNewNft {
         /// The receiver of the token
