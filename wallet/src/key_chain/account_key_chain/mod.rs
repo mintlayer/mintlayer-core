@@ -59,7 +59,7 @@ pub struct AccountKeyChain {
     vrf_chain: VrfKeySoftChain,
 
     /// Standalone keys added by the user not derived from this account's chain
-    standalone_keys: BTreeMap<PublicKeyHash, AccountStandaloneKey>,
+    standalone_keys: BTreeMap<Destination, AccountStandaloneKey>,
 
     /// The number of unused addresses that need to be checked after the last used address
     lookahead_size: ConstValue<u32>,
@@ -406,14 +406,14 @@ impl AccountKeyChain {
     }
 
     // Return true if the provided public key hash is one the standalone added keys
-    pub fn is_public_key_hash_watched(&self, pubkey_hash: &PublicKeyHash) -> bool {
-        self.standalone_keys.contains_key(pubkey_hash)
+    pub fn is_public_key_hash_watched(&self, pubkey_hash: PublicKeyHash) -> bool {
+        self.standalone_keys.contains_key(&Destination::PublicKeyHash(pubkey_hash))
     }
 
     // Return true if the provided public key hash belongs to this key chain
     // or is one the standalone added keys
-    pub fn is_public_key_hash_mine_or_watched(&self, pubkey_hash: &PublicKeyHash) -> bool {
-        self.is_public_key_hash_mine(pubkey_hash) || self.is_public_key_hash_watched(pubkey_hash)
+    pub fn is_public_key_hash_mine_or_watched(&self, pubkey_hash: PublicKeyHash) -> bool {
+        self.is_public_key_hash_mine(&pubkey_hash) || self.is_public_key_hash_watched(pubkey_hash)
     }
 
     ///  Adds a new public key hash to be watched, standalone from the keys derived from this account
@@ -423,7 +423,10 @@ impl AccountKeyChain {
         new_address: PublicKeyHash,
         label: Option<String>,
     ) -> KeyChainResult<()> {
-        let id = AccountPrefixedId::new(self.get_account_id(), new_address);
+        let id = AccountPrefixedId::new(
+            self.get_account_id(),
+            Destination::PublicKeyHash(new_address),
+        );
         let key = AccountStandaloneKey::V0 {
             label,
             public_key: None,
@@ -445,7 +448,7 @@ impl AccountKeyChain {
     ) -> KeyChainResult<()> {
         let pub_key = PublicKey::from_private_key(&new_private_key);
         let pkh = PublicKeyHash::from(&pub_key);
-        let id = AccountPrefixedId::new(self.get_account_id(), pkh);
+        let id = AccountPrefixedId::new(self.get_account_id(), Destination::PublicKeyHash(pkh));
         let key = AccountStandaloneKey::V0 {
             label,
             public_key: Some(pub_key),

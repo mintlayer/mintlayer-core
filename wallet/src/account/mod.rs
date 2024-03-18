@@ -1614,7 +1614,7 @@ impl Account {
     fn is_destination_mine_or_watched(&self, destination: &Destination) -> bool {
         match destination {
             Destination::PublicKeyHash(pkh) => {
-                self.key_chain.is_public_key_hash_mine_or_watched(pkh)
+                self.key_chain.is_public_key_hash_mine_or_watched(*pkh)
             }
             Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
             Destination::AnyoneCanSpend => false,
@@ -1646,7 +1646,7 @@ impl Account {
             match destination {
                 Destination::PublicKeyHash(pkh) => {
                     let found = self.key_chain.mark_public_key_hash_as_used(db_tx, &pkh)?;
-                    if found || self.key_chain.is_public_key_hash_watched(&pkh) {
+                    if found || self.key_chain.is_public_key_hash_watched(pkh) {
                         return Ok(true);
                     }
                 }

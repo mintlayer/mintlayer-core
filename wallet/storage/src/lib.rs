@@ -20,7 +20,7 @@ mod is_transaction_seal;
 pub mod schema;
 
 use common::{
-    address::{pubkeyhash::PublicKeyHash, Address, AddressError},
+    address::{Address, AddressError},
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
@@ -82,7 +82,7 @@ pub trait WalletStorageReadLocked {
     fn get_account_standalone_keys(
         &self,
         account_id: &AccountId,
-    ) -> Result<BTreeMap<PublicKeyHash, AccountStandaloneKey>>;
+    ) -> Result<BTreeMap<Destination, AccountStandaloneKey>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<String>>;
     fn get_addresses(
