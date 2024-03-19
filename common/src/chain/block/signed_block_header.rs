@@ -17,7 +17,7 @@ use crypto::key::Signature;
 use serialization::{Decode, Encode};
 use typename::TypeName;
 
-use crate::primitives::id::{Id, Idable};
+use crate::primitives::id::{Id, Idable, IdableWithParent};
 
 use super::{timestamp::BlockTimestamp, Block, BlockHeader, ConsensusData, GenBlock};
 
@@ -128,5 +128,13 @@ impl Idable for SignedBlockHeader {
 
     fn get_id(&self) -> Id<Self::Tag> {
         self.header().get_id()
+    }
+}
+
+impl IdableWithParent for SignedBlockHeader {
+    type ParentTag = GenBlock;
+
+    fn get_parent_id(&self) -> &Id<GenBlock> {
+        self.prev_block_id()
     }
 }

@@ -684,10 +684,10 @@ fn header_check_for_orphan(#[case] seed: Seed) {
         assert_eq!(
             err,
             ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
-                chainstate::CheckBlockError::PrevBlockNotFound(
-                    block.prev_block_id(),
-                    block.get_id(),
-                ),
+                chainstate::CheckBlockError::ParentBlockMissing {
+                    block_id: block.get_id(),
+                    parent_block_id: block.prev_block_id(),
+                },
             ))
         );
 
@@ -695,10 +695,10 @@ fn header_check_for_orphan(#[case] seed: Seed) {
         assert_eq!(
             err,
             ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
-                chainstate::CheckBlockError::PrevBlockNotFound(
-                    block.prev_block_id(),
-                    block.get_id()
-                ),
+                chainstate::CheckBlockError::ParentBlockMissing {
+                    block_id: block.get_id(),
+                    parent_block_id: block.prev_block_id(),
+                },
             ))
         );
 

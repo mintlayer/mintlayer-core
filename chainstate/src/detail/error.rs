@@ -82,6 +82,9 @@ pub enum BlockError {
     #[error("Failed to obtain the minimum height with allowed reorgs: {0}")]
     MinHeightForReorgQueryError(PropertyQueryError),
 
+    #[error("Error querying a property: {0}")]
+    PropertyQueryError(#[from] PropertyQueryError),
+
     #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
     InvariantErrorFailedToFindNewChainPath(Id<GenBlock>, Id<GenBlock>, PropertyQueryError),
     #[error("Invariant error: Attempted to connected block {0} that isn't on the tip")]
@@ -115,8 +118,11 @@ pub enum CheckBlockError {
     StateUpdateFailed(#[from] ConnectTransactionError),
     #[error("Block has an invalid merkle root")]
     MerkleRootMismatch,
-    #[error("Previous block {0} of block {1} not found in database")]
-    PrevBlockNotFound(Id<GenBlock>, Id<Block>),
+    #[error("Parent block {parent_block_id} of block {block_id} not found in database")]
+    ParentBlockMissing {
+        block_id: Id<Block>,
+        parent_block_id: Id<GenBlock>,
+    },
     #[error("Block {0} not found in database")]
     BlockNotFound(Id<GenBlock>),
     #[error("Block time ({0:?}) must be equal or higher than the median of its ancestors ({1:?})")]
@@ -145,8 +151,11 @@ pub enum CheckBlockError {
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("Error during sealing an epoch: {0}")]
     EpochSealError(#[from] EpochSealError),
-    #[error("Block {0} has invalid parent block")]
-    InvalidParent(Id<Block>),
+    #[error("Block {block_id} has invalid parent block {parent_block_id}")]
+    InvalidParent {
+        block_id: Id<Block>,
+        parent_block_id: Id<GenBlock>,
+    },
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
