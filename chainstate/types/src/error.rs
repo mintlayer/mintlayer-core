@@ -30,6 +30,13 @@ pub enum PropertyQueryError {
     BlockNotFound(Id<Block>),
     #[error("Block index not found for block {0}")]
     BlockIndexNotFound(Id<GenBlock>),
+    #[error(
+        "Previous block index not found; this block: {block_id}, previous block: {prev_block_id}"
+    )]
+    PrevBlockIndexNotFound {
+        block_id: Id<Block>,
+        prev_block_id: Id<GenBlock>,
+    },
     #[error("Block for height {0} not found")]
     BlockForHeightNotFound(BlockHeight),
     #[error("Error obtaining ancestor")]
