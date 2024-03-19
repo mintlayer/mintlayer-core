@@ -264,9 +264,12 @@ impl BlockProduction {
                     let sealed_epoch_randomness = sealed_epoch_index
                         .map(|index| this.get_epoch_data(index))
                         .transpose()
-                        .map_err(|_| {
+                        .map_err(|err| {
                             ConsensusPoSError::ChainstateError(
-                                consensus::ChainstateError::FailedToObtainEpochData(block_height),
+                                consensus::ChainstateError::FailedToObtainEpochData(
+                                    block_height,
+                                    Box::new(err),
+                                ),
                             )
                         })?
                         .flatten()
@@ -623,10 +626,11 @@ fn generate_finalize_block_data(
 
             let pledge_amount = chainstate_handle
                 .get_stake_pool_data(pos_input_data.pool_id())
-                .map_err(|_| {
+                .map_err(|err| {
                     ConsensusPoSError::ChainstateError(
                         consensus::ChainstateError::StakePoolDataReadError(
                             pos_input_data.pool_id(),
+                            Box::new(err),
                         ),
                     )
                 })?
@@ -642,9 +646,12 @@ fn generate_finalize_block_data(
 
             let pool_balance = chainstate_handle
                 .get_stake_pool_balance(pos_input_data.pool_id())
-                .map_err(|_| {
+                .map_err(|err| {
                     ConsensusPoSError::ChainstateError(
-                        consensus::ChainstateError::PoolBalanceReadError(pos_input_data.pool_id()),
+                        consensus::ChainstateError::PoolBalanceReadError(
+                            pos_input_data.pool_id(),
+                            Box::new(err),
+                        ),
                     )
                 })?
                 .ok_or(ConsensusPoSError::PropertyQueryError(
