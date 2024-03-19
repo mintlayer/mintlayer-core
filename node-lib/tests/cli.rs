@@ -156,7 +156,7 @@ fn read_config_override_values() {
         rpc_cookie_file: Some(rpc_cookie_file.to_owned()),
         clean_data: Some(false),
         min_tx_relay_fee_rate: Some(min_tx_relay_fee_rate),
-        force_run_as_root: Some(false),
+        force_allow_run_as_root: Some(false),
     };
     let config = NodeConfigFile::read(&chain_config, &config_path, &options).unwrap();
 

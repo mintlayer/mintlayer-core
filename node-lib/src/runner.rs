@@ -317,13 +317,13 @@ fn ensure_non_root_user(run_options: &RunOptions) -> Result<()> {
     {
         const DEFAULT_FORCE_RUN_AS_ROOT: bool = false;
 
-        if !run_options.force_run_as_root.unwrap_or(DEFAULT_FORCE_RUN_AS_ROOT) {
+        if !run_options.force_allow_run_as_root.unwrap_or(DEFAULT_FORCE_RUN_AS_ROOT) {
             use std::os::unix::fs::MetadataExt;
             let uid = std::fs::metadata("/proc/self").map(|m| m.uid());
             match uid {
                 Ok(id) => {
                     if id == 0 {
-                        return Err(anyhow!("ERROR: It is a mistake to run the node as root (user with uid=0), as it gives the node power that it does not need and violates good security practices. Either run the program as non-root, or do the VERY NOT RECOMMENDED THING TO DO, and add the flag `--force-run-as-root`"));
+                        return Err(anyhow!("ERROR: It is a mistake to run the node as root (user with uid=0), as it gives the node power that it does not need and violates good security practices. Either run the program as non-root, or do the VERY NOT RECOMMENDED THING TO DO, and add the flag `--force-allow-run-as-root`"));
                     }
                 }
                 Err(e) => log::error!("Failed to get user id to prevent running as root: {e}"),

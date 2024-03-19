@@ -222,11 +222,11 @@ pub struct RunOptions {
     #[clap(long, value_name = "VAL")]
     pub min_tx_relay_fee_rate: Option<u64>,
 
-    /// Allow the program to be run as root, which is NOT RECOMMENDED and DANGEROUS
+    /// Allow the program to be run as root, which is NOT RECOMMENDED and DANGEROUS.
     /// There is no need to run the mintlayer-software as root. The correct
     /// security practice is to only provide root access to programs that need it.
     #[clap(long, action = clap::ArgAction::SetTrue)]
-    pub force_run_as_root: Option<bool>,
+    pub force_allow_run_as_root: Option<bool>,
 }
 
 impl Options {
