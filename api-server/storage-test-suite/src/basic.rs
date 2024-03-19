@@ -872,7 +872,11 @@ where
             };
 
             let random_block_height = BlockHeight::new(rng.gen_range(500..1000) as u64);
+            let random_block_timestamp =
+                BlockTimestamp::from_int_seconds(rng.gen_range(500..1000) as u64);
             let random_block_height2 = BlockHeight::new(rng.gen_range(1..500) as u64);
+            let random_block_timestamp2 =
+                BlockTimestamp::from_int_seconds(rng.gen_range(500..1000) as u64);
 
             let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let random_pool_id = PoolId::new(H256::random_using(&mut rng));
@@ -883,6 +887,7 @@ where
             let random_nonce2 = AccountNonce::new(rng.gen::<u64>());
 
             let random_delegation = Delegation::new(
+                random_block_timestamp,
                 Destination::PublicKey(pk.clone()),
                 random_pool_id,
                 random_balance,
@@ -890,6 +895,7 @@ where
             );
 
             let random_delegation2 = Delegation::new(
+                random_block_timestamp2,
                 Destination::PublicKey(pk.clone()),
                 random_pool_id2,
                 random_balance2,
@@ -939,6 +945,7 @@ where
             let random_nonce = AccountNonce::new(rng.gen::<u64>());
 
             let random_delegation_new = Delegation::new(
+                random_block_timestamp,
                 Destination::PublicKey(pk),
                 random_pool_id,
                 random_balance,

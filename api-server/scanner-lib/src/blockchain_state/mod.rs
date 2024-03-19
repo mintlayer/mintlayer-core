@@ -167,7 +167,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 update_tables_from_transaction(
                     Arc::clone(&self.chain_config),
                     &mut db_tx,
-                    block_height,
+                    (block_height, block.timestamp()),
                     new_median_time,
                     tx,
                 )
@@ -719,7 +719,7 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
 async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
-    block_height: BlockHeight,
+    (block_height, block_timestamp): (BlockHeight, BlockTimestamp),
     median_time: BlockTimestamp,
     transaction: &SignedTransaction,
 ) -> Result<(), ApiServerStorageError> {
@@ -736,7 +736,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
     update_tables_from_transaction_outputs(
         Arc::clone(&chain_config),
         db_tx,
-        block_height,
+        (block_height, block_timestamp),
         median_time,
         transaction.transaction().get_id(),
         transaction.transaction().inputs(),
@@ -989,7 +989,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
 async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
-    block_height: BlockHeight,
+    (block_height, block_timestamp): (BlockHeight, BlockTimestamp),
     median_time: BlockTimestamp,
     transaction_id: Id<Transaction>,
     inputs: &[TxInput],
@@ -1038,6 +1038,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                         .set_delegation_at_height(
                             make_delegation_id(input0_outpoint),
                             &Delegation::new(
+                                block_timestamp,
                                 destination.clone(),
                                 *pool_id,
                                 Amount::ZERO,

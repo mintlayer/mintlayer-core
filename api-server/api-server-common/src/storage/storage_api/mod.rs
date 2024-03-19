@@ -66,6 +66,7 @@ pub enum ApiServerStorageError {
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct Delegation {
+    creation_time: BlockTimestamp,
     spend_destination: Destination,
     pool_id: PoolId,
     balance: Amount,
@@ -74,17 +75,23 @@ pub struct Delegation {
 
 impl Delegation {
     pub fn new(
+        creation_time: BlockTimestamp,
         spend_destination: Destination,
         pool_id: PoolId,
         balance: Amount,
         next_nonce: AccountNonce,
     ) -> Self {
         Self {
+            creation_time,
             spend_destination,
             pool_id,
             balance,
             next_nonce,
         }
+    }
+
+    pub fn creation_time(&self) -> BlockTimestamp {
+        self.creation_time
     }
 
     pub fn spend_destination(&self) -> &Destination {
@@ -109,6 +116,7 @@ impl Delegation {
             pool_id: self.pool_id,
             balance: (self.balance + rewards).expect("no overflow"),
             next_nonce: self.next_nonce,
+            creation_time: self.creation_time,
         }
     }
 
@@ -118,6 +126,7 @@ impl Delegation {
             pool_id: self.pool_id,
             balance: (self.balance - amount).expect("not underflow"),
             next_nonce: nonce.increment().expect("no overflow"),
+            creation_time: self.creation_time,
         }
     }
 }

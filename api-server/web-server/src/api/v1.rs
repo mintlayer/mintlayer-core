@@ -972,6 +972,7 @@ pub async fn pool_delegations<T: ApiServerStorage>(
                 "no error in encoding"
             ).get(),
             "balance": amount_to_json(*delegation.balance()),
+            "creation_time": delegation.creation_time(),
         })
         ).collect::<Vec<_>>(),
     ))
@@ -1010,6 +1011,7 @@ pub async fn delegation<T: ApiServerStorage>(
             "no error in encoding"
         ).get(),
         "balance": amount_to_json(*delegation.balance()),
+        "creation_time": delegation.creation_time(),
         "next_nonce": delegation.next_nonce(),
         "pool_id": Address::new(&state.chain_config, delegation.pool_id()).expect(
             "no error in encoding"
