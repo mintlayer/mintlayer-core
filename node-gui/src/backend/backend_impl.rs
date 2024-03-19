@@ -482,7 +482,7 @@ impl Backend {
             delegation_address,
         } = request;
 
-        let pool_id = Address::from_str(&self.chain_config, &pool_id)
+        let pool_id = Address::from_string(&self.chain_config, &pool_id)
             .map_err(|e| BackendError::AddressError(e.to_string()))?
             .into_object();
 
@@ -541,7 +541,7 @@ impl Backend {
         let amount = parse_coin_amount(&self.chain_config, &amount)
             .ok_or(BackendError::InvalidAmount(amount))?;
 
-        let delegation_id = Address::from_str(&self.chain_config, &delegation_id)
+        let delegation_id = Address::from_string(&self.chain_config, &delegation_id)
             .map_err(|e| BackendError::AddressError(e.to_string()))?
             .into_object();
 

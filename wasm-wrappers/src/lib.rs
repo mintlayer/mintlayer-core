@@ -328,7 +328,7 @@ fn parse_addressable<T: Addressable>(
     chain_config: &ChainConfig,
     address: &str,
 ) -> Result<T, Error> {
-    let addressable = Address::from_str(chain_config, address)
+    let addressable = Address::from_string(chain_config, address)
         .map_err(|_| Error::InvalidAddressable)?
         .into_object();
     Ok(addressable)

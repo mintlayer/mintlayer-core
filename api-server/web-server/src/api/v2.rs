@@ -583,7 +583,7 @@ pub async fn address<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let address =
-        Address::<Destination>::from_str(&state.chain_config, &address).map_err(|_| {
+        Address::<Destination>::from_string(&state.chain_config, &address).map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
         })?;
     let tx = state.db.transaction_ro().await.map_err(|e| {
@@ -634,7 +634,7 @@ pub async fn address_utxos<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let address =
-        Address::<Destination>::from_str(&state.chain_config, &address).map_err(|_| {
+        Address::<Destination>::from_string(&state.chain_config, &address).map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
         })?;
 
@@ -670,7 +670,7 @@ pub async fn all_address_utxos<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let address =
-        Address::<Destination>::from_str(&state.chain_config, &address).map_err(|_| {
+        Address::<Destination>::from_string(&state.chain_config, &address).map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
         })?;
 
@@ -706,7 +706,7 @@ pub async fn address_delegations<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let address =
-        Address::<Destination>::from_str(&state.chain_config, &address).map_err(|_| {
+        Address::<Destination>::from_string(&state.chain_config, &address).map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidAddress)
         })?;
 
@@ -848,7 +848,7 @@ pub async fn pool<T: ApiServerStorage>(
     Path(pool_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let pool_id = Address::from_str(&state.chain_config, &pool_id)
+    let pool_id = Address::from_string(&state.chain_config, &pool_id)
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
         })?
@@ -899,7 +899,7 @@ pub async fn pool_block_stats<T: ApiServerStorage>(
     Query(params): Query<TimeFilter>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let pool_id = Address::from_str(&state.chain_config, &pool_id)
+    let pool_id = Address::from_string(&state.chain_config, &pool_id)
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
         })?
@@ -941,7 +941,7 @@ pub async fn pool_delegations<T: ApiServerStorage>(
     Path(pool_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let pool_id = Address::from_str(&state.chain_config, &pool_id)
+    let pool_id = Address::from_string(&state.chain_config, &pool_id)
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
         })?
@@ -1022,7 +1022,7 @@ pub async fn token<T: ApiServerStorage>(
     Path(token_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let token_id = Address::from_str(&state.chain_config, &token_id)
+    let token_id = Address::from_string(&state.chain_config, &token_id)
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidTokenId)
         })?
@@ -1083,7 +1083,7 @@ pub async fn nft<T: ApiServerStorage>(
     Path(nft_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let nft_id = Address::from_str(&state.chain_config, &nft_id)
+    let nft_id = Address::from_string(&state.chain_config, &nft_id)
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNftId)
         })?

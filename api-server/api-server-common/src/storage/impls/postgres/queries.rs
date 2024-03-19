@@ -908,9 +908,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         rows.into_iter()
             .map(|row| {
                 let delegation_id: String = row.get(0);
-                let delegation_id = Address::<DelegationId>::from_str(chain_config, &delegation_id)
-                    .map_err(|_| ApiServerStorageError::AddressableError)?
-                    .into_object();
+                let delegation_id =
+                    Address::<DelegationId>::from_string(chain_config, delegation_id)
+                        .map_err(|_| ApiServerStorageError::AddressableError)?
+                        .into_object();
                 let pool_id: String = row.get(1);
                 let pool_id = Address::<PoolId>::from_string(chain_config, pool_id)
                     .map_err(|_| ApiServerStorageError::AddressableError)?
@@ -1070,7 +1071,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map(|row| {
                 let delegation_id_str: String = row.get(0);
                 let delegation_id =
-                    Address::<DelegationId>::from_str(chain_config, &delegation_id_str)
+                    Address::<DelegationId>::from_string(chain_config, &delegation_id_str)
                         .map_err(|_| ApiServerStorageError::AddressableError)?
                         .into_object();
                 let balance: String = row.get(1);
