@@ -17,7 +17,6 @@ fix-hidden-lifetime-bug.workspace = true
 heck.workspace = true
 num-traits.workspace = true
 parity-scale-codec.workspace = true
-paste.workspace = true
 probabilistic-collections.workspace = true
 qrcodegen.workspace = true
 slave-pool.workspace = true

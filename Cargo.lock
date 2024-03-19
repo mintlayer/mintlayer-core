@@ -7967,7 +7967,6 @@ dependencies = [
  "loom 0.7.1",
  "num-traits",
  "parity-scale-codec",
- "paste",
  "probabilistic-collections",
  "qrcodegen",
  "regex",
