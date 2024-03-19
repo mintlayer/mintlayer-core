@@ -25,6 +25,7 @@ pub mod cookie;
 pub mod counttracker;
 pub mod default_data_dir;
 pub mod displayable_option;
+pub mod dyn_error;
 pub mod ensure;
 pub mod eventhandler;
 pub mod exp_rand;
