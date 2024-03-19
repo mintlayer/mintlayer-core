@@ -223,7 +223,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         block_index: &BlockIndex,
     ) -> Result<GenBlockIndex, PropertyQueryError> {
         let prev_block_id = block_index.prev_block_id();
-        self.get_existing_gen_block_index(prev_block_id)
+
+        self.get_gen_block_index(prev_block_id)?
+            .ok_or(PropertyQueryError::PrevBlockIndexNotFound {
+                block_id: *block_index.block_id(),
+                prev_block_id: *prev_block_id,
+            })
     }
 
     #[log_error]
@@ -813,8 +818,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             );
         }
 
-        let prev_block_height =
-            self.get_existing_gen_block_index(&block.prev_block_id())?.block_height();
+        let prev_block_height = self
+            .get_gen_block_index(&block.prev_block_id())?
+            .ok_or_else(|| PropertyQueryError::PrevBlockIndexNotFound {
+                block_id: block.get_id(),
+                prev_block_id: block.prev_block_id(),
+            })?
+            .block_height();
 
         self.check_transactions(block, prev_block_height.next_height())
             .map_err(CheckBlockError::CheckTransactionFailed)?;
