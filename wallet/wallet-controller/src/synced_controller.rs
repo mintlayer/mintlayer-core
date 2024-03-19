@@ -209,8 +209,6 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         token_total_supply: TokenTotalSupply,
         is_freezable: IsTokenFreezable,
     ) -> Result<(SignedTransaction, TokenId), ControllerError<T>> {
-        let destination = address.decode_object(self.chain_config.as_ref())?;
-
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -223,7 +221,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                         number_of_decimals,
                         metadata_uri,
                         total_supply: token_total_supply,
-                        authority: destination,
+                        authority: address.into_object(),
                         is_freezable,
                     }),
                     current_fee_rate,
@@ -442,8 +440,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.check_tokens_in_selected_utxo(&selected_utxos).await?;
 
-        let output = make_address_output(self.chain_config, address, amount)
-            .map_err(ControllerError::WalletError)?;
+        let output = make_address_output(address, amount);
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -556,8 +553,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         selected_utxo: UtxoOutPoint,
         change_address: Option<Address<Destination>>,
     ) -> Result<(PartiallySignedTransaction, Balances), ControllerError<T>> {
-        let output = make_address_output(self.chain_config, address, amount)
-            .map_err(ControllerError::WalletError)?;
+        let output = make_address_output(address, amount);
 
         let utxo_output = self.fetch_utxo(&selected_utxo).await?;
         let change_address = if let Some(change_address) = change_address {
@@ -569,7 +565,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                         Box::new(utxo_output.clone()),
                     ))
                 })?;
-            Address::new(self.chain_config, &utxo_dest).expect("addressable")
+            Address::new(self.chain_config, utxo_dest).expect("addressable")
         };
 
         let selected_inputs = SelectedInputs::Inputs(vec![(selected_utxo, utxo_output)]);
@@ -602,8 +598,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         address: Address<Destination>,
         pool_id: PoolId,
     ) -> Result<(SignedTransaction, DelegationId), ControllerError<T>> {
-        let output = make_create_delegation_output(self.chain_config, address, pool_id)
-            .map_err(ControllerError::WalletError)?;
+        let output = make_create_delegation_output(address, pool_id);
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
@@ -695,9 +690,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         address: Address<Destination>,
         amount: Amount,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        let output =
-            make_address_output_token(self.chain_config, address, amount, token_info.token_id())
-                .map_err(ControllerError::WalletError)?;
+        let output = make_address_output_token(address, amount, token_info.token_id());
         self.create_and_send_token_tx(
             &token_info,
             move |current_fee_rate: FeeRate,

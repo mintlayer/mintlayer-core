@@ -459,8 +459,7 @@ impl Backend {
 
         let decommission_key = parse_address(&self.chain_config, &decommission_address)
             .map_err(|err| BackendError::AddressError(err.to_string()))?
-            .decode_object(&self.chain_config)
-            .map_err(|e| BackendError::AddressError(e.to_string()))?;
+            .into_object();
 
         let tx = self
             .synced_wallet_controller(wallet_id, account_id.account_index())
@@ -484,8 +483,8 @@ impl Backend {
         } = request;
 
         let pool_id = Address::from_str(&self.chain_config, &pool_id)
-            .and_then(|addr| addr.decode_object(&self.chain_config))
-            .map_err(|e| BackendError::AddressError(e.to_string()))?;
+            .map_err(|e| BackendError::AddressError(e.to_string()))?
+            .into_object();
 
         let delegation_key = parse_address(&self.chain_config, &delegation_address)
             .map_err(|err| BackendError::AddressError(err.to_string()))?;
@@ -543,8 +542,8 @@ impl Backend {
             .ok_or(BackendError::InvalidAmount(amount))?;
 
         let delegation_id = Address::from_str(&self.chain_config, &delegation_id)
-            .and_then(|addr| addr.decode_object(&self.chain_config))
-            .map_err(|e| BackendError::AddressError(e.to_string()))?;
+            .map_err(|e| BackendError::AddressError(e.to_string()))?
+            .into_object();
 
         let tx = self
             .synced_wallet_controller(wallet_id, account_id.account_index())

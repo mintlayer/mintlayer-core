@@ -468,7 +468,7 @@ macro_rules! impl_write_ops {
                 id: &AccountDerivationPathId,
                 address: &Address<Destination>,
             ) -> crate::Result<()> {
-                self.write::<db::DBAddresses, _, _, _>(id, address.get().to_owned())
+                self.write::<db::DBAddresses, _, _, _>(id, address.to_string())
             }
 
             fn del_address(&mut self, id: &AccountDerivationPathId) -> crate::Result<()> {

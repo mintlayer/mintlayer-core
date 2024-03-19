@@ -279,10 +279,9 @@ pub fn pubkey_to_pubkeyhash_address(
     let public_key_hash = PublicKeyHash::from(&public_key);
 
     Ok(
-        Address::new(&chain_config, &Destination::PublicKeyHash(public_key_hash))
+        Address::new(&chain_config, Destination::PublicKeyHash(public_key_hash))
             .expect("Should not fail to create address")
-            .get()
-            .to_owned(),
+            .to_string(),
     )
 }
 
@@ -331,8 +330,7 @@ fn parse_addressable<T: Addressable>(
 ) -> Result<T, Error> {
     let addressable = Address::from_str(chain_config, address)
         .map_err(|_| Error::InvalidAddressable)?
-        .decode_object(chain_config)
-        .expect("already checked");
+        .into_object();
     Ok(addressable)
 }
 

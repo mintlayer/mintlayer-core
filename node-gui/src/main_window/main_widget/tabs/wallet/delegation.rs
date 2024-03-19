@@ -81,20 +81,16 @@ pub fn view_delegation(
                 .iter()
                 .map(|(del_id, (pool_id, b))| (*del_id, *pool_id, *b))
             {
-                let delegation_address = Address::new(chain_config, &delegation_id)
+                let delegation_address = Address::new(chain_config, delegation_id)
                     .expect("Encoding pool id to address can't fail (GUI)");
-                let pool_address = Address::new(chain_config, &pool_id)
+                let pool_address = Address::new(chain_config, pool_id)
                     .expect("Encoding pool id to address can't fail (GUI)");
                 let delegate_staking_amount =
                     delegate_staking_amounts.get(&delegation_id).cloned().unwrap_or(String::new());
                 delegation_balance_grid = delegation_balance_grid
                     .push(
                         tooltip(
-                            field(
-                                delegation_address
-                                    .to_short_string(chain_config)
-                                    .expect("cannot fail"),
-                            ),
+                            field(delegation_address.to_short_string()),
                             delegation_address.to_string(),
                             Position::Bottom,
                         )
@@ -114,7 +110,7 @@ pub fn view_delegation(
                     )
                     .push(
                         tooltip(
-                            field(pool_address.to_short_string(chain_config).expect("cannot fail")),
+                            field(pool_address.to_short_string()),
                             pool_address.to_string(),
                             Position::Bottom,
                         )

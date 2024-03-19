@@ -338,14 +338,18 @@ where
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let public_key =
                     wallet.reveal_public_key(selected_account, public_key_hash).await?;
-                Ok(ConsoleCommand::Print(public_key.public_key_address))
+                Ok(ConsoleCommand::Print(
+                    public_key.public_key_address.to_string(),
+                ))
             }
 
             ColdWalletCommand::RevealPublicKeyHex { public_key_hash } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let public_key =
                     wallet.reveal_public_key(selected_account, public_key_hash).await?;
-                Ok(ConsoleCommand::Print(public_key.public_key_hex))
+                Ok(ConsoleCommand::Print(
+                    public_key.public_key_hex.hex_encode(),
+                ))
             }
 
             ColdWalletCommand::ShowReceiveAddresses => {
@@ -883,7 +887,7 @@ where
                 let mut output = format!("Coins amount: {coins}\n");
 
                 for (token_id, amount) in tokens {
-                    let token_id = Address::new(chain_config, &token_id)
+                    let token_id = Address::new(chain_config, token_id)
                         .expect("Encoding token id should never fail");
                     let amount = amount.decimal();
                     writeln!(&mut output, "Token: {token_id} amount: {amount}")
@@ -1266,7 +1270,7 @@ where
                     .into_iter()
                     .map(|info| {
                         format_delegation_info(
-                            info.delegation_id,
+                            info.delegation_id.to_string(),
                             info.balance.decimal().to_string(),
                         )
                     })
@@ -1381,7 +1385,7 @@ fn format_fees(output: &mut String, fees: Balances, chain_config: &ChainConfig) 
 
     for (token_id, amount) in tokens {
         let token_id =
-            Address::new(chain_config, &token_id).expect("Encoding token id should never fail");
+            Address::new(chain_config, token_id).expect("Encoding token id should never fail");
         let amount = amount.decimal();
         writeln!(output, "Token: {token_id} amount: {amount}")
             .expect("Writing to a memory buffer should not fail");

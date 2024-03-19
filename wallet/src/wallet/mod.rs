@@ -1511,7 +1511,7 @@ impl<B: storage::Backend> Wallet<B> {
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<(TokenId, SignedTransaction)> {
-        let destination = address.decode_object(self.chain_config.as_ref())?;
+        let destination = address.into_object();
         let latest_median_time = self.latest_median_time;
 
         let signed_transaction =

@@ -17,7 +17,10 @@ use std::num::NonZeroUsize;
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
+    chain::{
+        tokens::TokenId, Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
+    },
     primitives::{BlockHeight, Id},
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
@@ -32,8 +35,8 @@ use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction, CreatedWallet,
     DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
     NewAccountInfo, NewDelegation, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
-    PublicKeyInfo, RpcAmountIn, RpcTokenId, StakePoolBalance, StakingStatus, TokenMetadata,
-    TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
+    PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcTokenId, StakePoolBalance,
+    StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -139,7 +142,7 @@ trait ColdWalletRpc {
     async fn reveal_public_key(
         &self,
         account: AccountArg,
-        address: String,
+        address: RpcAddress<Destination>,
     ) -> rpc::RpcResult<PublicKeyInfo>;
 
     /// Issue a new staking VRF (Verifiable Random Function) key for this account.
@@ -176,7 +179,7 @@ trait ColdWalletRpc {
     async fn sign_raw_transaction(
         &self,
         account: AccountArg,
-        raw_tx: String,
+        raw_tx: RpcHexString,
         options: TransactionOptions,
     ) -> rpc::RpcResult<MaybeSignedTransaction>;
 
@@ -186,34 +189,34 @@ trait ColdWalletRpc {
         &self,
         account: AccountArg,
         challenge: String,
-        address: String,
-    ) -> rpc::RpcResult<String>;
+        address: RpcAddress<Destination>,
+    ) -> rpc::RpcResult<RpcHexString>;
 
     #[method(name = "challenge_sign_hex")]
     /// Signs a challenge with a private key corresponding to the provided address destination.
     async fn sign_challenge_hex(
         &self,
         account: AccountArg,
-        challenge: String,
-        address: String,
-    ) -> rpc::RpcResult<String>;
+        challenge: RpcHexString,
+        address: RpcAddress<Destination>,
+    ) -> rpc::RpcResult<RpcHexString>;
 
     #[method(name = "challenge_verify_plain")]
     /// Verifies a signed challenge against an address destination
     async fn verify_challenge(
         &self,
         message: String,
-        signed_challenge: String,
-        address: String,
+        signed_challenge: RpcHexString,
+        address: RpcAddress<Destination>,
     ) -> rpc::RpcResult<()>;
 
     #[method(name = "challenge_verify_hex")]
     /// Verifies a signed challenge against an address destination
     async fn verify_challenge_hex(
         &self,
-        message: String,
-        signed_challenge: String,
-        address: String,
+        message: RpcHexString,
+        signed_challenge: RpcHexString,
+        address: RpcAddress<Destination>,
     ) -> rpc::RpcResult<()>;
 }
 
@@ -273,7 +276,7 @@ trait WalletRpc {
     async fn send_coins(
         &self,
         account: AccountArg,
-        address: String,
+        address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         selected_utxos: Vec<UtxoOutPoint>,
         options: TransactionOptions,
@@ -286,8 +289,8 @@ trait WalletRpc {
     async fn sweep_addresses(
         &self,
         account: AccountArg,
-        destination_address: String,
-        from_addresses: Vec<String>,
+        destination_address: RpcAddress<Destination>,
+        from_addresses: Vec<RpcAddress<Destination>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
@@ -297,8 +300,8 @@ trait WalletRpc {
     async fn sweep_delegation(
         &self,
         account: AccountArg,
-        destination_address: String,
-        delegation_id: String,
+        destination_address: RpcAddress<Destination>,
+        delegation_id: RpcAddress<DelegationId>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
@@ -314,16 +317,19 @@ trait WalletRpc {
     async fn transaction_from_cold_input(
         &self,
         account: AccountArg,
-        address: String,
+        address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         selected_utxo: UtxoOutPoint,
-        change_address: Option<String>,
+        change_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<ComposedTransaction>;
 
     /// Print the summary of the transaction
     #[method(name = "transaction_inspect")]
-    async fn transaction_inspect(&self, transaction: String) -> rpc::RpcResult<InspectTransaction>;
+    async fn transaction_inspect(
+        &self,
+        transaction: RpcHexString,
+    ) -> rpc::RpcResult<InspectTransaction>;
 
     /// Create a staking pool. The pool will be capable of creating blocks and gaining rewards,
     /// and will be capable of taking delegations from other users and staking.
@@ -340,7 +346,7 @@ trait WalletRpc {
         amount: RpcAmountIn,
         cost_per_block: RpcAmountIn,
         margin_ratio_per_thousand: String,
-        decommission_address: String,
+        decommission_address: RpcAddress<Destination>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
@@ -350,8 +356,8 @@ trait WalletRpc {
     async fn decommission_stake_pool(
         &self,
         account: AccountArg,
-        pool_id: String,
-        output_address: Option<String>,
+        pool_id: RpcAddress<PoolId>,
+        output_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
@@ -363,8 +369,8 @@ trait WalletRpc {
     async fn decommission_stake_pool_request(
         &self,
         account: AccountArg,
-        pool_id: String,
-        output_address: Option<String>,
+        pool_id: RpcAddress<PoolId>,
+        output_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<HexEncoded<PartiallySignedTransaction>>;
 
@@ -376,8 +382,8 @@ trait WalletRpc {
     async fn create_delegation(
         &self,
         account: AccountArg,
-        address: String,
-        pool_id: String,
+        address: RpcAddress<Destination>,
+        pool_id: RpcAddress<PoolId>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewDelegation>;
 
@@ -387,7 +393,7 @@ trait WalletRpc {
         &self,
         account: AccountArg,
         amount: RpcAmountIn,
-        delegation_id: String,
+        delegation_id: RpcAddress<DelegationId>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
@@ -397,9 +403,9 @@ trait WalletRpc {
     async fn withdraw_from_delegation(
         &self,
         account: AccountArg,
-        address: String,
+        address: RpcAddress<Destination>,
         amount: RpcAmountIn,
-        delegation_id: String,
+        delegation_id: RpcAddress<DelegationId>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
@@ -428,7 +434,10 @@ trait WalletRpc {
 
     /// Print the balance of available staking pools
     #[method(name = "staking_pool_balance")]
-    async fn stake_pool_balance(&self, pool_id: String) -> rpc::RpcResult<StakePoolBalance>;
+    async fn stake_pool_balance(
+        &self,
+        pool_id: RpcAddress<PoolId>,
+    ) -> rpc::RpcResult<StakePoolBalance>;
 
     /// List delegation ids controlled by the selected account in this wallet with their balances
     #[method(name = "delegation_list_ids")]
@@ -447,7 +456,7 @@ trait WalletRpc {
     async fn issue_new_nft(
         &self,
         account: AccountArg,
-        destination_address: String,
+        destination_address: RpcAddress<Destination>,
         metadata: NftMetadata,
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcTokenId>;
@@ -459,7 +468,7 @@ trait WalletRpc {
     async fn issue_new_token(
         &self,
         account: AccountArg,
-        destination_address: String,
+        destination_address: RpcAddress<Destination>,
         metadata: TokenMetadata,
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcTokenId>;
@@ -469,8 +478,8 @@ trait WalletRpc {
     async fn change_token_authority(
         &self,
         account: AccountArg,
-        token_id: String,
-        address: String,
+        token_id: RpcAddress<TokenId>,
+        address: RpcAddress<Destination>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
@@ -479,8 +488,8 @@ trait WalletRpc {
     async fn mint_tokens(
         &self,
         account: AccountArg,
-        token_id: String,
-        address: String,
+        token_id: RpcAddress<TokenId>,
+        address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
@@ -492,7 +501,7 @@ trait WalletRpc {
     async fn unmint_tokens(
         &self,
         account: AccountArg,
-        token_id: String,
+        token_id: RpcAddress<TokenId>,
         amount: RpcAmountIn,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
@@ -503,7 +512,7 @@ trait WalletRpc {
     async fn lock_token_supply(
         &self,
         account_index: AccountArg,
-        token_id: String,
+        token_id: RpcAddress<TokenId>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
@@ -515,7 +524,7 @@ trait WalletRpc {
     async fn freeze_token(
         &self,
         account: AccountArg,
-        token_id: String,
+        token_id: RpcAddress<TokenId>,
         is_unfreezable: bool,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
@@ -528,7 +537,7 @@ trait WalletRpc {
     async fn unfreeze_token(
         &self,
         account: AccountArg,
-        token_id: String,
+        token_id: RpcAddress<TokenId>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
@@ -537,8 +546,8 @@ trait WalletRpc {
     async fn send_tokens(
         &self,
         account: AccountArg,
-        token_id: String,
-        address: String,
+        token_id: RpcAddress<TokenId>,
+        address: RpcAddress<Destination>,
         amount: RpcAmountIn,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
@@ -549,7 +558,7 @@ trait WalletRpc {
     async fn deposit_data(
         &self,
         account: AccountArg,
-        data: String,
+        data: RpcHexString,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
@@ -647,7 +656,7 @@ trait WalletRpc {
     async fn list_transactions_by_address(
         &self,
         account: AccountArg,
-        address: Option<String>,
+        address: Option<RpcAddress<Destination>>,
         limit: usize,
     ) -> rpc::RpcResult<Vec<TxInfo>>;
 
@@ -656,7 +665,7 @@ trait WalletRpc {
     async fn get_transaction(
         &self,
         account: AccountArg,
-        transaction_id: HexEncoded<Id<Transaction>>,
+        transaction_id: Id<Transaction>,
     ) -> rpc::RpcResult<serde_json::Value>;
 
     /// Get a transaction from the wallet, if present, as hex encoded raw transaction
@@ -664,16 +673,16 @@ trait WalletRpc {
     async fn get_raw_transaction(
         &self,
         account: AccountArg,
-        transaction_id: HexEncoded<Id<Transaction>>,
-    ) -> rpc::RpcResult<String>;
+        transaction_id: Id<Transaction>,
+    ) -> rpc::RpcResult<HexEncoded<Transaction>>;
 
     /// Get a signed transaction from the wallet, if present, as hex encoded raw transaction
     #[method(name = "transaction_get_signed_raw")]
     async fn get_raw_signed_transaction(
         &self,
         account: AccountArg,
-        transaction_id: HexEncoded<Id<Transaction>>,
-    ) -> rpc::RpcResult<String>;
+        transaction_id: Id<Transaction>,
+    ) -> rpc::RpcResult<HexEncoded<SignedTransaction>>;
 
     /// Compose a new transaction from the specified outputs and selected utxos
     /// The transaction is returned in a hex encoded form that can be passed to account-sign-raw-transaction
@@ -720,7 +729,7 @@ trait WalletRpc {
 
     /// Get a block by its hash, represented with hex encoded bytes
     #[method(name = "node_get_block")]
-    async fn node_block(&self, block_id: String) -> rpc::RpcResult<Option<String>>;
+    async fn node_block(&self, block_id: Id<Block>) -> rpc::RpcResult<Option<HexEncoded<Block>>>;
 
     /// Returns mainchain block ids with heights in the range start_height..end_height using
     /// the given step.

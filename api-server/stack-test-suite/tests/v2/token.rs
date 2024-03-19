@@ -50,9 +50,9 @@ async fn token_not_found(#[case] seed: Seed) {
     let chain_config = create_unit_test_config();
 
     let token_id = TokenId::new(H256::random_using(&mut rng));
-    let token_id = Address::<TokenId>::new(&chain_config, &token_id).unwrap();
+    let token_id = Address::<TokenId>::new(&chain_config, token_id).unwrap();
 
-    let (task, response) = spawn_webserver(&format!("/api/v2/token/{}", token_id.get())).await;
+    let (task, response) = spawn_webserver(&format!("/api/v2/token/{}", token_id.as_str())).await;
 
     assert_eq!(response.status(), 404);
 
@@ -136,9 +136,9 @@ async fn ok(#[case] seed: Seed) {
                 _ = tx.send([(
                     token_id,
                     json!({
-                        "authority": Address::new(&chain_config, &token_data.authority).expect(
+                        "authority": Address::new(&chain_config, token_data.authority.clone()).expect(
                             "no error in encoding"
-                        ).get(),
+                        ).as_str(),
                         "is_locked": token_data.is_locked,
                         "circulating_supply": amount_to_json(token_data.circulating_supply, token_data.number_of_decimals),
                         "token_ticker": to_json_string(&token_data.token_ticker),
@@ -189,7 +189,7 @@ async fn ok(#[case] seed: Seed) {
 
     let chain_config = create_unit_test_config();
     for (token_id, expected_values) in rx.await.unwrap() {
-        let token_id = Address::new(&chain_config, &token_id).unwrap();
+        let token_id = Address::new(&chain_config, token_id).unwrap();
         let url = format!("/api/v2/token/{token_id}");
 
         // Given that the listener port is open, this will block until a

@@ -151,7 +151,7 @@ fn generate_addresses(
 
             Ok(Address::new(
                 &chain_config,
-                &Destination::PublicKeyHash(public_key_hash),
+                Destination::PublicKeyHash(public_key_hash),
             )?)
         })
         .collect::<WalletResult<Vec<_>>>()

@@ -343,8 +343,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         let destination = self
             .call(move |this| {
                 this.get_chain_config().map(|chain| {
-                    Address::<Destination>::from_str(&chain, &address)
-                        .and_then(|addr| addr.decode_object(&chain))
+                    Address::<Destination>::from_str(&chain, &address).map(|a| a.into_object())
                 })
             })
             .await

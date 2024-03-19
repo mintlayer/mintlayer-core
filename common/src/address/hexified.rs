@@ -15,7 +15,7 @@
 
 use crate::chain::ChainConfig;
 
-use super::{traits::Addressable, Address};
+use super::{encoding, traits::Addressable, Address};
 use regex::Regex;
 use serde::{de::Error, Deserialize};
 use serialization::DecodeAll;
@@ -118,8 +118,19 @@ impl<'a, A: Addressable + DecodeAll + 'a> HexifiedAddress<'a, A> {
         } else if s.starts_with("0x") {
             Self::serde_hex_deserialize::<D>(&s)
         } else {
-            Address::<A>::from_str_no_hrp_verify(&s).map_err(D::Error::custom)
+            Self::decode_no_hrp_verify(&s)
         }
+    }
+
+    /// Decode an address without verifying the hrp
+    /// This is used only for the case of json deserialization, which is done as a compromise as
+    /// the alternative would be to not serialize at all. This is because chain config cannot be
+    /// passed to the json serializer/deserializer.
+    fn decode_no_hrp_verify<E: Error>(address: &str) -> Result<A, E> {
+        let data = encoding::decode(address).map_err(E::custom)?;
+        let raw_data = data.data();
+        let result = A::decode_from_bytes_from_address(raw_data).map_err(E::custom)?;
+        Ok(result)
     }
 }
 
@@ -177,7 +188,7 @@ impl<'a, A: Addressable + DecodeAll> regex::Replacer for AddressableReplacer<'a,
                 return;
             }
         };
-        let address = match Address::new(self.chain_config, &obj) {
+        let address = match Address::new(self.chain_config, obj) {
             Ok(address) => address,
             Err(_) => {
                 logging::log::error!(
@@ -199,8 +210,10 @@ mod tests {
     use crypto::{
         key::{KeyKind, PrivateKey},
         random,
+        vrf::VRFPublicKey,
     };
     use rstest::rstest;
+    use serde::de::value::Error as SerdeErr;
     use serialization::{Decode, DecodeAll, Encode};
     use test_utils::random::{make_seedable_rng, Rng, Seed};
 
@@ -220,6 +233,27 @@ mod tests {
             .collect()
     }
 
+    #[test]
+    fn example_mainnet_address() {
+        let address = "mtc1q9aaqkulkth7qp7mqtyv0rpgdwdytdewdu6ykrsj";
+        let dest =
+            HexifiedAddress::<Destination>::decode_no_hrp_verify::<SerdeErr>(address).unwrap();
+        let hex = hex::encode(dest.encode());
+        assert_eq!(hex, "017bd05b9fb2efe007db02c8c78c286b9a45b72e6f");
+    }
+
+    #[test]
+    fn example_mainnet_vrf() {
+        let address = "mvrfpk1qqyxcl4tc6y9amf2vmv6sgu8x5jwqlxawx73vhgemkduag9c8ku57m03mze";
+        let dest =
+            HexifiedAddress::<VRFPublicKey>::decode_no_hrp_verify::<SerdeErr>(address).unwrap();
+        let hex = hex::encode(dest.encode());
+        assert_eq!(
+            hex,
+            "00086c7eabc6885eed2a66d9a823873524e07cdd71bd165d19dd9bcea0b83db94f"
+        );
+    }
+
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -235,7 +269,7 @@ mod tests {
         let res = HexifiedAddress::<Destination>::replace_with_address(&chain_config, &s);
         assert_eq!(
             res,
-            format!("{}", Address::new(&chain_config, &address).unwrap())
+            Address::new(&chain_config, address).unwrap().into_string(),
         );
     }
 
@@ -302,7 +336,7 @@ mod tests {
 
         let expected = strings
             .iter()
-            .zip(keys.iter())
+            .zip(keys.into_iter())
             .map(|(s, k)| {
                 let address_str = Address::new(&chain_config, k).unwrap();
                 s.clone() + &address_str.to_string()
@@ -443,7 +477,7 @@ mod tests {
 
         {
             // Do the replacement, which will make the hexified address become a real address
-            let expected_address = Address::new(&chain_config, &obj).unwrap();
+            let expected_address = Address::new(&chain_config, obj.clone()).unwrap();
             let obj_json_replaced =
                 HexifiedAddress::<Destination>::replace_with_address(&chain_config, &obj_json);
             assert_eq!(obj_json_replaced, format!("\"{expected_address}\""));

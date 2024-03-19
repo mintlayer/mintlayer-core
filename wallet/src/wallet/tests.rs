@@ -162,7 +162,7 @@ fn get_address(
         .unwrap();
     Address::new(
         chain_config,
-        &Destination::PublicKey(address_priv_key.to_public_key().into_public_key()),
+        Destination::PublicKey(address_priv_key.to_public_key().into_public_key()),
     )
     .unwrap()
 }
@@ -280,12 +280,7 @@ fn create_block(
         chain_config.genesis_block_id(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(
-            chain_config.as_ref(),
-            address.clone(),
-            reward,
-        )
-        .unwrap()]),
+        BlockReward::new(vec![make_address_output(address.clone(), reward)]),
     )
     .unwrap();
 
@@ -361,10 +356,7 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
     let genesis = Genesis::new(
         String::new(),
         BlockTimestamp::from_int_seconds(1639975460),
-        vec![TxOutput::Transfer(
-            OutputValue::Coin(genesis_amount),
-            address.decode_object(&create_regtest()).unwrap(),
-        )],
+        vec![TxOutput::Transfer(OutputValue::Coin(genesis_amount), address.into_object())],
     );
     let chain_type = ChainType::Regtest;
     let chain_config = Arc::new(Builder::new(chain_type).genesis_custom(genesis).build());
@@ -569,12 +561,7 @@ fn wallet_seed_phrase_check_address() {
     .unwrap();
 
     let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
-    let pk = wallet
-        .find_public_key(
-            DEFAULT_ACCOUNT_INDEX,
-            address.1.decode_object(&chain_config).unwrap(),
-        )
-        .unwrap();
+    let pk = wallet.find_public_key(DEFAULT_ACCOUNT_INDEX, address.1.into_object()).unwrap();
 
     // m/44'/19788'/0'/0/0 for MNEMONIC
     let expected_pk = "03bf6f8d52dade77f95e9c6c9488fd8492a99c09ff23095caffb2e6409d1746ade";
@@ -595,12 +582,7 @@ fn wallet_seed_phrase_check_address() {
 
     let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
     assert_eq!(address.0, ChildNumber::from_index_with_hardened_bit(0));
-    let pk = wallet
-        .find_public_key(
-            DEFAULT_ACCOUNT_INDEX,
-            address.1.decode_object(&chain_config).unwrap(),
-        )
-        .unwrap();
+    let pk = wallet.find_public_key(DEFAULT_ACCOUNT_INDEX, address.1.into_object()).unwrap();
 
     // m/44'/19788'/0'/0/0 for MNEMONIC with passphrase: phrase123
     let expected_pk = "03f5afc96d42babad096261c743398ecad90bfd5dbf59dea840ef276a1bc2a62fb";
@@ -608,12 +590,7 @@ fn wallet_seed_phrase_check_address() {
 
     let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
     assert_eq!(address.0, ChildNumber::from_index_with_hardened_bit(1));
-    let pk = wallet
-        .find_public_key(
-            DEFAULT_ACCOUNT_INDEX,
-            address.1.decode_object(&chain_config).unwrap(),
-        )
-        .unwrap();
+    let pk = wallet.find_public_key(DEFAULT_ACCOUNT_INDEX, address.1.into_object()).unwrap();
     // m/44'/19788'/0'/0/1 for MNEMONIC with passphrase: phrase123
     let expected_pk2 = "0284857ecbeb0c19f078f4224313d9f43a86fcc875ffa6e00feca621bdc200d14a";
     assert_eq!(expected_pk2, pk.hex_encode().strip_prefix("00").unwrap());
@@ -634,7 +611,7 @@ fn wallet_balance_genesis() {
     );
     let genesis_output = TxOutput::Transfer(
         OutputValue::Coin(genesis_amount),
-        address.decode_object(chain_config.as_ref()).unwrap(),
+        address.as_object().clone(),
     );
 
     test_balance_from_genesis(chain_type, vec![genesis_output.clone()], genesis_amount);
@@ -642,7 +619,7 @@ fn wallet_balance_genesis() {
     let genesis_amount_2 = Amount::from_atoms(54321);
     let genesis_output_2 = TxOutput::LockThenTransfer(
         OutputValue::Coin(genesis_amount_2),
-        address.decode_object(chain_config.as_ref()).unwrap(),
+        address.into_object(),
         OutputTimeLock::UntilHeight(BlockHeight::zero()),
     );
 
@@ -665,8 +642,7 @@ fn wallet_balance_genesis() {
             );
 
             let genesis_amount = Amount::from_atoms(23456);
-            let genesis_output =
-                make_address_output(chain_config.as_ref(), address, genesis_amount).unwrap();
+            let genesis_output = make_address_output(address, genesis_amount);
 
             if address_index.into_u32() == LOOKAHEAD_SIZE {
                 test_balance_from_genesis(chain_type, vec![genesis_output], Amount::ZERO);
@@ -692,10 +668,8 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
         KeyPurpose::ReceiveFunds,
         0.try_into().unwrap(),
     );
-    let genesis_output = TxOutput::Transfer(
-        OutputValue::Coin(genesis_amount),
-        address.decode_object(chain_config.as_ref()).unwrap(),
-    );
+    let genesis_output =
+        TxOutput::Transfer(OutputValue::Coin(genesis_amount), address.into_object());
     let genesis = Genesis::new(
         String::new(),
         BlockTimestamp::from_int_seconds(1639975460),
@@ -752,12 +726,7 @@ fn wallet_balance_block_reward() {
         block1.get_id().into(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(
-            chain_config.as_ref(),
-            address,
-            block2_amount,
-        )
-        .unwrap()]),
+        BlockReward::new(vec![make_address_output(address, block2_amount)]),
     )
     .unwrap();
     let block2_id = block2.header().block_id();
@@ -787,12 +756,7 @@ fn wallet_balance_block_reward() {
         block1.get_id().into(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(
-            chain_config.as_ref(),
-            address,
-            block2_amount_new,
-        )
-        .unwrap()]),
+        BlockReward::new(vec![make_address_output(address, block2_amount_new)]),
     )
     .unwrap();
     let block2_new_id = block2_new.header().block_id();
@@ -827,7 +791,7 @@ fn wallet_balance_block_transactions() {
     let transaction1 = Transaction::new(
         0,
         Vec::new(),
-        vec![make_address_output(chain_config.as_ref(), address, tx_amount1).unwrap()],
+        vec![make_address_output(address, tx_amount1)],
     )
     .unwrap();
     let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
@@ -870,7 +834,7 @@ fn wallet_balance_parent_child_transactions() {
     let transaction1 = Transaction::new(
         0,
         Vec::new(),
-        vec![make_address_output(chain_config.as_ref(), address1, tx_amount1).unwrap()],
+        vec![make_address_output(address1, tx_amount1)],
     )
     .unwrap();
     let transaction_id1 = transaction1.get_id();
@@ -879,7 +843,7 @@ fn wallet_balance_parent_child_transactions() {
     let transaction2 = Transaction::new(
         0,
         vec![TxInput::from_utxo(OutPointSourceId::Transaction(transaction_id1), 0)],
-        vec![make_address_output(chain_config.as_ref(), address2, tx_amount2).unwrap()],
+        vec![make_address_output(address2, tx_amount2)],
     )
     .unwrap();
     let signed_transaction2 =
@@ -948,7 +912,7 @@ fn wallet_accounts_creation() {
             DEFAULT_ACCOUNT_INDEX,
             [TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(1)),
-                acc1_pk.decode_object(&chain_config).unwrap(),
+                acc1_pk.into_object(),
             )],
             SelectedInputs::Utxos(vec![]),
             BTreeMap::new(),
@@ -1035,7 +999,7 @@ fn wallet_recover_new_account(#[case] seed: Seed) {
             let transaction1 = Transaction::new(
                 0,
                 Vec::new(),
-                vec![make_address_output(chain_config.as_ref(), address, tx_amount1).unwrap()],
+                vec![make_address_output(address, tx_amount1)],
             )
             .unwrap();
             let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
@@ -1231,7 +1195,7 @@ fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
     // Generate a new block which sends reward to the wallet
     let block1_amount = Amount::from_atoms(rng.gen_range(100000..1000000));
     let (addr, _) = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
-    let dest = addr.decode_object(&chain_config).unwrap();
+    let dest = addr.into_object();
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -1400,7 +1364,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
                 KeyPurpose::ReceiveFunds,
                 idx.try_into().unwrap(),
             );
-            make_address_output(chain_config.as_ref(), address, utxo_amount).unwrap()
+            make_address_output(address, utxo_amount)
         })
         .collect_vec();
     let block1 = Block::new(
@@ -1542,7 +1506,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
-                decommission_key: decommission_key.decode_object(&chain_config).unwrap(),
+                decommission_key: decommission_key.as_object().clone(),
             },
         )
         .unwrap();
@@ -1562,10 +1526,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
     assert_eq!(pool_ids.len(), 1);
 
     let (pool_id, pool_data) = pool_ids.first().unwrap();
-    assert_eq!(
-        pool_data.decommission_key,
-        decommission_key.decode_object(&chain_config).unwrap()
-    );
+    assert_eq!(&pool_data.decommission_key, decommission_key.as_object());
     assert_eq!(
         &pool_data.utxo_outpoint,
         &UtxoOutPoint::new(OutPointSourceId::Transaction(stake_pool_transaction_id), 0)
@@ -1608,7 +1569,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
             common::primitives::Compact(0),
         ))),
         BlockReward::new(vec![TxOutput::ProduceBlockFromStake(
-            addr.decode_object(&chain_config).unwrap(),
+            addr.into_object(),
             *pool_id,
         )]),
     )
@@ -1751,12 +1712,7 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
     let (delegation_id, delegation_tx) = wallet
         .create_delegation(
             DEFAULT_ACCOUNT_INDEX,
-            vec![make_create_delegation_output(
-                chain_config.as_ref(),
-                address.clone(),
-                unknown_pool_id,
-            )
-            .unwrap()],
+            vec![make_create_delegation_output(address.clone(), unknown_pool_id)],
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
@@ -1838,8 +1794,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     let (delegation_id, delegation_tx) = wallet
         .create_delegation(
             DEFAULT_ACCOUNT_INDEX,
-            vec![make_create_delegation_output(chain_config.as_ref(), address.clone(), pool_id)
-                .unwrap()],
+            vec![make_create_delegation_output(address.clone(), pool_id)],
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
@@ -1860,10 +1815,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
     assert!(deleg_data.not_staked_yet);
     assert_eq!(deleg_data.last_nonce, None);
     assert_eq!(deleg_data.pool_id, pool_id);
-    assert_eq!(
-        deleg_data.destination,
-        address.decode_object(chain_config.as_ref()).unwrap()
-    );
+    assert_eq!(&deleg_data.destination, address.as_object());
 
     let delegation_stake_tx = wallet
         .create_transaction_to_addresses(
@@ -2066,7 +2018,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: "http://uri".as_bytes().to_vec(),
             total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
-            authority: address2.decode_object(&chain_config).unwrap(),
+            authority: address2.as_object().clone(),
             is_freezable: common::chain::tokens::IsTokenFreezable::No,
         };
         let (issued_token_id, token_issuance_transaction) = wallet
@@ -2287,7 +2239,7 @@ fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
                         amount_to_issue: Amount::from_atoms(rng.gen_range(1..10000)),
                     },
                 )))),
-                address2.decode_object(&chain_config).unwrap(),
+                address2.into_object(),
             )],
             SelectedInputs::Utxos(vec![]),
             BTreeMap::new(),
@@ -2339,7 +2291,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         number_of_decimals: rng.gen_range(1..18),
         metadata_uri: "http://uri".as_bytes().to_vec(),
         total_supply: common::chain::tokens::TokenTotalSupply::Fixed(fixed_max_amount),
-        authority: address2.decode_object(&chain_config).unwrap(),
+        authority: address2.as_object().clone(),
         is_freezable: common::chain::tokens::IsTokenFreezable::Yes,
     };
 
@@ -2622,7 +2574,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         number_of_decimals: rng.gen_range(1..18),
         metadata_uri: "http://uri".as_bytes().to_vec(),
         total_supply: common::chain::tokens::TokenTotalSupply::Fixed(fixed_max_amount),
-        authority: address2.decode_object(&chain_config).unwrap(),
+        authority: address2.as_object().clone(),
         is_freezable: common::chain::tokens::IsTokenFreezable::No,
     };
     let (issued_token_id, token_issuance_transaction) = wallet
@@ -2660,7 +2612,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
 
     assert_eq!(
         unconfirmed_token_info.authority().unwrap(),
-        &address2.decode_object(&chain_config).unwrap()
+        address2.as_object()
     );
 
     assert_eq!(
@@ -2868,7 +2820,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         number_of_decimals: rng.gen_range(1..18),
         metadata_uri: "http://uri".as_bytes().to_vec(),
         total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
-        authority: address2.decode_object(&chain_config).unwrap(),
+        authority: address2.as_object().clone(),
         is_freezable: common::chain::tokens::IsTokenFreezable::No,
     };
     let (issued_token_id, token_issuance_transaction) = wallet
@@ -2907,7 +2859,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
 
     assert_eq!(
         unconfirmed_token_info.authority().unwrap(),
-        &address2.decode_object(&chain_config).unwrap()
+        address2.as_object()
     );
 
     assert_eq!(
@@ -3056,7 +3008,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         number_of_decimals: rng.gen_range(1..18),
         metadata_uri: "http://uri".as_bytes().to_vec(),
         total_supply: common::chain::tokens::TokenTotalSupply::Lockable,
-        authority: address2.decode_object(&chain_config).unwrap(),
+        authority: address2.as_object().clone(),
         is_freezable: common::chain::tokens::IsTokenFreezable::No,
     };
     let (issued_token_id, token_issuance_transaction) = wallet
@@ -3095,7 +3047,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
 
     assert_eq!(
         unconfirmed_token_info.authority().unwrap(),
-        &address2.decode_object(&chain_config).unwrap()
+        address2.as_object()
     );
 
     assert_eq!(
@@ -3299,12 +3251,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
         chain_config.genesis_block_id(),
         timestamp,
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(
-            chain_config.as_ref(),
-            address.clone(),
-            block1_amount,
-        )
-        .unwrap()]),
+        BlockReward::new(vec![make_address_output(address.clone(), block1_amount)]),
     )
     .unwrap();
 
@@ -3321,7 +3268,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
 
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
-    let destination = address2.decode_object(chain_config.as_ref()).unwrap();
+    let destination = address2.into_object();
     let amount_fraction = (block1_amount.into_atoms() - NETWORK_FEE) / 10;
 
     let block_count_lock = rng.gen_range(1..10);
@@ -3355,12 +3302,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
         block1_id.into(),
         timestamp,
         ConsensusData::None,
-        BlockReward::new(vec![make_address_output(
-            chain_config.as_ref(),
-            address,
-            block1_amount,
-        )
-        .unwrap()]),
+        BlockReward::new(vec![make_address_output(address, block1_amount)]),
     )
     .unwrap();
 
@@ -3540,7 +3482,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             KeyPurpose::ReceiveFunds,
             (idx + 1).try_into().unwrap(),
         );
-        let change_output = make_address_output(chain_config.as_ref(), address, change).unwrap();
+        let change_output = make_address_output(address, change);
 
         let new_output = TxOutput::Transfer(
             OutputValue::Coin(amount_to_transfer),
@@ -3724,7 +3666,7 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
             KeyPurpose::ReceiveFunds,
             (idx + 1).try_into().unwrap(),
         );
-        let change_output = make_address_output(chain_config.as_ref(), address, change).unwrap();
+        let change_output = make_address_output(address, change);
 
         let new_output = TxOutput::Transfer(
             OutputValue::Coin(amount_to_transfer),
@@ -3928,7 +3870,7 @@ fn decommission_pool_wrong_account(#[case] seed: Seed) {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
-                decommission_key: decommission_key.decode_object(&chain_config).unwrap(),
+                decommission_key: decommission_key.into_object(),
             },
         )
         .unwrap();
@@ -4021,7 +3963,7 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
-                decommission_key: decommission_key.decode_object(&chain_config).unwrap(),
+                decommission_key: decommission_key.into_object(),
             },
         )
         .unwrap();
@@ -4107,7 +4049,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
-                decommission_key: decommission_key.decode_object(&chain_config).unwrap(),
+                decommission_key: decommission_key.into_object(),
             },
         )
         .unwrap();
@@ -4212,7 +4154,7 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
-                decommission_key: decommission_key.decode_object(&chain_config).unwrap(),
+                decommission_key: decommission_key.into_object(),
             },
         )
         .unwrap();
@@ -4300,7 +4242,7 @@ fn filter_pools(#[case] seed: Seed) {
                 amount: pool_amount,
                 margin_ratio_per_thousand: PerThousand::new_from_rng(&mut rng),
                 cost_per_block: Amount::ZERO,
-                decommission_key: decommission_key.decode_object(&chain_config).unwrap(),
+                decommission_key: decommission_key.into_object(),
             },
         )
         .unwrap();
@@ -4366,12 +4308,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
 
     // Generate a new block which sends reward to the cold wallet address
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let reward_output = make_address_output(
-        chain_config.as_ref(),
-        cold_wallet_address.clone(),
-        block1_amount,
-    )
-    .unwrap();
+    let reward_output = make_address_output(cold_wallet_address.clone(), block1_amount);
     let block1 = Block::new(
         vec![],
         chain_config.genesis_block_id(),
@@ -4392,10 +4329,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
     let (send_req, _) = hot_wallet
         .create_unsigned_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
-            [TxOutput::Transfer(
-                OutputValue::Coin(to_send),
-                hot_wallet_address.decode_object(&chain_config).unwrap(),
-            )],
+            [TxOutput::Transfer(OutputValue::Coin(to_send), hot_wallet_address.into_object())],
             SelectedInputs::Inputs(vec![(
                 UtxoOutPoint::new(OutPointSourceId::BlockReward(block1.get_id().into()), 0),
                 reward_output,
@@ -4459,7 +4393,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
     let (_, output, _) = utxos.pop().unwrap();
 
     matches!(output, TxOutput::Transfer(OutputValue::Coin(value), dest)
-            if value == balance && dest == cold_wallet_address.decode_object(&chain_config).unwrap());
+            if value == balance && dest == cold_wallet_address.into_object());
 }
 
 #[rstest]
@@ -4477,8 +4411,7 @@ fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
 
     // Generate a new block which sends reward to the cold wallet address
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let reward_output =
-        make_address_output(chain_config.as_ref(), address.clone(), block1_amount).unwrap();
+    let reward_output = make_address_output(address.clone(), block1_amount);
     let block1 = Block::new(
         vec![],
         chain_config.genesis_block_id(),
@@ -4500,7 +4433,7 @@ fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
                 DEFAULT_ACCOUNT_INDEX,
                 [TxOutput::Transfer(
                     OutputValue::Coin(Amount::from_atoms(1)),
-                    address.decode_object(&chain_config).unwrap(),
+                    address.as_object().clone(),
                 )],
                 SelectedInputs::Inputs(vec![]),
                 [].into(),

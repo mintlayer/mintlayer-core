@@ -52,10 +52,10 @@ async fn address_not_found(#[case] seed: Seed) {
 
     let (_, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
-    let address = Address::<Destination>::new(&chain_config, &destination).unwrap();
+    let address = Address::<Destination>::new(&chain_config, destination).unwrap();
 
     let (task, response) =
-        spawn_webserver(&format!("/api/v2/address/{}/delegations", address.get())).await;
+        spawn_webserver(&format!("/api/v2/address/{}/delegations", address.as_str())).await;
 
     assert_eq!(response.status(), 200);
 
@@ -95,14 +95,14 @@ async fn ok(#[case] seed: Seed) {
 
                 let alice_destination = Destination::PublicKeyHash(PublicKeyHash::from(&alice_pk));
                 let alice_address =
-                    Address::<Destination>::new(&chain_config, &alice_destination).unwrap();
+                    Address::<Destination>::new(&chain_config, alice_destination.clone()).unwrap();
 
                 let (_bob_sk, bob_pk) =
                     PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
                 let bob_destination = Destination::PublicKeyHash(PublicKeyHash::from(&bob_pk));
                 let bob_address =
-                    Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
+                    Address::<Destination>::new(&chain_config, bob_destination).unwrap();
 
                 let stake_pool_outpoint = UtxoOutPoint::new(
                     OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
@@ -163,19 +163,19 @@ async fn ok(#[case] seed: Seed) {
 
                 _ = tx.send([
                     (
-                        alice_address.get().to_string(),
+                        alice_address.as_str().to_string(),
                         delegations
                             .into_iter()
                             .map(|(delegation_id, amount, _, _)| {
                                 json!({
-                                "delegation_id": Address::new(&chain_config, &delegation_id).expect(
+                                "delegation_id": Address::new(&chain_config, delegation_id).expect(
                                     "no error in encoding"
-                                ).get(),
-                                "pool_id": Address::new(&chain_config, &pool_id).expect(
+                                ).as_str(),
+                                "pool_id": Address::new(&chain_config, pool_id).expect(
                                     "no error in encoding"
-                                ).get(),
+                                ).as_str(),
                                 "next_nonce": AccountNonce::new(0),
-                                "spend_destination": alice_address.get(),
+                                "spend_destination": alice_address.as_str(),
                                 "balance": amount_to_json(amount, chain_config.coin_decimals()),
                             })})
                             .collect::<Vec<_>>()

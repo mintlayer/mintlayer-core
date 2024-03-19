@@ -206,7 +206,7 @@ impl LeafKeySoftChain {
         if self.last_used() == self.last_issued() {
             logging::log::debug!(
                 "new address: {}, index: {}, purpose {:?}",
-                address.get(),
+                address.as_str(),
                 new_issued_index,
                 self.purpose
             );
@@ -234,7 +234,7 @@ impl LeafKeySoftChain {
 
         logging::log::debug!(
             "new address: {}, index: {}, purpose {:?}",
-            address.get(),
+            address.as_str(),
             new_issued_index,
             self.purpose
         );
@@ -326,7 +326,7 @@ impl LeafKeySoftChain {
         // Calculate the address
         let address = Address::new(
             &self.chain_config,
-            &Destination::PublicKeyHash(public_key_hash),
+            Destination::PublicKeyHash(public_key_hash),
         )?;
         // Calculate account derivation path id
         let account_path_id = AccountDerivationPathId::new(

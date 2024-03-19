@@ -155,7 +155,7 @@ impl VrfKeySoftChain {
 
         logging::log::debug!(
             "new vrf address: {}, index: {}",
-            Address::new(&self.chain_config, &key.clone().into_public_key()).expect("addressable"),
+            Address::new(&self.chain_config, key.clone().into_public_key()).expect("addressable"),
             new_issued_index,
         );
 
@@ -333,7 +333,8 @@ impl VrfKeySoftChain {
     }
 
     pub fn get_legacy_vrf_public_key(&self) -> Address<VRFPublicKey> {
-        Address::new(&self.chain_config, self.legacy_pubkey.public_key()).expect("addressable")
+        Address::new(&self.chain_config, self.legacy_pubkey.public_key().clone())
+            .expect("addressable")
     }
 
     pub fn get_all_issued_keys(&self) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)> {
@@ -352,7 +353,8 @@ impl VrfKeySoftChain {
                 (
                     index,
                     (
-                        Address::new(&self.chain_config, key.public_key()).expect("addressable"),
+                        Address::new(&self.chain_config, key.public_key().clone())
+                            .expect("addressable"),
                         self.usage_state.last_used().is_some_and(|used| used >= index.get_index()),
                     ),
                 )

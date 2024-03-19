@@ -80,7 +80,7 @@ pub fn outputvalue_to_json(
         OutputValue::TokenV1(token_id, amount) => {
             json!({
                 "type": "TokenV1",
-                "token_id": Address::new(chain_config, token_id).expect("no error").get(),
+                "token_id": Address::new(chain_config, *token_id).expect("no error").as_str(),
                 "amount": amount_to_json(*amount, token_decimals.get(token_id)),
             })
         }
@@ -97,14 +97,14 @@ pub fn txoutput_to_json(
             json!({
                 "type": "Transfer",
                 "value": outputvalue_to_json(value, chain_config, token_decimals),
-                "destination": Address::new(chain_config, dest).expect("no error").get(),
+                "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
             })
         }
         TxOutput::LockThenTransfer(value, dest, lock) => {
             json!({
                 "type": "LockThenTransfer",
                 "value": outputvalue_to_json(value, chain_config, token_decimals),
-                "destination": Address::new(chain_config, dest).expect("no error").get(),
+                "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
                 "lock": lock,
             })
         }
@@ -117,12 +117,12 @@ pub fn txoutput_to_json(
         TxOutput::CreateStakePool(pool_id, data) => {
             json!({
                 "type": "CreateStakePool",
-                "pool_id": Address::new(chain_config, pool_id).expect("no error").get(),
+                "pool_id": Address::new(chain_config, *pool_id).expect("no error").as_str(),
                 "data": {
                     "amount": amount_to_json(data.pledge(), chain_config.coin_decimals()),
-                    "staker": Address::new(chain_config, data.staker()).expect("no error").get(),
-                    "vrf_public_key": Address::new(chain_config, data.vrf_public_key()).expect("no error").get(),
-                    "decommission_key": Address::new(chain_config, data.decommission_key()).expect("no error").get(),
+                    "staker": Address::new(chain_config, data.staker().clone()).expect("no error").as_str(),
+                    "vrf_public_key": Address::new(chain_config, data.vrf_public_key().clone()).expect("no error").as_str(),
+                    "decommission_key": Address::new(chain_config, data.decommission_key().clone()).expect("no error").as_str(),
                     "margin_ratio_per_thousand": data.margin_ratio_per_thousand(),
                     "cost_per_block": amount_to_json(data.cost_per_block(), chain_config.coin_decimals())
                 },
@@ -131,22 +131,22 @@ pub fn txoutput_to_json(
         TxOutput::DelegateStaking(amount, delegation_id) => {
             json!({
                 "type": "DelegateStaking",
-                "delegation_id": Address::new(chain_config, delegation_id).expect("no error").get(),
+                "delegation_id": Address::new(chain_config, *delegation_id).expect("no error").as_str(),
                 "amount": amount_to_json(*amount, chain_config.coin_decimals()),
             })
         }
         TxOutput::CreateDelegationId(dest, pool_id) => {
             json!({
                 "type": "CreateDelegationId",
-                "pool_id": Address::new(chain_config, pool_id).expect("no error").get(),
-                "destination": Address::new(chain_config, dest).expect("no error").get(),
+                "pool_id": Address::new(chain_config, *pool_id).expect("no error").as_str(),
+                "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
             })
         }
         TxOutput::IssueNft(token_id, data, dest) => {
             json!({
                 "type": "IssueNft",
-                "token_id": Address::new(chain_config, token_id).expect("no error").get(),
-                "destination": Address::new(chain_config, dest).expect("no error").get(),
+                "token_id": Address::new(chain_config, *token_id).expect("no error").as_str(),
+                "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
                 "data": data,
             })
         }
@@ -158,7 +158,7 @@ pub fn txoutput_to_json(
                     "number_of_decimals": data.number_of_decimals,
                     "metadata_uri": data.metadata_uri,
                     "total_supply": data.total_supply,
-                    "authority": Address::new(chain_config, &data.authority).expect("no error").get(),
+                    "authority": Address::new(chain_config, data.authority.clone()).expect("no error").as_str(),
                     "is_freezable": data.is_freezable,
                 })
             }
@@ -172,8 +172,8 @@ pub fn txoutput_to_json(
         TxOutput::ProduceBlockFromStake(dest, pool_id) => {
             json!({
                 "type": "ProduceBlockFromStake",
-                "pool_id": Address::new(chain_config, pool_id).expect("no error").get(),
-                "destination": Address::new(chain_config, dest).expect("no error").get(),
+                "pool_id": Address::new(chain_config, *pool_id).expect("no error").as_str(),
+                "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
             })
         }
     }
@@ -223,7 +223,7 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                 json!({
                     "input_type": "Account",
                     "account_type": "DelegationBalance",
-                    "delegation_id": Address::new(chain_config, delegation_id).expect("addressable").to_string(),
+                    "delegation_id": Address::new(chain_config, *delegation_id).expect("addressable").to_string(),
                     "amount": amount_to_json(*amount, chain_config.coin_decimals()),
                     "nonce": acc.nonce(),
                 })
@@ -234,7 +234,7 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                 json!({
                     "input_type": "AccountCommand",
                     "command": "MintTokens",
-                    "token_id": Address::new(chain_config, token_id).expect("addressable").to_string(),
+                    "token_id": Address::new(chain_config, *token_id).expect("addressable").to_string(),
                     "amount": amount_to_json(*amount, chain_config.coin_decimals()),
                     "nonce": nonce,
                 })
@@ -243,7 +243,7 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                 json!({
                     "input_type": "AccountCommand",
                     "command": "UnmintTokens",
-                    "token_id": Address::new(chain_config, token_id).expect("addressable").to_string(),
+                    "token_id": Address::new(chain_config, *token_id).expect("addressable").to_string(),
                     "nonce": nonce,
                 })
             }
@@ -255,7 +255,7 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                 json!({
                     "input_type": "AccountCommand",
                     "command": "FreezeTokens",
-                    "token_id": Address::new(chain_config, token_id).expect("addressable").to_string(),
+                    "token_id": Address::new(chain_config, *token_id).expect("addressable").to_string(),
                     "is_token_unfreezable": is_unfreezable,
                     "nonce": nonce,
                 })
@@ -264,7 +264,7 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                 json!({
                     "input_type": "AccountCommand",
                     "command": "UnfreezeTokens",
-                    "token_id": Address::new(chain_config, token_id).expect("addressable").to_string(),
+                    "token_id": Address::new(chain_config, *token_id).expect("addressable").to_string(),
                     "nonce": nonce,
                 })
             }
@@ -272,7 +272,7 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                 json!({
                     "input_type": "AccountCommand",
                     "command": "LockTokenSupply",
-                    "token_id": Address::new(chain_config, token_id).expect("addressable").to_string(),
+                    "token_id": Address::new(chain_config, *token_id).expect("addressable").to_string(),
                     "nonce": nonce,
                 })
             }
@@ -280,8 +280,8 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                 json!({
                     "input_type": "AccountCommand",
                     "command": "ChangeTokenAuthority",
-                    "token_id": Address::new(chain_config, token_id).expect("addressable").to_string(),
-                    "new_authority": Address::new(chain_config, authority).expect("addressable").to_string(),
+                    "token_id": Address::new(chain_config, *token_id).expect("addressable").to_string(),
+                    "new_authority": Address::new(chain_config, authority.clone()).expect("addressable").to_string(),
                     "nonce": nonce,
                 })
             }

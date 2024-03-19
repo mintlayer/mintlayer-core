@@ -191,8 +191,16 @@ impl TxData {
         &self.tx
     }
 
+    pub fn into_signed_transaction(self) -> SignedTransaction {
+        self.tx
+    }
+
     pub fn get_transaction(&self) -> &Transaction {
         self.tx.transaction()
+    }
+
+    pub fn into_transaction(self) -> Transaction {
+        self.tx.take_transaction()
     }
 
     pub fn get_transaction_with_id(&self) -> WithId<&Transaction> {

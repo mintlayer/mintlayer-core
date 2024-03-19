@@ -718,9 +718,7 @@ pub async fn address_delegations<T: ApiServerStorage>(
             logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .get_delegations_from_address(
-            &address.decode_object(&state.chain_config).expect("already checked"),
-        )
+        .get_delegations_from_address(&address.into_object())
         .await
         .map_err(|e| {
             logging::log::error!("internal error: {e}");
@@ -730,16 +728,16 @@ pub async fn address_delegations<T: ApiServerStorage>(
     Ok(Json(
         delegations.into_iter().map(|(delegation_id, delegation)|
             json!({
-            "delegation_id": Address::new(&state.chain_config, &delegation_id).expect(
+            "delegation_id": Address::new(&state.chain_config, delegation_id).expect(
                 "no error in encoding"
-            ).get(),
-            "pool_id": Address::new(&state.chain_config, delegation.pool_id()).expect(
+            ).as_str(),
+            "pool_id": Address::new(&state.chain_config, *delegation.pool_id()).expect(
                 "no error in encoding"
-            ).get(),
+            ).as_str(),
             "next_nonce": delegation.next_nonce(),
-            "spend_destination": Address::new(&state.chain_config, delegation.spend_destination()).expect(
+            "spend_destination": Address::new(&state.chain_config, delegation.spend_destination().clone()).expect(
                 "no error in encoding"
-            ).get(),
+            ).as_str(),
             "balance": amount_to_json(*delegation.balance(), state.chain_config.coin_decimals()),
         })
         ).collect::<Vec<_>>(),
@@ -828,18 +826,18 @@ pub async fn pools<T: ApiServerStorage>(
 
     let pools = pools.into_iter().map(|(pool_id, pool_data)| {
         let decommission_destination =
-            Address::new(&state.chain_config, pool_data.decommission_destination())
+            Address::new(&state.chain_config, pool_data.decommission_destination().clone())
                 .expect("no error in encoding");
-        let pool_id = Address::new(&state.chain_config, &pool_id).expect("no error in encoding");
-        let vrf_key = Address::new(&state.chain_config, pool_data.vrf_public_key())
+        let pool_id = Address::new(&state.chain_config, pool_id).expect("no error in encoding");
+        let vrf_key = Address::new(&state.chain_config, pool_data.vrf_public_key().clone())
             .expect("no error in encoding");
         json!({
-            "pool_id": pool_id.get(),
-            "decommission_destination": decommission_destination.get(),
+            "pool_id": pool_id.as_str(),
+            "decommission_destination": decommission_destination.as_str(),
             "staker_balance": amount_to_json(pool_data.staker_balance().expect("no overflow"), state.chain_config.coin_decimals()),
             "margin_ratio_per_thousand": pool_data.margin_ratio_per_thousand(),
             "cost_per_block": amount_to_json(pool_data.cost_per_block(), state.chain_config.coin_decimals()),
-            "vrf_public_key": vrf_key.get(),
+            "vrf_public_key": vrf_key.as_str(),
         })
     });
 
@@ -851,10 +849,10 @@ pub async fn pool<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let pool_id = Address::from_str(&state.chain_config, &pool_id)
-        .and_then(|address| address.decode_object(&state.chain_config))
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
-        })?;
+        })?
+        .into_object();
 
     let pool_data = state
         .db
@@ -874,17 +872,19 @@ pub async fn pool<T: ApiServerStorage>(
             ApiServerWebServerNotFoundError::PoolNotFound,
         ))?;
 
-    let decommission_destination =
-        Address::new(&state.chain_config, pool_data.decommission_destination())
-            .expect("no error in encoding");
-    let vrf_key = Address::new(&state.chain_config, pool_data.vrf_public_key())
+    let decommission_destination = Address::new(
+        &state.chain_config,
+        pool_data.decommission_destination().clone(),
+    )
+    .expect("no error in encoding");
+    let vrf_key = Address::new(&state.chain_config, pool_data.vrf_public_key().clone())
         .expect("no error in encoding");
     Ok(Json(json!({
-        "decommission_destination": decommission_destination.get(),
+        "decommission_destination": decommission_destination.as_str(),
         "staker_balance": amount_to_json(pool_data.staker_balance().expect("no overflow"), state.chain_config.coin_decimals()),
         "margin_ratio_per_thousand": pool_data.margin_ratio_per_thousand(),
         "cost_per_block": amount_to_json(pool_data.cost_per_block(), state.chain_config.coin_decimals()),
-        "vrf_public_key": vrf_key.get(),
+        "vrf_public_key": vrf_key.as_str(),
     })))
 }
 
@@ -900,10 +900,10 @@ pub async fn pool_block_stats<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let pool_id = Address::from_str(&state.chain_config, &pool_id)
-        .and_then(|address| address.decode_object(&state.chain_config))
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
-        })?;
+        })?
+        .into_object();
 
     let tx = state.db.transaction_ro().await.map_err(|e| {
         logging::log::error!("internal error: {e}");
@@ -942,10 +942,10 @@ pub async fn pool_delegations<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let pool_id = Address::from_str(&state.chain_config, &pool_id)
-        .and_then(|address| address.decode_object(&state.chain_config))
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
-        })?;
+        })?
+        .into_object();
 
     let delegations = state
         .db
@@ -965,13 +965,13 @@ pub async fn pool_delegations<T: ApiServerStorage>(
     Ok(Json(
         delegations.into_iter().map(|(delegation_id, delegation)|
             json!({
-            "delegation_id": Address::new(&state.chain_config, &delegation_id).expect(
+            "delegation_id": Address::new(&state.chain_config, delegation_id).expect(
                 "no error in encoding"
-            ).get(),
+            ).as_str(),
             "next_nonce": delegation.next_nonce(),
-            "spend_destination": Address::new(&state.chain_config, delegation.spend_destination()).expect(
+            "spend_destination": Address::new(&state.chain_config, delegation.spend_destination().clone()).expect(
                 "no error in encoding"
-            ).get(),
+            ).as_str(),
             "balance": amount_to_json(*delegation.balance(), state.chain_config.coin_decimals()),
         })
         ).collect::<Vec<_>>(),
@@ -982,11 +982,11 @@ pub async fn delegation<T: ApiServerStorage>(
     Path(delegation_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let delegation_id = Address::from_str(&state.chain_config, &delegation_id)
-        .and_then(|address| address.decode_object(&state.chain_config))
+    let delegation_id = Address::from_string(&state.chain_config, delegation_id)
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidPoolId)
-        })?;
+        })?
+        .into_object();
 
     let delegation = state
         .db
@@ -1007,14 +1007,14 @@ pub async fn delegation<T: ApiServerStorage>(
         ))?;
 
     Ok(Json(json!({
-        "spend_destination": Address::new(&state.chain_config, delegation.spend_destination()).expect(
+        "spend_destination": Address::new(&state.chain_config, delegation.spend_destination().clone()).expect(
             "no error in encoding"
-        ).get(),
+        ).as_str(),
         "balance": amount_to_json(*delegation.balance(), state.chain_config.coin_decimals()),
         "next_nonce": delegation.next_nonce(),
-        "pool_id": Address::new(&state.chain_config, delegation.pool_id()).expect(
+        "pool_id": Address::new(&state.chain_config, *delegation.pool_id()).expect(
             "no error in encoding"
-        ).get(),
+        ).as_str(),
     })))
 }
 
@@ -1023,10 +1023,10 @@ pub async fn token<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let token_id = Address::from_str(&state.chain_config, &token_id)
-        .and_then(|address| address.decode_object(&state.chain_config))
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidTokenId)
-        })?;
+        })?
+        .into_object();
 
     let token = state
         .db
@@ -1064,9 +1064,9 @@ pub async fn token<T: ApiServerStorage>(
     };
 
     Ok(Json(json!({
-        "authority": Address::new(&state.chain_config, &token.authority).expect(
+        "authority": Address::new(&state.chain_config, token.authority).expect(
             "no error in encoding"
-        ).get(),
+        ).as_str(),
         "is_locked": token.is_locked,
         "circulating_supply": amount_to_json(token.circulating_supply, token.number_of_decimals),
         "token_ticker": to_json_string(&token.token_ticker),
@@ -1084,10 +1084,10 @@ pub async fn nft<T: ApiServerStorage>(
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
     let nft_id = Address::from_str(&state.chain_config, &nft_id)
-        .and_then(|address| address.decode_object(&state.chain_config))
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNftId)
-        })?;
+        })?
+        .into_object();
 
     let nft = state
         .db
@@ -1110,9 +1110,9 @@ pub async fn nft<T: ApiServerStorage>(
     match nft {
         NftIssuance::V0(nft) => Ok(Json(json!({
             "authority": nft.metadata.creator
-                .map(|creator| Address::new(&state.chain_config, &Destination::PublicKey(creator.public_key))
+                .map(|creator| Address::new(&state.chain_config, Destination::PublicKey(creator.public_key))
                 .expect("no error in encoding")
-                .get().to_owned()
+                .as_str().to_owned()
             ),
             "name": nft.metadata.name,
             "description": nft.metadata.description,

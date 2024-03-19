@@ -219,9 +219,13 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         address: String,
     ) -> Result<PublicKeyInfo, Self::Error> {
-        ColdWalletRpcClient::reveal_public_key(&self.http_client, account_index.into(), address)
-            .await
-            .map_err(WalletRpcError::ResponseError)
+        ColdWalletRpcClient::reveal_public_key(
+            &self.http_client,
+            account_index.into(),
+            address.into(),
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn get_balance(
@@ -272,7 +276,7 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::send_coins(
             &self.http_client,
             account_index.into(),
-            address,
+            address.into(),
             amount.into(),
             selected_utxos,
             options,
@@ -294,8 +298,8 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::sweep_addresses(
             &self.http_client,
             account_index.into(),
-            destination_address,
-            from_addresses,
+            destination_address.into(),
+            from_addresses.into_iter().map(Into::into).collect(),
             options,
         )
         .await
@@ -315,8 +319,8 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::sweep_delegation(
             &self.http_client,
             account_index.into(),
-            destination_address,
-            delegation_id,
+            destination_address.into(),
+            delegation_id.into(),
             options,
         )
         .await
@@ -338,10 +342,10 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::transaction_from_cold_input(
             &self.http_client,
             account_index.into(),
-            address,
+            address.into(),
             amount.into(),
             selected_utxo,
-            change_address,
+            change_address.map(Into::into),
             options,
         )
         .await
@@ -352,7 +356,7 @@ impl WalletInterface for ClientWalletRpc {
         &self,
         transaction: String,
     ) -> Result<InspectTransaction, Self::Error> {
-        WalletRpcClient::transaction_inspect(&self.http_client, transaction)
+        WalletRpcClient::transaction_inspect(&self.http_client, transaction.parse()?)
             .await
             .map_err(WalletRpcError::ResponseError)
     }
@@ -375,7 +379,7 @@ impl WalletInterface for ClientWalletRpc {
             amount.into(),
             cost_per_block.into(),
             margin_ratio_per_thousand,
-            decommission_address,
+            decommission_address.into(),
             options,
         )
         .await
@@ -395,8 +399,8 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::decommission_stake_pool(
             &self.http_client,
             account_index.into(),
-            pool_id,
-            output_address,
+            pool_id.into(),
+            output_address.map(Into::into),
             options,
         )
         .await
@@ -416,8 +420,8 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::decommission_stake_pool_request(
             &self.http_client,
             account_index.into(),
-            pool_id,
-            output_address,
+            pool_id.into(),
+            output_address.map(Into::into),
             options,
         )
         .await
@@ -437,8 +441,8 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::create_delegation(
             &self.http_client,
             account_index.into(),
-            address,
-            pool_id,
+            address.into(),
+            pool_id.into(),
             options,
         )
         .await
@@ -459,7 +463,7 @@ impl WalletInterface for ClientWalletRpc {
             &self.http_client,
             account_index.into(),
             amount.into(),
-            delegation_id,
+            delegation_id.into(),
             options,
         )
         .await
@@ -480,9 +484,9 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::withdraw_from_delegation(
             &self.http_client,
             account_index.into(),
-            address,
+            address.into(),
             amount.into(),
-            delegation_id,
+            delegation_id.into(),
             options,
         )
         .await
@@ -523,7 +527,7 @@ impl WalletInterface for ClientWalletRpc {
     }
 
     async fn stake_pool_balance(&self, pool_id: String) -> Result<StakePoolBalance, Self::Error> {
-        WalletRpcClient::stake_pool_balance(&self.http_client, pool_id)
+        WalletRpcClient::stake_pool_balance(&self.http_client, pool_id.into())
             .await
             .map_err(WalletRpcError::ResponseError)
     }
@@ -586,7 +590,7 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::issue_new_nft(
             &self.http_client,
             account_index.into(),
-            destination_address,
+            destination_address.into(),
             metadata,
             options,
         )
@@ -607,7 +611,7 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::issue_new_token(
             &self.http_client,
             account_index.into(),
-            destination_address,
+            destination_address.into(),
             metadata,
             options,
         )
@@ -628,8 +632,8 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::change_token_authority(
             &self.http_client,
             account_index.into(),
-            token_id,
-            address,
+            token_id.into(),
+            address.into(),
             options,
         )
         .await
@@ -650,8 +654,8 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::mint_tokens(
             &self.http_client,
             account_index.into(),
-            token_id,
-            address,
+            token_id.into(),
+            address.into(),
             amount.into(),
             options,
         )
@@ -672,7 +676,7 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::unmint_tokens(
             &self.http_client,
             account_index.into(),
-            token_id,
+            token_id.into(),
             amount.into(),
             options,
         )
@@ -692,7 +696,7 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::lock_token_supply(
             &self.http_client,
             account_index.into(),
-            token_id,
+            token_id.into(),
             options,
         )
         .await
@@ -712,7 +716,7 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::freeze_token(
             &self.http_client,
             account_index.into(),
-            token_id,
+            token_id.into(),
             is_unfreezable,
             options,
         )
@@ -729,9 +733,14 @@ impl WalletInterface for ClientWalletRpc {
         let options = TransactionOptions {
             in_top_x_mb: config.in_top_x_mb,
         };
-        WalletRpcClient::unfreeze_token(&self.http_client, account_index.into(), token_id, options)
-            .await
-            .map_err(WalletRpcError::ResponseError)
+        WalletRpcClient::unfreeze_token(
+            &self.http_client,
+            account_index.into(),
+            token_id.into(),
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn send_tokens(
@@ -748,8 +757,8 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::send_tokens(
             &self.http_client,
             account_index.into(),
-            token_id,
-            address,
+            token_id.into(),
+            address.into(),
             amount.into(),
             options,
         )
@@ -766,9 +775,14 @@ impl WalletInterface for ClientWalletRpc {
         let options = TransactionOptions {
             in_top_x_mb: config.in_top_x_mb,
         };
-        WalletRpcClient::deposit_data(&self.http_client, account_index.into(), data, options)
-            .await
-            .map_err(WalletRpcError::ResponseError)
+        WalletRpcClient::deposit_data(
+            &self.http_client,
+            account_index.into(),
+            data.parse()?,
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn node_version(&self) -> Result<NodeVersion, Self::Error> {
@@ -907,7 +921,7 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::list_transactions_by_address(
             &self.http_client,
             account_index.into(),
-            address,
+            address.map(Into::into),
             limit,
         )
         .await
@@ -919,13 +933,9 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         transaction_id: Id<Transaction>,
     ) -> Result<serde_json::Value, Self::Error> {
-        WalletRpcClient::get_transaction(
-            &self.http_client,
-            account_index.into(),
-            HexEncoded::new(transaction_id),
-        )
-        .await
-        .map_err(WalletRpcError::ResponseError)
+        WalletRpcClient::get_transaction(&self.http_client, account_index.into(), transaction_id)
+            .await
+            .map_err(WalletRpcError::ResponseError)
     }
 
     async fn get_raw_transaction(
@@ -936,10 +946,11 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::get_raw_transaction(
             &self.http_client,
             account_index.into(),
-            HexEncoded::new(transaction_id),
+            transaction_id,
         )
         .await
         .map_err(WalletRpcError::ResponseError)
+        .map(|obj| obj.to_string())
     }
 
     async fn get_raw_signed_transaction(
@@ -950,10 +961,11 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::get_raw_signed_transaction(
             &self.http_client,
             account_index.into(),
-            HexEncoded::new(transaction_id),
+            transaction_id,
         )
         .await
         .map_err(WalletRpcError::ResponseError)
+        .map(|obj| obj.to_string())
     }
 
     async fn sign_raw_transaction(
@@ -968,7 +980,7 @@ impl WalletInterface for ClientWalletRpc {
         ColdWalletRpcClient::sign_raw_transaction(
             &self.http_client,
             account_index.into(),
-            raw_tx,
+            raw_tx.parse()?,
             options,
         )
         .await
@@ -998,10 +1010,11 @@ impl WalletInterface for ClientWalletRpc {
             &self.http_client,
             account_index.into(),
             challenge,
-            address,
+            address.into(),
         )
         .await
         .map_err(WalletRpcError::ResponseError)
+        .map(|h| h.to_string())
     }
 
     async fn sign_challenge_hex(
@@ -1013,11 +1026,12 @@ impl WalletInterface for ClientWalletRpc {
         ColdWalletRpcClient::sign_challenge_hex(
             &self.http_client,
             account_index.into(),
-            challenge,
-            address,
+            challenge.parse()?,
+            address.into(),
         )
         .await
         .map_err(WalletRpcError::ResponseError)
+        .map(|h| h.to_string())
     }
 
     async fn verify_challenge(
@@ -1026,9 +1040,14 @@ impl WalletInterface for ClientWalletRpc {
         signed_challenge: String,
         address: String,
     ) -> Result<(), Self::Error> {
-        ColdWalletRpcClient::verify_challenge(&self.http_client, message, signed_challenge, address)
-            .await
-            .map_err(WalletRpcError::ResponseError)
+        ColdWalletRpcClient::verify_challenge(
+            &self.http_client,
+            message,
+            signed_challenge.parse()?,
+            address.into(),
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn verify_challenge_hex(
@@ -1039,9 +1058,9 @@ impl WalletInterface for ClientWalletRpc {
     ) -> Result<(), Self::Error> {
         ColdWalletRpcClient::verify_challenge_hex(
             &self.http_client,
-            message,
-            signed_challenge,
-            address,
+            message.parse()?,
+            signed_challenge.parse()?,
+            address.into(),
         )
         .await
         .map_err(WalletRpcError::ResponseError)
@@ -1100,9 +1119,10 @@ impl WalletInterface for ClientWalletRpc {
     }
 
     async fn node_block(&self, block_id: String) -> Result<Option<String>, Self::Error> {
-        WalletRpcClient::node_block(&self.http_client, block_id)
+        WalletRpcClient::node_block(&self.http_client, block_id.parse::<HexEncoded<_>>()?.take())
             .await
             .map_err(WalletRpcError::ResponseError)
+            .map(|r| r.map(|b| b.to_string()))
     }
 
     async fn node_get_block_ids_as_checkpoints(

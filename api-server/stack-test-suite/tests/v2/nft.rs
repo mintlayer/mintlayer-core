@@ -47,9 +47,9 @@ async fn nft_not_found(#[case] seed: Seed) {
     let chain_config = create_unit_test_config();
 
     let token_id = TokenId::new(H256::random_using(&mut rng));
-    let token_id = Address::<TokenId>::new(&chain_config, &token_id).unwrap();
+    let token_id = Address::<TokenId>::new(&chain_config, token_id).unwrap();
 
-    let (task, response) = spawn_webserver(&format!("/api/v2/nft/{}", token_id.get())).await;
+    let (task, response) = spawn_webserver(&format!("/api/v2/nft/{}", token_id.as_str())).await;
 
     assert_eq!(response.status(), 404);
 
@@ -128,9 +128,9 @@ async fn ok(#[case] seed: Seed) {
                     token_id,
                     json!({
                         "authority": nft.metadata.creator
-                            .map(|creator| Address::new(&chain_config, &Destination::PublicKey(creator.public_key))
+                            .map(|creator| Address::new(&chain_config, Destination::PublicKey(creator.public_key))
                             .expect("no error in encoding")
-                            .get().to_owned()
+                            .as_str().to_owned()
                         ),
                         "name": nft.metadata.name,
                         "description": nft.metadata.description,
@@ -180,7 +180,7 @@ async fn ok(#[case] seed: Seed) {
 
     let chain_config = create_unit_test_config();
     for (token_id, expected_values) in rx.await.unwrap() {
-        let token_id = Address::new(&chain_config, &token_id).unwrap();
+        let token_id = Address::new(&chain_config, token_id).unwrap();
         let url = format!("/api/v2/nft/{token_id}");
 
         // Given that the listener port is open, this will block until a

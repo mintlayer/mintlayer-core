@@ -359,7 +359,6 @@ impl Account {
                 let (coin_change_fee, token_change_fee) = coin_and_token_output_change_fees(
                     current_fee_rate,
                     change_addresses.get(currency),
-                    &self.chain_config,
                 )?;
 
                 let cost_of_change = match currency {
@@ -413,7 +412,6 @@ impl Account {
         let (coin_change_fee, token_change_fee) = coin_and_token_output_change_fees(
             current_fee_rate,
             change_addresses.get(&pay_fee_with_currency),
-            &self.chain_config,
         )?;
         let cost_of_change = match pay_fee_with_currency {
             currency_grouper::Currency::Coin => coin_change_fee,
@@ -481,17 +479,12 @@ impl Account {
                 };
 
                 let change_output = match currency {
-                    currency_grouper::Currency::Coin => make_address_output(
-                        self.chain_config.as_ref(),
-                        change_address,
-                        change_amount,
-                    )?,
-                    currency_grouper::Currency::Token(token_id) => make_address_output_token(
-                        self.chain_config.as_ref(),
-                        change_address,
-                        change_amount,
-                        *token_id,
-                    )?,
+                    currency_grouper::Currency::Coin => {
+                        make_address_output(change_address, change_amount)
+                    }
+                    currency_grouper::Currency::Token(token_id) => {
+                        make_address_output_token(change_address, change_amount, *token_id)
+                    }
                 };
                 request = request.with_outputs([change_output]);
             }
@@ -639,7 +632,7 @@ impl Account {
             address.clone(),
             delegation_share,
             current_block_height,
-        )?;
+        );
         let delegation_data = self.find_delegation(&delegation_id)?;
         let nonce = delegation_data
             .last_nonce
@@ -672,7 +665,7 @@ impl Account {
             address,
             amount,
             current_block_height,
-        )?;
+        );
 
         let tx = Transaction::new(0, vec![tx_input], vec![output])?;
 
@@ -745,10 +738,7 @@ impl Account {
         let output_destination = if let Some(dest) = output_address {
             dest
         } else {
-            self.get_new_address(db_tx, KeyPurpose::ReceiveFunds)?
-                .1
-                .decode_object(&self.chain_config)
-                .expect("already checked")
+            self.get_new_address(db_tx, KeyPurpose::ReceiveFunds)?.1.into_object()
         };
 
         let pool_data = self.output_cache.pool_data(pool_id)?;
@@ -844,7 +834,7 @@ impl Account {
             address,
             amount,
             current_block_height,
-        )?;
+        );
         let delegation_data = self.find_delegation(&delegation_id)?;
         let nonce = delegation_data
             .last_nonce
@@ -1090,8 +1080,7 @@ impl Account {
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
         let token_id = *token_info.token_id();
-        let outputs =
-            make_mint_token_outputs(token_id, amount, address, self.chain_config.as_ref())?;
+        let outputs = make_mint_token_outputs(token_id, amount, address);
 
         token_info.check_can_mint(amount)?;
 
@@ -1219,7 +1208,7 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let new_authority = address.decode_object(&self.chain_config)?;
+        let new_authority = address.into_object();
 
         let nonce = token_info.get_next_nonce()?;
         let tx_input = TxInput::AccountCommand(
@@ -1522,7 +1511,8 @@ impl Account {
             self.key_chain.issue_vrf_key(db_tx).map(|(child_number, vrf_key)| {
                 (
                     child_number,
-                    Address::new(&self.chain_config, vrf_key.public_key()).expect("addressable"),
+                    Address::new(&self.chain_config, vrf_key.public_key().clone())
+                        .expect("addressable"),
                 )
             })?,
         )
@@ -2201,10 +2191,9 @@ fn group_preselected_inputs(
 fn coin_and_token_output_change_fees(
     feerate: mempool::FeeRate,
     destination: Option<&Address<Destination>>,
-    chain_config: &ChainConfig,
 ) -> WalletResult<(Amount, Amount)> {
     let destination = if let Some(addr) = destination {
-        addr.decode_object(chain_config)?
+        addr.as_object().clone()
     } else {
         let pub_key_hash = PublicKeyHash::from_low_u64_ne(0);
         Destination::PublicKeyHash(pub_key_hash)

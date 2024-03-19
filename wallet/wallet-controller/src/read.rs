@@ -249,7 +249,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
             .and_then(|balance| {
                 balance.ok_or(ControllerError::SyncError(format!(
                     "Pool id {} from wallet not found in node",
-                    Address::new(self.chain_config, &pool_id)?
+                    Address::new(self.chain_config, pool_id)?
                 )))
             })
             .log_err()?;
@@ -261,7 +261,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
             .and_then(|balance| {
                 balance.ok_or(ControllerError::SyncError(format!(
                     "Pool id {} from wallet not found in node",
-                    Address::new(self.chain_config, &pool_id)?
+                    Address::new(self.chain_config, pool_id)?
                 )))
             })
             .map(|pledge| (pool_id, pool_data, balance, pledge))
@@ -302,7 +302,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
                     .into_iter()
                     .map(|(height, id, pool_id)| {
                         let pool_id =
-                            Address::new(self.chain_config, &pool_id).expect("addressable");
+                            Address::new(self.chain_config, pool_id).expect("addressable");
 
                         CreatedBlockInfo {
                             height,

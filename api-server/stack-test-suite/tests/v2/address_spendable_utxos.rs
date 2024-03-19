@@ -46,11 +46,11 @@ async fn address_not_found(#[case] seed: Seed) {
 
     let (_, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
-    let address = Address::<Destination>::new(&chain_config, &destination).unwrap();
+    let address = Address::<Destination>::new(&chain_config, destination).unwrap();
 
     let (task, response) = spawn_webserver(&format!(
         "/api/v2/address/{}/spendable-utxos",
-        address.get()
+        address.as_str()
     ))
     .await;
 
@@ -92,7 +92,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
 
                 let alice_destination = Destination::PublicKeyHash(PublicKeyHash::from(&alice_pk));
                 let alice_address =
-                    Address::<Destination>::new(&chain_config, &alice_destination).unwrap();
+                    Address::<Destination>::new(&chain_config, alice_destination.clone()).unwrap();
                 let mut alice_balance = Amount::from_atoms(1_000_000);
                 let mut alice_utxos = BTreeMap::new();
 
@@ -101,7 +101,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
 
                 let bob_destination = Destination::PublicKeyHash(PublicKeyHash::from(&bob_pk));
                 let bob_address =
-                    Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
+                    Address::<Destination>::new(&chain_config, bob_destination.clone()).unwrap();
                 let mut bob_utxos = BTreeMap::new();
 
                 // setup initial transaction
@@ -225,7 +225,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
 
                 _ = tx.send([
                     (
-                        alice_address.get().to_string(),
+                        alice_address.as_str().to_string(),
                         alice_utxos
                             .into_iter()
                             .map(|utxo| {
@@ -338,7 +338,7 @@ async fn ok(#[case] seed: Seed) {
 
                 let alice_destination = Destination::PublicKeyHash(PublicKeyHash::from(&alice_pk));
                 let alice_address =
-                    Address::<Destination>::new(&chain_config, &alice_destination).unwrap();
+                    Address::<Destination>::new(&chain_config, alice_destination.clone()).unwrap();
                 let mut alice_balance = Amount::from_atoms(1_000_000);
                 let mut alice_utxos = BTreeMap::new();
 
@@ -347,7 +347,7 @@ async fn ok(#[case] seed: Seed) {
 
                 let bob_destination = Destination::PublicKeyHash(PublicKeyHash::from(&bob_pk));
                 let bob_address =
-                    Address::<Destination>::new(&chain_config, &bob_destination).unwrap();
+                    Address::<Destination>::new(&chain_config, bob_destination.clone()).unwrap();
                 let mut bob_balance = Amount::ZERO;
                 let mut bob_utxos = BTreeMap::new();
 
@@ -468,7 +468,7 @@ async fn ok(#[case] seed: Seed) {
 
                 _ = tx.send([
                     (
-                        alice_address.get().to_string(),
+                        alice_address.as_str().to_string(),
                         alice_utxos
                             .into_iter()
                             .map(|utxo| {

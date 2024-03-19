@@ -34,13 +34,13 @@ pub fn view_addresses(
     for (index, address) in account.addresses.iter() {
         addresses = addresses
             .push(field(index.to_string()))
-            .push(field(address.get().to_owned()))
+            .push(field(address.as_str().to_owned()))
             .push(
                 button(
                     Text::new(iced_aw::Icon::ClipboardCheck.to_string()).font(iced_aw::ICON_FONT),
                 )
                 .style(iced::theme::Button::Text)
-                .on_press(WalletMessage::CopyToClipboard(address.get().to_owned())),
+                .on_press(WalletMessage::CopyToClipboard(address.as_str().to_owned())),
             );
     }
     column![
