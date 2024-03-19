@@ -26,6 +26,7 @@ tx-verifier = { path = '../tx-verifier' }
 utils = { path = '../../utils' }
 utxo = { path = '../../utxo' }
 
+ctor.workspace = true
 hex.workspace = true
 itertools.workspace = true
 

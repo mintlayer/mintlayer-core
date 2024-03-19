@@ -15,6 +15,9 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use chainstate_storage::{
+    BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
+};
 use rstest::rstest;
 
 use crate::{
@@ -24,7 +27,7 @@ use crate::{
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
-use chainstate_types::{BlockIndex, GenBlockIndex};
+use chainstate_types::{BlockIndex, BlockStatus, GenBlockIndex};
 use common::{
     chain::{
         Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxOutput,
@@ -332,6 +335,21 @@ impl TestFramework {
 
     pub fn get_min_height_with_allowed_reorg(&self) -> BlockHeight {
         self.chainstate.get_min_height_with_allowed_reorg().unwrap()
+    }
+
+    pub fn set_block_status(&mut self, block_id: &Id<Block>, status: BlockStatus) {
+        let mut block_idx = self
+            .storage
+            .transaction_ro()
+            .unwrap()
+            .get_block_index(block_id)
+            .unwrap()
+            .unwrap();
+        block_idx.set_status(status);
+        let mut tx_rw = self.storage.transaction_rw(None).unwrap();
+
+        tx_rw.set_block_index(&block_idx).unwrap();
+        tx_rw.commit().unwrap();
     }
 }
 

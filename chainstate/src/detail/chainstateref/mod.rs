@@ -638,7 +638,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let block_timestamp = header.timestamp();
         ensure!(
             block_timestamp.as_duration_since_epoch() <= current_time + *max_future_offset,
-            CheckBlockError::BlockFromTheFuture,
+            CheckBlockError::BlockFromTheFuture(header.block_id()),
         );
         Ok(())
     }
@@ -1041,6 +1041,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
                     // of check_block out of connect_tip). The caller code will then be able
                     // to determine that block data is missing for a potentially valid block,
                     // and trigger its re-download.
+                    // Note: the 2nd part of this TODO is out of date - BlockDataMissing will
+                    // not cause block re-invalidation anymore.
                     // 2) Right now, all callers handle BlockDataMissing by invalidating the
                     // corresponding block subtree, because currently there is no way of getting
                     // the missing block data again. But once we have a mechanism for triggering
@@ -1220,14 +1222,6 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     #[log_error]
     pub fn set_block_index(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
         self.db_tx.set_block_index(block_index).map_err(BlockError::from)
-    }
-
-    #[log_error]
-    pub fn set_new_block_index(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
-        if self.db_tx.get_block_index(block_index.block_id())?.is_some() {
-            return Err(BlockError::BlockIndexAlreadyExists(*block_index.block_id()));
-        }
-        self.set_block_index(block_index)
     }
 
     /// Update the status of the passed `block_index`.

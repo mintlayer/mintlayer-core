@@ -1003,6 +1003,8 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn blocks_from_the_future(#[case] seed: Seed) {
+    use test_utils::assert_matches;
+
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
@@ -1053,7 +1055,7 @@ fn blocks_from_the_future(#[case] seed: Seed) {
             let max_future_offset =
                 tf.chainstate.get_chain_config().max_future_block_time_offset().as_secs();
 
-            assert_eq!(
+            assert_matches!(
                 tf.make_block_builder()
                     .with_timestamp(BlockTimestamp::from_int_seconds(
                         current_time.load() + max_future_offset + 1,
@@ -1061,7 +1063,7 @@ fn blocks_from_the_future(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                    CheckBlockError::BlockFromTheFuture
+                    CheckBlockError::BlockFromTheFuture(_)
                 ))
             );
         }
@@ -1170,4 +1172,68 @@ fn make_invalid_pow_block(
     }
 
     Ok(false)
+}
+
+// Process a block with timestamp far in the future, make sure it fails with the
+// BlockFromTheFuture error.
+// Advance time, process the block again. Now it should succeed.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reprocess_previously_temporarily_invalid_block(#[case] seed: Seed) {
+    use chainstate_types::BlockValidationStage;
+    use common::chain;
+    use test_utils::assert_matches;
+
+    use crate::tests::helpers::{
+        block_creation_helpers::process_block,
+        block_status_helpers::{assert_fully_valid_blocks, assert_ok_blocks_at_stage},
+    };
+
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let chain_config = chain::config::create_unit_test_config();
+        let genesis = Arc::clone(chain_config.genesis_block());
+        let start_time_secs = genesis.timestamp().as_int_seconds();
+        let real_time_secs = Arc::new(SeqCstAtomicU64::new(start_time_secs));
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(chain_config)
+            .with_time_getter(mocked_time_getter_seconds(Arc::clone(&real_time_secs)))
+            .build();
+
+        let (m0_id, result) = process_block(&mut tf, &genesis.get_id().into(), &mut rng);
+        assert!(result.is_ok());
+        let (m1_id, result) = process_block(&mut tf, &m0_id.into(), &mut rng);
+        assert!(result.is_ok());
+        let (m2_id, result) = process_block(&mut tf, &m1_id.into(), &mut rng);
+        assert!(result.is_ok());
+
+        let future_block_time_secs = start_time_secs + 60 * 60 * 24;
+        let future_block = tf
+            .make_block_builder()
+            .with_parent(m2_id.into())
+            .with_timestamp(BlockTimestamp::from_int_seconds(future_block_time_secs))
+            .build();
+        let future_block_id = future_block.get_id();
+        let result = tf.process_block(future_block.clone(), BlockSource::Local);
+
+        let expected_error =
+            BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture(future_block_id));
+        assert_eq!(
+            result,
+            Err(ChainstateError::ProcessBlockError(expected_error))
+        );
+
+        assert_eq!(tf.best_block_id(), m2_id);
+        assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
+        assert_ok_blocks_at_stage(&tf, &[future_block_id], BlockValidationStage::Unchecked);
+
+        real_time_secs.store(future_block_time_secs);
+
+        let result = tf.process_block(future_block.clone(), BlockSource::Local);
+        assert_matches!(result, Ok(_));
+
+        assert_eq!(tf.best_block_id(), future_block_id);
+        assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id, future_block_id]);
+    });
 }

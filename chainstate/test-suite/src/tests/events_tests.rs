@@ -189,6 +189,7 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
             .with_parent(first_block.get_id().into())
             .with_timestamp(BlockTimestamp::from_int_seconds(timestamp))
             .build();
+        let second_block_id = second_block.get_id();
 
         // The second block isn't processed because its parent isn't known.
         assert_eq!(
@@ -209,7 +210,7 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
         assert_eq!(errors_guard.len(), 1);
         assert_eq!(
             errors_guard[0],
-            BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture)
+            BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture(second_block_id))
         );
     });
 }

@@ -39,7 +39,7 @@ pub fn build_block(
         .build()
 }
 
-fn make_block_reward() -> Vec<TxOutput> {
+pub fn make_block_reward() -> Vec<TxOutput> {
     vec![TxOutput::LockThenTransfer(
         coins(1_000_000),
         anyonecanspend_address(),

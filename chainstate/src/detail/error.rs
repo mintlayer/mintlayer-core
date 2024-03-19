@@ -50,8 +50,6 @@ pub enum BlockError {
     PrevBlockNotFoundForNewBlock(Id<Block>),
     #[error("Block {0} already exists")]
     BlockAlreadyExists(Id<Block>),
-    #[error("Block {0} index already exists")]
-    BlockIndexAlreadyExists(Id<Block>),
     #[error("Block {0} has already been processed")]
     BlockAlreadyProcessed(Id<Block>),
     #[error("Block {0} has already been processed and marked as invalid")]
@@ -129,8 +127,8 @@ pub enum CheckBlockError {
     BlockNotFoundDuringInMemoryReorg(Id<GenBlock>),
     #[error("Block time ({0:?}) must be equal or higher than the median of its ancestors ({1:?})")]
     BlockTimeOrderInvalid(BlockTimestamp, BlockTimestamp),
-    #[error("Block time too far into the future")]
-    BlockFromTheFuture,
+    #[error("Block {0} time too far into the future")]
+    BlockFromTheFuture(Id<Block>),
     #[error("Block size is too large: {0}")]
     BlockSizeError(#[from] BlockSizeError),
     #[error("Check transaction failed: {0}")]

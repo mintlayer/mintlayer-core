@@ -22,7 +22,10 @@ use thiserror::Error;
 
 use self::best_chain_candidates::BestChainCandidates;
 use super::{chainstateref::ChainstateRef, Chainstate};
-use crate::{detail::chainstateref::ReorgError, BlockError, TransactionVerificationStrategy};
+use crate::{
+    detail::chainstateref::ReorgError, BlockError, BlockProcessingErrorClassification,
+    TransactionVerificationStrategy,
+};
 use chainstate_storage::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite};
 use chainstate_types::{BlockIndex, BlockStatus, GenBlockIndex, PropertyQueryError};
 use common::{
@@ -49,6 +52,23 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
         BlockInvalidator { chainstate }
     }
 
+    /// Collect block indices in the branch starting at the specified block id.
+    /// Assert that the specified block is stale.
+    #[log_error]
+    fn collect_stale_block_indices_in_branch(
+        &mut self,
+        root_block_id: &Id<Block>,
+    ) -> Result<Vec<BlockIndex>, BlockInvalidatorError> {
+        let chainstate_ref =
+            self.chainstate.make_db_tx_ro().map_err(BlockInvalidatorError::from).log_err()?;
+        assert!(!is_block_in_main_chain(&chainstate_ref, root_block_id.into()).log_err()?);
+        let block_indices = chainstate_ref
+            .collect_block_indices_in_branch(root_block_id)
+            .map_err(BlockInvalidatorError::BlockIndicesForBranchQueryError)
+            .log_err()?;
+        Ok(block_indices)
+    }
+
     /// Invalidate the specified stale block and its descendants; `is_explicit_invalidation`
     /// specifies whether the invalidation is being triggered implicitly during block processing
     /// or explicitly via ChainstateInterface.
@@ -58,15 +78,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
         block_id: &Id<Block>,
         is_explicit_invalidation: IsExplicit,
     ) -> Result<Vec<BlockIndex>, BlockInvalidatorError> {
-        let block_indices_to_invalidate = {
-            let chainstate_ref =
-                self.chainstate.make_db_tx_ro().map_err(BlockInvalidatorError::from).log_err()?;
-            assert!(!is_block_in_main_chain(&chainstate_ref, block_id.into()).log_err()?);
-            chainstate_ref
-                .collect_block_indices_in_branch(block_id)
-                .map_err(BlockInvalidatorError::BlockIndicesForBranchQueryError)
-                .log_err()?
-        };
+        let block_indices_to_invalidate = self.collect_stale_block_indices_in_branch(block_id)?;
 
         self.chainstate
             .with_rw_tx(
@@ -173,18 +185,16 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
     /// Return true if a reorg has occurred.
     #[log_error]
     fn find_and_activate_best_chain(&mut self) -> Result<bool, BlockInvalidatorError> {
-        let (cur_best_chain_trust, best_chain_candidates) = {
+        let (min_chain_trust, best_chain_candidates) = {
             let chainstate_ref = self.chainstate.make_db_tx_ro().log_err()?;
             let cur_best_block_index = get_best_block_index(&chainstate_ref)?;
             let cur_best_chain_trust = cur_best_block_index.chain_trust();
+            let min_chain_trust = (cur_best_chain_trust + Uint256::ONE)
+                .expect("Chain trust won't be saturated in a very long time");
 
-            let best_chain_candidates = BestChainCandidates::new(
-                &chainstate_ref,
-                (cur_best_chain_trust + Uint256::ONE)
-                    .expect("Chain trust won't be saturated in a very long time"),
-            )?;
+            let best_chain_candidates = BestChainCandidates::new(&chainstate_ref, min_chain_trust)?;
 
-            (cur_best_chain_trust, best_chain_candidates)
+            (min_chain_trust, best_chain_candidates)
         };
 
         let mut best_chain_candidates = best_chain_candidates;
@@ -192,7 +202,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
         while !best_chain_candidates.is_empty() {
             let candidate =
                 *best_chain_candidates.best_item().expect("Item missing after !is_empty check");
-            assert!(*candidate.chain_trust() > cur_best_chain_trust);
+            assert!(*candidate.chain_trust() >= min_chain_trust);
 
             let result = self.chainstate.with_rw_tx(
                 |chainstate_ref| {
@@ -220,7 +230,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                 },
             );
 
-            match result {
+            let (first_bad_block, error_class) = match result {
                 Ok(()) => return Ok(true),
                 Err(ReorgDuringInvalidationError::OtherDbError(err)) => {
                     return Err(BlockInvalidatorError::StorageError(err));
@@ -232,25 +242,33 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                     ReorgError::OtherError(err) => {
                         return Err(BlockInvalidatorError::GenericReorgError(Box::new(err)));
                     }
-                    ReorgError::ConnectTipFailed(first_bad_block, _)
-                    | ReorgError::BlockDataMissing(first_bad_block) => {
-                        let invalidated_block_indices =
-                            self.invalidate_stale_block(&first_bad_block, IsExplicit::No)?;
-                        assert!(!invalidated_block_indices.is_empty());
-                        best_chain_candidates
-                            .on_block_invalidated(
-                                &self
-                                    .chainstate
-                                    .make_db_tx_ro()
-                                    .map_err(BlockInvalidatorError::from)
-                                    .log_err()?,
-                                &invalidated_block_indices[0],
-                                &invalidated_block_indices[1..],
-                            )
-                            .log_err()?;
+                    ReorgError::ConnectTipFailed(first_bad_block, err) => {
+                        (first_bad_block, Some(err.classify()))
                     }
+                    ReorgError::BlockDataMissing(first_bad_block) => (first_bad_block, None),
                 },
-            }
+            };
+
+            let indices_to_remove =
+                if error_class.is_some_and(|ec| ec.block_should_be_invalidated()) {
+                    self.invalidate_stale_block(&first_bad_block, IsExplicit::No)?
+                } else {
+                    self.collect_stale_block_indices_in_branch(&first_bad_block)?
+                };
+
+            assert!(!indices_to_remove.is_empty());
+            best_chain_candidates
+                .remove_tree_add_parent(
+                    &self
+                        .chainstate
+                        .make_db_tx_ro()
+                        .map_err(BlockInvalidatorError::from)
+                        .log_err()?,
+                    &indices_to_remove[0],
+                    &indices_to_remove[1..],
+                    min_chain_trust,
+                )
+                .log_err()?;
         }
 
         Ok(false)
