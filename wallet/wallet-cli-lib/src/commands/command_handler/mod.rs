@@ -321,7 +321,7 @@ where
             }
 
             ColdWalletCommand::AddressQRCode { address } => {
-                let addr: Address<Destination> = Address::from_str(chain_config, &address)
+                let addr: Address<Destination> = Address::from_string(chain_config, address)
                     .map_err(|_| WalletCliError::InvalidInput("Invalid address".to_string()))?;
 
                 let qr_code_string = qrcode_or_error_string(&addr.to_string());

@@ -298,7 +298,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         rpc::handle_result(
             self.call(move |this| {
                 let chain_config = this.get_chain_config();
-                let id_result = Address::<PoolId>::from_str(chain_config, &pool_address);
+                let id_result = Address::<PoolId>::from_string(chain_config, pool_address);
                 id_result.map(|address| this.get_stake_pool_balance(address.into_object()))
             })
             .await,
@@ -310,7 +310,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             self.call(move |this| {
                 let chain_config = this.get_chain_config();
                 let result: Result<Option<Amount>, _> =
-                    dynamize_err(Address::<PoolId>::from_str(chain_config, &pool_address))
+                    dynamize_err(Address::<PoolId>::from_string(chain_config, pool_address))
                         .map(|address| address.into_object())
                         .and_then(|pool_id| dynamize_err(this.get_stake_pool_data(pool_id)))
                         .and_then(|pool_data| {
@@ -333,10 +333,10 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                 let chain_config = this.get_chain_config();
 
                 let pool_id_result =
-                    dynamize_err(Address::<PoolId>::from_str(chain_config, &pool_address))
+                    dynamize_err(Address::<PoolId>::from_string(chain_config, &pool_address))
                         .map(|address| address.into_object());
 
-                let delegation_id_result = dynamize_err(Address::<DelegationId>::from_str(
+                let delegation_id_result = dynamize_err(Address::<DelegationId>::from_string(
                     chain_config,
                     &delegation_address,
                 ))
@@ -357,7 +357,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             self.call(move |this| {
                 let chain_config = this.get_chain_config();
                 let token_info_result: Result<Option<RPCTokenInfo>, _> =
-                    dynamize_err(Address::<TokenId>::from_str(chain_config, &token_id))
+                    dynamize_err(Address::<TokenId>::from_string(chain_config, token_id))
                         .map(|address| address.into_object())
                         .and_then(|token_id| dynamize_err(this.get_token_info_for_rpc(token_id)));
 

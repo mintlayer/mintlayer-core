@@ -68,7 +68,7 @@ fn parse_address(
     chain_config: &ChainConfig,
     address: &str,
 ) -> Result<Address<Destination>, AddressError> {
-    Address::from_str(chain_config, address)
+    Address::from_string(chain_config, address)
 }
 
 #[derive(Debug)]

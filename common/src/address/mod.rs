@@ -56,7 +56,11 @@ impl<T: Addressable> Address<T> {
         Ok(Self { address, object })
     }
 
-    pub fn from_string(cfg: &ChainConfig, address: String) -> Result<Self, AddressError> {
+    pub fn from_string(
+        cfg: &ChainConfig,
+        address: impl Into<String>,
+    ) -> Result<Self, AddressError> {
+        let address = address.into();
         let data = bech32_encoding::bech32m_decode(&address)?;
         let object = T::decode_from_bytes_from_address(data.data())
             .map_err(|e| AddressError::DecodingError(e.to_string()))?;
@@ -65,10 +69,6 @@ impl<T: Addressable> Address<T> {
         ensure!(hrp_ok, AddressError::InvalidPrefix(data.hrp().to_owned()));
 
         Ok(Self { address, object })
-    }
-
-    pub fn from_str(cfg: &ChainConfig, addr_str: &str) -> Result<Self, AddressError> {
-        Self::from_string(cfg, addr_str.to_owned())
     }
 }
 
@@ -145,26 +145,28 @@ mod tests {
     fn to_short_string() {
         let cfg = create_regtest();
 
-        let address =
-            Address::<Destination>::from_str(&cfg, "rmt1qyyra5j3qduhyd43wa50lpn2ddpg9ql0u50ceu68")
-                .unwrap();
+        let address = Address::<Destination>::from_string(
+            &cfg,
+            "rmt1qyyra5j3qduhyd43wa50lpn2ddpg9ql0u50ceu68",
+        )
+        .unwrap();
         assert_eq!("rmt1qyy...eu68", address.to_short_string());
 
-        let vrf = Address::<VRFPublicKey>::from_str(
+        let vrf = Address::<VRFPublicKey>::from_string(
             &cfg,
             "rvrfpk1qregu4v895mchautf84u46nsf9xel2507a37ksaf3stmuw44y3m4vc2kzme",
         )
         .unwrap();
         assert_eq!("rvrfpk1qre...kzme", vrf.to_short_string());
 
-        let pool_id = Address::<PoolId>::from_str(
+        let pool_id = Address::<PoolId>::from_string(
             &cfg,
             "rpool1zg7yccqqjlz38cyghxlxyp5lp36vwecu2g7gudrf58plzjm75tzq99fr6v",
         )
         .unwrap();
         assert_eq!("rpool1zg7...fr6v", pool_id.to_short_string());
 
-        let delegation_id = Address::<DelegationId>::from_str(
+        let delegation_id = Address::<DelegationId>::from_string(
             &cfg,
             "rdelg1zl206x6hkh6cmtmyhmjx3zhtc2qaunckcuvxsywpnervkclj2keq2wmdff",
         )

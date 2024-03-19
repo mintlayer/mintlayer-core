@@ -231,7 +231,7 @@ pub fn parse_output<N: NodeInterface>(
         ));
     }
 
-    let dest = Address::from_str(chain_config, parts[1])
+    let dest = Address::from_string(chain_config, parts[1])
         .map_err(|err| {
             WalletCliError::<N>::InvalidInput(format!("invalid address {} {err}", parts[1]))
         })?
