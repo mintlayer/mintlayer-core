@@ -22,6 +22,12 @@ use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::signature::inputsig::arbitrary_message::ArbitraryMessageSignature;
+use common::chain::signature::inputsig::classical_multisig::authorize_classical_multisig::{
+    sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
+    ClassicalMultisigCompletionStatus,
+};
+use common::chain::signature::sighash::signature_hash;
+use common::chain::signature::DestinationSigError;
 use common::chain::{AccountCommand, AccountOutPoint, AccountSpending, TransactionCreationError};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
@@ -1264,8 +1270,7 @@ impl Account {
         let stake_private_key = self
             .key_chain
             .get_private_key_for_destination(stake_destination, db_tx)?
-            .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
-            .private_key();
+            .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?;
 
         let vrf_private_key = self
             .key_chain
@@ -1307,13 +1312,12 @@ impl Account {
         input_utxos: &[Option<&TxOutput>],
         db_tx: &impl WalletStorageReadUnlocked,
     ) -> WalletResult<Option<InputWitness>> {
-        if *destination == Destination::AnyoneCanSpend {
-            Ok(Some(InputWitness::NoSignature(None)))
-        } else {
-            self.key_chain
+        match destination {
+            Destination::AnyoneCanSpend => Ok(Some(InputWitness::NoSignature(None))),
+            Destination::PublicKey(_) | Destination::PublicKeyHash(_) => self
+                .key_chain
                 .get_private_key_for_destination(destination, db_tx)?
-                .map(|pk_from_keychain| {
-                    let private_key = pk_from_keychain.private_key();
+                .map(|private_key| {
                     let sighash_type =
                         SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
 
@@ -1328,7 +1332,53 @@ impl Account {
                     .map(InputWitness::Standard)
                     .map_err(WalletError::TransactionSig)
                 })
-                .transpose()
+                .transpose(),
+            Destination::ClassicMultisig(_) => {
+                if let Some(challenge) = self.key_chain.get_multisig_challenge(destination)? {
+                    let mut current_signatures =
+                        AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
+
+                    let sighash_type =
+                        SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
+
+                    let sighash = signature_hash(sighash_type, tx, input_utxos, input_index)?;
+
+                    for (key_index, public_key) in challenge.public_keys().iter().enumerate() {
+                        if let Some(private_key) = self.key_chain.get_private_key_for_destination(
+                            &Destination::PublicKey(public_key.clone()),
+                            db_tx,
+                        )? {
+                            let res = sign_classical_multisig_spending(
+                                &self.chain_config,
+                                key_index as u8,
+                                &private_key,
+                                challenge,
+                                &sighash,
+                                current_signatures,
+                            )
+                            .map_err(DestinationSigError::ClassicalMultisigSigningFailed)?;
+
+                            match res {
+                                ClassicalMultisigCompletionStatus::Complete(signatures) => {
+                                    current_signatures = signatures;
+                                    break;
+                                }
+                                ClassicalMultisigCompletionStatus::Incomplete(signatures) => {
+                                    current_signatures = signatures;
+                                }
+                            };
+                        }
+                    }
+
+                    return Ok(Some(InputWitness::Standard(StandardInputSignature::new(
+                        sighash_type,
+                        current_signatures.encode(),
+                    ))));
+                }
+
+                Ok(None)
+            }
+            Destination::ScriptHash(_) => Ok(None),
         }
     }
 
@@ -1428,8 +1478,7 @@ impl Account {
         let private_key = self
             .key_chain
             .get_private_key_for_destination(&destination, db_tx)?
-            .ok_or(WalletError::DestinationNotFromThisWallet)?
-            .private_key();
+            .ok_or(WalletError::DestinationNotFromThisWallet)?;
 
         let sig = ArbitraryMessageSignature::produce_uniparty_signature(
             &private_key,
