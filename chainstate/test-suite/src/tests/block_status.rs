@@ -140,7 +140,10 @@ fn test_process_block_with_bad_parent(#[case] seed: Seed) {
         assert_eq!(
             error,
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::InvalidParent(block_id)
+                CheckBlockError::InvalidParent {
+                    block_id,
+                    parent_block_id: bad_block_id.into()
+                }
             ))
         );
 
@@ -176,7 +179,10 @@ fn test_preliminary_headers_check_with_bad_parent(#[case] seed: Seed) {
         assert_eq!(
             error,
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::InvalidParent(block.get_id())
+                CheckBlockError::InvalidParent {
+                    block_id: block.get_id(),
+                    parent_block_id: bad_block_id.into()
+                }
             ))
         );
     });

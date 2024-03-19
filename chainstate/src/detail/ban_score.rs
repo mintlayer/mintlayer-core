@@ -70,6 +70,7 @@ impl BanScore for BlockError {
             BlockError::BlockIndexQueryError(_, _) => 0,
             BlockError::IsBlockInMainChainQueryError(_, _) => 0,
             BlockError::MinHeightForReorgQueryError(_) => 0,
+            BlockError::PropertyQueryError(_) => 0,
 
             BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => 0,
             BlockError::InvariantErrorInvalidTip(_) => 0,
@@ -219,7 +220,7 @@ impl BanScore for CheckBlockError {
             CheckBlockError::StorageError(_) => 0,
             CheckBlockError::MerkleRootMismatch => 100,
             // even though this may be an invariant error, we treat it strictly
-            CheckBlockError::PrevBlockNotFound(_, _) => 100,
+            CheckBlockError::ParentBlockMissing { .. } => 100,
             CheckBlockError::TransactionVerifierError(err) => err.ban_score(),
             CheckBlockError::BlockNotFound(_) => 100,
             CheckBlockError::BlockTimeOrderInvalid(_, _) => 100,
@@ -237,7 +238,7 @@ impl BanScore for CheckBlockError {
             CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(_, _, _) => 100,
             CheckBlockError::StateUpdateFailed(err) => err.ban_score(),
             CheckBlockError::EpochSealError(err) => err.ban_score(),
-            CheckBlockError::InvalidParent(_) => 100,
+            CheckBlockError::InvalidParent { .. } => 100,
         }
     }
 }

@@ -40,7 +40,11 @@ use common::{
         AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, Transaction, TxOutput,
         UtxoOutPoint,
     },
-    primitives::{id::WithId, time::Time, BlockCount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{
+        id::{IdableWithParent, WithId},
+        time::Time,
+        BlockCount, BlockDistance, BlockHeight, Id, Idable,
+    },
     time_getter::TimeGetter,
     Uint256,
 };
@@ -220,13 +224,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     fn get_previous_block_index(
         &self,
-        block_index: &BlockIndex,
+        block: &impl IdableWithParent<Tag = Block, ParentTag = GenBlock>,
     ) -> Result<GenBlockIndex, PropertyQueryError> {
-        let prev_block_id = block_index.prev_block_id();
+        let prev_block_id = block.get_parent_id();
 
         self.get_gen_block_index(prev_block_id)?
             .ok_or(PropertyQueryError::PrevBlockIndexNotFound {
-                block_id: *block_index.block_id(),
+                block_id: block.get_id(),
                 prev_block_id: *prev_block_id,
             })
     }
@@ -461,7 +465,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     /// The header's parent block must be known.
     #[log_error]
     fn enforce_checkpoints(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
-        let prev_block_index = self.get_previous_block_index_for_check_block(header)?;
+        let prev_block_index = self.get_previous_block_index(header)?;
         let current_height = prev_block_index.block_height().next_height();
 
         if self.enforce_exact_checkpoint_assuming_height(header, current_height)? {
@@ -501,7 +505,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         headers_to_check: &[SignedBlockHeader],
     ) -> Result<(), BlockError> {
         let checked_header_height = {
-            let prev_block_index = self.get_previous_block_index_for_check_block(checked_header)?;
+            let prev_block_index = self.get_previous_block_index(checked_header)?;
             prev_block_index.block_height().next_height()
         };
 
@@ -532,7 +536,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         header: &SignedBlockHeader,
     ) -> Result<(), CheckBlockError> {
-        let prev_block_index = self.get_previous_block_index_for_check_block(header)?;
+        let prev_block_index = self.get_previous_block_index(header)?;
         let common_ancestor_height =
             self.last_common_ancestor_in_main_chain(&prev_block_index)?.block_height();
         let min_allowed_height = self.get_min_height_with_allowed_reorg()?;
@@ -550,31 +554,26 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    /// Return BlockIndex of the previous block.
-    #[log_error]
-    fn get_previous_block_index_for_check_block(
-        &self,
-        block_header: &SignedBlockHeader,
-    ) -> Result<GenBlockIndex, CheckBlockError> {
-        let prev_block_id = block_header.prev_block_id();
-        self.get_gen_block_index(prev_block_id)?
-            .ok_or(CheckBlockError::PrevBlockNotFound(
-                *prev_block_id,
-                block_header.get_id(),
-            ))
-    }
-
     /// Return Ok(()) if the specified block has a valid parent and an error otherwise.
     #[log_error]
     pub fn check_block_parent(
         &self,
         block_header: &SignedBlockHeader,
     ) -> Result<(), CheckBlockError> {
-        let parent_block_index = self.get_previous_block_index_for_check_block(block_header)?;
+        let parent_block_id = block_header.prev_block_id();
+        let parent_block_index = self.get_gen_block_index(parent_block_id)?.ok_or_else(|| {
+            CheckBlockError::ParentBlockMissing {
+                block_id: block_header.block_id(),
+                parent_block_id: *parent_block_id,
+            }
+        })?;
 
         ensure!(
             parent_block_index.status().is_ok(),
-            CheckBlockError::InvalidParent(block_header.block_id())
+            CheckBlockError::InvalidParent {
+                block_id: block_header.block_id(),
+                parent_block_id: *parent_block_id,
+            }
         );
 
         Ok(())
