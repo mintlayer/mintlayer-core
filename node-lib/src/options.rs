@@ -221,6 +221,12 @@ pub struct RunOptions {
     /// Minimum transaction relay fee rate (in atoms per 1000 bytes).
     #[clap(long, value_name = "VAL")]
     pub min_tx_relay_fee_rate: Option<u64>,
+
+    /// Allow the program to be run as root, which is NOT RECOMMENDED and DANGEROUS
+    /// There is no need to run the mintlayer-software as root. The correct
+    /// security practice is to only provide root access to programs that need it.
+    #[clap(long, action = clap::ArgAction::SetTrue)]
+    pub force_run_as_root: Option<bool>,
 }
 
 impl Options {
