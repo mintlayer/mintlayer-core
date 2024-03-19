@@ -324,7 +324,7 @@ impl AccountKeyChain {
         &self,
         destination: &Destination,
         db_tx: &impl WalletStorageReadUnlocked,
-    ) -> KeyChainResult<Option<ExtendedPrivateKey>> {
+    ) -> KeyChainResult<Option<PrivateKey>> {
         let xpriv = self.derive_account_private_key(db_tx)?;
         for purpose in KeyPurpose::ALL {
             let leaf_key = self.get_leaf_key_chain(purpose);
@@ -332,10 +332,42 @@ impl AccountKeyChain {
                 .get_child_num_from_destination(destination)
                 .and_then(|child_num| leaf_key.get_derived_xpub(child_num))
             {
-                return Self::get_private_key(&xpriv, xpub).map(Option::Some);
+                return Self::get_private_key(&xpriv, xpub).map(|pk| Some(pk.private_key()));
             }
         }
-        Ok(None)
+
+        let standalone_pk = self.standalone_keys.get(destination).and_then(|key| match key {
+            AccountStandaloneKey::Address {
+                label: _,
+                public_key: _,
+                private_key,
+            } => private_key.clone(),
+            AccountStandaloneKey::MultiSig {
+                label: _,
+                challenge: _,
+            } => None,
+        });
+
+        Ok(standalone_pk)
+    }
+
+    pub fn get_multisig_challenge(
+        &self,
+        destination: &Destination,
+    ) -> KeyChainResult<Option<&ClassicMultisigChallenge>> {
+        let standalone_pk = self.standalone_keys.get(destination).and_then(|key| match key {
+            AccountStandaloneKey::Address {
+                label: _,
+                public_key: _,
+                private_key: _,
+            } => None,
+            AccountStandaloneKey::MultiSig {
+                label: _,
+                challenge,
+            } => Some(challenge),
+        });
+
+        Ok(standalone_pk)
     }
 
     pub fn get_private_key_for_path(
