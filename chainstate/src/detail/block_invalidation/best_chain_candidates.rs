@@ -127,26 +127,28 @@ impl BestChainCandidates {
     }
 
     // Remove the block and its descendants, which must be specified in descendants_indices,
-    // from the set and add the block's parent block to the set.
+    // from the set and add the block's parent block to the set if its chain trust is not less than
+    // the specified minimum.
     #[log_error]
-    pub fn on_block_invalidated<Chs: ChainstateAccessor>(
+    pub fn remove_tree_add_parent<Chs: ChainstateAccessor>(
         &mut self,
         chs: &Chs,
-        invalidated_block_info: &Chs::BlockInfo,
+        root_block_info: &Chs::BlockInfo,
         descendant_block_infos: &[Chs::BlockInfo],
+        min_chain_trust: Uint256,
     ) -> Result<(), BestChainCandidatesError> {
-        self.remove(invalidated_block_info);
+        self.remove(root_block_info);
 
         for descendant_info in descendant_block_infos {
             self.remove(descendant_info);
         }
 
         // Add the parent to the list
-        if let Some(parent_block_id) =
-            chs.gen_block_id_to_normal(&invalidated_block_info.parent_id())
-        {
+        if let Some(parent_block_id) = chs.gen_block_id_to_normal(&root_block_info.parent_id()) {
             let parent_block_info = chs.get_block_info(&parent_block_id)?;
-            self.add(&parent_block_info);
+            if parent_block_info.chain_trust() >= min_chain_trust {
+                self.add(&parent_block_info);
+            }
         }
 
         Ok(())

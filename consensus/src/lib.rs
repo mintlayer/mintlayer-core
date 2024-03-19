@@ -56,7 +56,7 @@ pub use crate::{
         stake,
         target::calculate_target_required,
         target::calculate_target_required_from_block_index,
-        StakeResult,
+        EffectivePoolBalanceError, StakeResult,
     },
     pow::{
         calculate_work_required, check_proof_of_work, input_data::PoWGenerateBlockInputData, mine,

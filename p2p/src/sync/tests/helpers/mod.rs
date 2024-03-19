@@ -263,7 +263,7 @@ impl TestNode {
                         break (peer, score);
                     }
                     PeerManagerEvent::PeerBlockSyncStatusUpdate { .. } => {}
-                    e => panic!("Expected PeerManagerEvent::Disconnect, received: {e:?}"),
+                    e => panic!("Expected peer score adjustment, received: {e:?}"),
                 }
             }
         };
