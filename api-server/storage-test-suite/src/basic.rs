@@ -931,6 +931,7 @@ where
             let random_nonce2 = AccountNonce::new(rng.gen::<u64>());
 
             let random_delegation = Delegation::new(
+                random_block_height,
                 Destination::PublicKey(pk.clone()),
                 random_pool_id,
                 random_balance,
@@ -938,6 +939,7 @@ where
             );
 
             let random_delegation2 = Delegation::new(
+                random_block_height2,
                 Destination::PublicKey(pk.clone()),
                 random_pool_id2,
                 random_balance2,
@@ -987,6 +989,7 @@ where
             let random_nonce = AccountNonce::new(rng.gen::<u64>());
 
             let random_delegation_new = Delegation::new(
+                random_block_height,
                 Destination::PublicKey(pk),
                 random_pool_id,
                 random_balance,

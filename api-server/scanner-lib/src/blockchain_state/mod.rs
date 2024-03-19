@@ -1109,6 +1109,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                         .set_delegation_at_height(
                             make_delegation_id(input0_outpoint),
                             &Delegation::new(
+                                block_height,
                                 destination.clone(),
                                 *pool_id,
                                 Amount::ZERO,
