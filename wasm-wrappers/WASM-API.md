@@ -113,7 +113,7 @@ given its parameters and the network type (testnet, mainnet, etc).
 Given a pool id, staking data as bytes and the network type (mainnet, testnet, etc),
 this function returns an output that creates that staking pool.
 Note that the pool id is mandated to be taken from the hash of the first input.
-It's not arbitrary.
+It is not arbitrary.
 
 ### Function: `encode_output_issue_fungible_token`
 
@@ -138,7 +138,7 @@ A nonce is needed because this spends from an account. The nonce must be in sequ
 ### Function: `estimate_transaction_size`
 
 Given the inputs, along each input's destination that can spend that input
-(e.g. If we are spending a UTXO in input number 1 and it is owned by address mtc1xxxx, then it's mtc1xxxx in element number 2 in the vector/list.
+(e.g. If we are spending a UTXO in input number 1 and it is owned by address mtc1xxxx, then it is mtc1xxxx in element number 2 in the vector/list.
 for Account inputs that spend from a delegation it is the owning address of that delegation,
 and in the case of AccountCommand inputs which change a token it is the token's authority destination)
 and the outputs, estimate the transaction size.
@@ -160,6 +160,18 @@ and a network type (mainnet, testnet, etc), this function returns a witness to b
 ### Function: `encode_signed_transaction`
 
 Given an unsigned transaction, and signatures, this function returns a SignedTransaction object as bytes.
+
+### Function: `get_transaction_id`
+
+Given a `Transaction` encoded in bytes (not a signed transaction, but a signed transaction is tolerated by ignoring the extra bytes, by choice)
+this function will return the transaction id.
+
+The second parameter, the boolean, is provided as means of asserting that the given bytes exactly match a `Transaction` object.
+When set to `true`, the bytes provided must exactly match a single `Transaction` object.
+When set to `false`, extra bytes can exist, but will be ignored.
+This is useful when the provided bytes are of a `SignedTransaction` instead of a `Transaction`,
+since the signatures are appended at the end of the `Transaction` object as a vector to create a `SignedTransaction`.
+It is recommended to use a strict `Transaction` size and set the second parameter to `true`.
 
 ### Function: `effective_pool_balance`
 

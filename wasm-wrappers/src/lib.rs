@@ -32,7 +32,9 @@ use common::{
         AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination, OutPointSourceId,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{self, amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, H256},
+    primitives::{
+        self, amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, Idable, H256,
+    },
     size_estimation::{input_signature_size_from_destination, tx_size_with_outputs},
 };
 use crypto::key::{
@@ -495,7 +497,7 @@ pub fn encode_stake_pool_data(
 /// Given a pool id, staking data as bytes and the network type (mainnet, testnet, etc),
 /// this function returns an output that creates that staking pool.
 /// Note that the pool id is mandated to be taken from the hash of the first input.
-/// It's not arbitrary.
+/// It is not arbitrary.
 #[wasm_bindgen]
 pub fn encode_output_create_stake_pool(
     pool_id: &str,
@@ -586,7 +588,7 @@ pub fn encode_input_for_withdraw_from_delegation(
 }
 
 /// Given the inputs, along each input's destination that can spend that input
-/// (e.g. If we are spending a UTXO in input number 1 and it is owned by address mtc1xxxx, then it's mtc1xxxx in element number 2 in the vector/list.
+/// (e.g. If we are spending a UTXO in input number 1 and it is owned by address mtc1xxxx, then it is mtc1xxxx in element number 2 in the vector/list.
 /// for Account inputs that spend from a delegation it is the owning address of that delegation,
 /// and in the case of AccountCommand inputs which change a token it is the token's authority destination)
 /// and the outputs, estimate the transaction size.
@@ -713,6 +715,30 @@ pub fn encode_signed_transaction(
     Ok(tx.encode())
 }
 
+/// Given a `Transaction` encoded in bytes (not a signed transaction, but a signed transaction is tolerated by ignoring the extra bytes, by choice)
+/// this function will return the transaction id.
+///
+/// The second parameter, the boolean, is provided as means of asserting that the given bytes exactly match a `Transaction` object.
+/// When set to `true`, the bytes provided must exactly match a single `Transaction` object.
+/// When set to `false`, extra bytes can exist, but will be ignored.
+/// This is useful when the provided bytes are of a `SignedTransaction` instead of a `Transaction`,
+/// since the signatures are appended at the end of the `Transaction` object as a vector to create a `SignedTransaction`.
+/// It is recommended to use a strict `Transaction` size and set the second parameter to `true`.
+pub fn get_transaction_id(
+    transaction_bytes: &[u8],
+    strict_byte_size: bool,
+) -> Result<String, Error> {
+    let tx = if strict_byte_size {
+        Transaction::decode_all(&mut &transaction_bytes[..])
+            .map_err(|_| Error::InvalidTransaction)?
+    } else {
+        Transaction::decode(&mut &transaction_bytes[..]).map_err(|_| Error::InvalidTransaction)?
+    };
+    let tx_id = tx.get_id();
+
+    Ok(format!("{:x}", tx_id))
+}
+
 /// Calculate the "effective balance" of a pool, given the total pool balance and pledge by the pool owner/staker.
 /// The effective balance is how the influence of a pool is calculated due to its balance.
 #[wasm_bindgen]
@@ -793,5 +819,24 @@ mod tests {
                 verify_signature_for_spending(&public_key, &signature, &message).unwrap();
             assert!(!verification_result);
         }
+    }
+
+    #[test]
+    fn transaction_get_id() {
+        let expected_tx_id = "35a7938c2a2aad5ae324e7d0536de245bf9e439169aa3c16f1492be117e5d0e0";
+        let tx_hex = "0100040000ff5d9a94390ee97208d31aa5c3b5ddbd8df9d308069df2ebf5283f7ce3e4261401000000080340f9924e4da0af7dc8c5be71a9c9e05962c7bf4ef96127fde7a7b4e1469e48620f0080e03779c31102000365807e3b4147cb978b78715e60606092f89dc769586e98456850bd3b449c87b400203015e9ef9fc142569e0f966bc0188464fa712a841e14002e0fe952a076a26c01e539c5f0ceba927ab8f8f55f274af739ce4eef3700000b00204aa9d10100000b409e4c355d010199e4ec3a5b176140ef9cd58c7d3579fdb0ecb21a";
+        let tx_signed_hex = "0100040000ff5d9a94390ee97208d31aa5c3b5ddbd8df9d308069df2ebf5283f7ce3e4261401000000080340f9924e4da0af7dc8c5be71a9c9e05962c7bf4ef96127fde7a7b4e1469e48620f0080e03779c31102000365807e3b4147cb978b78715e60606092f89dc769586e98456850bd3b449c87b400203015e9ef9fc142569e0f966bc0188464fa712a841e14002e0fe952a076a26c01e539c5f0ceba927ab8f8f55f274af739ce4eef3700000b00204aa9d10100000b409e4c355d010199e4ec3a5b176140ef9cd58c7d3579fdb0ecb21a0401018d010002eddd003bfb6333123e682abe6923da1d38faa4f0e0d9e2ee42d5aa46c152a34800a749a30c8c9c33696ce407fc145ebc9824e17b778d0d9ccc8129be52f37b74160e60f6689ac2f481071e1a63d9cf0f6eab84c2703b5e9f229cd8188ce092edd4";
+
+        let tx_bin = hex::decode(tx_hex).unwrap();
+        let tx_signed_bin = hex::decode(tx_signed_hex).unwrap();
+
+        assert_eq!(get_transaction_id(&tx_bin, true).unwrap(), expected_tx_id);
+        assert_eq!(get_transaction_id(&tx_bin, false).unwrap(), expected_tx_id);
+
+        get_transaction_id(&tx_signed_bin, true).unwrap_err();
+        assert_eq!(
+            get_transaction_id(&tx_signed_bin, false).unwrap(),
+            expected_tx_id
+        );
     }
 }

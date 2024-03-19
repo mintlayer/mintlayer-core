@@ -24,5 +24,6 @@ wasm-bindgen = "0.2"
 thiserror.workspace = true
 
 [dev-dependencies]
+hex.workspace = true
 rstest.workspace = true
 test-utils = {path = '../test-utils'}
