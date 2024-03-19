@@ -29,6 +29,7 @@ import {
   encode_input_for_withdraw_from_delegation,
   estimate_transaction_size,
   staking_pool_spend_maturity_block_count,
+  get_transaction_id,
   effective_pool_balance,
   Amount,
 } from "../pkg/wasm_wrappers.js";
@@ -613,7 +614,7 @@ export async function run_test() {
       inputs,
       [address, address],
       outputs,
-      Network.Testnet,
+      Network.Testnet
     );
     if (estimated_size != expected_signed_tx.length) {
       throw new Error("wrong estimated size");
@@ -624,14 +625,22 @@ export async function run_test() {
   }
 
   {
-    const eff_bal = effective_pool_balance(Network.Mainnet, Amount.from_atoms("0"), Amount.from_atoms("0"));
+    const eff_bal = effective_pool_balance(
+      Network.Mainnet,
+      Amount.from_atoms("0"),
+      Amount.from_atoms("0")
+    );
     if (eff_bal.atoms() != "0") {
       throw new Error(`Effective balance test failed ${eff_bal}`);
     }
   }
 
   {
-    const eff_bal = effective_pool_balance(Network.Mainnet, Amount.from_atoms("4000000000000000"), Amount.from_atoms("20000000000000000"));
+    const eff_bal = effective_pool_balance(
+      Network.Mainnet,
+      Amount.from_atoms("4000000000000000"),
+      Amount.from_atoms("20000000000000000")
+    );
     if (eff_bal.atoms() != "18679147907594054") {
       throw new Error(`Effective balance test failed ${eff_bal}`);
     }
@@ -639,7 +648,11 @@ export async function run_test() {
 
   {
     // capped
-    const eff_bal = effective_pool_balance(Network.Mainnet, Amount.from_atoms("59999080000000000"), Amount.from_atoms("59999080000000000"));
+    const eff_bal = effective_pool_balance(
+      Network.Mainnet,
+      Amount.from_atoms("59999080000000000"),
+      Amount.from_atoms("59999080000000000")
+    );
     if (eff_bal.atoms() != "59999080000000000") {
       throw new Error(`Effective balance test failed ${eff_bal}`);
     }
@@ -649,9 +662,97 @@ export async function run_test() {
     // over capped
     const over_capped = Math.floor(Math.random() * 4);
     const capped = 6 + over_capped;
-    const eff_bal = effective_pool_balance(Network.Mainnet, Amount.from_atoms(`${capped}0000000000000000`), Amount.from_atoms(`${capped}0000000000000000`));
+    const eff_bal = effective_pool_balance(
+      Network.Mainnet,
+      Amount.from_atoms(`${capped}0000000000000000`),
+      Amount.from_atoms(`${capped}0000000000000000`)
+    );
     if (eff_bal.atoms() != "59999080000000000") {
       throw new Error(`Effective balance test failed ${eff_bal}`);
+    }
+  }
+}
+
+// get_transaction_id tests
+{
+  const tx_bin = [
+    1, 0, 4, 0, 0, 255, 93, 154, 148, 57, 14, 233, 114, 8, 211, 26, 165, 195,
+    181, 221, 189, 141, 249, 211, 8, 6, 157, 242, 235, 245, 40, 63, 124, 227,
+    228, 38, 20, 1, 0, 0, 0, 8, 3, 64, 249, 146, 78, 77, 160, 175, 125, 200,
+    197, 190, 113, 169, 201, 224, 89, 98, 199, 191, 78, 249, 97, 39, 253, 231,
+    167, 180, 225, 70, 158, 72, 98, 15, 0, 128, 224, 55, 121, 195, 17, 2, 0, 3,
+    101, 128, 126, 59, 65, 71, 203, 151, 139, 120, 113, 94, 96, 96, 96, 146,
+    248, 157, 199, 105, 88, 110, 152, 69, 104, 80, 189, 59, 68, 156, 135, 180,
+    0, 32, 48, 21, 233, 239, 159, 193, 66, 86, 158, 15, 150, 107, 192, 24, 132,
+    100, 250, 113, 42, 132, 30, 20, 0, 46, 15, 233, 82, 160, 118, 162, 108, 1,
+    229, 57, 197, 240, 206, 186, 146, 122, 184, 248, 245, 95, 39, 74, 247, 57,
+    206, 78, 239, 55, 0, 0, 11, 0, 32, 74, 169, 209, 1, 0, 0, 11, 64, 158, 76,
+    53, 93, 1, 1, 153, 228, 236, 58, 91, 23, 97, 64, 239, 156, 213, 140, 125,
+    53, 121, 253, 176, 236, 178, 26,
+  ];
+
+  const tx_signed_bin = [
+    1, 0, 4, 0, 0, 255, 93, 154, 148, 57, 14, 233, 114, 8, 211, 26, 165, 195,
+    181, 221, 189, 141, 249, 211, 8, 6, 157, 242, 235, 245, 40, 63, 124, 227,
+    228, 38, 20, 1, 0, 0, 0, 8, 3, 64, 249, 146, 78, 77, 160, 175, 125, 200,
+    197, 190, 113, 169, 201, 224, 89, 98, 199, 191, 78, 249, 97, 39, 253, 231,
+    167, 180, 225, 70, 158, 72, 98, 15, 0, 128, 224, 55, 121, 195, 17, 2, 0, 3,
+    101, 128, 126, 59, 65, 71, 203, 151, 139, 120, 113, 94, 96, 96, 96, 146,
+    248, 157, 199, 105, 88, 110, 152, 69, 104, 80, 189, 59, 68, 156, 135, 180,
+    0, 32, 48, 21, 233, 239, 159, 193, 66, 86, 158, 15, 150, 107, 192, 24, 132,
+    100, 250, 113, 42, 132, 30, 20, 0, 46, 15, 233, 82, 160, 118, 162, 108, 1,
+    229, 57, 197, 240, 206, 186, 146, 122, 184, 248, 245, 95, 39, 74, 247, 57,
+    206, 78, 239, 55, 0, 0, 11, 0, 32, 74, 169, 209, 1, 0, 0, 11, 64, 158, 76,
+    53, 93, 1, 1, 153, 228, 236, 58, 91, 23, 97, 64, 239, 156, 213, 140, 125,
+    53, 121, 253, 176, 236, 178, 26, 4, 1, 1, 141, 1, 0, 2, 237, 221, 0, 59,
+    251, 99, 51, 18, 62, 104, 42, 190, 105, 35, 218, 29, 56, 250, 164, 240, 224,
+    217, 226, 238, 66, 213, 170, 70, 193, 82, 163, 72, 0, 167, 73, 163, 12, 140,
+    156, 51, 105, 108, 228, 7, 252, 20, 94, 188, 152, 36, 225, 123, 119, 141,
+    13, 156, 204, 129, 41, 190, 82, 243, 123, 116, 22, 14, 96, 246, 104, 154,
+    194, 244, 129, 7, 30, 26, 99, 217, 207, 15, 110, 171, 132, 194, 112, 59, 94,
+    159, 34, 156, 216, 24, 140, 224, 146, 237, 212,
+  ];
+
+  const expected_tx_id =
+    "35a7938c2a2aad5ae324e7d0536de245bf9e439169aa3c16f1492be117e5d0e0";
+
+  {
+    const tx_id = get_transaction_id(tx_bin, true);
+    if (tx_id != expected_tx_id) {
+      throw new Error(
+        `Decoded transaction id mismatch: ${tx_id} != ${expected_tx_id}`
+      );
+    }
+  }
+
+  {
+    const tx_id = get_transaction_id(tx_bin, false);
+    if (tx_id != expected_tx_id) {
+      throw new Error(
+        `Decoded transaction id mismatch: ${tx_id} != ${expected_tx_id}`
+      );
+    }
+  }
+
+  {
+    const tx_id = get_transaction_id(tx_signed_bin, false);
+    if (tx_id != expected_tx_id) {
+      throw new Error(
+        `Decoded transaction id mismatch: ${tx_id} != ${expected_tx_id}`
+      );
+    }
+  }
+
+  {
+    try {
+      get_transaction_id(tx_signed_bin, true);
+      throw new Error("Invalid witnesses worked somehow!");
+    } catch (e) {
+      if (!e.includes("Invalid transaction encoding")) {
+        throw new Error(
+          "Invalid transaction encodeing resulted in an unexpected error message!"
+        );
+      }
     }
   }
 }
