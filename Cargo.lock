@@ -8505,6 +8505,7 @@ dependencies = [
  "consensus",
  "crypto",
  "getrandom 0.2.12",
+ "hex",
  "rstest",
  "serialization",
  "test-utils",
