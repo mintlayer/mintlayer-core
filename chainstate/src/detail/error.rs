@@ -125,8 +125,8 @@ pub enum CheckBlockError {
         block_id: Id<Block>,
         parent_block_id: Id<GenBlock>,
     },
-    #[error("Block {0} not found in database")]
-    BlockNotFound(Id<GenBlock>),
+    #[error("Block {0} not found in database during in-memory reorg")]
+    BlockNotFoundDuringInMemoryReorg(Id<GenBlock>),
     #[error("Block time ({0:?}) must be equal or higher than the median of its ancestors ({1:?})")]
     BlockTimeOrderInvalid(BlockTimestamp, BlockTimestamp),
     #[error("Block time too far into the future")]

@@ -223,7 +223,7 @@ impl BanScore for CheckBlockError {
             // even though this may be an invariant error, we treat it strictly
             CheckBlockError::ParentBlockMissing { .. } => 100,
             CheckBlockError::TransactionVerifierError(err) => err.ban_score(),
-            CheckBlockError::BlockNotFound(_) => 100,
+            CheckBlockError::BlockNotFoundDuringInMemoryReorg(_) => 100,
             CheckBlockError::BlockTimeOrderInvalid(_, _) => 100,
             CheckBlockError::BlockFromTheFuture => 100,
             CheckBlockError::BlockSizeError(err) => err.ban_score(),
