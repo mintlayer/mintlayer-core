@@ -724,6 +724,7 @@ pub fn encode_signed_transaction(
 /// This is useful when the provided bytes are of a `SignedTransaction` instead of a `Transaction`,
 /// since the signatures are appended at the end of the `Transaction` object as a vector to create a `SignedTransaction`.
 /// It is recommended to use a strict `Transaction` size and set the second parameter to `true`.
+#[wasm_bindgen]
 pub fn get_transaction_id(
     transaction_bytes: &[u8],
     strict_byte_size: bool,
