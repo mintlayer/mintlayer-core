@@ -55,6 +55,7 @@ impl BanScore for BlockError {
             // a peer sent a block they're not supposed to send.
             BlockError::PrevBlockNotFoundForNewBlock(_) => 100,
             BlockError::BlockAlreadyExists(_) => 0,
+            BlockError::BlockIndexAlreadyExists(_) => 0,
             BlockError::BlockAlreadyProcessed(_) => 0,
             BlockError::InvalidBlockAlreadyProcessed(_) => 100,
             BlockError::DbCommitError(_, _, _) => 0,
