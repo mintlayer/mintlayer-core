@@ -1097,8 +1097,11 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .sign_raw_transaction(account_index, RpcHexString::from_str(&raw_tx)?, config)
             .await
             .map(|ptx| {
-                if ptx.is_fully_signed() {
-                    PartialOrSignedTx::Signed(ptx.into_signed_tx().expect("already checked"))
+                if ptx.is_fully_signed(self.wallet_rpc.chain_config()) {
+                    PartialOrSignedTx::Signed(
+                        ptx.into_signed_tx(self.wallet_rpc.chain_config())
+                            .expect("already checked"),
+                    )
                 } else {
                     PartialOrSignedTx::Partial(ptx)
                 }

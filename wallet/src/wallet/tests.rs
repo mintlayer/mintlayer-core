@@ -22,7 +22,10 @@ use crate::{
 };
 use serialization::hex::HexEncode;
 use serialization::Encode;
-use std::{collections::BTreeSet, num::NonZeroUsize};
+use std::{
+    collections::BTreeSet,
+    num::{NonZeroU8, NonZeroUsize},
+};
 
 use super::*;
 use common::{
@@ -60,6 +63,9 @@ use wallet_types::{seed_phrase::SeedPhraseLanguage, AccountWalletTxId};
 
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+const MNEMONIC2: &str =
+    "disease woman cave illness sample crew swamp robust crumble infant news sign liquid rigid alter";
 
 const NETWORK_FEE: u128 = 10000;
 
@@ -4001,9 +4007,9 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
         .unwrap();
-    assert!(!decommission_partial_tx.is_fully_signed());
+    assert!(!decommission_partial_tx.is_fully_signed(&chain_config));
     matches!(
-        decommission_partial_tx.into_signed_tx().unwrap_err(),
+        decommission_partial_tx.into_signed_tx(&chain_config).unwrap_err(),
         WalletError::FailedToConvertPartiallySignedTx(_)
     );
 }
@@ -4059,7 +4065,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     let stake_pool_transaction = wallet
         .sign_raw_transaction(acc_0_index, TransactionToSign::Tx(tx))
         .unwrap()
-        .into_signed_tx()
+        .into_signed_tx(&chain_config)
         .unwrap();
 
     let _ = create_block(
@@ -4102,7 +4108,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
             TransactionToSign::Partial(decommission_partial_tx),
         )
         .unwrap()
-        .into_signed_tx()
+        .into_signed_tx(&chain_config)
         .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![signed_tx], Amount::ZERO, 2);
@@ -4187,7 +4193,7 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
             TransactionToSign::Partial(decommission_partial_tx),
         )
         .unwrap()
-        .into_signed_tx()
+        .into_signed_tx(&chain_config)
         .unwrap();
 
     let _ = create_block(
@@ -4353,7 +4359,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
     let signed_tx = cold_wallet
         .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, TransactionToSign::Partial(send_req))
         .unwrap()
-        .into_signed_tx()
+        .into_signed_tx(&chain_config)
         .unwrap();
 
     let (_, block2) = create_block(
@@ -4495,4 +4501,129 @@ fn test_add_standalone_private_key(#[case] seed: Seed) {
         .unwrap();
 
     assert_eq!(tx_data.get_transaction(), tx.transaction());
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_add_standalone_multisig(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_regtest());
+
+    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
+
+    let coin_balance = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance, Amount::ZERO);
+    let coin_balance = get_coin_balance(&wallet2);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    let (_, address1) = wallet1.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pub_key1 = wallet1
+        .find_public_key(
+            DEFAULT_ACCOUNT_INDEX,
+            address1.decode_object(&chain_config).unwrap(),
+        )
+        .unwrap();
+
+    let (_, address2) = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pub_key2 = wallet2
+        .find_public_key(
+            DEFAULT_ACCOUNT_INDEX,
+            address2.decode_object(&chain_config).unwrap(),
+        )
+        .unwrap();
+
+    let min_required_signatures = 2;
+    let challenge = ClassicMultisigChallenge::new(
+        &chain_config,
+        NonZeroU8::new(min_required_signatures).unwrap(),
+        vec![pub_key1, pub_key2],
+    )
+    .unwrap();
+    let multisig_hash = wallet1
+        .add_standalone_multisig(DEFAULT_ACCOUNT_INDEX, challenge.clone(), None)
+        .unwrap();
+
+    let multisig_address =
+        Address::new(&chain_config, &Destination::ClassicMultisig(multisig_hash)).unwrap();
+
+    // Generate a new block which sends reward to the new multisig address
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let output = make_address_output(
+        chain_config.as_ref(),
+        multisig_address.clone(),
+        block1_amount,
+    )
+    .unwrap();
+
+    let tx =
+        SignedTransaction::new(Transaction::new(0, vec![], vec![output]).unwrap(), vec![]).unwrap();
+
+    let block1 = Block::new(
+        vec![tx.clone()],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![]),
+    )
+    .unwrap();
+
+    scan_wallet(&mut wallet1, BlockHeight::new(0), vec![block1.clone()]);
+
+    // Check amount is still zero
+    let coin_balance = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // but the transaction has been added to the wallet
+    let tx_data = wallet1
+        .get_transaction(DEFAULT_ACCOUNT_INDEX, tx.transaction().get_id())
+        .unwrap();
+
+    assert_eq!(tx_data.get_transaction(), tx.transaction());
+
+    let spend_multisig_tx = Transaction::new(
+        0,
+        vec![TxInput::from_utxo(OutPointSourceId::Transaction(tx.transaction().get_id()), 0)],
+        vec![TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1)),
+            Destination::AnyoneCanSpend,
+        )],
+    )
+    .unwrap();
+
+    // sign it with wallet1
+    let ptx = wallet1
+        .sign_raw_transaction(
+            DEFAULT_ACCOUNT_INDEX,
+            TransactionToSign::Tx(spend_multisig_tx),
+        )
+        .unwrap();
+
+    // check it is still not fully signed
+    assert!(!ptx.is_fully_signed(&chain_config));
+
+    // try to sign it with wallet1 again
+    let ptx = wallet1
+        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, TransactionToSign::Partial(ptx))
+        .unwrap();
+
+    // check it is still not fully signed
+    assert!(!ptx.is_fully_signed(&chain_config));
+
+    // try to sign it with wallet2 but wallet2 does not have the multisig added as standalone
+    let ptx = wallet2
+        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, TransactionToSign::Partial(ptx))
+        .unwrap();
+
+    // add it to wallet2 as well
+    wallet2.add_standalone_multisig(DEFAULT_ACCOUNT_INDEX, challenge, None).unwrap();
+
+    // now we can sign it
+    let ptx = wallet2
+        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, TransactionToSign::Partial(ptx))
+        .unwrap();
+
+    // now it is fully signed
+    assert!(ptx.is_fully_signed(&chain_config));
 }

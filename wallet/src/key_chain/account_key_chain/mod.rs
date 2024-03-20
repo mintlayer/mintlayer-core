@@ -354,8 +354,8 @@ impl AccountKeyChain {
     pub fn get_multisig_challenge(
         &self,
         destination: &Destination,
-    ) -> KeyChainResult<Option<&ClassicMultisigChallenge>> {
-        let standalone_pk = self.standalone_keys.get(destination).and_then(|key| match key {
+    ) -> Option<&ClassicMultisigChallenge> {
+        self.standalone_keys.get(destination).and_then(|key| match key {
             AccountStandaloneKey::Address {
                 label: _,
                 public_key: _,
@@ -365,9 +365,7 @@ impl AccountKeyChain {
                 label: _,
                 challenge,
             } => Some(challenge),
-        });
-
-        Ok(standalone_pk)
+        })
     }
 
     pub fn get_private_key_for_path(
@@ -505,7 +503,7 @@ impl AccountKeyChain {
 
         let id = AccountPrefixedId::new(
             self.get_account_id(),
-            Destination::PublicKeyHash(destination_multisig),
+            Destination::ClassicMultisig(destination_multisig),
         );
         let key = AccountStandaloneKey::MultiSig { label, challenge };
 
