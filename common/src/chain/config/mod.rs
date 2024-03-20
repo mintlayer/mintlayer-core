@@ -25,6 +25,7 @@ use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
 use emission_schedule::CoinUnit;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular};
+use utils::const_nz_u64;
 
 use std::fmt::{Debug, Display};
 use std::{net::SocketAddr, num::NonZeroU64, sync::Arc, time::Duration};
@@ -60,10 +61,7 @@ const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 
 const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
-    match NonZeroU64::new((5 * 24 * 60 * 60) / DEFAULT_TARGET_BLOCK_SPACING.as_secs()) {
-        Some(v) => v,
-        None => panic!("epoch length cannot be 0"),
-    };
+    const_nz_u64!((5 * 24 * 60 * 60) / DEFAULT_TARGET_BLOCK_SPACING.as_secs());
 const DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP: usize = 2;
 
 const DEFAULT_MAX_DEPTH_FOR_REORG: BlockDistance = BlockDistance::new(1000);

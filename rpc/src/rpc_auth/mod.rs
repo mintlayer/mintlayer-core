@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::NonZeroUsize;
-
 use base64::Engine;
 use crypto::{
     kdf::{argon2::Argon2Config, hash_password, verify_password, KdfConfig, KdfResult},
@@ -24,6 +22,7 @@ use crypto::{
 use hyper::{Body, Request, Response};
 use logging::log;
 use tower_http::validate_request::ValidateRequest;
+use utils::const_nz_usize;
 
 /// Custom HTTP authentication layer implementation
 ///
@@ -42,14 +41,8 @@ const RPC_KDF_CONFIG: KdfConfig = KdfConfig::Argon2id {
         t_cost_iterations: 10,
         p_cost_parallelism: 2,
     },
-    hash_length: match NonZeroUsize::new(32) {
-        Some(v) => v,
-        None => unreachable!(),
-    },
-    salt_length: match NonZeroUsize::new(16) {
-        Some(v) => v,
-        None => unreachable!(),
-    },
+    hash_length: const_nz_usize!(32),
+    salt_length: const_nz_usize!(16),
 };
 
 #[derive(thiserror::Error, Debug)]

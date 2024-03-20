@@ -63,13 +63,11 @@ use crypto::{
 use pos_accounting::{make_pool_id, PoSAccountingStorageRead};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+use utils::const_nz_u64;
 
 // It's important to have short epoch length, so that genesis and the first block can seal
 // an epoch with pool, which is required for PoS validation to work.
-const TEST_EPOCH_LENGTH: NonZeroU64 = match NonZeroU64::new(2) {
-    Some(v) => v,
-    None => panic!("epoch length cannot be 0"),
-};
+const TEST_EPOCH_LENGTH: NonZeroU64 = const_nz_u64!(2);
 const TEST_SEALED_EPOCH_DISTANCE: usize = 0;
 
 const MIN_DIFFICULTY: Uint256 = Uint256::MAX;
