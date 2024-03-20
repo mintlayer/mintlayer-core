@@ -250,8 +250,8 @@ trait WalletRpc {
         name: Option<String>,
     ) -> rpc::RpcResult<NewAccountInfo>;
 
-    /// Add a new standalone address not derived from the selected account's key chain to be watched
-    #[method(name = "account_add_standalone_address")]
+    /// Add a new standalone watch only address not derived from the selected account's key chain
+    #[method(name = "standalone_add_watch_only_address")]
     async fn add_standalone_address(
         &self,
         account: AccountArg,
@@ -260,17 +260,17 @@ trait WalletRpc {
     ) -> rpc::RpcResult<()>;
 
     /// Add a new standalone private key not derived from the selected account's key chain to be watched
-    #[method(name = "account_add_standalone_private_key")]
+    #[method(name = "standalone_add_private_key-as-hex")]
     async fn add_standalone_private_key(
         &self,
         account: AccountArg,
-        private_key: HexEncoded<PrivateKey>,
+        hex_private_key: HexEncoded<PrivateKey>,
         label: Option<String>,
     ) -> rpc::RpcResult<()>;
 
     /// Add a new standalone multi signature address
     /// Use the `transaction_compose` command to use the new multisig address as input or output
-    #[method(name = "account_add_standalone_multisig")]
+    #[method(name = "standalone_add_multisig")]
     async fn add_standalone_multisig(
         &self,
         account: AccountArg,

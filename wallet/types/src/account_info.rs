@@ -18,7 +18,7 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 use crypto::{
-    key::{extended::ExtendedPublicKey, hdkd::u31::U31, PrivateKey, PublicKey},
+    key::{extended::ExtendedPublicKey, hdkd::u31::U31, PrivateKey},
     vrf::ExtendedVRFPublicKey,
 };
 use serialization::{Decode, Encode};
@@ -112,7 +112,6 @@ pub enum AccountStandaloneKey {
     #[codec(index = 0)]
     Address {
         label: Option<String>,
-        public_key: Option<PublicKey>,
         private_key: Option<PrivateKey>,
     },
     #[codec(index = 1)]
