@@ -27,10 +27,7 @@ pub enum UtxoType {
     Transfer = 1 << 0,
     LockThenTransfer = 1 << 1,
     CreateStakePool = 1 << 2,
-    Burn = 1 << 3,
     ProduceBlockFromStake = 1 << 4,
-    CreateDelegationId = 1 << 5,
-    DelegateStaking = 1 << 6,
     IssueNft = 1 << 7,
 }
 
@@ -48,14 +45,14 @@ pub fn get_utxo_type(output: &TxOutput) -> Option<UtxoType> {
     match output {
         TxOutput::Transfer(_, _) => Some(UtxoType::Transfer),
         TxOutput::LockThenTransfer(_, _, _) => Some(UtxoType::LockThenTransfer),
-        TxOutput::Burn(_) => Some(UtxoType::Burn),
         TxOutput::CreateStakePool(_, _) => Some(UtxoType::CreateStakePool),
         TxOutput::ProduceBlockFromStake(_, _) => Some(UtxoType::ProduceBlockFromStake),
-        TxOutput::CreateDelegationId(_, _) => Some(UtxoType::CreateDelegationId),
-        TxOutput::DelegateStaking(_, _) => Some(UtxoType::DelegateStaking),
         TxOutput::IssueNft(_, _, _) => Some(UtxoType::IssueNft),
-        TxOutput::IssueFungibleToken(_) => None,
-        TxOutput::DataDeposit(_) => None,
+        TxOutput::Burn(_)
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::DataDeposit(_) => None,
     }
 }
 pub fn get_utxo_state(output: &TxState) -> UtxoState {
@@ -74,10 +71,15 @@ pub struct UtxoTypes(UtxoTypeInt);
 #[derive(Debug, Clone, Copy)]
 pub struct UtxoStates(UtxoTypeInt);
 
+pub enum BitFlagError {
+    Empty,
+}
+
 macro_rules! generate_bitflag_ops {
     ($type_name:ident, $enum_name:ident) => {
         impl $type_name {
             pub const ALL: $type_name = $type_name(UtxoTypeInt::MAX);
+            pub const NONE: $type_name = $type_name(UtxoTypeInt::MIN);
         }
 
         impl std::ops::BitOr<$enum_name> for $type_name {
@@ -99,6 +101,22 @@ macro_rules! generate_bitflag_ops {
         impl From<$enum_name> for $type_name {
             fn from(value: $enum_name) -> Self {
                 Self(value as UtxoTypeInt)
+            }
+        }
+
+        impl TryFrom<&Vec<$enum_name>> for $type_name {
+            type Error = BitFlagError;
+
+            fn try_from(value: &Vec<$enum_name>) -> Result<Self, BitFlagError> {
+                if let Some((first, rest)) = value.split_first() {
+                    Ok(rest
+                        .iter()
+                        .copied()
+                        .map(|s| s.into())
+                        .fold((*first).into(), |acc, x| acc | x))
+                } else {
+                    Err(BitFlagError::Empty)
+                }
             }
         }
 

@@ -32,7 +32,7 @@ use utils_networking::IpOrSocketAddress;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
     types::{Balances, CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
-    ConnectedPeer, ControllerConfig, UtxoStates, UtxoTypes,
+    ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
     types::{
@@ -281,7 +281,7 @@ impl WalletInterface for ClientWalletRpc {
     async fn get_balance(
         &self,
         account_index: U31,
-        _utxo_states: UtxoStates,
+        _utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
     ) -> Result<Balances, Self::Error> {
         WalletRpcClient::get_balance(&self.http_client, account_index.into(), Some(with_locked))
@@ -289,11 +289,29 @@ impl WalletInterface for ClientWalletRpc {
             .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn get_multisig_utxos(
+        &self,
+        account_index: U31,
+        utxo_types: Vec<UtxoType>,
+        utxo_states: Vec<UtxoState>,
+        with_locked: WithLocked,
+    ) -> Result<Vec<serde_json::Value>, Self::Error> {
+        WalletRpcClient::get_multisig_utxos(
+            &self.http_client,
+            account_index.into(),
+            utxo_types.iter().map(Into::into).collect(),
+            utxo_states.iter().map(Into::into).collect(),
+            Some(with_locked),
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn get_utxos(
         &self,
         account_index: U31,
-        _utxo_types: UtxoTypes,
-        _utxo_states: UtxoStates,
+        _utxo_types: Vec<UtxoType>,
+        _utxo_states: Vec<UtxoState>,
         _with_locked: WithLocked,
     ) -> Result<Vec<serde_json::Value>, Self::Error> {
         WalletRpcClient::get_utxos(&self.http_client, account_index.into())

@@ -985,6 +985,27 @@ impl<B: storage::Backend> Wallet<B> {
         )
     }
 
+    pub fn get_multisig_utxos(
+        &self,
+        account_index: U31,
+        utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>> {
+        let account = self.get_account(account_index)?;
+        let utxos = account.get_multisig_utxos(
+            utxo_types,
+            self.latest_median_time,
+            utxo_states,
+            with_locked,
+        );
+        let utxos = utxos
+            .into_iter()
+            .map(|(outpoint, (txo, token_id))| (outpoint, txo.clone(), token_id))
+            .collect();
+        Ok(utxos)
+    }
+
     pub fn get_utxos(
         &self,
         account_index: U31,

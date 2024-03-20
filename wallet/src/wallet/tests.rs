@@ -4519,20 +4519,10 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
     assert_eq!(coin_balance, Amount::ZERO);
 
     let (_, address1) = wallet1.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
-    let pub_key1 = wallet1
-        .find_public_key(
-            DEFAULT_ACCOUNT_INDEX,
-            address1.decode_object(&chain_config).unwrap(),
-        )
-        .unwrap();
+    let pub_key1 = wallet1.find_public_key(DEFAULT_ACCOUNT_INDEX, address1.into_object()).unwrap();
 
     let (_, address2) = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
-    let pub_key2 = wallet2
-        .find_public_key(
-            DEFAULT_ACCOUNT_INDEX,
-            address2.decode_object(&chain_config).unwrap(),
-        )
-        .unwrap();
+    let pub_key2 = wallet2.find_public_key(DEFAULT_ACCOUNT_INDEX, address2.into_object()).unwrap();
 
     let min_required_signatures = 2;
     let challenge = ClassicMultisigChallenge::new(
@@ -4546,16 +4536,11 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
         .unwrap();
 
     let multisig_address =
-        Address::new(&chain_config, &Destination::ClassicMultisig(multisig_hash)).unwrap();
+        Address::new(&chain_config, Destination::ClassicMultisig(multisig_hash)).unwrap();
 
     // Generate a new block which sends reward to the new multisig address
     let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
-    let output = make_address_output(
-        chain_config.as_ref(),
-        multisig_address.clone(),
-        block1_amount,
-    )
-    .unwrap();
+    let output = make_address_output(multisig_address.clone(), block1_amount);
 
     let tx =
         SignedTransaction::new(Transaction::new(0, vec![], vec![output]).unwrap(), vec![]).unwrap();

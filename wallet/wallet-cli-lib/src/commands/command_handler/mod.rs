@@ -672,6 +672,26 @@ where
                 })
             }
 
+            WalletCommand::ListMultisigUtxo {
+                utxo_type,
+                with_locked,
+                utxo_states,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                let utxos = wallet
+                    .get_multisig_utxos(
+                        selected_account,
+                        utxo_type.to_wallet_types(),
+                        CliUtxoState::to_wallet_states(utxo_states),
+                        with_locked.to_wallet_type(),
+                    )
+                    .await
+                    .map(serde_json::Value::Array)?;
+                Ok(ConsoleCommand::Print(
+                    serde_json::to_string(&utxos).expect("ok"),
+                ))
+            }
+
             WalletCommand::SelectAccount { account_index } => {
                 self.set_selected_account(account_index).await?;
 
