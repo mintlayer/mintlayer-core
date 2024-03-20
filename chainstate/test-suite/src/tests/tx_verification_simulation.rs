@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, num::NonZeroU64};
 
 use super::*;
 use chainstate_storage::{BlockchainStorageWrite, TransactionRw, Transactional};
@@ -31,6 +31,7 @@ use crypto::{
 #[case(Seed::from_entropy(), 20, 50)]
 fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_block: usize) {
     utils::concurrency::model(move || {
+        logging::init_logging();
         let mut rng = make_seedable_rng(seed);
 
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
@@ -52,9 +53,13 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
         )];
         let consensus_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
 
+        let epoch_length = NonZeroU64::new(rng.gen_range(1..10)).unwrap();
+        let sealed_epoch_distance_from_tip = rng.gen_range(1..10);
         let chain_config = config_builder
             .consensus_upgrades(consensus_upgrades)
             .max_future_block_time_offset(std::time::Duration::from_secs(1_000_000))
+            .epoch_length(epoch_length)
+            .sealed_epoch_distance_from_tip(sealed_epoch_distance_from_tip)
             .build();
         let target_time = chain_config.target_block_spacing();
         let genesis_pool_outpoint = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 1);
@@ -89,7 +94,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
 
         // Generate a random chain
         let mut all_blocks = Vec::new();
-        for _ in 0..rng.gen_range(10..max_blocks) {
+        for _ in 0..rng.gen_range((max_blocks / 2)..max_blocks) {
             let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
             for _ in 0..rng.gen_range(10..max_tx_per_block) {
@@ -155,14 +160,22 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
         // This is a workaround because deltas are never removed on undo but rather replaced with None value.
         // It seems like an acceptable trade-off for the simplicity of the test given that Sealed storage
         // which utilizes such epoch deltas is not used in production.
+        let last_epoch =
+            tf.chain_config().epoch_index_from_height(&BlockHeight::new(max_blocks as u64));
         {
             let mut db_tx = tf.storage.transaction_rw(None).unwrap();
-            db_tx.del_accounting_epoch_delta(0).unwrap();
+            for i in 0..=last_epoch {
+                db_tx.del_accounting_epoch_delta(i).unwrap();
+                db_tx.del_accounting_epoch_undo_delta(i).unwrap();
+            }
             db_tx.commit().unwrap();
         }
         {
             let mut db_tx = reference_tf.storage.transaction_rw(None).unwrap();
-            db_tx.del_accounting_epoch_delta(0).unwrap();
+            for i in 0..=last_epoch {
+                db_tx.del_accounting_epoch_delta(i).unwrap();
+                db_tx.del_accounting_epoch_undo_delta(i).unwrap();
+            }
             db_tx.commit().unwrap();
         }
 
