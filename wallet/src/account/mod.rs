@@ -187,12 +187,27 @@ impl PartiallySignedTransaction {
         self.witnesses.iter().filter(|w| w.is_some()).count()
     }
 
-    pub fn is_fully_signed(&self) -> bool {
-        self.witnesses.iter().all(|w| w.is_some())
+    pub fn is_fully_signed(&self, chain_config: &ChainConfig) -> bool {
+        let inputs_utxos_refs: Vec<_> = self.input_utxos.iter().map(|out| out.as_ref()).collect();
+        self.witnesses
+            .iter()
+            .enumerate()
+            .zip(&self.destinations)
+            .all(|((input_num, w), d)| match (w, d) {
+                (Some(InputWitness::NoSignature(_)), None) => true,
+                (Some(InputWitness::NoSignature(_)), Some(_)) => false,
+                (Some(InputWitness::Standard(_)), None) => false,
+                (Some(InputWitness::Standard(sig)), Some(dest)) => {
+                    signature_hash(sig.sighash_type(), &self.tx, &inputs_utxos_refs, input_num)
+                        .and_then(|sighash| sig.verify_signature(chain_config, dest, &sighash))
+                        .is_ok()
+                }
+                (None, _) => false,
+            })
     }
 
-    pub fn into_signed_tx(self) -> WalletResult<SignedTransaction> {
-        if self.is_fully_signed() {
+    pub fn into_signed_tx(self, chain_config: &ChainConfig) -> WalletResult<SignedTransaction> {
+        if self.is_fully_signed(chain_config) {
             let witnesses = self.witnesses.into_iter().map(|w| w.expect("cannot fail")).collect();
             Ok(SignedTransaction::new(self.tx, witnesses)?)
         } else {
@@ -677,7 +692,7 @@ impl Account {
         let tx = Transaction::new(0, vec![tx_input], vec![output])?;
 
         self.sign_transaction(tx, &[&delegation_data.destination], &[None], db_tx)?
-            .into_signed_tx()
+            .into_signed_tx(&self.chain_config)
     }
 
     pub fn process_send_request(
@@ -801,7 +816,7 @@ impl Account {
             current_fee_rate,
         )?;
         result
-            .into_signed_tx()
+            .into_signed_tx(&self.chain_config)
             .map_err(|_| WalletError::PartiallySignedTransactionInDecommissionCommand)
     }
 
@@ -820,7 +835,7 @@ impl Account {
             output_address,
             current_fee_rate,
         )?;
-        if result.is_fully_signed() {
+        if result.is_fully_signed(&self.chain_config) {
             return Err(WalletError::FullySignedTransactionInDecommissionReq);
         }
         Ok(result)
@@ -891,7 +906,7 @@ impl Account {
         let tx = Transaction::new(0, vec![tx_input], outputs)?;
 
         self.sign_transaction(tx, &[&delegation_data.destination], &[None], db_tx)?
-            .into_signed_tx()
+            .into_signed_tx(&self.chain_config)
     }
 
     fn get_vrf_public_key(
@@ -1301,7 +1316,7 @@ impl Account {
         let input_utxos = input_utxos.iter().map(Option::as_ref).collect_vec();
 
         self.sign_transaction(tx, destinations.as_slice(), input_utxos.as_slice(), db_tx)?
-            .into_signed_tx()
+            .into_signed_tx(&self.chain_config)
     }
 
     fn sign_input(
@@ -1334,52 +1349,76 @@ impl Account {
                 })
                 .transpose(),
             Destination::ClassicMultisig(_) => {
-                if let Some(challenge) = self.key_chain.get_multisig_challenge(destination)? {
-                    let mut current_signatures =
+                if let Some(challenge) = self.key_chain.get_multisig_challenge(destination) {
+                    let current_signatures =
                         AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
 
-                    let sighash_type =
-                        SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
-
-                    let sighash = signature_hash(sighash_type, tx, input_utxos, input_index)?;
-
-                    for (key_index, public_key) in challenge.public_keys().iter().enumerate() {
-                        if let Some(private_key) = self.key_chain.get_private_key_for_destination(
-                            &Destination::PublicKey(public_key.clone()),
-                            db_tx,
-                        )? {
-                            let res = sign_classical_multisig_spending(
-                                &self.chain_config,
-                                key_index as u8,
-                                &private_key,
-                                challenge,
-                                &sighash,
-                                current_signatures,
-                            )
-                            .map_err(DestinationSigError::ClassicalMultisigSigningFailed)?;
-
-                            match res {
-                                ClassicalMultisigCompletionStatus::Complete(signatures) => {
-                                    current_signatures = signatures;
-                                    break;
-                                }
-                                ClassicalMultisigCompletionStatus::Incomplete(signatures) => {
-                                    current_signatures = signatures;
-                                }
-                            };
-                        }
-                    }
-
-                    return Ok(Some(InputWitness::Standard(StandardInputSignature::new(
-                        sighash_type,
-                        current_signatures.encode(),
-                    ))));
+                    return self.sign_multisig_input(
+                        tx,
+                        destination,
+                        input_index,
+                        input_utxos,
+                        current_signatures,
+                        db_tx,
+                    );
                 }
 
                 Ok(None)
             }
             Destination::ScriptHash(_) => Ok(None),
         }
+    }
+
+    fn sign_multisig_input(
+        &self,
+        tx: &Transaction,
+        destination: &Destination,
+        input_index: usize,
+        input_utxos: &[Option<&TxOutput>],
+        mut current_signatures: AuthorizedClassicalMultisigSpend,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> WalletResult<Option<InputWitness>> {
+        let sighash_type = SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
+
+        if let Some(challenge) = self.key_chain.get_multisig_challenge(destination) {
+            let sighash = signature_hash(sighash_type, tx, input_utxos, input_index)?;
+
+            for (key_index, public_key) in challenge.public_keys().iter().enumerate() {
+                if current_signatures.signatures().contains_key(&(key_index as u8)) {
+                    continue;
+                }
+
+                if let Some(private_key) = self.key_chain.get_private_key_for_destination(
+                    &Destination::PublicKey(public_key.clone()),
+                    db_tx,
+                )? {
+                    let res = sign_classical_multisig_spending(
+                        &self.chain_config,
+                        key_index as u8,
+                        &private_key,
+                        challenge,
+                        &sighash,
+                        current_signatures,
+                    )
+                    .map_err(DestinationSigError::ClassicalMultisigSigningFailed)?;
+
+                    match res {
+                        ClassicalMultisigCompletionStatus::Complete(signatures) => {
+                            current_signatures = signatures;
+                            break;
+                        }
+                        ClassicalMultisigCompletionStatus::Incomplete(signatures) => {
+                            current_signatures = signatures;
+                        }
+                    };
+                }
+            }
+        }
+
+        Ok(Some(InputWitness::Standard(StandardInputSignature::new(
+            sighash_type,
+            current_signatures.encode(),
+        ))))
     }
 
     fn sign_transaction(
@@ -1506,9 +1545,41 @@ impl Account {
             .witnesses()
             .iter()
             .enumerate()
-            .map(|(i, witness)| match witness {
-                Some(w) => Ok(Some(w.clone())),
-                None => match ptx.destinations().get(i).expect("cannot fail") {
+            .zip(ptx.destinations())
+            .map(|((i, witness), destination)| match witness {
+                Some(w) => match w {
+                    InputWitness::NoSignature(_) => Ok(Some(w.clone())),
+                    InputWitness::Standard(sig) => match destination {
+                        Some(destination) => {
+                            let sighash =
+                                signature_hash(sig.sighash_type(), ptx.tx(), &inputs_utxo_refs, i)?;
+
+                            if sig
+                                .verify_signature(&self.chain_config, destination, &sighash)
+                                .is_ok()
+                            {
+                                Ok(Some(w.clone()))
+                            } else if let Destination::ClassicMultisig(_) = destination {
+                                let sig_components = AuthorizedClassicalMultisigSpend::from_data(
+                                    sig.raw_signature(),
+                                )?;
+
+                                self.sign_multisig_input(
+                                    ptx.tx(),
+                                    destination,
+                                    i,
+                                    &inputs_utxo_refs,
+                                    sig_components,
+                                    db_tx,
+                                )
+                            } else {
+                                Ok(None)
+                            }
+                        }
+                        None => Ok(None),
+                    },
+                },
+                None => match destination {
                     Some(destination) => {
                         let s = self
                             .sign_input(ptx.tx(), destination, i, &inputs_utxo_refs, db_tx)?
@@ -1678,7 +1749,10 @@ impl Account {
             }
             Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
             Destination::AnyoneCanSpend => false,
-            Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => false,
+            Destination::ScriptHash(_) => false,
+            Destination::ClassicMultisig(_) => {
+                self.key_chain.get_multisig_challenge(destination).is_some()
+            }
         }
     }
 
@@ -1717,7 +1791,12 @@ impl Account {
                     }
                 }
                 Destination::AnyoneCanSpend => return Ok(false),
-                Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
+                Destination::ClassicMultisig(_) => {
+                    if self.key_chain.get_multisig_challenge(&destination).is_some() {
+                        return Ok(true);
+                    }
+                }
+                Destination::ScriptHash(_) => {}
             }
         }
 

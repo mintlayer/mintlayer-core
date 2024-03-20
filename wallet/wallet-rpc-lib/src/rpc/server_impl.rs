@@ -216,9 +216,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
             self.sign_raw_transaction(account_arg.index::<N>()?, raw_tx, config)
                 .await
                 .map(|tx| {
-                    let is_complete = tx.is_fully_signed();
+                    let is_complete = tx.is_fully_signed(&self.chain_config);
                     let hex = if is_complete {
-                        let tx = tx.into_signed_tx().expect("already checked");
+                        let tx = tx.into_signed_tx(&self.chain_config).expect("already checked");
                         tx.hex_encode()
                     } else {
                         tx.hex_encode()
