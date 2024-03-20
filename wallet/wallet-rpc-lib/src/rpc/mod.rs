@@ -326,7 +326,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await??;
         let address = Address::new(
             &self.chain_config,
-            Destination::PublicKeyHash(multisig_address),
+            Destination::ClassicMultisig(multisig_address),
         )
         .expect("addressable");
 

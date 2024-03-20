@@ -227,6 +227,10 @@ class WalletCliController:
     async def add_standalone_address(self, address: str, label: Optional[str] = '') -> str:
         return await self._write_command(f"standalone-add-watch-only-address {address} {label}\n")
 
+    async def add_standalone_multisig_address(self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = '') -> str:
+        label_str = f'--label {label}' if label else ''
+        return await self._write_command(f"standalone-add-multisig {min_required_signatures} {' '.join(pub_keys)} {label_str}\n")
+
     async def select_account(self, account_index: int) -> str:
         return await self._write_command(f"account-select {account_index}\n")
 
@@ -254,6 +258,13 @@ class WalletCliController:
 
     async def list_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
         output = await self._write_command(f"account-utxos {utxo_types} {with_locked} {''.join(utxo_states)}\n")
+
+        j = json.loads(output)
+
+        return [UtxoOutpoint(id=match["outpoint"]["id"]["Transaction"], index=int(match["outpoint"]["index"])) for match in j]
+
+    async def list_multisig_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
+        output = await self._write_command(f"standalone-multisig-utxos {utxo_types} {with_locked} {''.join(utxo_states)}\n")
 
         j = json.loads(output)
 
