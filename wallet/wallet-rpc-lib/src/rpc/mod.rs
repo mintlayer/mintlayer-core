@@ -227,8 +227,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         Ok(NewAccountInfo::new(num, name))
     }
 
-    // FIXME: make this add_standalone_watchonly_address and support all destinations
-    pub async fn add_standalone_address(
+    pub async fn add_standalone_watch_only_address(
         &self,
         account_index: U31,
         address: String,

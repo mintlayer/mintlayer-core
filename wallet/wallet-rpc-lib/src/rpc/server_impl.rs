@@ -309,7 +309,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         label: Option<String>,
     ) -> rpc::RpcResult<()> {
         rpc::handle_result(
-            self.add_standalone_address(account_arg.index::<N>()?, address, label).await,
+            self.add_standalone_watch_only_address(account_arg.index::<N>()?, address, label)
+                .await,
         )
     }
 
