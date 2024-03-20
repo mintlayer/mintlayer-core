@@ -101,9 +101,9 @@ Returns:
 }
 ```
 
-### Method `account_add_standalone_address`
+### Method `standalone_add_watch_only_address`
 
-Add a new standalone address not derived from the selected account's key chain to be watched
+Add a new standalone watch only address not derived from the selected account's key chain
 
 
 Parameters:
@@ -122,7 +122,7 @@ Returns:
 nothing
 ```
 
-### Method `account_add_standalone_private_key`
+### Method `standalone_add_private_key-as-hex`
 
 Add a new standalone private key not derived from the selected account's key chain to be watched
 
@@ -131,7 +131,7 @@ Parameters:
 ```
 {
     "account": number,
-    "private_key": hex string,
+    "hex_private_key": hex string,
     "label": EITHER OF
          1) string
          2) null,
@@ -143,7 +143,7 @@ Returns:
 nothing
 ```
 
-### Method `account_add_standalone_multisig`
+### Method `standalone_add_multisig`
 
 Add a new standalone multi signature address
 Use the `transaction_compose` command to use the new multisig address as input or output
@@ -164,6 +164,40 @@ Parameters:
 Returns:
 ```
 string
+```
+
+### Method `standalone_multisig_utxos`
+
+Lists all the utxos owned by a multisig watched by this account
+
+
+Parameters:
+```
+{
+    "account": number,
+    "utxo_types": [ EITHER OF
+         1) "Transfer"
+         2) "LockThenTransfer"
+         3) "IssueNft"
+         4) "CreateStakePool"
+         5) "ProduceBlockFromStake", .. ],
+    "utxo_states": [ EITHER OF
+         1) "Confirmed"
+         2) "Conflicted"
+         3) "Inactive"
+         4) "Abandoned"
+         5) "InMempool", .. ],
+    "with_locked": EITHER OF
+         1) "Any"
+         2) "Unlocked"
+         3) "Locked"
+         4) null,
+}
+```
+
+Returns:
+```
+[ json, .. ]
 ```
 
 ### Method `account_balance`
