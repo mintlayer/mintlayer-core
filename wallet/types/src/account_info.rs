@@ -115,7 +115,7 @@ pub enum AccountStandaloneKey {
         private_key: Option<PrivateKey>,
     },
     #[codec(index = 1)]
-    MultiSig {
+    Multisig {
         label: Option<String>,
         challenge: ClassicMultisigChallenge,
     },

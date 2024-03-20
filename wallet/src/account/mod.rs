@@ -1585,10 +1585,7 @@ impl Account {
                 },
                 None => match destination {
                     Some(destination) => {
-                        let s = self
-                            .sign_input(ptx.tx(), destination, i, &inputs_utxo_refs, db_tx)?
-                            .ok_or(WalletError::InputCannotBeSigned)?;
-                        Ok(Some(s.clone()))
+                        self.sign_input(ptx.tx(), destination, i, &inputs_utxo_refs, db_tx)
                     }
                     None => Ok(None),
                 },
@@ -1735,7 +1732,7 @@ impl Account {
             .any(|d| self.is_destination_mine_or_watched(d))
     }
 
-    /// Return true if this transaction output is a multisi that is being watched
+    /// Return true if this transaction output is a multisig that is being watched
     fn is_watched_multisig_output(&self, txo: &TxOutput) -> bool {
         self.collect_output_destinations(txo)
             .iter()

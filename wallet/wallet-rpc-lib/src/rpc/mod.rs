@@ -303,7 +303,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                     .map_err(|_| RpcError::InvalidAddress)
                     .and_then(|dest| match dest.into_object() {
                         Destination::PublicKey(pk) => Ok(pk),
-                        _ => Err(RpcError::MultisigNotPublicKey),
+                        Destination::PublicKeyHash(_)
+                        | Destination::AnyoneCanSpend
+                        | Destination::ScriptHash(_)
+                        | Destination::ClassicMultisig(_) => Err(RpcError::MultisigNotPublicKey),
                     })
             })
             .collect::<WRpcResult<Vec<PublicKey>, N>>()?;
