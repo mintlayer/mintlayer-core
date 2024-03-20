@@ -143,6 +143,29 @@ Returns:
 nothing
 ```
 
+### Method `account_add_standalone_multisig`
+
+Add a new standalone multi signature address
+Use the `transaction_compose` command to use the new multisig address as input or output
+
+
+Parameters:
+```
+{
+    "account": number,
+    "min_required_signatures": number,
+    "public_keys": [ string, .. ],
+    "label": EITHER OF
+         1) string
+         2) null,
+}
+```
+
+Returns:
+```
+string
+```
+
 ### Method `account_balance`
 
 Get the total balance in the selected account in this wallet. See available options to include more categories, like locked coins.

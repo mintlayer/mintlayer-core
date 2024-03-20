@@ -260,7 +260,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         label: Option<String>,
     ) -> Result<(), Self::Error> {
         self.wallet_rpc
-            .add_standalone_address(account_index, address, label)
+            .add_standalone_watch_only_address(account_index, address, label)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
