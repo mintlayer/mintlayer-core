@@ -27,7 +27,7 @@ use utils_networking::IpOrSocketAddress;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
     types::{CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
-    ConnectedPeer, ControllerConfig,
+    ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::types::{
     AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
@@ -35,10 +35,7 @@ use wallet_rpc_lib::types::{
     NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance, StakingStatus,
     TokenMetadata, TxOptionsOverrides, VrfPublicKeyInfo,
 };
-use wallet_types::{
-    utxo_types::{UtxoStates, UtxoTypes},
-    with_locked::WithLocked,
-};
+use wallet_types::with_locked::WithLocked;
 
 pub enum PartialOrSignedTx {
     Partial(PartiallySignedTransaction),
@@ -146,15 +143,23 @@ pub trait WalletInterface {
     async fn get_balance(
         &self,
         account_index: U31,
-        utxo_states: UtxoStates,
+        utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
     ) -> Result<Balances, Self::Error>;
+
+    async fn get_multisig_utxos(
+        &self,
+        account_index: U31,
+        utxo_types: Vec<UtxoType>,
+        utxo_states: Vec<UtxoState>,
+        with_locked: WithLocked,
+    ) -> Result<Vec<serde_json::Value>, Self::Error>;
 
     async fn get_utxos(
         &self,
         account_index: U31,
-        utxo_types: UtxoTypes,
-        utxo_states: UtxoStates,
+        utxo_types: Vec<UtxoType>,
+        utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
     ) -> Result<Vec<serde_json::Value>, Self::Error>;
 

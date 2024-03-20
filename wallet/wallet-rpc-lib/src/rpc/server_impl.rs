@@ -35,7 +35,7 @@ use wallet::{
 };
 use wallet_controller::{
     types::{BlockInfo, CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
-    ConnectedPeer, ControllerConfig, NodeInterface, UtxoStates, UtxoTypes,
+    ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
@@ -46,8 +46,8 @@ use crate::{
         CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
         MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
         NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcTokenId,
-        StakePoolBalance, StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-        UtxoInfo, VrfPublicKeyInfo,
+        RpcUtxoState, RpcUtxoType, StakePoolBalance, StakingStatus, TokenMetadata,
+        TransactionOptions, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError,
 };
@@ -357,6 +357,42 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
             )
             .await,
         )
+    }
+
+    async fn get_multisig_utxos(
+        &self,
+        account_arg: AccountArg,
+        utxo_types: Vec<RpcUtxoType>,
+        utxo_states: Vec<RpcUtxoState>,
+        with_locked: Option<WithLocked>,
+    ) -> rpc::RpcResult<Vec<JsonValue>> {
+        let utxo_types = if utxo_types.is_empty() {
+            UtxoTypes::ALL
+        } else {
+            utxo_types.iter().map(UtxoType::from).fold(UtxoTypes::NONE, |x, y| x | y)
+        };
+
+        let utxo_states = if utxo_states.is_empty() {
+            UtxoState::Confirmed.into()
+        } else {
+            utxo_states.iter().map(UtxoState::from).fold(UtxoStates::NONE, |x, y| x | y)
+        };
+
+        let utxos = self
+            .get_multisig_utxos(
+                account_arg.index::<N>()?,
+                utxo_types,
+                utxo_states,
+                with_locked.unwrap_or(WithLocked::Unlocked),
+            )
+            .await?;
+
+        let result = utxos
+            .into_iter()
+            .map(|utxo| to_dehexified_json(&self.chain_config, UtxoInfo::from_tuple(utxo)))
+            .collect::<Result<Vec<_>, _>>();
+
+        rpc::handle_result(result)
     }
 
     async fn get_utxos(&self, account_arg: AccountArg) -> rpc::RpcResult<Vec<JsonValue>> {

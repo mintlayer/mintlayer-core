@@ -36,8 +36,9 @@ use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction, CreatedWallet,
     DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
     NewAccountInfo, NewDelegation, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
-    PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcTokenId, StakePoolBalance,
-    StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
+    PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcTokenId, RpcUtxoState, RpcUtxoType,
+    StakePoolBalance, StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides,
+    VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -278,6 +279,16 @@ trait WalletRpc {
         public_keys: Vec<String>,
         label: Option<String>,
     ) -> rpc::RpcResult<String>;
+
+    /// Lists all the utxos owned by a multisig watched by this account
+    #[method(name = "standalone_multisig_utxos")]
+    async fn get_multisig_utxos(
+        &self,
+        account: AccountArg,
+        utxo_types: Vec<RpcUtxoType>,
+        utxo_states: Vec<RpcUtxoState>,
+        with_locked: Option<WithLocked>,
+    ) -> rpc::RpcResult<Vec<JsonValue>>;
 
     /// Get the total balance in the selected account in this wallet. See available options to include more categories, like locked coins.
     #[method(name = "account_balance")]

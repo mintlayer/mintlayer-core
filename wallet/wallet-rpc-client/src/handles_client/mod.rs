@@ -36,7 +36,7 @@ use wallet::{
 };
 use wallet_controller::{
     types::{CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
-    ConnectedPeer, ControllerConfig,
+    ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
     types::{
@@ -47,11 +47,7 @@ use wallet_rpc_lib::{
     },
     RpcError, WalletRpc,
 };
-use wallet_types::{
-    seed_phrase::StoreSeedPhrase,
-    utxo_types::{UtxoStates, UtxoTypes},
-    with_locked::WithLocked,
-};
+use wallet_types::{seed_phrase::StoreSeedPhrase, utxo_types::UtxoTypes, with_locked::WithLocked};
 
 use crate::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 
@@ -321,25 +317,61 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
     async fn get_balance(
         &self,
         account_index: U31,
-        utxo_states: UtxoStates,
+        utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
     ) -> Result<Balances, Self::Error> {
         self.wallet_rpc
-            .get_balance(account_index, utxo_states, with_locked)
+            .get_balance(
+                account_index,
+                (&utxo_states).try_into().unwrap_or(UtxoState::Confirmed.into()),
+                with_locked,
+            )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn get_multisig_utxos(
+        &self,
+        account_index: U31,
+        utxo_types: Vec<UtxoType>,
+        utxo_states: Vec<UtxoState>,
+        with_locked: WithLocked,
+    ) -> Result<Vec<serde_json::Value>, Self::Error> {
+        let utxos = self
+            .wallet_rpc
+            .get_multisig_utxos(
+                account_index,
+                (&utxo_types).try_into().unwrap_or(UtxoTypes::ALL),
+                (&utxo_states).try_into().unwrap_or(UtxoState::Confirmed.into()),
+                with_locked,
+            )
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)?;
+
+        utxos
+            .into_iter()
+            .map(|utxo| {
+                to_dehexified_json(self.wallet_rpc.chain_config(), UtxoInfo::from_tuple(utxo))
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(WalletRpcHandlesClientError::SerializationError)
     }
 
     async fn get_utxos(
         &self,
         account_index: U31,
-        utxo_types: UtxoTypes,
-        utxo_states: UtxoStates,
+        utxo_types: Vec<UtxoType>,
+        utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
     ) -> Result<Vec<serde_json::Value>, Self::Error> {
         let utxos = self
             .wallet_rpc
-            .get_utxos(account_index, utxo_types, utxo_states, with_locked)
+            .get_utxos(
+                account_index,
+                (&utxo_types).try_into().unwrap_or(UtxoTypes::ALL),
+                (&utxo_states).try_into().unwrap_or(UtxoState::Confirmed.into()),
+                with_locked,
+            )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)?;
 

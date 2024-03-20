@@ -459,6 +459,24 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         Ok(balances)
     }
 
+    pub async fn get_multisig_utxos(
+        &self,
+        account_index: U31,
+        utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> WRpcResult<Vec<(UtxoOutPoint, TxOutput)>, N> {
+        self.wallet
+            .call(move |w| {
+                w.readonly_controller(account_index).get_multisig_utxos(
+                    utxo_types,
+                    utxo_states,
+                    with_locked,
+                )
+            })
+            .await?
+    }
+
     pub async fn get_utxos(
         &self,
         account_index: U31,

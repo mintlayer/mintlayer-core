@@ -49,6 +49,7 @@ pub use wallet_controller::types::{
     Balances, BlockInfo, InspectTransaction, SignatureStats, ValidatedSignatures,
 };
 pub use wallet_controller::{ControllerConfig, NodeInterface};
+use wallet_controller::{UtxoState, UtxoType};
 
 use crate::service::SubmitError;
 
@@ -348,6 +349,72 @@ impl NftMetadata {
             additional_metadata_uri: self.additional_metadata_uri.map(|x| x.into_bytes()).into(),
             media_uri: self.media_uri.map(|x| x.into_bytes()).into(),
             media_hash: self.media_hash.into_bytes(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub enum RpcUtxoType {
+    Transfer,
+    LockThenTransfer,
+    IssueNft,
+    CreateStakePool,
+    ProduceBlockFromStake,
+}
+
+impl From<&RpcUtxoType> for UtxoType {
+    fn from(value: &RpcUtxoType) -> Self {
+        match value {
+            RpcUtxoType::Transfer => UtxoType::Transfer,
+            RpcUtxoType::LockThenTransfer => UtxoType::LockThenTransfer,
+            RpcUtxoType::IssueNft => UtxoType::IssueNft,
+            RpcUtxoType::CreateStakePool => UtxoType::CreateStakePool,
+            RpcUtxoType::ProduceBlockFromStake => UtxoType::ProduceBlockFromStake,
+        }
+    }
+}
+
+impl From<&UtxoType> for RpcUtxoType {
+    fn from(value: &UtxoType) -> Self {
+        match value {
+            UtxoType::Transfer => RpcUtxoType::Transfer,
+            UtxoType::LockThenTransfer => RpcUtxoType::LockThenTransfer,
+            UtxoType::IssueNft => RpcUtxoType::IssueNft,
+            UtxoType::CreateStakePool => RpcUtxoType::CreateStakePool,
+            UtxoType::ProduceBlockFromStake => RpcUtxoType::ProduceBlockFromStake,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub enum RpcUtxoState {
+    Confirmed,
+    Conflicted,
+    Inactive,
+    Abandoned,
+    InMempool,
+}
+
+impl From<&RpcUtxoState> for UtxoState {
+    fn from(value: &RpcUtxoState) -> Self {
+        match value {
+            RpcUtxoState::Confirmed => UtxoState::Confirmed,
+            RpcUtxoState::Inactive => UtxoState::Inactive,
+            RpcUtxoState::Abandoned => UtxoState::Abandoned,
+            RpcUtxoState::Conflicted => UtxoState::Conflicted,
+            RpcUtxoState::InMempool => UtxoState::InMempool,
+        }
+    }
+}
+
+impl From<&UtxoState> for RpcUtxoState {
+    fn from(value: &UtxoState) -> Self {
+        match value {
+            UtxoState::Confirmed => RpcUtxoState::Confirmed,
+            UtxoState::Inactive => RpcUtxoState::Inactive,
+            UtxoState::Abandoned => RpcUtxoState::Abandoned,
+            UtxoState::Conflicted => RpcUtxoState::Conflicted,
+            UtxoState::InMempool => RpcUtxoState::InMempool,
         }
     }
 }

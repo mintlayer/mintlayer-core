@@ -1731,6 +1731,21 @@ impl Account {
             .any(|d| self.is_destination_mine_or_watched(d))
     }
 
+    /// Return true if this transaction output is a multisi that is being watched
+    fn is_watched_multisig_output(&self, txo: &TxOutput) -> bool {
+        self.collect_output_destinations(txo)
+            .iter()
+            .any(|destination| match destination {
+                Destination::PublicKeyHash(_)
+                | Destination::PublicKey(_)
+                | Destination::AnyoneCanSpend
+                | Destination::ScriptHash(_) => false,
+                Destination::ClassicMultisig(_) => {
+                    self.key_chain.get_multisig_challenge(destination).is_some()
+                }
+            })
+    }
+
     /// Return true if this destination can be spent by this account
     fn is_destination_mine(&self, destination: &Destination) -> bool {
         match destination {
@@ -1849,6 +1864,28 @@ impl Account {
             Amount::ZERO,
         )?;
         Ok(amounts_by_currency)
+    }
+
+    pub fn get_multisig_utxos(
+        &self,
+        utxo_types: UtxoTypes,
+        median_time: BlockTimestamp,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))> {
+        let current_block_info = BlockInfo {
+            height: self.account_info.best_block_height(),
+            timestamp: median_time,
+        };
+        self.output_cache.utxos_with_token_ids(
+            current_block_info,
+            utxo_states,
+            with_locked,
+            |txo| {
+                self.is_watched_multisig_output(txo)
+                    && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
+            },
+        )
     }
 
     pub fn get_utxos(

@@ -281,6 +281,19 @@ pub enum WalletCommand {
         label: Option<String>,
     },
 
+    #[clap(name = "standalone-multisig-utxos")]
+    ListMultisigUtxo {
+        /// The type of utxo to be listed. Default is "all".
+        #[arg(value_enum, default_value_t = CliUtxoTypes::All)]
+        utxo_type: CliUtxoTypes,
+        /// Whether to include locked outputs. Default is "unlocked"
+        #[arg(value_enum, default_value_t = CliWithLocked::Unlocked)]
+        with_locked: CliWithLocked,
+        /// The state of the utxos; e.g., confirmed, unconfirmed, etc.
+        #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
+        utxo_states: Vec<CliUtxoState>,
+    },
+
     #[clap(name = "token-nft-issue-new")]
     IssueNewNft {
         /// The receiver of the token
