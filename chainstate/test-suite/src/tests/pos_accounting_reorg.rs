@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use itertools::Itertools;
 use std::num::NonZeroU64;
 
 use super::helpers::{
@@ -51,156 +50,155 @@ use test_utils::random::{make_seedable_rng, Seed};
 // Check that after reorg all accounting data from block `a` was removed and from block `c` added to storage.
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
-fn stake_pool_reorg(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), NonZeroU64::new(1).unwrap(), 0)]
+#[case(Seed::from_entropy(), NonZeroU64::new(1).unwrap(), 1)]
+#[case(Seed::from_entropy(), NonZeroU64::new(1).unwrap(), 2)]
+#[case(Seed::from_entropy(), NonZeroU64::new(2).unwrap(), 0)]
+#[case(Seed::from_entropy(), NonZeroU64::new(2).unwrap(), 1)]
+#[case(Seed::from_entropy(), NonZeroU64::new(2).unwrap(), 2)]
+#[case(Seed::from_entropy(), NonZeroU64::new(3).unwrap(), 0)]
+#[case(Seed::from_entropy(), NonZeroU64::new(3).unwrap(), 1)]
+#[case(Seed::from_entropy(), NonZeroU64::new(3).unwrap(), 2)]
+fn stake_pool_reorg(
+    #[case] seed: Seed,
+    #[case] epoch_length: NonZeroU64,
+    #[case] sealed_epoch_distance_from_tip: usize,
+) {
     utils::concurrency::model(move || {
-        let epoch_length_params = [
-            NonZeroU64::new(1).unwrap(), // reorg between epochs, every block is epoch boundary
-            NonZeroU64::new(2).unwrap(), // reorg between epochs, `c` starts new epoch
-            NonZeroU64::new(3).unwrap(), // reorg within epoch
-        ];
-        let sealed_epoch_distance_from_tip_params: [usize; 3] = [
-            0, // tip == sealed
-            1, // sealed is behind the tip by 1 epoch
-            2, // sealed is behind the tip by 2 epochs
-        ];
+        let storage = Store::new_empty().unwrap();
+        let mut rng = make_seedable_rng(seed);
+        let chain_config = ConfigBuilder::test_chain()
+            .epoch_length(epoch_length)
+            .sealed_epoch_distance_from_tip(sealed_epoch_distance_from_tip)
+            .build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_storage(storage.clone())
+            .with_chain_config(chain_config.clone())
+            .build();
+        let genesis_id = tf.genesis().get_id();
+        let min_stake_pool_pledge =
+            tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
+        let pledge_amount =
+            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
 
-        for (epoch_length, sealed_epoch_distance_from_tip) in epoch_length_params
-            .into_iter()
-            .cartesian_product(sealed_epoch_distance_from_tip_params)
-        {
+        // prepare tx_a
+        let destination_a = new_pub_key_destination(&mut rng);
+        let (_, vrf_pub_key_a) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let genesis_outpoint = UtxoOutPoint::new(
+            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+            0,
+        );
+        let pool_id_a = pos_accounting::make_pool_id(&genesis_outpoint);
+        let tx_a = TransactionBuilder::new()
+            .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateStakePool(
+                pool_id_a,
+                Box::new(StakePoolData::new(
+                    pledge_amount,
+                    anyonecanspend_address(),
+                    vrf_pub_key_a,
+                    destination_a,
+                    PerThousand::new(0).unwrap(),
+                    Amount::ZERO,
+                )),
+            ))
+            .build();
+
+        // prepare tx_b
+        let tx_b = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(OutPointSourceId::BlockReward(genesis_id.into()), 0),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(pledge_amount),
+                anyonecanspend_address(),
+            ))
+            .build();
+
+        // prepare tx_c
+        let destination_c = new_pub_key_destination(&mut rng);
+        let (_, vrf_pub_key_c) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let tx_b_outpoint0 = UtxoOutPoint::new(tx_b.transaction().get_id().into(), 0);
+        let pool_id_c = pos_accounting::make_pool_id(&tx_b_outpoint0);
+        let tx_c = TransactionBuilder::new()
+            .add_input(tx_b_outpoint0.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateStakePool(
+                pool_id_c,
+                Box::new(StakePoolData::new(
+                    pledge_amount,
+                    anyonecanspend_address(),
+                    vrf_pub_key_c,
+                    destination_c,
+                    PerThousand::new(0).unwrap(),
+                    Amount::ZERO,
+                )),
+            ))
+            .build();
+
+        // create block a
+        let block_a = tf.make_block_builder().add_transaction(tx_a).build();
+        let block_a_index = tf.process_block(block_a.clone(), BlockSource::Local).unwrap().unwrap();
+        assert_eq!(
+            tf.best_block_id(),
+            Id::<GenBlock>::from(*block_a_index.block_id())
+        );
+
+        // create block b
+        let block_b = tf
+            .make_block_builder()
+            .with_parent(genesis_id.into())
+            .add_transaction(tx_b.clone())
+            .build();
+        let block_b_id = block_b.get_id();
+        tf.process_block(block_b, BlockSource::Local).unwrap();
+
+        // no reorg here
+        assert_eq!(
+            tf.best_block_id(),
+            Id::<GenBlock>::from(*block_a_index.block_id())
+        );
+
+        // create block c
+        let block_c = tf
+            .make_block_builder()
+            .with_parent(block_b_id.into())
+            .add_transaction(tx_c.clone())
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            tf.best_block_id(),
+            Id::<GenBlock>::from(*block_c.block_id())
+        );
+
+        // Accounting data in storage after reorg should equal to the data in storage for chain
+        // where reorg never happened.
+        //
+        // Construct fresh `genesis -> b -> c` chain as a reference
+        let expected_storage = {
             let storage = Store::new_empty().unwrap();
-            let mut rng = make_seedable_rng(seed);
-            let chain_config = ConfigBuilder::test_chain()
-                .epoch_length(epoch_length)
-                .sealed_epoch_distance_from_tip(sealed_epoch_distance_from_tip)
-                .build();
+            let block_a_epoch = chain_config.epoch_index_from_height(&block_a_index.block_height());
             let mut tf = TestFramework::builder(&mut rng)
                 .with_storage(storage.clone())
-                .with_chain_config(chain_config.clone())
-                .build();
-            let genesis_id = tf.genesis().get_id();
-            let min_stake_pool_pledge =
-                tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
-            let pledge_amount = Amount::from_atoms(
-                rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
-            );
-
-            // prepare tx_a
-            let destination_a = new_pub_key_destination(&mut rng);
-            let (_, vrf_pub_key_a) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-            let genesis_outpoint = UtxoOutPoint::new(
-                OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                0,
-            );
-            let pool_id_a = pos_accounting::make_pool_id(&genesis_outpoint);
-            let tx_a = TransactionBuilder::new()
-                .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
-                .add_output(TxOutput::CreateStakePool(
-                    pool_id_a,
-                    Box::new(StakePoolData::new(
-                        pledge_amount,
-                        anyonecanspend_address(),
-                        vrf_pub_key_a,
-                        destination_a,
-                        PerThousand::new(0).unwrap(),
-                        Amount::ZERO,
-                    )),
-                ))
+                .with_chainstate_config(tf.chainstate().get_chainstate_config())
+                .with_chain_config(chain_config)
                 .build();
 
-            // prepare tx_b
-            let tx_b = TransactionBuilder::new()
-                .add_input(
-                    TxInput::from_utxo(OutPointSourceId::BlockReward(genesis_id.into()), 0),
-                    empty_witness(&mut rng),
-                )
-                .add_output(TxOutput::Transfer(
-                    OutputValue::Coin(pledge_amount),
-                    anyonecanspend_address(),
-                ))
-                .build();
+            {
+                // manually add block_a info
+                let mut db_tx = storage.transaction_rw(None).unwrap();
+                db_tx.set_block_index(&block_a_index).unwrap();
+                db_tx.add_block(&block_a).unwrap();
 
-            // prepare tx_c
-            let destination_c = new_pub_key_destination(&mut rng);
-            let (_, vrf_pub_key_c) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-            let tx_b_outpoint0 = UtxoOutPoint::new(tx_b.transaction().get_id().into(), 0);
-            let pool_id_c = pos_accounting::make_pool_id(&tx_b_outpoint0);
-            let tx_c = TransactionBuilder::new()
-                .add_input(tx_b_outpoint0.into(), empty_witness(&mut rng))
-                .add_output(TxOutput::CreateStakePool(
-                    pool_id_c,
-                    Box::new(StakePoolData::new(
-                        pledge_amount,
-                        anyonecanspend_address(),
-                        vrf_pub_key_c,
-                        destination_c,
-                        PerThousand::new(0).unwrap(),
-                        Amount::ZERO,
-                    )),
-                ))
-                .build();
-
-            // create block a
-            let block_a = tf.make_block_builder().add_transaction(tx_a).build();
-            let block_a_index =
-                tf.process_block(block_a.clone(), BlockSource::Local).unwrap().unwrap();
-            assert_eq!(
-                tf.best_block_id(),
-                Id::<GenBlock>::from(*block_a_index.block_id())
-            );
-
-            // create block b
-            let block_b = tf
-                .make_block_builder()
-                .with_parent(genesis_id.into())
-                .add_transaction(tx_b.clone())
-                .build();
-            let block_b_id = block_b.get_id();
-            tf.process_block(block_b, BlockSource::Local).unwrap();
-
-            // no reorg here
-            assert_eq!(
-                tf.best_block_id(),
-                Id::<GenBlock>::from(*block_a_index.block_id())
-            );
-
-            // create block c
-            let block_c = tf
-                .make_block_builder()
-                .with_parent(block_b_id.into())
-                .add_transaction(tx_c.clone())
-                .build_and_process()
-                .unwrap()
-                .unwrap();
-
-            assert_eq!(
-                tf.best_block_id(),
-                Id::<GenBlock>::from(*block_c.block_id())
-            );
-
-            // Accounting data in storage after reorg should equal to the data in storage for chain
-            // where reorg never happened.
-            //
-            // Construct fresh `genesis -> b -> c` chain as a reference
-            let expected_storage = {
-                let storage = Store::new_empty().unwrap();
-                let block_a_epoch =
-                    chain_config.epoch_index_from_height(&block_a_index.block_height());
-                let mut tf = TestFramework::builder(&mut rng)
-                    .with_storage(storage.clone())
-                    .with_chainstate_config(tf.chainstate().get_chainstate_config())
-                    .with_chain_config(chain_config)
-                    .build();
-
+                // reorg leaves a trace in delta index
+                // because deltas are only removed on undo if the entire epoch is disconnected;
+                // so we need to manually add None-None delta left from block_a
+                if !tf
+                    .chain_config()
+                    .is_last_block_in_epoch(&block_a_index.block_height().prev_height().unwrap())
                 {
-                    // manually add block_a info
-                    let mut db_tx = storage.transaction_rw(None).unwrap();
-                    db_tx.set_block_index(&block_a_index).unwrap();
-                    db_tx.add_block(&block_a).unwrap();
-
-                    // reorg leaves a trace in delta index, because deltas are never removed on undo;
-                    // so we need to manually add None-None delta left from block_a
                     let block_a_delta = PoSAccountingDeltaData {
                         pool_data: DeltaDataCollection::from_iter(
                             [(pool_id_a, DataDelta::new(None, None))].into_iter(),
@@ -211,32 +209,32 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                         delegation_data: DeltaDataCollection::new(),
                     };
                     db_tx.set_accounting_epoch_delta(block_a_epoch, &block_a_delta).unwrap();
-
-                    db_tx.commit().unwrap();
                 }
 
-                let block_b = tf
-                    .make_block_builder()
-                    .with_parent(genesis_id.into())
-                    .add_transaction(tx_b)
-                    .build_and_process()
-                    .unwrap()
-                    .unwrap();
+                db_tx.commit().unwrap();
+            }
 
-                tf.make_block_builder()
-                    .with_parent((*block_b.block_id()).into())
-                    .add_transaction(tx_c)
-                    .build_and_process()
-                    .unwrap();
+            let block_b = tf
+                .make_block_builder()
+                .with_parent(genesis_id.into())
+                .add_transaction(tx_b)
+                .build_and_process()
+                .unwrap()
+                .unwrap();
 
-                storage
-            };
+            tf.make_block_builder()
+                .with_parent((*block_b.block_id()).into())
+                .add_transaction(tx_c)
+                .build_and_process()
+                .unwrap();
 
-            assert_eq!(
-                storage.transaction_ro().unwrap().dump_raw(),
-                expected_storage.transaction_ro().unwrap().dump_raw()
-            );
-        }
+            storage
+        };
+
+        assert_eq!(
+            storage.transaction_ro().unwrap().dump_raw(),
+            expected_storage.transaction_ro().unwrap().dump_raw()
+        );
     });
 }
 

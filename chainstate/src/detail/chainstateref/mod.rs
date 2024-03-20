@@ -1285,6 +1285,15 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             epoch_seal::BlockStateEvent::Disconnect(tip_height),
         )?;
 
+        if self.chain_config.is_last_block_in_epoch(&tip_height) {
+            // If current tip is the last block of the epoch
+            // it means that the first block of next epoch was just disconnected
+            // and the epoch delta for the next epoch should be deleted.
+            // Otherwise its traces can mess up with connection of future blocks.
+            let epoch_index = self.chain_config.epoch_index_from_height(&tip_height.next_height());
+            self.db_tx.del_accounting_epoch_delta(epoch_index).log_err()?;
+        }
+
         let mut epoch_data_cache = EpochDataCache::new(&self.db_tx);
         let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
         epoch_seal::update_epoch_data(

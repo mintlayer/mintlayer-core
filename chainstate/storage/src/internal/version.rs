@@ -19,7 +19,7 @@ use serialization::{Decode, Encode};
 pub struct ChainstateStorageVersion(u32);
 
 impl ChainstateStorageVersion {
-    pub const CURRENT: Self = Self(7);
+    pub const CURRENT: Self = Self(8);
 
     pub fn new(value: u32) -> Self {
         Self(value)
