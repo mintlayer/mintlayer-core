@@ -172,8 +172,8 @@ pub enum CheckBlockTransactionsError {
 pub enum OrphanCheckError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] chainstate_storage::Error),
-    #[error("Block index not found")]
-    PrevBlockIndexNotFound(PropertyQueryError),
+    #[error("Property query error: {0}")]
+    PropertyQueryError(#[from] PropertyQueryError),
     #[error("Orphan that was submitted legitimately through a local source")]
     LocalOrphan,
 }

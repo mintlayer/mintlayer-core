@@ -211,7 +211,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         block_id: &Id<GenBlock>,
     ) -> Result<GenBlockIndex, PropertyQueryError> {
         self.get_gen_block_index(block_id)?
-            .ok_or_else(|| PropertyQueryError::BlockIndexNotFound(*block_id))
+            .ok_or(PropertyQueryError::BlockIndexNotFound(*block_id))
     }
 
     #[log_error]
