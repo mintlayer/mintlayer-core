@@ -278,6 +278,7 @@ pub enum WalletCommand {
         public_keys: Vec<String>,
 
         /// Optionally specify a label to the new address
+        #[arg(long = "label")]
         label: Option<String>,
     },
 
