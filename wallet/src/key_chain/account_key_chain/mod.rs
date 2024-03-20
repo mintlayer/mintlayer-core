@@ -341,7 +341,7 @@ impl AccountKeyChain {
                 label: _,
                 private_key,
             } => private_key.clone(),
-            AccountStandaloneKey::MultiSig {
+            AccountStandaloneKey::Multisig {
                 label: _,
                 challenge: _,
             } => None,
@@ -359,7 +359,7 @@ impl AccountKeyChain {
                 label: _,
                 private_key: _,
             } => None,
-            AccountStandaloneKey::MultiSig {
+            AccountStandaloneKey::Multisig {
                 label: _,
                 challenge,
             } => Some(challenge),
@@ -488,7 +488,7 @@ impl AccountKeyChain {
         Ok(())
     }
 
-    ///  Adds a multisig to be watched
+    /// Adds a multisig to be watched
     pub fn add_standalone_multisig(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -501,7 +501,7 @@ impl AccountKeyChain {
             self.get_account_id(),
             Destination::ClassicMultisig(destination_multisig),
         );
-        let key = AccountStandaloneKey::MultiSig { label, challenge };
+        let key = AccountStandaloneKey::Multisig { label, challenge };
 
         db_tx.set_standalone_key(&id, &key)?;
         self.standalone_keys.insert(id.into_item_id(), key);

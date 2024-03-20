@@ -668,7 +668,7 @@ where
 
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status().await?,
-                    print_message: format!("Success, the new multisig has been added to the account\n{multisig_address}")
+                    print_message: format!("Success. The following new multisig address has been added to the account\n{multisig_address}")
                 })
             }
 

@@ -210,8 +210,6 @@ pub enum WalletError {
     PartiallySignedTransactionInDecommissionCommand,
     #[error("Failed to create decommission request as all the signatures are present. Use staking-decommission-pool command.")]
     FullySignedTransactionInDecommissionReq,
-    #[error("Input cannot be signed")]
-    InputCannotBeSigned,
     #[error("Destination does not belong to this wallet")]
     DestinationNotFromThisWallet,
     #[error("Sign message error: {0}")]

@@ -4093,14 +4093,14 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
         .unwrap();
 
     // Try to sign decommission request with wrong account
-    let sign_from_acc0_res = wallet.sign_raw_transaction(
-        acc_0_index,
-        TransactionToSign::Partial(decommission_partial_tx.clone()),
-    );
-    assert_eq!(
-        sign_from_acc0_res.unwrap_err(),
-        WalletError::InputCannotBeSigned
-    );
+    let sign_from_acc0_res = wallet
+        .sign_raw_transaction(
+            acc_0_index,
+            TransactionToSign::Partial(decommission_partial_tx.clone()),
+        )
+        .unwrap();
+    // the tx is still not fully signed
+    assert!(!sign_from_acc0_res.is_fully_signed(&chain_config));
 
     let signed_tx = wallet
         .sign_raw_transaction(
@@ -4347,13 +4347,14 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
         .unwrap();
 
     // Try to sign request with the hot wallet
-    let err = hot_wallet
+    let tx = hot_wallet
         .sign_raw_transaction(
             DEFAULT_ACCOUNT_INDEX,
             TransactionToSign::Partial(send_req.clone()),
         )
-        .unwrap_err();
-    assert_eq!(err, WalletError::InputCannotBeSigned);
+        .unwrap();
+    // the tx is not fully signed
+    assert!(!tx.is_fully_signed(&chain_config));
 
     // sign the tx with cold wallet
     let signed_tx = cold_wallet
@@ -4523,12 +4524,14 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
 
     let (_, address2) = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
     let pub_key2 = wallet2.find_public_key(DEFAULT_ACCOUNT_INDEX, address2.into_object()).unwrap();
+    let (_, address3) = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pub_key3 = wallet2.find_public_key(DEFAULT_ACCOUNT_INDEX, address3.into_object()).unwrap();
 
     let min_required_signatures = 2;
     let challenge = ClassicMultisigChallenge::new(
         &chain_config,
         NonZeroU8::new(min_required_signatures).unwrap(),
-        vec![pub_key1, pub_key2],
+        vec![pub_key3, pub_key2, pub_key1],
     )
     .unwrap();
     let multisig_hash = wallet1
