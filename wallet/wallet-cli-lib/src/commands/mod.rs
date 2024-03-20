@@ -251,16 +251,16 @@ pub enum WalletCommand {
         utxo_states: Vec<CliUtxoState>,
     },
 
-    #[clap(name = "account-add-standalone-address")]
+    #[clap(name = "standalone-add-watch-only-address")]
     AddStandaloneKey {
-        /// The new standalone address to be added to the selected account
+        /// The new standalone watch only address to be added to the selected account
         address: String,
 
         /// Optionally specify a label to the new address
         label: Option<String>,
     },
 
-    #[clap(name = "account-add-standalone-private-key-as-hex")]
+    #[clap(name = "standalone-add-private-key-as-hex")]
     AddStandalonePrivateKey {
         /// The new hex encoded standalone private key to be added to the selected account
         hex_private_key: HexEncoded<PrivateKey>,
@@ -269,7 +269,7 @@ pub enum WalletCommand {
         label: Option<String>,
     },
 
-    #[clap(name = "account-add-standalone-multisig")]
+    #[clap(name = "standalone-add-multisig")]
     AddStandaloneMultisig {
         /// The minimum required signatures out of the specified public keys
         min_required_signatures: u8,

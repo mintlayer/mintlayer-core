@@ -339,7 +339,6 @@ impl AccountKeyChain {
         let standalone_pk = self.standalone_keys.get(destination).and_then(|key| match key {
             AccountStandaloneKey::Address {
                 label: _,
-                public_key: _,
                 private_key,
             } => private_key.clone(),
             AccountStandaloneKey::MultiSig {
@@ -358,7 +357,6 @@ impl AccountKeyChain {
         self.standalone_keys.get(destination).and_then(|key| match key {
             AccountStandaloneKey::Address {
                 label: _,
-                public_key: _,
                 private_key: _,
             } => None,
             AccountStandaloneKey::MultiSig {
@@ -460,7 +458,6 @@ impl AccountKeyChain {
         );
         let key = AccountStandaloneKey::Address {
             label,
-            public_key: None,
             private_key: None,
         };
 
@@ -482,7 +479,6 @@ impl AccountKeyChain {
         let id = AccountPrefixedId::new(self.get_account_id(), Destination::PublicKeyHash(pkh));
         let key = AccountStandaloneKey::Address {
             label,
-            public_key: Some(pub_key),
             private_key: Some(new_private_key),
         };
 
