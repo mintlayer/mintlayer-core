@@ -45,7 +45,7 @@ use common::{
         block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, SignedTransaction,
         Transaction, TxInput,
     },
-    primitives::{amount::Amount, decimal_amount::DisplayAmount, time::Time, BlockHeight, Id},
+    primitives::{amount::DisplayAmount, time::Time, Amount, BlockHeight, Id},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -159,6 +159,14 @@ impl<M> TxPool<M> {
         self.blocking_chainstate_handle()
             .call(|chainstate| chainstate.is_initial_block_download())
             .expect("IBD state query fialed")
+    }
+
+    pub fn get_all(&self) -> Vec<SignedTransaction> {
+        self.store
+            .txs_by_descendant_score
+            .iter()
+            .map(|(_score, id)| self.store.get_entry(id).expect("entry").transaction().clone())
+            .collect()
     }
 }
 
@@ -1055,14 +1063,6 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
 
     pub fn get_entry(&self, id: &Id<Transaction>) -> Option<&TxMempoolEntry> {
         self.store.get_entry(id)
-    }
-
-    pub fn get_all(&self) -> Vec<SignedTransaction> {
-        self.store
-            .txs_by_descendant_score
-            .iter()
-            .map(|(_score, id)| self.store.get_entry(id).expect("entry").transaction().clone())
-            .collect()
     }
 
     pub fn collect_txs(

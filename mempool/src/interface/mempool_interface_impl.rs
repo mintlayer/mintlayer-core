@@ -201,7 +201,7 @@ impl MempoolInterface for MempoolImpl {
     }
 
     fn memory_usage(&self) -> usize {
-        Mempool::memory_usage(&self.mempool)
+        self.mempool.memory_usage()
     }
 
     fn get_size_limit(&self) -> MempoolMaxSize {

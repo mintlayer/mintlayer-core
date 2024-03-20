@@ -27,6 +27,8 @@ use utils::shallow_clone::ShallowClone;
 pub use chainstate_handle::ChainstateHandle;
 pub use utxo_view::MempoolUtxoView;
 
+use super::TxPool;
+
 /// Mempool instantiation of [chainstate::tx_verifier::TransactionVerifier]
 pub type TransactionVerifier = chainstate::tx_verifier::TransactionVerifier<
     Arc<ChainConfig>,

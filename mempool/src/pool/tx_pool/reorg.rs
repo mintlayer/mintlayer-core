@@ -204,6 +204,7 @@ fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
     for tx in txs_to_insert {
         let tx_id = tx.transaction().get_id();
         let origin = LocalTxOrigin::PastBlock.into();
+        // TODO(PR): Notify work queue about newly added tx
         if let Err(e) = mempool.add_transaction(tx, origin, work_queue) {
             log::debug!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
         }

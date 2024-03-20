@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{mem, sync::Arc};
+use std::{mem, num::NonZeroUsize, sync::Arc};
 
 use common::{
     chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction},
-    primitives::{Amount, decimal_amount::DisplayAmount, time::Time, BlockHeight, Id},
+    primitives::{amount::DisplayAmount, time::Time, Amount, BlockHeight, Id},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -39,7 +39,7 @@ use crate::{
     tx_accumulator::{PackingStrategy, TransactionAccumulator},
     tx_options::{TxOptions, TxTrustPolicy},
     tx_origin::{RemoteTxOrigin, TxOrigin},
-    TxStatus,
+    MempoolMaxSize, TxStatus,
 };
 
 // TODO(PR): Move fee, feerate?
@@ -83,12 +83,32 @@ impl<M> Mempool<M> {
         pool_txs.chain(orphan_txs.map(|entry| entry.map_origin(TxOrigin::from)))
     }
 
+    pub fn get_all(&self) -> Vec<SignedTransaction> {
+        self.tx_pool.get_all()
+    }
+
+    pub fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
+        self.tx_pool.contains_transaction(tx_id)
+    }
+
+    pub fn transaction(&self, id: &Id<Transaction>) -> Option<&SignedTransaction> {
+        self.tx_pool.transaction(id)
+    }
+
     pub fn contains_orphan_transaction(&self, id: &Id<Transaction>) -> bool {
         self.orphans.contains(id)
     }
 
     pub fn orphan_transaction(&self, id: &Id<Transaction>) -> Option<&SignedTransaction> {
         self.orphans.get(id).map(TxEntry::transaction)
+    }
+
+    pub fn best_block_id(&self) -> Id<GenBlock> {
+        self.tx_pool.best_block_id()
+    }
+
+    pub fn chainstate_handle(&self) -> &chainstate::ChainstateHandle {
+        self.tx_pool.chainstate_handle()
     }
 }
 
@@ -881,6 +901,38 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         if let Some(orphan_id) = orphan_id {
             self.enqueue_children(&orphan_id, work_queue);
         }
+    }
+
+    pub fn max_size(&self) -> MempoolMaxSize {
+        self.tx_pool.max_size()
+    }
+
+    pub fn set_size_limit(&mut self, max_size: MempoolMaxSize) -> Result<(), Error> {
+        self.tx_pool.set_max_size(max_size)
+    }
+
+    pub fn memory_usage(&self) -> usize {
+        self.tx_pool.memory_usage()
+    }
+
+    pub fn get_fee_rate(&self, in_top_x_mb: usize) -> FeeRate {
+        self.tx_pool.get_fee_rate(in_top_x_mb)
+    }
+
+    pub fn get_fee_rate_points(
+        &self,
+        num_points: NonZeroUsize,
+    ) -> Result<Vec<(usize, FeeRate)>, MempoolPolicyError> {
+        self.tx_pool.get_fee_rate_points(num_points)
+    }
+
+    pub fn collect_txs(
+        &self,
+        tx_accumulator: Box<dyn TransactionAccumulator>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+    ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError> {
+        self.tx_pool.collect_txs(tx_accumulator, transaction_ids, packing_strategy)
     }
 }
 
