@@ -689,10 +689,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         let prev_block_id = block.prev_block_id();
 
-        let block_index_found = chainstate_ref
-            .get_gen_block_index(&prev_block_id)
-            .map_err(OrphanCheckError::PrevBlockIndexNotFound)?
-            .is_some();
+        let block_index_found = chainstate_ref.get_gen_block_index(&prev_block_id)?.is_some();
 
         drop(chainstate_ref);
 

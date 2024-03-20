@@ -87,7 +87,7 @@ impl BanScore for OrphanCheckError {
     fn ban_score(&self) -> u32 {
         match self {
             OrphanCheckError::StorageError(_) => 0,
-            OrphanCheckError::PrevBlockIndexNotFound(_) => 100,
+            OrphanCheckError::PropertyQueryError(_) => 0,
             OrphanCheckError::LocalOrphan => 0,
         }
     }
