@@ -225,8 +225,8 @@ pub struct RunOptions {
     /// Allow the program to be run as root, which is NOT RECOMMENDED and DANGEROUS.
     /// There is no need to run the mintlayer-software as root. The correct
     /// security practice is to only provide root access to programs that need it.
-    #[clap(long, action = clap::ArgAction::SetTrue)]
-    pub force_allow_run_as_root: Option<bool>,
+    #[clap(long)]
+    pub force_allow_run_as_root: bool,
 }
 
 impl Options {

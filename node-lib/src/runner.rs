@@ -315,9 +315,7 @@ fn ensure_non_root_user(run_options: &RunOptions) -> Result<()> {
         target_os = "netbsd",
     ))]
     {
-        const DEFAULT_FORCE_RUN_AS_ROOT: bool = false;
-
-        if !run_options.force_allow_run_as_root.unwrap_or(DEFAULT_FORCE_RUN_AS_ROOT) {
+        if !run_options.force_allow_run_as_root {
             use std::os::unix::fs::MetadataExt;
             let uid = std::fs::metadata("/proc/self").map(|m| m.uid());
             match uid {
