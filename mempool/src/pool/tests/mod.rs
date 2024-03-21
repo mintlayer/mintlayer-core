@@ -1767,3 +1767,70 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.store.assert_valid();
     Ok(())
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy(), 300, true)]
+#[case(Seed::from_entropy(), 1_000, true)]
+#[case(Seed::from_entropy(), 10_000, true)]
+#[case(Seed::from_entropy(), 100_000, true)]
+#[case(Seed::from_entropy(), 900_000, true)]
+#[case(Seed::from_entropy(), 1_000_000, true)]
+#[case::one_below(Seed::from_entropy(), 1_047_576, true)]
+#[case::at_limit(Seed::from_entropy(), 1_047_576, true)]
+#[case::just_above(Seed::from_entropy(), 1_047_577, false)]
+#[case::one_below_block_limit(Seed::from_entropy(), 1_048_575, false)]
+#[case::at_block_limit(Seed::from_entropy(), 1_048_576, false)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn accepted_tx_size(#[case] seed: Seed, #[case] tx_size: usize, #[case] accept: bool) {
+    let mut rng = make_seedable_rng(seed);
+
+    let tf = {
+        let chain_config =
+            common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
+                .data_deposit_max_size(2_000_000)
+                .build();
+        TestFramework::builder(&mut rng).with_chain_config(chain_config).build()
+    };
+
+    let transaction = {
+        let genesis = tf.genesis();
+        let tx_builder = TransactionBuilder::new().add_input(
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            empty_witness(&mut rng),
+        );
+
+        // Here we try to calculate the size of data to add to the transaction output so that the
+        // size of the full transaction matches the size required by the test.
+        let data_size = tx_size - 147;
+        let data_size = data_size - serialization::Compact::<u64>(data_size as u64).encoded_size();
+        let data = (0..data_size).map(|_| rng.gen()).collect();
+
+        let tx_builder = tx_builder.add_output(TxOutput::DataDeposit(data));
+        let transaction = tx_builder.build();
+
+        // Check the transaction actually has the desired size. Failure of this assertion means the
+        // calculation above has to be adjusted.
+        assert_eq!(
+            transaction.encoded_size(),
+            tx_size,
+            "Data size not calculated correctly to create a transaction of given size"
+        );
+
+        transaction
+    };
+
+    let max_tx_size = tf.chain_config().max_tx_size_for_mempool();
+    let mut mempool = setup_with_chainstate(tf.chainstate());
+    let result = mempool.add_transaction_test(transaction);
+
+    let expected = match accept {
+        true => Ok(TxStatus::InMempool),
+        false => Err(Error::Policy(MempoolPolicyError::ExceedsMaxBlockSize)),
+    };
+
+    assert_eq!(
+        result, expected,
+        "tx_size: {tx_size}, max tx size: {max_tx_size}"
+    );
+}
