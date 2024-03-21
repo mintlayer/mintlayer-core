@@ -1878,6 +1878,26 @@ Returns:
 }, .. ]
 ```
 
+### Method `standalone_address_show`
+
+Show standalone added addresses with their labels.
+
+
+Parameters:
+```
+{ "account": number }
+```
+
+Returns:
+```
+[ {
+    "address": string,
+    "label": EITHER OF
+         1) string
+         2) null,
+}, .. ]
+```
+
 ### Method `address_new`
 
 Generate a new unused address
