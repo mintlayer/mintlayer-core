@@ -499,10 +499,16 @@ impl ChainConfig {
 
     /// The maximum size of any transaction submitted to the node for the mempool
     pub fn max_tx_size_for_mempool(&self) -> usize {
-        std::cmp::min(
+        // Reserve some space in the block for the data it needs to store beyond the transaction
+        // data itself, namely the transaction count due to how sequences of elements are encoded.
+        const BLOCK_DATA_OVERHEAD: usize = 1000;
+
+        let max_block_size = std::cmp::min(
             self.max_block_size_from_std_scripts(),
             self.max_block_size_from_smart_contracts(),
-        )
+        );
+
+        max_block_size.saturating_sub(BLOCK_DATA_OVERHEAD)
     }
 
     /// The initial randomness used for the first few epochs until sealed blocks kick in
