@@ -306,32 +306,6 @@ fn set_defaults_for_gui_mode(mut opts: RunOptions) -> RunOptions {
     opts
 }
 
-fn ensure_non_root_user(run_options: &RunOptions) -> Result<()> {
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "macos",
-        target_os = "freebsd",
-        target_os = "openbsd",
-        target_os = "netbsd",
-    ))]
-    {
-        if !run_options.force_allow_run_as_root {
-            use std::os::unix::fs::MetadataExt;
-            let uid = std::fs::metadata("/proc/self").map(|m| m.uid());
-            match uid {
-                Ok(id) => {
-                    if id == 0 {
-                        return Err(anyhow!("ERROR: It is a mistake to run the node as root (user with uid=0), as it gives the node power that it does not need and violates good security practices. Either run the program as non-root, or do the VERY NOT RECOMMENDED THING TO DO, and add the flag `--force-allow-run-as-root`"));
-                    }
-                }
-                Err(e) => log::error!("Failed to get user id to prevent running as root: {e}"),
-            }
-        }
-    }
-
-    Ok(())
-}
-
 async fn start(
     config_path: &Path,
     datadir_path_opt: &Option<PathBuf>,
@@ -345,7 +319,7 @@ async fn start(
         run_options
     };
 
-    ensure_non_root_user(&run_options)?;
+    run_options.force_allow_run_as_root_outer.ensure_not_running_as_root_user()?;
 
     if let Some(mock_time) = run_options.mock_time {
         set_mock_time(*chain_config.chain_type(), mock_time)?;

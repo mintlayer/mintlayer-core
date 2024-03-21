@@ -11,7 +11,8 @@ logging = {path = '../logging'}
 log_error = { path = "log_error" }
 serialization = { path = "../serialization" }
 
-clap = { workspace = true, features = ["env", "string"] }
+anyhow.workspace = true
+clap = { workspace = true, features = ["env", "string", "derive"] }
 directories.workspace = true
 fix-hidden-lifetime-bug.workspace = true
 heck.workspace = true

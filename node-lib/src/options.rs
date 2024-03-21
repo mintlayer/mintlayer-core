@@ -24,7 +24,9 @@ use std::{
 
 use clap::{Args, Parser, Subcommand};
 use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
-use utils::{clap_utils, default_data_dir::default_data_dir_common};
+use utils::{
+    clap_utils, default_data_dir::default_data_dir_common, root_user::ForceRunAsRootOptions,
+};
 use utils_networking::IpOrSocketAddress;
 
 use crate::config_files::{NodeTypeConfigFile, StorageBackendConfigFile};
@@ -222,11 +224,8 @@ pub struct RunOptions {
     #[clap(long, value_name = "VAL")]
     pub min_tx_relay_fee_rate: Option<u64>,
 
-    /// Allow the program to be run as root, which is NOT RECOMMENDED and DANGEROUS.
-    /// There is no need to run the mintlayer-software as root. The correct
-    /// security practice is to only provide root access to programs that need it.
-    #[clap(long)]
-    pub force_allow_run_as_root: bool,
+    #[clap(flatten)]
+    pub force_allow_run_as_root_outer: ForceRunAsRootOptions,
 }
 
 impl Options {
