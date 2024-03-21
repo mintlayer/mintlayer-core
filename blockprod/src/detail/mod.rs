@@ -265,8 +265,8 @@ impl BlockProduction {
                         .map(|index| this.get_epoch_data(index))
                         .transpose()
                         .map_err(|_| {
-                            ConsensusPoSError::PropertyQueryError(
-                                PropertyQueryError::EpochDataNotFound(block_height),
+                            ConsensusPoSError::ChainstateError(
+                                consensus::ChainstateError::FailedToObtainEpochData(block_height),
                             )
                         })?
                         .flatten()
@@ -624,8 +624,10 @@ fn generate_finalize_block_data(
             let pledge_amount = chainstate_handle
                 .get_stake_pool_data(pos_input_data.pool_id())
                 .map_err(|_| {
-                    ConsensusPoSError::PropertyQueryError(
-                        PropertyQueryError::StakePoolDataReadError(pos_input_data.pool_id()),
+                    ConsensusPoSError::ChainstateError(
+                        consensus::ChainstateError::StakePoolDataReadError(
+                            pos_input_data.pool_id(),
+                        ),
                     )
                 })?
                 .ok_or(ConsensusPoSError::PropertyQueryError(
@@ -641,9 +643,9 @@ fn generate_finalize_block_data(
             let pool_balance = chainstate_handle
                 .get_stake_pool_balance(pos_input_data.pool_id())
                 .map_err(|_| {
-                    ConsensusPoSError::PropertyQueryError(PropertyQueryError::PoolBalanceReadError(
-                        pos_input_data.pool_id(),
-                    ))
+                    ConsensusPoSError::ChainstateError(
+                        consensus::ChainstateError::PoolBalanceReadError(pos_input_data.pool_id()),
+                    )
                 })?
                 .ok_or(ConsensusPoSError::PropertyQueryError(
                     PropertyQueryError::PoolBalanceNotFound(pos_input_data.pool_id()),

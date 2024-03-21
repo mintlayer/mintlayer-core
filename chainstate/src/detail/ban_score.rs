@@ -328,6 +328,8 @@ impl BanScore for BlockSizeError {
 impl BanScore for ConsensusPoSError {
     fn ban_score(&self) -> u32 {
         match self {
+            ConsensusPoSError::StorageError(_) => 0,
+            ConsensusPoSError::ChainstateError(_) => 0,
             ConsensusPoSError::PropertyQueryError(_) => 0,
             ConsensusPoSError::StakeKernelHashTooHigh => 100,
             ConsensusPoSError::TimestampViolation(_, _) => 100,
