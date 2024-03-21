@@ -208,7 +208,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
         options: TransactionOptions,
     ) -> rpc::RpcResult<MaybeSignedTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
         rpc::handle_result(
@@ -352,7 +352,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
         rpc::handle_result(
@@ -375,7 +375,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
         rpc::handle_result(
@@ -397,7 +397,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
         rpc::handle_result(
@@ -421,7 +421,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<ComposedTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
         rpc::handle_result(
@@ -458,7 +458,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
         rpc::handle_result(
@@ -482,7 +482,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
         rpc::handle_result(
@@ -504,7 +504,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<HexEncoded<PartiallySignedTransaction>> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
         rpc::handle_result(
@@ -527,7 +527,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewDelegation> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
         rpc::handle_result(
@@ -544,7 +544,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
         rpc::handle_result(
@@ -562,7 +562,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
         rpc::handle_result(
@@ -622,7 +622,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcTokenId> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
 
@@ -645,7 +645,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<RpcTokenId> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
 
@@ -674,7 +674,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
 
@@ -693,7 +693,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
 
@@ -711,7 +711,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
 
@@ -727,7 +727,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
 
@@ -744,7 +744,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
 
@@ -767,7 +767,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
 
@@ -783,7 +783,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
 
@@ -800,7 +800,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
-            in_top_x_mb: options.in_top_x_mb,
+            in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
 

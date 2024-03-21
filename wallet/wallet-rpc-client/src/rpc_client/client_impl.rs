@@ -270,9 +270,7 @@ impl WalletInterface for ClientWalletRpc {
         selected_utxos: Vec<UtxoOutPoint>,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::send_coins(
             &self.http_client,
             account_index.into(),
@@ -292,9 +290,7 @@ impl WalletInterface for ClientWalletRpc {
         from_addresses: Vec<String>,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::sweep_addresses(
             &self.http_client,
             account_index.into(),
@@ -313,9 +309,7 @@ impl WalletInterface for ClientWalletRpc {
         delegation_id: String,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::sweep_delegation(
             &self.http_client,
             account_index.into(),
@@ -336,9 +330,7 @@ impl WalletInterface for ClientWalletRpc {
         change_address: Option<String>,
         config: ControllerConfig,
     ) -> Result<ComposedTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::transaction_from_cold_input(
             &self.http_client,
             account_index.into(),
@@ -370,9 +362,7 @@ impl WalletInterface for ClientWalletRpc {
         decommission_address: String,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::create_stake_pool(
             &self.http_client,
             account_index.into(),
@@ -393,9 +383,7 @@ impl WalletInterface for ClientWalletRpc {
         output_address: Option<String>,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::decommission_stake_pool(
             &self.http_client,
             account_index.into(),
@@ -414,9 +402,7 @@ impl WalletInterface for ClientWalletRpc {
         output_address: Option<String>,
         config: ControllerConfig,
     ) -> Result<HexEncoded<PartiallySignedTransaction>, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::decommission_stake_pool_request(
             &self.http_client,
             account_index.into(),
@@ -435,9 +421,7 @@ impl WalletInterface for ClientWalletRpc {
         pool_id: String,
         config: ControllerConfig,
     ) -> Result<NewDelegation, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::create_delegation(
             &self.http_client,
             account_index.into(),
@@ -456,9 +440,7 @@ impl WalletInterface for ClientWalletRpc {
         delegation_id: String,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::delegate_staking(
             &self.http_client,
             account_index.into(),
@@ -478,9 +460,7 @@ impl WalletInterface for ClientWalletRpc {
         delegation_id: String,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::withdraw_from_delegation(
             &self.http_client,
             account_index.into(),
@@ -584,9 +564,7 @@ impl WalletInterface for ClientWalletRpc {
         metadata: NftMetadata,
         config: ControllerConfig,
     ) -> Result<RpcTokenId, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::issue_new_nft(
             &self.http_client,
             account_index.into(),
@@ -605,9 +583,7 @@ impl WalletInterface for ClientWalletRpc {
         metadata: TokenMetadata,
         config: ControllerConfig,
     ) -> Result<RpcTokenId, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::issue_new_token(
             &self.http_client,
             account_index.into(),
@@ -626,9 +602,7 @@ impl WalletInterface for ClientWalletRpc {
         address: String,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::change_token_authority(
             &self.http_client,
             account_index.into(),
@@ -648,9 +622,7 @@ impl WalletInterface for ClientWalletRpc {
         amount: DecimalAmount,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::mint_tokens(
             &self.http_client,
             account_index.into(),
@@ -670,9 +642,7 @@ impl WalletInterface for ClientWalletRpc {
         amount: DecimalAmount,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::unmint_tokens(
             &self.http_client,
             account_index.into(),
@@ -690,9 +660,7 @@ impl WalletInterface for ClientWalletRpc {
         token_id: String,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::lock_token_supply(
             &self.http_client,
             account_index.into(),
@@ -710,9 +678,7 @@ impl WalletInterface for ClientWalletRpc {
         is_unfreezable: bool,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::freeze_token(
             &self.http_client,
             account_index.into(),
@@ -730,9 +696,7 @@ impl WalletInterface for ClientWalletRpc {
         token_id: String,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::unfreeze_token(
             &self.http_client,
             account_index.into(),
@@ -751,9 +715,7 @@ impl WalletInterface for ClientWalletRpc {
         amount: DecimalAmount,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::send_tokens(
             &self.http_client,
             account_index.into(),
@@ -772,9 +734,7 @@ impl WalletInterface for ClientWalletRpc {
         data: String,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         WalletRpcClient::deposit_data(
             &self.http_client,
             account_index.into(),
@@ -974,9 +934,7 @@ impl WalletInterface for ClientWalletRpc {
         raw_tx: String,
         config: ControllerConfig,
     ) -> Result<PartialOrSignedTx, Self::Error> {
-        let options = TransactionOptions {
-            in_top_x_mb: config.in_top_x_mb,
-        };
+        let options = TransactionOptions::from_controller_config(&config);
         ColdWalletRpcClient::sign_raw_transaction(
             &self.http_client,
             account_index.into(),
