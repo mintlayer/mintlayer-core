@@ -16,7 +16,9 @@
 use common::{
     address::{AddressError, RpcAddress},
     chain::{
-        tokens::{IsTokenFreezable, NftIssuance, TokenIssuance, TokenTotalSupply},
+        tokens::{
+            IsTokenFreezable, IsTokenUnfreezable, NftIssuance, TokenIssuance, TokenTotalSupply,
+        },
         ChainConfig, Destination,
     },
     primitives::amount::RpcAmountOut,
@@ -54,6 +56,21 @@ impl From<IsTokenFreezable> for RpcIsTokenFreezable {
         match value {
             IsTokenFreezable::No => RpcIsTokenFreezable::No,
             IsTokenFreezable::Yes => RpcIsTokenFreezable::Yes,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub enum RpcIsTokenUnfreezable {
+    No,
+    Yes,
+}
+
+impl From<IsTokenUnfreezable> for RpcIsTokenUnfreezable {
+    fn from(value: IsTokenUnfreezable) -> Self {
+        match value {
+            IsTokenUnfreezable::No => RpcIsTokenUnfreezable::No,
+            IsTokenUnfreezable::Yes => RpcIsTokenUnfreezable::Yes,
         }
     }
 }
