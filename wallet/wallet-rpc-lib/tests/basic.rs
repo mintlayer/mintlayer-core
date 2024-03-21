@@ -157,7 +157,9 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
     let to_send_amount = Amount::from_atoms(utxo_amount / 2);
     let _: NewTransaction = {
         let send_to_addr = acct1_addr.address;
-        let options = TransactionOptions { in_top_x_mb: 3 };
+        let options = TransactionOptions {
+            in_top_x_mb: Some(3),
+        };
         let params = (
             ACCOUNT0_ARG,
             send_to_addr,

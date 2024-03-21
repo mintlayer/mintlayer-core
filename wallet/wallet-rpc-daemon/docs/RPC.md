@@ -188,7 +188,9 @@ Parameters:
              2) { "BlockReward": hex string },
         "index": number,
     }, .. ],
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -210,7 +212,9 @@ Parameters:
     "account": number,
     "destination_address": bech32 string,
     "from_addresses": [ bech32 string, .. ],
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -231,7 +235,9 @@ Parameters:
     "account": number,
     "destination_address": bech32 string,
     "delegation_id": bech32 string,
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -269,7 +275,9 @@ Parameters:
     "change_address": EITHER OF
          1) bech32 string
          2) null,
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -353,7 +361,9 @@ Parameters:
          2) { "decimal": decimal string },
     "margin_ratio_per_thousand": string,
     "decommission_address": bech32 string,
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -376,7 +386,9 @@ Parameters:
     "output_address": EITHER OF
          1) bech32 string
          2) null,
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -401,7 +413,9 @@ Parameters:
     "output_address": EITHER OF
          1) bech32 string
          2) null,
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -424,7 +438,9 @@ Parameters:
     "account": number,
     "address": bech32 string,
     "pool_id": bech32 string,
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -449,7 +465,9 @@ Parameters:
          1) { "atoms": number string }
          2) { "decimal": decimal string },
     "delegation_id": bech32 string,
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -473,7 +491,9 @@ Parameters:
          1) { "atoms": number string }
          2) { "decimal": decimal string },
     "delegation_id": bech32 string,
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -681,7 +701,9 @@ Parameters:
              2) { "hex": hex string }
              3) null,
     },
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -721,7 +743,9 @@ Parameters:
              3) "Unlimited",
         "is_freezable": bool,
     },
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -744,7 +768,9 @@ Parameters:
     "account": number,
     "token_id": bech32 string,
     "address": bech32 string,
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -767,7 +793,9 @@ Parameters:
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -791,7 +819,9 @@ Parameters:
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -811,7 +841,9 @@ Parameters:
 {
     "account_index": number,
     "token_id": bech32 string,
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -834,7 +866,9 @@ Parameters:
     "account": number,
     "token_id": bech32 string,
     "is_unfreezable": bool,
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -856,7 +890,9 @@ Parameters:
 {
     "account": number,
     "token_id": bech32 string,
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -879,7 +915,9 @@ Parameters:
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -899,7 +937,9 @@ Parameters:
 {
     "account": number,
     "data": hex string,
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 
@@ -1854,7 +1894,9 @@ Parameters:
 {
     "account": number,
     "raw_tx": hex string,
-    "options": { "in_top_x_mb": number },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
 }
 ```
 

@@ -233,7 +233,20 @@ impl NewAccountInfo {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct TransactionOptions {
-    pub in_top_x_mb: usize,
+    pub in_top_x_mb: Option<usize>,
+}
+
+impl TransactionOptions {
+    const DEFAULT_IN_TOP_X_MB: usize = 5;
+
+    pub fn from_controller_config(config: &ControllerConfig) -> Self {
+        let in_top_x_mb = Some(config.in_top_x_mb);
+        Self { in_top_x_mb }
+    }
+
+    pub fn in_top_x_mb(&self) -> usize {
+        self.in_top_x_mb.unwrap_or(Self::DEFAULT_IN_TOP_X_MB)
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
@@ -432,4 +445,16 @@ pub struct ComposedTransaction {
 pub struct MaybeSignedTransaction {
     pub hex: String,
     pub is_complete: bool,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn transaction_options_optional() {
+        let empty_obj = serde_json::Value::Object(Default::default());
+        let opts = serde_json::from_value::<TransactionOptions>(empty_obj).unwrap();
+        assert_eq!(opts.in_top_x_mb(), 5);
+    }
 }
