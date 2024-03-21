@@ -148,6 +148,9 @@ pub struct WalletRpcDaemonChainArgs {
     /// Enable running the wallet service without RPC authentication
     #[arg(long, conflicts_with_all(["rpc_password", "rpc_username", "rpc_cookie_file"]))]
     rpc_no_authentication: bool,
+
+    #[clap(flatten)]
+    force_allow_run_as_root: utils::root_user::ForceRunAsRootOptions,
 }
 
 impl WalletRpcDaemonChainArgs {
@@ -169,7 +172,12 @@ impl WalletRpcDaemonChainArgs {
             rpc_password,
             rpc_no_authentication,
             cold_wallet,
+            force_allow_run_as_root,
         } = self;
+
+        force_allow_run_as_root
+            .ensure_not_running_as_root_user()
+            .map_err(ConfigError::RunningAsRoot)?;
 
         let ws_config = {
             let service = WalletServiceConfig::new(
@@ -273,4 +281,7 @@ pub enum ConfigError {
 
     #[error("Invalid regtest chain configuration: {0}")]
     InvalidRegtestOptions(anyhow::Error),
+
+    #[error(transparent)]
+    RunningAsRoot(anyhow::Error),
 }
