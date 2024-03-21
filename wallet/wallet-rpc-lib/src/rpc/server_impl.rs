@@ -185,7 +185,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
     async fn get_standalone_address_details(
         &self,
         account_arg: AccountArg,
-        address: String,
+        address: RpcAddress<Destination>,
     ) -> rpc::RpcResult<StandaloneAddressDetails> {
         rpc::handle_result(
             self.get_standalone_address_details(account_arg.index::<N>()?, address).await,
@@ -323,7 +323,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn add_standalone_address(
         &self,
         account_arg: AccountArg,
-        address: String,
+        address: RpcAddress<Destination>,
         label: Option<String>,
     ) -> rpc::RpcResult<()> {
         rpc::handle_result(
@@ -348,7 +348,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         &self,
         account_arg: AccountArg,
         min_required_signatures: u8,
-        public_keys: Vec<String>,
+        public_keys: Vec<RpcAddress<Destination>>,
         label: Option<String>,
     ) -> rpc::RpcResult<String> {
         rpc::handle_result(

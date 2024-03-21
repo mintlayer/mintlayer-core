@@ -147,7 +147,7 @@ trait ColdWalletRpc {
     async fn get_standalone_address_details(
         &self,
         account: AccountArg,
-        address: String,
+        address: RpcAddress<Destination>,
     ) -> rpc::RpcResult<StandaloneAddressDetails>;
 
     /// Generate a new unused address
@@ -273,7 +273,7 @@ trait WalletRpc {
     async fn add_standalone_address(
         &self,
         account: AccountArg,
-        address: String,
+        address: RpcAddress<Destination>,
         label: Option<String>,
     ) -> rpc::RpcResult<()>;
 
@@ -293,7 +293,7 @@ trait WalletRpc {
         &self,
         account: AccountArg,
         min_required_signatures: u8,
-        public_keys: Vec<String>,
+        public_keys: Vec<RpcAddress<Destination>>,
         label: Option<String>,
     ) -> rpc::RpcResult<String>;
 
