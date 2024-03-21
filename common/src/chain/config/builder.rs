@@ -51,7 +51,9 @@ const TESTNET_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78440);
 // The fork, at which we upgrade chainstate to distribute reward to staker proportionally to its balance,
 // changed various tokens fees and also increased max ticker length for tokens
 const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(138244);
-const CONSTRAINTS_ACCUMULATOR_FORK_HEIGHT: BlockHeight = BlockHeight::new(99999999999999);
+const TESTNET_CONSTRAINTS_ACCUMULATOR_FORK_HEIGHT: BlockHeight = BlockHeight::new(185891);
+
+const MAINNET_CONSTRAINTS_ACCUMULATOR_FORK_HEIGHT: BlockHeight = BlockHeight::new(58344);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -171,7 +173,7 @@ impl ChainType {
                         ),
                     ),
                     (
-                        CONSTRAINTS_ACCUMULATOR_FORK_HEIGHT,
+                        MAINNET_CONSTRAINTS_ACCUMULATOR_FORK_HEIGHT,
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V1,
@@ -234,7 +236,7 @@ impl ChainType {
                         ),
                     ),
                     (
-                        CONSTRAINTS_ACCUMULATOR_FORK_HEIGHT,
+                        TESTNET_CONSTRAINTS_ACCUMULATOR_FORK_HEIGHT,
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V1,
