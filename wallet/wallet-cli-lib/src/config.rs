@@ -133,7 +133,7 @@ pub struct CliArgs {
     pub in_top_x_mb: usize,
 
     /// use the wallet without a connection to a node
-    #[arg(long, conflicts_with_all(["wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file", "wallet_rpc_no_authentication", "wallet_rpc_bind_address", "node_rpc_address", "node_rpc_cookie_file", "node_rpc_username", "node_rpc_password"]))]
+    #[arg(long, conflicts_with_all(["node_rpc_address", "node_rpc_cookie_file", "node_rpc_username", "node_rpc_password"]))]
     pub cold_wallet: bool,
 
     /// enable the RPC interface of the wallet (i.e., run a wallet RPC server with the CLI)

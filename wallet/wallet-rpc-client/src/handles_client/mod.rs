@@ -43,8 +43,8 @@ use wallet_rpc_lib::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
         NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance,
-        StakingStatus, StandaloneAddress, TokenMetadata, TxOptionsOverrides, UtxoInfo,
-        VrfPublicKeyInfo,
+        StakingStatus, StandaloneAddress, StandaloneAddressDetails, TokenMetadata,
+        TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError, WalletRpc,
 };
@@ -303,6 +303,17 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
     ) -> Result<Vec<StandaloneAddress>, Self::Error> {
         self.wallet_rpc
             .get_standalone_addresses(account_index)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn get_standalone_address_details(
+        &self,
+        account_index: U31,
+        address: String,
+    ) -> Result<StandaloneAddressDetails, Self::Error> {
+        self.wallet_rpc
+            .get_standalone_address_details(account_index, address)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }

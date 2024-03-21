@@ -140,6 +140,11 @@ pub enum ColdWalletCommand {
     #[clap(name = "standalone-address-show")]
     ShowStandaloneAddresses,
 
+    #[clap(name = "standalone-address-details")]
+    ShowStandaloneAddressDetails {
+        address: String,
+    },
+
     #[clap(name = "staking-new-vrf-public-key")]
     NewVrfPublicKey,
 

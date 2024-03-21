@@ -17,6 +17,7 @@ use std::num::NonZeroUsize;
 
 use chainstate::ChainInfo;
 use common::{
+    address::RpcAddress,
     chain::{
         tokens::TokenId, Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
         Transaction, TxOutput, UtxoOutPoint,
@@ -25,6 +26,7 @@ use common::{
 };
 use crypto::key::PrivateKey;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use rpc::types::RpcHexString;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
     types::{BlockInfo, CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
@@ -36,8 +38,8 @@ use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction, CreatedWallet,
     DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
     NewAccountInfo, NewDelegation, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
-    PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcTokenId, RpcUtxoState, RpcUtxoType,
-    StakePoolBalance, StakingStatus, StandaloneAddress, TokenMetadata, TransactionOptions,
+    PublicKeyInfo, RpcAmountIn, RpcTokenId, RpcUtxoState, RpcUtxoType, StakePoolBalance,
+    StakingStatus, StandaloneAddress, StandaloneAddressDetails, TokenMetadata, TransactionOptions,
     TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
@@ -139,6 +141,14 @@ trait ColdWalletRpc {
         &self,
         account: AccountArg,
     ) -> rpc::RpcResult<Vec<StandaloneAddress>>;
+
+    /// Show standalone addresses details.
+    #[method(name = "standalone_address_details")]
+    async fn get_standalone_address_details(
+        &self,
+        account: AccountArg,
+        address: String,
+    ) -> rpc::RpcResult<StandaloneAddressDetails>;
 
     /// Generate a new unused address
     #[method(name = "address_new")]

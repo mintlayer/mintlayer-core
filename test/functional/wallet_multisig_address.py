@@ -118,12 +118,25 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             # sync the wallet
             assert_in("Success", await wallet.sync())
 
+
             # create more wallets
             num_wallets = random.randint(2, 32)
             min_required_signatures = random.randint(1, num_wallets)
 
             pub_key = await wallet.reveal_public_key_as_address()
             public_keys = [pub_key]
+
+            # invalid multisig address
+            assert_in("Public keys vector is empty", await wallet.add_standalone_multisig_address(1, []))
+
+            # min_required_signatures is 0
+            assert_in("Minimum number of signatures can't be 0", await wallet.add_standalone_multisig_address(0, [pub_key]))
+
+            # more signatures than public keys
+            assert_in("More required signatures than public keys", await wallet.add_standalone_multisig_address(100, [pub_key]))
+
+            # min_required_signatures is over 32
+            assert_in("Too many public keys, more than allowed", await wallet.add_standalone_multisig_address(100, [pub_key] * 100))
 
             for i in range(1, num_wallets):
                 await wallet.close_wallet()
@@ -206,6 +219,10 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             # check we have received the coins from the multisig
             assert_in(f"Coins amount: {coins_from_multisig}", await wallet.get_balance())
 
+            output = await wallet.get_standalone_address_details(multisig_address)
+            assert_in(f"min_required_signatures: {min_required_signatures}", output)
+            for pk in public_keys:
+                assert_in(pk, output)
 
 
 if __name__ == '__main__':
