@@ -122,9 +122,7 @@ where
 
     for block_id in blocks_list {
         writer.write_all(magic_bytes)?;
-        let block = query_interface
-            .get_block(block_id)?
-            .ok_or(PropertyQueryError::BlockNotFound(block_id))?;
+        let block = query_interface.get_existing_block(block_id)?;
         writer.write_all(&block.encode())?;
     }
     Ok(())

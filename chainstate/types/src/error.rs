@@ -24,34 +24,24 @@ use common::{
 pub enum PropertyQueryError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] crate::storage_result::Error),
-    #[error("Best block not found")]
-    BestBlockNotFound,
     #[error("Best block index not found")]
     BestBlockIndexNotFound,
     #[error("Block not found {0}")]
     BlockNotFound(Id<Block>),
-    #[error("Epoch data not found for block height {0}")]
-    EpochDataNotFound(BlockHeight),
     #[error("Block index not found for block {0}")]
     BlockIndexNotFound(Id<GenBlock>),
-    #[error("Previous block index not found: {0}")]
-    PrevBlockIndexNotFound(Id<GenBlock>),
     #[error("Block for height {0} not found")]
     BlockForHeightNotFound(BlockHeight),
-    #[error("Genesis block has no header")]
+    #[error("Error obtaining ancestor")]
     GetAncestorError(#[from] GetAncestorError),
     #[error("Genesis block has no header")]
     GenesisHeaderRequested,
     #[error("Stake pool {0} data not found")]
     StakePoolDataNotFound(PoolId),
-    #[error("Failed to read data of pool {0}")]
-    StakePoolDataReadError(PoolId),
     #[error("Staker balance for pool {0} overflow")]
     StakerBalanceOverflow(PoolId),
     #[error("Balance of pool {0} not found")]
     PoolBalanceNotFound(PoolId),
-    #[error("Failed to read balance of pool {0}")]
-    PoolBalanceReadError(PoolId),
     #[error("Invalid starting block height: {0}")]
     InvalidStartingBlockHeightForMainchainBlocks(BlockHeight),
     #[error("Invalid block height range: {start}..{end}")]

@@ -40,11 +40,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         best_block_id: Id<GenBlock>,
     ) -> Result<(TransactionVerifierDelta, ConsumedEpochDataCache), CheckBlockError> {
         let prev_block_id = new_block_header.prev_block_id();
-        let new_chain = match self
-            .get_gen_block_index(prev_block_id)
-            .log_err()?
-            .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))?
-        {
+        let new_chain = match self.get_existing_gen_block_index(prev_block_id)? {
             GenBlockIndex::Block(block_index) => self.get_new_chain(&block_index).log_err()?,
             GenBlockIndex::Genesis(_) => Vec::new(),
         };
