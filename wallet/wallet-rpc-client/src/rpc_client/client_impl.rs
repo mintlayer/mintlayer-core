@@ -209,7 +209,7 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::add_standalone_address(
             &self.http_client,
             account_index.into(),
-            address,
+            address.into(),
             label,
         )
         .await
@@ -243,7 +243,7 @@ impl WalletInterface for ClientWalletRpc {
             &self.http_client,
             account_index.into(),
             min_required_signatures,
-            public_keys,
+            public_keys.into_iter().map(Into::into).collect(),
             label,
         )
         .await
@@ -276,7 +276,7 @@ impl WalletInterface for ClientWalletRpc {
         ColdWalletRpcClient::get_standalone_address_details(
             &self.http_client,
             account_index.into(),
-            address,
+            address.into(),
         )
         .await
         .map_err(WalletRpcError::ResponseError)

@@ -234,11 +234,11 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     pub async fn add_standalone_watch_only_address(
         &self,
         account_index: U31,
-        address: String,
+        address: RpcAddress<Destination>,
         label: Option<String>,
     ) -> WRpcResult<(), N> {
-        let dest = Address::from_string(&self.chain_config, &address)
-            .map(|addr| addr.into_object())
+        let dest = address
+            .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidAddress)?;
         let pkh = match dest {
             Destination::PublicKeyHash(pkh) => pkh,
@@ -290,7 +290,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         &self,
         account_index: U31,
         min_required_signatures: u8,
-        public_keys: Vec<String>,
+        public_keys: Vec<RpcAddress<Destination>>,
         label: Option<String>,
     ) -> WRpcResult<String, N> {
         let config = ControllerConfig {
@@ -303,9 +303,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         let public_keys = public_keys
             .into_iter()
             .map(|addr| {
-                Address::from_string(&self.chain_config, addr)
+                addr.decode_object(&self.chain_config)
                     .map_err(|_| RpcError::InvalidAddress)
-                    .and_then(|dest| match dest.into_object() {
+                    .and_then(|dest| match dest {
                         Destination::PublicKey(pk) => Ok(pk),
                         Destination::PublicKeyHash(_)
                         | Destination::AnyoneCanSpend
@@ -468,10 +468,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     pub async fn get_standalone_address_details(
         &self,
         account_index: U31,
-        address: String,
+        address: RpcAddress<Destination>,
     ) -> WRpcResult<StandaloneAddressDetails, N> {
-        let address = Address::<Destination>::from_string(&self.chain_config, address)
-            .map(|dest| dest.into_object())
+        let address = address
+            .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidAddress)?;
 
         let chain_config = self.chain_config.clone();
