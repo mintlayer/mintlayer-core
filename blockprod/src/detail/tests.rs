@@ -1313,7 +1313,7 @@ mod produce_block {
 
             let easy_pos_config = PoSChainConfigBuilder::new_for_unit_test().build();
 
-            let consensus_types = vec![
+            let consensus_types = [
                 ConsensusUpgrade::IgnoreConsensus,
                 ConsensusUpgrade::PoW {
                     initial_difficulty: Uint256::MAX.into(),

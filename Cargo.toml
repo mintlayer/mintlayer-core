@@ -5,7 +5,7 @@ homepage = "https://mintlayer.org"
 repository = "https://github.com/mintlayer/mintlayer-core"
 readme = "README.md"
 license = "MIT"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
 edition = "2021"
 
@@ -119,7 +119,7 @@ utxo = { path = "utxo"}
 [workspace.package]
 edition = "2021"
 rust-version = "1.75"
-version = "0.3.0"
+version = "0.4.0"
 license = "MIT"
 
 [workspace.dependencies]
