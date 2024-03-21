@@ -15,15 +15,20 @@
 
 use std::{sync::Arc, time::Duration};
 
-use common::primitives::{user_agent::mintlayer_core_user_agent, Idable};
+use chainstate_test_framework::TestFramework;
+use common::{
+    chain::block::timestamp::BlockTimestamp,
+    primitives::{user_agent::mintlayer_core_user_agent, Idable},
+};
 use crypto::random::Rng;
 use logging::log;
 use p2p_test_utils::P2pBasicTestTimeGetter;
-use test_utils::random::Seed;
+use p2p_types::PeerId;
+use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
     config::P2pConfig,
-    message::BlockSyncMessage,
+    message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList},
     protocol::ProtocolConfig,
     sync::tests::helpers::{
         make_new_block, make_new_blocks, make_new_top_blocks,
@@ -390,6 +395,183 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
 
         log::debug!("Joining subsystem managers");
         nodes.join_subsystem_managers().await;
+    })
+    .await;
+}
+
+// 1) A peer sends a block with too big a timestamp; the block is rejected, the peer is discouraged.
+// 2) Time passes, so that the previously invalid block is now valid.
+// 3) Another peer sends the same block; the block must be accepted this time.
+#[tracing::instrument(skip(seed))]
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn send_block_from_the_future_again(#[case] seed: Seed) {
+    for_each_protocol_version(|protocol_version| async move {
+        let time_getter = P2pBasicTestTimeGetter::new();
+        let start_time = time_getter.get_time_getter().get_time();
+
+        let p2p_config = Arc::new(P2pConfig {
+            // Minimize the time block sync manager spends in wait_for_clock_diff.
+            max_clock_diff: Duration::from_secs(1).into(),
+            peer_handshake_timeout: Duration::from_secs(1).into(),
+
+            bind_addresses: Default::default(),
+            socks5_proxy: Default::default(),
+            disable_noise: Default::default(),
+            boot_nodes: Default::default(),
+            reserved_nodes: Default::default(),
+            whitelisted_addresses: Default::default(),
+            ban_config: Default::default(),
+            outbound_connection_timeout: Default::default(),
+            ping_check_period: Default::default(),
+            ping_timeout: Default::default(),
+            node_type: Default::default(),
+            allow_discover_private_ips: Default::default(),
+            user_agent: mintlayer_core_user_agent(),
+            sync_stalling_timeout: Default::default(),
+            peer_manager_config: Default::default(),
+            protocol_config: Default::default(),
+        });
+
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_time_getter(time_getter.get_time_getter())
+            .build();
+
+        let normal_block = tf
+            .make_block_builder()
+            .with_timestamp(BlockTimestamp::from_time(start_time))
+            .build();
+        let normal_block_id = normal_block.get_id();
+
+        let future_block_delay = Duration::from_secs(60 * 60 * 24);
+        let future_block_time = (start_time + future_block_delay).unwrap();
+        let future_block = tf
+            .make_block_builder()
+            .with_parent(normal_block_id.into())
+            .with_timestamp(BlockTimestamp::from_time(future_block_time))
+            .build();
+        let future_block_id = future_block.get_id();
+
+        log::debug!("normal_block_id = {normal_block_id}, future_block_id = {future_block_id}");
+
+        let mut node = TestNode::builder(protocol_version)
+            .with_p2p_config(p2p_config)
+            .with_time_getter(time_getter.get_time_getter())
+            .build()
+            .await;
+
+        let peer1 = node.connect_peer(PeerId::new(), protocol_version).await;
+
+        // Announce both blocks in one HeaderList. This way, only the normal block's header
+        // will be checked at this stage.
+        peer1
+            .send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![
+                normal_block.header().clone(),
+                future_block.header().clone(),
+            ])))
+            .await;
+
+        log::debug!("Expecting block list request");
+        let (sent_to, message) = node.get_sent_block_sync_message().await;
+        assert_eq!(sent_to, peer1.get_id());
+        assert_eq!(
+            message,
+            BlockSyncMessage::BlockListRequest(BlockListRequest::new(vec![
+                normal_block_id,
+                future_block_id
+            ]))
+        );
+
+        peer1
+            .send_block_sync_message(BlockSyncMessage::BlockResponse(BlockResponse::new(
+                normal_block.clone(),
+            )))
+            .await;
+
+        node.assert_no_peer_manager_event().await;
+
+        peer1
+            .send_block_sync_message(BlockSyncMessage::BlockResponse(BlockResponse::new(
+                future_block.clone(),
+            )))
+            .await;
+
+        log::debug!("Expecting score adjustment");
+        let (adjusted_peer_id, ban_score_delta) = node.receive_adjust_peer_score_event().await;
+        assert_eq!(adjusted_peer_id, peer1.get_id());
+        assert_eq!(ban_score_delta, 100);
+
+        {
+            let (
+                normal_block_idx_on_the_node,
+                normal_block_on_the_node,
+                future_block_idx_on_the_node,
+                future_block_on_the_node,
+            ) = node
+                .chainstate()
+                .call(move |cs| {
+                    (
+                        cs.get_block_index(&normal_block_id).unwrap(),
+                        cs.get_block(normal_block_id).unwrap(),
+                        cs.get_block_index(&future_block_id).unwrap(),
+                        cs.get_block(future_block_id).unwrap(),
+                    )
+                })
+                .await
+                .unwrap();
+            assert!(normal_block_idx_on_the_node.is_some());
+            assert!(normal_block_on_the_node.is_some());
+            // Note: both the index and the block itself are missing.
+            assert!(future_block_idx_on_the_node.is_none());
+            assert!(future_block_on_the_node.is_none());
+        }
+
+        time_getter.advance_time(future_block_delay);
+
+        let peer2 = node.connect_peer(PeerId::new(), protocol_version).await;
+
+        peer2
+            .send_block_sync_message(BlockSyncMessage::HeaderList(HeaderList::new(vec![
+                future_block.header().clone(),
+            ])))
+            .await;
+
+        log::debug!("Expecting block list request");
+        let (sent_to, message) = node.get_sent_block_sync_message().await;
+        assert_eq!(sent_to, peer2.get_id());
+        assert_eq!(
+            message,
+            BlockSyncMessage::BlockListRequest(BlockListRequest::new(vec![future_block_id]))
+        );
+
+        peer2
+            .send_block_sync_message(BlockSyncMessage::BlockResponse(BlockResponse::new(
+                future_block.clone(),
+            )))
+            .await;
+
+        node.assert_no_peer_manager_event().await;
+
+        {
+            let (future_block_idx_on_the_node, future_block_on_the_node) = node
+                .chainstate()
+                .call(move |cs| {
+                    (
+                        cs.get_block_index(&future_block_id).unwrap(),
+                        cs.get_block(future_block_id).unwrap(),
+                    )
+                })
+                .await
+                .unwrap();
+            // Both the index and the block are present now.
+            assert!(future_block_idx_on_the_node.is_some());
+            assert!(future_block_on_the_node.is_some());
+        }
+
+        node.join_subsystem_manager().await;
     })
     .await;
 }
