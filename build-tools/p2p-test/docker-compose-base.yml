@@ -13,8 +13,8 @@ services:
     command: bash -c "
         node-daemon testnet \
             $COMMON_NODE_ARGS \
-            $(dig +short $ORDINARY_NODES_LIST | xargs printf '--p2p-boot-node %s ') \
-            --p2p-reserved-node $(dig +short $SPECIAL_NODE) \
+            $(dig +short $ORDINARY_NODES_LIST | xargs printf '--p2p-boot-nodes %s ') \
+            --p2p-reserved-nodes $(dig +short $SPECIAL_NODE) \
       "
     environment:
       - RUST_LOG
