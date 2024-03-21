@@ -38,6 +38,7 @@ use wallet::{
     DefaultWallet,
 };
 use wallet_types::{
+    account_info::AccountStandaloneKey,
     utxo_types::{UtxoStates, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
@@ -214,6 +215,16 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     ) -> Result<Vec<(Destination, Option<String>)>, ControllerError<T>> {
         self.wallet
             .get_all_standalone_addresses(self.account_index)
+            .map_err(ControllerError::WalletError)
+    }
+
+    /// Get all standalone addresses with their labels
+    pub fn get_standalone_address_details(
+        &self,
+        address: Destination,
+    ) -> Result<(Destination, &AccountStandaloneKey), ControllerError<T>> {
+        self.wallet
+            .get_all_standalone_address_details(self.account_index, address)
             .map_err(ControllerError::WalletError)
     }
 

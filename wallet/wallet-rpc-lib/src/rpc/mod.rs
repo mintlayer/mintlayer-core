@@ -67,7 +67,10 @@ use wallet_controller::{
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes,
     DEFAULT_ACCOUNT_INDEX,
 };
-use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_tx::TxData, with_locked::WithLocked};
+use wallet_types::{
+    account_info::AccountStandaloneKey, seed_phrase::StoreSeedPhrase, wallet_tx::TxData,
+    with_locked::WithLocked,
+};
 
 use crate::{service::CreatedWallet, WalletHandle, WalletRpcConfig};
 
@@ -75,7 +78,8 @@ pub use self::types::RpcError;
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo,
     NewDelegation, NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
-    RpcTokenId, StakingStatus, StandaloneAddress, VrfPublicKeyInfo,
+    RpcTokenId, StakingStatus, StandaloneAddress, StandaloneAddressDetails, StandaloneAddressType,
+    VrfPublicKeyInfo,
 };
 
 #[derive(Clone)]
@@ -294,7 +298,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             broadcast_to_mempool: true,
         }; // irrelevant for issuing addresses
         let min_required_signatures =
-            NonZeroU8::new(min_required_signatures).ok_or(RpcError::InvalidAddress)?;
+            NonZeroU8::new(min_required_signatures).ok_or(RpcError::InvalidMultisigMinSignature)?;
 
         let public_keys = public_keys
             .into_iter()
@@ -458,6 +462,64 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .into_iter()
             .map(|(dest, label)| StandaloneAddress::new(dest, label, &self.chain_config))
             .collect();
+        Ok(result)
+    }
+
+    pub async fn get_standalone_address_details(
+        &self,
+        account_index: U31,
+        address: String,
+    ) -> WRpcResult<StandaloneAddressDetails, N> {
+        let address = Address::<Destination>::from_string(&self.chain_config, address)
+            .map(|dest| dest.into_object())
+            .map_err(|_| RpcError::InvalidAddress)?;
+
+        let chain_config = self.chain_config.clone();
+        let result = self
+            .wallet
+            .call(move |controller| {
+                controller
+                    .readonly_controller(account_index)
+                    .get_standalone_address_details(address)
+                    .map(|(dest, details)| {
+                        let address =
+                            Address::new(&chain_config, dest).expect("Addressable").into_string();
+                        match details {
+                            AccountStandaloneKey::Address { label, private_key } => {
+                                StandaloneAddressDetails {
+                                    address,
+                                    label: label.clone(),
+                                    details: StandaloneAddressType::Address {
+                                        has_private_key: private_key.is_some(),
+                                    },
+                                }
+                            }
+                            AccountStandaloneKey::Multisig { label, challenge } => {
+                                StandaloneAddressDetails {
+                                    address,
+                                    label: label.clone(),
+                                    details: StandaloneAddressType::Multisig {
+                                        min_required_signatures: challenge
+                                            .min_required_signatures(),
+                                        public_keys: challenge
+                                            .public_keys()
+                                            .iter()
+                                            .map(|pk| {
+                                                Address::new(
+                                                    &chain_config,
+                                                    Destination::PublicKey(pk.clone()),
+                                                )
+                                                .expect("Addresable")
+                                                .into_string()
+                                            })
+                                            .collect(),
+                                    },
+                                }
+                            }
+                        }
+                    })
+            })
+            .await??;
         Ok(result)
     }
 

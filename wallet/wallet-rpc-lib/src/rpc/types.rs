@@ -117,6 +117,9 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Invalid multisig: {0}")]
     InvalidMultisigChallenge(#[from] ClassicMultisigChallengeError),
+
+    #[error("Minimum number of signatures can't be 0")]
+    InvalidMultisigMinSignature,
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
@@ -153,6 +156,24 @@ impl AddressInfo {
             index: child_number.to_string(),
         }
     }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub enum StandaloneAddressType {
+    Address {
+        has_private_key: bool,
+    },
+    Multisig {
+        min_required_signatures: u8,
+        public_keys: Vec<String>,
+    },
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct StandaloneAddressDetails {
+    pub address: String,
+    pub label: Option<String>,
+    pub details: StandaloneAddressType,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]

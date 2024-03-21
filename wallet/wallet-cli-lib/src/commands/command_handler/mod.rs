@@ -36,7 +36,8 @@ use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     Balances, ComposedTransaction, ControllerConfig, CreatedWallet, InspectTransaction,
-    NewTransaction, NftMetadata, SignatureStats, TokenMetadata, ValidatedSignatures,
+    NewTransaction, NftMetadata, SignatureStats, StandaloneAddressType, TokenMetadata,
+    ValidatedSignatures,
 };
 
 use crate::errors::WalletCliError;
@@ -393,6 +394,39 @@ where
                 };
 
                 Ok(ConsoleCommand::Print(addresses_table.to_string()))
+            }
+
+            ColdWalletCommand::ShowStandaloneAddressDetails { address } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                let addr_details =
+                    wallet.get_standalone_address_details(selected_account, address).await?;
+
+                let label_str =
+                    addr_details.label.map_or("None".into(), |label| format!("\"{label}\""));
+                let details_str = match addr_details.details {
+                    StandaloneAddressType::Address { has_private_key } => {
+                        let has_private_key = if has_private_key { "Yes" } else { "No" };
+
+                        format!(
+                            "Address: {}, label: {}, has_private_key: {}",
+                            addr_details.address, label_str, has_private_key
+                        )
+                    }
+                    StandaloneAddressType::Multisig {
+                        min_required_signatures,
+                        public_keys,
+                    } => {
+                        format!(
+                            "Address: {}, label: {}, min_required_signatures: {}, public_keys: {}",
+                            addr_details.address,
+                            label_str,
+                            min_required_signatures,
+                            public_keys.iter().join(", ")
+                        )
+                    }
+                };
+
+                Ok(ConsoleCommand::Print(details_str))
             }
 
             ColdWalletCommand::NewVrfPublicKey => {

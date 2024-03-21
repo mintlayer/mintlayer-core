@@ -67,6 +67,7 @@ use wallet_storage::{
     TransactionRwUnlocked, Transactional, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
+use wallet_types::account_info::AccountStandaloneKey;
 use wallet_types::chain_info::ChainInfo;
 use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
@@ -220,6 +221,8 @@ pub enum WalletError {
     FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
     #[error("The specified address is not found in this wallet")]
     AddressNotFound,
+    #[error("The specified standalone address is not found in this wallet")]
+    StandaloneAddressNotFound,
 }
 
 /// Result type used for the wallet
@@ -1208,6 +1211,15 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<Vec<(Destination, Option<String>)>> {
         let account = self.get_account(account_index)?;
         Ok(account.get_all_standalone_addresses())
+    }
+
+    pub fn get_all_standalone_address_details(
+        &self,
+        account_index: U31,
+        address: Destination,
+    ) -> WalletResult<(Destination, &AccountStandaloneKey)> {
+        let account = self.get_account(account_index)?;
+        account.get_all_standalone_address_details(address)
     }
 
     pub fn get_all_issued_vrf_public_keys(

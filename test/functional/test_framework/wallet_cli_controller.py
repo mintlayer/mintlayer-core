@@ -452,6 +452,9 @@ class WalletCliController:
     async def get_standalone_addresses(self) -> str:
         return await self._write_command("standalone-address-show\n")
 
+    async def get_standalone_address_details(self, address: str) -> str:
+        return await self._write_command(f"standalone-address-details {address}\n")
+
     async def get_addresses_usage(self) -> str:
         return await self._write_command("address-show\n")
 

@@ -1898,6 +1898,35 @@ Returns:
 }, .. ]
 ```
 
+### Method `standalone_address_details`
+
+Show standalone addresses details.
+
+
+Parameters:
+```
+{
+    "account": number,
+    "address": string,
+}
+```
+
+Returns:
+```
+{
+    "address": string,
+    "label": EITHER OF
+         1) string
+         2) null,
+    "details": EITHER OF
+         1) { "Address": { "has_private_key": bool } }
+         2) { "Multisig": {
+                "min_required_signatures": number,
+                "public_keys": [ string, .. ],
+            } },
+}
+```
+
 ### Method `address_new`
 
 Generate a new unused address

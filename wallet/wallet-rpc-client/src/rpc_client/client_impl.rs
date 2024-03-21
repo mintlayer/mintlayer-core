@@ -39,8 +39,8 @@ use wallet_rpc_lib::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
         NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance,
-        StakingStatus, StandaloneAddress, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-        VrfPublicKeyInfo,
+        StakingStatus, StandaloneAddress, StandaloneAddressDetails, TokenMetadata,
+        TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
     },
     ColdWalletRpcClient, WalletRpcClient,
 };
@@ -266,6 +266,20 @@ impl WalletInterface for ClientWalletRpc {
         ColdWalletRpcClient::get_standalone_addresses(&self.http_client, account_index.into())
             .await
             .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn get_standalone_address_details(
+        &self,
+        account_index: U31,
+        address: String,
+    ) -> Result<StandaloneAddressDetails, Self::Error> {
+        ColdWalletRpcClient::get_standalone_address_details(
+            &self.http_client,
+            account_index.into(),
+            address,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn issue_address(&self, account_index: U31) -> Result<AddressInfo, Self::Error> {
