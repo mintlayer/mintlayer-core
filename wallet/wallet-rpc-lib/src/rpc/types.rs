@@ -156,6 +156,21 @@ impl AddressInfo {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct StandaloneAddress {
+    pub address: String,
+    pub label: Option<String>,
+}
+
+impl StandaloneAddress {
+    pub fn new(dest: Destination, label: Option<String>, chain_config: &ChainConfig) -> Self {
+        Self {
+            address: Address::new(chain_config, dest).expect("addressable").into_string(),
+            label,
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct AddressWithUsageInfo {
     pub address: RpcAddress<Destination>,
     pub index: String,

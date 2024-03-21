@@ -1202,6 +1202,14 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(account.get_all_issued_addresses())
     }
 
+    pub fn get_all_standalone_addresses(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<Vec<(Destination, Option<String>)>> {
+        let account = self.get_account(account_index)?;
+        Ok(account.get_all_standalone_addresses())
+    }
+
     pub fn get_all_issued_vrf_public_keys(
         &self,
         account_index: U31,

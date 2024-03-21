@@ -136,7 +136,8 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             await wallet.create_wallet('wallet2')
             assert_in("Success", await wallet.sync())
 
-            assert_in("Success, the new address has been added to the account", await wallet.add_standalone_address(address_from_wallet1))
+            label = 'some_label' if random.choice([True, False]) else None
+            assert_in("Success, the new address has been added to the account", await wallet.add_standalone_address(address_from_wallet1, label))
 
             await wallet.close_wallet()
             await wallet.open_wallet('wallet1')
@@ -190,6 +191,11 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             # after syncing the tx should be found
             assert_not_in("No transaction found", await wallet.get_raw_signed_transaction(send_coins_tx_id))
+
+            output = await wallet.get_standalone_addresses()
+            assert_in(address_from_wallet1, output)
+            if label:
+                assert_in(label, output)
 
 
 if __name__ == '__main__':

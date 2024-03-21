@@ -296,7 +296,7 @@ class WalletDecommissionRequest(BitcoinTestFramework):
             decommission_req = decommission_req_output.split('\n')[2]
 
             # try to sign decommission request from hot wallet
-            assert_in("Wallet error: Wallet error: Input cannot be signed",
+            assert_in("Not all transaction inputs have been signed",
                        await wallet.sign_raw_transaction(decommission_req))
 
         decommission_signed_tx = ""

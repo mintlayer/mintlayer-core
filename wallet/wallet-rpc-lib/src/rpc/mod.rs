@@ -75,7 +75,7 @@ pub use self::types::RpcError;
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo,
     NewDelegation, NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
-    RpcTokenId, StakingStatus, VrfPublicKeyInfo,
+    RpcTokenId, StakingStatus, StandaloneAddress, VrfPublicKeyInfo,
 };
 
 #[derive(Clone)]
@@ -440,6 +440,23 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         let result = addresses
             .into_iter()
             .map(|(num, (addr, used))| AddressWithUsageInfo::new(num, addr, used))
+            .collect();
+        Ok(result)
+    }
+
+    pub async fn get_standalone_addresses(
+        &self,
+        account_index: U31,
+    ) -> WRpcResult<Vec<StandaloneAddress>, N> {
+        let addresses = self
+            .wallet
+            .call(move |controller| {
+                controller.readonly_controller(account_index).get_standalone_addresses()
+            })
+            .await??;
+        let result = addresses
+            .into_iter()
+            .map(|(dest, label)| StandaloneAddress::new(dest, label, &self.chain_config))
             .collect();
         Ok(result)
     }

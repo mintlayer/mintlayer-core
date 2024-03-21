@@ -224,10 +224,11 @@ class WalletCliController:
     async def rename_account(self, name: Optional[str] = '') -> str:
         return await self._write_command(f"account-rename {name}\n")
 
-    async def add_standalone_address(self, address: str, label: Optional[str] = '') -> str:
-        return await self._write_command(f"standalone-add-watch-only-address {address} {label}\n")
+    async def add_standalone_address(self, address: str, label: Optional[str] = None) -> str:
+        label_str = f'--label {label}' if label else ''
+        return await self._write_command(f"standalone-add-watch-only-address {address} {label_str}\n")
 
-    async def add_standalone_multisig_address(self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = '') -> str:
+    async def add_standalone_multisig_address(self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = None) -> str:
         label_str = f'--label {label}' if label else ''
         return await self._write_command(f"standalone-add-multisig {min_required_signatures} {' '.join(pub_keys)} {label_str}\n")
 
@@ -447,6 +448,9 @@ class WalletCliController:
 
     async def generate_block(self, transactions: [str]) -> str:
         return await self._write_command(f"generate-block {transactions}\n")
+
+    async def get_standalone_addresses(self) -> str:
+        return await self._write_command("standalone-address-show\n")
 
     async def get_addresses_usage(self) -> str:
         return await self._write_command("address-show\n")

@@ -137,6 +137,9 @@ pub enum ColdWalletCommand {
     #[clap(name = "address-show")]
     ShowReceiveAddresses,
 
+    #[clap(name = "standalone-address-show")]
+    ShowStandaloneAddresses,
+
     #[clap(name = "staking-new-vrf-public-key")]
     NewVrfPublicKey,
 
@@ -257,6 +260,7 @@ pub enum WalletCommand {
         address: String,
 
         /// Optionally specify a label to the new address
+        #[arg(long = "label")]
         label: Option<String>,
     },
 
@@ -266,6 +270,7 @@ pub enum WalletCommand {
         hex_private_key: HexEncoded<PrivateKey>,
 
         /// Optionally specify a label to the new address
+        #[arg(long = "label")]
         label: Option<String>,
     },
 
