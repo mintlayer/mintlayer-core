@@ -15,6 +15,7 @@
 
 use chainstate_types::BlockIndex;
 use common::{
+    address::AddressError,
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id, Idable},
 };
@@ -29,24 +30,31 @@ pub struct RpcBlock {
     height: BlockHeight,
     transaction_count_in_block: u32,
     chain_transaction_count: u128,
-    block: HexEncoded<Block>,
+    block_hex: HexEncoded<Block>,
     transactions: Vec<RpcSignedTransaction>,
 }
 
 impl RpcBlock {
-    pub fn new(chain_config: &ChainConfig, block: Block, block_index: BlockIndex) -> Self {
-        Self {
+    pub fn new(
+        chain_config: &ChainConfig,
+        block: Block,
+        block_index: BlockIndex,
+    ) -> Result<Self, AddressError> {
+        let rpc_transactions = block
+            .transactions()
+            .iter()
+            .map(|tx| RpcSignedTransaction::new(chain_config, tx.clone()))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let rpc_block = Self {
             id: block.get_id(),
             prev_block_id: block.prev_block_id(),
             height: block_index.block_height(),
             transaction_count_in_block: block.transactions().len() as u32,
             chain_transaction_count: block_index.chain_transaction_count(),
-            transactions: block
-                .transactions()
-                .iter()
-                .map(|tx| RpcSignedTransaction::new(chain_config, tx.clone()))
-                .collect(),
-            block: block.into(),
-        }
+            transactions: rpc_transactions,
+            block_hex: block.into(),
+        };
+        Ok(rpc_block)
     }
 }

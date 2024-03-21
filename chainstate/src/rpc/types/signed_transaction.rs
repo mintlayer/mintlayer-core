@@ -14,35 +14,40 @@
 // limitations under the License.
 
 use common::{
+    address::AddressError,
     chain::{ChainConfig, SignedTransaction, Transaction},
     primitives::{Id, Idable},
 };
 use serialization::hex_encoded::HexEncoded;
 
-use super::output::RpcOutput;
+use super::output::RpcTxOutput;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RpcSignedTransaction {
     id: Id<Transaction>,
     input_count: u32,
     output_count: u32,
-    outputs: Vec<RpcOutput>,
-    tx: HexEncoded<SignedTransaction>,
+    outputs: Vec<RpcTxOutput>,
+    tx_hex: HexEncoded<SignedTransaction>,
 }
 
 impl RpcSignedTransaction {
-    pub fn new(chain_config: &ChainConfig, tx: SignedTransaction) -> Self {
-        Self {
+    pub fn new(chain_config: &ChainConfig, tx: SignedTransaction) -> Result<Self, AddressError> {
+        let rpc_tx_outputs = tx
+            .transaction()
+            .outputs()
+            .iter()
+            .map(|output| RpcTxOutput::new(chain_config, output))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let rpc_tx = Self {
             id: tx.transaction().get_id(),
             input_count: tx.transaction().inputs().len() as u32,
             output_count: tx.transaction().outputs().len() as u32,
-            outputs: tx
-                .transaction()
-                .outputs()
-                .iter()
-                .map(|output| RpcOutput::new(chain_config, output))
-                .collect(),
-            tx: tx.into(),
-        }
+            outputs: rpc_tx_outputs,
+            tx_hex: tx.into(),
+        };
+
+        Ok(rpc_tx)
     }
 }
