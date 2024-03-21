@@ -13,20 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The node command line options.
-
 use clap::Args;
 use logging::log;
-
-fn is_unix() -> bool {
-    cfg!(any(
-        target_os = "linux",
-        target_os = "macos",
-        target_os = "freebsd",
-        target_os = "openbsd",
-        target_os = "netbsd",
-    ))
-}
 
 const FORCE_ALLOW_ROOT_FLAG: &str = "--force-allow-run-as-root";
 
@@ -41,16 +29,25 @@ pub struct ForceRunAsRootOptions {
 
 impl ForceRunAsRootOptions {
     pub fn ensure_not_running_as_root_user(&self) -> anyhow::Result<()> {
-        if is_unix() && !self.force_allow_run_as_root {
-            use std::os::unix::fs::MetadataExt;
-            let uid = std::fs::metadata("/proc/self").map(|m| m.uid());
-            match uid {
-                Ok(id) => {
-                    if id == 0 {
-                        return Err(anyhow::anyhow!("ERROR: It is a mistake to run the node as root (user with uid=0), as it gives the node power that it does not need and violates good security practices. Either run the program as non-root, or do the VERY NOT RECOMMENDED THING TO DO, and add the flag `{FORCE_ALLOW_ROOT_FLAG}`"));
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "macos",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "netbsd",
+        ))]
+        {
+            if !self.force_allow_run_as_root {
+                use std::os::unix::fs::MetadataExt;
+                let uid = std::fs::metadata("/proc/self").map(|m| m.uid());
+                match uid {
+                    Ok(id) => {
+                        if id == 0 {
+                            return Err(anyhow::anyhow!("ERROR: It is a mistake to run as root (user with uid=0), as it gives the this software power that it does not need and violates good security practices. Either run the program as non-root, or do the VERY NOT RECOMMENDED THING TO DO, and add the flag `{FORCE_ALLOW_ROOT_FLAG}`"));
+                        }
                     }
+                    Err(e) => log::error!("Failed to get user id to prevent running as root: {e}"),
                 }
-                Err(e) => log::error!("Failed to get user id to prevent running as root: {e}"),
             }
         }
 
