@@ -208,6 +208,15 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
             .collect())
     }
 
+    /// Get all standalone addresses with their labels
+    pub fn get_standalone_addresses(
+        &self,
+    ) -> Result<Vec<(Destination, Option<String>)>, ControllerError<T>> {
+        self.wallet
+            .get_all_standalone_addresses(self.account_index)
+            .map_err(ControllerError::WalletError)
+    }
+
     /// Get all addresses with usage information
     /// The boolean in the BTreeMap's value is true if the address is used, false is otherwise
     /// Note that the usage statistics follow strictly the rules of the wallet. For example,

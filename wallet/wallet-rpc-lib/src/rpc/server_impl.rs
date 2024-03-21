@@ -46,8 +46,8 @@ use crate::{
         CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
         MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
         NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcTokenId,
-        RpcUtxoState, RpcUtxoType, StakePoolBalance, StakingStatus, TokenMetadata,
-        TransactionOptions, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
+        RpcUtxoState, RpcUtxoType, StakePoolBalance, StakingStatus, StandaloneAddress,
+        TokenMetadata, TransactionOptions, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError,
 };
@@ -172,6 +172,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
         address: RpcAddress<Destination>,
     ) -> rpc::RpcResult<PublicKeyInfo> {
         rpc::handle_result(self.find_public_key(account_arg.index::<N>()?, address).await)
+    }
+
+    async fn get_standalone_addresses(
+        &self,
+        account_arg: AccountArg,
+    ) -> rpc::RpcResult<Vec<StandaloneAddress>> {
+        rpc::handle_result(self.get_standalone_addresses(account_arg.index::<N>()?).await)
     }
 
     async fn get_issued_addresses(

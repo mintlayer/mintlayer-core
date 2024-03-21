@@ -1680,6 +1680,10 @@ impl Account {
         self.key_chain.get_all_issued_addresses()
     }
 
+    pub fn get_all_standalone_addresses(&self) -> Vec<(Destination, Option<String>)> {
+        self.key_chain.get_all_standalone_addresses()
+    }
+
     pub fn get_all_issued_vrf_public_keys(
         &self,
     ) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)> {

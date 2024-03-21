@@ -33,7 +33,7 @@ use wallet_rpc_lib::types::{
     AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
     DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
     NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance, StakingStatus,
-    TokenMetadata, TxOptionsOverrides, VrfPublicKeyInfo,
+    StandaloneAddress, TokenMetadata, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 use wallet_types::with_locked::WithLocked;
 
@@ -131,6 +131,11 @@ pub trait WalletInterface {
         &self,
         options: U31,
     ) -> Result<Vec<AddressWithUsageInfo>, Self::Error>;
+
+    async fn get_standalone_addresses(
+        &self,
+        account_index: U31,
+    ) -> Result<Vec<StandaloneAddress>, Self::Error>;
 
     async fn issue_address(&self, account_index: U31) -> Result<AddressInfo, Self::Error>;
 

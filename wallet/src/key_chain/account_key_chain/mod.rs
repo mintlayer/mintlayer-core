@@ -581,6 +581,22 @@ impl AccountKeyChain {
         self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).get_all_issued_addresses()
     }
 
+    pub fn get_all_standalone_addresses(&self) -> Vec<(Destination, Option<String>)> {
+        self.standalone_keys
+            .iter()
+            .map(|(dest, addr)| match addr {
+                AccountStandaloneKey::Address {
+                    label,
+                    private_key: _,
+                }
+                | AccountStandaloneKey::Multisig {
+                    label,
+                    challenge: _,
+                } => (dest.clone(), label.clone()),
+            })
+            .collect()
+    }
+
     pub fn get_all_issued_vrf_public_keys(
         &self,
     ) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)> {

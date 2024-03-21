@@ -141,8 +141,13 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
                 label = 'some_label' if random.choice([True, False]) else None
                 output = await wallet.add_standalone_multisig_address(min_required_signatures, public_keys, label)
-                assert_in("Success, the new multisig has been added to the account", output)
+                assert_in("Success. The following new multisig address has been added to the account", output)
                 multisig_address = output.splitlines()[1]
+
+                output = await wallet.get_standalone_addresses()
+                assert_in(multisig_address, output)
+                if label:
+                    assert_in(label, output)
 
             # send some coins to the multisig address
             await wallet.close_wallet()

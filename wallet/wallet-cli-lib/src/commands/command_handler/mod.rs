@@ -375,6 +375,26 @@ where
                 Ok(ConsoleCommand::Print(addresses_table.to_string()))
             }
 
+            ColdWalletCommand::ShowStandaloneAddresses => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                let addresses_with_label =
+                    wallet.get_standalone_addresses(selected_account).await?;
+
+                let addresses_table = {
+                    let mut addresses_table = prettytable::Table::new();
+                    addresses_table.set_titles(prettytable::row!["Address", "Label",]);
+
+                    addresses_table.extend(addresses_with_label.into_iter().map(|info| {
+                        let label = info.label.unwrap_or_default();
+                        prettytable::row![info.address, label]
+                    }));
+
+                    addresses_table
+                };
+
+                Ok(ConsoleCommand::Print(addresses_table.to_string()))
+            }
+
             ColdWalletCommand::NewVrfPublicKey => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let vrf_public_key = wallet.new_vrf_public_key(selected_account).await?;

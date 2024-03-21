@@ -37,8 +37,8 @@ use crate::types::{
     DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
     NewAccountInfo, NewDelegation, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
     PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcTokenId, RpcUtxoState, RpcUtxoType,
-    StakePoolBalance, StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-    VrfPublicKeyInfo,
+    StakePoolBalance, StakingStatus, StandaloneAddress, TokenMetadata, TransactionOptions,
+    TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -132,6 +132,13 @@ trait ColdWalletRpc {
         &self,
         account: AccountArg,
     ) -> rpc::RpcResult<Vec<AddressWithUsageInfo>>;
+
+    /// Show standalone added addresses with their labels.
+    #[method(name = "standalone_address_show")]
+    async fn get_standalone_addresses(
+        &self,
+        account: AccountArg,
+    ) -> rpc::RpcResult<Vec<StandaloneAddress>>;
 
     /// Generate a new unused address
     #[method(name = "address_new")]
