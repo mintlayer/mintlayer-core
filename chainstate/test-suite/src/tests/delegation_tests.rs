@@ -845,7 +845,7 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
             ))
         );
 
-        let inputs_utxos = vec![None];
+        let inputs_utxos = [None];
         let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
         // Try to spend share with wrong signature
