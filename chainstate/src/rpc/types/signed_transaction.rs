@@ -14,22 +14,35 @@
 // limitations under the License.
 
 use common::{
-    chain::{SignedTransaction, Transaction},
+    chain::{ChainConfig, SignedTransaction, Transaction},
     primitives::{Id, Idable},
 };
+use serialization::hex_encoded::HexEncoded;
+
+use super::output::RpcOutput;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RpcSignedTransaction {
     id: Id<Transaction>,
-    tx: SignedTransaction,
+    input_count: u32,
+    output_count: u32,
+    outputs: Vec<RpcOutput>,
+    tx: HexEncoded<SignedTransaction>,
 }
 
 impl RpcSignedTransaction {
-    #[allow(dead_code)]
-    pub fn new(tx: SignedTransaction) -> Self {
+    pub fn new(chain_config: &ChainConfig, tx: SignedTransaction) -> Self {
         Self {
             id: tx.transaction().get_id(),
-            tx,
+            input_count: tx.transaction().inputs().len() as u32,
+            output_count: tx.transaction().outputs().len() as u32,
+            outputs: tx
+                .transaction()
+                .outputs()
+                .iter()
+                .map(|output| RpcOutput::new(chain_config, output))
+                .collect(),
+            tx: tx.into(),
         }
     }
 }

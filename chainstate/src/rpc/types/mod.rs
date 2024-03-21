@@ -15,4 +15,5 @@
 
 pub mod block;
 pub mod event;
+pub mod output;
 pub mod signed_transaction;
