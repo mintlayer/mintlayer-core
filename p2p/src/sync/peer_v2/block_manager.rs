@@ -739,6 +739,17 @@ where
             .chainstate_handle
             .call_mut(move |c| {
                 // If the block already exists in the block tree, skip it.
+                // TODO: the fact that we check only for the block index here is a problem,
+                // because the chainstate can have a block index with "ok" status when the block
+                // itself is missing (it happens if the block was invalid and then its status was
+                // manually reset). So, if this happens, the node won't ever be able to receive this
+                // block from any peer. On the other hand, the only reasonable case where a
+                // block that was once invalid can become valid again is the "block from the future"
+                // case and it's impossible to achieve it through p2p due to the "preliminary_block_check"
+                // call above - the "future" block will be rejected at this stage, leaving no
+                // trace in the chainstate. So we consider this problem to be minor.
+                // (Also note that simply checking for block existence here is not enough,
+                // because the block won't be even requested if its index is already present.)
                 let new_tip_received = if c.get_block_index(&block.get_id())?.is_some() {
                     log::debug!(
                         "[peer id = {}] The peer sent a block that already exists ({})",
