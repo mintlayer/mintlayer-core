@@ -20,7 +20,7 @@ use common::{
     chain::{
         signature::inputsig::InputWitness,
         tokens::{get_tokens_issuance_count, NftIssuance},
-        ChainConfig, SignedTransaction, Transaction, TxOutput,
+        ChainConfig, SignedTransaction, Transaction, TransactionSize, TxOutput,
     },
     primitives::{BlockHeight, Id, Idable},
 };
@@ -50,6 +50,8 @@ pub enum CheckTransactionError {
     NoSignatureDataNotAllowed(Id<Transaction>),
     #[error("Data deposit size {0} exceeded max allowed {1}. Found in transaction {2}")]
     DataDepositMaxSizeExceeded(usize, usize, Id<Transaction>),
+    #[error("The size if tx {0} is too large: {1} > {2}")]
+    TxSizeTooLarge(Id<Transaction>, usize, usize),
 }
 
 pub fn check_transaction(
@@ -57,11 +59,43 @@ pub fn check_transaction(
     block_height: BlockHeight,
     tx: &SignedTransaction,
 ) -> Result<(), CheckTransactionError> {
+    check_size(chain_config, tx)?;
     check_duplicate_inputs(tx)?;
     check_witness_count(tx)?;
     check_tokens_tx(chain_config, block_height, tx)?;
     check_no_signature_size(chain_config, tx)?;
     check_data_deposit_outputs(chain_config, tx)?;
+    Ok(())
+}
+
+fn check_size(
+    chain_config: &ChainConfig,
+    tx: &SignedTransaction,
+) -> Result<(), CheckTransactionError> {
+    match tx.transaction_data_size() {
+        TransactionSize::ScriptedTransaction(size) => {
+            let max_allowed_size = chain_config.max_block_size_from_std_scripts();
+            ensure!(
+                size <= max_allowed_size,
+                CheckTransactionError::TxSizeTooLarge(
+                    tx.transaction().get_id(),
+                    size,
+                    max_allowed_size
+                )
+            );
+        }
+        TransactionSize::SmartContractTransaction(size) => {
+            let max_allowed_size = chain_config.max_block_size_from_smart_contracts();
+            ensure!(
+                size <= max_allowed_size,
+                CheckTransactionError::TxSizeTooLarge(
+                    tx.transaction().get_id(),
+                    size,
+                    max_allowed_size
+                )
+            );
+        }
+    };
     Ok(())
 }
 
