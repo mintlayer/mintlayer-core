@@ -190,7 +190,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
         pool_id: PoolId,
         amount_to_add: Amount,
     ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
-        log::debug!("Increase staker reward of a pool: {}", pool_id);
+        log::debug!("Increasing staker reward of a pool: {:x}", pool_id);
 
         let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
 
