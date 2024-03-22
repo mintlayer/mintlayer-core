@@ -39,12 +39,16 @@ jobs:
   static_checks_windows:
     runs-on: windows-latest
     steps:
+      # This prevents git from changing line-endings to crlf, which messes cargo fmt checks
+      - name: Set git to use LF
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
       - name: Checkout repository and submodules
         uses: actions/checkout@v2
         with:
           submodules: recursive
-        env:
-          GIT_AUTOCRLF: "false" # Disable line ending conversion
 
       - name: Install python toml package
         run: python3 -m pip install toml
