@@ -110,7 +110,7 @@ Parameters:
 ```
 {
     "account": number,
-    "address": string,
+    "address": bech32 string,
     "label": EITHER OF
          1) string
          2) null,
@@ -154,7 +154,7 @@ Parameters:
 {
     "account": number,
     "min_required_signatures": number,
-    "public_keys": [ string, .. ],
+    "public_keys": [ bech32 string, .. ],
     "label": EITHER OF
          1) string
          2) null,
@@ -1907,7 +1907,7 @@ Parameters:
 ```
 {
     "account": number,
-    "address": string,
+    "address": bech32 string,
 }
 ```
 
