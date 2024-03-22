@@ -18,15 +18,14 @@ jobs:
     runs-on: windows-latest
     # if: github.ref == 'refs/heads/master'
     steps:
-      - uses: actions/checkout@v2
-      - name: Install python toml package
-        run: python3 -m pip install toml
-      - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/rust-version-extractor/rust-version-extractor.py)
       - name: Checkout repository and submodules
         uses: actions/checkout@v2
         with:
           submodules: recursive
+      - name: Install python toml package
+        run: python3 -m pip install toml
+      - name: Install rust
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/rust-version-extractor/rust-version-extractor.py)
       - name: Build
         run: cargo build --release --locked
       - name: Run tests
@@ -53,19 +52,18 @@ jobs:
     runs-on: ubuntu-latest
     # if: github.ref == 'refs/heads/master'
     steps:
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - name: Update local dependency repositories
         run: sudo apt-get update
       - name: Install dependencies
         run: sudo apt-get install -yqq --no-install-recommends build-essential python3 python3-toml podman build-essential pkg-config libssl-dev
       - name: Install rust deps
         run: sudo apt-get install -yqq build-essential pkg-config libssl-dev
-      - uses: actions/checkout@v2
       - name: Install rust
         run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/rust-version-extractor/rust-version-extractor.py)
-      - name: Checkout repository and submodules
-        uses: actions/checkout@v2
-        with:
-          submodules: recursive
       - name: Build
         run: cargo build --release --locked
       - name: Run tests
@@ -90,15 +88,14 @@ jobs:
     runs-on: macos-latest
     # if: github.ref == 'refs/heads/master'
     steps:
-      - uses: actions/checkout@v2
-      - name: Install python toml package
-        run: python3 -m pip install toml
-      - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/rust-version-extractor/rust-version-extractor.py)
       - name: Checkout repository and submodules
         uses: actions/checkout@v2
         with:
           submodules: recursive
+      - name: Install python toml package
+        run: python3 -m pip install toml
+      - name: Install rust
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/rust-version-extractor/rust-version-extractor.py)
       - name: Build
         run: cargo build --release --locked
       - name: Run tests
