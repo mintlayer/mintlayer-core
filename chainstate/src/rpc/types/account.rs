@@ -87,7 +87,7 @@ impl RpcAccountCommand {
             }
             AccountCommand::FreezeToken(id, is_unfreezable) => RpcAccountCommand::FreezeToken(
                 RpcAddress::new(chain_config, *id)?,
-                is_unfreezable.clone().into(),
+                (*is_unfreezable).into(),
             ),
             AccountCommand::UnfreezeToken(id) => {
                 RpcAccountCommand::UnfreezeToken(RpcAddress::new(chain_config, *id)?)

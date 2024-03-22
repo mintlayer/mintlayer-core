@@ -24,7 +24,7 @@ use super::input::RpcTxInput;
 pub enum RpcConsensusData {
     None,
     PoW,
-    PoS(RpcPosData),
+    PoS(RpcPoSData),
 }
 
 impl RpcConsensusData {
@@ -43,15 +43,15 @@ impl RpcConsensusData {
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let target = format!(
-                    "{:#x}",
+                    "{:x}",
                     TryInto::<common::Uint256>::try_into(pos_data.compact_target())
                         .expect("valid target")
                 );
 
-                RpcConsensusData::PoS(RpcPosData {
+                RpcConsensusData::PoS(RpcPoSData {
                     kernel_input_count: rpc_inputs.len() as u32,
                     kernel_inputs: rpc_inputs,
-                    stake_pool_id: RpcAddress::new(chain_config, pos_data.stake_pool_id().clone())?,
+                    stake_pool_id: RpcAddress::new(chain_config, *pos_data.stake_pool_id())?,
                     target,
                 })
             }
@@ -62,7 +62,7 @@ impl RpcConsensusData {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct RpcPosData {
+pub struct RpcPoSData {
     kernel_input_count: u32,
     kernel_inputs: Vec<RpcTxInput>,
     stake_pool_id: RpcAddress<PoolId>,

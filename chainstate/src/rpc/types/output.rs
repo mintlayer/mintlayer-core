@@ -104,33 +104,33 @@ impl RpcTxOutput {
                 RpcTxOutput::LockThenTransfer(
                     RpcOutputValue::new(chain_config, value.clone())?,
                     RpcAddress::new(chain_config, destination.clone())?,
-                    timelock.clone(),
+                    *timelock,
                 )
             }
             TxOutput::Burn(value) => {
                 RpcTxOutput::Burn(RpcOutputValue::new(chain_config, value.clone())?)
             }
             TxOutput::CreateStakePool(id, data) => RpcTxOutput::CreateStakePool(
-                RpcAddress::new(chain_config, id.clone())?,
+                RpcAddress::new(chain_config, *id)?,
                 Box::new(RpcStakePoolData::new(chain_config, data)?),
             ),
             TxOutput::ProduceBlockFromStake(destination, id) => RpcTxOutput::ProduceBlockFromStake(
                 RpcAddress::new(chain_config, destination.clone())?,
-                RpcAddress::new(chain_config, id.clone())?,
+                RpcAddress::new(chain_config, *id)?,
             ),
             TxOutput::CreateDelegationId(destination, id) => RpcTxOutput::CreateDelegationId(
                 RpcAddress::new(chain_config, destination.clone())?,
-                RpcAddress::new(chain_config, id.clone())?,
+                RpcAddress::new(chain_config, *id)?,
             ),
             TxOutput::DelegateStaking(amount, id) => RpcTxOutput::DelegateStaking(
                 RpcAmountOut::from_amount(*amount, chain_config.coin_decimals()),
-                RpcAddress::new(chain_config, id.clone())?,
+                RpcAddress::new(chain_config, *id)?,
             ),
             TxOutput::IssueFungibleToken(issuance) => RpcTxOutput::IssueFungibleToken(Box::new(
                 RpcTokenIssuance::new(chain_config, issuance)?,
             )),
             TxOutput::IssueNft(id, issuance, destination) => RpcTxOutput::IssueNft(
-                RpcAddress::new(chain_config, id.clone())?,
+                RpcAddress::new(chain_config, *id)?,
                 Box::new(RpcNftIssuance::new(chain_config, issuance)?),
                 RpcAddress::new(chain_config, destination.clone())?,
             ),
