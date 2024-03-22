@@ -1,3 +1,5 @@
+name: Static code checks
+
 on:
   push:
     branches:
@@ -6,13 +8,17 @@ on:
     branches:
       - master
 
-name: Static code checks
+env:
+  CARGO_TERM_COLOR: always
+  RUST_LOG: debug
+  RUST_BACKTRACE: full
+
 jobs:
   static_checks_ubuntu:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository and submodules
-      - uses: actions/checkout@v2
+        uses: actions/checkout@v2
         with:
           submodules: recursive
 
@@ -34,7 +40,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository and submodules
-      - uses: actions/checkout@v2
+        uses: actions/checkout@v2
         with:
           submodules: recursive
 
@@ -54,7 +60,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout repository and submodules
-      - uses: actions/checkout@v2
+        uses: actions/checkout@v2
         with:
           submodules: recursive
 
