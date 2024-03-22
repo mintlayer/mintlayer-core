@@ -26,14 +26,14 @@ jobs:
         run: sudo apt-get install -yqq build-essential python3 python3-toml
       - uses: actions/checkout@v1
       - name: Install rust
-        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly-2023-11-01
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly-2024-03-20
       - name: Run cargo clean
         run: cargo clean
       - name: Install grcov from cargo
         run: cargo install grcov
 
       - name: Run coverage tests
-        run: python3 build-tools/workspace-partition.py ${{ env.PARTITIONS_COUNT }} ${{ matrix.partition }} | xargs -I {} sh -c 'CARGO_INCREMENTAL=0 RUST_BACKTRACE=full RUST_LOG=debug RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off" RUSTDOCFLAGS="-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off" RUSTUP_TOOLCHAIN=nightly-2023-11-01 cargo test'
+        run: python3 build-tools/workspace-partition.py ${{ env.PARTITIONS_COUNT }} ${{ matrix.partition }} | xargs -I {} sh -c 'CARGO_INCREMENTAL=0 RUST_BACKTRACE=full RUST_LOG=debug RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off" RUSTDOCFLAGS="-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off" RUSTUP_TOOLCHAIN=nightly-2024-03-20 cargo test'
 
       - name: Collect coverage data with grcov
         run: grcov . --source-dir . --output-type lcov --branch --ignore-not-existing --binary-path ./target/debug/ -o grcov-report-${{ matrix.partition }}
