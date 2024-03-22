@@ -53,7 +53,8 @@ pub fn view_top_panel(
         EncryptionState::Disabled => row![
             iced::widget::button(Text::new("Encrypt wallet")).on_press(WalletMessage::SetPassword),
             tooltip(
-                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                    .font(iced_aw::BOOTSTRAP_FONT),
                 ENCRYPT_WALLET_TOOLTIP_TEXT,
                 tooltip::Position::Bottom
             )

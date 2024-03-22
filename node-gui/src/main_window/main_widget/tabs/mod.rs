@@ -89,7 +89,7 @@ impl TabsWidget {
         let position = self.settings_tab.settings().tab_bar_position.unwrap_or_default();
 
         let mut tabs = Tabs::new(TabsMessage::TabSelected)
-            .icon_font(iced_aw::ICON_FONT)
+            .icon_font(iced_aw::BOOTSTRAP_FONT)
             .push(
                 TabIndex::Summary as usize,
                 self.summary_tab.tab_label(),

@@ -92,7 +92,7 @@ impl Tab for SettingsTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_aw::Icon::Gear.into(), self.title())
+        TabLabel::IconText(iced_aw::BootstrapIcon::Gear.into(), self.title())
     }
 
     fn content(&self, _node_state: &NodeState) -> Element<Self::Message> {

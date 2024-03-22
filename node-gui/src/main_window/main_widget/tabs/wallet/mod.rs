@@ -144,9 +144,9 @@ impl WalletTab {
         let (mut panes, pane) = pane_grid::State::new(WalletPane::Left);
 
         let (_pane, split) = panes
-            .split(pane_grid::Axis::Vertical, &pane, WalletPane::Right)
+            .split(pane_grid::Axis::Vertical, pane, WalletPane::Right)
             .expect("split should not fail");
-        panes.resize(&split, 0.2);
+        panes.resize(split, 0.2);
 
         WalletTab {
             wallet_id,
@@ -178,7 +178,7 @@ impl WalletTab {
             }
 
             WalletMessage::Resized(pane_grid::ResizeEvent { split, ratio }) => {
-                self.panes.resize(&split, ratio);
+                self.panes.resize(split, ratio);
                 Command::none()
             }
 
@@ -374,7 +374,7 @@ impl Tab for WalletTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_aw::Icon::Wallet.into(), self.title())
+        TabLabel::IconText(iced_aw::BootstrapIcon::Wallet.into(), self.title())
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {

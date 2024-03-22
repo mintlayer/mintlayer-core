@@ -16,7 +16,7 @@
 use iced::{
     alignment::Horizontal,
     widget::{self, container, text, text_input, Button, Component, Text},
-    Element, Length,
+    Element, Length, Theme,
 };
 use iced_aw::Card;
 
@@ -51,7 +51,7 @@ pub enum ImportEvent {
     Cancel,
 }
 
-impl<Message> Component<Message, iced::Renderer> for WalletMnemonicDialog<Message> {
+impl<Message> Component<Message, Theme, iced::Renderer> for WalletMnemonicDialog<Message> {
     type State = ImportState;
     type Event = ImportEvent;
 
@@ -76,7 +76,7 @@ impl<Message> Component<Message, iced::Renderer> for WalletMnemonicDialog<Messag
         }
     }
 
-    fn view(&self, state: &Self::State) -> Element<Self::Event, iced::Renderer> {
+    fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
         let (mnemonic, action_text) = match &self.generated_mnemonic_opt {
             Some(generated_mnemonic) => (generated_mnemonic.to_string(), "Create"),
             None => (state.entered_mnemonic.clone(), "Import"),
@@ -112,7 +112,8 @@ impl<Message> Component<Message, iced::Renderer> for WalletMnemonicDialog<Messag
     }
 }
 
-impl<'a, Message> From<WalletMnemonicDialog<Message>> for Element<'a, Message, iced::Renderer>
+impl<'a, Message> From<WalletMnemonicDialog<Message>>
+    for Element<'a, Message, Theme, iced::Renderer>
 where
     Message: 'a,
 {

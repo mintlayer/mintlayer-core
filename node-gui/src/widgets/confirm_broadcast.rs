@@ -22,7 +22,7 @@ use common::{
 use iced::{
     alignment::Horizontal,
     widget::{self, container, Button, Component, Text},
-    Element, Length,
+    Element, Length, Theme,
 };
 use iced_aw::Card;
 
@@ -60,7 +60,7 @@ pub enum ConfirmBroadcastEvent {
     CopyToClipboard(String),
 }
 
-impl<Message> Component<Message, iced::Renderer> for ConfirmBroadcast<Message> {
+impl<Message> Component<Message, Theme, iced::Renderer> for ConfirmBroadcast<Message> {
     type State = ConfirmBroadcastState;
     type Event = ConfirmBroadcastEvent;
 
@@ -72,7 +72,7 @@ impl<Message> Component<Message, iced::Renderer> for ConfirmBroadcast<Message> {
         }
     }
 
-    fn view(&self, _state: &Self::State) -> Element<Self::Event, iced::Renderer> {
+    fn view(&self, _state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
         let summary = self.tx.transaction().text_summary(&self.chain_config);
 
         let button = Button::new(
@@ -82,7 +82,8 @@ impl<Message> Component<Message, iced::Renderer> for ConfirmBroadcast<Message> {
         .on_press(ConfirmBroadcastEvent::Ok);
 
         let copy_to_clipboard = Button::new(
-            Text::new(iced_aw::Icon::ClipboardCheck.to_string()).font(iced_aw::ICON_FONT),
+            Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
+                .font(iced_aw::BOOTSTRAP_FONT),
         )
         .style(iced::theme::Button::Text)
         .on_press(ConfirmBroadcastEvent::CopyToClipboard(summary.clone()));
@@ -93,7 +94,7 @@ impl<Message> Component<Message, iced::Renderer> for ConfirmBroadcast<Message> {
                 family: iced::font::Family::Monospace,
                 weight: Default::default(),
                 stretch: Default::default(),
-                monospaced: true
+                style: iced::font::Style::Normal,
             }),],
         )
         .foot(
@@ -111,7 +112,7 @@ impl<Message> Component<Message, iced::Renderer> for ConfirmBroadcast<Message> {
     }
 }
 
-impl<'a, Message> From<ConfirmBroadcast<Message>> for Element<'a, Message, iced::Renderer>
+impl<'a, Message> From<ConfirmBroadcast<Message>> for Element<'a, Message, Theme, iced::Renderer>
 where
     Message: 'a,
 {
