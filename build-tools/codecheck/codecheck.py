@@ -100,7 +100,7 @@ def disallow(pat, exclude = []):
 
     found_re = False
     for path in rs_sources(exclude):
-        with open(path) as file:
+        with open(path, 'r', encoding='utf-8') as file:
             for (line_num, line) in enumerate(file, start = 1):
                 line = line.rstrip()
                 if pat.search(line):
@@ -272,7 +272,7 @@ def check_local_licenses():
                for exempted in exempted_files):
             continue
 
-        with open(path) as file:
+        with open(path, 'r', encoding='utf-8') as file:
             if not template.search(file.read()):
                 ok = False
                 print("{}: License missing or incorrect".format(path))
@@ -295,7 +295,7 @@ def check_todos():
                for exempted in exempted_files):
             continue
 
-        with open(path) as file:
+        with open(path, 'r', encoding='utf-8') as file:
             file_data = file.read()
             if 'TODO(PR)' in file_data or 'FIXME' in file_data:
                 ok = False
@@ -306,7 +306,7 @@ def check_todos():
 
 
 def file_ends_with_newline(file_path):
-    with open(file_path, 'r') as file:
+    with open(file_path, 'r', encoding='utf-8') as file:
         file_data = file.read()
         if len(file_data) == 0:
             # Exclude empty files
@@ -358,7 +358,7 @@ def check_trailing_whitespaces():
                for exempted in exempted_files):
             continue
 
-        with open(path) as file:
+        with open(path, 'r', encoding='utf-8') as file:
             try:
                 for line_idx, line in enumerate(file, start=1):
                     line = line.rstrip('\n\r')
