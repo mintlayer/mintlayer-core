@@ -21,7 +21,10 @@ use common::{
 };
 use serialization::hex_encoded::HexEncoded;
 
-use super::{block_reward::RpcBlockReward, signed_transaction::RpcSignedTransaction};
+use super::{
+    block_reward::RpcBlockReward, consensus_data::RpcConsensusData,
+    signed_transaction::RpcSignedTransaction,
+};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RpcBlock {
@@ -30,8 +33,8 @@ pub struct RpcBlock {
     height: BlockHeight,
     chain_transaction_count: u128,
     timestamp: BlockTimestamp,
+    consensus_data: RpcConsensusData,
 
-    // FIXME: consensus data
     block_reward: RpcBlockReward,
     transaction_count_in_block: u32,
     transactions: Vec<RpcSignedTransaction>,
@@ -45,6 +48,7 @@ impl RpcBlock {
         block: Block,
         block_index: BlockIndex,
     ) -> Result<Self, AddressError> {
+        let rpc_consensus_data = RpcConsensusData::new(chain_config, block.consensus_data())?;
         let rpc_block_reward = RpcBlockReward::new(chain_config, block.block_reward())?;
         let rpc_transactions = block
             .transactions()
@@ -58,6 +62,7 @@ impl RpcBlock {
             height: block_index.block_height(),
             chain_transaction_count: block_index.chain_transaction_count(),
             timestamp: block.timestamp(),
+            consensus_data: rpc_consensus_data,
             block_reward: rpc_block_reward,
             transaction_count_in_block: block.transactions().len() as u32,
             transactions: rpc_transactions,
