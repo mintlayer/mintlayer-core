@@ -77,6 +77,9 @@ jobs:
       - name: Build the wasm module for bundler - debug
         working-directory: ./wasm-wrappers
         run: wasm-pack build --target bundler --out-dir wasm-wrappers-builds/bundler/debug   --debug
+      - name: Copy readme file into the package
+        working-directory: ./wasm-wrappers
+        run: cp README.md wasm-wrappers-builds/ && cp WASM-API.md wasm-wrappers-builds/
 
       - name: Create artifacts
         uses: actions/upload-artifact@v2
