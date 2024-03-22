@@ -15,6 +15,7 @@
 
 pub mod account;
 pub mod block;
+pub mod block_reward;
 pub mod event;
 pub mod input;
 pub mod output;

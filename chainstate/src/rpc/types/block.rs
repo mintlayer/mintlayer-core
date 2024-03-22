@@ -16,22 +16,27 @@
 use chainstate_types::BlockIndex;
 use common::{
     address::AddressError,
-    chain::{Block, ChainConfig, GenBlock},
+    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id, Idable},
 };
 use serialization::hex_encoded::HexEncoded;
 
-use super::signed_transaction::RpcSignedTransaction;
+use super::{block_reward::RpcBlockReward, signed_transaction::RpcSignedTransaction};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RpcBlock {
     id: Id<Block>,
     prev_block_id: Id<GenBlock>,
     height: BlockHeight,
-    transaction_count_in_block: u32,
     chain_transaction_count: u128,
-    block_hex: HexEncoded<Block>,
+    timestamp: BlockTimestamp,
+
+    // FIXME: consensus data
+    block_reward: RpcBlockReward,
+    transaction_count_in_block: u32,
     transactions: Vec<RpcSignedTransaction>,
+
+    block_hex: HexEncoded<Block>,
 }
 
 impl RpcBlock {
@@ -40,6 +45,7 @@ impl RpcBlock {
         block: Block,
         block_index: BlockIndex,
     ) -> Result<Self, AddressError> {
+        let rpc_block_reward = RpcBlockReward::new(chain_config, block.block_reward())?;
         let rpc_transactions = block
             .transactions()
             .iter()
@@ -50,8 +56,10 @@ impl RpcBlock {
             id: block.get_id(),
             prev_block_id: block.prev_block_id(),
             height: block_index.block_height(),
-            transaction_count_in_block: block.transactions().len() as u32,
             chain_transaction_count: block_index.chain_transaction_count(),
+            timestamp: block.timestamp(),
+            block_reward: rpc_block_reward,
+            transaction_count_in_block: block.transactions().len() as u32,
             transactions: rpc_transactions,
             block_hex: block.into(),
         };
