@@ -34,8 +34,12 @@ cargo clippy --all-features --workspace --lib --bins --examples -- \
     -D clippy::fallible_impl_from \
     -D clippy::string_slice
 
-# Install requirements with: pip install -r ./build-tools/codecheck/requirements.txt
-"$PYTHON" "$SCRIPT_DIR/build-tools/codecheck/codecheck.py"
+
+# Run only if not Windows
+if [ "$(uname -s)" != "Windows" ]; then
+    # Install requirements with: pip install -r ./build-tools/codecheck/requirements.txt
+    "$PYTHON" "$SCRIPT_DIR/build-tools/codecheck/codecheck.py"
+fi
 
 # Ensure that wasm documentation is up-to-date
 cargo run -p wasm-doc-gen -- -o wasm-wrappers/WASM-API.md --check
