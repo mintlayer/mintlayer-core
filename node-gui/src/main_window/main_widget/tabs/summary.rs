@@ -20,7 +20,7 @@ use iced::{
     widget::{column, tooltip, Text},
     Command, Element, Length,
 };
-use iced_aw::{tab_bar::TabLabel, Grid};
+use iced_aw::{tab_bar::TabLabel, Grid, GridRow};
 
 use crate::main_window::{print_block_timestamp, NodeState};
 
@@ -58,32 +58,38 @@ impl Tab for SummaryTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_aw::Icon::Info.into(), self.title())
+        TabLabel::IconText(iced_aw::BootstrapIcon::Info.into(), self.title())
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {
         let network_type = get_network_type_capitalized(node_state.chain_config());
-        let chainstate = Grid::with_columns(2)
-            .push(Text::new("Network "))
+        let chainstate = Grid::new()
             .push(
-                tooltip(
-                    Text::new(network_type),
-                    NETWORK_TOOLTIP,
-                    tooltip::Position::Bottom,
-                )
-                .gap(10)
-                .style(iced::theme::Container::Box),
+                GridRow::new().push(Text::new("Network ")).push(
+                    tooltip(
+                        Text::new(network_type),
+                        NETWORK_TOOLTIP,
+                        tooltip::Position::Bottom,
+                    )
+                    .gap(10)
+                    .style(iced::theme::Container::Box),
+                ),
             )
-            .push(Text::new("Best block id "))
-            .push(Text::new(node_state.chain_info.best_block_id.hex_encode()))
-            .push(Text::new("Best block height "))
-            .push(Text::new(
-                node_state.chain_info.best_block_height.to_string(),
-            ))
-            .push(Text::new("Best block timestamp (UTC) "))
-            .push(Text::new(print_block_timestamp(
-                node_state.chain_info.best_block_timestamp,
-            )));
+            .push(
+                GridRow::new()
+                    .push(Text::new("Best block id "))
+                    .push(Text::new(node_state.chain_info.best_block_id.hex_encode())),
+            )
+            .push(
+                GridRow::new().push(Text::new("Best block height ")).push(Text::new(
+                    node_state.chain_info.best_block_height.to_string(),
+                )),
+            )
+            .push(
+                GridRow::new().push(Text::new("Best block timestamp (UTC) ")).push(Text::new(
+                    print_block_timestamp(node_state.chain_info.best_block_timestamp),
+                )),
+            );
 
         column![
             Text::new("The following is the syncing state of your node. In a healthy network, the block timestamp should be close to the current wall-clock time.").size(16),

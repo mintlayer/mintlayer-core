@@ -20,7 +20,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, ChainConfig, SignedTransaction},
     primitives::{per_thousand::PerThousand, semver::SemVer, user_agent::UserAgent, Amount},
 };
-use iced::{widget::Text, Command, Element};
+use iced::{widget::Text, window, Command, Element};
 use iced_aw::native::Modal;
 use logging::log;
 use p2p::{net::types::services::Services, types::peer_id::PeerId, P2pEvent};
@@ -272,7 +272,7 @@ impl MainWindow {
                         identity,
                     )
                 }
-                MenuMessage::Exit => iced::window::close(),
+                MenuMessage::Exit => iced::window::close(window::Id::MAIN),
             },
 
             MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(

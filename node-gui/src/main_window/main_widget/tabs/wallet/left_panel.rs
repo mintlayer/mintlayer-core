@@ -94,7 +94,8 @@ pub fn view_left_panel(
         let label = row![
             text(label).size(16).width(Length::Fill),
             tooltip(
-                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                    .font(iced_aw::BOOTSTRAP_FONT),
                 tooltip_text,
                 tooltip::Position::Bottom
             )
@@ -153,7 +154,8 @@ pub fn view_left_panel(
                     .style(iced::theme::Button::Positive)
                     .on_press(WalletMessage::NewAccount),
                 tooltip(
-                    Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                    Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                        .font(iced_aw::BOOTSTRAP_FONT),
                     NEW_ACCOUNT_TOOLTIP_TEXT,
                     tooltip::Position::Bottom
                 )

@@ -16,9 +16,9 @@
 use iced::{
     alignment,
     widget::{button, container, text},
-    Color, Element, Length,
+    Color, Element, Length, Theme,
 };
-use iced_aw::menu::{CloseCondition, ItemHeight, ItemWidth, MenuBar, MenuTree, PathHighlight};
+use iced_aw::menu::{DrawPath, Item, Menu, MenuBar};
 
 #[derive(Debug, Clone)]
 pub enum MenuMessage {
@@ -41,16 +41,18 @@ impl MainMenu {
         let help_menu = make_menu_help();
 
         let menu_bar = MenuBar::new(vec![file_menu, help_menu])
-            .item_width(ItemWidth::Uniform(180))
-            .item_height(ItemHeight::Uniform(25))
+            // .item_width(ItemWidth::Uniform(180))
+            // .item_height(ItemHeight::Uniform(25))
             .spacing(4.0)
-            .bounds_expand(30)
-            .path_highlight(Some(PathHighlight::MenuActive))
-            .close_condition(CloseCondition {
-                leave: false,
-                click_outside: true,
-                click_inside: true,
-            });
+            // .bounds_expand(30)
+            // .path_highlight(Some(PathHighlight::MenuActive))
+            .draw_path(DrawPath::Backdrop)
+            // .close_condition(CloseCondition {
+            //     leave: false,
+            //     click_outside: true,
+            //     click_inside: true,
+            // });
+            ;
 
         let c = iced::widget::column![container(menu_bar)];
 
@@ -65,7 +67,10 @@ impl button::StyleSheet for ButtonStyle {
     fn active(&self, style: &Self::Style) -> button::Appearance {
         button::Appearance {
             text_color: style.extended_palette().background.base.text,
-            border_radius: 4.0.into(),
+            border: iced::Border {
+                radius: 4.0.into(),
+                ..Default::default()
+            },
             background: Some(Color::TRANSPARENT.into()),
             ..Default::default()
         }
@@ -85,7 +90,7 @@ impl button::StyleSheet for ButtonStyle {
 fn base_button<'a>(
     content: impl Into<Element<'a, MenuMessage>>,
     msg: MenuMessage,
-) -> button::Button<'a, MenuMessage, iced::Renderer> {
+) -> button::Button<'a, MenuMessage> {
     button(content)
         .padding([4, 8])
         .style(iced::theme::Button::Custom(Box::new(ButtonStyle {})))
@@ -102,33 +107,32 @@ fn labeled_button<'a>(label: &str, msg: MenuMessage) -> button::Button<'a, MenuM
     )
 }
 
-fn menu_item<'a>(label: &str, msg: MenuMessage) -> MenuTree<'a, MenuMessage, iced::Renderer> {
-    MenuTree::new(labeled_button(label, msg).width(Length::Fill).height(Length::Fill))
+fn menu_item(label: &str, msg: MenuMessage) -> Item<'_, MenuMessage, Theme, iced::Renderer> {
+    Item::new(labeled_button(label, msg).width(Length::Fill).height(Length::Fill))
 }
 
-fn make_menu_file<'a>() -> MenuTree<'a, MenuMessage, iced::Renderer> {
-    let root = MenuTree::with_children(
+fn make_menu_file<'a>() -> Item<'a, MenuMessage, Theme, iced::Renderer> {
+    let root = Item::with_menu(
         labeled_button("File", MenuMessage::NoOp),
-        vec![
+        Menu::new(vec![
             menu_item("Create new wallet", MenuMessage::CreateNewWallet),
             menu_item("Import wallet", MenuMessage::ImportWallet),
             menu_item("Open wallet", MenuMessage::OpenWallet),
             // TODO: enable setting when needed
             // menu_item("Settings", MenuMessage::NoOp),
             menu_item("Exit", MenuMessage::Exit),
-        ],
-    )
-    .width(110);
+        ])
+        .width(110),
+    );
 
     root
 }
 
-fn make_menu_help<'a>() -> MenuTree<'a, MenuMessage, iced::Renderer> {
-    let root = MenuTree::with_children(
+fn make_menu_help<'a>() -> Item<'a, MenuMessage, Theme, iced::Renderer> {
+    let root = Item::with_menu(
         labeled_button("Help", MenuMessage::NoOp),
-        vec![menu_item("About", MenuMessage::NoOp)],
-    )
-    .width(110);
+        Menu::new(vec![menu_item("About", MenuMessage::NoOp)]).width(110),
+    );
 
     root
 }

@@ -18,7 +18,7 @@ use iced::{
     widget::{button, column, container, row, text_input, tooltip, tooltip::Position, Text},
     Alignment, Element,
 };
-use iced_aw::Grid;
+use iced_aw::{Grid, GridRow};
 
 use crate::{
     backend::messages::AccountInfo,
@@ -75,45 +75,51 @@ pub fn view_stake(
     let staking_balance_grid = {
         // We print the table only if there are staking pools
         if account.staking_balance.is_empty() {
-            Grid::with_columns(2)
-                .push(field("No staking pools found".to_owned()))
-                .push(field(String::new()))
+            Grid::new().push(
+                GridRow::new()
+                    .push(field("No staking pools found".to_owned()))
+                    .push(field(String::new())),
+            )
         } else {
-            let mut staking_balance_grid = Grid::with_columns(5)
-                .push(field("Pool Id".to_owned()))
-                .push(field(String::new()))
-                .push(field("Margin ratio".to_owned()))
-                .push(field("Cost per block".to_owned()))
-                .push(field("Pool balance".to_owned()));
+            let mut staking_balance_grid = Grid::new().push(
+                GridRow::new()
+                    .push(field("Pool Id".to_owned()))
+                    .push(field(String::new()))
+                    .push(field("Margin ratio".to_owned()))
+                    .push(field("Cost per block".to_owned()))
+                    .push(field("Pool balance".to_owned())),
+            );
             for (pool_id, (pool_data, balance)) in account.staking_balance.iter() {
                 let pool_id_address = Address::new(chain_config, *pool_id)
                     .expect("Encoding pool id to address can't fail (GUI)");
-                staking_balance_grid = staking_balance_grid
-                    .push(
-                        tooltip(
-                            field(pool_id_address.to_short_string()),
-                            pool_id_address.to_string(),
-                            Position::Bottom,
+                staking_balance_grid = staking_balance_grid.push(
+                    GridRow::new()
+                        .push(
+                            tooltip(
+                                field(pool_id_address.to_short_string()),
+                                Text::new(pool_id_address.to_string()),
+                                Position::Bottom,
+                            )
+                            .gap(5)
+                            .style(iced::theme::Container::Box),
                         )
-                        .gap(5)
-                        .style(iced::theme::Container::Box),
-                    )
-                    .push(
-                        button(
-                            Text::new(iced_aw::Icon::ClipboardCheck.to_string())
-                                .font(iced_aw::ICON_FONT),
+                        .push(
+                            button(
+                                Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
+                                    .font(iced_aw::BOOTSTRAP_FONT),
+                            )
+                            .style(iced::theme::Button::Text)
+                            .on_press(WalletMessage::CopyToClipboard(pool_id_address.to_string())),
                         )
-                        .style(iced::theme::Button::Text)
-                        .on_press(WalletMessage::CopyToClipboard(pool_id_address.to_string())),
-                    )
-                    .push(field(print_margin_ratio(
-                        pool_data.margin_ratio_per_thousand,
-                    )))
-                    .push(field(print_coin_amount(
-                        chain_config,
-                        pool_data.cost_per_block,
-                    )))
-                    .push(field(print_coin_amount(chain_config, *balance)));
+                        .push(field(print_margin_ratio(
+                            pool_data.margin_ratio_per_thousand,
+                        )))
+                        .push(field(print_coin_amount(
+                            chain_config,
+                            pool_data.cost_per_block,
+                        )))
+                        .push(field(print_coin_amount(chain_config, *balance))),
+                );
             }
             staking_balance_grid
         }
@@ -132,7 +138,8 @@ pub fn view_stake(
             iced::widget::button(Text::new(staking_button))
                 .on_press(still_syncing.clone().unwrap_or(WalletMessage::ToggleStaking(new_state))),
             tooltip(
-                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                    .font(iced_aw::BOOTSTRAP_FONT),
                 START_STAKING_TOOLTIP_TEXT,
                 Position::Bottom
             )
@@ -160,14 +167,14 @@ pub fn view_stake(
     column![
         row![Text::new(min_pledge_text).size(13),
         tooltip(
-            Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+            Text::new(iced_aw::BootstrapIcon::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
             MIN_PLEDGE_AMOUNT_TOOLTIP_TEXT,
             Position::Bottom)
         .gap(10)
         .style(iced::theme::Container::Box)],
         row![Text::new(maturity_period_text).size(13),
         tooltip(
-            Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+            Text::new(iced_aw::BootstrapIcon::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
             MATURITY_PERIOD_TOOLTIP_TEXT,
             Position::Bottom)
         .gap(10)
@@ -183,7 +190,7 @@ pub fn view_stake(
                  })
                 .padding(15),
             tooltip(
-                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                Text::new(iced_aw::BootstrapIcon::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 PLEDGE_AMOUNT_TOOLTIP_TEXT,
                 Position::Bottom)
             .gap(10)
@@ -201,7 +208,7 @@ pub fn view_stake(
                 })
                 .padding(15),
             tooltip(
-                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                Text::new(iced_aw::BootstrapIcon::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 COST_PER_BLOCK_TOOLTIP_TEXT,
                 Position::Bottom)
             .gap(10)
@@ -219,7 +226,7 @@ pub fn view_stake(
                 })
                 .padding(15),
             tooltip(
-                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                Text::new(iced_aw::BootstrapIcon::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 MARGIN_PER_THOUSAND_TOOLTIP_TEXT,
                 Position::Bottom)
             .gap(10)
@@ -237,7 +244,7 @@ pub fn view_stake(
                 })
                 .padding(15),
             tooltip(
-                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                Text::new(iced_aw::BootstrapIcon::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 DECOMMISSION_ADDRESS_TOOLTIP_TEXT,
                 Position::Bottom)
             .gap(10)
@@ -249,7 +256,7 @@ pub fn view_stake(
                 .padding(15)
                 .on_press(still_syncing.unwrap_or(WalletMessage::CreateStakingPool)),
             tooltip(
-                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                Text::new(iced_aw::BootstrapIcon::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 CREATE_STAKING_POOL_TOOLTIP_TEXT,
                 Position::Bottom
             )

@@ -16,7 +16,7 @@
 use iced::{
     alignment::Horizontal,
     widget::{self, container, text, text_input, Button, Component, Text},
-    Element, Length,
+    Element, Length, Theme,
 };
 use iced_aw::Card;
 
@@ -48,7 +48,7 @@ pub enum UnlockEvent {
     Cancel,
 }
 
-impl<Message> Component<Message, iced::Renderer> for WalletUnlockDialog<Message> {
+impl<Message> Component<Message, Theme, iced::Renderer> for WalletUnlockDialog<Message> {
     type State = UnlockState;
     type Event = UnlockEvent;
 
@@ -66,7 +66,7 @@ impl<Message> Component<Message, iced::Renderer> for WalletUnlockDialog<Message>
         }
     }
 
-    fn view(&self, state: &Self::State) -> Element<Self::Event, iced::Renderer> {
+    fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
         let container = match state.unlocking {
             true => container(text("Unlocking...")),
             false => {
@@ -83,7 +83,7 @@ impl<Message> Component<Message, iced::Renderer> for WalletUnlockDialog<Message>
             }
         };
 
-        let password = text_input("Password", &state.password).password();
+        let password = text_input("Password", &state.password).secure(true);
         let password = match state.unlocking {
             true => password,
             false => password.on_input(UnlockEvent::EditPassword),
@@ -100,7 +100,7 @@ impl<Message> Component<Message, iced::Renderer> for WalletUnlockDialog<Message>
     }
 }
 
-impl<'a, Message> From<WalletUnlockDialog<Message>> for Element<'a, Message, iced::Renderer>
+impl<'a, Message> From<WalletUnlockDialog<Message>> for Element<'a, Message, Theme, iced::Renderer>
 where
     Message: 'a,
 {
