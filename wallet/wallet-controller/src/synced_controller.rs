@@ -860,18 +860,29 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         &mut self,
         tx: SignedTransaction,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        if self.config.broadcast_to_mempool {
-            self.wallet
-                .add_account_unconfirmed_tx(self.account_index, tx.clone(), self.wallet_events)
-                .map_err(ControllerError::WalletError)?;
+        self.wallet
+            .add_account_unconfirmed_tx(self.account_index, tx.clone(), self.wallet_events)
+            .map_err(ControllerError::WalletError)?;
 
-            self.rpc_client
-                .submit_transaction(tx.clone(), Default::default())
-                .await
-                .map_err(ControllerError::NodeCallError)?;
-        }
+        self.rpc_client
+            .submit_transaction(tx.clone(), Default::default())
+            .await
+            .map_err(ControllerError::NodeCallError)?;
 
         Ok(tx)
+    }
+
+    /// Broadcast to the mempool if specified by the controller config
+    /// sometimes broadcasting is disabled when a prior confirmation is needed
+    async fn broadcast_to_mempool_if_needed(
+        &mut self,
+        tx: SignedTransaction,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        if self.config.broadcast_to_mempool {
+            self.broadcast_to_mempool(tx).await
+        } else {
+            Ok(tx)
+        }
     }
 
     /// Create a transaction and broadcast it
@@ -892,7 +903,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         )
         .map_err(ControllerError::WalletError)?;
 
-        self.broadcast_to_mempool(tx).await
+        self.broadcast_to_mempool_if_needed(tx).await
     }
 
     /// Create and broadcast a transaction that uses token,
@@ -933,7 +944,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         )
         .map_err(ControllerError::WalletError)?;
 
-        self.broadcast_to_mempool(tx).await
+        self.broadcast_to_mempool_if_needed(tx).await
     }
 
     /// Similar to create_and_send_tx but some transactions also create an ID
@@ -956,7 +967,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         )
         .map_err(ControllerError::WalletError)?;
 
-        let tx_id = self.broadcast_to_mempool(tx).await?;
+        let tx_id = self.broadcast_to_mempool_if_needed(tx).await?;
         Ok((tx_id, id))
     }
 
