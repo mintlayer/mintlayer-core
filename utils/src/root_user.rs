@@ -14,9 +14,6 @@
 // limitations under the License.
 
 use clap::Args;
-use logging::log;
-
-const FORCE_ALLOW_ROOT_FLAG: &str = "--force-allow-run-as-root";
 
 #[derive(Args, Clone, Debug, Default)]
 pub struct ForceRunAsRootOptions {
@@ -37,6 +34,10 @@ impl ForceRunAsRootOptions {
             target_os = "netbsd",
         ))]
         {
+            use logging::log;
+
+            const FORCE_ALLOW_ROOT_FLAG: &str = "--force-allow-run-as-root";
+
             if !self.force_allow_run_as_root {
                 use std::os::unix::fs::MetadataExt;
                 let uid = std::fs::metadata("/proc/self").map(|m| m.uid());
