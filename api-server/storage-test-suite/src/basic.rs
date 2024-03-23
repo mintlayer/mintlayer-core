@@ -500,6 +500,18 @@ where
                     UtxoWithExtraInfo::new(output.clone(), None),
                 )]
             );
+
+            let bob_utxos = db_tx
+                .get_locked_utxos_until_now(
+                    block_height.next_height(),
+                    (
+                        next_block_timestamp,
+                        next_block_timestamp.add_int_seconds(10).unwrap(),
+                    ),
+                )
+                .await
+                .unwrap();
+            assert_eq!(bob_utxos, vec![]);
         }
 
         // get all utxos

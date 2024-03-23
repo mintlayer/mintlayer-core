@@ -462,6 +462,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     async fn create_tables(&mut self) -> Result<(), ApiServerStorageError> {
         logging::log::info!("Creating database tables");
 
+        self.just_execute("CREATE SCHEMA IF NOT EXISTS public;").await?;
+
         self.just_execute(
             "CREATE TABLE ml_misc_data (
             name TEXT PRIMARY KEY,
@@ -630,18 +632,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     async fn drop_tables(&mut self) -> Result<(), ApiServerStorageError> {
         logging::log::info!("Dropping database tables");
 
-        self.just_execute("DROP TABLE ml_misc_data;").await?;
-        self.just_execute("DROP TABLE ml_genesis;").await?;
-        self.just_execute("DROP TABLE ml_blocks;").await?;
-        self.just_execute("DROP TABLE ml_transactions;").await?;
-        self.just_execute("DROP TABLE ml_address_balance;").await?;
-        self.just_execute("DROP TABLE ml_address_transactions;").await?;
-        self.just_execute("DROP TABLE ml_utxo;").await?;
-        self.just_execute("DROP TABLE ml_block_aux_data;").await?;
-        self.just_execute("DROP TABLE ml_pool_data;").await?;
-        self.just_execute("DROP TABLE ml_delegations;").await?;
-        self.just_execute("DROP TABLE ml_fungible_token;").await?;
-        self.just_execute("DROP TABLE ml_nft_issuance;").await?;
+        self.just_execute("DROP SCHEMA IF EXISTS public CASCADE;").await?;
 
         logging::log::info!("Done dropping database tables");
 
@@ -1567,7 +1558,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query(
                 r#"SELECT outpoint, utxo
                 FROM ml_locked_utxo
-                WHERE lock_until_block = $1 OR lock_until_timestamp BETWEEN $2 AND $3
+                WHERE lock_until_block = $1 OR lock_until_timestamp > $2 AND lock_until_timestamp <= $3
                 ;"#,
                 &[&block_height, &from_time, &to_time],
             )
