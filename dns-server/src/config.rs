@@ -23,7 +23,7 @@ use trust_dns_client::rr::Name;
 use utils_networking::IpOrSocketAddress;
 
 use common::primitives::per_thousand::PerThousand;
-use utils::clap_utils;
+use utils::{clap_utils, root_user::ForceRunAsRootOptions};
 
 use crate::dns_server::MinSameSoftwareVersionNodesRatio;
 
@@ -35,6 +35,15 @@ pub enum Network {
 
 #[derive(Parser, Debug)]
 #[clap(mut_args(clap_utils::env_adder("DNS_SRV")))]
+pub struct DnsServerRunOptions {
+    #[clap(flatten)]
+    pub config: DnsServerConfig,
+
+    #[clap(flatten)]
+    pub force_allow_run_as_root_options: ForceRunAsRootOptions,
+}
+
+#[derive(Parser, Debug)]
 pub struct DnsServerConfig {
     /// Optional path to the data directory
     #[clap(long)]
