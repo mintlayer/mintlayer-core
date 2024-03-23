@@ -38,16 +38,6 @@ use super::{ApiServerPostgresTransactionalRw, CONN_ERR};
 
 #[async_trait::async_trait]
 impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
-    async fn initialize_storage(
-        &mut self,
-        chain_config: &ChainConfig,
-    ) -> Result<(), ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
-        conn.initialize_database(chain_config).await?;
-
-        Ok(())
-    }
-
     async fn reinitialize_storage(
         &mut self,
         chain_config: &ChainConfig,

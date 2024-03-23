@@ -454,11 +454,6 @@ pub trait ApiServerStorageRead: Sync {
 
 #[async_trait::async_trait]
 pub trait ApiServerStorageWrite: ApiServerStorageRead {
-    async fn initialize_storage(
-        &mut self,
-        chain_config: &ChainConfig,
-    ) -> Result<(), ApiServerStorageError>;
-
     async fn reinitialize_storage(
         &mut self,
         chain_config: &ChainConfig,

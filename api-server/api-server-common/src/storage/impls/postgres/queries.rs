@@ -52,7 +52,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "SELECT COALESCE( (
             SELECT 1
             FROM information_schema.tables
-            WHERE table_name = '{}'
+            WHERE table_name = '{}' AND table_schema = 'ml'
         ), 0) AS count;",
             table_name
         )
@@ -81,7 +81,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     }
 
     pub async fn is_initialized(&mut self) -> Result<bool, ApiServerStorageError> {
-        let query_str = Self::get_table_exists_query("ml_misc_data");
+        let query_str = Self::get_table_exists_query("misc_data");
         let row_count = self
             .tx
             .query_one(&query_str, &[])
@@ -110,7 +110,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let query_result = self
             .tx
             .query_opt(
-                "SELECT value FROM ml_misc_data WHERE name = 'version';",
+                "SELECT value FROM ml.misc_data WHERE name = 'version';",
                 &[],
             )
             .await
@@ -142,7 +142,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query_opt(
                 r#"
                     SELECT amount
-                    FROM ml_address_balance
+                    FROM ml.address_balance
                     WHERE address = $1 AND coin_or_token_id = $2
                     ORDER BY block_height DESC
                     LIMIT 1;
@@ -176,7 +176,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query_opt(
                 r#"
                     SELECT amount
-                    FROM ml_address_locked_balance
+                    FROM ml.address_locked_balance
                     WHERE address = $1 AND coin_or_token_id = $2
                     ORDER BY block_height DESC
                     LIMIT 1;
@@ -209,7 +209,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "DELETE FROM ml_address_balance WHERE block_height > $1;",
+                "DELETE FROM ml.address_balance WHERE block_height > $1;",
                 &[&height],
             )
             .await
@@ -226,7 +226,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "DELETE FROM ml_address_locked_balance WHERE block_height > $1;",
+                "DELETE FROM ml.address_locked_balance WHERE block_height > $1;",
                 &[&height],
             )
             .await
@@ -247,7 +247,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml_address_balance (address, block_height, coin_or_token_id, amount)
+                    INSERT INTO ml.address_balance (address, block_height, coin_or_token_id, amount)
                     VALUES ($1, $2, $3, $4)
                     ON CONFLICT (address, block_height, coin_or_token_id)
                     DO UPDATE SET amount = $4;
@@ -272,7 +272,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml_address_locked_balance (address, block_height, coin_or_token_id, amount)
+                    INSERT INTO ml.address_locked_balance (address, block_height, coin_or_token_id, amount)
                     VALUES ($1, $2, $3, $4)
                     ON CONFLICT (address, block_height, coin_or_token_id)
                     DO UPDATE SET amount = $4;
@@ -294,7 +294,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query(
                 r#"
                     SELECT transaction_id
-                    FROM ml_address_transactions
+                    FROM ml.address_transactions
                     WHERE address = $1
                     ORDER BY block_height DESC;
                 "#,
@@ -329,7 +329,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "DELETE FROM ml_address_transactions WHERE block_height > $1;",
+                "DELETE FROM ml.address_transactions WHERE block_height > $1;",
                 &[&height],
             )
             .await
@@ -350,7 +350,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             self.tx
                 .execute(
                     r#"
-                        INSERT INTO ml_address_transactions (address, block_height, transaction_id)
+                        INSERT INTO ml.address_transactions (address, block_height, transaction_id)
                         VALUES ($1, $2, $3)
                         ON CONFLICT (address, block_height, transaction_id)
                         DO NOTHING;
@@ -377,7 +377,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 (
                 (
                     SELECT block_height, block_timestamp
-                    FROM ml_blocks
+                    FROM ml.blocks
                     WHERE block_height IS NOT NULL
                     ORDER BY block_height DESC
                     LIMIT $1
@@ -385,7 +385,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 UNION ALL
                 (
                     SELECT block_height, block_timestamp
-                    FROM ml_genesis
+                    FROM ml.genesis
                     LIMIT 1
                 )
                 ORDER BY block_height DESC
@@ -415,7 +415,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r#"
                 (
                     SELECT block_height, block_id, block_timestamp
-                    FROM ml_blocks
+                    FROM ml.blocks
                     WHERE block_height IS NOT NULL
                     ORDER BY block_height DESC
                     LIMIT 1
@@ -423,7 +423,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 UNION ALL
                 (
                     SELECT block_height, block_id, block_timestamp
-                    FROM ml_genesis
+                    FROM ml.genesis
                     LIMIT 1
                 )
                 ORDER BY block_height DESC
@@ -462,8 +462,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     async fn create_tables(&mut self) -> Result<(), ApiServerStorageError> {
         logging::log::info!("Creating database tables");
 
+        self.just_execute("CREATE SCHEMA ml;").await?;
+
         self.just_execute(
-            "CREATE TABLE ml_misc_data (
+            "CREATE TABLE ml.misc_data (
             name TEXT PRIMARY KEY,
             value bytea NOT NULL
         );",
@@ -471,7 +473,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_genesis (
+            "CREATE TABLE ml.genesis (
             block_height bigint PRIMARY KEY,
             block_id bytea NOT NULL,
             block_timestamp bigint NOT NULL,
@@ -481,7 +483,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_blocks (
+            "CREATE TABLE ml.blocks (
                 block_id bytea PRIMARY KEY,
                 block_height bigint,
                 block_timestamp bigint NOT NULL,
@@ -490,25 +492,25 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
-        // Add ml_blocks indexes on height and timestamp
-        self.just_execute("CREATE INDEX ml_blocks_block_height_index ON ml_blocks (block_height);")
+        // Add ml.blocks indexes on height and timestamp
+        self.just_execute("CREATE INDEX blocks_block_height_index ON ml.blocks (block_height);")
             .await?;
         self.just_execute(
-            "CREATE INDEX ml_blocks_block_timestamp_index ON ml_blocks (block_timestamp);",
+            "CREATE INDEX blocks_block_timestamp_index ON ml.blocks (block_timestamp);",
         )
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_transactions (
+            "CREATE TABLE ml.transactions (
                     transaction_id bytea PRIMARY KEY,
-                    owning_block_id bytea REFERENCES ml_blocks(block_id),
+                    owning_block_id bytea REFERENCES ml.blocks(block_id),
                     transaction_data bytea NOT NULL
                 );", // block_id can be null if the transaction is not in the main chain
         )
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_address_balance (
+            "CREATE TABLE ml.address_balance (
                     address TEXT NOT NULL,
                     block_height bigint NOT NULL,
                     coin_or_token_id bytea NOT NULL,
@@ -519,7 +521,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_address_locked_balance (
+            "CREATE TABLE ml.address_locked_balance (
                     address TEXT NOT NULL,
                     block_height bigint NOT NULL,
                     coin_or_token_id bytea NOT NULL,
@@ -530,7 +532,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_address_transactions (
+            "CREATE TABLE ml.address_transactions (
                     address TEXT NOT NULL,
                     block_height bigint NOT NULL,
                     transaction_id bytea NOT NULL,
@@ -540,7 +542,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_utxo (
+            "CREATE TABLE ml.utxo (
                     outpoint bytea NOT NULL,
                     block_height bigint,
                     spent BOOLEAN NOT NULL,
@@ -552,7 +554,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_locked_utxo (
+            "CREATE TABLE ml.locked_utxo (
                     outpoint bytea NOT NULL,
                     block_height bigint,
                     address TEXT NOT NULL,
@@ -565,15 +567,15 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_block_aux_data (
-                    block_id bytea PRIMARY KEY REFERENCES ml_blocks(block_id),
+            "CREATE TABLE ml.block_aux_data (
+                    block_id bytea PRIMARY KEY REFERENCES ml.blocks(block_id),
                     aux_data bytea NOT NULL
                 );",
         )
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_pool_data (
+            "CREATE TABLE ml.pool_data (
                     pool_id TEXT NOT NULL,
                     block_height bigint NOT NULL,
                     staker_balance TEXT NOT NULL,
@@ -584,7 +586,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_delegations (
+            "CREATE TABLE ml.delegations (
                     delegation_id TEXT NOT NULL,
                     block_height bigint NOT NULL,
                     pool_id TEXT NOT NULL,
@@ -598,12 +600,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         // index when searching for delegations by address
         self.just_execute(
-            "CREATE INDEX ml_delegations_spend_destination_index ON ml_delegations (spend_destination);",
+            "CREATE INDEX delegations_spend_destination_index ON ml.delegations (spend_destination);",
         )
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_fungible_token (
+            "CREATE TABLE ml.fungible_token (
                     token_id bytea NOT NULL,
                     block_height bigint NOT NULL,
                     issuance bytea NOT NULL,
@@ -613,7 +615,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         .await?;
 
         self.just_execute(
-            "CREATE TABLE ml_nft_issuance (
+            "CREATE TABLE ml.nft_issuance (
                     nft_id bytea NOT NULL,
                     block_height bigint NOT NULL,
                     issuance bytea NOT NULL,
@@ -630,18 +632,26 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     async fn drop_tables(&mut self) -> Result<(), ApiServerStorageError> {
         logging::log::info!("Dropping database tables");
 
-        self.just_execute("DROP TABLE ml_misc_data;").await?;
-        self.just_execute("DROP TABLE ml_genesis;").await?;
-        self.just_execute("DROP TABLE ml_blocks;").await?;
-        self.just_execute("DROP TABLE ml_transactions;").await?;
-        self.just_execute("DROP TABLE ml_address_balance;").await?;
-        self.just_execute("DROP TABLE ml_address_transactions;").await?;
-        self.just_execute("DROP TABLE ml_utxo;").await?;
-        self.just_execute("DROP TABLE ml_block_aux_data;").await?;
-        self.just_execute("DROP TABLE ml_pool_data;").await?;
-        self.just_execute("DROP TABLE ml_delegations;").await?;
-        self.just_execute("DROP TABLE ml_fungible_token;").await?;
-        self.just_execute("DROP TABLE ml_nft_issuance;").await?;
+        // drop any legacy tables from before version 8
+        self.just_execute("DROP TABLE IF EXISTS ml_misc_data CASCADE;").await?;
+        self.just_execute("DROP TABLE IF EXISTS ml_transactions CASCADE;").await?;
+        self.just_execute("DROP TABLE IF EXISTS ml_address_balance CASCADE;").await?;
+        self.just_execute("DROP TABLE IF EXISTS ml_address_locked_balance CASCADE;")
+            .await?;
+        self.just_execute("DROP TABLE IF EXISTS ml_address_transactions CASCADE;")
+            .await?;
+        self.just_execute("DROP TABLE IF EXISTS ml_utxo CASCADE;").await?;
+        self.just_execute("DROP TABLE IF EXISTS ml_locked_utxo CASCADE;").await?;
+        self.just_execute("DROP TABLE IF EXISTS ml_block_aux_data CASCADE;").await?;
+        self.just_execute("DROP TABLE IF EXISTS ml_pool_data CASCADE;").await?;
+        self.just_execute("DROP TABLE IF EXISTS ml_delegations CASCADE;").await?;
+        self.just_execute("DROP TABLE IF EXISTS ml_fungible_token CASCADE;").await?;
+        self.just_execute("DROP TABLE IF EXISTS ml_nft_issuance CASCADE;").await?;
+        self.just_execute("DROP TABLE IF EXISTS ml_genesis CASCADE;").await?;
+        self.just_execute("DROP TABLE IF EXISTS ml_blocks CASCADE;").await?;
+
+        // drop the new ml schema since version 8
+        self.just_execute("DROP SCHEMA IF EXISTS ml CASCADE;").await?;
 
         logging::log::info!("Done dropping database tables");
 
@@ -659,7 +669,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         // Insert row to the table
         self.tx
             .execute(
-                "INSERT INTO ml_misc_data (name, value) VALUES ($1, $2)",
+                "INSERT INTO ml.misc_data (name, value) VALUES ($1, $2)",
                 &[&VERSION_STR, &CURRENT_STORAGE_VERSION.encode()],
             )
             .await
@@ -667,7 +677,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml_genesis (block_height, block_id, block_timestamp, block_data) VALUES ($1, $2, $3, $4)",
+                "INSERT INTO ml.genesis (block_height, block_id, block_timestamp, block_data) VALUES ($1, $2, $3, $4)",
                 &[
                     &(0i64),
                     &chain_config.genesis_block_id().encode(),
@@ -701,7 +711,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                "SELECT block_id FROM ml_blocks WHERE block_height = $1;",
+                "SELECT block_id FROM ml.blocks WHERE block_height = $1;",
                 &[&height],
             )
             .await
@@ -732,7 +742,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "UPDATE ml_blocks
+                "UPDATE ml.blocks
                 SET block_height = NULL
                 WHERE block_height > $1;",
                 &[&height],
@@ -750,7 +760,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                "SELECT block_data, block_height FROM ml_blocks WHERE block_id = $1;",
+                "SELECT block_data, block_height FROM ml.blocks WHERE block_id = $1;",
                 &[&block_id.encode()],
             )
             .await
@@ -786,7 +796,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query_one(
                 r"
                 SELECT COALESCE(MIN(block_height), 0), COALESCE(MAX(block_height), 0)
-                FROM ml_blocks
+                FROM ml.blocks
                 WHERE block_timestamp BETWEEN $1 AND $2 AND block_height IS NOT NULL
                 ;",
                 &[&from, &to],
@@ -815,7 +825,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml_blocks (block_id, block_height, block_timestamp, block_data) VALUES ($1, $2, $3, $4)
+                "INSERT INTO ml.blocks (block_id, block_height, block_timestamp, block_data) VALUES ($1, $2, $3, $4)
                     ON CONFLICT (block_id) DO UPDATE
                     SET block_data = $4, block_height = $2;",
                 &[&block_id.encode(), &height, &timestamp, &block.encode()],
@@ -837,9 +847,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .tx
             .query_opt(
                 r#"SELECT pool_id, balance, spend_destination, next_nonce
-                FROM ml_delegations
+                FROM ml.delegations
                 WHERE delegation_id = $1
-                AND block_height = (SELECT MAX(block_height) FROM ml_delegations WHERE delegation_id = $1);
+                AND block_height = (SELECT MAX(block_height) FROM ml.delegations WHERE delegation_id = $1);
                 "#,
                 &[&delegation_id.as_str()],
             )
@@ -895,7 +905,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r#"SELECT delegation_id, pool_id, balance, spend_destination, next_nonce
                 FROM (
                     SELECT delegation_id, pool_id, balance, spend_destination, next_nonce, ROW_NUMBER() OVER(PARTITION BY delegation_id ORDER BY block_height DESC) as newest
-                    FROM ml_delegations
+                    FROM ml.delegations
                     WHERE spend_destination = $1
                 ) AS sub
                 WHERE newest = 1;
@@ -962,7 +972,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml_delegations (delegation_id, block_height, pool_id, balance, spend_destination, next_nonce)
+                    INSERT INTO ml.delegations (delegation_id, block_height, pool_id, balance, spend_destination, next_nonce)
                     VALUES($1, $2, $3, $4, $5, $6)
                     ON CONFLICT (delegation_id, block_height) DO UPDATE
                     SET pool_id = $3, balance = $4, spend_destination = $5, next_nonce = $6;
@@ -990,7 +1000,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "DELETE FROM ml_delegations WHERE block_height > $1;",
+                "DELETE FROM ml.delegations WHERE block_height > $1;",
                 &[&height],
             )
             .await
@@ -1007,7 +1017,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "DELETE FROM ml_pool_data WHERE block_height > $1;",
+                "DELETE FROM ml.pool_data WHERE block_height > $1;",
                 &[&height],
             )
             .await
@@ -1030,9 +1040,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .tx
             .query_one(
                 r#"SELECT COUNT(*)
-                    FROM ml_pool_data
+                    FROM ml.pool_data
                     WHERE pool_id = $1 AND block_height BETWEEN $2 AND $3
-                    AND block_height != (SELECT COALESCE(MIN(block_height), 0) FROM ml_pool_data WHERE pool_id = $1)
+                    AND block_height != (SELECT COALESCE(MIN(block_height), 0) FROM ml.pool_data WHERE pool_id = $1)
                     AND staker_balance::NUMERIC != 0
                 "#,
                 &[&pool_id_str.as_str(), &from_height, &to_height],
@@ -1056,10 +1066,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .query(
                 r#"SELECT delegation_id, balance, spend_destination, next_nonce
-                    FROM ml_delegations
+                    FROM ml.delegations
                     WHERE pool_id = $1
                     AND (delegation_id, block_height) in (SELECT delegation_id, MAX(block_height)
-                                                            FROM ml_delegations
+                                                            FROM ml.delegations
                                                             WHERE pool_id = $1
                                                             GROUP BY delegation_id)
                 "#,
@@ -1117,7 +1127,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query_opt(
                 r#"
                 SELECT data
-                FROM ml_pool_data
+                FROM ml.pool_data
                 WHERE pool_id = $1
                 ORDER BY block_height DESC
                 LIMIT 1;
@@ -1157,8 +1167,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 SELECT sub.pool_id, data
                 FROM (
                     SELECT pool_id, data, staker_balance, block_height, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height DESC) as newest
-                    FROM ml_pool_data
-                ) AS sub INNER JOIN (SELECT pool_id, MIN(block_height) AS created_height FROM ml_pool_data GROUP BY pool_id) as created ON sub.pool_id = created.pool_id
+                    FROM ml.pool_data
+                ) AS sub INNER JOIN (SELECT pool_id, MIN(block_height) AS created_height FROM ml.pool_data GROUP BY pool_id) as created ON sub.pool_id = created.pool_id
                 WHERE newest = 1 AND staker_balance::NUMERIC != 0
                 ORDER BY created_height DESC
                 OFFSET $1
@@ -1201,7 +1211,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 SELECT pool_id, data
                 FROM (
                     SELECT pool_id, data, staker_balance, ROW_NUMBER() OVER(PARTITION BY pool_id ORDER BY block_height DESC) as newest
-                    FROM ml_pool_data
+                    FROM ml.pool_data
                 ) AS sub
                 WHERE newest = 1 AND staker_balance::NUMERIC != 0
                 ORDER BY staker_balance DESC
@@ -1246,7 +1256,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml_pool_data (pool_id, block_height, staker_balance, data)
+                    INSERT INTO ml.pool_data (pool_id, block_height, staker_balance, data)
                     VALUES ($1, $2, $3, $4)
                 "#,
                 &[&pool_id.as_str(), &height, &amount_str, &pool_data.encode()],
@@ -1266,7 +1276,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .tx
             .query_opt(
                 r#"SELECT owning_block_id, transaction_data
-                 FROM ml_transactions
+                 FROM ml.transactions
                  WHERE transaction_id = $1;
             "#,
                 &[&transaction_id.encode()],
@@ -1317,9 +1327,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     t.transaction_data,
                     b.aux_data
                 FROM
-                    ml_transactions t
+                    ml.transactions t
                 LEFT JOIN
-                    ml_block_aux_data b ON t.owning_block_id = b.block_id
+                    ml.block_aux_data b ON t.owning_block_id = b.block_id
                 WHERE
                     t.transaction_id = $1;
                 "#,
@@ -1373,11 +1383,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     t.transaction_data,
                     b.aux_data
                 FROM
-                    ml_blocks mb
+                    ml.blocks mb
                 INNER JOIN
-                    ml_transactions t ON t.owning_block_id = mb.block_id
+                    ml.transactions t ON t.owning_block_id = mb.block_id
                 INNER JOIN
-                    ml_block_aux_data b ON t.owning_block_id = b.block_id
+                    ml.block_aux_data b ON t.owning_block_id = b.block_id
                 WHERE mb.block_height IS NOT NULL
                 ORDER BY mb.block_height DESC
                 OFFSET $1
@@ -1426,7 +1436,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         );
 
         self.tx.execute(
-                "INSERT INTO ml_transactions (transaction_id, owning_block_id, transaction_data) VALUES ($1, $2, $3)
+                "INSERT INTO ml.transactions (transaction_id, owning_block_id, transaction_data) VALUES ($1, $2, $3)
                     ON CONFLICT (transaction_id) DO UPDATE
                     SET owning_block_id = $2, transaction_data = $3;", &[&transaction_id.encode(), &owning_block.map(|v|v.encode()), &transaction.encode()]
             ).await
@@ -1442,7 +1452,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                "SELECT utxo, spent FROM ml_utxo WHERE outpoint = $1 ORDER BY block_height DESC LIMIT 1;",
+                "SELECT utxo, spent FROM ml.utxo WHERE outpoint = $1 ORDER BY block_height DESC LIMIT 1;",
                 &[&outpoint.encode()],
             )
             .await
@@ -1477,7 +1487,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 r#"SELECT outpoint, utxo
                 FROM (
                     SELECT outpoint, utxo, spent, ROW_NUMBER() OVER(PARTITION BY outpoint ORDER BY block_height DESC) as newest
-                    FROM ml_utxo
+                    FROM ml.utxo
                     WHERE address = $1
                 ) AS sub
                 WHERE newest = 1 AND spent = false;"#,
@@ -1518,11 +1528,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .query(
                 r#"
                 SELECT outpoint, utxo
-                FROM ml_utxo
+                FROM ml.utxo
                 WHERE address = $1
                 UNION
                 SELECT outpoint, utxo
-                FROM ml_locked_utxo
+                FROM ml.locked_utxo
                 WHERE address = $1
                 ;"#,
                 &[&address],
@@ -1566,8 +1576,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .tx
             .query(
                 r#"SELECT outpoint, utxo
-                FROM ml_locked_utxo
-                WHERE lock_until_block = $1 OR lock_until_timestamp BETWEEN $2 AND $3
+                FROM ml.locked_utxo
+                WHERE lock_until_block = $1 OR lock_until_timestamp > $2 AND lock_until_timestamp <= $3
                 ;"#,
                 &[&block_height, &from_time, &to_time],
             )
@@ -1607,7 +1617,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml_utxo (outpoint, utxo, spent, address, block_height) VALUES ($1, $2, $3, $4, $5)
+                "INSERT INTO ml.utxo (outpoint, utxo, spent, address, block_height) VALUES ($1, $2, $3, $4, $5)
                     ON CONFLICT (outpoint, block_height) DO UPDATE
                     SET utxo = $2, spent = $3;",
                 &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &spent, &address, &height],
@@ -1633,7 +1643,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml_locked_utxo (outpoint, utxo, lock_until_timestamp, lock_until_block, address, block_height)
+                "INSERT INTO ml.locked_utxo (outpoint, utxo, lock_until_timestamp, lock_until_block, address, block_height)
                     VALUES ($1, $2, $3, $4, $5, $6);",
                 &[&outpoint.encode(), &utxo.utxo_with_extra_info().encode(), &lock_time, &lock_height, &address, &height],
             )
@@ -1650,7 +1660,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let height = Self::block_height_to_postgres_friendly(block_height);
 
         self.tx
-            .execute("DELETE FROM ml_utxo WHERE block_height > $1;", &[&height])
+            .execute("DELETE FROM ml.utxo WHERE block_height > $1;", &[&height])
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
@@ -1665,7 +1675,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "DELETE FROM ml_locked_utxo WHERE block_height > $1;",
+                "DELETE FROM ml.locked_utxo WHERE block_height > $1;",
                 &[&height],
             )
             .await
@@ -1684,7 +1694,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml_fungible_token (token_id, block_height, issuance) VALUES ($1, $2, $3)
+                "INSERT INTO ml.fungible_token (token_id, block_height, issuance) VALUES ($1, $2, $3)
                     ON CONFLICT (token_id, block_height) DO UPDATE
                     SET issuance = $3;",
                 &[&token_id.encode(), &height, &issuance.encode()],
@@ -1702,7 +1712,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                "SELECT issuance FROM ml_fungible_token WHERE token_id = $1
+                "SELECT issuance FROM ml.fungible_token WHERE token_id = $1
                     ORDER BY block_height DESC
                     LIMIT 1;",
                 &[&token_id.encode()],
@@ -1746,7 +1756,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                "SELECT issuance FROM ml_nft_issuance WHERE nft_id = $1
+                "SELECT issuance FROM ml.nft_issuance WHERE nft_id = $1
                     ORDER BY block_height DESC
                     LIMIT 1;",
                 &[&token_id.encode()],
@@ -1781,7 +1791,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml_nft_issuance (nft_id, block_height, issuance) VALUES ($1, $2, $3);",
+                "INSERT INTO ml.nft_issuance (nft_id, block_height, issuance) VALUES ($1, $2, $3);",
                 &[&token_id.encode(), &height, &issuance.encode()],
             )
             .await
@@ -1798,7 +1808,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "DELETE FROM ml_fungible_token WHERE block_height > $1;",
+                "DELETE FROM ml.fungible_token WHERE block_height > $1;",
                 &[&height],
             )
             .await
@@ -1815,7 +1825,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "DELETE FROM ml_nft_issuance WHERE block_height > $1;",
+                "DELETE FROM ml.nft_issuance WHERE block_height > $1;",
                 &[&height],
             )
             .await
@@ -1831,7 +1841,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                "SELECT aux_data FROM ml_block_aux_data WHERE block_id = $1;",
+                "SELECT aux_data FROM ml.block_aux_data WHERE block_id = $1;",
                 &[&block_id.encode()],
             )
             .await
@@ -1864,7 +1874,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml_block_aux_data (block_id, aux_data) VALUES ($1, $2)
+                "INSERT INTO ml.block_aux_data (block_id, aux_data) VALUES ($1, $2)
                     ON CONFLICT (block_id) DO UPDATE
                     SET aux_data = $2;",
                 &[&block_id.encode(), &block_aux_data.encode()],
