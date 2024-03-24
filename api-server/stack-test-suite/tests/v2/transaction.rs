@@ -214,7 +214,7 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
                 let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
 
                 let mut db_tx = storage.transaction_rw().await.unwrap();
-                db_tx.initialize_storage(&chain_config).await.unwrap();
+                db_tx.reinitialize_storage(&chain_config).await.unwrap();
                 db_tx.commit().await.unwrap();
 
                 storage
@@ -361,7 +361,7 @@ async fn ok(#[case] seed: Seed) {
                 let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
 
                 let mut db_tx = storage.transaction_rw().await.unwrap();
-                db_tx.initialize_storage(&chain_config).await.unwrap();
+                db_tx.reinitialize_storage(&chain_config).await.unwrap();
                 db_tx.commit().await.unwrap();
 
                 storage

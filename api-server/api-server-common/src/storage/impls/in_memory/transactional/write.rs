@@ -35,13 +35,6 @@ use super::ApiServerInMemoryStorageTransactionalRw;
 
 #[async_trait::async_trait]
 impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
-    async fn initialize_storage(
-        &mut self,
-        chain_config: &ChainConfig,
-    ) -> Result<(), ApiServerStorageError> {
-        self.transaction.initialize_storage(chain_config)
-    }
-
     async fn reinitialize_storage(
         &mut self,
         chain_config: &ChainConfig,

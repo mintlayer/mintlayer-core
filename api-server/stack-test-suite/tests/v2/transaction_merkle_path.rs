@@ -91,7 +91,7 @@ async fn get_block_failed(#[case] seed: Seed) {
                 let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
 
                 let mut db_tx = storage.transaction_rw().await.unwrap();
-                db_tx.initialize_storage(&chain_config).await.unwrap();
+                db_tx.reinitialize_storage(&chain_config).await.unwrap();
                 db_tx.commit().await.unwrap();
 
                 storage
@@ -226,7 +226,7 @@ async fn transaction_not_part_of_block(#[case] seed: Seed) {
                 let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
 
                 let mut db_tx = storage.transaction_rw().await.unwrap();
-                db_tx.initialize_storage(&chain_config).await.unwrap();
+                db_tx.reinitialize_storage(&chain_config).await.unwrap();
                 db_tx.commit().await.unwrap();
 
                 storage
@@ -344,7 +344,7 @@ async fn cannot_find_transaction_in_block(#[case] seed: Seed) {
                 let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
 
                 let mut db_tx = storage.transaction_rw().await.unwrap();
-                db_tx.initialize_storage(&chain_config).await.unwrap();
+                db_tx.reinitialize_storage(&chain_config).await.unwrap();
                 db_tx.commit().await.unwrap();
 
                 storage
@@ -488,7 +488,7 @@ async fn ok(#[case] seed: Seed) {
                 let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
 
                 let mut db_tx = storage.transaction_rw().await.unwrap();
-                db_tx.initialize_storage(&chain_config).await.unwrap();
+                db_tx.reinitialize_storage(&chain_config).await.unwrap();
                 db_tx.commit().await.unwrap();
 
                 storage
