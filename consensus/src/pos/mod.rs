@@ -60,7 +60,6 @@ use crate::{
 pub enum StakeResult {
     Success(BlockTimestamp, VRFReturn),
     Failed,
-    Stopped,
 }
 
 fn randomness_of_sealed_epoch<S: EpochStorageRead>(
@@ -203,9 +202,8 @@ pub fn stake(
     chain_config: &ChainConfig,
     pos_config: &PoSChainConfig,
     mut pos_data: PoSData,
-    block_timestamp_seconds: Arc<AcqRelAtomicU64>,
+    block_timestamp_seconds: u64,
     finalize_pos_data: PoSFinalizeBlockInputData,
-    stop_flag: Arc<RelaxedAtomicBool>,
 ) -> Result<StakeResult, ConsensusPoSError> {
     let sealed_epoch_randomness = finalize_pos_data.sealed_epoch_randomness();
     let vrf_pk = finalize_pos_data.vrf_public_key();
@@ -213,7 +211,7 @@ pub fn stake(
         .final_supply()
         .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
 
-    let mut block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
+    let mut block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds);
 
     ensure!(
         block_timestamp <= finalize_pos_data.max_block_timestamp(),
@@ -266,14 +264,8 @@ pub fn stake(
             ));
         }
 
-        if stop_flag.load() {
-            return Ok(StakeResult::Stopped);
-        }
-
         block_timestamp =
             block_timestamp.add_int_seconds(1).ok_or(ConsensusPoSError::TimestampOverflow)?;
-
-        block_timestamp_seconds.store(block_timestamp.as_int_seconds());
     }
 
     Ok(StakeResult::Failed)

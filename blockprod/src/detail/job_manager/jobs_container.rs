@@ -63,18 +63,10 @@ impl JobsContainer {
     }
 
     pub fn handle_chainstate_event(&mut self, new_tip_id: Id<GenBlock>) {
-        let jobs_to_stop: Vec<JobKey> = self
-            .jobs
+        self.jobs
             .iter()
             .filter(|(job_key, _)| job_key.current_tip_id() != new_tip_id)
-            .map(|(job_key, _)| job_key.clone())
-            .collect();
-
-        for job_key in jobs_to_stop {
-            self.remove_job(job_key, true);
-        }
-
-        self.last_used_block_timestamps = BTreeMap::new();
+            .for_each(|(_, handle)| _ = handle.cancel_sender.send(()));
     }
 
     /// Remove a job by its key
@@ -83,6 +75,8 @@ impl JobsContainer {
     ///
     /// Returns true if the job was removed, false if it was not found.
     fn remove_job(&mut self, job_key: JobKey, and_stop: bool) -> bool {
+        self.last_used_block_timestamps.remove(&job_key.custom_id);
+
         match self.jobs.entry(job_key) {
             Entry::Vacant(_) => false,
             Entry::Occupied(entry) => {

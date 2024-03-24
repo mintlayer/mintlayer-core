@@ -171,7 +171,7 @@ pub fn finalize_consensus_data(
     chain_config: &ChainConfig,
     block_header: &mut BlockHeader,
     block_height: BlockHeight,
-    block_timestamp_seconds: Arc<AcqRelAtomicU64>,
+    block_timestamp_seconds: u64,
     stop_flag: Arc<RelaxedAtomicBool>,
     finalize_data: FinalizeBlockInputData,
 ) -> Result<SignedBlockHeader, ConsensusCreationError> {
@@ -200,9 +200,8 @@ pub fn finalize_consensus_data(
                             chain_config,
                             pos_status.get_chain_config(),
                             pos_data.as_ref().clone(),
-                            Arc::clone(&block_timestamp_seconds),
+                            block_timestamp_seconds,
                             finalize_pos_data,
-                            stop_flag,
                         )?;
 
                         match stake_result {
@@ -226,7 +225,6 @@ pub fn finalize_consensus_data(
                                 Ok(signed_block_header)
                             }
                             StakeResult::Failed => Err(ConsensusCreationError::StakingFailed),
-                            StakeResult::Stopped => Err(ConsensusCreationError::StakingStopped),
                         }
                     }
                 },
