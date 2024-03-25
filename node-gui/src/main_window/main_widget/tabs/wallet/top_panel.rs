@@ -15,7 +15,7 @@
 
 use common::{chain::ChainConfig, primitives::Amount};
 use iced::{
-    widget::{button, row, tooltip, Row, Text},
+    widget::{button, horizontal_space, row, text::LineHeight, tooltip, Text},
     Alignment, Element, Length,
 };
 use wallet::account::currency_grouper::Currency;
@@ -43,17 +43,25 @@ pub fn view_top_panel(
 
     let password = match wallet_info.encryption {
         EncryptionState::EnabledLocked => {
-            row![iced::widget::button(Text::new("Unlock")).on_press(WalletMessage::Unlock)]
+            row![iced::widget::button(Text::new("Unlock").line_height(LineHeight::Relative(1.0)))
+                .on_press(WalletMessage::Unlock)]
         }
         EncryptionState::EnabledUnlocked => row![
-            iced::widget::button(Text::new("Lock")).on_press(WalletMessage::Lock),
-            iced::widget::button(Text::new("Disable wallet encryption"))
-                .on_press(WalletMessage::RemovePassword)
+            iced::widget::button(Text::new("Lock").line_height(LineHeight::Relative(1.0)))
+                .on_press(WalletMessage::Lock),
+            iced::widget::button(
+                Text::new("Disable wallet encryption").line_height(LineHeight::Relative(1.0))
+            )
+            .on_press(WalletMessage::RemovePassword)
         ],
         EncryptionState::Disabled => row![
-            iced::widget::button(Text::new("Encrypt wallet")).on_press(WalletMessage::SetPassword),
+            iced::widget::button(
+                Text::new("Encrypt wallet").line_height(LineHeight::Relative(1.0))
+            )
+            .on_press(WalletMessage::SetPassword),
             tooltip(
                 Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                    .line_height(LineHeight::Relative(1.0))
                     .font(iced_aw::BOOTSTRAP_FONT),
                 ENCRYPT_WALLET_TOOLTIP_TEXT,
                 tooltip::Position::Bottom
@@ -67,9 +75,9 @@ pub fn view_top_panel(
 
     row![
         balance,
-        Row::new().width(Length::Fill),
+        horizontal_space(),
         password,
-        button(Text::new("Close wallet"))
+        button(Text::new("Close wallet").line_height(LineHeight::Relative(1.0)))
             .style(iced::theme::Button::Destructive)
             .on_press(WalletMessage::Close),
     ]
