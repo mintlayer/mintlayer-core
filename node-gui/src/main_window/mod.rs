@@ -501,6 +501,15 @@ impl MainWindow {
                     self.show_error(error.to_string());
                     Command::none()
                 }
+                BackendEvent::DecommissionPool(Ok(transaction_info)) => {
+                    self.wallet_msg = Some(WalletMessage::DecommissionPoolSucceed);
+                    self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };
+                    Command::none()
+                }
+                BackendEvent::DecommissionPool(Err(error)) => {
+                    self.show_error(error.to_string());
+                    Command::none()
+                }
                 BackendEvent::CreateDelegation(Ok(transaction_info)) => {
                     self.wallet_msg = Some(WalletMessage::CreateDelegationSucceed);
                     self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };

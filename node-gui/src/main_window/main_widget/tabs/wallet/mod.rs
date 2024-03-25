@@ -37,8 +37,9 @@ use wallet_controller::DEFAULT_ACCOUNT_INDEX;
 use crate::{
     backend::{
         messages::{
-            AccountId, BackendRequest, CreateDelegationRequest, DelegateStakingRequest,
-            SendDelegateToAddressRequest, SendRequest, StakeRequest, WalletId,
+            AccountId, BackendRequest, CreateDelegationRequest, DecommissionPoolRequest,
+            DelegateStakingRequest, SendDelegateToAddressRequest, SendRequest, StakeRequest,
+            WalletId,
         },
         BackendSender,
     },
@@ -85,6 +86,11 @@ pub enum WalletMessage {
     CreateStakingPool,
     CreateStakingPoolSucceed,
 
+    DecommissionPoolIdEdit(String),
+    DecommissionPoolAddressEdit(String),
+    DecommissionPool,
+    DecommissionPoolSucceed,
+
     DelegationPoolIdEdit(String),
     DelegationAddressEdit(String),
     CreateDelegation,
@@ -116,6 +122,9 @@ pub struct AccountState {
     margin_per_thousand: String,
     cost_per_block_amount: String,
     decommission_address: String,
+
+    decommission_pool_address: String,
+    decommission_pool_id: String,
 
     delegation_pool_id: String,
     delegation_address: String,
@@ -245,6 +254,14 @@ impl WalletTab {
                 self.account_state.decommission_address = value;
                 Command::none()
             }
+            WalletMessage::DecommissionPoolIdEdit(value) => {
+                self.account_state.decommission_pool_id = value;
+                Command::none()
+            }
+            WalletMessage::DecommissionPoolAddressEdit(value) => {
+                self.account_state.decommission_pool_address = value;
+                Command::none()
+            }
 
             WalletMessage::CreateStakingPool => {
                 let request = StakeRequest {
@@ -263,6 +280,21 @@ impl WalletTab {
                 self.account_state.margin_per_thousand.clear();
                 self.account_state.cost_per_block_amount.clear();
                 self.account_state.decommission_address.clear();
+                Command::none()
+            }
+            WalletMessage::DecommissionPool => {
+                let request = DecommissionPoolRequest {
+                    wallet_id: self.wallet_id,
+                    account_id: self.selected_account,
+                    pool_id: self.account_state.decommission_pool_id.clone(),
+                    output_address: self.account_state.decommission_pool_address.clone(),
+                };
+                backend_sender.send(BackendRequest::DecommissionPool(request));
+                Command::none()
+            }
+            WalletMessage::DecommissionPoolSucceed => {
+                self.account_state.decommission_pool_id.clear();
+                self.account_state.decommission_pool_address.clear();
                 Command::none()
             }
             WalletMessage::ToggleStaking(enabled) => {
@@ -424,6 +456,8 @@ impl Tab for WalletTab {
                             &self.account_state.margin_per_thousand,
                             &self.account_state.cost_per_block_amount,
                             &self.account_state.decommission_address,
+                            &self.account_state.decommission_pool_id,
+                            &self.account_state.decommission_pool_address,
                             still_syncing.clone(),
                         ),
                         SelectedPanel::Delegation => delegation::view_delegation(

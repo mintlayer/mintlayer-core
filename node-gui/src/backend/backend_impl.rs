@@ -47,8 +47,9 @@ use super::{
     error::BackendError,
     messages::{
         AccountId, AccountInfo, AddressInfo, BackendEvent, BackendRequest, CreateDelegationRequest,
-        DelegateStakingRequest, EncryptionAction, EncryptionState, SendDelegateToAddressRequest,
-        SendRequest, StakeRequest, TransactionInfo, WalletId, WalletInfo,
+        DecommissionPoolRequest, DelegateStakingRequest, EncryptionAction, EncryptionState,
+        SendDelegateToAddressRequest, SendRequest, StakeRequest, TransactionInfo, WalletId,
+        WalletInfo,
     },
     p2p_event_handler::P2pEventHandler,
     parse_address, parse_coin_amount,
@@ -471,6 +472,35 @@ impl Backend {
         Ok(TransactionInfo { wallet_id, tx })
     }
 
+    async fn decommission_pool(
+        &mut self,
+        request: DecommissionPoolRequest,
+    ) -> Result<TransactionInfo, BackendError> {
+        let DecommissionPoolRequest {
+            wallet_id,
+            account_id,
+            pool_id,
+            output_address,
+        } = request;
+
+        let pool_id = Address::from_string(&self.chain_config, &pool_id)
+            .map_err(|e| BackendError::AddressError(e.to_string()))?
+            .into_object();
+
+        let output_address = Address::from_string(&self.chain_config, &output_address)
+            .map_err(|e| BackendError::AddressError(e.to_string()))?
+            .into_object();
+
+        let tx = self
+            .synced_wallet_controller(wallet_id, account_id.account_index())
+            .await?
+            .decommission_stake_pool(pool_id, Some(output_address))
+            .await
+            .map_err(|e| BackendError::WalletError(e.to_string()))?;
+
+        Ok(TransactionInfo { wallet_id, tx })
+    }
+
     async fn create_delegation(
         &mut self,
         request: CreateDelegationRequest,
@@ -645,6 +675,10 @@ impl Backend {
             BackendRequest::StakeAmount(stake_request) => {
                 let stake_res = self.stake_amount(stake_request).await;
                 Self::send_event(&self.event_tx, BackendEvent::StakeAmount(stake_res));
+            }
+            BackendRequest::DecommissionPool(decommission_request) => {
+                let stake_res = self.decommission_pool(decommission_request).await;
+                Self::send_event(&self.event_tx, BackendEvent::DecommissionPool(stake_res));
             }
             BackendRequest::CreateDelegation(request) => {
                 let result = self.create_delegation(request).await;
