@@ -89,6 +89,7 @@ impl BlockProcessingErrorClassification for BlockError {
             | BlockError::InvariantErrorDisconnectedHeaders
             | BlockError::DbCommitError(_, _, _)
             | BlockError::BlockAlreadyExists(_)
+            | BlockError::BlockIndexAlreadyExists(_)
             | BlockError::BlockAlreadyProcessed(_)
             | BlockError::BlockDataMissingForValidBlockIndex(_)
             // These contain an error inside, but they are meant to denote storage/invariant
