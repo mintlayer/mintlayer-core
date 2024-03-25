@@ -64,6 +64,13 @@ impl WalletCliArgs {
 }
 
 #[derive(Args, Clone, Debug)]
+#[command(
+    group(
+        clap::ArgGroup::new("remote_rpc_auth")
+            .args(["remote_rpc_wallet_cookie_file", "remote_rpc_wallet_username", "remote_rpc_wallet_no_authentication"])
+            .required(false),
+    ),
+)]
 pub struct CliArgs {
     /// Optional path to the wallet file
     #[clap(long)]
@@ -157,7 +164,7 @@ pub struct CliArgs {
     /// So, you can start an RPC daemon, and make this CLI connect to it to control it.
     /// This is useful for servers, where the RPC wallet can be left staking,
     /// and the wallet CLI is used to control its state.
-    #[arg(long, conflicts_with_all(["wallet_file", "wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file", "wallet_rpc_no_authentication", "wallet_rpc_bind_address", "node_rpc_address", "node_rpc_cookie_file", "node_rpc_username", "node_rpc_password"]))]
+    #[arg(long, requires("remote_rpc_auth"), conflicts_with_all(["wallet_file", "wallet_rpc_password", "wallet_rpc_username", "wallet_rpc_cookie_file", "wallet_rpc_no_authentication", "wallet_rpc_bind_address", "node_rpc_address", "node_rpc_cookie_file", "node_rpc_username", "node_rpc_password"]))]
     pub remote_rpc_wallet_address: Option<String>,
 
     /// For a remote RPC wallet, this is the path to the RPC cookie file. If not set, the value is read from the default cookie file location.
@@ -165,12 +172,16 @@ pub struct CliArgs {
     pub remote_rpc_wallet_cookie_file: Option<String>,
 
     /// For a remote RPC wallet, this is the RPC username (either provide a username and password, or use a cookie file. You cannot use both)
-    #[clap(long)]
+    #[arg(long, conflicts_with_all(["remote_rpc_wallet_cookie_file"]))]
     pub remote_rpc_wallet_username: Option<String>,
 
     /// For a remote RPC wallet, this is the RPC password (either provide a username and password, or use a cookie file. You cannot use both)
-    #[clap(long)]
+    #[arg(long, conflicts_with_all(["remote_rpc_wallet_cookie_file"]), requires("remote_rpc_wallet_username"))]
     pub remote_rpc_wallet_password: Option<String>,
+
+    /// For a remote RPC wallet, this will not use any authentication
+    #[arg(long, conflicts_with_all(["remote_rpc_wallet_password", "remote_rpc_wallet_username", "remote_rpc_wallet_cookie_file"]))]
+    pub remote_rpc_wallet_no_authentication: bool,
 }
 
 impl From<&Network> for ChainType {

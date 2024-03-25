@@ -31,10 +31,13 @@ from test_framework.mintlayer import (make_tx, reward_input, tx_input, ATOMS_PER
 from test_framework.util import assert_in, assert_equal
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
+from test_framework.wallet_rpc_controller import WalletRpcController
+from test_framework.util import rpc_port
 
 import asyncio
 import sys
 import random
+import os
 
 
 class WalletSubmitTransaction(BitcoinTestFramework):
@@ -75,13 +78,46 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
     async def async_test(self):
         node = self.nodes[0]
-        async with WalletCliController(node, self.config, self.log, wallet_args=["--wallet-rpc-bind-address", "127.0.0.1:23134", "--enable-wallet-rpc-interface", "--wallet-rpc-no-authentication"]) as wallet1:
+        port = rpc_port(10)
+        url = "127.0.0.1"
+        bind_addr = f"{url}:{port}"
+        def random_auth():
+            remote_wallet = random.choice(["cli", "rpc"])
+            auth = random.choice(["none", "pass", "cookie"])
+
+            cookie_file = os.path.join(node.datadir, "wrpc_cookie")
+            username = "user"
+            password = "pass"
+
+            if remote_wallet == 'rpc':
+                remote_wallet_args = ["--rpc-bind-address", bind_addr]
+            else:
+                remote_wallet_args = ["--wallet-rpc-bind-address", bind_addr, "--enable-wallet-rpc-interface"]
+
+            if auth == "none":
+                if remote_wallet == "rpc":
+                    return WalletRpcController, remote_wallet_args + ["--rpc-no-authentication"], ["--remote-rpc-no-authentication"]
+                else:
+                    return WalletCliController, remote_wallet_args + ["--wallet-rpc-no-authentication"], ["--remote-rpc-wallet-no-authentication"]
+            elif auth == "pass":
+                if remote_wallet == "rpc":
+                    return WalletRpcController, remote_wallet_args + ["--rpc-username", username, "--rpc-password", password], ["--remote-rpc-wallet-username", username, "--remote-rpc-wallet-password", password]
+                else:
+                    return WalletCliController, remote_wallet_args + ["--wallet-rpc-username", username, "--wallet-rpc-password", password], ["--remote-rpc-wallet-username", username, "--remote-rpc-wallet-password", password]
+            else:
+                if remote_wallet == "rpc":
+                    return WalletRpcController, remote_wallet_args + ["--rpc-cookie-file", cookie_file], ["--remote-rpc-wallet-cookie-file", cookie_file]
+                else:
+                    return WalletCliController, remote_wallet_args + ["--wallet-rpc-cookie-file", cookie_file], ["--remote-rpc-wallet-cookie-file", cookie_file]
+
+        remote_wallet_controller, wallet_rpc_args, remote_wallet_auth = random_auth()
+        async with remote_wallet_controller(node, self.config, self.log, wallet_args=wallet_rpc_args) as wallet1:
 
             # new wallet
-            await wallet1.create_wallet("wallet1")
+            assert_in('New wallet created successfully', await wallet1.create_wallet("wallet1"))
 
             # open a new CLI wallet that connects to the previous one through RPC
-            async with WalletCliController(node, self.config, self.log, wallet_args=["--remote-rpc-wallet-address", "127.0.0.1:23134"]) as wallet2:
+            async with WalletCliController(node, self.config, self.log, wallet_args=["--remote-rpc-wallet-address", bind_addr] + remote_wallet_auth) as wallet2:
 
                 # check it is on genesis
                 best_block_height = await wallet2.get_best_block_height()
