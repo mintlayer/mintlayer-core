@@ -330,7 +330,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         let block_index = block_index.with_status(block_status);
         chainstate_ref
-            .set_block_index(&block_index)
+            .set_new_block_index(&block_index)
             .and_then(|_| chainstate_ref.persist_block(block))
             .map_err(|err| BlockIntegrationError::OtherValidationError(err, block_status))?;
 
@@ -384,17 +384,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             let existing_block_index = get_block_index(&chainstate_ref, &block_id)?;
 
             if let Some(block_index) = existing_block_index {
-                if block_index.status().is_fully_valid() {
-                    return Err(BlockError::BlockAlreadyProcessed(block_id));
-                } else if !block_index.status().is_ok() {
-                    return Err(BlockError::InvalidBlockAlreadyProcessed(block_id));
-                }
-
-                // The block is ok, but not fully valid.
-                block_index
-            } else {
-                chainstate_ref.create_block_index_for_new_block(&block, BlockStatus::new())?
+                return if block_index.status().is_ok() {
+                    Err(BlockError::BlockAlreadyProcessed(block_id))
+                } else {
+                    Err(BlockError::InvalidBlockAlreadyProcessed(block_id))
+                };
             }
+
+            chainstate_ref.create_block_index_for_new_block(&block, BlockStatus::new())?
         };
 
         // Perform block checks; `integrate_block_result` is `Result<bool>`, where the bool

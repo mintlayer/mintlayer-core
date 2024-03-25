@@ -1224,6 +1224,14 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         self.db_tx.set_block_index(block_index).map_err(BlockError::from)
     }
 
+    #[log_error]
+    pub fn set_new_block_index(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
+        if self.db_tx.get_block_index(block_index.block_id())?.is_some() {
+            return Err(BlockError::BlockIndexAlreadyExists(*block_index.block_id()));
+        }
+        self.set_block_index(block_index)
+    }
+
     /// Update the status of the passed `block_index`.
     /// If a BlockIndex already exists for this block, it must be equal to `block_index`.
     #[log_error]

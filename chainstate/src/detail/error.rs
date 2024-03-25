@@ -50,6 +50,8 @@ pub enum BlockError {
     PrevBlockNotFoundForNewBlock(Id<Block>),
     #[error("Block {0} already exists")]
     BlockAlreadyExists(Id<Block>),
+    #[error("Block {0} index already exists")]
+    BlockIndexAlreadyExists(Id<Block>),
     #[error("Block {0} has already been processed")]
     BlockAlreadyProcessed(Id<Block>),
     #[error("Block {0} has already been processed and marked as invalid")]
