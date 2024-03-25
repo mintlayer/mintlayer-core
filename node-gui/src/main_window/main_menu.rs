@@ -18,7 +18,7 @@ use iced::{
     widget::{button, container, text},
     Color, Element, Length, Theme,
 };
-use iced_aw::menu::{DrawPath, Item, Menu, MenuBar};
+use iced_aw::menu::{Item, Menu, MenuBar};
 
 #[derive(Debug, Clone)]
 pub enum MenuMessage {
@@ -40,19 +40,8 @@ impl MainMenu {
         let file_menu = make_menu_file();
         let help_menu = make_menu_help();
 
-        let menu_bar = MenuBar::new(vec![file_menu, help_menu])
-            // .item_width(ItemWidth::Uniform(180))
-            // .item_height(ItemHeight::Uniform(25))
-            .spacing(4.0)
-            // .bounds_expand(30)
-            // .path_highlight(Some(PathHighlight::MenuActive))
-            .draw_path(DrawPath::Backdrop)
-            // .close_condition(CloseCondition {
-            //     leave: false,
-            //     click_outside: true,
-            //     click_inside: true,
-            // });
-            ;
+        let menu_bar =
+            MenuBar::new(vec![file_menu, help_menu]).spacing(4.0).check_bounds_width(30.0);
 
         let c = iced::widget::column![container(menu_bar)];
 
@@ -100,15 +89,15 @@ fn base_button<'a>(
 fn labeled_button<'a>(label: &str, msg: MenuMessage) -> button::Button<'a, MenuMessage> {
     base_button(
         text(label)
-            .width(Length::Fill)
-            .height(Length::Fill)
+            .width(Length::Fixed(100.0))
+            .height(Length::Fixed(25.0))
             .vertical_alignment(alignment::Vertical::Center),
         msg,
     )
 }
 
 fn menu_item(label: &str, msg: MenuMessage) -> Item<'_, MenuMessage, Theme, iced::Renderer> {
-    Item::new(labeled_button(label, msg).width(Length::Fill).height(Length::Fill))
+    Item::new(labeled_button(label, msg).width(Length::Fixed(100.0)))
 }
 
 fn make_menu_file<'a>() -> Item<'a, MenuMessage, Theme, iced::Renderer> {
