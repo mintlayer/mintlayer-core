@@ -230,7 +230,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                 },
             );
 
-            let (first_bad_block, error_class) = match result {
+            let (first_bad_block, should_invalidate) = match result {
                 Ok(()) => return Ok(true),
                 Err(ReorgDuringInvalidationError::OtherDbError(err)) => {
                     return Err(BlockInvalidatorError::StorageError(err));
@@ -242,19 +242,17 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                     ReorgError::OtherError(err) => {
                         return Err(BlockInvalidatorError::GenericReorgError(Box::new(err)));
                     }
-                    ReorgError::ConnectTipFailed(first_bad_block, err) => {
-                        (first_bad_block, Some(err.classify()))
+                    ReorgError::ConnectTipFailed(block_id, err) => {
+                        (block_id, err.classify().block_should_be_invalidated())
                     }
-                    ReorgError::BlockDataMissing(first_bad_block) => (first_bad_block, None),
                 },
             };
 
-            let indices_to_remove =
-                if error_class.is_some_and(|ec| ec.block_should_be_invalidated()) {
-                    self.invalidate_stale_block(&first_bad_block, IsExplicit::No)?
-                } else {
-                    self.collect_stale_block_indices_in_branch(&first_bad_block)?
-                };
+            let indices_to_remove = if should_invalidate {
+                self.invalidate_stale_block(&first_bad_block, IsExplicit::No)?
+            } else {
+                self.collect_stale_block_indices_in_branch(&first_bad_block)?
+            };
 
             assert!(!indices_to_remove.is_empty());
             best_chain_candidates

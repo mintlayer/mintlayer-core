@@ -1028,36 +1028,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
         // Connect the new chain
         for block_index in new_chain {
-            let block: WithId<Block> = self
-                .get_block_from_index(&block_index)
-                .map_err(BlockError::StorageError)?
-                .ok_or_else(|| {
-                    // Note: missing block data is an expected situation; it can happen if
-                    // the block was initially considered invalid, so its block data was never
-                    // saved, but later its bad status flags were reset.
-                    // TODO:
-                    // 1) Block data existence check should be moved into connect_tip,
-                    // so that it happens after check_block (or we should move the call
-                    // of check_block out of connect_tip). The caller code will then be able
-                    // to determine that block data is missing for a potentially valid block,
-                    // and trigger its re-download.
-                    // Note: the 2nd part of this TODO is out of date - BlockDataMissing will
-                    // not cause block re-invalidation anymore.
-                    // 2) Right now, all callers handle BlockDataMissing by invalidating the
-                    // corresponding block subtree, because currently there is no way of getting
-                    // the missing block data again. But once we have a mechanism for triggering
-                    // block re-downloading, this behavior must be changed: instead, we should
-                    // trigger the re-downloading and completely ignore the subtree during
-                    // the current operation.
-                    // Alternatively, we can just remove the previously invalid block indices
-                    // instead of resetting their statuses.
-                    // See https://github.com/mintlayer/mintlayer-core/issues/1033, item #4.
-                    ReorgError::BlockDataMissing(*block_index.block_id())
-                })
-                .log_err()?
-                .into();
-
-            self.connect_tip(&block_index, &block)
+            self.connect_tip(&block_index)
                 .map_err(|err| ReorgError::ConnectTipFailed(*block_index.block_id(), err))
                 .log_err()?;
         }
@@ -1108,48 +1079,57 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
     // Connect new block
     #[log_error]
-    fn connect_tip(
-        &mut self,
-        new_tip_block_index: &BlockIndex,
-        new_tip: &WithId<Block>,
-    ) -> Result<(), BlockError> {
-        let new_tip_status = {
-            let mut new_tip_status = new_tip_block_index.status();
+    fn connect_tip(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
+        let (block, block_status) = {
+            let mut block_status = block_index.status();
             ensure!(
-                new_tip_status.is_ok(),
-                BlockError::InvariantErrorAttemptToConnectInvalidBlock(new_tip.get_id().into())
+                block_status.is_ok(),
+                BlockError::InvariantErrorAttemptToConnectInvalidBlock(block_index.get_id().into())
             );
 
-            if new_tip_status.last_valid_stage() < BlockValidationStage::CheckBlockOk {
-                self.check_block(new_tip)?;
-                new_tip_status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
+            let block: WithId<Block> = self
+                .get_block_from_index(block_index)
+                .map_err(BlockError::StorageError)?
+                .ok_or_else(|| {
+                    let id = *block_index.block_id();
+                    log::warn!(
+                        "Missing block data for block {id} with a valid status {block_status}"
+                    );
+                    BlockError::BlockDataMissingForValidBlockIndex(id)
+                })
+                .log_err()?
+                .into();
+
+            if block_status.last_valid_stage() < BlockValidationStage::CheckBlockOk {
+                self.check_block(&block)?;
+                block_status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
             }
 
-            new_tip_status
+            (block, block_status)
         };
 
         let best_block_id = self.get_best_block_id().map_err(BlockError::BestBlockIdQueryError)?;
         utils::ensure!(
-            &best_block_id == new_tip_block_index.prev_block_id(),
-            BlockError::InvariantErrorInvalidTip(new_tip.get_id().into()),
+            &best_block_id == block_index.prev_block_id(),
+            BlockError::InvariantErrorInvalidTip(block.get_id().into()),
         );
 
-        self.connect_transactions(new_tip_block_index, new_tip)?;
+        self.connect_transactions(block_index, &block)?;
 
         self.db_tx.set_block_id_at_height(
-            &new_tip_block_index.block_height(),
-            &(*new_tip_block_index.block_id()).into(),
+            &block_index.block_height(),
+            &(*block_index.block_id()).into(),
         )?;
-        self.db_tx.set_best_block_id(&(*new_tip_block_index.block_id()).into())?;
+        self.db_tx.set_best_block_id(&(*block_index.block_id()).into())?;
 
-        if new_tip_block_index.status().last_valid_stage() != BlockValidationStage::FullyChecked {
-            let mut new_tip_status = new_tip_status;
-            new_tip_status.advance_validation_stage_to(BlockValidationStage::FullyChecked);
-            let new_block_index = new_tip_block_index.clone().with_status(new_tip_status);
+        if block_index.status().last_valid_stage() != BlockValidationStage::FullyChecked {
+            let mut block_status = block_status;
+            block_status.advance_validation_stage_to(BlockValidationStage::FullyChecked);
+            let new_block_index = block_index.clone().with_status(block_status);
             self.set_block_index(&new_block_index)?;
         }
 
-        self.post_connect_tip(new_tip_block_index, new_tip.as_ref())
+        self.post_connect_tip(block_index, block.as_ref())
     }
 
     /// Does a read-modify-write operation on the database and disconnects a block
@@ -1331,8 +1311,6 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 pub enum ReorgError {
     #[error("Error connecting block {0}: {1}")]
     ConnectTipFailed(Id<Block>, BlockError),
-    #[error("Block data missing for block {0}")]
-    BlockDataMissing(Id<Block>),
     #[error("Generic error during reorg: {0}")]
     OtherError(#[from] BlockError),
 }
