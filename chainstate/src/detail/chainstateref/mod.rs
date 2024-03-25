@@ -405,16 +405,16 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             GenBlockId::Genesis(_) => return Ok(Some(BlockHeight::zero())),
         };
 
-        let block_index = self.get_existing_block_index(&id)?;
-        let mainchain_block_id = self.get_block_id_by_height(&block_index.block_height())?;
+        if let Some(block_index) = self.get_block_index(&id)? {
+            let mainchain_block_id = self.get_block_id_by_height(&block_index.block_height())?;
 
-        // Note: this function may be called when the chain is still empty, so we don't unwrap
-        // mainchain_block_id and wrap gen_id instead.
-        if mainchain_block_id.as_ref() == Some(gen_id) {
-            Ok(Some(block_index.block_height()))
-        } else {
-            Ok(None)
+            // Note: this function may be called when the chain is still empty, so we don't unwrap
+            // mainchain_block_id and wrap gen_id instead.
+            if mainchain_block_id.as_ref() == Some(gen_id) {
+                return Ok(Some(block_index.block_height()));
+            }
         }
+        Ok(None)
     }
 
     // Get indexes for a new longest chain

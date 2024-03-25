@@ -873,15 +873,14 @@ fn test_add_block_to_chain_with_bad_tip(#[case] seed: Seed) {
         // "m" is still the best chain.
         // But note that since the reorg has failed with the BlockDataMissingForValidBlockIndex
         // error, the block a0 hasn't been marked as invalid this time, because it couldn't
-        // be checked. And its children retained their original statuses.
+        // be checked. Also, a3's index hasn't been saved, because "ok" indices are ot saved
+        // for blocks that haven't been persisted.
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
-        assert_ok_blocks_at_stage(
-            &tf,
-            &[a0_id, a2_id, a3_id],
-            BlockValidationStage::CheckBlockOk,
-        );
+        assert_ok_blocks_at_stage(&tf, &[a0_id, a2_id], BlockValidationStage::CheckBlockOk);
         assert_ok_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::Unchecked);
+
+        assert!(!tf.block_index_exists(&a3_id.into()));
     });
 }
 
@@ -927,7 +926,8 @@ fn temporarily_bad_block_not_invalidated_during_integration(#[case] seed: Seed) 
 
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
-        assert_ok_blocks_at_stage(&tf, &[bad_block_id], BlockValidationStage::Unchecked);
+        // An "ok" block index is not saved for a block that wasn't persisted.
+        assert!(!tf.block_index_exists(&bad_block_id.into()));
     });
 }
 
@@ -1013,10 +1013,8 @@ fn temporarily_bad_block_not_invalidated_after_reorg(#[case] seed: Seed) {
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
         assert_ok_blocks_at_stage(&tf, &[bad_block_id], BlockValidationStage::Unchecked);
-        assert_ok_blocks_at_stage(
-            &tf,
-            &[c0_id, c1_id, c2_id],
-            BlockValidationStage::CheckBlockOk,
-        );
+        assert_ok_blocks_at_stage(&tf, &[c0_id, c1_id], BlockValidationStage::CheckBlockOk);
+        // An "ok" block index is not saved for a block that wasn't persisted.
+        assert!(!tf.block_index_exists(&c2_id.into()));
     });
 }
