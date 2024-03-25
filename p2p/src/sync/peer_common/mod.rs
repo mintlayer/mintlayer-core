@@ -58,7 +58,8 @@ pub async fn handle_message_processing_result(
         // A protocol error - increase the ban score of a peer if needed.
         e @ (P2pError::ProtocolError(_)
         | P2pError::MempoolError(_)
-        | P2pError::ChainstateError(_)) => {
+        | P2pError::ChainstateError(_)
+        | P2pError::SyncError(_)) => {
             let ban_score = e.ban_score();
             if ban_score > 0 {
                 log::info!(
@@ -96,13 +97,14 @@ pub async fn handle_message_processing_result(
         | P2pError::ConnectionValidationFailed(_)) => panic!("Unexpected error {e:?}"),
 
         // Fatal errors, simply propagate them to stop the sync manager.
-        // Note/TODO: due to how error types are currently organized, a storage error can
+        // Note: due to how error types are currently organized, a storage error can
         // "hide" in other error types. E.g. ChainstateError can contain a BlockError, which
         // can contain a storage error (both directly and through other error types such as
         // PropertyQueryError). Also, MempoolError may contain ChainstateError through
         // TxValidationError. I.e. the code above may silently consume a fatal error,
         // leaving this struct in some intermediate state. Because of this, a malfunctioning
-        // node may see its peers as behaving incorrectly and ban them eventually.
+        // node may see its peers as behaving incorrectly; but since we only discourage
+        // on misbehavior and not ban, this shouldn't be a big problem.
         e @ (P2pError::ChannelClosed
         | P2pError::SubsystemFailure
         | P2pError::StorageFailure(_)
