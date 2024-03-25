@@ -348,13 +348,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     block_id,
                 )
             }
-            ReorgError::BlockDataMissing(block_id) => {
-                BlockIntegrationError::ConnectBlockErrorDuringReorg(
-                    BlockError::BlockDataMissingForValidBlockIndex(block_id),
-                    block_status,
-                    block_id,
-                )
-            }
             ReorgError::OtherError(block_err) => {
                 BlockIntegrationError::OtherReorgError(block_err, block_status)
             }
