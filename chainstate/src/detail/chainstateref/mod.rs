@@ -1232,6 +1232,11 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         self.set_block_index(block_index)
     }
 
+    #[log_error]
+    pub fn del_block_index(&mut self, block_id: &Id<Block>) -> Result<(), BlockError> {
+        self.db_tx.del_block_index(*block_id).map_err(BlockError::from)
+    }
+
     /// Update the status of the passed `block_index`.
     /// If a BlockIndex already exists for this block, it must be equal to `block_index`.
     #[log_error]

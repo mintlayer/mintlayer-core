@@ -157,6 +157,7 @@ mockall::mock! {
         fn set_chain_type(&mut self, chain: &str) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
         fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
+        fn del_block_index(&mut self, block_id: Id<Block>) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
 
@@ -533,6 +534,7 @@ mockall::mock! {
         fn set_chain_type(&mut self, chain: &str) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
         fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
+        fn del_block_index(&mut self, block_id: Id<Block>) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
 

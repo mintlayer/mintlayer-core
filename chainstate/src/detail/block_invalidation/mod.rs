@@ -279,6 +279,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
     pub fn reset_block_failure_flags(
         &mut self,
         block_id: &Id<Block>,
+        delete_index_if_block_doesnt_exist: bool,
     ) -> Result<(), BlockInvalidatorError> {
         let block_indices_to_clear = {
             let chainstate_ref =
@@ -293,11 +294,21 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
         self.chainstate.with_rw_tx(
             |chainstate_ref| {
                 for cur_index in &block_indices_to_clear {
-                    update_block_status(
-                        chainstate_ref,
-                        cur_index.clone(),
-                        cur_index.status().with_cleared_fail_bits(),
-                    )?;
+                    let should_delete_index = if delete_index_if_block_doesnt_exist {
+                        chainstate_ref.get_block(*cur_index.block_id())?.is_none()
+                    } else {
+                        false
+                    };
+
+                    if should_delete_index {
+                        chainstate_ref.del_block_index(cur_index.block_id())?;
+                    } else {
+                        update_block_status(
+                            chainstate_ref,
+                            cur_index.clone(),
+                            cur_index.status().with_cleared_fail_bits(),
+                        )?;
+                    }
                 }
 
                 Ok(())
@@ -350,6 +361,12 @@ pub enum BlockInvalidatorError {
     BestBlockIndexQueryError(PropertyQueryError),
     #[error("Failed to obtain block index for block {0}: {1}")]
     BlockIndexQueryError(Id<GenBlock>, PropertyQueryError),
+
+    // FIXME
+    #[error("Property query error: {0}")]
+    PropertyQueryError(#[from] PropertyQueryError),
+    #[error("Property query error: {0}")]
+    BlockError(#[from] BlockError),
 }
 
 #[derive(Debug, Display, PartialEq, Eq, Clone)]

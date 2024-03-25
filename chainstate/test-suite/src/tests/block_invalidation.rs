@@ -538,14 +538,14 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
         assert_eq!(tf.best_block_id(), m[6]);
 
         // "b", "c" and "d" are different - fully validated blocks have retained their FullyChecked
-        // status; and the blocks that were initially invalid have become "ok/Unchecked".
+        // status; and block indices of blocks that were initially invalid have been removed.
         assert_in_stale_chain(&tf, b);
         assert_fully_valid_blocks(&tf, &b[..1]);
-        assert_ok_blocks_at_stage(&tf, &b[1..], BlockValidationStage::Unchecked);
+        assert_no_block_indices(&tf, &b[1..]);
 
         assert_in_stale_chain(&tf, c);
         assert_fully_valid_blocks(&tf, &c[..2]);
-        assert_ok_blocks_at_stage(&tf, &c[2..], BlockValidationStage::Unchecked);
+        assert_no_block_indices(&tf, &c[2..]);
 
         assert_in_stale_chain(&tf, d);
         assert_fully_valid_blocks(&tf, d);
@@ -633,19 +633,17 @@ fn test_tip_invalidation_with_no_better_candidates(#[case] seed: Seed) {
     });
 }
 
-// Invalidate m0 in:
+// Given the block tree:
 // /----a0---!a1
 // G----m0----m1
-// where a1 is invalid (it didn't pass even the check_block stage), but its status
-// has been manually reset to "ok".
-// This checks two facts:
-// 1) It's ok to try to reorg to blocks like that (i.e. it'll fail gracefully);
-// 2) If a reorg to the tip of a branch fails, its parents from the same branch are still
-// considered for the next attempt.
+// where a1 is invalid (it didn't pass even the check_block stage), manually reset the failure
+// status of a1 and invalidate m0.
+// Note: since certain point, we remove block indices when resetting failure flags if the block
+// itself is not present in the db, so this test mainly checks this fact now.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_invalidation_with_reorg_to_chain_with_bad_tip(#[case] seed: Seed) {
+fn test_invalidation_with_reorg_to_chain_with_bad_tip1(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -661,22 +659,67 @@ fn test_invalidation_with_reorg_to_chain_with_bad_tip(#[case] seed: Seed) {
         let (a1_id, result) = process_block_with_empty_tx(&mut tf, &a0_id.into());
         assert!(result.is_err());
 
-        // Reset the fail flags of a1 to get to the desired state of the chain.
+        // Reset the fail flags of a1.
         tf.chainstate.reset_block_failure_flags(&a1_id).unwrap();
 
         assert_eq!(tf.best_block_id(), m1_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id]);
         assert_ok_blocks_at_stage(&tf, &[a0_id], BlockValidationStage::CheckBlockOk);
-        assert_ok_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::Unchecked);
+        // Resetting block status has removed the block index, because the block data itself was missing.
+        assert_no_block_indices(&tf, &[a1_id]);
+
+        // For completeness, invalidate m0 and check that the chain reorgs to a0.
 
         tf.chainstate.invalidate_block(&m0_id).unwrap();
 
-        // a0 is now the best block, a1 is back to its "bad" status.
+        // a0 is now the best block
         assert_eq!(tf.best_block_id(), a0_id);
-        // Note: reorg to a1 will fail due to the missing block data, which doesn't lead
-        // to block invalidation; so, a1 is still "ok".
-        assert_ok_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::Unchecked);
         assert_fully_valid_blocks(&tf, &[a0_id]);
+        assert_no_block_indices(&tf, &[a1_id]);
+        assert_invalidated_blocks_at_stage(&tf, &[m0_id], BlockValidationStage::FullyChecked);
+        assert_blocks_with_bad_parent_at_stage(&tf, &[m1_id], BlockValidationStage::FullyChecked);
+    });
+}
+
+// Given the block tree:
+// /----a0---?a1
+// G----m0----m1
+// where a1 is invalid but can pass the check_block stage, invalidate m0.
+// This checks two facts:
+// 1) It's ok to try to reorg to blocks like a1 (i.e. it'll fail gracefully);
+// 2) If a reorg to the tip of a branch fails, its parents from the same branch are still
+// considered for the next attempt.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_invalidation_with_reorg_to_chain_with_bad_tip2(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_id = tf.genesis().get_id();
+
+        let (m0_id, result) = process_block(&mut tf, &genesis_id.into(), &mut rng);
+        assert!(result.is_ok());
+        let (m1_id, result) = process_block(&mut tf, &m0_id.into(), &mut rng);
+        assert!(result.is_ok());
+
+        let (a0_id, a0_tx_id, result) =
+            process_block_split_parent_reward(&mut tf, &genesis_id.into(), &mut rng);
+        assert!(result.is_ok());
+        let (a1_id, result) =
+            process_block_spend_tx(&mut tf, &a0_id.into(), &a0_tx_id, 1, &mut rng);
+        assert!(result.is_ok());
+
+        assert_eq!(tf.best_block_id(), m1_id);
+        assert_fully_valid_blocks(&tf, &[m0_id, m1_id]);
+        assert_ok_blocks_at_stage(&tf, &[a0_id, a1_id], BlockValidationStage::CheckBlockOk);
+
+        tf.chainstate.invalidate_block(&m0_id).unwrap();
+
+        // a0 is now the best block, a1 is marked as bad.
+        assert_eq!(tf.best_block_id(), a0_id);
+        assert_fully_valid_blocks(&tf, &[a0_id]);
+        assert_bad_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::CheckBlockOk);
         assert_invalidated_blocks_at_stage(&tf, &[m0_id], BlockValidationStage::FullyChecked);
         assert_blocks_with_bad_parent_at_stage(&tf, &[m1_id], BlockValidationStage::FullyChecked);
     });
@@ -748,14 +791,14 @@ fn test_invalidation_with_reorg_attempt_to_chain_with_lower_chain_trust(#[case] 
         assert_eq!(tf.best_block_id(), m1_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id]);
         assert_ok_blocks_at_stage(&tf, &[a0_id], BlockValidationStage::CheckBlockOk);
-        assert_ok_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::Unchecked);
+        assert_no_block_indices(&tf, &[a1_id]);
     });
 }
 
-// Same as in test_invalidation_with_reorg_to_chain_with_bad_tip, invalidate m0 in:
+// Given the following block tree:
 // /----a0---*a1
 // G----m0----m1
-// where a1 is classified as TemporarilyBadBlock (we use some hacks to achieve this situation).
+// where a1 is classified as TemporarilyBadBlock, invalidate m0.
 // The mainchain should be reorged to a0, but a1 should not be marked as invalid.
 // Note: the purpose of the test is to ensure that blocks are not invalidated on an error
 // that isn't classified as BadBlock. We use a TemporarilyBadBlock kind of error only because
@@ -783,6 +826,7 @@ fn test_invalidation_with_reorg_to_chain_with_tip_far_in_the_future(#[case] seed
         let (a0_id, result) = process_block(&mut tf, &genesis.get_id().into(), &mut rng);
         assert!(result.is_ok());
 
+        // Create and process the block at the future time, then reset the time to the starting value.
         let bad_block_time_secs = start_time_secs + 60 * 60 * 24;
         real_time_secs.store(bad_block_time_secs);
 
@@ -791,7 +835,7 @@ fn test_invalidation_with_reorg_to_chain_with_tip_far_in_the_future(#[case] seed
 
         real_time_secs.store(start_time_secs);
 
-        // We want the "bad" block to be Unchecked, so that check_block is called again on it during reorg.
+        // We want the "bad" block to be Unchecked, so that check_block can be called again on it during reorg.
         tf.set_block_status(&a1_id, BlockStatus::new());
 
         assert_eq!(tf.best_block_id(), m1_id);
@@ -803,22 +847,22 @@ fn test_invalidation_with_reorg_to_chain_with_tip_far_in_the_future(#[case] seed
 
         // a0 is now the best block, a1 is still ok and unchecked.
         assert_eq!(tf.best_block_id(), a0_id);
-        assert_ok_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::Unchecked);
         assert_fully_valid_blocks(&tf, &[a0_id]);
+        assert_ok_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::Unchecked);
         assert_invalidated_blocks_at_stage(&tf, &[m0_id], BlockValidationStage::FullyChecked);
         assert_blocks_with_bad_parent_at_stage(&tf, &[m1_id], BlockValidationStage::FullyChecked);
     });
 }
 
-// Add 2 new blocks on top of a1 in:
+// Given the block tree:
 // /----a0---!a1
 // G----m0----m1----m2
-// where a1 is completely invalid (i.e. it didn't pass even the check_block stage), but its
-// status has been manually reset to "ok".
+// where a1 has been determined to be invalid but still remains in the db, reset
+// its status to ok and add 2 more blocks on top of it.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_add_block_to_chain_with_bad_tip(#[case] seed: Seed) {
+fn test_reset_bad_stale_tip_status_and_add_blocks(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -828,29 +872,30 @@ fn test_add_block_to_chain_with_bad_tip(#[case] seed: Seed) {
         assert!(result.is_ok());
         let (m1_id, result) = process_block(&mut tf, &m0_id.into(), &mut rng);
         assert!(result.is_ok());
+
+        let (a0_id, a0_tx_id, result) =
+            process_block_split_parent_reward(&mut tf, &genesis_id.into(), &mut rng);
+        assert!(result.is_ok());
+        let (a1_id, result) =
+            process_block_spend_tx(&mut tf, &a0_id.into(), &a0_tx_id, 1, &mut rng);
+        assert!(result.is_ok());
+
+        // Add a "temporary" block on top of a1 to trigger a reorg to it, so that it is marked as invalid.
+        let (tmp_id, result) = process_block(&mut tf, &a1_id.into(), &mut rng);
+        assert!(result.is_err());
+        tf.purge_block(&tmp_id);
+
         let (m2_id, result) = process_block(&mut tf, &m1_id.into(), &mut rng);
         assert!(result.is_ok());
 
-        let (a0_id, result) = process_block(&mut tf, &genesis_id.into(), &mut rng);
-        assert!(result.is_ok());
+        assert_bad_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::CheckBlockOk);
 
-        let (a1_id, result) = process_block_with_empty_tx(&mut tf, &a0_id.into());
-        assert_matches!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(_))
-            ))
-        );
-
-        assert_bad_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::Unchecked);
-
-        // Reset the fail flags of a1 to get to the desired state of the chain.
+        // Reset the fail flags of a1.
         tf.chainstate.reset_block_failure_flags(&a1_id).unwrap();
 
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
-        assert_ok_blocks_at_stage(&tf, &[a0_id], BlockValidationStage::CheckBlockOk);
-        assert_ok_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::Unchecked);
+        assert_ok_blocks_at_stage(&tf, &[a0_id, a1_id], BlockValidationStage::CheckBlockOk);
 
         let (a2_id, result) = process_block_spend_parent_reward(&mut tf, &a1_id.into(), &mut rng);
         assert!(result.is_ok());
@@ -858,29 +903,27 @@ fn test_add_block_to_chain_with_bad_tip(#[case] seed: Seed) {
         // a2 has been added successfully to the stale chain; everything else is the same.
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
-        assert_ok_blocks_at_stage(&tf, &[a0_id, a2_id], BlockValidationStage::CheckBlockOk);
-        assert_ok_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::Unchecked);
-
-        let (a3_id, result) = process_block(&mut tf, &a2_id.into(), &mut rng);
-        assert_eq!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::BlockDataMissingForValidBlockIndex(a1_id)
-            ))
+        assert_ok_blocks_at_stage(
+            &tf,
+            &[a0_id, a1_id, a2_id],
+            BlockValidationStage::CheckBlockOk,
         );
 
+        let (a3_id, result) = process_block(&mut tf, &a2_id.into(), &mut rng);
+        assert!(result.is_err());
+
         // A reorg has been triggered, which has failed.
-        // "m" is still the best chain.
-        // But note that since the reorg has failed with the BlockDataMissingForValidBlockIndex
-        // error, the block a0 hasn't been marked as invalid this time, because it couldn't
-        // be checked. Also, a3's index hasn't been saved, because "ok" indices are ot saved
-        // for blocks that haven't been persisted.
+        // "m" is still the best chain; a1 has been marked as invalid, a2 and a3 have been marked
+        // as having an invalid parent.
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
-        assert_ok_blocks_at_stage(&tf, &[a0_id, a2_id], BlockValidationStage::CheckBlockOk);
-        assert_ok_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::Unchecked);
-
-        assert!(!tf.block_index_exists(&a3_id.into()));
+        assert_ok_blocks_at_stage(&tf, &[a0_id], BlockValidationStage::CheckBlockOk);
+        assert_bad_blocks_at_stage(&tf, &[a1_id], BlockValidationStage::CheckBlockOk);
+        assert_blocks_with_bad_parent_at_stage(
+            &tf,
+            &[a2_id, a3_id],
+            BlockValidationStage::CheckBlockOk,
+        );
     });
 }
 
@@ -927,7 +970,7 @@ fn temporarily_bad_block_not_invalidated_during_integration(#[case] seed: Seed) 
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
         // An "ok" block index is not saved for a block that wasn't persisted.
-        assert!(!tf.block_index_exists(&bad_block_id.into()));
+        assert_no_block_indices(&tf, &[bad_block_id]);
     });
 }
 
@@ -1015,6 +1058,6 @@ fn temporarily_bad_block_not_invalidated_after_reorg(#[case] seed: Seed) {
         assert_ok_blocks_at_stage(&tf, &[bad_block_id], BlockValidationStage::Unchecked);
         assert_ok_blocks_at_stage(&tf, &[c0_id, c1_id], BlockValidationStage::CheckBlockOk);
         // An "ok" block index is not saved for a block that wasn't persisted.
-        assert!(!tf.block_index_exists(&c2_id.into()));
+        assert_no_block_indices(&tf, &[c2_id]);
     });
 }
