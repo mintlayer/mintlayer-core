@@ -1181,13 +1181,12 @@ fn make_invalid_pow_block(
 #[trace]
 #[case(Seed::from_entropy())]
 fn reprocess_previously_temporarily_invalid_block(#[case] seed: Seed) {
-    use chainstate_types::BlockValidationStage;
     use common::chain;
     use test_utils::assert_matches;
 
     use crate::tests::helpers::{
         block_creation_helpers::process_block,
-        block_status_helpers::{assert_fully_valid_blocks, assert_ok_blocks_at_stage},
+        block_status_helpers::{assert_fully_valid_blocks, assert_no_block_indices},
     };
 
     utils::concurrency::model(move || {
@@ -1226,7 +1225,7 @@ fn reprocess_previously_temporarily_invalid_block(#[case] seed: Seed) {
 
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
-        assert_ok_blocks_at_stage(&tf, &[future_block_id], BlockValidationStage::Unchecked);
+        assert_no_block_indices(&tf, &[future_block_id]);
 
         real_time_secs.store(future_block_time_secs);
 

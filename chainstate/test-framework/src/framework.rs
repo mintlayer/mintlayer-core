@@ -315,6 +315,10 @@ impl TestFramework {
         self.chainstate.get_gen_block_index(id).unwrap().unwrap()
     }
 
+    pub fn block_index_exists(&self, id: &Id<GenBlock>) -> bool {
+        self.chainstate.get_gen_block_index(id).unwrap().is_some()
+    }
+
     pub fn index_at(&self, at: usize) -> &BlockIndex {
         assert!(at > 0, "No block index for genesis");
         &self.block_indexes[at - 1]
