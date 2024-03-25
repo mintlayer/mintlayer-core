@@ -83,6 +83,10 @@ pub trait BlockchainStorageRead:
     /// Get block by its hash
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
 
+    // TODO: sometimes get_block is used just to check for block existence in the db; it's better
+    // to add a separate function for this, which wouldn't have the overhead of copying and decoding
+    // of the block's data.
+
     fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
     /// Get the height below which reorgs should not be allowed.
@@ -156,6 +160,9 @@ pub trait BlockchainStorageWrite:
 
     /// Set the block index
     fn set_block_index(&mut self, block_index: &BlockIndex) -> Result<()>;
+
+    /// Remove block index from the database
+    fn del_block_index(&mut self, block_id: Id<Block>) -> Result<()>;
 
     /// Add a new block into the database
     fn add_block(&mut self, block: &Block) -> Result<()>;

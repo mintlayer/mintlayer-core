@@ -71,6 +71,11 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     }
 
     #[log_error]
+    fn del_block_index(&mut self, block_id: Id<Block>) -> crate::Result<()> {
+        self.0.get_mut::<db::DBBlockIndex, _>().del(block_id).map_err(Into::into)
+    }
+
+    #[log_error]
     fn set_min_height_with_allowed_reorg(&mut self, height: BlockHeight) -> crate::Result<()> {
         self.write_value::<well_known::MinHeightForReorg>(&height)
     }
