@@ -20,7 +20,7 @@ use crate::{
     disconnection_reason::DisconnectionReason,
     net::{
         default_backend::{types::Command, ConnectivityHandle},
-        types::{ConnectionType, PeerInfo, Role},
+        types::{ConnectionDirection, ConnectionType, PeerInfo},
     },
     peer_manager::{
         peerdb::{salt::Salt, storage::PeerDbStorageWrite, CURRENT_STORAGE_VERSION},
@@ -116,7 +116,7 @@ where
     pm2.accept_connection(
         address,
         pm2.peer_connectivity_handle.local_addresses()[0],
-        Role::Inbound,
+        ConnectionDirection::Inbound,
         peer_info,
         None,
     );
@@ -231,7 +231,7 @@ where
     pm2.accept_connection(
         address,
         pm2.peer_connectivity_handle.local_addresses()[0],
-        Role::Inbound,
+        ConnectionDirection::Inbound,
         peer_info,
         None,
     );
@@ -316,7 +316,7 @@ fn manual_ban_overrides_whitelisting(#[case] seed: Seed) {
     pm.accept_connection(
         address_1,
         pm.peer_connectivity_handle.local_addresses()[0],
-        Role::Inbound,
+        ConnectionDirection::Inbound,
         peer_info,
         None,
     );

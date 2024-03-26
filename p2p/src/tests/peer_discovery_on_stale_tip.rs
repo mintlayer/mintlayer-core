@@ -174,7 +174,7 @@ async fn peer_discovery_on_stale_tip_impl(
     // Wait until nodes connect to each other.
     wait_for_interconnection(&node_group).await;
     let full_relay_conn_cnt_before_wait =
-        node_group.count_connections_by_role(ConnectionType::OutboundFullRelay).await;
+        node_group.count_connections_by_type(ConnectionType::OutboundFullRelay).await;
 
     // Advance the time by 1 hour
     log::debug!("Advancing time by 1 hour");
@@ -183,7 +183,7 @@ async fn peer_discovery_on_stale_tip_impl(
 
     // Non-extra full relay connections must still be in place.
     let full_relay_conn_cnt_after_wait =
-        node_group.count_connections_by_role(ConnectionType::OutboundFullRelay).await;
+        node_group.count_connections_by_type(ConnectionType::OutboundFullRelay).await;
 
     assert_eq!(
         full_relay_conn_cnt_before_wait.len(),
