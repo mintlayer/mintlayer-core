@@ -25,7 +25,7 @@ use p2p::{
 };
 use p2p_test_utils::{expect_no_recv, expect_recv};
 use rstest::rstest;
-use test_utils::random::{Seed, make_seedable_rng};
+use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
     crawler_p2p::{

@@ -22,7 +22,7 @@ use tokio::time;
 
 use crate::{
     config::P2pConfig,
-    net::{default_backend::transport::TransportSocket, types::PeerRole},
+    net::{default_backend::transport::TransportSocket, types::ConnectionType},
 };
 
 use super::test_node::TestNode;
@@ -65,13 +65,15 @@ where
         self.nodes.iter().map(|node| *node.local_address()).collect()
     }
 
-    pub async fn count_connections_by_role(&self, peer_role: PeerRole) -> Vec<usize> {
+    pub async fn count_connections_by_role(&self, conn_type: ConnectionType) -> Vec<usize> {
         let mut result = Vec::with_capacity(self.nodes.len());
 
         for node in &self.nodes {
             let peers_info = node.get_peers_info().await.info;
-            let count =
-                peers_info.iter().filter(|(_, peer_info)| peer_info.role == peer_role).count();
+            let count = peers_info
+                .iter()
+                .filter(|(_, peer_info)| peer_info.conn_type == conn_type)
+                .count();
 
             result.push(count);
         }

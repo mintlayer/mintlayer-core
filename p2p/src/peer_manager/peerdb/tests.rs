@@ -457,10 +457,12 @@ fn anchor_peers(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let mut anchors =
-        [TestAddressMaker::new_random_address(&mut rng), TestAddressMaker::new_random_address(&mut rng)]
-            .into_iter()
-            .collect::<BTreeSet<_>>();
+    let mut anchors = [
+        TestAddressMaker::new_random_address(&mut rng),
+        TestAddressMaker::new_random_address(&mut rng),
+    ]
+    .into_iter()
+    .collect::<BTreeSet<_>>();
 
     peerdb.set_anchors(anchors.clone());
     assert_eq!(*peerdb.anchors(), anchors);

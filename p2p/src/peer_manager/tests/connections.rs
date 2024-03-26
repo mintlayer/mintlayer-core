@@ -43,7 +43,7 @@ use crate::{
             types::{Command, Message},
             ConnectivityHandle,
         },
-        types::{services::Service, ConnectivityEvent, PeerRole},
+        types::{services::Service, ConnectionType, ConnectivityEvent},
     },
     peer_manager::{
         config::{MaxInboundConnections, PeerManagerConfig},
@@ -102,7 +102,7 @@ where
 {
     let mut rng = make_seedable_rng(seed);
 
-    for peer_role in [PeerRole::OutboundFullRelay, PeerRole::Inbound] {
+    for conn_type in [ConnectionType::OutboundFullRelay, ConnectionType::Inbound] {
         let config = Arc::new(config::create_unit_test_config());
         let (mut peer_manager, _shutdown_sender, _subscribers_sender) =
             make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config))
@@ -113,7 +113,7 @@ where
         let res = peer_manager.try_accept_connection(
             TestAddressMaker::new_random_address(&mut rng),
             TestAddressMaker::new_random_address(&mut rng),
-            peer_role,
+            conn_type,
             net::types::PeerInfo {
                 peer_id,
                 protocol_version: TEST_PROTOCOL_VERSION,
@@ -251,7 +251,9 @@ async fn test_peer_manager_connect<T: NetworkingService>(
     let (mut peer_manager, _shutdown_sender, _subscribers_sender) =
         make_peer_manager::<T>(transport, bind_addr, config).await;
 
-    peer_manager.try_connect(remote_addr, None, PeerRole::OutboundManual).unwrap();
+    peer_manager
+        .try_connect(remote_addr, None, ConnectionType::OutboundManual)
+        .unwrap();
 
     assert!(matches!(
         peer_manager.peer_connectivity_handle.poll_next().await,
@@ -471,7 +473,7 @@ where
     pm2.try_accept_connection(
         address,
         pm2.peer_connectivity_handle.local_addresses()[0],
-        PeerRole::Inbound,
+        ConnectionType::Inbound,
         peer_info,
         None,
     )
@@ -534,7 +536,7 @@ where
         pm2.try_accept_connection(
             address,
             pm2.peer_connectivity_handle.local_addresses()[0],
-            PeerRole::Inbound,
+            ConnectionType::Inbound,
             peer_info,
             None
         ),
@@ -651,7 +653,7 @@ where
         make_peer_manager::<T>(A::make_transport(), addr2, Arc::clone(&config)).await;
 
     for peer in peers.into_iter() {
-        pm1.try_accept_connection(peer.0, addr2, PeerRole::Inbound, peer.1, None)
+        pm1.try_accept_connection(peer.0, addr2, ConnectionType::Inbound, peer.1, None)
             .unwrap();
     }
     assert_eq!(pm1.inbound_peer_count(), *MaxInboundConnections::default());
@@ -2196,11 +2198,13 @@ async fn feeler_connection_to_ip_address_of_inbound_peer(#[case] seed: Seed) {
     })
     .await;
     let peers_info: BTreeMap<_, _> =
-        peers_info.info.into_iter().map(|(addr, info)| (addr, info.role)).collect();
-    let expected_peers_info: BTreeMap<_, _> =
-        [(inbound_peer_addr, PeerRole::Inbound), (outbound_peer_addr, PeerRole::Feeler)]
-            .into_iter()
-            .collect();
+        peers_info.info.into_iter().map(|(addr, info)| (addr, info.conn_type)).collect();
+    let expected_peers_info: BTreeMap<_, _> = [
+        (inbound_peer_addr, ConnectionType::Inbound),
+        (outbound_peer_addr, ConnectionType::Feeler),
+    ]
+    .into_iter()
+    .collect();
     assert_eq!(peers_info, expected_peers_info);
 
     drop(conn_event_sender);

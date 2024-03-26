@@ -291,7 +291,7 @@ impl SyncingEventReceiver for MockSyncingEventReceiver {
 
 pub fn test_crawler(
     reserved_nodes: Vec<SocketAddress>,
-    rng: &mut impl Rng
+    rng: &mut impl Rng,
 ) -> (
     CrawlerManager<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
     MockStateRef,
