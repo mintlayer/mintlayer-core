@@ -229,7 +229,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                 },
             );
 
-            let (first_bad_block, should_invalidate) = match result {
+            match result {
                 Ok(()) => return Ok(true),
                 Err(ReorgDuringInvalidationError::OtherDbError(err)) => {
                     return Err(BlockInvalidatorError::StorageError(err));
@@ -242,35 +242,37 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                         return Err(BlockInvalidatorError::GenericReorgError(Box::new(err)));
                     }
                     ReorgError::ConnectTipFailed(block_id, err) => {
-                        (block_id, err.classify().block_should_be_invalidated())
+                        let should_invalidate = err.classify().block_should_be_invalidated();
+                        let indices_to_remove = if should_invalidate {
+                            self.invalidate_stale_block(&block_id, IsExplicit::No)?
+                        } else {
+                            self.collect_stale_block_indices_in_branch(&block_id)?
+                        };
+
+                        assert!(!indices_to_remove.is_empty());
+                        best_chain_candidates.remove_tree_add_parent(
+                            &self
+                                .chainstate
+                                .make_db_tx_ro()
+                                .map_err(BlockInvalidatorError::from)?,
+                            &indices_to_remove[0],
+                            &indices_to_remove[1..],
+                            min_chain_trust,
+                        )?;
                     }
                 },
             };
-
-            let indices_to_remove = if should_invalidate {
-                self.invalidate_stale_block(&first_bad_block, IsExplicit::No)?
-            } else {
-                self.collect_stale_block_indices_in_branch(&first_bad_block)?
-            };
-
-            assert!(!indices_to_remove.is_empty());
-            best_chain_candidates.remove_tree_add_parent(
-                &self.chainstate.make_db_tx_ro().map_err(BlockInvalidatorError::from)?,
-                &indices_to_remove[0],
-                &indices_to_remove[1..],
-                min_chain_trust,
-            )?;
         }
 
         Ok(false)
     }
 
-    /// Reset fail flags in all blocks in the subtree that starts at the specified block.
+    /// Reset fail flags in block indices for all blocks in the subtree that starts at the specified block.
+    /// Block indices for which no block data exists in the db will be deleted.
     #[log_error]
     pub fn reset_block_failure_flags(
         &mut self,
         block_id: &Id<Block>,
-        delete_index_if_block_doesnt_exist: bool,
     ) -> Result<(), BlockInvalidatorError> {
         let block_indices_to_clear = {
             let chainstate_ref =
@@ -284,16 +286,12 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
         self.chainstate.with_rw_tx(
             |chainstate_ref| {
                 for cur_index in &block_indices_to_clear {
-                    let should_delete_index = if delete_index_if_block_doesnt_exist {
-                        chainstate_ref
-                            .get_block(*cur_index.block_id())
-                            .map_err(|err| {
-                                BlockInvalidatorError::BlockQueryError(*cur_index.block_id(), err)
-                            })?
-                            .is_none()
-                    } else {
-                        false
-                    };
+                    let should_delete_index = chainstate_ref
+                        .get_block(*cur_index.block_id())
+                        .map_err(|err| {
+                            BlockInvalidatorError::BlockQueryError(*cur_index.block_id(), err)
+                        })?
+                        .is_none();
 
                     if should_delete_index {
                         chainstate_ref.del_block_index(cur_index.block_id()).map_err(|err| {

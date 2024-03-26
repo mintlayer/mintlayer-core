@@ -538,7 +538,7 @@ fn complex_test_impl(mut tf: TestFramework, block_ids: &TestChainBlockIds) {
         assert_eq!(tf.best_block_id(), m[6]);
 
         // "b", "c" and "d" are different - fully validated blocks have retained their FullyChecked
-        // status; and block indices of blocks that were initially invalid have been removed.
+        // status and block indices of blocks that were initially invalid have been removed.
         assert_in_stale_chain(&tf, b);
         assert_fully_valid_blocks(&tf, &b[..1]);
         assert_no_block_indices(&tf, &b[1..]);
@@ -728,7 +728,7 @@ fn test_invalidation_with_reorg_to_chain_with_bad_tip2(#[case] seed: Seed) {
 // Reset failure flags of a1 in:
 // /----a0---!a1
 // G----m0----m1
-// Here a1 is invalid and has the highest chain trust; a0 and m0 has the same chain trust.
+// Here a1 is invalid and has the highest chain trust; a0 and m0 have the same chain trust.
 // What happens:
 // 1) a reorg attempt is made, where the list of candidates is not empty - a1 is the candidate;
 // 2) a1 is invalid, so it is removed from the candidates list; its parent is supposed to be tried
