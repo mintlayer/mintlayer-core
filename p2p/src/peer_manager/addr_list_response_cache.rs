@@ -88,7 +88,7 @@ impl AddrListResponseCache {
         // because it's randomly generated for each connection.
         // However, we don't expect outbound peers here, because addr list requests from them
         // are never handled.
-        debug_assert!(!peer_ctx.peer_role.is_outbound());
+        debug_assert!(!peer_ctx.conn_type.is_outbound());
         bind_addr.port().hash(&mut hasher);
 
         // Note: in bitcoin they also hash peer address's "network", where ipv6 and ipv4 addresses

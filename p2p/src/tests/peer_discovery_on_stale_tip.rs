@@ -27,7 +27,7 @@ use test_utils::random::Seed;
 
 use crate::{
     config::P2pConfig,
-    net::types::PeerRole,
+    net::types::ConnectionType,
     peer_manager::{self, address_groups::AddressGroup, config::PeerManagerConfig},
     sync::test_helpers::make_new_block,
     testing_utils::{
@@ -174,7 +174,7 @@ async fn peer_discovery_on_stale_tip_impl(
     // Wait until nodes connect to each other.
     wait_for_interconnection(&node_group).await;
     let full_relay_conn_cnt_before_wait =
-        node_group.count_connections_by_role(PeerRole::OutboundFullRelay).await;
+        node_group.count_connections_by_role(ConnectionType::OutboundFullRelay).await;
 
     // Advance the time by 1 hour
     log::debug!("Advancing time by 1 hour");
@@ -183,7 +183,7 @@ async fn peer_discovery_on_stale_tip_impl(
 
     // Non-extra full relay connections must still be in place.
     let full_relay_conn_cnt_after_wait =
-        node_group.count_connections_by_role(PeerRole::OutboundFullRelay).await;
+        node_group.count_connections_by_role(ConnectionType::OutboundFullRelay).await;
 
     assert_eq!(
         full_relay_conn_cnt_before_wait.len(),
@@ -394,7 +394,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
 
     node_wait_for_connection_to(&main_node, extra_nodes_addresses[0]).await;
     main_node
-        .assert_connected_to(&[(extra_nodes_addresses[0], PeerRole::OutboundFullRelay)])
+        .assert_connected_to(&[(extra_nodes_addresses[0], ConnectionType::OutboundFullRelay)])
         .await;
 
     let all_dns_addresses = {
@@ -424,7 +424,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
 
     // We're still connected to the same one node.
     main_node
-        .assert_connected_to(&[(extra_nodes_addresses[0], PeerRole::OutboundFullRelay)])
+        .assert_connected_to(&[(extra_nodes_addresses[0], ConnectionType::OutboundFullRelay)])
         .await;
 
     // Advance the time by 2 hours
@@ -442,12 +442,12 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
     // Wait until the main node has tried connecting to all of the extra nodes.
     while tried_connections.len() < extra_nodes_addresses.len() {
         if let Some(notification) = main_node.try_recv_peer_mgr_notification() {
-            if let PeerManagerNotification::ConnectionAccepted { address, peer_role } = notification
+            if let PeerManagerNotification::ConnectionAccepted { address, conn_type } = notification
             {
-                log::debug!("Connection accepted from {address}, role is {peer_role:?}");
+                log::debug!("Connection accepted from {address}, type is {conn_type:?}");
 
                 if address.socket_addr().ip() != main_node_address.socket_addr().ip() {
-                    assert_eq!(peer_role, PeerRole::OutboundFullRelay);
+                    assert_eq!(conn_type, ConnectionType::OutboundFullRelay);
                     tried_connections.insert(address);
 
                     // Make sure that at any given time the total number of outbound full relay connections

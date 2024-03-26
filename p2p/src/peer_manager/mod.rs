@@ -58,7 +58,7 @@ use crate::{
     net::{
         types::{
             services::{Service, Services},
-            ConnectivityEvent, PeerInfo, PeerRole, Role,
+            ConnectionType, ConnectivityEvent, PeerInfo, Role,
         },
         ConnectivityService, NetworkingService,
     },
@@ -128,19 +128,19 @@ impl OutboundConnectType {
     }
 }
 
-impl From<&OutboundConnectType> for PeerRole {
+impl From<&OutboundConnectType> for ConnectionType {
     fn from(value: &OutboundConnectType) -> Self {
         match value {
             OutboundConnectType::Automatic { block_relay_only } => {
                 if *block_relay_only {
-                    PeerRole::OutboundBlockRelay
+                    ConnectionType::OutboundBlockRelay
                 } else {
-                    PeerRole::OutboundFullRelay
+                    ConnectionType::OutboundFullRelay
                 }
             }
-            OutboundConnectType::Reserved => PeerRole::OutboundReserved,
-            OutboundConnectType::Manual { response_sender: _ } => PeerRole::OutboundManual,
-            OutboundConnectType::Feeler => PeerRole::Feeler,
+            OutboundConnectType::Reserved => ConnectionType::OutboundReserved,
+            OutboundConnectType::Manual { response_sender: _ } => ConnectionType::OutboundManual,
+            OutboundConnectType::Feeler => ConnectionType::Feeler,
         }
     }
 }
@@ -325,15 +325,17 @@ where
     fn discover_own_address(
         &mut self,
         peer_id: PeerId,
-        peer_role: PeerRole,
+        conn_type: ConnectionType,
         common_services: Services,
         node_address_as_seen_by_peer: Option<PeerAddress>,
     ) -> Option<SocketAddress> {
-        let discover = match peer_role {
-            PeerRole::Inbound | PeerRole::OutboundBlockRelay | PeerRole::Feeler => false,
-            PeerRole::OutboundFullRelay | PeerRole::OutboundReserved | PeerRole::OutboundManual => {
-                common_services.has_service(Service::PeerAddresses)
-            }
+        let discover = match conn_type {
+            ConnectionType::Inbound
+            | ConnectionType::OutboundBlockRelay
+            | ConnectionType::Feeler => false,
+            ConnectionType::OutboundFullRelay
+            | ConnectionType::OutboundReserved
+            | ConnectionType::OutboundManual => common_services.has_service(Service::PeerAddresses),
         };
         if !discover {
             return None;
@@ -430,15 +432,15 @@ where
 
     // TODO: this should probably be renamed to 'should_ignore_ban_score_adjustment' or something
     // similar, because it only makes sense in that particular context.
-    fn is_whitelisted_node(&self, peer_role: PeerRole, address: &SocketAddress) -> bool {
-        match peer_role {
-            PeerRole::Inbound
-            | PeerRole::OutboundFullRelay
-            | PeerRole::OutboundBlockRelay
-            | PeerRole::Feeler => {
+    fn is_whitelisted_node(&self, conn_type: ConnectionType, address: &SocketAddress) -> bool {
+        match conn_type {
+            ConnectionType::Inbound
+            | ConnectionType::OutboundFullRelay
+            | ConnectionType::OutboundBlockRelay
+            | ConnectionType::Feeler => {
                 self.p2p_config.whitelisted_addresses.contains(&address.ip_addr())
             }
-            PeerRole::OutboundReserved | PeerRole::OutboundManual => true,
+            ConnectionType::OutboundReserved | ConnectionType::OutboundManual => true,
         }
     }
 
@@ -451,7 +453,7 @@ where
             None => return,
         };
 
-        if self.is_whitelisted_node(peer.peer_role, &peer.peer_address) {
+        if self.is_whitelisted_node(peer.conn_type, &peer.peer_address) {
             log::info!(
                 "Not adjusting peer score for the whitelisted peer {peer_id}, adjustment {score}",
             );
@@ -583,7 +585,7 @@ where
         &mut self,
         address: SocketAddress,
         local_services_override: Option<Services>,
-        peer_role: PeerRole,
+        conn_type: ConnectionType,
     ) -> crate::Result<()> {
         ensure!(
             self.networking_enabled,
@@ -595,7 +597,7 @@ where
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
 
-        self.maybe_reject_because_already_connected(&address, peer_role)?;
+        self.maybe_reject_because_already_connected(&address, conn_type)?;
 
         let bannable_address = address.as_bannable();
         let is_reserved = self.peerdb.is_reserved_node(&address);
@@ -629,10 +631,10 @@ where
             None
         };
 
-        let peer_role: PeerRole = (&outbound_connect_type).into();
+        let conn_type: ConnectionType = (&outbound_connect_type).into();
         log::debug!("Trying a new outbound connection, address: {:?}, local_services_override: {:?}, peer_role: {:?}",
-            address, local_services_override, peer_role);
-        let res = self.try_connect(address, local_services_override, peer_role);
+            address, local_services_override, conn_type);
+        let res = self.try_connect(address, local_services_override, conn_type);
 
         match res {
             Ok(()) => {
@@ -724,7 +726,7 @@ where
     fn validate_connection(
         &mut self,
         address: &SocketAddress,
-        peer_role: PeerRole,
+        conn_type: ConnectionType,
         info: &PeerInfo,
     ) -> crate::Result<()> {
         ensure!(
@@ -745,7 +747,7 @@ where
         // Note: for inbound connections, maybe_reject_because_already_connected always returns
         // Ok and for outbound ones we've already called it in try_connect. But new connections
         // might have appeared since try_connect was called, so the call below is not redundant.
-        self.maybe_reject_because_already_connected(address, peer_role)?;
+        self.maybe_reject_because_already_connected(address, conn_type)?;
 
         // Note: for outbound connections, ban and discouragement statuses have already been
         // checked in try_connect, so when we do the checks here, they'll only work for
@@ -763,8 +765,8 @@ where
             P2pError::ConnectionValidationFailed(ConnectionValidationError::NoCommonServices),
         );
 
-        match peer_role {
-            PeerRole::Inbound => {
+        match conn_type {
+            ConnectionType::Inbound => {
                 // If the maximum number of inbound connections is reached,
                 // the new inbound connection cannot be accepted even if it's valid.
                 // Outbound peer count is not checked because the node initiates new connections
@@ -789,9 +791,11 @@ where
                 }
             }
 
-            PeerRole::OutboundReserved | PeerRole::OutboundManual | PeerRole::Feeler => {}
+            ConnectionType::OutboundReserved
+            | ConnectionType::OutboundManual
+            | ConnectionType::Feeler => {}
 
-            PeerRole::OutboundFullRelay => {
+            ConnectionType::OutboundFullRelay => {
                 let needed_services: Services = (*self.p2p_config.node_type).into();
                 utils::ensure!(
                     info.common_services == needed_services,
@@ -804,7 +808,7 @@ where
                 );
             }
 
-            PeerRole::OutboundBlockRelay => {
+            ConnectionType::OutboundBlockRelay => {
                 let needed_services: Services = [Service::Blocks].as_slice().into();
                 utils::ensure!(
                     info.common_services == needed_services,
@@ -821,12 +825,15 @@ where
         Ok(())
     }
 
-    fn eviction_candidates(&self, peer_role: PeerRole) -> Vec<peers_eviction::EvictionCandidate> {
+    fn eviction_candidates(
+        &self,
+        conn_type: ConnectionType,
+    ) -> Vec<peers_eviction::EvictionCandidate> {
         let now = self.time_getter.get_time();
         self.peers
             .values()
             .filter(|peer| {
-                peer.peer_role == peer_role
+                peer.conn_type == conn_type
                     && !self.pending_disconnects.contains_key(&peer.info.peer_id)
             })
             .map(|peer| {
@@ -846,7 +853,7 @@ where
     /// Returns true if a random peer has been disconnected.
     fn try_evict_random_inbound_connection(&mut self) -> bool {
         if let Some(peer_id) = peers_eviction::select_for_eviction_inbound(
-            self.eviction_candidates(PeerRole::Inbound),
+            self.eviction_candidates(ConnectionType::Inbound),
             &self.p2p_config.peer_manager_config,
             &mut make_pseudo_rng(),
         ) {
@@ -866,7 +873,7 @@ where
     /// If there are too many outbound block relay peers, find and disconnect the "worst" one.
     fn evict_block_relay_peer(&mut self) {
         if let Some(peer_id) = peers_eviction::select_for_eviction_block_relay(
-            self.eviction_candidates(PeerRole::OutboundBlockRelay),
+            self.eviction_candidates(ConnectionType::OutboundBlockRelay),
             &self.p2p_config.peer_manager_config,
             self.time_getter.get_time(),
             &mut make_pseudo_rng(),
@@ -884,7 +891,7 @@ where
     /// If there are too many outbound full relay peers, find and disconnect the "worst" one.
     fn evict_full_relay_peer(&mut self) {
         if let Some(peer_id) = peers_eviction::select_for_eviction_full_relay(
-            self.eviction_candidates(PeerRole::OutboundFullRelay),
+            self.eviction_candidates(ConnectionType::OutboundFullRelay),
             &self.p2p_config.peer_manager_config,
             self.time_getter.get_time(),
             &mut make_pseudo_rng(),
@@ -900,26 +907,28 @@ where
     }
 
     /// Should we load addresses from this peer?
-    fn should_load_addresses_from(peer_role: PeerRole) -> bool {
+    fn should_load_addresses_from(conn_type: ConnectionType) -> bool {
         // Load addresses only from outbound peers, like it's done in Bitcoin Core
-        match peer_role {
-            PeerRole::OutboundFullRelay | PeerRole::OutboundReserved | PeerRole::OutboundManual => {
-                true
-            }
-            PeerRole::Inbound | PeerRole::OutboundBlockRelay | PeerRole::Feeler => false,
+        match conn_type {
+            ConnectionType::OutboundFullRelay
+            | ConnectionType::OutboundReserved
+            | ConnectionType::OutboundManual => true,
+            ConnectionType::Inbound
+            | ConnectionType::OutboundBlockRelay
+            | ConnectionType::Feeler => false,
         }
     }
 
     /// Should we send addresses to this peer if it requests them?
-    fn should_send_addresses_to(peer_role: PeerRole) -> bool {
+    fn should_send_addresses_to(conn_type: ConnectionType) -> bool {
         // Send addresses only to inbound peers, like it's done in Bitcoin Core
-        match peer_role {
-            PeerRole::Inbound => true,
-            PeerRole::OutboundFullRelay
-            | PeerRole::OutboundBlockRelay
-            | PeerRole::OutboundReserved
-            | PeerRole::OutboundManual
-            | PeerRole::Feeler => false,
+        match conn_type {
+            ConnectionType::Inbound => true,
+            ConnectionType::OutboundFullRelay
+            | ConnectionType::OutboundBlockRelay
+            | ConnectionType::OutboundReserved
+            | ConnectionType::OutboundManual
+            | ConnectionType::Feeler => false,
         }
     }
 
@@ -932,18 +941,18 @@ where
         &mut self,
         peer_address: SocketAddress,
         bind_address: SocketAddress,
-        peer_role: PeerRole,
+        conn_type: ConnectionType,
         info: PeerInfo,
         node_address_as_seen_by_peer: Option<PeerAddress>,
     ) -> crate::Result<()> {
         let peer_id = info.peer_id;
 
-        self.validate_connection(&peer_address, peer_role, &info)?;
+        self.validate_connection(&peer_address, conn_type, &info)?;
 
         self.peer_connectivity_handle.accept(peer_id)?;
 
         log::info!(
-            "new peer accepted, peer_id: {peer_id}, address: {peer_address:?}, role: {peer_role:?}, protocol_version: {:?}",
+            "new peer accepted, peer_id: {peer_id}, address: {peer_address:?}, connection type: {conn_type:?}, protocol_version: {:?}",
             info.protocol_version
         );
 
@@ -951,7 +960,7 @@ where
             self.subscribed_to_peer_addresses.insert(info.peer_id);
         }
 
-        if Self::should_load_addresses_from(peer_role) {
+        if Self::should_load_addresses_from(conn_type) {
             log::debug!("Asking peer {peer_id} for addresses");
             Self::send_peer_message(
                 &mut self.peer_connectivity_handle,
@@ -975,7 +984,7 @@ where
 
         let discovered_own_address = self.discover_own_address(
             peer_id,
-            peer_role,
+            conn_type,
             info.common_services,
             node_address_as_seen_by_peer,
         );
@@ -985,7 +994,7 @@ where
             info,
             peer_address,
             bind_address,
-            peer_role,
+            conn_type,
             score: 0,
             sent_ping: None,
             ping_last: None,
@@ -1005,21 +1014,21 @@ where
         let old_value = self.peers.insert(peer_id, peer);
         assert!(old_value.is_none());
 
-        if peer_role.is_outbound() {
+        if conn_type.is_outbound() {
             self.peerdb.outbound_peer_connected(peer_address);
         }
 
-        if peer_role == PeerRole::OutboundBlockRelay {
+        if conn_type == ConnectionType::OutboundBlockRelay {
             let anchor_addresses = self
                 .peers
                 .values()
-                .filter_map(|peer| match peer.peer_role {
-                    PeerRole::Inbound
-                    | PeerRole::OutboundFullRelay
-                    | PeerRole::OutboundReserved
-                    | PeerRole::OutboundManual
-                    | PeerRole::Feeler => None,
-                    PeerRole::OutboundBlockRelay => Some(peer.peer_address),
+                .filter_map(|peer| match peer.conn_type {
+                    ConnectionType::Inbound
+                    | ConnectionType::OutboundFullRelay
+                    | ConnectionType::OutboundReserved
+                    | ConnectionType::OutboundManual
+                    | ConnectionType::Feeler => None,
+                    ConnectionType::OutboundBlockRelay => Some(peer.peer_address),
                 })
                 // Note: there may be more than outbound_block_relay_count block relay connections
                 // at a given moment, but the extra ones will soon be evicted. Since connections
@@ -1030,7 +1039,7 @@ where
         }
 
         if let Some(o) = self.observer.as_mut() {
-            o.on_connection_accepted(peer_address, peer_role)
+            o.on_connection_accepted(peer_address, conn_type)
         }
 
         Ok(())
@@ -1046,13 +1055,13 @@ where
     ) {
         let peer_id = info.peer_id;
 
-        let (peer_role, response_sender) = match role {
-            Role::Inbound => (PeerRole::Inbound, None),
+        let (conn_type, response_sender) = match role {
+            Role::Inbound => (ConnectionType::Inbound, None),
             Role::Outbound => {
                 let pending_connect = self.pending_outbound_connects.remove(&peer_address).expect(
                     "the address must be present in pending_outbound_connects (accept_connection)",
                 );
-                let role = (&pending_connect.outbound_connect_type).into();
+                let conn_type = (&pending_connect.outbound_connect_type).into();
                 let response_sender = match pending_connect.outbound_connect_type {
                     OutboundConnectType::Automatic {
                         block_relay_only: _,
@@ -1062,14 +1071,14 @@ where
                     OutboundConnectType::Manual { response_sender } => Some(response_sender),
                 };
 
-                (role, response_sender)
+                (conn_type, response_sender)
             }
         };
 
         let accept_res = self.try_accept_connection(
             peer_address,
             bind_address,
-            peer_role,
+            conn_type,
             info,
             node_address_as_seen_by_peer,
         );
@@ -1095,10 +1104,10 @@ where
                 log::error!("disconnect failed unexpectedly: {err:?}");
             }
 
-            if peer_role.is_outbound() {
+            if conn_type.is_outbound() {
                 self.peerdb.report_outbound_failure(peer_address);
             }
-        } else if peer_role == PeerRole::Feeler {
+        } else if conn_type == ConnectionType::Feeler {
             self.disconnect(
                 peer_id,
                 PeerDisconnectionDbAction::Keep,
@@ -1153,7 +1162,7 @@ where
                 peer.peer_address
             );
 
-            if peer.peer_role.is_outbound() {
+            if peer.conn_type.is_outbound() {
                 self.peerdb.outbound_peer_disconnected(peer.peer_address);
             }
 
@@ -1165,7 +1174,7 @@ where
                 match peerdb_action {
                     PeerDisconnectionDbAction::Keep => {}
                     PeerDisconnectionDbAction::RemoveIfOutbound => {
-                        if peer.peer_role.is_outbound() {
+                        if peer.conn_type.is_outbound() {
                             self.peerdb.remove_address(&peer.peer_address);
                         }
                     }
@@ -1204,13 +1213,13 @@ where
         self.last_dns_query_time = Some(self.time_getter.get_time());
     }
 
-    fn peer_addresses_iter(&self) -> impl Iterator<Item = (SocketAddress, PeerRole)> + '_ {
+    fn peer_addresses_iter(&self) -> impl Iterator<Item = (SocketAddress, ConnectionType)> + '_ {
         let pending = self.pending_outbound_connects.iter().map(|(addr, pending_conn)| {
             let role = (&pending_conn.outbound_connect_type).into();
             (*addr, role)
         });
         let connected =
-            self.peers.values().map(|peer_ctx| (peer_ctx.peer_address, peer_ctx.peer_role));
+            self.peers.values().map(|peer_ctx| (peer_ctx.peer_address, peer_ctx.conn_type));
         connected.chain(pending)
     }
 
@@ -1264,19 +1273,19 @@ where
             let addr_group = AddressGroup::from_peer_address(&addr.as_peer_address());
 
             match role {
-                PeerRole::Inbound => {}
-                PeerRole::OutboundReserved | PeerRole::OutboundManual => {
+                ConnectionType::Inbound => {}
+                ConnectionType::OutboundReserved | ConnectionType::OutboundManual => {
                     cur_outbound_conn_addr_groups.insert(addr_group);
                 }
-                PeerRole::OutboundFullRelay => {
+                ConnectionType::OutboundFullRelay => {
                     cur_outbound_full_relay_conn_count += 1;
                     cur_outbound_conn_addr_groups.insert(addr_group);
                 }
-                PeerRole::OutboundBlockRelay => {
+                ConnectionType::OutboundBlockRelay => {
                     cur_outbound_block_relay_conn_count += 1;
                     cur_outbound_conn_addr_groups.insert(addr_group);
                 }
-                PeerRole::Feeler => {
+                ConnectionType::Feeler => {
                     cur_feeler_conn_count += 1;
                 }
             }
@@ -1302,7 +1311,7 @@ where
                 self.allow_new_outbound_connection(
                     &cur_conn_ip_port_to_role_map,
                     addr,
-                    PeerRole::OutboundFullRelay,
+                    ConnectionType::OutboundFullRelay,
                 )
             },
             needed_outbound_full_relay_conn_count,
@@ -1342,7 +1351,7 @@ where
                 self.allow_new_outbound_connection(
                     &cur_conn_ip_port_to_role_map,
                     addr,
-                    PeerRole::OutboundBlockRelay,
+                    ConnectionType::OutboundBlockRelay,
                 )
             },
             needed_outbound_block_relay_conn_count,
@@ -1370,7 +1379,7 @@ where
                 && self.allow_new_outbound_connection(
                     &cur_conn_ip_port_to_role_map,
                     addr,
-                    PeerRole::OutboundReserved,
+                    ConnectionType::OutboundReserved,
                 )
         });
 
@@ -1449,7 +1458,7 @@ where
     fn handle_addr_list_request(&mut self, peer_id: PeerId) {
         let peer = self.peers.get_mut(&peer_id).expect("peer must be known");
         // Only one request allowed to reduce load in case of DoS attacks
-        if !Self::should_send_addresses_to(peer.peer_role)
+        if !Self::should_send_addresses_to(peer.conn_type)
             || peer.addr_list_req_received.test_and_set()
         {
             log::warn!("Ignore unexpected address list request from peer {peer_id}");
@@ -1512,7 +1521,7 @@ where
             P2pError::ProtocolError(ProtocolError::AddressListLimitExceeded)
         );
         ensure!(
-            Self::should_load_addresses_from(peer.peer_role)
+            Self::should_load_addresses_from(peer.conn_type)
                 && !peer.addr_list_resp_received.test_and_set(),
             P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
                 "AddrListResponse".to_owned()
@@ -1757,7 +1766,7 @@ where
             .map(|context| ConnectedPeer {
                 peer_id: context.info.peer_id,
                 address: context.peer_address,
-                peer_role: context.peer_role,
+                conn_type: context.conn_type,
                 ban_score: context.score,
                 user_agent: context.info.user_agent.to_string(),
                 software_version: context.info.software_version.to_string(),
@@ -1786,20 +1795,20 @@ where
     fn maybe_reject_because_already_connected(
         &self,
         new_peer_addr: &SocketAddress,
-        new_peer_role: PeerRole,
+        new_peer_conn_type: ConnectionType,
     ) -> crate::Result<()> {
-        match new_peer_role {
+        match new_peer_conn_type {
             // Don't reject inbound connections. The address will have a random port number anyway,
             // so we won't be able to tell whether the connections come from the same node or not.
-            PeerRole::Inbound
+            ConnectionType::Inbound
             // Don't reject feeler connections either.
-            | PeerRole::Feeler => {
+            | ConnectionType::Feeler => {
                 return Ok(());
             }
-            PeerRole::OutboundFullRelay
-            | PeerRole::OutboundBlockRelay
-            | PeerRole::OutboundReserved
-            | PeerRole::OutboundManual => {}
+            ConnectionType::OutboundFullRelay
+            | ConnectionType::OutboundBlockRelay
+            | ConnectionType::OutboundReserved
+            | ConnectionType::OutboundManual => {}
         }
 
         let conflicting_connection =
@@ -1813,16 +1822,16 @@ where
                     existing_peer_addr.socket_addr().port(),
                     *existing_peer_role,
                     new_peer_addr.socket_addr().port(),
-                    new_peer_role,
+                    new_peer_conn_type,
                 )
             });
 
         if let Some((existing_peer_addr, existing_peer_role)) = conflicting_connection {
             Err(P2pError::PeerError(PeerError::AlreadyConnected {
                 existing_peer_addr,
-                existing_peer_role,
+                existing_peer_conn_type: existing_peer_role,
                 new_peer_addr: *new_peer_addr,
-                new_peer_role,
+                new_peer_conn_type,
             }))
         } else {
             Ok(())
@@ -1841,11 +1850,11 @@ where
         &self,
         // Note: we use the (ip_addr, port) pair as a key instead of SocketAddress to ensure
         // that the keys are always sorted first by the ip and then by port.
-        existing_connections: &BTreeMap<(IpAddr, /*port:*/ u16), PeerRole>,
+        existing_connections: &BTreeMap<(IpAddr, /*port:*/ u16), ConnectionType>,
         new_peer_addr: &SocketAddress,
-        new_peer_role: PeerRole,
+        new_peer_conn_type: ConnectionType,
     ) -> bool {
-        assert!(new_peer_role.is_outbound());
+        assert!(new_peer_conn_type.is_outbound());
 
         let new_peer_ip = new_peer_addr.socket_addr().ip();
         let new_peer_port = new_peer_addr.socket_addr().port();
@@ -1855,7 +1864,7 @@ where
                     *existing_peer_port,
                     *existing_peer_role,
                     new_peer_port,
-                    new_peer_role,
+                    new_peer_conn_type,
                 )
             },
         )
@@ -1868,11 +1877,11 @@ where
     fn may_allow_outbound_connection_to_existing_ip(
         &self,
         existing_peer_port: u16,
-        existing_peer_role: PeerRole,
+        existing_peer_conn_type: ConnectionType,
         new_peer_port: u16,
-        new_peer_role: PeerRole,
+        new_peer_conn_type: ConnectionType,
     ) -> bool {
-        assert!(new_peer_role.is_outbound());
+        assert!(new_peer_conn_type.is_outbound());
 
         if existing_peer_port == new_peer_port {
             // Can't have multiple connections to the same socket address.
@@ -1884,7 +1893,7 @@ where
             return true;
         }
 
-        if existing_peer_role.is_outbound() {
+        if existing_peer_conn_type.is_outbound() {
             // Outbound connections to different socket addresses are ok.
             return true;
         }
@@ -1894,7 +1903,7 @@ where
         // allow the new connection) if the new connection is a manual one (because the user
         // should know better; also, functional tests use manual connections for test nodes
         // and those nodes do share the same ip address).
-        new_peer_role.is_outbound_manual()
+        new_peer_conn_type.is_outbound_manual()
     }
 
     /// The number of active inbound peers (all inbound connected peers that are not in `pending_disconnects`)
@@ -1902,7 +1911,7 @@ where
         self.peers
             .iter()
             .filter(|(peer_id, peer)| {
-                !peer.peer_role.is_outbound() && !self.pending_disconnects.contains_key(peer_id)
+                !peer.conn_type.is_outbound() && !self.pending_disconnects.contains_key(peer_id)
             })
             .count()
     }
@@ -2240,7 +2249,7 @@ pub trait Observer {
     // This will be called at the end of "heartbeat" function.
     fn on_heartbeat(&mut self);
     // This will be called for both incoming and outgoing connections.
-    fn on_connection_accepted(&mut self, address: SocketAddress, peer_role: PeerRole);
+    fn on_connection_accepted(&mut self, address: SocketAddress, conn_type: ConnectionType);
 }
 
 pub trait PeerManagerInterface {

@@ -30,7 +30,7 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use crate::{
     net::{
         default_backend::transport::TransportSocket,
-        types::{PeerInfo, PeerRole},
+        types::{ConnectionType, PeerInfo},
     },
     peer_manager::{self, dns_seed::DnsSeed},
 };
@@ -60,7 +60,7 @@ pub enum PeerManagerNotification {
     Heartbeat,
     ConnectionAccepted {
         address: SocketAddress,
-        peer_role: PeerRole,
+        conn_type: ConnectionType,
     },
 }
 
@@ -101,15 +101,18 @@ impl peer_manager::Observer for PeerManagerObserver {
         self.send_notification(PeerManagerNotification::Heartbeat);
     }
 
-    fn on_connection_accepted(&mut self, address: SocketAddress, peer_role: PeerRole) {
-        self.send_notification(PeerManagerNotification::ConnectionAccepted { address, peer_role });
+    fn on_connection_accepted(&mut self, address: SocketAddress, peer_role: ConnectionType) {
+        self.send_notification(PeerManagerNotification::ConnectionAccepted {
+            address,
+            conn_type: peer_role,
+        });
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct TestPeerInfo {
     pub info: PeerInfo,
-    pub role: PeerRole,
+    pub conn_type: ConnectionType,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -128,7 +131,7 @@ impl TestPeersInfo {
                 ctx.peer_address,
                 TestPeerInfo {
                     info: ctx.info.clone(),
-                    role: ctx.peer_role,
+                    conn_type: ctx.conn_type,
                 },
             );
         }
@@ -136,8 +139,8 @@ impl TestPeersInfo {
         Self { info }
     }
 
-    pub fn count_peers_by_role(&self, role: PeerRole) -> usize {
-        self.info.iter().filter(|(_, info)| info.role == role).count()
+    pub fn count_peers_by_role(&self, conn_type: ConnectionType) -> usize {
+        self.info.iter().filter(|(_, info)| info.conn_type == conn_type).count()
     }
 
     pub fn count_peers_by_ip(&self, ip: IpAddr) -> usize {

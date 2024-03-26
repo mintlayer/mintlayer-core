@@ -29,7 +29,7 @@ use crate::{
         default_backend::{
             transport::TcpTransportSocket, ConnectivityHandle, DefaultNetworkingService,
         },
-        types::{PeerInfo, PeerRole},
+        types::{ConnectionType, PeerInfo},
     },
     peer_manager::PeerManager,
     testing_utils::{peerdb_inmemory_store, TEST_PROTOCOL_VERSION},
@@ -97,7 +97,7 @@ fn validate_services() {
             let services = Services::from_u64(services);
 
             // List all peer roles
-            for peer_role in PeerRole::ALL {
+            for conn_type in ConnectionType::ALL {
                 let peer_id_1 = PeerId::new();
                 let peer_info = PeerInfo {
                     peer_id: peer_id_1,
@@ -110,7 +110,7 @@ fn validate_services() {
 
                 let res = pm.validate_connection(
                     &"127.0.0.1:1234".parse().unwrap(),
-                    peer_role,
+                    conn_type,
                     &peer_info,
                 );
 
@@ -122,16 +122,16 @@ fn validate_services() {
                         ))
                     );
                 } else {
-                    let expected_services: Option<Services> = match peer_role {
-                        PeerRole::Inbound
-                        | PeerRole::OutboundReserved
-                        | PeerRole::OutboundManual
-                        | PeerRole::Feeler => {
+                    let expected_services: Option<Services> = match conn_type {
+                        ConnectionType::Inbound
+                        | ConnectionType::OutboundReserved
+                        | ConnectionType::OutboundManual
+                        | ConnectionType::Feeler => {
                             // Inbound, OutboundReserved, OutboundManual and Feeler connections
                             // are allowed to nodes with any combination of services.
                             None
                         }
-                        PeerRole::OutboundFullRelay => match node_type {
+                        ConnectionType::OutboundFullRelay => match node_type {
                             NodeType::Full => Some(
                                 [Service::Blocks, Service::Transactions, Service::PeerAddresses]
                                     .as_slice()
@@ -143,7 +143,9 @@ fn validate_services() {
                             NodeType::DnsServer => unimplemented!(),
                             NodeType::Inactive => unimplemented!(),
                         },
-                        PeerRole::OutboundBlockRelay => Some([Service::Blocks].as_slice().into()),
+                        ConnectionType::OutboundBlockRelay => {
+                            Some([Service::Blocks].as_slice().into())
+                        }
                     };
 
                     if let Some(expected_services) = expected_services {

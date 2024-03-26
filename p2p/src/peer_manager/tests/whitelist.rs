@@ -20,7 +20,7 @@ use crate::{
     disconnection_reason::DisconnectionReason,
     net::{
         default_backend::{types::Command, ConnectivityHandle},
-        types::{PeerInfo, PeerRole, Role},
+        types::{ConnectionType, PeerInfo, Role},
     },
     peer_manager::{
         peerdb::{salt::Salt, storage::PeerDbStorageWrite, CURRENT_STORAGE_VERSION},
@@ -121,7 +121,7 @@ where
         None,
     );
 
-    assert!(pm2.is_whitelisted_node(PeerRole::Inbound, &addr1));
+    assert!(pm2.is_whitelisted_node(ConnectionType::Inbound, &addr1));
 
     // automatic ban
     pm2.adjust_peer_score(peer_id, 1000);
@@ -238,7 +238,7 @@ where
 
     // address is whitelisted and still banned
     assert!(pm2.peerdb.is_address_banned(&addr1.as_bannable()));
-    assert!(pm2.is_whitelisted_node(PeerRole::Inbound, &addr1));
+    assert!(pm2.is_whitelisted_node(ConnectionType::Inbound, &addr1));
 }
 
 #[tracing::instrument]
@@ -328,7 +328,7 @@ fn manual_ban_overrides_whitelisting(#[case] seed: Seed) {
         v => panic!("unexpected command: {v:?}"),
     }
 
-    assert!(pm.is_whitelisted_node(PeerRole::Inbound, &address_1));
+    assert!(pm.is_whitelisted_node(ConnectionType::Inbound, &address_1));
 
     let (ban_sender, mut ban_receiver) = oneshot_nofail::channel();
     pm.handle_control_event(PeerManagerEvent::Ban(

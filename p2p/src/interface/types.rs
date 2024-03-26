@@ -16,7 +16,7 @@
 use p2p_types::socket_address::SocketAddress;
 use serde::{Deserialize, Serialize};
 
-use crate::{net::types::PeerRole, types::peer_id::PeerId};
+use crate::{net::types::ConnectionType, types::peer_id::PeerId};
 
 /// Helper type used to return information about a connected peer from RPC.
 ///
@@ -27,7 +27,7 @@ pub struct ConnectedPeer {
 
     pub address: SocketAddress,
 
-    pub peer_role: PeerRole,
+    pub conn_type: ConnectionType,
 
     pub ban_score: u32,
 

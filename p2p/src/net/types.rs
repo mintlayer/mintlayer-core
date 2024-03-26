@@ -44,7 +44,6 @@ pub enum Role {
     Outbound,
 }
 
-// TODO: Rename to ConnectionType
 #[derive(
     Debug,
     Clone,
@@ -57,7 +56,7 @@ pub enum Role {
     serde::Deserialize,
     rpc_description::HasValueHint,
 )]
-pub enum PeerRole {
+pub enum ConnectionType {
     Inbound,
     OutboundFullRelay,
     OutboundBlockRelay,
@@ -67,17 +66,17 @@ pub enum PeerRole {
 }
 
 // TODO: Use something like enum_iterator
-impl PeerRole {
-    pub const ALL: [PeerRole; 5] = [
-        PeerRole::Inbound,
-        PeerRole::OutboundFullRelay,
-        PeerRole::OutboundBlockRelay,
-        PeerRole::OutboundReserved,
-        PeerRole::OutboundManual,
+impl ConnectionType {
+    pub const ALL: [ConnectionType; 5] = [
+        ConnectionType::Inbound,
+        ConnectionType::OutboundFullRelay,
+        ConnectionType::OutboundBlockRelay,
+        ConnectionType::OutboundReserved,
+        ConnectionType::OutboundManual,
     ];
 
     pub fn is_outbound(&self) -> bool {
-        use PeerRole::*;
+        use ConnectionType::*;
 
         match self {
             Inbound => false,
@@ -88,7 +87,7 @@ impl PeerRole {
     }
 
     pub fn is_outbound_manual(&self) -> bool {
-        use PeerRole::*;
+        use ConnectionType::*;
 
         match self {
             OutboundManual => true,
