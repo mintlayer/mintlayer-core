@@ -68,8 +68,8 @@ type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 async fn basic_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let bind_address12 = TestAddressMaker::new_random_address_with_rng(&mut rng);
-    let bind_address3 = TestAddressMaker::new_random_address_with_rng(&mut rng);
+    let bind_address12 = TestAddressMaker::new_random_address(&mut rng);
+    let bind_address3 = TestAddressMaker::new_random_address(&mut rng);
 
     let chain_config = Arc::new(chain::config::create_unit_test_config());
     let p2p_config = Arc::new(make_p2p_config());
@@ -78,7 +78,7 @@ async fn basic_test(#[case] seed: Seed) {
     let (mut peer_mgr, mut cmd_receiver) =
         setup_peer_mgr(&chain_config, &p2p_config, &time_getter, &mut rng);
 
-    let peer1_address = TestAddressMaker::new_random_address_with_rng(&mut rng);
+    let peer1_address = TestAddressMaker::new_random_address(&mut rng);
     let (peer1_id, peer1_info) = make_new_peer(&chain_config);
     accept_conn(
         &mut peer_mgr,
@@ -122,7 +122,7 @@ async fn basic_test(#[case] seed: Seed) {
     assert_eq!(addresses_for_peer1, addresses_for_peer1_again);
 
     // Accept connection from another peer with the same bind address.
-    let peer2_address = TestAddressMaker::new_random_address_with_rng(&mut rng);
+    let peer2_address = TestAddressMaker::new_random_address(&mut rng);
     let (peer2_id, peer2_info) = make_new_peer(&chain_config);
     accept_conn(
         &mut peer_mgr,
@@ -141,7 +141,7 @@ async fn basic_test(#[case] seed: Seed) {
     assert_eq!(addresses_for_peer1, addresses_for_peer2);
 
     // Accept connection from another peer with a different bind address.
-    let peer3_address = TestAddressMaker::new_random_address_with_rng(&mut rng);
+    let peer3_address = TestAddressMaker::new_random_address(&mut rng);
     let (peer3_id, peer3_info) = make_new_peer(&chain_config);
     accept_conn(
         &mut peer_mgr,

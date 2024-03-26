@@ -56,9 +56,13 @@ use super::{
 
 // Ban the peer, check that it's banned.
 // Wait for the duration of the ban, check that it's no longer banned.
-#[tracing::instrument]
-#[test]
-fn ban_peer() {
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn ban_peer(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
@@ -74,7 +78,7 @@ fn ban_peer() {
     )
     .unwrap();
 
-    let address = TestAddressMaker::new_random_address();
+    let address = TestAddressMaker::new_random_address(&mut rng);
     peerdb.ban(address.as_bannable(), ban_duration);
 
     // The address is banned.
@@ -113,9 +117,13 @@ fn ban_peer() {
 }
 
 // Ban the peer twice, check that the second duration overrides the first one.
-#[tracing::instrument]
-#[test]
-fn ban_peer_twice() {
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn ban_peer_twice(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
@@ -132,7 +140,7 @@ fn ban_peer_twice() {
     )
     .unwrap();
 
-    let address = TestAddressMaker::new_random_address();
+    let address = TestAddressMaker::new_random_address(&mut rng);
 
     peerdb.ban(address.as_bannable(), ban_duration1);
 
@@ -162,9 +170,13 @@ fn ban_peer_twice() {
 }
 
 // Ban the peer for Duration::MAX; the ban end time should be the maximum possible time.
-#[tracing::instrument]
-#[test]
-fn ban_for_max_duration() {
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn ban_for_max_duration(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
@@ -176,7 +188,7 @@ fn ban_for_max_duration() {
     )
     .unwrap();
 
-    let address = TestAddressMaker::new_random_address();
+    let address = TestAddressMaker::new_random_address(&mut rng);
 
     peerdb.ban(address.as_bannable(), Duration::MAX);
 
@@ -195,9 +207,13 @@ fn ban_for_max_duration() {
 
 // Discourage the peer, check that it's discouraged.
 // Wait for the duration of the discouragement, check that it's no longer discouraged.
-#[tracing::instrument]
-#[test]
-fn discourage_peer() {
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn discourage_peer(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
@@ -213,7 +229,7 @@ fn discourage_peer() {
     )
     .unwrap();
 
-    let address = TestAddressMaker::new_random_address();
+    let address = TestAddressMaker::new_random_address(&mut rng);
     peerdb.discourage(address.as_bannable());
 
     // The address is discouraged.
@@ -253,9 +269,13 @@ fn discourage_peer() {
 
 // Discourage the peer, wait for some time then discourage it again. The discouragement duration
 // should be refreshed.
-#[tracing::instrument]
-#[test]
-fn discourage_peer_twice() {
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn discourage_peer_twice(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
@@ -271,7 +291,7 @@ fn discourage_peer_twice() {
     )
     .unwrap();
 
-    let address = TestAddressMaker::new_random_address();
+    let address = TestAddressMaker::new_random_address(&mut rng);
 
     peerdb.discourage(address.as_bannable());
 
@@ -318,9 +338,13 @@ fn discourage_peer_twice() {
 
 // Discourage the peer for Duration::MAX; the discouragement end time should be
 // the maximum possible time.
-#[tracing::instrument]
-#[test]
-fn discourage_for_max_duration() {
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn discourage_for_max_duration(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
@@ -335,7 +359,7 @@ fn discourage_for_max_duration() {
     )
     .unwrap();
 
-    let address = TestAddressMaker::new_random_address();
+    let address = TestAddressMaker::new_random_address(&mut rng);
     peerdb.discourage(address.as_bannable());
 
     // The address is discouraged until the maximum possible time.
@@ -352,9 +376,13 @@ fn discourage_for_max_duration() {
     assert_addr_consistency(&peerdb);
 }
 
-#[tracing::instrument]
-#[test]
-fn connected_unreachable() {
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn connected_unreachable(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let p2p_config = Arc::new(test_p2p_config());
@@ -367,7 +395,7 @@ fn connected_unreachable() {
     )
     .unwrap();
 
-    let address = TestAddressMaker::new_random_address();
+    let address = TestAddressMaker::new_random_address(&mut rng);
     peerdb.peer_discovered(address);
     peerdb.report_outbound_failure(address);
     assert!(peerdb.addresses.get(&address).unwrap().is_unreachable());
@@ -380,9 +408,13 @@ fn connected_unreachable() {
     assert_addr_consistency(&peerdb);
 }
 
-#[tracing::instrument]
-#[test]
-fn connected_unknown() {
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn connected_unknown(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
@@ -395,7 +427,7 @@ fn connected_unknown() {
     )
     .unwrap();
 
-    let address = TestAddressMaker::new_random_address();
+    let address = TestAddressMaker::new_random_address(&mut rng);
 
     // User requests connection to some unknown node via RPC and connection succeeds.
     // PeerDb should process that normally.
@@ -405,9 +437,13 @@ fn connected_unknown() {
     assert_addr_consistency(&peerdb);
 }
 
-#[tracing::instrument]
-#[test]
-fn anchor_peers() {
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn anchor_peers(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
@@ -422,14 +458,14 @@ fn anchor_peers() {
     .unwrap();
 
     let mut anchors =
-        [TestAddressMaker::new_random_address(), TestAddressMaker::new_random_address()]
+        [TestAddressMaker::new_random_address(&mut rng), TestAddressMaker::new_random_address(&mut rng)]
             .into_iter()
             .collect::<BTreeSet<_>>();
 
     peerdb.set_anchors(anchors.clone());
     assert_eq!(*peerdb.anchors(), anchors);
 
-    let new_address = TestAddressMaker::new_random_address();
+    let new_address = TestAddressMaker::new_random_address(&mut rng);
     anchors.insert(new_address);
     peerdb.set_anchors(anchors.clone());
     assert_eq!(*peerdb.anchors(), anchors);
