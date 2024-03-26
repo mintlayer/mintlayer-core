@@ -16,8 +16,7 @@
 use common::{
     address::{AddressError, RpcAddress},
     chain::{
-        tokens::TokenId, AccountCommand, AccountOutPoint, AccountSpending, ChainConfig,
-        DelegationId, Destination,
+        tokens::TokenId, AccountCommand, AccountSpending, ChainConfig, DelegationId, Destination,
     },
     primitives::amount::RpcAmountOut,
 };
@@ -26,37 +25,24 @@ use super::token::RpcIsTokenUnfreezable;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum RpcAccountSpending {
-    DelegationBalance(RpcAddress<DelegationId>, RpcAmountOut),
+    DelegationBalance {
+        delegation_id: RpcAddress<DelegationId>,
+        amount: RpcAmountOut,
+    },
 }
 
 impl RpcAccountSpending {
-    fn new(chain_config: &ChainConfig, spending: AccountSpending) -> Result<Self, AddressError> {
-        let result = match spending {
-            AccountSpending::DelegationBalance(id, amount) => {
-                RpcAccountSpending::DelegationBalance(
-                    RpcAddress::new(chain_config, id)?,
-                    RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
-                )
-            }
-        };
-        Ok(result)
-    }
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct RpcAccountOutPoint {
-    nonce: u64,
-    account: RpcAccountSpending,
-}
-
-impl RpcAccountOutPoint {
     pub fn new(
         chain_config: &ChainConfig,
-        outpoint: AccountOutPoint,
+        spending: AccountSpending,
     ) -> Result<Self, AddressError> {
-        let result = Self {
-            nonce: outpoint.nonce().value(),
-            account: RpcAccountSpending::new(chain_config, outpoint.account().clone())?,
+        let result = match spending {
+            AccountSpending::DelegationBalance(id, amount) => {
+                RpcAccountSpending::DelegationBalance {
+                    delegation_id: RpcAddress::new(chain_config, id)?,
+                    amount: RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
+                }
+            }
         };
         Ok(result)
     }
@@ -64,39 +50,54 @@ impl RpcAccountOutPoint {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum RpcAccountCommand {
-    MintTokens(RpcAddress<TokenId>, RpcAmountOut),
-    UnmintTokens(RpcAddress<TokenId>),
-    LockTokenSupply(RpcAddress<TokenId>),
-    FreezeToken(RpcAddress<TokenId>, RpcIsTokenUnfreezable),
-    UnfreezeToken(RpcAddress<TokenId>),
-    ChangeTokenAuthority(RpcAddress<TokenId>, RpcAddress<Destination>),
+    MintTokens {
+        token_id: RpcAddress<TokenId>,
+        amount: RpcAmountOut,
+    },
+    UnmintTokens {
+        token_id: RpcAddress<TokenId>,
+    },
+    LockTokenSupply {
+        token_id: RpcAddress<TokenId>,
+    },
+    FreezeToken {
+        token_id: RpcAddress<TokenId>,
+        is_unfreezable: RpcIsTokenUnfreezable,
+    },
+    UnfreezeToken {
+        token_id: RpcAddress<TokenId>,
+    },
+    ChangeTokenAuthority {
+        token_id: RpcAddress<TokenId>,
+        new_authority: RpcAddress<Destination>,
+    },
 }
 
 impl RpcAccountCommand {
     pub fn new(chain_config: &ChainConfig, command: &AccountCommand) -> Result<Self, AddressError> {
         let result = match command {
-            AccountCommand::MintTokens(id, amount) => RpcAccountCommand::MintTokens(
-                RpcAddress::new(chain_config, *id)?,
-                RpcAmountOut::from_amount(*amount, chain_config.coin_decimals()),
-            ),
-            AccountCommand::UnmintTokens(id) => {
-                RpcAccountCommand::UnmintTokens(RpcAddress::new(chain_config, *id)?)
-            }
-            AccountCommand::LockTokenSupply(id) => {
-                RpcAccountCommand::LockTokenSupply(RpcAddress::new(chain_config, *id)?)
-            }
-            AccountCommand::FreezeToken(id, is_unfreezable) => RpcAccountCommand::FreezeToken(
-                RpcAddress::new(chain_config, *id)?,
-                (*is_unfreezable).into(),
-            ),
-            AccountCommand::UnfreezeToken(id) => {
-                RpcAccountCommand::UnfreezeToken(RpcAddress::new(chain_config, *id)?)
-            }
+            AccountCommand::MintTokens(id, amount) => RpcAccountCommand::MintTokens {
+                token_id: RpcAddress::new(chain_config, *id)?,
+                amount: RpcAmountOut::from_amount(*amount, chain_config.coin_decimals()),
+            },
+            AccountCommand::UnmintTokens(id) => RpcAccountCommand::UnmintTokens {
+                token_id: RpcAddress::new(chain_config, *id)?,
+            },
+            AccountCommand::LockTokenSupply(id) => RpcAccountCommand::LockTokenSupply {
+                token_id: RpcAddress::new(chain_config, *id)?,
+            },
+            AccountCommand::FreezeToken(id, is_unfreezable) => RpcAccountCommand::FreezeToken {
+                token_id: RpcAddress::new(chain_config, *id)?,
+                is_unfreezable: (*is_unfreezable).into(),
+            },
+            AccountCommand::UnfreezeToken(id) => RpcAccountCommand::UnfreezeToken {
+                token_id: RpcAddress::new(chain_config, *id)?,
+            },
             AccountCommand::ChangeTokenAuthority(id, destination) => {
-                RpcAccountCommand::ChangeTokenAuthority(
-                    RpcAddress::new(chain_config, *id)?,
-                    RpcAddress::new(chain_config, destination.clone())?,
-                )
+                RpcAccountCommand::ChangeTokenAuthority {
+                    token_id: RpcAddress::new(chain_config, *id)?,
+                    new_authority: RpcAddress::new(chain_config, destination.clone())?,
+                }
             }
         };
         Ok(result)

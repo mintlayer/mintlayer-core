@@ -15,30 +15,56 @@
 
 use common::{
     address::AddressError,
-    chain::{ChainConfig, TxInput, UtxoOutPoint},
+    chain::{ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput},
+    primitives::Id,
 };
 
-use super::account::{RpcAccountCommand, RpcAccountOutPoint};
+use super::account::{RpcAccountCommand, RpcAccountSpending};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum RpcTxInput {
-    Utxo(UtxoOutPoint),
-    Account(RpcAccountOutPoint),
-    AccountCommand(u64, RpcAccountCommand),
+    Utxo {
+        source_id: RpcOutPointSourceId,
+        index: u32,
+    },
+    Account {
+        nonce: u64,
+        account: RpcAccountSpending,
+    },
+    AccountCommand {
+        nonce: u64,
+        command: RpcAccountCommand,
+    },
 }
 
 impl RpcTxInput {
     pub fn new(chain_config: &ChainConfig, input: &TxInput) -> Result<Self, AddressError> {
         let result = match input {
-            TxInput::Utxo(outpoint) => RpcTxInput::Utxo(outpoint.clone()),
-            TxInput::Account(outpoint) => {
-                RpcTxInput::Account(RpcAccountOutPoint::new(chain_config, outpoint.clone())?)
-            }
-            TxInput::AccountCommand(nonce, command) => {
-                let command = RpcAccountCommand::new(chain_config, command)?;
-                RpcTxInput::AccountCommand(nonce.value(), command)
-            }
+            TxInput::Utxo(outpoint) => match outpoint.source_id() {
+                OutPointSourceId::Transaction(id) => RpcTxInput::Utxo {
+                    source_id: RpcOutPointSourceId::Transaction { tx_id: id },
+                    index: outpoint.output_index(),
+                },
+                OutPointSourceId::BlockReward(id) => RpcTxInput::Utxo {
+                    source_id: RpcOutPointSourceId::BlockReward { block_id: id },
+                    index: outpoint.output_index(),
+                },
+            },
+            TxInput::Account(outpoint) => RpcTxInput::Account {
+                nonce: outpoint.nonce().value(),
+                account: RpcAccountSpending::new(chain_config, outpoint.account().clone())?,
+            },
+            TxInput::AccountCommand(nonce, command) => RpcTxInput::AccountCommand {
+                nonce: nonce.value(),
+                command: RpcAccountCommand::new(chain_config, command)?,
+            },
         };
         Ok(result)
     }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub enum RpcOutPointSourceId {
+    Transaction { tx_id: Id<Transaction> },
+    BlockReward { block_id: Id<GenBlock> },
 }

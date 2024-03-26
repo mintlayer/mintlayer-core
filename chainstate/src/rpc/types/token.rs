@@ -23,7 +23,6 @@ use common::{
     },
     primitives::amount::RpcAmountOut,
 };
-use serialization::extras::non_empty_vec::DataOrNoVec;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum RpcTokenTotalSupply {
@@ -77,9 +76,9 @@ impl From<IsTokenUnfreezable> for RpcIsTokenUnfreezable {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RpcTokenIssuance {
-    pub token_ticker: Vec<u8>,
+    pub token_ticker: String,
     pub number_of_decimals: u8,
-    pub metadata_uri: Vec<u8>,
+    pub metadata_uri: String,
     pub total_supply: RpcTokenTotalSupply,
     pub authority: RpcAddress<Destination>,
     pub is_freezable: RpcIsTokenFreezable,
@@ -89,9 +88,9 @@ impl RpcTokenIssuance {
     pub fn new(chain_config: &ChainConfig, issuance: &TokenIssuance) -> Result<Self, AddressError> {
         let result = match issuance {
             TokenIssuance::V1(issuance) => Self {
-                token_ticker: issuance.token_ticker.clone(),
+                token_ticker: hex::encode(&issuance.token_ticker),
                 number_of_decimals: issuance.number_of_decimals,
-                metadata_uri: issuance.metadata_uri.clone(),
+                metadata_uri: hex::encode(&issuance.metadata_uri),
                 total_supply: RpcTokenTotalSupply::new(chain_config, issuance.total_supply)?,
                 authority: RpcAddress::new(chain_config, issuance.authority.clone())?,
                 is_freezable: issuance.is_freezable.into(),
@@ -121,13 +120,13 @@ impl RpcNftIssuance {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RpcNftMetadata {
     pub creator: Option<RpcAddress<Destination>>,
-    pub name: Vec<u8>,
-    pub description: Vec<u8>,
-    pub ticker: Vec<u8>,
-    pub icon_uri: DataOrNoVec<u8>,
-    pub additional_metadata_uri: DataOrNoVec<u8>,
-    pub media_uri: DataOrNoVec<u8>,
-    pub media_hash: Vec<u8>,
+    pub name: String,
+    pub description: String,
+    pub ticker: String,
+    pub icon_uri: Option<String>,
+    pub additional_metadata_uri: Option<String>,
+    pub media_uri: Option<String>,
+    pub media_hash: String,
 }
 
 impl RpcNftMetadata {
@@ -141,13 +140,16 @@ impl RpcNftMetadata {
                 .clone()
                 .map(|c| RpcAddress::new(chain_config, Destination::PublicKey(c.public_key)))
                 .transpose()?,
-            name: metadata.name.clone(),
-            description: metadata.description.clone(),
-            ticker: metadata.ticker.clone(),
-            icon_uri: metadata.icon_uri.clone(),
-            additional_metadata_uri: metadata.additional_metadata_uri.clone(),
-            media_uri: metadata.media_uri.clone(),
-            media_hash: metadata.media_hash.clone(),
+            name: hex::encode(&metadata.name),
+            description: hex::encode(&metadata.description),
+            ticker: hex::encode(&metadata.ticker),
+            icon_uri: metadata.icon_uri.as_opt_slice().map(hex::encode),
+            additional_metadata_uri: metadata
+                .additional_metadata_uri
+                .as_opt_slice()
+                .map(hex::encode),
+            media_uri: metadata.media_uri.as_opt_slice().map(hex::encode),
+            media_hash: hex::encode(&metadata.media_hash),
         };
         Ok(result)
     }

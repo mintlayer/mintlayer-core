@@ -27,22 +27,26 @@ use super::token::{RpcNftIssuance, RpcTokenIssuance};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum RpcOutputValue {
-    Coin(RpcAmountOut),
-    Token(RpcAddress<TokenId>, RpcAmountOut),
+    Coin {
+        amount: RpcAmountOut,
+    },
+    Token {
+        id: RpcAddress<TokenId>,
+        amount: RpcAmountOut,
+    },
 }
 
 impl RpcOutputValue {
     fn new(chain_config: &ChainConfig, value: OutputValue) -> Result<Self, AddressError> {
         let result = match value {
-            OutputValue::Coin(amount) => RpcOutputValue::Coin(RpcAmountOut::from_amount(
-                amount,
-                chain_config.coin_decimals(),
-            )),
+            OutputValue::Coin(amount) => RpcOutputValue::Coin {
+                amount: RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
+            },
             OutputValue::TokenV0(_) => unimplemented!(),
-            OutputValue::TokenV1(token_id, amount) => RpcOutputValue::Token(
-                RpcAddress::new(chain_config, token_id)?,
-                RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
-            ),
+            OutputValue::TokenV1(token_id, amount) => RpcOutputValue::Token {
+                id: RpcAddress::new(chain_config, token_id)?,
+                amount: RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
+            },
         };
         Ok(result)
     }
@@ -77,64 +81,93 @@ impl RpcStakePoolData {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub enum RpcTxOutput {
-    Transfer(RpcOutputValue, RpcAddress<Destination>),
-    LockThenTransfer(RpcOutputValue, RpcAddress<Destination>, OutputTimeLock),
-    Burn(RpcOutputValue),
-    CreateStakePool(RpcAddress<PoolId>, Box<RpcStakePoolData>),
-    ProduceBlockFromStake(RpcAddress<Destination>, RpcAddress<PoolId>),
-    CreateDelegationId(RpcAddress<Destination>, RpcAddress<PoolId>),
-    DelegateStaking(RpcAmountOut, RpcAddress<DelegationId>),
-    IssueFungibleToken(Box<RpcTokenIssuance>),
-    IssueNft(
-        RpcAddress<TokenId>,
-        Box<RpcNftIssuance>,
-        RpcAddress<Destination>,
-    ),
-    DataDeposit(Vec<u8>),
+    Transfer {
+        value: RpcOutputValue,
+        destination: RpcAddress<Destination>,
+    },
+    LockThenTransfer {
+        value: RpcOutputValue,
+        destination: RpcAddress<Destination>,
+        timelock: OutputTimeLock,
+    },
+    Burn {
+        value: RpcOutputValue,
+    },
+    CreateStakePool {
+        pool_id: RpcAddress<PoolId>,
+        data: Box<RpcStakePoolData>,
+    },
+    ProduceBlockFromStake {
+        destination: RpcAddress<Destination>,
+        pool_id: RpcAddress<PoolId>,
+    },
+    CreateDelegationId {
+        destination: RpcAddress<Destination>,
+        pool_id: RpcAddress<PoolId>,
+    },
+    DelegateStaking {
+        amount: RpcAmountOut,
+        delegation_id: RpcAddress<DelegationId>,
+    },
+    IssueFungibleToken {
+        data: Box<RpcTokenIssuance>,
+    },
+    IssueNft {
+        token_id: RpcAddress<TokenId>,
+        data: Box<RpcNftIssuance>,
+        destination: RpcAddress<Destination>,
+    },
+    DataDeposit {
+        data: String,
+    },
 }
 
 impl RpcTxOutput {
     pub fn new(chain_config: &ChainConfig, output: &TxOutput) -> Result<Self, AddressError> {
         let result = match output {
-            TxOutput::Transfer(value, destination) => RpcTxOutput::Transfer(
-                RpcOutputValue::new(chain_config, value.clone())?,
-                RpcAddress::new(chain_config, destination.clone())?,
-            ),
+            TxOutput::Transfer(value, destination) => RpcTxOutput::Transfer {
+                value: RpcOutputValue::new(chain_config, value.clone())?,
+                destination: RpcAddress::new(chain_config, destination.clone())?,
+            },
             TxOutput::LockThenTransfer(value, destination, timelock) => {
-                RpcTxOutput::LockThenTransfer(
-                    RpcOutputValue::new(chain_config, value.clone())?,
-                    RpcAddress::new(chain_config, destination.clone())?,
-                    *timelock,
-                )
+                RpcTxOutput::LockThenTransfer {
+                    value: RpcOutputValue::new(chain_config, value.clone())?,
+                    destination: RpcAddress::new(chain_config, destination.clone())?,
+                    timelock: *timelock,
+                }
             }
-            TxOutput::Burn(value) => {
-                RpcTxOutput::Burn(RpcOutputValue::new(chain_config, value.clone())?)
+            TxOutput::Burn(value) => RpcTxOutput::Burn {
+                value: RpcOutputValue::new(chain_config, value.clone())?,
+            },
+            TxOutput::CreateStakePool(id, data) => RpcTxOutput::CreateStakePool {
+                pool_id: RpcAddress::new(chain_config, *id)?,
+                data: Box::new(RpcStakePoolData::new(chain_config, data)?),
+            },
+            TxOutput::ProduceBlockFromStake(destination, id) => {
+                RpcTxOutput::ProduceBlockFromStake {
+                    destination: RpcAddress::new(chain_config, destination.clone())?,
+                    pool_id: RpcAddress::new(chain_config, *id)?,
+                }
             }
-            TxOutput::CreateStakePool(id, data) => RpcTxOutput::CreateStakePool(
-                RpcAddress::new(chain_config, *id)?,
-                Box::new(RpcStakePoolData::new(chain_config, data)?),
-            ),
-            TxOutput::ProduceBlockFromStake(destination, id) => RpcTxOutput::ProduceBlockFromStake(
-                RpcAddress::new(chain_config, destination.clone())?,
-                RpcAddress::new(chain_config, *id)?,
-            ),
-            TxOutput::CreateDelegationId(destination, id) => RpcTxOutput::CreateDelegationId(
-                RpcAddress::new(chain_config, destination.clone())?,
-                RpcAddress::new(chain_config, *id)?,
-            ),
-            TxOutput::DelegateStaking(amount, id) => RpcTxOutput::DelegateStaking(
-                RpcAmountOut::from_amount(*amount, chain_config.coin_decimals()),
-                RpcAddress::new(chain_config, *id)?,
-            ),
-            TxOutput::IssueFungibleToken(issuance) => RpcTxOutput::IssueFungibleToken(Box::new(
-                RpcTokenIssuance::new(chain_config, issuance)?,
-            )),
-            TxOutput::IssueNft(id, issuance, destination) => RpcTxOutput::IssueNft(
-                RpcAddress::new(chain_config, *id)?,
-                Box::new(RpcNftIssuance::new(chain_config, issuance)?),
-                RpcAddress::new(chain_config, destination.clone())?,
-            ),
-            TxOutput::DataDeposit(data) => RpcTxOutput::DataDeposit(data.clone()),
+            TxOutput::CreateDelegationId(destination, id) => RpcTxOutput::CreateDelegationId {
+                destination: RpcAddress::new(chain_config, destination.clone())?,
+                pool_id: RpcAddress::new(chain_config, *id)?,
+            },
+            TxOutput::DelegateStaking(amount, id) => RpcTxOutput::DelegateStaking {
+                amount: RpcAmountOut::from_amount(*amount, chain_config.coin_decimals()),
+                delegation_id: RpcAddress::new(chain_config, *id)?,
+            },
+            TxOutput::IssueFungibleToken(issuance) => RpcTxOutput::IssueFungibleToken {
+                data: Box::new(RpcTokenIssuance::new(chain_config, issuance)?),
+            },
+            TxOutput::IssueNft(id, issuance, destination) => RpcTxOutput::IssueNft {
+                token_id: RpcAddress::new(chain_config, *id)?,
+                data: Box::new(RpcNftIssuance::new(chain_config, issuance)?),
+                destination: RpcAddress::new(chain_config, destination.clone())?,
+            },
+            TxOutput::DataDeposit(data) => RpcTxOutput::DataDeposit {
+                data: hex::encode(data),
+            },
         };
         Ok(result)
     }

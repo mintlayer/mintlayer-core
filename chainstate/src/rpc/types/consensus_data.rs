@@ -24,7 +24,7 @@ use super::input::RpcTxInput;
 pub enum RpcConsensusData {
     None,
     PoW,
-    PoS(RpcPoSData),
+    PoS { pos_data: RpcPoSData },
 }
 
 impl RpcConsensusData {
@@ -42,18 +42,23 @@ impl RpcConsensusData {
                     .map(|input| RpcTxInput::new(chain_config, input))
                     .collect::<Result<Vec<_>, _>>()?;
 
+                let compact_target = format!("{:x}", pos_data.compact_target().0);
+
                 let target = format!(
                     "{:x}",
                     TryInto::<common::Uint256>::try_into(pos_data.compact_target())
                         .expect("valid target")
                 );
 
-                RpcConsensusData::PoS(RpcPoSData {
-                    kernel_input_count: rpc_inputs.len() as u32,
-                    kernel_inputs: rpc_inputs,
-                    stake_pool_id: RpcAddress::new(chain_config, *pos_data.stake_pool_id())?,
-                    target,
-                })
+                RpcConsensusData::PoS {
+                    pos_data: RpcPoSData {
+                        kernel_input_count: rpc_inputs.len() as u32,
+                        kernel_inputs: rpc_inputs,
+                        stake_pool_id: RpcAddress::new(chain_config, *pos_data.stake_pool_id())?,
+                        compact_target,
+                        target,
+                    },
+                }
             }
         };
 
@@ -66,5 +71,6 @@ pub struct RpcPoSData {
     kernel_input_count: u32,
     kernel_inputs: Vec<RpcTxInput>,
     stake_pool_id: RpcAddress<PoolId>,
+    compact_target: String,
     target: String,
 }
