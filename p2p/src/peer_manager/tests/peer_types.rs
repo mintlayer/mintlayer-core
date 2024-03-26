@@ -97,7 +97,7 @@ fn validate_services() {
             let services = Services::from_u64(services);
 
             // List all connection types
-            for conn_type in ConnectionType::ALL {
+            for conn_type in enum_iterator::all::<ConnectionType>() {
                 let peer_id_1 = PeerId::new();
                 let peer_info = PeerInfo {
                     peer_id: peer_id_1,

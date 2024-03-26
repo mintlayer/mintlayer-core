@@ -51,6 +51,7 @@ pub enum ConnectionDirection {
     serde::Serialize,
     serde::Deserialize,
     rpc_description::HasValueHint,
+    enum_iterator::Sequence,
 )]
 pub enum ConnectionType {
     Inbound,
@@ -61,16 +62,7 @@ pub enum ConnectionType {
     Feeler,
 }
 
-// TODO: Use something like enum_iterator
 impl ConnectionType {
-    pub const ALL: [ConnectionType; 5] = [
-        ConnectionType::Inbound,
-        ConnectionType::OutboundFullRelay,
-        ConnectionType::OutboundBlockRelay,
-        ConnectionType::OutboundReserved,
-        ConnectionType::OutboundManual,
-    ];
-
     pub fn is_outbound(&self) -> bool {
         use ConnectionType::*;
 
