@@ -43,11 +43,7 @@ use common::{
 };
 use logging::log;
 use pos_accounting::PoSAccountingView;
-use std::sync::Arc;
-use utils::{
-    atomics::{AcqRelAtomicU64, RelaxedAtomicBool},
-    ensure,
-};
+use utils::ensure;
 use utxo::UtxosView;
 
 use crate::{

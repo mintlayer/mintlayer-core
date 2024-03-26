@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Range;
+
 use crate::{
     detail::{job_manager::JobKey, BlockProduction},
     BlockProductionError,
 };
 use common::{
-    chain::{Block, SignedTransaction, Transaction},
+    chain::{block::timestamp::BlockTimestamp, Block, SignedTransaction, Transaction},
     primitives::Id,
 };
 use consensus::GenerateBlockInputData;
@@ -54,6 +56,30 @@ impl BlockProductionInterface for BlockProduction {
         Ok(block)
     }
 
+    async fn try_generate_block(
+        &mut self,
+        input_data: GenerateBlockInputData,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+        time_search_range: Range<BlockTimestamp>,
+    ) -> Result<Block, BlockProductionError> {
+        let (block, end_receiver) = self
+            .try_produce_block(
+                input_data,
+                transactions,
+                transaction_ids,
+                packing_strategy,
+                time_search_range,
+            )
+            .await?;
+
+        // The only error that can happen is if the channel is closed. We don't care about that here.
+        let _finished = end_receiver.await;
+
+        Ok(block)
+    }
+
     async fn e2e_public_key(&self) -> ephemeral_e2e::EndToEndPublicKey {
         self.e2e_private_key().public_key()
     }
@@ -71,6 +97,28 @@ impl BlockProductionInterface for BlockProduction {
             shared_secret.decrypt_then_decode::<GenerateBlockInputData>(&encrypted_input_data)?;
         self.generate_block(input_data, transactions, transaction_ids, packing_strategy)
             .await
+    }
+
+    async fn try_generate_block_e2e(
+        &mut self,
+        encrypted_input_data: Vec<u8>,
+        public_key: ephemeral_e2e::EndToEndPublicKey,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+        time_search_range: Range<BlockTimestamp>,
+    ) -> Result<Block, BlockProductionError> {
+        let shared_secret = self.e2e_private_key().shared_secret(&public_key);
+        let input_data =
+            shared_secret.decrypt_then_decode::<GenerateBlockInputData>(&encrypted_input_data)?;
+        self.try_generate_block(
+            input_data,
+            transactions,
+            transaction_ids,
+            packing_strategy,
+            time_search_range,
+        )
+        .await
     }
 }
 

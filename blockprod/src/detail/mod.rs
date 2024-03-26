@@ -17,7 +17,7 @@ pub mod job_manager;
 
 use std::{
     cmp,
-    ops::RangeBounds,
+    ops::Range,
     sync::{mpsc, Arc},
 };
 
@@ -536,14 +536,33 @@ impl BlockProduction {
         }
     }
 
+    pub async fn try_produce_block(
+        &self,
+        input_data: GenerateBlockInputData,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+        time_search_range: Range<BlockTimestamp>,
+    ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
+        self.try_produce_block_in_range_with_custom_id(
+            input_data,
+            transactions,
+            transaction_ids,
+            packing_strategy,
+            time_search_range,
+            None,
+        )
+        .await
+    }
+
     async fn try_produce_block_in_range_with_custom_id(
         &self,
         input_data: GenerateBlockInputData,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
+        time_search_range: Range<BlockTimestamp>,
         custom_id_maybe: Option<Vec<u8>>,
-        time_search_range: std::ops::Range<BlockTimestamp>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
         if !self.blockprod_config.skip_ibd_check {
             let is_initial_block_download = self

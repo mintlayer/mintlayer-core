@@ -14,11 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{
-        block::{consensus_data::PoSData, timestamp::BlockTimestamp},
-        config::EpochIndex,
-        Block, ChainConfig,
-    },
+    chain::{block::timestamp::BlockTimestamp, config::EpochIndex, Block, ChainConfig},
     primitives::{Id, H256},
 };
 use crypto::vrf::{VRFPublicKey, VRFReturn};

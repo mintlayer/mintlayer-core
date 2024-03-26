@@ -13,9 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Range;
+
 use crate::{detail::job_manager::JobKey, BlockProductionError};
 use common::{
-    chain::{Block, SignedTransaction, Transaction},
+    chain::{block::timestamp::BlockTimestamp, Block, SignedTransaction, Transaction},
     primitives::Id,
 };
 use consensus::GenerateBlockInputData;
@@ -49,6 +51,15 @@ pub trait BlockProductionInterface: Send + Sync {
         packing_strategy: PackingStrategy,
     ) -> Result<Block, BlockProductionError>;
 
+    async fn try_generate_block(
+        &mut self,
+        input_data: GenerateBlockInputData,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+        time_search_range: Range<BlockTimestamp>,
+    ) -> Result<Block, BlockProductionError>;
+
     async fn e2e_public_key(&self) -> ephemeral_e2e::EndToEndPublicKey;
 
     /// Same as generate_block, but with end-to-end encryption for the secret data
@@ -59,5 +70,15 @@ pub trait BlockProductionInterface: Send + Sync {
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
+    ) -> Result<Block, BlockProductionError>;
+
+    async fn try_generate_block_e2e(
+        &mut self,
+        encrypted_input_data: Vec<u8>,
+        public_key: ephemeral_e2e::EndToEndPublicKey,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+        time_search_range: Range<BlockTimestamp>,
     ) -> Result<Block, BlockProductionError>;
 }

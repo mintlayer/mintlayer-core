@@ -87,6 +87,14 @@ pub trait NodeInterface {
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error>;
+    //async fn try_generate_block_e2e(
+    //    &self,
+    //    encrypted_input_data: Vec<u8>,
+    //    public_key: EndToEndPublicKey,
+    //    transactions: Vec<SignedTransaction>,
+    //    transaction_ids: Vec<Id<Transaction>>,
+    //    packing_strategy: PackingStrategy,
+    //) -> Result<Block, Self::Error>;
     async fn submit_block(&self, block: Block) -> Result<(), Self::Error>;
     async fn submit_transaction(
         &self,

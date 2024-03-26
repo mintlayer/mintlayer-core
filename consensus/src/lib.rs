@@ -20,7 +20,6 @@ mod pos;
 mod pow;
 mod validator;
 
-use crypto::vrf;
 pub use pos::calculate_effective_pool_balance;
 
 use std::sync::Arc;
@@ -41,7 +40,7 @@ use common::{
     primitives::BlockHeight,
 };
 use serialization::{Decode, Encode};
-use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
+use utils::atomics::RelaxedAtomicBool;
 
 use crate::pos::input_data::generate_pos_consensus_data_and_reward;
 use crate::pow::input_data::generate_pow_consensus_data_and_reward;

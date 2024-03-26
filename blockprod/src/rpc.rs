@@ -15,9 +15,10 @@
 
 //! Block production subsystem RPC handler
 
+use std::ops::Range;
+
 use common::{
-    chain::Block,
-    chain::{SignedTransaction, Transaction},
+    chain::{block::timestamp::BlockTimestamp, Block, SignedTransaction, Transaction},
     primitives::Id,
 };
 use consensus::GenerateBlockInputData;
@@ -78,6 +79,18 @@ trait BlockProductionRpc {
         transactions: Vec<HexEncoded<SignedTransaction>>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
+    ) -> RpcResult<HexEncoded<Block>>;
+
+    #[method(name = "try_generate_block_e2e")]
+    async fn try_generate_block_e2e(
+        &self,
+        encrypted_input_data: Vec<u8>,
+        e2e_public_key: HexEncoded<EndToEndPublicKey>,
+        transactions: Vec<HexEncoded<SignedTransaction>>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+        time_search_range_start: u64,
+        time_search_range_end: u64,
     ) -> RpcResult<HexEncoded<Block>>;
 }
 
@@ -146,6 +159,37 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
                     transactions,
                     transaction_ids,
                     packing_strategy,
+                )
+            })
+            .await,
+        )?;
+
+        Ok(block.into())
+    }
+
+    async fn try_generate_block_e2e(
+        &self,
+        encrypted_input_data: Vec<u8>,
+        e2e_public_key: HexEncoded<EndToEndPublicKey>,
+        transactions: Vec<HexEncoded<SignedTransaction>>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+        time_search_range_start: u64,
+        time_search_range_end: u64,
+    ) -> RpcResult<HexEncoded<Block>> {
+        let transactions = transactions.into_iter().map(HexEncoded::take).collect::<Vec<_>>();
+        let e2e_public_key = e2e_public_key.take();
+
+        let block: Block = rpc::handle_result(
+            self.call_async_mut(move |this| {
+                this.try_generate_block_e2e(
+                    encrypted_input_data,
+                    e2e_public_key,
+                    transactions,
+                    transaction_ids,
+                    packing_strategy,
+                    BlockTimestamp::from_int_seconds(time_search_range_start)
+                        ..BlockTimestamp::from_int_seconds(time_search_range_end),
                 )
             })
             .await,
