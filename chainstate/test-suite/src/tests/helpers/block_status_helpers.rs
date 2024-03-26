@@ -103,6 +103,15 @@ pub fn assert_fully_valid_blocks(tf: &TestFramework, block_ids: &[Id<Block>]) {
     }
 }
 
+pub fn assert_no_block_indices(tf: &TestFramework, block_ids: &[Id<Block>]) {
+    for block_id in block_ids {
+        assert!(
+            !tf.block_index_exists(block_id.into()),
+            "Block {block_id} index must not exist"
+        );
+    }
+}
+
 pub fn assert_ok_blocks_at_stage(
     tf: &TestFramework,
     block_ids: &[Id<Block>],

@@ -225,7 +225,7 @@ impl BanScore for CheckBlockError {
             CheckBlockError::TransactionVerifierError(err) => err.ban_score(),
             CheckBlockError::BlockNotFoundDuringInMemoryReorg(_) => 100,
             CheckBlockError::BlockTimeOrderInvalid(_, _) => 100,
-            CheckBlockError::BlockFromTheFuture => 100,
+            CheckBlockError::BlockFromTheFuture(_) => 100,
             CheckBlockError::BlockSizeError(err) => err.ban_score(),
             CheckBlockError::CheckTransactionFailed(err) => err.ban_score(),
             CheckBlockError::ConsensusVerificationFailed(err) => err.ban_score(),

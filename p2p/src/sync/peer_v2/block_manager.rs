@@ -37,7 +37,7 @@ use utils::sync::Arc;
 use crate::{
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
-    error::{P2pError, PeerError, ProtocolError},
+    error::{P2pError, PeerError, ProtocolError, SyncError},
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
     net::{
         types::services::{Service, Services},
@@ -499,10 +499,12 @@ where
         self.chainstate_handle
             .call(move |c| {
                 for id in ids {
-                    // TODO: As it is mentioned in send_block, in the future it may be possible
-                    // for previously existing blocks and block indices to get removed due to
-                    // invalidation. P2p will need to handle this situation correctly. See issue
-                    // #1033 for more details.
+                    // Note: in the future, when/if we implement block purging, it may be possible for a previously
+                    // existing block (and therefore its BlockIndex) not to exist anymore; if this happens, the
+                    // following check will fail without peer's fault. (But this situation should be rare, so we
+                    // probably won't care about it anyway, because its impact - erroneously discourage/or be discouraged
+                    // by a peer - is low.)
+                    // Also see a similar note in send_block.
                     let index = c.get_block_index(&id)?.ok_or(P2pError::ProtocolError(
                         ProtocolError::UnknownBlockRequested(id),
                     ))?;
@@ -851,14 +853,13 @@ where
                 Ok((block, index))
             })
             .await?;
-        // All requested blocks are already checked while processing `BlockListRequest`.
-        // TODO: in the future, when block invalidation gets merged in and/if we implement
-        // bad blocks purging, a block that once existed may not exist anymore.
-        // Moreover, its block index may no longer exist (e.g. there was a suggestion
-        // to delete block indices of missing blocks when resetting their failure flags).
-        // P2p should handle such situations correctly (see issue #1033 for more details).
-        let block = block?.unwrap_or_else(|| panic!("Unknown block requested: {id}"));
-        let block_index = block_index?.expect("Block index must exist");
+        // Note: all requested blocks have already been checked for existence in handle_block_request.
+        // But in the future, when/if we implement block purging, it will still be possible for a
+        // block to become missing by this point. This should be a rare and low impact situation,
+        // but at least we should fail gracefully here and not panic.
+        // Also see a similar note in handle_block_request.
+        let block = block?.ok_or(SyncError::BlockDataMissingInSendBlock(id))?;
+        let block_index = block_index?.ok_or(SyncError::BlockIndexMissingInSendBlock(id))?;
 
         let old_best_sent_block_id = self.outgoing.best_sent_block.as_ref().map(|idx| {
             let id: Id<GenBlock> = (*idx.block_id()).into();

@@ -15,6 +15,9 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use chainstate_storage::{
+    BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
+};
 use rstest::rstest;
 
 use crate::{
@@ -24,7 +27,7 @@ use crate::{
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
-use chainstate_types::{BlockIndex, GenBlockIndex};
+use chainstate_types::{BlockIndex, BlockStatus, GenBlockIndex};
 use common::{
     chain::{
         Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxOutput,
@@ -312,6 +315,10 @@ impl TestFramework {
         self.chainstate.get_gen_block_index(id).unwrap().unwrap()
     }
 
+    pub fn block_index_exists(&self, id: &Id<GenBlock>) -> bool {
+        self.chainstate.get_gen_block_index(id).unwrap().is_some()
+    }
+
     pub fn index_at(&self, at: usize) -> &BlockIndex {
         assert!(at > 0, "No block index for genesis");
         &self.block_indexes[at - 1]
@@ -332,6 +339,30 @@ impl TestFramework {
 
     pub fn get_min_height_with_allowed_reorg(&self) -> BlockHeight {
         self.chainstate.get_min_height_with_allowed_reorg().unwrap()
+    }
+
+    pub fn set_block_status(&mut self, block_id: &Id<Block>, status: BlockStatus) {
+        let mut block_idx = self
+            .storage
+            .transaction_ro()
+            .unwrap()
+            .get_block_index(block_id)
+            .unwrap()
+            .unwrap();
+        block_idx.set_status(status);
+        let mut tx_rw = self.storage.transaction_rw(None).unwrap();
+
+        tx_rw.set_block_index(&block_idx).unwrap();
+        tx_rw.commit().unwrap();
+    }
+
+    // Delete the block and its index
+    pub fn purge_block(&mut self, block_id: &Id<Block>) {
+        let mut tx_rw = self.storage.transaction_rw(None).unwrap();
+
+        tx_rw.del_block(*block_id).unwrap();
+        tx_rw.del_block_index(*block_id).unwrap();
+        tx_rw.commit().unwrap();
     }
 }
 

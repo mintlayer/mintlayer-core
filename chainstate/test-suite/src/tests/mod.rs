@@ -64,3 +64,8 @@ mod tx_verifier_disconnect;
 mod helpers;
 
 type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
+
+#[ctor::ctor]
+fn init() {
+    logging::init_logging();
+}

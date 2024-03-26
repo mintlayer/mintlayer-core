@@ -1119,6 +1119,7 @@ dependencies = [
 name = "chainstate"
 version = "0.4.1"
 dependencies = [
+ "accounting",
  "async-trait",
  "chainstate-storage",
  "chainstate-types",
@@ -1231,6 +1232,7 @@ dependencies = [
  "constraints-value-accumulator",
  "criterion",
  "crypto",
+ "ctor",
  "expect-test",
  "hex",
  "itertools 0.12.1",

@@ -153,6 +153,14 @@ pub enum ConnectionValidationError {
 }
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum SyncError {
+    #[error("Block data missing when trying to send block {0}")]
+    BlockDataMissingInSendBlock(Id<Block>),
+    #[error("Block index missing when trying to send block {0}")]
+    BlockIndexMissingInSendBlock(Id<Block>),
+}
+
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum P2pError {
     #[error("Protocol violation: {0}")]
     ProtocolError(ProtocolError),
@@ -185,6 +193,8 @@ pub enum P2pError {
     MessageCodecError(#[from] MessageCodecError),
     #[error("Connection validation failed: {0}")]
     ConnectionValidationFailed(#[from] ConnectionValidationError),
+    #[error("Synchronization error: {0}")]
+    SyncError(#[from] SyncError),
 }
 
 impl From<DialError> for P2pError {
@@ -244,6 +254,7 @@ impl BanScore for P2pError {
             P2pError::MempoolError(err) => err.mempool_ban_score(),
             P2pError::MessageCodecError(_) => 0,
             P2pError::ConnectionValidationFailed(_) => 0,
+            P2pError::SyncError(err) => err.ban_score(),
         }
     }
 }
@@ -273,6 +284,15 @@ impl BanScore for ProtocolError {
     }
 }
 
+impl BanScore for SyncError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            SyncError::BlockDataMissingInSendBlock(_) => 0,
+            SyncError::BlockIndexMissingInSendBlock(_) => 0,
+        }
+    }
+}
+
 impl TryAsRef<storage::Error> for P2pError {
     fn try_as_ref(&self) -> Option<&storage::Error> {
         match self {
@@ -291,7 +311,8 @@ impl TryAsRef<storage::Error> for P2pError {
             }
             | P2pError::MempoolError(_)
             | P2pError::MessageCodecError(_)
-            | P2pError::ConnectionValidationFailed(_) => None,
+            | P2pError::ConnectionValidationFailed(_)
+            | P2pError::SyncError(_) => None,
             P2pError::StorageFailure(err) => Some(err),
         }
     }
