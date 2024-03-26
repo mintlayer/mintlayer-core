@@ -42,7 +42,7 @@ use super::{
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum BlockProcessingErrorClass {
-    /// General error - the operation failed  due to storage issues, invariant violations etc.
+    /// General error - the operation failed due to storage issues, invariant violations etc.
     General,
     /// This error type signifies that the block is definitely bad.
     BadBlock,

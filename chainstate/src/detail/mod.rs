@@ -435,8 +435,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
                     // Since the failure occurred during reorg, the new block itself is ok.
                     // Update its block status to persist its validation stage.
-                    // Also, invalidate_block needs the block index to exist in order to be able to
-                    // set the corresponding failure bit.
+                    // (Also, invalidate_block needs the block index to exist in order to be able to
+                    // set the corresponding failure bit.)
                     debug_assert!(status.is_ok());
                     // Ignore the result, because we already have an error to return.
                     let _result = self.update_block_status(&block_index, status);
@@ -456,7 +456,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 return Err(err);
             }
             Err(BlockIntegrationError::OtherReorgError(err, _status)) => {
-                log::warn!("Error occurred during reorg, but no blocks can be blamed");
+                log::warn!("An error occurred during reorg, but none of the blocks can be blamed");
                 // Don't save an "ok" status for a block that hasn't been persisted.
                 return Err(err);
             }

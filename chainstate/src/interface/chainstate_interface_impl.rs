@@ -90,7 +90,7 @@ where
     #[tracing::instrument(skip_all, fields(block_id = %block_id))]
     fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError> {
         BlockInvalidator::new(&mut self.chainstate)
-            .reset_block_failure_flags(block_id, true)
+            .reset_block_failure_flags(block_id)
             .map_err(ChainstateError::BlockInvalidatorError)
     }
 
