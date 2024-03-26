@@ -34,7 +34,7 @@ use common::{
     Uint256,
 };
 use logging::log;
-use utils::{ensure, log_error, tap_log::TapLog};
+use utils::{ensure, log_error};
 
 pub use best_chain_candidates::BestChainCandidatesError;
 
@@ -60,12 +60,14 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
         root_block_id: &Id<Block>,
     ) -> Result<Vec<BlockIndex>, BlockInvalidatorError> {
         let chainstate_ref =
-            self.chainstate.make_db_tx_ro().map_err(BlockInvalidatorError::from).log_err()?;
-        assert!(!is_block_in_main_chain(&chainstate_ref, root_block_id.into()).log_err()?);
+            self.chainstate.make_db_tx_ro().map_err(BlockInvalidatorError::from)?;
+        assert!(!is_block_in_main_chain(
+            &chainstate_ref,
+            root_block_id.into()
+        )?);
         let block_indices = chainstate_ref
             .collect_block_indices_in_branch(root_block_id)
-            .map_err(BlockInvalidatorError::BlockIndicesForBranchQueryError)
-            .log_err()?;
+            .map_err(BlockInvalidatorError::BlockIndicesForBranchQueryError)?;
         Ok(block_indices)
     }
 
@@ -80,37 +82,35 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
     ) -> Result<Vec<BlockIndex>, BlockInvalidatorError> {
         let block_indices_to_invalidate = self.collect_stale_block_indices_in_branch(block_id)?;
 
-        self.chainstate
-            .with_rw_tx(
-                |chainstate_ref| {
-                    for (i, block_index) in block_indices_to_invalidate.iter().enumerate() {
-                        let mut status = block_index.status();
-                        if i == 0 {
-                            match is_explicit_invalidation {
-                                IsExplicit::Yes => status.set_explicitly_invalidated(),
-                                IsExplicit::No => status.set_validation_failed(),
-                            }
-                        } else {
-                            status.set_has_invalid_parent();
+        self.chainstate.with_rw_tx(
+            |chainstate_ref| {
+                for (i, block_index) in block_indices_to_invalidate.iter().enumerate() {
+                    let mut status = block_index.status();
+                    if i == 0 {
+                        match is_explicit_invalidation {
+                            IsExplicit::Yes => status.set_explicitly_invalidated(),
+                            IsExplicit::No => status.set_validation_failed(),
                         }
-
-                        update_block_status(chainstate_ref, block_index.clone(), status)?;
+                    } else {
+                        status.set_has_invalid_parent();
                     }
 
-                    Ok(())
-                },
-                |attempt_number| {
-                    log::info!("Invalidating block {block_id}, attempt #{attempt_number}");
-                },
-                |attempts_count, db_err| {
-                    BlockInvalidatorError::DbCommitError(
-                        attempts_count,
-                        db_err,
-                        DbCommittingContext::InvalidatedBlockTreeStatuses(*block_id),
-                    )
-                },
-            )
-            .log_err()?;
+                    update_block_status(chainstate_ref, block_index.clone(), status)?;
+                }
+
+                Ok(())
+            },
+            |attempt_number| {
+                log::info!("Invalidating block {block_id}, attempt #{attempt_number}");
+            },
+            |attempts_count, db_err| {
+                BlockInvalidatorError::DbCommitError(
+                    attempts_count,
+                    db_err,
+                    DbCommittingContext::InvalidatedBlockTreeStatuses(*block_id),
+                )
+            },
+        )?;
 
         self.chainstate.remove_orphans_of(block_id);
 
@@ -127,9 +127,8 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
         is_explicit_invalidation: IsExplicit,
     ) -> Result<(), BlockInvalidatorError> {
         let (block_index, best_block_index, min_height_with_allowed_reorg) = {
-            let chainstate_ref = self.chainstate.make_db_tx_ro().log_err()?;
-            let is_block_in_main_chain =
-                is_block_in_main_chain(&chainstate_ref, block_id.into()).log_err()?;
+            let chainstate_ref = self.chainstate.make_db_tx_ro()?;
+            let is_block_in_main_chain = is_block_in_main_chain(&chainstate_ref, block_id.into())?;
 
             if !is_block_in_main_chain {
                 drop(chainstate_ref);
@@ -137,8 +136,8 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                 return Ok(());
             }
 
-            let block_index = get_existing_block_index(&chainstate_ref, block_id).log_err()?;
-            let best_block_index = get_best_block_index(&chainstate_ref).log_err()?;
+            let block_index = get_existing_block_index(&chainstate_ref, block_id)?;
+            let best_block_index = get_best_block_index(&chainstate_ref)?;
             let min_height_with_allowed_reorg = get_min_height_with_allowed_reorg(&chainstate_ref)?;
 
             (block_index, best_block_index, min_height_with_allowed_reorg)
@@ -186,7 +185,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
     #[log_error]
     fn find_and_activate_best_chain(&mut self) -> Result<bool, BlockInvalidatorError> {
         let (min_chain_trust, best_chain_candidates) = {
-            let chainstate_ref = self.chainstate.make_db_tx_ro().log_err()?;
+            let chainstate_ref = self.chainstate.make_db_tx_ro()?;
             let cur_best_block_index = get_best_block_index(&chainstate_ref)?;
             let cur_best_chain_trust = cur_best_block_index.chain_trust();
             let min_chain_trust = (cur_best_chain_trust + Uint256::ONE)
@@ -255,18 +254,12 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
             };
 
             assert!(!indices_to_remove.is_empty());
-            best_chain_candidates
-                .remove_tree_add_parent(
-                    &self
-                        .chainstate
-                        .make_db_tx_ro()
-                        .map_err(BlockInvalidatorError::from)
-                        .log_err()?,
-                    &indices_to_remove[0],
-                    &indices_to_remove[1..],
-                    min_chain_trust,
-                )
-                .log_err()?;
+            best_chain_candidates.remove_tree_add_parent(
+                &self.chainstate.make_db_tx_ro().map_err(BlockInvalidatorError::from)?,
+                &indices_to_remove[0],
+                &indices_to_remove[1..],
+                min_chain_trust,
+            )?;
         }
 
         Ok(false)
@@ -281,25 +274,31 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
     ) -> Result<(), BlockInvalidatorError> {
         let block_indices_to_clear = {
             let chainstate_ref =
-                self.chainstate.make_db_tx_ro().map_err(BlockInvalidatorError::from).log_err()?;
+                self.chainstate.make_db_tx_ro().map_err(BlockInvalidatorError::from)?;
 
             chainstate_ref
                 .collect_block_indices_in_branch(block_id)
-                .map_err(BlockInvalidatorError::BlockIndicesForBranchQueryError)
-                .log_err()?
+                .map_err(BlockInvalidatorError::BlockIndicesForBranchQueryError)?
         };
 
         self.chainstate.with_rw_tx(
             |chainstate_ref| {
                 for cur_index in &block_indices_to_clear {
                     let should_delete_index = if delete_index_if_block_doesnt_exist {
-                        chainstate_ref.get_block(*cur_index.block_id())?.is_none()
+                        chainstate_ref
+                            .get_block(*cur_index.block_id())
+                            .map_err(|err| {
+                                BlockInvalidatorError::BlockQueryError(*cur_index.block_id(), err)
+                            })?
+                            .is_none()
                     } else {
                         false
                     };
 
                     if should_delete_index {
-                        chainstate_ref.del_block_index(cur_index.block_id())?;
+                        chainstate_ref.del_block_index(cur_index.block_id()).map_err(|err| {
+                            BlockInvalidatorError::DelBlockIndexError(*cur_index.block_id(), err)
+                        })?;
                     } else {
                         update_block_status(
                             chainstate_ref,
@@ -359,12 +358,10 @@ pub enum BlockInvalidatorError {
     BestBlockIndexQueryError(PropertyQueryError),
     #[error("Failed to obtain block index for block {0}: {1}")]
     BlockIndexQueryError(Id<GenBlock>, PropertyQueryError),
-
-    // FIXME
-    #[error("Property query error: {0}")]
-    PropertyQueryError(#[from] PropertyQueryError),
-    #[error("Property query error: {0}")]
-    BlockError(#[from] BlockError),
+    #[error("Failed to obtain block {0}: {1}")]
+    BlockQueryError(Id<Block>, PropertyQueryError),
+    #[error("Error deleting index for block {0}: {1}")]
+    DelBlockIndexError(Id<Block>, BlockError),
 }
 
 #[derive(Debug, Display, PartialEq, Eq, Clone)]
