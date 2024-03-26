@@ -19,7 +19,9 @@ use std::{
     time::Duration,
 };
 
+use crypto::random::Rng;
 use logging::log;
+use rstest::rstest;
 use tokio::sync::mpsc::{error::TryRecvError, UnboundedReceiver, UnboundedSender};
 
 use common::{
@@ -27,8 +29,11 @@ use common::{
     primitives::user_agent::mintlayer_core_user_agent,
 };
 use p2p_test_utils::{expect_future_val, expect_no_recv, P2pBasicTestTimeGetter};
-use p2p_types::socket_address::SocketAddress;
-use test_utils::assert_matches;
+use p2p_types::{peer_address::PeerAddress, socket_address::SocketAddress};
+use test_utils::{
+    assert_matches,
+    random::{make_seedable_rng, Seed},
+};
 
 use crate::{
     config::{NodeType, P2pConfig},
@@ -61,12 +66,23 @@ use crate::{
     PeerManagerEvent,
 };
 
-async fn test_address_rate_limiter<A, T>()
+fn get_new_public_address(rng: &mut impl Rng) -> PeerAddress {
+    loop {
+        let address = TestAddressMaker::new_random_address(&mut *rng).as_peer_address();
+        if SocketAddress::from_peer_address(&address, false).is_some() {
+            return address;
+        }
+    }
+}
+
+async fn test_address_rate_limiter<A, T>(seed: Seed)
 where
     A: TestTransportMaker<Transport = T::Transport>,
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     let bind_address = A::make_address();
     let config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
@@ -81,7 +97,7 @@ where
         )
         .await;
 
-    let address = TestAddressMaker::new_random_address();
+    let address = TestAddressMaker::new_random_address(&mut rng);
     let peer_id = PeerId::new();
     let peer_info = PeerInfo {
         peer_id,
@@ -94,15 +110,8 @@ where
     pm.accept_connection(address, bind_address, Role::Inbound, peer_info, None);
     assert_eq!(pm.peers.len(), 1);
 
-    let get_new_public_address = || loop {
-        let address = TestAddressMaker::new_random_address().as_peer_address();
-        if SocketAddress::from_peer_address(&address, false).is_some() {
-            return address;
-        }
-    };
-
     // Check that nodes are allowed to send own address immediately after connecting
-    let address = get_new_public_address();
+    let address = get_new_public_address(&mut rng);
     pm.handle_announce_addr_request(peer_id, address);
     let accepted_count = pm.peerdb.known_addresses().count();
     assert_eq!(accepted_count, 1);
@@ -112,7 +121,7 @@ where
         for _ in 0..100 {
             pm.handle_announce_addr_request(
                 peer_id,
-                TestAddressMaker::new_random_address().as_peer_address(),
+                TestAddressMaker::new_random_address(&mut rng).as_peer_address(),
             );
         }
     }
@@ -125,20 +134,27 @@ where
 }
 
 // Test only TestTransportChannel because actual networking is not used
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn test_address_rate_limiter_channels() {
+async fn test_address_rate_limiter_channels(#[case] seed: Seed) {
     test_address_rate_limiter::<
         TestTransportChannel,
         DefaultNetworkingService<MpscChannelTransport>,
-    >()
+    >(seed)
     .await;
 }
 
-#[tracing::instrument]
-#[test]
-fn test_addr_list_handling_inbound() {
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_addr_list_handling_inbound(#[case] seed: Seed) {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+
+    let mut rng = make_seedable_rng(seed);
 
     let bind_address = TestTransportTcp::make_address();
     let chain_config = Arc::new(config::create_unit_test_config());
@@ -172,7 +188,7 @@ fn test_addr_list_handling_inbound() {
         common_services: NodeType::Full.into(),
     };
     pm.accept_connection(
-        TestAddressMaker::new_random_address(),
+        TestAddressMaker::new_random_address(&mut rng),
         bind_address,
         Role::Inbound,
         peer_info,
@@ -217,15 +233,19 @@ fn test_addr_list_handling_inbound() {
     // Check that the peer is scored if it tries to send an unexpected address list response
     pm.handle_addr_list_response(
         peer_id_1,
-        vec![TestAddressMaker::new_random_address().as_peer_address()],
+        vec![TestAddressMaker::new_random_address(&mut rng).as_peer_address()],
     );
     assert_ne!(pm.peers.get(&peer_id_1).unwrap().score, 0);
 }
 
-#[tracing::instrument]
-#[test]
-fn test_addr_list_handling_outbound() {
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_addr_list_handling_outbound(#[case] seed: Seed) {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+
+    let mut rng = make_seedable_rng(seed);
 
     let bind_address = TestTransportTcp::make_address();
     let chain_config = Arc::new(config::create_unit_test_config());
@@ -250,7 +270,7 @@ fn test_addr_list_handling_outbound() {
     .unwrap();
 
     let peer_id_1 = PeerId::new();
-    let peer_address = TestAddressMaker::new_random_address();
+    let peer_address = TestAddressMaker::new_random_address(&mut rng);
     let peer_info = PeerInfo {
         peer_id: peer_id_1,
         protocol_version: TEST_PROTOCOL_VERSION,
@@ -299,7 +319,7 @@ fn test_addr_list_handling_outbound() {
     // Check that the address list response is processed normally and that the peer is not scored
     pm.handle_addr_list_response(
         peer_id_1,
-        vec![TestAddressMaker::new_random_address().as_peer_address()],
+        vec![TestAddressMaker::new_random_address(&mut rng).as_peer_address()],
     );
     assert_eq!(pm.peers.get(&peer_id_1).unwrap().score, 0);
 
@@ -312,16 +332,21 @@ fn test_addr_list_handling_outbound() {
     // Check that the peer is scored if it tries to send an unexpected address list response
     pm.handle_addr_list_response(
         peer_id_1,
-        vec![TestAddressMaker::new_random_address().as_peer_address()],
+        vec![TestAddressMaker::new_random_address(&mut rng).as_peer_address()],
     );
     assert_ne!(pm.peers.get(&peer_id_1).unwrap().score, 0);
 }
 
 // Verify that the node periodically resends its own address
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn resend_own_addresses() {
+async fn resend_own_addresses(#[case] seed: Seed) {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+
+    let mut rng = make_seedable_rng(seed);
 
     // The addresses on which the node is listening
     let listening_addresses: Vec<SocketAddress> =
@@ -358,7 +383,7 @@ async fn resend_own_addresses() {
     let peer_count = p2p_config.peer_manager_config.outbound_full_and_block_relay_count();
     for peer_index in 0..peer_count {
         let new_peer_id = PeerId::new();
-        let peer_address = TestAddressMaker::new_random_address();
+        let peer_address = TestAddressMaker::new_random_address(&mut rng);
         let peer_info = PeerInfo {
             peer_id: new_peer_id,
             protocol_version: TEST_PROTOCOL_VERSION,
@@ -426,12 +451,17 @@ async fn resend_own_addresses() {
 
 // Configure the peer manager with an empty dns seed and a predefined peer address.
 // Check that it attempts to connect to the predefined address.
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn connect_to_predefined_address_if_dns_seed_is_empty() {
+async fn connect_to_predefined_address_if_dns_seed_is_empty(#[case] seed: Seed) {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
-    let predefined_peer_address = TestAddressMaker::new_random_address();
+    let mut rng = make_seedable_rng(seed);
+
+    let predefined_peer_address = TestAddressMaker::new_random_address(&mut rng);
 
     let chain_config = Arc::new(
         chain::config::create_unit_test_config_builder()
@@ -484,13 +514,18 @@ async fn connect_to_predefined_address_if_dns_seed_is_empty() {
 
 // Configure the peer manager with a non-empty dns seed and a predefined peer address.
 // Check that it attempts to connect to the seeded address, but not to the predefined one.
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn dont_connect_to_predefined_address_if_dns_seed_is_non_empty() {
+async fn dont_connect_to_predefined_address_if_dns_seed_is_non_empty(#[case] seed: Seed) {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
-    let seeded_peer_address = TestAddressMaker::new_random_address();
-    let predefined_peer_address = TestAddressMaker::new_random_address();
+    let mut rng = make_seedable_rng(seed);
+
+    let seeded_peer_address = TestAddressMaker::new_random_address(&mut rng);
+    let predefined_peer_address = TestAddressMaker::new_random_address(&mut rng);
 
     let chain_config = Arc::new(
         chain::config::create_unit_test_config_builder()
@@ -548,13 +583,18 @@ async fn dont_connect_to_predefined_address_if_dns_seed_is_non_empty() {
 // 1) Configure the peer manager with a non-empty dns seed and a predefined peer address.
 // 2) Check that it attempts to connect to the seeded address; make the connection fail.
 // 3) Check that it attempts to connect to the predefined address now.
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn connect_to_predefined_address_if_dns_seed_returned_bogus_address() {
+async fn connect_to_predefined_address_if_dns_seed_returned_bogus_address(#[case] seed: Seed) {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
-    let seeded_peer_address = TestAddressMaker::new_random_address();
-    let predefined_peer_address = TestAddressMaker::new_random_address();
+    let mut rng = make_seedable_rng(seed);
+
+    let seeded_peer_address = TestAddressMaker::new_random_address(&mut rng);
+    let predefined_peer_address = TestAddressMaker::new_random_address(&mut rng);
 
     let chain_config = Arc::new(
         chain::config::create_unit_test_config_builder()
@@ -624,14 +664,19 @@ async fn connect_to_predefined_address_if_dns_seed_returned_bogus_address() {
 // make the connection succeed.
 // 3) Advance the time, so that the peer manager might consider querying the dns seed.
 // The dns seed should not be queried.
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn dont_use_dns_seed_if_connections_exist() {
+async fn dont_use_dns_seed_if_connections_exist(#[case] seed: Seed) {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
-    let local_bind_address = TestAddressMaker::new_random_address();
-    let existing_address = TestAddressMaker::new_random_address();
-    let seeded_peer_address = TestAddressMaker::new_random_address();
+    let mut rng = make_seedable_rng(seed);
+
+    let local_bind_address = TestAddressMaker::new_random_address(&mut rng);
+    let existing_address = TestAddressMaker::new_random_address(&mut rng);
+    let seeded_peer_address = TestAddressMaker::new_random_address(&mut rng);
 
     let chain_config = Arc::new(chain::config::create_unit_test_config());
 

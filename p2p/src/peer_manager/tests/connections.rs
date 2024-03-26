@@ -94,12 +94,14 @@ use crate::{
     PeerManagerEvent,
 };
 
-async fn validate_invalid_connection<A, S>()
+async fn validate_invalid_connection<A, S>(seed: Seed)
 where
     A: TestTransportMaker<Transport = S::Transport>,
     S: NetworkingService + 'static + std::fmt::Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
 {
+    let mut rng = make_seedable_rng(seed);
+
     for peer_role in [PeerRole::OutboundFullRelay, PeerRole::Inbound] {
         let config = Arc::new(config::create_unit_test_config());
         let (mut peer_manager, _shutdown_sender, _subscribers_sender) =
@@ -109,8 +111,8 @@ where
         // invalid magic bytes
         let peer_id = PeerId::new();
         let res = peer_manager.try_accept_connection(
-            TestAddressMaker::new_random_address(),
-            TestAddressMaker::new_random_address(),
+            TestAddressMaker::new_random_address(&mut rng),
+            TestAddressMaker::new_random_address(&mut rng),
             peer_role,
             net::types::PeerInfo {
                 peer_id,
@@ -129,27 +131,39 @@ where
     }
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn validate_invalid_connection_tcp() {
-    validate_invalid_connection::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
-        .await;
-}
-
-#[tracing::instrument]
-#[tokio::test]
-async fn validate_invalid_connection_channels() {
-    validate_invalid_connection::<
-        TestTransportChannel,
-        DefaultNetworkingService<MpscChannelTransport>,
-    >()
+async fn validate_invalid_connection_tcp(#[case] seed: Seed) {
+    validate_invalid_connection::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>(
+        seed,
+    )
     .await;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn validate_invalid_connection_noise() {
+async fn validate_invalid_connection_channels(#[case] seed: Seed) {
+    validate_invalid_connection::<
+        TestTransportChannel,
+        DefaultNetworkingService<MpscChannelTransport>,
+    >(seed)
+    .await;
+}
+
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn validate_invalid_connection_noise(#[case] seed: Seed) {
     validate_invalid_connection::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>(
+        seed,
     )
     .await;
 }
@@ -2124,7 +2138,7 @@ async fn feeler_connection_to_ip_address_of_inbound_peer(#[case] seed: Seed) {
         time_getter.get_time_getter(),
     );
 
-    let peer_addr = TestAddressMaker::new_random_address_with_rng(&mut rng);
+    let peer_addr = TestAddressMaker::new_random_address(&mut rng);
     let outbound_peer_addr = peer_addr;
     let inbound_peer_addr = {
         let mut socket_addr = peer_addr.socket_addr();

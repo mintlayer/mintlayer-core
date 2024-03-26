@@ -92,7 +92,7 @@ async fn dont_auto_ban_connected_peer(#[case] seed: Seed) {
         peer_mgr
     });
 
-    let peer_addr = TestAddressMaker::new_random_address_with_rng(&mut rng);
+    let peer_addr = TestAddressMaker::new_random_address(&mut rng);
     let peer_id = inbound_block_relay_peer_accepted_by_backend(
         &conn_event_sender,
         peer_addr,
@@ -157,7 +157,7 @@ async fn disconnect_manually_banned_peer(#[case] seed: Seed) {
         peer_mgr
     });
 
-    let peer_addr = TestAddressMaker::new_random_address_with_rng(&mut rng);
+    let peer_addr = TestAddressMaker::new_random_address(&mut rng);
     let peer_id = inbound_block_relay_peer_accepted_by_backend(
         &conn_event_sender,
         peer_addr,

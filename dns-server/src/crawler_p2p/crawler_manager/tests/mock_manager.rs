@@ -24,6 +24,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use crypto::random::Rng;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -290,6 +291,7 @@ impl SyncingEventReceiver for MockSyncingEventReceiver {
 
 pub fn test_crawler(
     reserved_nodes: Vec<SocketAddress>,
+    rng: &mut impl Rng
 ) -> (
     CrawlerManager<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
     MockStateRef,
@@ -317,7 +319,7 @@ pub fn test_crawler(
         connected: Default::default(),
         connection_attempts: Default::default(),
         conn_tx,
-        bind_address: TestAddressMaker::new_random_address(),
+        bind_address: TestAddressMaker::new_random_address(rng),
     };
 
     let conn = MockConnectivityHandle {
