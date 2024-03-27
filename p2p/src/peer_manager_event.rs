@@ -38,7 +38,6 @@ pub enum PeerDisconnectionDbAction {
     RemoveIfOutbound,
 }
 
-// TODO: this is more like PeerManagerCommand
 #[derive(Debug)]
 pub enum PeerManagerEvent {
     /// Try to establish connection with a remote peer

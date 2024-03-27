@@ -430,8 +430,6 @@ where
         }
     }
 
-    // TODO: this should probably be renamed to 'should_ignore_ban_score_adjustment' or something
-    // similar, because it only makes sense in that particular context.
     fn is_whitelisted_node(&self, conn_type: ConnectionType, address: &SocketAddress) -> bool {
         match conn_type {
             ConnectionType::Inbound
@@ -1235,10 +1233,6 @@ where
     /// This function maintains the overall connectivity state of peers by culling
     /// low-reputation peers and establishing new connections with peers that have higher
     /// reputation. It also updates peer scores and forgets those peers that are no longer needed.
-    ///
-    /// TODO: IP address diversity check?
-    /// TODO: exploratory peer connections?
-    /// TODO: close connection with low-score peers in favor of peers with higher score?
     ///
     /// The process starts by first checking if the number of active connections is less than
     /// the number of desired connections and there are available peers, the function tries to
