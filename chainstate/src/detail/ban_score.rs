@@ -55,6 +55,7 @@ impl BanScore for BlockError {
             // a peer sent a block they're not supposed to send.
             BlockError::PrevBlockNotFoundForNewBlock(_) => 100,
             BlockError::BlockAlreadyExists(_) => 0,
+            BlockError::BlockIndexAlreadyExists(_) => 0,
             BlockError::BlockAlreadyProcessed(_) => 0,
             BlockError::InvalidBlockAlreadyProcessed(_) => 100,
             BlockError::DbCommitError(_, _, _) => 0,
@@ -70,6 +71,7 @@ impl BanScore for BlockError {
             BlockError::BlockIndexQueryError(_, _) => 0,
             BlockError::IsBlockInMainChainQueryError(_, _) => 0,
             BlockError::MinHeightForReorgQueryError(_) => 0,
+            BlockError::PropertyQueryError(_) => 0,
 
             BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => 0,
             BlockError::InvariantErrorInvalidTip(_) => 0,
@@ -85,7 +87,7 @@ impl BanScore for OrphanCheckError {
     fn ban_score(&self) -> u32 {
         match self {
             OrphanCheckError::StorageError(_) => 0,
-            OrphanCheckError::PrevBlockIndexNotFound(_) => 100,
+            OrphanCheckError::PropertyQueryError(_) => 0,
             OrphanCheckError::LocalOrphan => 0,
         }
     }
@@ -219,9 +221,9 @@ impl BanScore for CheckBlockError {
             CheckBlockError::StorageError(_) => 0,
             CheckBlockError::MerkleRootMismatch => 100,
             // even though this may be an invariant error, we treat it strictly
-            CheckBlockError::PrevBlockNotFound(_, _) => 100,
+            CheckBlockError::ParentBlockMissing { .. } => 100,
             CheckBlockError::TransactionVerifierError(err) => err.ban_score(),
-            CheckBlockError::BlockNotFound(_) => 100,
+            CheckBlockError::BlockNotFoundDuringInMemoryReorg(_) => 100,
             CheckBlockError::BlockTimeOrderInvalid(_, _) => 100,
             CheckBlockError::BlockFromTheFuture => 100,
             CheckBlockError::BlockSizeError(err) => err.ban_score(),
@@ -237,7 +239,7 @@ impl BanScore for CheckBlockError {
             CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(_, _, _) => 100,
             CheckBlockError::StateUpdateFailed(err) => err.ban_score(),
             CheckBlockError::EpochSealError(err) => err.ban_score(),
-            CheckBlockError::InvalidParent(_) => 100,
+            CheckBlockError::InvalidParent { .. } => 100,
         }
     }
 }
@@ -328,6 +330,8 @@ impl BanScore for BlockSizeError {
 impl BanScore for ConsensusPoSError {
     fn ban_score(&self) -> u32 {
         match self {
+            ConsensusPoSError::StorageError(_) => 0,
+            ConsensusPoSError::ChainstateError(_) => 0,
             ConsensusPoSError::PropertyQueryError(_) => 0,
             ConsensusPoSError::StakeKernelHashTooHigh => 100,
             ConsensusPoSError::TimestampViolation(_, _) => 100,

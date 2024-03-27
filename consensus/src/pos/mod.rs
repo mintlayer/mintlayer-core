@@ -27,7 +27,7 @@ pub use effective_pool_balance::EffectivePoolBalanceError;
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
     vrf_tools::construct_transcript,
-    BlockIndexHandle, EpochStorageRead, GenBlockIndex, PropertyQueryError,
+    BlockIndexHandle, EpochStorageRead, GenBlockIndex,
 };
 use common::{
     address::Address,
@@ -71,9 +71,7 @@ fn randomness_of_sealed_epoch<S: EpochStorageRead>(
 
     let random_seed = match sealed_epoch_index {
         Some(sealed_epoch_index) => {
-            let epoch_data = epoch_storage
-                .get_epoch_data(sealed_epoch_index)
-                .map_err(PropertyQueryError::StorageError)?;
+            let epoch_data = epoch_storage.get_epoch_data(sealed_epoch_index)?;
             match epoch_data {
                 Some(d) => *d.randomness(),
                 None => {

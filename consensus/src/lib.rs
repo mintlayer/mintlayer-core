@@ -49,7 +49,7 @@ pub use crate::{
     error::ConsensusVerificationError,
     pos::{
         block_sig::BlockSignatureError,
-        error::ConsensusPoSError,
+        error::{ChainstateError, ConsensusPoSError},
         hash_check::check_pos_hash,
         input_data::{PoSFinalizeBlockInputData, PoSGenerateBlockInputData},
         kernel::get_kernel_output,

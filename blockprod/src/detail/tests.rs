@@ -736,7 +736,7 @@ mod produce_block {
                     chain_config.genesis_block(),
                 ))),
                 Err(ChainstateError::FailedToReadProperty(
-                    PropertyQueryError::BestBlockNotFound,
+                    PropertyQueryError::BestBlockIndexNotFound,
                 )),
             ];
 

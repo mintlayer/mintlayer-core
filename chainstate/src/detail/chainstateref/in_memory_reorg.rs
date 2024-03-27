@@ -40,14 +40,16 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         best_block_id: Id<GenBlock>,
     ) -> Result<(TransactionVerifierDelta, ConsumedEpochDataCache), CheckBlockError> {
         let prev_block_id = new_block_header.prev_block_id();
-        let new_chain = match self
-            .get_gen_block_index(prev_block_id)
-            .log_err()?
-            .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))?
-        {
-            GenBlockIndex::Block(block_index) => self.get_new_chain(&block_index).log_err()?,
-            GenBlockIndex::Genesis(_) => Vec::new(),
-        };
+        let new_chain =
+            match self.get_gen_block_index(prev_block_id).log_err()?.ok_or_else(|| {
+                PropertyQueryError::PrevBlockIndexNotFound {
+                    block_id: new_block_header.block_id(),
+                    prev_block_id: *prev_block_id,
+                }
+            })? {
+                GenBlockIndex::Block(block_index) => self.get_new_chain(&block_index).log_err()?,
+                GenBlockIndex::Genesis(_) => Vec::new(),
+            };
 
         let common_ancestor_id = match new_chain.first() {
             Some(block_index) => block_index.prev_block_id(),
@@ -61,11 +63,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         // Disconnect the current chain if it is not a genesis
         if let GenBlockId::Block(best_block_id) = best_block_id.classify(self.chain_config) {
-            let mainchain_tip = self
-                .get_block_index(&best_block_id)
-                .map_err(|_| CheckBlockError::BlockNotFound(best_block_id.into()))
-                .log_err()?
-                .expect("Can't get block index. Inconsistent DB");
+            let mainchain_tip = self.get_existing_block_index(&best_block_id)?;
 
             let mut to_disconnect = GenBlockIndex::Block(mainchain_tip);
             while to_disconnect.block_id() != *common_ancestor_id {
@@ -110,7 +108,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             let new_tip: WithId<Block> = self
                 .get_block_from_index(&new_tip_block_index)
                 .log_err()?
-                .ok_or(CheckBlockError::BlockNotFound(
+                .ok_or(CheckBlockError::BlockNotFoundDuringInMemoryReorg(
                     (*new_tip_block_index.block_id()).into(),
                 ))?
                 .into();
