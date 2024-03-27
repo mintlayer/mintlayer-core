@@ -291,7 +291,7 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
 
 pub fn tx_to_json(
     tx: &Transaction,
-    additinal_info: &TxAdditionalInfo,
+    additional_info: &TxAdditionalInfo,
     chain_config: &ChainConfig,
 ) -> serde_json::Value {
     json!({
@@ -299,14 +299,14 @@ pub fn tx_to_json(
     "version_byte": tx.version_byte(),
     "is_replaceable": tx.is_replaceable(),
     "flags": tx.flags(),
-    "fee": amount_to_json(additinal_info.fee, chain_config.coin_decimals()),
-    "inputs": tx.inputs().iter().zip(additinal_info.input_utxos.iter()).map(|(inp, utxo)| json!({
+    "fee": amount_to_json(additional_info.fee, chain_config.coin_decimals()),
+    "inputs": tx.inputs().iter().zip(additional_info.input_utxos.iter()).map(|(inp, utxo)| json!({
         "input": tx_input_to_json(inp, chain_config),
-        "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, chain_config, &(&additinal_info.token_decimals).into())),
+        "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, chain_config, &(&additional_info.token_decimals).into())),
         })).collect::<Vec<_>>(),
     "outputs": tx.outputs()
             .iter()
-            .map(|out| txoutput_to_json(out, chain_config, &(&additinal_info.token_decimals).into()))
+            .map(|out| txoutput_to_json(out, chain_config, &(&additional_info.token_decimals).into()))
             .collect::<Vec<_>>()
     })
 }

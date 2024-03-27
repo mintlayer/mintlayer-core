@@ -22,7 +22,20 @@ use common::{
 use super::account::{RpcAccountCommand, RpcAccountSpending};
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub enum RpcTxInput {
+pub struct RpcTxInput {
+    input_type: RpcTxInputKey,
+    value: RpcTxInputValue,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+enum RpcTxInputKey {
+    Utxo,
+    Account,
+    AccountCommand,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+enum RpcTxInputValue {
     Utxo {
         source_id: RpcOutPointSourceId,
         index: u32,
@@ -41,22 +54,40 @@ impl RpcTxInput {
     pub fn new(chain_config: &ChainConfig, input: &TxInput) -> Result<Self, AddressError> {
         let result = match input {
             TxInput::Utxo(outpoint) => match outpoint.source_id() {
-                OutPointSourceId::Transaction(id) => RpcTxInput::Utxo {
-                    source_id: RpcOutPointSourceId::Transaction { tx_id: id },
-                    index: outpoint.output_index(),
+                OutPointSourceId::Transaction(id) => RpcTxInput {
+                    input_type: RpcTxInputKey::Utxo,
+                    value: RpcTxInputValue::Utxo {
+                        source_id: RpcOutPointSourceId {
+                            source_type: RpcOutPointSourceIdKey::Transaction,
+                            value: RpcOutPointSourceIdValue::Transaction(id),
+                        },
+                        index: outpoint.output_index(),
+                    },
                 },
-                OutPointSourceId::BlockReward(id) => RpcTxInput::Utxo {
-                    source_id: RpcOutPointSourceId::BlockReward { block_id: id },
-                    index: outpoint.output_index(),
+                OutPointSourceId::BlockReward(id) => RpcTxInput {
+                    input_type: RpcTxInputKey::Utxo,
+                    value: RpcTxInputValue::Utxo {
+                        source_id: RpcOutPointSourceId {
+                            source_type: RpcOutPointSourceIdKey::BlockReward,
+                            value: RpcOutPointSourceIdValue::BlockReward(id),
+                        },
+                        index: outpoint.output_index(),
+                    },
                 },
             },
-            TxInput::Account(outpoint) => RpcTxInput::Account {
-                nonce: outpoint.nonce().value(),
-                account: RpcAccountSpending::new(chain_config, outpoint.account().clone())?,
+            TxInput::Account(outpoint) => RpcTxInput {
+                input_type: RpcTxInputKey::Account,
+                value: RpcTxInputValue::Account {
+                    nonce: outpoint.nonce().value(),
+                    account: RpcAccountSpending::new(chain_config, outpoint.account().clone())?,
+                },
             },
-            TxInput::AccountCommand(nonce, command) => RpcTxInput::AccountCommand {
-                nonce: nonce.value(),
-                command: RpcAccountCommand::new(chain_config, command)?,
+            TxInput::AccountCommand(nonce, command) => RpcTxInput {
+                input_type: RpcTxInputKey::AccountCommand,
+                value: RpcTxInputValue::AccountCommand {
+                    nonce: nonce.value(),
+                    command: RpcAccountCommand::new(chain_config, command)?,
+                },
             },
         };
         Ok(result)
@@ -64,7 +95,19 @@ impl RpcTxInput {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub enum RpcOutPointSourceId {
-    Transaction { tx_id: Id<Transaction> },
-    BlockReward { block_id: Id<GenBlock> },
+pub struct RpcOutPointSourceId {
+    source_type: RpcOutPointSourceIdKey,
+    value: RpcOutPointSourceIdValue,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+enum RpcOutPointSourceIdKey {
+    Transaction,
+    BlockReward,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+enum RpcOutPointSourceIdValue {
+    Transaction(Id<Transaction>),
+    BlockReward(Id<GenBlock>),
 }
