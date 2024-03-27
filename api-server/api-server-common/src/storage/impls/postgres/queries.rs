@@ -589,6 +589,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "CREATE TABLE ml.delegations (
                     delegation_id TEXT NOT NULL,
                     block_height bigint NOT NULL,
+                    creation_block_height bigint NOT NULL,
                     pool_id TEXT NOT NULL,
                     balance TEXT NOT NULL,
                     next_nonce bytea NOT NULL,
@@ -846,7 +847,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                r#"SELECT pool_id, balance, spend_destination, next_nonce
+                r#"SELECT pool_id, balance, spend_destination, next_nonce, creation_block_height
                 FROM ml.delegations
                 WHERE delegation_id = $1
                 AND block_height = (SELECT MAX(block_height) FROM ml.delegations WHERE delegation_id = $1);
@@ -868,6 +869,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let balance: String = data.get(1);
         let spend_destination: Vec<u8> = data.get(2);
         let next_nonce: Vec<u8> = data.get(3);
+        let creation_block_height: i64 = data.get(4);
 
         let balance = Amount::from_fixedpoint_str(&balance, 0).ok_or_else(|| {
             ApiServerStorageError::DeserializationError(format!(
@@ -890,7 +892,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             ))
         })?;
 
-        let delegation = Delegation::new(spend_destination, pool_id, balance, next_nonce);
+        let delegation = Delegation::new(
+            BlockHeight::new(creation_block_height as u64),
+            spend_destination,
+            pool_id,
+            balance,
+            next_nonce,
+        );
         Ok(Some(delegation))
     }
 
@@ -902,9 +910,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let rows = self
             .tx
             .query(
-                r#"SELECT delegation_id, pool_id, balance, spend_destination, next_nonce
+                r#"SELECT delegation_id, pool_id, balance, spend_destination, next_nonce, creation_block_height
                 FROM (
-                    SELECT delegation_id, pool_id, balance, spend_destination, next_nonce, ROW_NUMBER() OVER(PARTITION BY delegation_id ORDER BY block_height DESC) as newest
+                    SELECT delegation_id, pool_id, balance, spend_destination, next_nonce, creation_block_height, ROW_NUMBER() OVER(PARTITION BY delegation_id ORDER BY block_height DESC) as newest
                     FROM ml.delegations
                     WHERE spend_destination = $1
                 ) AS sub
@@ -929,6 +937,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 let balance: String = row.get(2);
                 let spend_destination: Vec<u8> = row.get(3);
                 let next_nonce: Vec<u8> = row.get(4);
+                let creation_block_height: i64 = row.get(5);
 
                 let balance = Amount::from_fixedpoint_str(&balance, 0).ok_or_else(|| {
                     ApiServerStorageError::DeserializationError(format!(
@@ -950,7 +959,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                         ))
                     })?;
 
-                let delegation = Delegation::new(spend_destination, pool_id, balance, next_nonce);
+                let delegation = Delegation::new(
+                    BlockHeight::new(creation_block_height as u64),
+                    spend_destination,
+                    pool_id,
+                    balance,
+                    next_nonce,
+                );
                 Ok((delegation_id, delegation))
             })
             .collect()
@@ -964,6 +979,8 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         chain_config: &ChainConfig,
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
+        let creation_block_height =
+            Self::block_height_to_postgres_friendly(delegation.creation_block_height());
         let pool_id = Address::new(chain_config, *delegation.pool_id())
             .map_err(|_| ApiServerStorageError::AddressableError)?;
         let delegation_id = Address::new(chain_config, delegation_id)
@@ -972,10 +989,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml.delegations (delegation_id, block_height, pool_id, balance, spend_destination, next_nonce)
-                    VALUES($1, $2, $3, $4, $5, $6)
+                    INSERT INTO ml.delegations (delegation_id, block_height, pool_id, balance, spend_destination, next_nonce, creation_block_height)
+                    VALUES($1, $2, $3, $4, $5, $6, $7)
                     ON CONFLICT (delegation_id, block_height) DO UPDATE
-                    SET pool_id = $3, balance = $4, spend_destination = $5, next_nonce = $6;
+                    SET pool_id = $3, balance = $4, spend_destination = $5, next_nonce = $6, creation_block_height = $7;
                 "#,
                 &[
                     &delegation_id.as_str(),
@@ -984,6 +1001,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     &amount_to_str(*delegation.balance()),
                     &delegation.spend_destination().encode(),
                     &delegation.next_nonce().encode(),
+                    &creation_block_height,
                 ],
             )
             .await
@@ -1065,7 +1083,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .map_err(|_| ApiServerStorageError::AddressableError)?;
         self.tx
             .query(
-                r#"SELECT delegation_id, balance, spend_destination, next_nonce
+                r#"SELECT delegation_id, balance, spend_destination, next_nonce, creation_block_height
                     FROM ml.delegations
                     WHERE pool_id = $1
                     AND (delegation_id, block_height) in (SELECT delegation_id, MAX(block_height)
@@ -1087,6 +1105,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 let balance: String = row.get(1);
                 let spend_destination: Vec<u8> = row.get(2);
                 let next_nonce: Vec<u8> = row.get(3);
+                let creation_block_height: i64 = row.get(4);
 
                 let balance = Amount::from_fixedpoint_str(&balance, 0).ok_or_else(|| {
                     ApiServerStorageError::DeserializationError(format!(
@@ -1110,7 +1129,13 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
                 Ok((
                     delegation_id,
-                    Delegation::new(spend_destination, pool_id, balance, next_nonce),
+                    Delegation::new(
+                        BlockHeight::new(creation_block_height as u64),
+                        spend_destination,
+                        pool_id,
+                        balance,
+                        next_nonce,
+                    ),
                 ))
             })
             .collect()
