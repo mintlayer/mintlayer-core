@@ -20,6 +20,7 @@ storage-lmdb = { path = "../storage/lmdb" }
 utils = { path = '../utils' }
 utils-networking = { path = "../utils/networking" }
 
+anyhow.workspace = true
 async-trait.workspace = true
 clap = { workspace = true, features = ["derive"] }
 directories.workspace = true

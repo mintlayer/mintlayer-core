@@ -21,7 +21,7 @@ use logging::log;
 use tokio::sync::{mpsc, oneshot};
 
 use common::{primitives::user_agent::UserAgent, time_getter::TimeGetter};
-use config::DnsServerConfig;
+use config::DnsServerRunOptions;
 use crawler_p2p::crawler_manager::{CrawlerManager, CrawlerManagerConfig};
 use p2p::{
     config::{NodeType, P2pConfig},
@@ -45,7 +45,15 @@ const DNS_SERVER_DB_NAME: &str = "dns_server";
 
 pub type Result<T> = core::result::Result<T, error::DnsServerError>;
 
-async fn run(config: Arc<DnsServerConfig>) -> Result<Never> {
+async fn run(options: DnsServerRunOptions) -> anyhow::Result<Never> {
+    let DnsServerRunOptions {
+        config,
+        force_allow_run_as_root_options,
+    } = options;
+
+    force_allow_run_as_root_options.ensure_not_running_as_root_user()?;
+
+    let config = Arc::new(config);
     let (dns_server_cmd_tx, dns_server_cmd_rx) = mpsc::unbounded_channel();
 
     let chain_type = match config.network {
@@ -165,10 +173,10 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<Never> {
 
     tokio::select! {
         res = crawler_manager_task => {
-            res.expect("crawler should not panic")
+            res.expect("crawler should not panic").map_err(|err| err.into())
         },
         res = server_task => {
-            res.expect("server should not panic")
+            res.expect("server should not panic").map_err(|err| err.into())
         },
     }
 }
@@ -179,9 +187,8 @@ async fn main() {
 
     logging::init_logging();
 
-    let config = Arc::new(DnsServerConfig::parse());
-
-    let result = run(config).await;
+    let run_options = DnsServerRunOptions::parse();
+    let result = run(run_options).await;
 
     if let Err(err) = result {
         eprintln!("DnsServer failed: {err:?}");
