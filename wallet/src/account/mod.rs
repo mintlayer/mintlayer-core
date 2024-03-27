@@ -41,7 +41,7 @@ use serialization::hex_encoded::HexEncoded;
 use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
 use wallet_types::account_id::AccountPrefixedId;
-use wallet_types::account_info::AccountStandaloneKey;
+use wallet_types::account_info::{AccountStandaloneKey, AccountStandaloneKeyInfo};
 use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
@@ -1677,7 +1677,7 @@ impl Account {
         self.key_chain.get_all_issued_addresses()
     }
 
-    pub fn get_all_standalone_addresses(&self) -> Vec<(Destination, Option<String>)> {
+    pub fn get_all_standalone_addresses(&self) -> Vec<AccountStandaloneKeyInfo> {
         self.key_chain.get_all_standalone_addresses()
     }
 

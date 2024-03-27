@@ -39,6 +39,7 @@ use wallet_rpc_lib::types::{
     NewTransaction, NftMetadata, SignatureStats, StandaloneAddressType, TokenMetadata,
     ValidatedSignatures,
 };
+use wallet_types::account_info::AccountStandaloneKeyType;
 
 use crate::errors::WalletCliError;
 
@@ -383,11 +384,15 @@ where
 
                 let addresses_table = {
                     let mut addresses_table = prettytable::Table::new();
-                    addresses_table.set_titles(prettytable::row!["Address", "Label",]);
+                    addresses_table.set_titles(prettytable::row!["Address", "Type", "Label",]);
 
                     addresses_table.extend(addresses_with_label.into_iter().map(|info| {
                         let label = info.label.unwrap_or_default();
-                        prettytable::row![info.address, label]
+                        let address_type = match info.address_type {
+                            AccountStandaloneKeyType::Address => "Address",
+                            AccountStandaloneKeyType::Multisig => "Multisig",
+                        };
+                        prettytable::row![info.address, address_type, label]
                     }));
 
                     addresses_table
@@ -681,9 +686,20 @@ where
                 })
             }
 
-            WalletCommand::AddStandaloneKey { address, label } => {
+            WalletCommand::AddStandaloneKey {
+                address,
+                label,
+                no_rescan,
+            } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-                wallet.add_standalone_address(selected_account, address, label).await?;
+                wallet
+                    .add_standalone_address(
+                        selected_account,
+                        address,
+                        label,
+                        no_rescan.unwrap_or(false),
+                    )
+                    .await?;
 
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status().await?,
@@ -692,11 +708,19 @@ where
             }
 
             WalletCommand::AddStandalonePrivateKey {
-                hex_private_key: private_key,
+                hex_private_key,
                 label,
+                no_rescan,
             } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-                wallet.add_standalone_private_key(selected_account, private_key, label).await?;
+                wallet
+                    .add_standalone_private_key(
+                        selected_account,
+                        hex_private_key,
+                        label,
+                        no_rescan.unwrap_or(false),
+                    )
+                    .await?;
 
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status().await?,
@@ -709,6 +733,7 @@ where
                 min_required_signatures,
                 public_keys,
                 label,
+                no_rescan,
             } => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let multisig_address = wallet
@@ -717,6 +742,7 @@ where
                         min_required_signatures,
                         public_keys,
                         label,
+                        no_rescan.unwrap_or(false),
                     )
                     .await?;
 

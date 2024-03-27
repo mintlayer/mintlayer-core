@@ -267,9 +267,13 @@ pub enum WalletCommand {
         /// Optionally specify a label to the new address
         #[arg(long = "label")]
         label: Option<String>,
+
+        /// Skip the rescanning of the blockchain
+        #[arg(long = "no-rescan")]
+        no_rescan: Option<bool>,
     },
 
-    #[clap(name = "standalone-add-private-key-as-hex")]
+    #[clap(name = "standalone-add-private-key-from-hex")]
     AddStandalonePrivateKey {
         /// The new hex encoded standalone private key to be added to the selected account
         hex_private_key: HexEncoded<PrivateKey>,
@@ -277,6 +281,10 @@ pub enum WalletCommand {
         /// Optionally specify a label to the new address
         #[arg(long = "label")]
         label: Option<String>,
+
+        /// Skip the rescanning of the blockchain
+        #[arg(long = "no-rescan")]
+        no_rescan: Option<bool>,
     },
 
     #[clap(name = "standalone-add-multisig")]
@@ -290,6 +298,10 @@ pub enum WalletCommand {
         /// Optionally specify a label to the new address
         #[arg(long = "label")]
         label: Option<String>,
+
+        /// Skip the rescanning of the blockchain
+        #[arg(long = "no-rescan")]
+        no_rescan: Option<bool>,
     },
 
     #[clap(name = "standalone-multisig-utxos")]

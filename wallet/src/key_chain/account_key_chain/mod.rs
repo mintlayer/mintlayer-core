@@ -34,7 +34,9 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
 };
 use wallet_types::account_id::AccountPrefixedId;
-use wallet_types::account_info::AccountStandaloneKey;
+use wallet_types::account_info::{
+    AccountStandaloneKey, AccountStandaloneKeyInfo, AccountStandaloneKeyType,
+};
 use wallet_types::keys::KeyPurpose;
 use wallet_types::{AccountId, AccountInfo, KeychainUsageState};
 
@@ -581,18 +583,26 @@ impl AccountKeyChain {
         self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).get_all_issued_addresses()
     }
 
-    pub fn get_all_standalone_addresses(&self) -> Vec<(Destination, Option<String>)> {
+    pub fn get_all_standalone_addresses(&self) -> Vec<AccountStandaloneKeyInfo> {
         self.standalone_keys
             .iter()
             .map(|(dest, addr)| match addr {
                 AccountStandaloneKey::Address {
                     label,
                     private_key: _,
-                }
-                | AccountStandaloneKey::Multisig {
+                } => AccountStandaloneKeyInfo {
+                    address: dest.clone(),
+                    address_type: AccountStandaloneKeyType::Address,
+                    label: label.clone(),
+                },
+                AccountStandaloneKey::Multisig {
                     label,
                     challenge: _,
-                } => (dest.clone(), label.clone()),
+                } => AccountStandaloneKeyInfo {
+                    address: dest.clone(),
+                    address_type: AccountStandaloneKeyType::Multisig,
+                    label: label.clone(),
+                },
             })
             .collect()
     }

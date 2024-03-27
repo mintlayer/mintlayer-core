@@ -50,6 +50,7 @@ pub use wallet_controller::types::{
 };
 pub use wallet_controller::{ControllerConfig, NodeInterface};
 use wallet_controller::{UtxoState, UtxoType};
+use wallet_types::account_info::AccountStandaloneKeyType;
 
 use crate::service::SubmitError;
 
@@ -179,13 +180,20 @@ pub struct StandaloneAddressDetails {
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct StandaloneAddress {
     pub address: String,
+    pub address_type: AccountStandaloneKeyType,
     pub label: Option<String>,
 }
 
 impl StandaloneAddress {
-    pub fn new(dest: Destination, label: Option<String>, chain_config: &ChainConfig) -> Self {
+    pub fn new(
+        dest: Destination,
+        address_type: AccountStandaloneKeyType,
+        label: Option<String>,
+        chain_config: &ChainConfig,
+    ) -> Self {
         Self {
             address: Address::new(chain_config, dest).expect("addressable").into_string(),
+            address_type,
             label,
         }
     }

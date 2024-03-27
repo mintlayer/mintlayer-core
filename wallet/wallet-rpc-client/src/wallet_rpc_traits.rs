@@ -111,6 +111,7 @@ pub trait WalletInterface {
         account_index: U31,
         address: String,
         label: Option<String>,
+        no_rescan: bool,
     ) -> Result<(), Self::Error>;
 
     async fn add_standalone_private_key(
@@ -118,6 +119,7 @@ pub trait WalletInterface {
         account_index: U31,
         private_key: HexEncoded<PrivateKey>,
         label: Option<String>,
+        no_rescan: bool,
     ) -> Result<(), Self::Error>;
 
     async fn add_standalone_multisig(
@@ -126,6 +128,7 @@ pub trait WalletInterface {
         min_required_signatures: u8,
         public_keys: Vec<String>,
         label: Option<String>,
+        no_rescan: bool,
     ) -> Result<String, Self::Error>;
 
     async fn get_issued_addresses(
