@@ -128,7 +128,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             block_id = node.chainstate_block_id_at_height(1)
             block = node.chainstate_get_block_json(block_id)
-            timestamp = block['block']['V1']['header']['block_header']['timestamp']['timestamp']
+            timestamp = block['timestamp']['timestamp']
 
             output = await wallet.get_transaction(tx_id)
             tx_output = output[0]["V1"]
