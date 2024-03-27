@@ -17,9 +17,9 @@
 //! to block announcement from peers and the announcement of blocks produced by this node).
 
 mod chainstate_handle;
+mod peer;
 mod peer_activity;
 mod peer_common;
-mod peer_v2;
 pub mod sync_status;
 
 use std::collections::HashMap;
@@ -194,7 +194,7 @@ where
         let mut peer_local_event_senders = Vec::new();
 
         let (local_event_sender, local_event_receiver) = mpsc::unbounded_channel();
-        let mut mgr = peer_v2::block_manager::PeerBlockSyncManager::<T>::new(
+        let mut mgr = peer::block_manager::PeerBlockSyncManager::<T>::new(
             peer_id,
             common_services,
             Arc::clone(&self.chain_config),
@@ -217,7 +217,7 @@ where
         peer_local_event_senders.push(local_event_sender);
 
         let (local_event_sender, local_event_receiver) = mpsc::unbounded_channel();
-        let mut mgr = peer_v2::transaction_manager::PeerTransactionSyncManager::<T>::new(
+        let mut mgr = peer::transaction_manager::PeerTransactionSyncManager::<T>::new(
             peer_id,
             common_services,
             Arc::clone(&self.p2p_config),
