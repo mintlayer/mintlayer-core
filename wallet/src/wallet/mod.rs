@@ -1217,9 +1217,13 @@ impl<B: storage::Backend> Wallet<B> {
         &self,
         account_index: U31,
         address: Destination,
-    ) -> WalletResult<(Destination, &AccountStandaloneKey)> {
+    ) -> WalletResult<(
+        Destination,
+        BTreeMap<Currency, Amount>,
+        &AccountStandaloneKey,
+    )> {
         let account = self.get_account(account_index)?;
-        account.get_all_standalone_address_details(address)
+        account.get_all_standalone_address_details(address, self.latest_median_time)
     }
 
     pub fn get_all_issued_vrf_public_keys(

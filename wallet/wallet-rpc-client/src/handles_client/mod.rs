@@ -43,7 +43,7 @@ use wallet_rpc_lib::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
         NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance,
-        StakingStatus, StandaloneAddress, StandaloneAddressDetails, TokenMetadata,
+        StakingStatus, StandaloneAddress, StandaloneAddressWithDetails, TokenMetadata,
         TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError, WalletRpc,
@@ -320,7 +320,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         &self,
         account_index: U31,
         address: String,
-    ) -> Result<StandaloneAddressDetails, Self::Error> {
+    ) -> Result<StandaloneAddressWithDetails, Self::Error> {
         self.wallet_rpc
             .get_standalone_address_details(account_index, address.into())
             .await

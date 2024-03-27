@@ -18,6 +18,7 @@
 mod balances;
 mod block_info;
 mod seed_phrase;
+mod standalone_key;
 mod transaction;
 
 pub use balances::Balances;
@@ -25,6 +26,7 @@ pub use block_info::{BlockInfo, CreatedBlockInfo};
 pub use common::primitives::amount::RpcAmountOut;
 use common::primitives::H256;
 pub use seed_phrase::SeedWithPassPhrase;
+pub use standalone_key::AccountStandaloneKeyDetails;
 pub use transaction::{
     InspectTransaction, SignatureStats, TransactionToInspect, ValidatedSignatures,
 };

@@ -36,7 +36,7 @@ use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     Balances, ComposedTransaction, ControllerConfig, CreatedWallet, InspectTransaction,
-    NewTransaction, NftMetadata, SignatureStats, StandaloneAddressType, TokenMetadata,
+    NewTransaction, NftMetadata, SignatureStats, StandaloneAddressDetails, TokenMetadata,
     ValidatedSignatures,
 };
 use wallet_types::account_info::AccountStandaloneKeyType;
@@ -408,16 +408,16 @@ where
 
                 let label_str =
                     addr_details.label.map_or("None".into(), |label| format!("\"{label}\""));
-                let details_str = match addr_details.details {
-                    StandaloneAddressType::Address { has_private_key } => {
+                let mut output = match addr_details.details {
+                    StandaloneAddressDetails::Address { has_private_key } => {
                         let has_private_key = if has_private_key { "Yes" } else { "No" };
 
                         format!(
-                            "Address: {}, label: {}, has_private_key: {}",
+                            "Address: {}, label: {}, has_private_key: {}\nBalances:",
                             addr_details.address, label_str, has_private_key
                         )
                     }
-                    StandaloneAddressType::Multisig {
+                    StandaloneAddressDetails::Multisig {
                         min_required_signatures,
                         public_keys,
                     } => {
@@ -430,8 +430,21 @@ where
                         )
                     }
                 };
+                let (coins, tokens) = addr_details.balances.into_coins_and_tokens();
+                let coins = coins.decimal();
+                writeln!(&mut output, "Coins amount: {coins}\n")
+                    .expect("Writing to a memory buffer should not fail");
 
-                Ok(ConsoleCommand::Print(details_str))
+                for (token_id, amount) in tokens {
+                    let token_id = Address::new(chain_config, token_id)
+                        .expect("Encoding token id should never fail");
+                    let amount = amount.decimal();
+                    writeln!(&mut output, "Token: {token_id} amount: {amount}")
+                        .expect("Writing to a memory buffer should not fail");
+                }
+                output.pop();
+
+                Ok(ConsoleCommand::Print(output))
             }
 
             ColdWalletCommand::NewVrfPublicKey => {

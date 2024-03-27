@@ -38,7 +38,7 @@ use wallet::{
     DefaultWallet,
 };
 use wallet_types::{
-    account_info::{AccountStandaloneKey, AccountStandaloneKeyInfo},
+    account_info::AccountStandaloneKeyInfo,
     utxo_types::{UtxoStates, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
@@ -46,7 +46,7 @@ use wallet_types::{
 };
 
 use crate::{
-    types::{Balances, CreatedBlockInfo},
+    types::{AccountStandaloneKeyDetails, Balances, CreatedBlockInfo},
     ControllerError,
 };
 
@@ -218,14 +218,23 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
             .map_err(ControllerError::WalletError)
     }
 
-    /// Get all standalone addresses with their labels
-    pub fn get_standalone_address_details(
+    /// Get all standalone addresses with their labels and balances
+    pub async fn get_standalone_address_details(
         &self,
         address: Destination,
-    ) -> Result<(Destination, &AccountStandaloneKey), ControllerError<T>> {
-        self.wallet
+    ) -> Result<AccountStandaloneKeyDetails, ControllerError<T>> {
+        let (address, balances, address_type) = self
+            .wallet
             .get_all_standalone_address_details(self.account_index, address)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::WalletError)?;
+
+        let balances = super::into_balances(&self.rpc_client, self.chain_config, balances).await?;
+
+        Ok(AccountStandaloneKeyDetails {
+            address,
+            balances,
+            address_type: address_type.clone(),
+        })
     }
 
     /// Get all addresses with usage information
