@@ -39,8 +39,8 @@ use crate::types::{
     DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
     NewAccountInfo, NewDelegation, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
     PublicKeyInfo, RpcAmountIn, RpcTokenId, RpcUtxoState, RpcUtxoType, StakePoolBalance,
-    StakingStatus, StandaloneAddress, StandaloneAddressDetails, TokenMetadata, TransactionOptions,
-    TxOptionsOverrides, VrfPublicKeyInfo,
+    StakingStatus, StandaloneAddress, StandaloneAddressWithDetails, TokenMetadata,
+    TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -148,7 +148,7 @@ trait ColdWalletRpc {
         &self,
         account: AccountArg,
         address: RpcAddress<Destination>,
-    ) -> rpc::RpcResult<StandaloneAddressDetails>;
+    ) -> rpc::RpcResult<StandaloneAddressWithDetails>;
 
     /// Generate a new unused address
     #[method(name = "address_new")]

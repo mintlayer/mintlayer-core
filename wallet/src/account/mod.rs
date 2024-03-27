@@ -1684,10 +1684,39 @@ impl Account {
     pub fn get_all_standalone_address_details(
         &self,
         address: Destination,
-    ) -> WalletResult<(Destination, &AccountStandaloneKey)> {
-        self.key_chain
+        median_time: BlockTimestamp,
+    ) -> WalletResult<(
+        Destination,
+        BTreeMap<Currency, Amount>,
+        &AccountStandaloneKey,
+    )> {
+        let (address, standalone_key) = self
+            .key_chain
             .get_all_standalone_address_details(address)
-            .ok_or(WalletError::StandaloneAddressNotFound)
+            .ok_or(WalletError::StandaloneAddressNotFound)?;
+
+        let current_block_info = BlockInfo {
+            height: self.account_info.best_block_height(),
+            timestamp: median_time,
+        };
+        let amounts_by_currency = currency_grouper::group_utxos_for_input(
+            self.output_cache
+                .utxos_with_token_ids(
+                    current_block_info,
+                    UtxoState::Confirmed.into(),
+                    WithLocked::Unlocked,
+                    |txo| get_utxo_type(txo).is_some() && self.is_watched_by(txo, &address),
+                )
+                .into_iter(),
+            |(_, (tx_output, _))| tx_output,
+            |total: &mut Amount, _, amount| -> WalletResult<()> {
+                *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
+                Ok(())
+            },
+            Amount::ZERO,
+        )?;
+
+        Ok((address, amounts_by_currency, standalone_key))
     }
 
     pub fn get_all_issued_vrf_public_keys(
@@ -1755,6 +1784,11 @@ impl Account {
                     self.key_chain.get_multisig_challenge(destination).is_some()
                 }
             })
+    }
+
+    /// Return true if this transaction output can be spent by this account
+    fn is_watched_by(&self, txo: &TxOutput, watched_by: &Destination) -> bool {
+        self.collect_output_destinations(txo).contains(watched_by)
     }
 
     /// Return true if this destination can be spent by this account

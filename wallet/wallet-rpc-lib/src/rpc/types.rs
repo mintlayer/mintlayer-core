@@ -160,7 +160,7 @@ impl AddressInfo {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-pub enum StandaloneAddressType {
+pub enum StandaloneAddressDetails {
     Address {
         has_private_key: bool,
     },
@@ -170,11 +170,12 @@ pub enum StandaloneAddressType {
     },
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-pub struct StandaloneAddressDetails {
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct StandaloneAddressWithDetails {
     pub address: String,
     pub label: Option<String>,
-    pub details: StandaloneAddressType,
+    pub details: StandaloneAddressDetails,
+    pub balances: Balances,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]

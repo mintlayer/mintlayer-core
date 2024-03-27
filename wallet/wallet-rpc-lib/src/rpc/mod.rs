@@ -78,8 +78,8 @@ pub use self::types::RpcError;
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo,
     NewDelegation, NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
-    RpcTokenId, StakingStatus, StandaloneAddress, StandaloneAddressDetails, StandaloneAddressType,
-    VrfPublicKeyInfo,
+    RpcTokenId, StakingStatus, StandaloneAddress, StandaloneAddressDetails,
+    StandaloneAddressWithDetails, VrfPublicKeyInfo,
 };
 
 #[derive(Clone)]
@@ -500,7 +500,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         &self,
         account_index: U31,
         address: RpcAddress<Destination>,
-    ) -> WRpcResult<StandaloneAddressDetails, N> {
+    ) -> WRpcResult<StandaloneAddressWithDetails, N> {
         let address = address
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidAddress)?;
@@ -508,47 +508,52 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         let chain_config = self.chain_config.clone();
         let result = self
             .wallet
-            .call(move |controller| {
-                controller
-                    .readonly_controller(account_index)
-                    .get_standalone_address_details(address)
-                    .map(|(dest, details)| {
-                        let address =
-                            Address::new(&chain_config, dest).expect("Addressable").into_string();
-                        match details {
-                            AccountStandaloneKey::Address { label, private_key } => {
-                                StandaloneAddressDetails {
-                                    address,
-                                    label: label.clone(),
-                                    details: StandaloneAddressType::Address {
-                                        has_private_key: private_key.is_some(),
-                                    },
+            .call_async(move |w| {
+                Box::pin(async move {
+                    w.readonly_controller(account_index)
+                        .get_standalone_address_details(address)
+                        .await
+                        .map(|details| {
+                            let address = Address::new(&chain_config, details.address)
+                                .expect("Addressable")
+                                .into_string();
+                            match details.address_type {
+                                AccountStandaloneKey::Address { label, private_key } => {
+                                    StandaloneAddressWithDetails {
+                                        address,
+                                        label: label.clone(),
+                                        balances: details.balances,
+                                        details: StandaloneAddressDetails::Address {
+                                            has_private_key: private_key.is_some(),
+                                        },
+                                    }
+                                }
+                                AccountStandaloneKey::Multisig { label, challenge } => {
+                                    StandaloneAddressWithDetails {
+                                        address,
+                                        label: label.clone(),
+                                        balances: details.balances,
+                                        details: StandaloneAddressDetails::Multisig {
+                                            min_required_signatures: challenge
+                                                .min_required_signatures(),
+                                            public_keys: challenge
+                                                .public_keys()
+                                                .iter()
+                                                .map(|pk| {
+                                                    Address::new(
+                                                        &chain_config,
+                                                        Destination::PublicKey(pk.clone()),
+                                                    )
+                                                    .expect("Addressable")
+                                                    .into_string()
+                                                })
+                                                .collect(),
+                                        },
+                                    }
                                 }
                             }
-                            AccountStandaloneKey::Multisig { label, challenge } => {
-                                StandaloneAddressDetails {
-                                    address,
-                                    label: label.clone(),
-                                    details: StandaloneAddressType::Multisig {
-                                        min_required_signatures: challenge
-                                            .min_required_signatures(),
-                                        public_keys: challenge
-                                            .public_keys()
-                                            .iter()
-                                            .map(|pk| {
-                                                Address::new(
-                                                    &chain_config,
-                                                    Destination::PublicKey(pk.clone()),
-                                                )
-                                                .expect("Addressable")
-                                                .into_string()
-                                            })
-                                            .collect(),
-                                    },
-                                }
-                            }
-                        }
-                    })
+                        })
+                })
             })
             .await??;
         Ok(result)
