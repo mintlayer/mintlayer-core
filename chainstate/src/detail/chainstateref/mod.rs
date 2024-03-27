@@ -1327,7 +1327,7 @@ pub enum ReorgError {
     OtherError(#[from] BlockError),
 }
 
-trait BlockInfo {
+trait BlockInfo: Sized {
     /// Get the block id; this may be cheaper than calling get_id on the header (which would
     /// calculate the id from the header data).
     fn get_or_calc_id(&self) -> Id<Block>;
