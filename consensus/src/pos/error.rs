@@ -21,7 +21,6 @@ use common::{
     primitives::{BlockHeight, Compact, Id},
     UintConversionError,
 };
-use utils::dyn_error::DynError;
 
 use super::{block_sig::BlockSignatureError, EffectivePoolBalanceError};
 
@@ -112,10 +111,10 @@ pub enum ConsensusPoSError {
 // TODO: include the original chainstate::ChainstateError in each error below.
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ChainstateError {
-    #[error("Failed to obtain epoch for block height {0}")]
-    FailedToObtainEpochData(BlockHeight, Box<dyn DynError>),
-    #[error("Failed to read data of pool {0}")]
-    StakePoolDataReadError(PoolId, Box<dyn DynError>),
-    #[error("Failed to read balance of pool {0}")]
-    PoolBalanceReadError(PoolId, Box<dyn DynError>),
+    #[error("Failed to obtain epoch for block height {0}: {1}")]
+    FailedToObtainEpochData(BlockHeight, String),
+    #[error("Failed to read data of pool {0}: {1}")]
+    StakePoolDataReadError(PoolId, String),
+    #[error("Failed to read balance of pool {0}: {1}")]
+    PoolBalanceReadError(PoolId, String),
 }

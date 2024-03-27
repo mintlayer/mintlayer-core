@@ -268,7 +268,7 @@ impl BlockProduction {
                             ConsensusPoSError::ChainstateError(
                                 consensus::ChainstateError::FailedToObtainEpochData(
                                     block_height,
-                                    Box::new(err),
+                                    err.to_string(),
                                 ),
                             )
                         })?
@@ -630,7 +630,7 @@ fn generate_finalize_block_data(
                     ConsensusPoSError::ChainstateError(
                         consensus::ChainstateError::StakePoolDataReadError(
                             pos_input_data.pool_id(),
-                            Box::new(err),
+                            err.to_string(),
                         ),
                     )
                 })?
@@ -650,7 +650,7 @@ fn generate_finalize_block_data(
                     ConsensusPoSError::ChainstateError(
                         consensus::ChainstateError::PoolBalanceReadError(
                             pos_input_data.pool_id(),
-                            Box::new(err),
+                            err.to_string(),
                         ),
                     )
                 })?
