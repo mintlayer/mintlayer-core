@@ -32,19 +32,15 @@ use chainstate_types::{
 use common::{
     chain::{
         block::{
-            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward,
-            ConsensusData,
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockHeader,
+            BlockReward, ConsensusData,
         },
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, Transaction, TxOutput,
         UtxoOutPoint,
     },
-    primitives::{
-        id::{IdableWithParent, WithId},
-        time::Time,
-        BlockCount, BlockDistance, BlockHeight, Id, Idable,
-    },
+    primitives::{id::WithId, time::Time, BlockCount, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
     Uint256,
 };
@@ -224,13 +220,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     fn get_previous_block_index(
         &self,
-        block: &impl IdableWithParent<Tag = Block, ParentTag = GenBlock>,
+        block_info: &impl BlockInfo,
     ) -> Result<GenBlockIndex, PropertyQueryError> {
-        let prev_block_id = block.get_parent_id();
+        let prev_block_id = block_info.get_header().prev_block_id();
 
         self.get_gen_block_index(prev_block_id)?
             .ok_or(PropertyQueryError::PrevBlockIndexNotFound {
-                block_id: block.get_id(),
+                block_id: block_info.get_or_calc_id(),
                 prev_block_id: *prev_block_id,
             })
     }
@@ -1329,4 +1325,56 @@ pub enum ReorgError {
     BlockDataMissing(Id<Block>),
     #[error("Generic error during reorg: {0}")]
     OtherError(#[from] BlockError),
+}
+
+trait BlockInfo {
+    /// Get the block id; this may be cheaper than calling get_id on the header (which would
+    /// calculate the id from the header data).
+    fn get_or_calc_id(&self) -> Id<Block>;
+
+    /// Get the header.
+    fn get_header(&self) -> &BlockHeader;
+}
+
+impl BlockInfo for BlockIndex {
+    fn get_or_calc_id(&self) -> Id<Block> {
+        *self.block_id()
+    }
+
+    fn get_header(&self) -> &BlockHeader {
+        self.block_header().header()
+    }
+}
+
+impl BlockInfo for SignedBlockHeader {
+    fn get_or_calc_id(&self) -> Id<Block> {
+        self.get_id()
+    }
+
+    fn get_header(&self) -> &BlockHeader {
+        self.header()
+    }
+}
+
+impl BlockInfo for BlockHeader {
+    fn get_or_calc_id(&self) -> Id<Block> {
+        self.get_id()
+    }
+
+    fn get_header(&self) -> &BlockHeader {
+        self
+    }
+}
+
+impl<T> BlockInfo for WithId<T>
+where
+    T: Idable<Tag = Block> + BlockInfo,
+{
+    fn get_or_calc_id(&self) -> Id<Block> {
+        WithId::<T>::get(self).get_id()
+    }
+
+    fn get_header(&self) -> &BlockHeader {
+        WithId::<T>::get(self).get_header()
+    }
 }

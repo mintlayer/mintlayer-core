@@ -16,7 +16,6 @@
 use common::chain::block::signed_block_header::SignedBlockHeader;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::{Block, GenBlock};
-use common::primitives::id::IdableWithParent;
 use common::primitives::{BlockHeight, Id, Idable, H256};
 use common::Uint256;
 use serialization::{Decode, Encode};
@@ -38,22 +37,6 @@ pub struct BlockIndex {
     /// The total number of transactions up to this block
     chain_transaction_count: u128,
     status: BlockStatus,
-}
-
-impl Idable for BlockIndex {
-    type Tag = Block;
-
-    fn get_id(&self) -> Id<Block> {
-        *self.block_id()
-    }
-}
-
-impl IdableWithParent for BlockIndex {
-    type ParentTag = GenBlock;
-
-    fn get_parent_id(&self) -> &Id<GenBlock> {
-        self.prev_block_id()
-    }
 }
 
 impl BlockIndex {

@@ -243,12 +243,6 @@ impl<T: Idable> Idable for &T {
     }
 }
 
-/// A trait for Idable objects that form a chain.
-pub trait IdableWithParent: Idable {
-    type ParentTag: TypeName;
-    fn get_parent_id(&self) -> &Id<Self::ParentTag>;
-}
-
 // we use a cropping stream (64 => 32) because
 // we want a hash result to H256 and a byte array
 // of the hash to be identical, while benefiting

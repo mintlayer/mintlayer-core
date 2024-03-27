@@ -38,10 +38,7 @@ use utils::ensure;
 
 use crate::{
     chain::block::{block_size::BlockSize, block_v1::BlockV1, timestamp::BlockTimestamp},
-    primitives::{
-        id::{IdableWithParent, WithId},
-        Id, Idable, VersionTag, H256,
-    },
+    primitives::{id::WithId, Id, Idable, VersionTag, H256},
 };
 
 use self::{
@@ -212,13 +209,6 @@ impl Idable for Block {
         // Block ID is just the hash of its header. The transaction list is committed to by the
         // inclusion of transaction Merkle root in the header. We also include the version number.
         self.header().header().get_id()
-    }
-}
-
-impl IdableWithParent for Block {
-    type ParentTag = GenBlock;
-    fn get_parent_id(&self) -> &Id<GenBlock> {
-        self.header().header().prev_block_id()
     }
 }
 

@@ -20,15 +20,11 @@ use crate::{
         block::{Block, BlockReward, BlockRewardTransactable, ConsensusData},
         signed_transaction::SignedTransaction,
     },
-    primitives::{
-        id::{Idable, IdableWithParent},
-        Id, H256,
-    },
+    primitives::{id::Idable, Id, H256},
 };
 
 use super::{
     block_body::BlockBody, signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp,
-    GenBlock,
 };
 
 #[must_use]
@@ -42,13 +38,6 @@ impl Idable for BlockV1 {
     type Tag = Block;
     fn get_id(&self) -> Id<Block> {
         self.header().get_id()
-    }
-}
-
-impl IdableWithParent for BlockV1 {
-    type ParentTag = GenBlock;
-    fn get_parent_id(&self) -> &Id<GenBlock> {
-        self.header.prev_block_id()
     }
 }
 
