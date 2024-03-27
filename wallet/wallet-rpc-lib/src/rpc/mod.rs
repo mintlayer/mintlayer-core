@@ -236,6 +236,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         account_index: U31,
         address: RpcAddress<Destination>,
         label: Option<String>,
+        no_rescan: bool,
     ) -> WRpcResult<(), N> {
         let dest = address
             .decode_object(&self.chain_config)
@@ -255,9 +256,16 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         self.wallet
             .call_async(move |w| {
                 Box::pin(async move {
-                    w.synced_controller(account_index, config)
+                    let res = w
+                        .synced_controller(account_index, config)
                         .await?
-                        .add_standalone_address(pkh, label)
+                        .add_standalone_address(pkh, label);
+
+                    if !no_rescan {
+                        w.reset_wallet_to_genesis()?;
+                    }
+
+                    res
                 })
             })
             .await??;
@@ -269,6 +277,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         account_index: U31,
         private_key: PrivateKey,
         label: Option<String>,
+        no_rescan: bool,
     ) -> WRpcResult<(), N> {
         let config = ControllerConfig {
             in_top_x_mb: 5,
@@ -277,9 +286,16 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         self.wallet
             .call_async(move |w| {
                 Box::pin(async move {
-                    w.synced_controller(account_index, config)
+                    let res = w
+                        .synced_controller(account_index, config)
                         .await?
-                        .add_standalone_private_key(private_key, label)
+                        .add_standalone_private_key(private_key, label);
+
+                    if !no_rescan {
+                        w.reset_wallet_to_genesis()?;
+                    }
+
+                    res
                 })
             })
             .await??;
@@ -292,6 +308,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         min_required_signatures: u8,
         public_keys: Vec<RpcAddress<Destination>>,
         label: Option<String>,
+        no_rescan: bool,
     ) -> WRpcResult<String, N> {
         let config = ControllerConfig {
             in_top_x_mb: 5,
@@ -325,9 +342,16 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .wallet
             .call_async(move |w| {
                 Box::pin(async move {
-                    w.synced_controller(account_index, config)
+                    let res = w
+                        .synced_controller(account_index, config)
                         .await?
-                        .add_standalone_multisig(challenge, label)
+                        .add_standalone_multisig(challenge, label);
+
+                    if !no_rescan {
+                        w.reset_wallet_to_genesis()?;
+                    }
+
+                    res
                 })
             })
             .await??;
@@ -460,7 +484,14 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await??;
         let result = addresses
             .into_iter()
-            .map(|(dest, label)| StandaloneAddress::new(dest, label, &self.chain_config))
+            .map(|info| {
+                StandaloneAddress::new(
+                    info.address,
+                    info.address_type,
+                    info.label,
+                    &self.chain_config,
+                )
+            })
             .collect();
         Ok(result)
     }
@@ -509,7 +540,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                                                     &chain_config,
                                                     Destination::PublicKey(pk.clone()),
                                                 )
-                                                .expect("Addresable")
+                                                .expect("Addressable")
                                                 .into_string()
                                             })
                                             .collect(),

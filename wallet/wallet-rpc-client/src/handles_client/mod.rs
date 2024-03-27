@@ -255,9 +255,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         account_index: U31,
         address: String,
         label: Option<String>,
+        no_rescan: bool,
     ) -> Result<(), Self::Error> {
         self.wallet_rpc
-            .add_standalone_watch_only_address(account_index, address.into(), label)
+            .add_standalone_watch_only_address(account_index, address.into(), label, no_rescan)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -267,9 +268,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         account_index: U31,
         private_key: HexEncoded<PrivateKey>,
         label: Option<String>,
+        no_rescan: bool,
     ) -> Result<(), Self::Error> {
         self.wallet_rpc
-            .add_standalone_private_key(account_index, private_key.take(), label)
+            .add_standalone_private_key(account_index, private_key.take(), label, no_rescan)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
@@ -280,6 +282,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         min_required_signatures: u8,
         public_keys: Vec<String>,
         label: Option<String>,
+        no_rescan: bool,
     ) -> Result<String, Self::Error> {
         self.wallet_rpc
             .add_standalone_multisig(
@@ -287,6 +290,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
                 min_required_signatures,
                 public_keys.into_iter().map(Into::into).collect(),
                 label,
+                no_rescan,
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)

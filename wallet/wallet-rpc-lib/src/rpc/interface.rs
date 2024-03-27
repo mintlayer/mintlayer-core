@@ -275,15 +275,17 @@ trait WalletRpc {
         account: AccountArg,
         address: RpcAddress<Destination>,
         label: Option<String>,
+        no_rescan: Option<bool>,
     ) -> rpc::RpcResult<()>;
 
     /// Add a new standalone private key not derived from the selected account's key chain to be watched
-    #[method(name = "standalone_add_private_key-as-hex")]
+    #[method(name = "standalone_add_private_key_from_hex")]
     async fn add_standalone_private_key(
         &self,
         account: AccountArg,
         hex_private_key: HexEncoded<PrivateKey>,
         label: Option<String>,
+        no_rescan: Option<bool>,
     ) -> rpc::RpcResult<()>;
 
     /// Add a new standalone multi signature address
@@ -295,6 +297,7 @@ trait WalletRpc {
         min_required_signatures: u8,
         public_keys: Vec<RpcAddress<Destination>>,
         label: Option<String>,
+        no_rescan: Option<bool>,
     ) -> rpc::RpcResult<String>;
 
     /// Lists all the utxos owned by a multisig watched by this account

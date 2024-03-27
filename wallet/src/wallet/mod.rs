@@ -67,7 +67,7 @@ use wallet_storage::{
     TransactionRwUnlocked, Transactional, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
-use wallet_types::account_info::AccountStandaloneKey;
+use wallet_types::account_info::{AccountStandaloneKey, AccountStandaloneKeyInfo};
 use wallet_types::chain_info::ChainInfo;
 use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
@@ -1208,7 +1208,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn get_all_standalone_addresses(
         &self,
         account_index: U31,
-    ) -> WalletResult<Vec<(Destination, Option<String>)>> {
+    ) -> WalletResult<Vec<AccountStandaloneKeyInfo>> {
         let account = self.get_account(account_index)?;
         Ok(account.get_all_standalone_addresses())
     }

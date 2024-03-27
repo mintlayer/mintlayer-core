@@ -325,10 +325,16 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         account_arg: AccountArg,
         address: RpcAddress<Destination>,
         label: Option<String>,
+        no_rescan: Option<bool>,
     ) -> rpc::RpcResult<()> {
         rpc::handle_result(
-            self.add_standalone_watch_only_address(account_arg.index::<N>()?, address, label)
-                .await,
+            self.add_standalone_watch_only_address(
+                account_arg.index::<N>()?,
+                address,
+                label,
+                no_rescan.unwrap_or(false),
+            )
+            .await,
         )
     }
 
@@ -337,10 +343,16 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         account_arg: AccountArg,
         private_key: HexEncoded<PrivateKey>,
         label: Option<String>,
+        no_rescan: Option<bool>,
     ) -> rpc::RpcResult<()> {
         rpc::handle_result(
-            self.add_standalone_private_key(account_arg.index::<N>()?, private_key.take(), label)
-                .await,
+            self.add_standalone_private_key(
+                account_arg.index::<N>()?,
+                private_key.take(),
+                label,
+                no_rescan.unwrap_or(false),
+            )
+            .await,
         )
     }
 
@@ -350,6 +362,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         min_required_signatures: u8,
         public_keys: Vec<RpcAddress<Destination>>,
         label: Option<String>,
+        no_rescan: Option<bool>,
     ) -> rpc::RpcResult<String> {
         rpc::handle_result(
             self.add_standalone_multisig(
@@ -357,6 +370,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
                 min_required_signatures,
                 public_keys,
                 label,
+                no_rescan.unwrap_or(false),
             )
             .await,
         )

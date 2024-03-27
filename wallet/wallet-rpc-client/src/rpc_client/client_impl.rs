@@ -205,12 +205,14 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         address: String,
         label: Option<String>,
+        no_rescan: bool,
     ) -> Result<(), Self::Error> {
         WalletRpcClient::add_standalone_address(
             &self.http_client,
             account_index.into(),
             address.into(),
             label,
+            Some(no_rescan),
         )
         .await
         .map_err(WalletRpcError::ResponseError)
@@ -221,12 +223,14 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         private_key: HexEncoded<PrivateKey>,
         label: Option<String>,
+        no_rescan: bool,
     ) -> Result<(), Self::Error> {
         WalletRpcClient::add_standalone_private_key(
             &self.http_client,
             account_index.into(),
             private_key,
             label,
+            Some(no_rescan),
         )
         .await
         .map_err(WalletRpcError::ResponseError)
@@ -238,6 +242,7 @@ impl WalletInterface for ClientWalletRpc {
         min_required_signatures: u8,
         public_keys: Vec<String>,
         label: Option<String>,
+        no_rescan: bool,
     ) -> Result<String, Self::Error> {
         WalletRpcClient::add_standalone_multisig(
             &self.http_client,
@@ -245,6 +250,7 @@ impl WalletInterface for ClientWalletRpc {
             min_required_signatures,
             public_keys.into_iter().map(Into::into).collect(),
             label,
+            Some(no_rescan),
         )
         .await
         .map_err(WalletRpcError::ResponseError)
