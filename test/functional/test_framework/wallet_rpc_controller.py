@@ -23,6 +23,7 @@ import json
 import re
 from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
+import base64
 
 from typing import Optional, List, Tuple, Union
 
@@ -77,16 +78,58 @@ class WalletRpcController:
     async def __aenter__(self):
         cookie_file = os.path.join(self.node.datadir, ".cookie")
 
-        port = rpc_port(10)
-        url = "127.0.0.1"
-        bind_addr = f"{url}:{port}"
         self.log.info(f"node url: {self.node.url}")
         wallet_rpc = os.path.join(self.config["environment"]["BUILDDIR"], "test_rpc_wallet"+self.config["environment"]["EXEEXT"] )
+        if "--rpc-username" in self.wallet_args:
+            idx = self.wallet_args.index("--rpc-username")
+            username = self.wallet_args[idx+1]
+            idx = self.wallet_args.index("--rpc-password")
+            password = self.wallet_args[idx+1]
+            credentials = f"{username}:{password}"
+            self.log.info(f'creds: {credentials}')
+            credentials_encoded = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
+
+            def get_headers_user_pass():
+                return {
+                    'Authorization': f'Basic {credentials_encoded}',
+                    'Content-Type': 'application/json'
+                }
+
+            self.headers = get_headers_user_pass
+        elif "--rpc-cookie-file" in self.wallet_args:
+            idx = self.wallet_args.index("--rpc-cookie-file")
+            wallet_cookie_file = os.path.join(self.node.datadir, self.wallet_args[idx+1])
+            def get_headers_cookie():
+                with open(wallet_cookie_file, 'r') as f:
+                    cookie = f.read().strip()
+                credentials_encoded = base64.b64encode(cookie.encode('utf-8')).decode('utf-8')
+                return {
+                    'Authorization': f'Basic {credentials_encoded}',
+                    'Content-Type': 'application/json'
+                }
+            self.headers = get_headers_cookie
+        else:
+            def get_headers():
+                return {'Content-Type': 'application/json'}
+            self.headers = get_headers
+
+        if "--rpc-bind-address" in self.wallet_args:
+            rpc_bind_addr_idx = self.wallet_args.index("--rpc-bind-address")
+            bind_addr = self.wallet_args[rpc_bind_addr_idx+1]
+            url, port = bind_addr.split(':')
+            port = int(port)
+            wallet_args = ["regtest"]
+        else:
+            port = rpc_port(10)
+            url = "127.0.0.1"
+            bind_addr = f"{url}:{port}"
+            wallet_args = ["regtest", "--rpc-bind-address", bind_addr, "--rpc-no-authentication"]
+
         # if it is a cold wallet don't specify node address and cookie
         if "--cold-wallet" in self.wallet_args:
-            wallet_args = ["regtest", "--rpc-bind-address", bind_addr, "--rpc-no-authentication"] + self.wallet_args + self.chain_config_args
+            wallet_args += self.wallet_args + self.chain_config_args
         else:
-            wallet_args = ["regtest", "--node-rpc-address", self.node.url.split("@")[1], "--node-rpc-cookie-file", cookie_file, "--rpc-bind-address", bind_addr, "--rpc-no-authentication"] + self.wallet_args + self.chain_config_args
+            wallet_args += ["--node-rpc-address", self.node.url.split("@")[1], "--node-rpc-cookie-file", cookie_file] + self.wallet_args + self.chain_config_args
         self.wallet_log_file = NamedTemporaryFile(prefix="wallet_stderr_rpc_", dir=os.path.dirname(self.node.datadir), delete=False)
         self.wallet_commands_file = NamedTemporaryFile(prefix="wallet_commands_responses_rpc_", dir=os.path.dirname(self.node.datadir), delete=False)
 
@@ -115,7 +158,6 @@ class WalletRpcController:
         self.wallet_commands_file.write(encoded_cmd)
         self.wallet_commands_file.write(encoded_params)
 
-        headers = {"Content-Type": "application/json"}
         payload = {
             "jsonrpc": "2.0",
             "method": method,
@@ -123,7 +165,7 @@ class WalletRpcController:
             "id": 1  # Adjust the id field as needed
         }
         encoded_payload = json.dumps(payload).encode('utf-8')
-        self.http_client.request("POST", '', body=encoded_payload, headers=headers)
+        self.http_client.request("POST", '', body=encoded_payload, headers=self.headers())
         response = self.http_client.getresponse()
         self.log.info(f"method, {method}")
         self.log.info(f'response, {response} status: {response.status}')
@@ -135,7 +177,7 @@ class WalletRpcController:
     async def create_wallet(self, name: str = "wallet") -> str:
         wallet_file = os.path.join(self.node.datadir, name)
         self._write_command("wallet_create", [wallet_file, True])
-        return "Success"
+        return "New wallet created successfully"
 
     async def open_wallet(self, name: str = "wallet", password: Optional[str] = None, force_change_wallet_type: bool = False) -> str:
         wallet_file = os.path.join(self.node.datadir, name)

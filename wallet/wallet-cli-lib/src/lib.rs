@@ -37,7 +37,7 @@ use errors::WalletCliError;
 use node_comm::{make_cold_wallet_rpc_client, make_rpc_client, rpc_client::ColdWalletClient};
 use rpc::RpcAuthData;
 use tokio::sync::mpsc;
-use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
+use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain, ensure};
 use wallet_rpc_lib::types::NodeInterface;
 use wallet_rpc_lib::{cmdline::make_wallet_config, config::WalletRpcConfig};
 
@@ -224,9 +224,13 @@ async fn connect_to_rpc_wallet(
         &cli_args.remote_rpc_wallet_password,
     ) {
         (None, None, None) => {
-            let cookie_file_path =
-                default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
-            RpcAuthData::Cookie { cookie_file_path }
+            ensure!(
+                cli_args.remote_rpc_wallet_no_authentication,
+                Box::new(WalletCliError::<ColdWalletClient>::InvalidConfig(
+                    "At least one RPC cookie/username/password/no-authentication should be specified".to_owned(),
+                ))
+            );
+            RpcAuthData::None
         }
         (Some(cookie_file_path), None, None) => RpcAuthData::Cookie {
             cookie_file_path: cookie_file_path.into(),
@@ -235,11 +239,7 @@ async fn connect_to_rpc_wallet(
             username: username.clone(),
             password: password.clone(),
         },
-        _ => {
-            return Err(Box::new(WalletCliError::<ColdWalletClient>::InvalidConfig(
-                "Invalid RPC cookie/username/password combination".to_owned(),
-            )))
-        }
+        _ => panic!("Should not happen due to arg constraints"),
     };
 
     let remote_socket_address = cli_args.remote_rpc_wallet_address.clone().expect("checked");
