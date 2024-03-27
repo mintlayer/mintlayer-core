@@ -22,7 +22,8 @@ use common::{
 use serialization::hex_encoded::HexEncoded;
 
 use super::{
-    block_reward::RpcBlockReward, consensus_data::RpcConsensusData,
+    block_reward::RpcBlockReward,
+    consensus_data::{RpcConsensusData, RpcConsensusDataKey},
     signed_transaction::RpcSignedTransaction,
 };
 
@@ -33,6 +34,7 @@ pub struct RpcBlock {
     height: BlockHeight,
     chain_transaction_count: u128,
     timestamp: BlockTimestamp,
+    consensus_type: RpcConsensusDataKey,
     consensus_data: RpcConsensusData,
 
     block_reward: RpcBlockReward,
@@ -62,6 +64,7 @@ impl RpcBlock {
             height: block_index.block_height(),
             chain_transaction_count: block_index.chain_transaction_count(),
             timestamp: block.timestamp(),
+            consensus_type: (&rpc_consensus_data).into(),
             consensus_data: rpc_consensus_data,
             block_reward: rpc_block_reward,
             transaction_count_in_block: block.transactions().len() as u32,

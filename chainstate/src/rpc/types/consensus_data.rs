@@ -21,6 +21,23 @@ use common::{
 use super::input::RpcTxInput;
 
 #[derive(Debug, Clone, serde::Serialize)]
+pub enum RpcConsensusDataKey {
+    None,
+    PoW,
+    PoS,
+}
+
+impl From<&RpcConsensusData> for RpcConsensusDataKey {
+    fn from(value: &RpcConsensusData) -> Self {
+        match value {
+            RpcConsensusData::None => RpcConsensusDataKey::None,
+            RpcConsensusData::PoW => RpcConsensusDataKey::PoW,
+            RpcConsensusData::PoS { .. } => RpcConsensusDataKey::PoS,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum RpcConsensusData {
     None,
     PoW,
