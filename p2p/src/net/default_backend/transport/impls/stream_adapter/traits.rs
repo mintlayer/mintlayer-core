@@ -18,7 +18,7 @@ use futures::future::BoxFuture;
 use crate::{
     net::{
         default_backend::transport::{ConnectedSocketInfo, PeerStream},
-        types::Role,
+        types::ConnectionDirection,
     },
     Result,
 };
@@ -28,5 +28,9 @@ pub trait StreamAdapter<T>: Clone + Send + Sync + 'static {
     type Stream: PeerStream + ConnectedSocketInfo;
 
     /// Wraps base async stream into AsyncRead/AsyncWrite stream that may implement encryption.
-    fn handshake(&self, base: T, role: Role) -> BoxFuture<'static, Result<Self::Stream>>;
+    fn handshake(
+        &self,
+        base: T,
+        conn_dir: ConnectionDirection,
+    ) -> BoxFuture<'static, Result<Self::Stream>>;
 }

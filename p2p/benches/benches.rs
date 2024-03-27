@@ -18,12 +18,14 @@ use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use common::chain::config::create_unit_test_config;
 use criterion::{criterion_group, criterion_main, Criterion};
 
+use crypto::random::make_pseudo_rng;
 use p2p::{
     peer_manager::{address_groups::AddressGroup, peerdb::PeerDb},
     testing_utils::{peerdb_inmemory_store, test_p2p_config, TestAddressMaker},
 };
 
 pub fn peer_db(c: &mut Criterion) {
+    let mut rng = make_pseudo_rng();
     let db_store = peerdb_inmemory_store();
     let chain_config = create_unit_test_config();
     let p2p_config = Arc::new(test_p2p_config());
@@ -31,19 +33,19 @@ pub fn peer_db(c: &mut Criterion) {
         PeerDb::<_>::new(&chain_config, p2p_config, Default::default(), db_store).unwrap();
 
     for _ in 0..100000 {
-        peerdb.peer_discovered(TestAddressMaker::new_random_address());
+        peerdb.peer_discovered(TestAddressMaker::new_random_address(&mut rng));
     }
 
     for _ in 0..1000 {
         peerdb.ban(
-            TestAddressMaker::new_random_address().as_bannable(),
+            TestAddressMaker::new_random_address(&mut rng).as_bannable(),
             Duration::from_secs(60 * 60 * 24),
         );
     }
 
     let outbound_addr_groups = (0..5)
         .map(|_| {
-            let addr = TestAddressMaker::new_random_address();
+            let addr = TestAddressMaker::new_random_address(&mut rng);
             AddressGroup::from_peer_address(&addr.as_peer_address())
         })
         .collect::<BTreeSet<_>>();

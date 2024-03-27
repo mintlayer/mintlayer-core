@@ -34,17 +34,12 @@ use crate::{
 
 use self::services::Services;
 
-// TODO:
-// 1) The name "Role" is bad, consider renaming it e.g. to ConnectionDirection.
-// 2) It's better to remove it and use the PeerRole enum instead (which should better be renamed
-// as well).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum Role {
+pub enum ConnectionDirection {
     Inbound,
     Outbound,
 }
 
-// TODO: Rename to ConnectionType
 #[derive(
     Debug,
     Clone,
@@ -56,8 +51,9 @@ pub enum Role {
     serde::Serialize,
     serde::Deserialize,
     rpc_description::HasValueHint,
+    enum_iterator::Sequence,
 )]
-pub enum PeerRole {
+pub enum ConnectionType {
     Inbound,
     OutboundFullRelay,
     OutboundBlockRelay,
@@ -66,18 +62,9 @@ pub enum PeerRole {
     Feeler,
 }
 
-// TODO: Use something like enum_iterator
-impl PeerRole {
-    pub const ALL: [PeerRole; 5] = [
-        PeerRole::Inbound,
-        PeerRole::OutboundFullRelay,
-        PeerRole::OutboundBlockRelay,
-        PeerRole::OutboundReserved,
-        PeerRole::OutboundManual,
-    ];
-
+impl ConnectionType {
     pub fn is_outbound(&self) -> bool {
-        use PeerRole::*;
+        use ConnectionType::*;
 
         match self {
             Inbound => false,
@@ -88,7 +75,7 @@ impl PeerRole {
     }
 
     pub fn is_outbound_manual(&self) -> bool {
-        use PeerRole::*;
+        use ConnectionType::*;
 
         match self {
             OutboundManual => true,
