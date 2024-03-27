@@ -38,7 +38,7 @@ use common::{
     address::Address,
     chain::{
         block::timestamp::BlockTimestamp,
-        tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance},
+        tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable},
         Block, Destination, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
@@ -52,7 +52,7 @@ use utils::ensure;
 
 use crate::ApiServerWebServerState;
 
-use super::json_helpers::to_json_string;
+use super::json_helpers::{nft_issuance_data_to_json, to_json_string};
 
 pub const API_VERSION: &str = "2.0.0";
 
@@ -1107,20 +1107,5 @@ pub async fn nft<T: ApiServerStorage>(
             ApiServerWebServerNotFoundError::NftNotFound,
         ))?;
 
-    match nft {
-        NftIssuance::V0(nft) => Ok(Json(json!({
-            "authority": nft.metadata.creator
-                .map(|creator| Address::new(&state.chain_config, Destination::PublicKey(creator.public_key))
-                .expect("no error in encoding")
-                .as_str().to_owned()
-            ),
-            "name": nft.metadata.name,
-            "description": nft.metadata.description,
-            "ticker": to_json_string(&nft.metadata.ticker),
-            "icon_uri": nft.metadata.icon_uri.as_ref().as_ref().map(|b| to_json_string(b)),
-            "additional_metadata_uri": nft.metadata.additional_metadata_uri.as_ref().as_ref().map(|b| to_json_string(b)),
-            "media_uri": nft.metadata.media_uri.as_ref().as_ref().map(|b| to_json_string(b)),
-            "media_hash": to_json_string(&nft.metadata.media_hash),
-        }))),
-    }
+    Ok(Json(nft_issuance_data_to_json(&nft, &state.chain_config)))
 }
