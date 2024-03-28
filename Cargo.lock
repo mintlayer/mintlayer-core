@@ -8512,6 +8512,7 @@ dependencies = [
  "serialization",
  "test-utils",
  "thiserror",
+ "tx-verifier",
  "wasm-bindgen",
 ]
 

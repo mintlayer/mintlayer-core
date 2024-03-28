@@ -15,6 +15,7 @@ consensus = { path = '../consensus' }
 crypto = { path = '../crypto' }
 serialization = { path = "../serialization" }
 common = { path = "../common" }
+tx-verifier = { path = "../chainstate/tx-verifier" }
 
 bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
 

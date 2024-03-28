@@ -28,7 +28,10 @@ use common::{
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        tokens::{IsTokenFreezable, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
+        tokens::{
+            IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenCreator, TokenIssuance,
+            TokenIssuanceV1, TokenTotalSupply,
+        },
         AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination, OutPointSourceId,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
@@ -513,6 +516,58 @@ pub fn encode_output_create_stake_pool(
     Ok(output.encode())
 }
 
+/// Returns the fee that needs to be paid by a transaction for issuing a new fungible token
+#[wasm_bindgen]
+pub fn fungible_token_issuance_fee(_current_block_height: u64, network: Network) -> Amount {
+    let chain_config = Builder::new(network.into()).build();
+    Amount::from_internal_amount(chain_config.fungible_token_issuance_fee())
+}
+
+/// Given the current block height and a network type (mainnet, testnet, etc),
+/// this will return the fee that needs to be paid by a transaction for issuing a new NFT
+/// The current block height information is used in case a network upgrade changed the value.
+#[wasm_bindgen]
+pub fn nft_issuance_fee(current_block_height: u64, network: Network) -> Amount {
+    let chain_config = Builder::new(network.into()).build();
+    Amount::from_internal_amount(
+        chain_config.nft_issuance_fee(BlockHeight::new(current_block_height)),
+    )
+}
+
+/// Given the current block height and a network type (mainnet, testnet, etc),
+/// this will return the fee that needs to be paid by a transaction for changing the total supply of a token
+/// by either minting or unminting tokens
+/// The current block height information is used in case a network upgrade changed the value.
+#[wasm_bindgen]
+pub fn token_supply_change_fee(current_block_height: u64, network: Network) -> Amount {
+    let chain_config = Builder::new(network.into()).build();
+    Amount::from_internal_amount(
+        chain_config.token_supply_change_fee(BlockHeight::new(current_block_height)),
+    )
+}
+
+/// Given the current block height and a network type (mainnet, testnet, etc),
+/// this will return the fee that needs to be paid by a transaction for freezing/unfreezing a token
+/// The current block height information is used in case a network upgrade changed the value.
+#[wasm_bindgen]
+pub fn token_freeze_fee(current_block_height: u64, network: Network) -> Amount {
+    let chain_config = Builder::new(network.into()).build();
+    Amount::from_internal_amount(
+        chain_config.token_freeze_fee(BlockHeight::new(current_block_height)),
+    )
+}
+
+/// Given the current block height and a network type (mainnet, testnet, etc),
+/// this will return the fee that needs to be paid by a transaction for changing the authority of a token
+/// The current block height information is used in case a network upgrade changed the value.
+#[wasm_bindgen]
+pub fn token_change_authority_fee(current_block_height: u64, network: Network) -> Amount {
+    let chain_config = Builder::new(network.into()).build();
+    Amount::from_internal_amount(
+        chain_config.token_change_authority_fee(BlockHeight::new(current_block_height)),
+    )
+}
+
 /// Given the parameters needed to issue a fungible token, and a network type (mainnet, testnet, etc),
 /// this function creates an output that issues that token.
 #[allow(clippy::too_many_arguments)]
@@ -525,6 +580,7 @@ pub fn encode_output_issue_fungible_token(
     total_supply: TotalSupply,
     supply_amount: Option<Amount>,
     is_token_freezable: FreezableToken,
+    current_block_height: u64,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
@@ -534,16 +590,84 @@ pub fn encode_output_issue_fungible_token(
     let total_supply = parse_token_total_supply(total_supply, supply_amount)?;
     let is_freezable = is_token_freezable.into();
 
-    let token_issuance = TokenIssuanceV1 {
+    let token_issuance = TokenIssuance::V1(TokenIssuanceV1 {
         authority,
         token_ticker,
         metadata_uri,
         number_of_decimals,
         total_supply,
         is_freezable,
+    });
+
+    tx_verifier::check_tokens_issuance(
+        &chain_config,
+        BlockHeight::new(current_block_height),
+        &token_issuance,
+    )?;
+
+    let output = TxOutput::IssueFungibleToken(Box::new(token_issuance));
+    Ok(output.encode())
+}
+
+/// Given the parameters needed to issue an NFT, and a network type (mainnet, testnet, etc),
+/// this function creates an output that issues that NFT.
+#[allow(clippy::too_many_arguments)]
+#[wasm_bindgen]
+pub fn encode_output_issue_nft(
+    token_id: &str,
+    authority: &str,
+    name: &str,
+    ticker: &str,
+    description: &str,
+    media_hash: &[u8],
+    creator: Option<String>,
+    media_uri: Option<Vec<u8>>,
+    icon_uri: Option<Vec<u8>>,
+    additional_metadata_uri: Option<Vec<u8>>,
+    current_block_height: u64,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let token_id = parse_addressable(&chain_config, token_id)?;
+    let authority = parse_addressable(&chain_config, authority)?;
+    let name = name.into();
+    let ticker = ticker.into();
+    let media_uri = media_uri.into();
+    let icon_uri = icon_uri.into();
+    let media_hash = media_hash.into();
+    let additional_metadata_uri = additional_metadata_uri.into();
+    let creator = creator
+        .map(|addr| parse_addressable::<Destination>(&chain_config, &addr))
+        .transpose()?
+        .map(|dest| match dest {
+            Destination::PublicKey(public_key) => Ok(TokenCreator { public_key }),
+            Destination::AnyoneCanSpend
+            | Destination::ScriptHash(_)
+            | Destination::PublicKeyHash(_)
+            | Destination::ClassicMultisig(_) => Err(Error::InvalidCreatorPublicKey),
+        })
+        .transpose()?;
+
+    let nft_issuance = NftIssuanceV0 {
+        metadata: Metadata {
+            media_hash,
+            media_uri,
+            ticker,
+            additional_metadata_uri,
+            description: description.into(),
+            name,
+            icon_uri,
+            creator,
+        },
     };
 
-    let output = TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(token_issuance)));
+    tx_verifier::check_nft_issuance_data(
+        &chain_config,
+        BlockHeight::new(current_block_height),
+        &nft_issuance,
+    )?;
+
+    let output = TxOutput::IssueNft(token_id, Box::new(NftIssuance::V0(nft_issuance)), authority);
     Ok(output.encode())
 }
 
