@@ -33,6 +33,8 @@ pub enum Error {
     InvalidOutpointId,
     #[error("Invalid addressable encoding")]
     InvalidAddressable,
+    #[error("NFT Creator needs to be a public key address")]
+    InvalidCreatorPublicKey,
     #[error("Invalid amount")]
     InvalidAmount,
     #[error("Invalid time lock encoding")]
@@ -57,6 +59,8 @@ pub enum Error {
     EffectiveBalanceCalculationFailed(String),
     #[error("When fixed total supply is selected an amount must be present as well")]
     FixedTotalSupply,
+    #[error("Invalid token parameters: {0}")]
+    TokenIssuanceError(#[from] tx_verifier::error::TokenIssuanceError),
 }
 
 // This is required to make an error readable in JavaScript

@@ -32,6 +32,7 @@ import {
   get_transaction_id,
   effective_pool_balance,
   Amount,
+  encode_output_issue_nft,
 } from "../pkg/wasm_wrappers.js";
 
 function assert_eq_arrays(arr1, arr2) {
@@ -325,6 +326,70 @@ export async function run_test() {
     ];
 
     assert_eq_arrays(pool_data, expected_pool_data);
+
+    try {
+      const invalid_token_id = "asd";
+      encode_output_issue_nft(invalid_token_id, address, "nft", "XXX", "desc", "123", undefined, undefined, undefined, undefined, BigInt(1), Network.Testnet);
+      throw new Error("Invalid token id worked somehow!");
+    } catch (e) {
+      console.log(`err: ${e}`);
+      if (!e.includes("Invalid addressable encoding")) {
+        throw e;
+      }
+      console.log("Tested invalid token id successfully");
+    }
+
+    try {
+      console.log("Testing invalid creator successfully..");
+      const token_id = "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
+      const creator_public_key_hash = address;
+      encode_output_issue_nft(token_id, address, "nft", "XXX", "desc", "123", creator_public_key_hash, undefined, undefined, undefined, BigInt(1), Network.Testnet);
+      throw new Error("Invalid creator worked somehow!");
+    } catch (e) {
+      if (!e.includes("NFT Creator needs to be a public key address")) {
+        throw e;
+      }
+      console.log("Tested invalid creator successfully");
+    }
+
+    try {
+      console.log("Testing invalid nft ticker successfully..");
+      const token_id = "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
+      const empty_ticker = "";
+      encode_output_issue_nft(token_id, address, "nft", empty_ticker, "desc", "123", undefined, undefined, undefined, undefined, BigInt(1), Network.Testnet);
+      throw new Error("Invalid ticker worked somehow!");
+    } catch (e) {
+      if (!e.includes("Invalid ticker length")) {
+        throw e;
+      }
+      console.log("Tested invalid ticker successfully");
+    }
+
+    try {
+      console.log("Testing invalid nft name successfully..");
+      const token_id = "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
+      const empty_name = "";
+      encode_output_issue_nft(token_id, address, empty_name, "xxx", "desc", "123", undefined, undefined, undefined, undefined, BigInt(1), Network.Testnet);
+      throw new Error("Invalid name worked somehow!");
+    } catch (e) {
+      if (!e.includes("Invalid name length")) {
+        throw e;
+      }
+      console.log("Tested invalid name successfully");
+    }
+
+    try {
+      console.log("Testing invalid nft description successfully..");
+      const token_id = "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
+      const empty_description = "";
+      encode_output_issue_nft(token_id, address, "name", "XXX", empty_description, "123", undefined, undefined, undefined, undefined, BigInt(1), Network.Testnet);
+      throw new Error("Invalid description worked somehow!");
+    } catch (e) {
+      if (!e.includes("Invalid description length")) {
+        throw e;
+      }
+      console.log("Tested invalid description successfully");
+    }
 
     const pool_id =
       "tpool1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqza035u";

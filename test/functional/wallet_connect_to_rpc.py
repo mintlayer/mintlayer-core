@@ -96,7 +96,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             if auth == "none":
                 if remote_wallet == "rpc":
-                    return WalletRpcController, remote_wallet_args + ["--rpc-no-authentication"], ["--remote-rpc-no-authentication"]
+                    return WalletRpcController, remote_wallet_args + ["--rpc-no-authentication"], ["--remote-rpc-wallet-no-authentication"]
                 else:
                     return WalletCliController, remote_wallet_args + ["--wallet-rpc-no-authentication"], ["--remote-rpc-wallet-no-authentication"]
             elif auth == "pass":
