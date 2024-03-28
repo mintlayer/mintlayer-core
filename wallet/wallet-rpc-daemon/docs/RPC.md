@@ -114,6 +114,9 @@ Parameters:
     "label": EITHER OF
          1) string
          2) null,
+    "no_rescan": EITHER OF
+         1) bool
+         2) null,
 }
 ```
 
@@ -122,7 +125,7 @@ Returns:
 nothing
 ```
 
-### Method `standalone_add_private_key-as-hex`
+### Method `standalone_add_private_key_from_hex`
 
 Add a new standalone private key not derived from the selected account's key chain to be watched
 
@@ -134,6 +137,9 @@ Parameters:
     "hex_private_key": hex string,
     "label": EITHER OF
          1) string
+         2) null,
+    "no_rescan": EITHER OF
+         1) bool
          2) null,
 }
 ```
@@ -157,6 +163,9 @@ Parameters:
     "public_keys": [ bech32 string, .. ],
     "label": EITHER OF
          1) string
+         2) null,
+    "no_rescan": EITHER OF
+         1) bool
          2) null,
 }
 ```
@@ -1892,6 +1901,9 @@ Returns:
 ```
 [ {
     "address": string,
+    "address_type": EITHER OF
+         1) "Address"
+         2) "Multisig",
     "label": EITHER OF
          1) string
          2) null,
@@ -1924,6 +1936,16 @@ Returns:
                 "min_required_signatures": number,
                 "public_keys": [ string, .. ],
             } },
+    "balances": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { hex string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
 }
 ```
 
