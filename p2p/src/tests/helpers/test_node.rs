@@ -380,9 +380,9 @@ where
 
         let peers_info = self.get_peers_info().await;
         let outbound_full_relay_peers_count =
-            peers_info.count_peers_by_conn_type(ConnectionType::OutboundFullRelay);
+            peers_info.count_peers_by_role(ConnectionType::OutboundFullRelay);
         let outbound_block_relay_peers_count =
-            peers_info.count_peers_by_conn_type(ConnectionType::OutboundBlockRelay);
+            peers_info.count_peers_by_role(ConnectionType::OutboundBlockRelay);
 
         assert!(outbound_full_relay_peers_count >= *peer_mgr_config.outbound_full_relay_count);
         assert!(
@@ -406,9 +406,9 @@ where
 
         let peers_info = self.get_peers_info().await;
         let outbound_full_relay_peers_count =
-            peers_info.count_peers_by_conn_type(ConnectionType::OutboundFullRelay);
+            peers_info.count_peers_by_role(ConnectionType::OutboundFullRelay);
         let outbound_block_relay_peers_count =
-            peers_info.count_peers_by_conn_type(ConnectionType::OutboundBlockRelay);
+            peers_info.count_peers_by_role(ConnectionType::OutboundBlockRelay);
 
         assert!(
             outbound_full_relay_peers_count

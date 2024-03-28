@@ -101,8 +101,11 @@ impl peer_manager::Observer for PeerManagerObserver {
         self.send_notification(PeerManagerNotification::Heartbeat);
     }
 
-    fn on_connection_accepted(&mut self, address: SocketAddress, conn_type: ConnectionType) {
-        self.send_notification(PeerManagerNotification::ConnectionAccepted { address, conn_type });
+    fn on_connection_accepted(&mut self, address: SocketAddress, peer_role: ConnectionType) {
+        self.send_notification(PeerManagerNotification::ConnectionAccepted {
+            address,
+            conn_type: peer_role,
+        });
     }
 }
 
@@ -136,7 +139,7 @@ impl TestPeersInfo {
         Self { info }
     }
 
-    pub fn count_peers_by_conn_type(&self, conn_type: ConnectionType) -> usize {
+    pub fn count_peers_by_role(&self, conn_type: ConnectionType) -> usize {
         self.info.iter().filter(|(_, info)| info.conn_type == conn_type).count()
     }
 
