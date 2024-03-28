@@ -1080,7 +1080,7 @@ async fn sync_and_compare(
 #[trace]
 #[case(test_utils::random::Seed::from_entropy())]
 #[tokio::test]
-async fn check_all_destinations_are_trucked(#[case] seed: Seed) {
+async fn check_all_destinations_are_tracked(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let mut tf = TestFramework::builder(&mut rng).build();
