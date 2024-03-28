@@ -16,7 +16,7 @@
 use iced::{
     alignment::Horizontal,
     widget::{self, container, text_input, Button, Component, Text},
-    Element, Length,
+    Element, Length, Theme,
 };
 use iced_aw::Card;
 
@@ -49,7 +49,7 @@ pub enum SetPasswordEvent {
     Cancel,
 }
 
-impl<Message> Component<Message, iced::Renderer> for WalletUnlockDialog<Message> {
+impl<Message> Component<Message, Theme, iced::Renderer> for WalletUnlockDialog<Message> {
     type State = SetPasswordState;
     type Event = SetPasswordEvent;
 
@@ -71,7 +71,7 @@ impl<Message> Component<Message, iced::Renderer> for WalletUnlockDialog<Message>
         }
     }
 
-    fn view(&self, state: &Self::State) -> Element<Self::Event, iced::Renderer> {
+    fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
         let button_enabled = !state.password1.is_empty();
         let button =
             Button::new(Text::new("Encrypt wallet").horizontal_alignment(Horizontal::Center));
@@ -85,11 +85,11 @@ impl<Message> Component<Message, iced::Renderer> for WalletUnlockDialog<Message>
             Text::new("Encrypt wallet"),
             iced::widget::column![
                 text_input("Password", &state.password1)
-                    .password()
+                    .secure(true)
                     .on_input(SetPasswordEvent::EditPassword1)
                     .padding(15),
                 text_input("Repeat", &state.password2)
-                    .password()
+                    .secure(true)
                     .on_input(SetPasswordEvent::EditPassword2)
                     .padding(15)
             ]
@@ -102,7 +102,7 @@ impl<Message> Component<Message, iced::Renderer> for WalletUnlockDialog<Message>
     }
 }
 
-impl<'a, Message> From<WalletUnlockDialog<Message>> for Element<'a, Message, iced::Renderer>
+impl<'a, Message> From<WalletUnlockDialog<Message>> for Element<'a, Message, Theme, iced::Renderer>
 where
     Message: 'a,
 {

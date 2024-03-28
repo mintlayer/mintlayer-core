@@ -19,7 +19,7 @@ use iced::{
     widget::{column, container, Text},
     Command, Element, Length,
 };
-use iced_aw::{tab_bar::TabLabel, Grid};
+use iced_aw::{tab_bar::TabLabel, Grid, GridRow};
 
 use crate::main_window::NodeState;
 
@@ -48,27 +48,33 @@ impl Tab for NetworkingTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_aw::Icon::Wifi.into(), self.title())
+        TabLabel::IconText(iced_aw::BootstrapIcon::Wifi.into(), self.title())
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {
         let header = |text: &'static str| container(Text::new(text)).padding(5);
         let field = |text: String| container(Text::new(text)).padding(5);
-        let mut peers = Grid::with_columns(5)
-            .push(header("#"))
-            .push(header("Socket"))
-            .push(header("Inbound"))
-            .push(header("User agent"))
-            .push(header("Version"));
-        for (peer_id, peer) in node_state.connected_peers.iter() {
-            let inbound_str = if peer.inbound { "Inbound" } else { "Outbound" };
-            peers = peers
-                .push(field(peer_id.to_string()))
-                .push(field(peer.address.clone()))
-                .push(field(inbound_str.to_string()))
-                .push(field(peer.user_agent.to_string()))
-                .push(field(peer.version.to_string()));
-        }
+        let peers = Grid::new().push(
+            GridRow::new()
+                .push(header("#"))
+                .push(header("Socket"))
+                .push(header("Inbound"))
+                .push(header("User agent"))
+                .push(header("Version")),
+        );
+        let peers = node_state
+            .connected_peers
+            .iter()
+            .map(|(peer_id, peer)| {
+                let inbound_str = if peer.inbound { "Inbound" } else { "Outbound" };
+                GridRow::new()
+                    .push(field(peer_id.to_string()))
+                    .push(field(peer.address.clone()))
+                    .push(field(inbound_str.to_string()))
+                    .push(field(peer.user_agent.to_string()))
+                    .push(field(peer.version.to_string()))
+            })
+            .fold(peers, |grid, row| grid.push(row));
 
         column![
             Text::new("The following is a list of peers connected to your node").size(16),

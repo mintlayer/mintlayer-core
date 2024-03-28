@@ -16,7 +16,7 @@
 use iced::{
     alignment::Horizontal,
     widget::{self, container, Button, Component, Text},
-    Element, Length,
+    Element, Length, Theme,
 };
 use iced_aw::Card;
 
@@ -35,7 +35,7 @@ pub fn popup_dialog<Message>(popup: Popup, on_close: Message) -> PopupDialog<Mes
     PopupDialog { popup, on_close }
 }
 
-impl<Message: Clone> Component<Message, iced::Renderer> for PopupDialog<Message> {
+impl<Message: Clone> Component<Message, Theme, iced::Renderer> for PopupDialog<Message> {
     type State = ();
     type Event = ();
 
@@ -43,7 +43,7 @@ impl<Message: Clone> Component<Message, iced::Renderer> for PopupDialog<Message>
         Some(self.on_close.clone())
     }
 
-    fn view(&self, _state: &Self::State) -> Element<Self::Event, iced::Renderer> {
+    fn view(&self, _state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
         Card::new(
             Text::new(self.popup.title.clone()),
             Text::new(self.popup.message.clone()).horizontal_alignment(Horizontal::Center),
@@ -63,7 +63,7 @@ impl<Message: Clone> Component<Message, iced::Renderer> for PopupDialog<Message>
     }
 }
 
-impl<'a, Message: Clone> From<PopupDialog<Message>> for Element<'a, Message, iced::Renderer>
+impl<'a, Message: Clone> From<PopupDialog<Message>> for Element<'a, Message, Theme, iced::Renderer>
 where
     Message: 'a,
 {

@@ -17,7 +17,7 @@ use iced::{
     widget::{button, column, container, row, tooltip, Text},
     Element,
 };
-use iced_aw::Grid;
+use iced_aw::{Grid, GridRow};
 
 use crate::backend::messages::AccountInfo;
 
@@ -30,26 +30,32 @@ pub fn view_addresses(
     still_syncing: Option<WalletMessage>,
 ) -> Element<'static, WalletMessage> {
     let field = |text: String| container(Text::new(text)).padding(5);
-    let mut addresses = Grid::with_columns(3);
-    for (index, address) in account.addresses.iter() {
-        addresses = addresses
-            .push(field(index.to_string()))
-            .push(field(address.as_str().to_owned()))
-            .push(
-                button(
-                    Text::new(iced_aw::Icon::ClipboardCheck.to_string()).font(iced_aw::ICON_FONT),
+    let addresses = account
+        .addresses
+        .iter()
+        .map(|(index, address)| {
+            GridRow::new()
+                .push(field(index.to_string()))
+                .push(field(address.as_str().to_owned()))
+                .push(
+                    button(
+                        Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
+                            .font(iced_aw::BOOTSTRAP_FONT),
+                    )
+                    .style(iced::theme::Button::Text)
+                    .on_press(WalletMessage::CopyToClipboard(address.as_str().to_owned())),
                 )
-                .style(iced::theme::Button::Text)
-                .on_press(WalletMessage::CopyToClipboard(address.as_str().to_owned())),
-            );
-    }
+        })
+        .fold(Grid::new(), |grid, row| grid.push(row));
+
     column![
         addresses,
         row![
             iced::widget::button(Text::new("New address"))
                 .on_press(still_syncing.unwrap_or(WalletMessage::GetNewAddress)),
             tooltip(
-                Text::new(iced_aw::Icon::Question.to_string()).font(iced_aw::ICON_FONT),
+                Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                    .font(iced_aw::BOOTSTRAP_FONT),
                 NEW_ADDRESS_TOOLTIP_TEXT,
                 tooltip::Position::Bottom
             )

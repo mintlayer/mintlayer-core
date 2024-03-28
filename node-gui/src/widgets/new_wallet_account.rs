@@ -31,7 +31,7 @@
 use iced::{
     alignment::Horizontal,
     widget::{self, container, text_input, Button, Component, Text},
-    Element, Length,
+    Element, Length, Theme,
 };
 use iced_aw::Card;
 
@@ -62,7 +62,7 @@ pub enum NewAccountEvent {
     Cancel,
 }
 
-impl<Message> Component<Message, iced::Renderer> for NewWalletAccount<Message> {
+impl<Message> Component<Message, Theme, iced::Renderer> for NewWalletAccount<Message> {
     type State = NewAccountState;
     type Event = NewAccountEvent;
 
@@ -77,7 +77,7 @@ impl<Message> Component<Message, iced::Renderer> for NewWalletAccount<Message> {
         }
     }
 
-    fn view(&self, state: &Self::State) -> Element<Self::Event, iced::Renderer> {
+    fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
         let button = Button::new(Text::new("Create").horizontal_alignment(Horizontal::Center))
             .width(100.0)
             .on_press(NewAccountEvent::Ok);
@@ -95,7 +95,7 @@ impl<Message> Component<Message, iced::Renderer> for NewWalletAccount<Message> {
     }
 }
 
-impl<'a, Message> From<NewWalletAccount<Message>> for Element<'a, Message, iced::Renderer>
+impl<'a, Message> From<NewWalletAccount<Message>> for Element<'a, Message, Theme, iced::Renderer>
 where
     Message: 'a,
 {
