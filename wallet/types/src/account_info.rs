@@ -14,13 +14,14 @@
 // limitations under the License.
 
 use common::{
-    chain::{ChainConfig, GenBlock},
+    chain::{classic_multisig::ClassicMultisigChallenge, ChainConfig, Destination, GenBlock},
     primitives::{BlockHeight, Id},
 };
 use crypto::{
-    key::{extended::ExtendedPublicKey, hdkd::u31::U31},
+    key::{extended::ExtendedPublicKey, hdkd::u31::U31, PrivateKey},
     vrf::ExtendedVRFPublicKey,
 };
+use rpc_description::HasValueHint;
 use serialization::{Decode, Encode};
 
 pub const DEFAULT_ACCOUNT_INDEX: U31 = match U31::from_u32(0) {
@@ -105,4 +106,30 @@ impl AccountInfo {
 pub struct AccountVrfKeys {
     pub account_vrf_key: ExtendedVRFPublicKey,
     pub legacy_vrf_key: ExtendedVRFPublicKey,
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
+pub enum AccountStandaloneKey {
+    #[codec(index = 0)]
+    Address {
+        label: Option<String>,
+        private_key: Option<PrivateKey>,
+    },
+    #[codec(index = 1)]
+    Multisig {
+        label: Option<String>,
+        challenge: ClassicMultisigChallenge,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub enum AccountStandaloneKeyType {
+    Address,
+    Multisig,
+}
+
+pub struct AccountStandaloneKeyInfo {
+    pub address: Destination,
+    pub address_type: AccountStandaloneKeyType,
+    pub label: Option<String>,
 }

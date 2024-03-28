@@ -174,9 +174,9 @@ class WalletRpcController:
         self.wallet_commands_file.write(response.read())
         return json.loads(body)
 
-    async def create_wallet(self, name: str = "wallet") -> str:
+    async def create_wallet(self, name: str = "wallet", mnemonic: Optional[str] = None) -> str:
         wallet_file = os.path.join(self.node.datadir, name)
-        self._write_command("wallet_create", [wallet_file, True])
+        self._write_command("wallet_create", [wallet_file, True, mnemonic])
         return "New wallet created successfully"
 
     async def open_wallet(self, name: str = "wallet", password: Optional[str] = None, force_change_wallet_type: bool = False) -> str:
@@ -385,7 +385,11 @@ class WalletRpcController:
     async def sign_raw_transaction(self, transaction: str) -> str:
         result = self._write_command("account_sign_raw_transaction", [self.account, transaction, {'in_top_x_mb': 5}])
         if 'result' in result:
-            return f"The transaction has been fully signed and is ready to be broadcast to network\n\n{result['result']['hex']}"
+            if result['result']['is_complete']:
+                return f"The transaction has been fully signed and is ready to be broadcast to network\n\n{result['result']['hex']}"
+            else:
+                return f"Not all transaction inputs have been signed. This wallet does not have all the keys for that.\
+                             Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n{result['result']['hex']}"
         else:
             return result['error']['message']
 

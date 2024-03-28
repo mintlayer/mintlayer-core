@@ -28,10 +28,14 @@ pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlo
 use std::collections::BTreeMap;
 
 use wallet_types::{
-    account_info::AccountVrfKeys, chain_info::ChainInfo, keys::RootKeys,
-    seed_phrase::SerializableSeedPhrase, wallet_type::WalletType, AccountDerivationPathId,
-    AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId,
-    KeychainUsageState, WalletTx,
+    account_id::AccountAddress,
+    account_info::{AccountStandaloneKey, AccountVrfKeys},
+    chain_info::ChainInfo,
+    keys::RootKeys,
+    seed_phrase::SerializableSeedPhrase,
+    wallet_type::WalletType,
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
+    AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 /// Wallet Errors
@@ -75,6 +79,10 @@ pub trait WalletStorageReadLocked {
     fn get_account_unconfirmed_tx_counter(&self, account_id: &AccountId) -> Result<Option<u64>>;
     fn get_account_vrf_public_keys(&self, account_id: &AccountId)
         -> Result<Option<AccountVrfKeys>>;
+    fn get_account_standalone_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<BTreeMap<Destination, AccountStandaloneKey>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<String>>;
     fn get_addresses(
@@ -133,6 +141,8 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
         tx: &SignedTransaction,
     ) -> Result<()>;
     fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()>;
+    fn set_standalone_key(&mut self, id: &AccountAddress, key: &AccountStandaloneKey)
+        -> Result<()>;
     fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> Result<()>;
     fn del_account(&mut self, id: &AccountId) -> Result<()>;
     fn set_address(

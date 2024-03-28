@@ -16,7 +16,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use clap::ValueEnum;
-use wallet_types::utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes};
+use wallet_types::utxo_types::{UtxoState, UtxoType};
 
 use common::{
     address::Address,
@@ -34,23 +34,22 @@ pub enum CliUtxoTypes {
     Transfer,
     LockThenTransfer,
     CreateStakePool,
-    Burn,
     ProduceBlockFromStake,
-    CreateDelegationId,
-    DelegateStaking,
 }
 
 impl CliUtxoTypes {
-    pub fn to_wallet_types(self) -> UtxoTypes {
+    pub fn to_wallet_types(self) -> Vec<UtxoType> {
         match self {
-            CliUtxoTypes::All => UtxoTypes::ALL,
-            CliUtxoTypes::Transfer => UtxoType::Transfer.into(),
-            CliUtxoTypes::LockThenTransfer => UtxoType::LockThenTransfer.into(),
-            CliUtxoTypes::CreateStakePool => UtxoType::CreateStakePool.into(),
-            CliUtxoTypes::Burn => UtxoType::Burn.into(),
-            CliUtxoTypes::ProduceBlockFromStake => UtxoType::ProduceBlockFromStake.into(),
-            CliUtxoTypes::CreateDelegationId => UtxoType::CreateDelegationId.into(),
-            CliUtxoTypes::DelegateStaking => UtxoType::DelegateStaking.into(),
+            CliUtxoTypes::All => vec![
+                UtxoType::Transfer,
+                UtxoType::LockThenTransfer,
+                UtxoType::CreateStakePool,
+                UtxoType::ProduceBlockFromStake,
+            ],
+            CliUtxoTypes::Transfer => vec![UtxoType::Transfer],
+            CliUtxoTypes::LockThenTransfer => vec![UtxoType::LockThenTransfer],
+            CliUtxoTypes::CreateStakePool => vec![UtxoType::CreateStakePool],
+            CliUtxoTypes::ProduceBlockFromStake => vec![UtxoType::ProduceBlockFromStake],
         }
     }
 }
@@ -88,14 +87,11 @@ impl CliUtxoState {
         }
     }
 
-    pub fn to_wallet_states(value: Vec<CliUtxoState>) -> UtxoStates {
-        if let Some((first_state, rest)) = value.split_first() {
-            rest.iter().map(|s| s.to_wallet_type()).fold(
-                first_state.to_wallet_type().into(),
-                |acc: UtxoStates, x: UtxoState| acc | x,
-            )
+    pub fn to_wallet_states(value: Vec<CliUtxoState>) -> Vec<UtxoState> {
+        if !value.is_empty() {
+            value.iter().map(|s| s.to_wallet_type()).collect()
         } else {
-            UtxoState::Confirmed.into()
+            vec![UtxoState::Confirmed]
         }
     }
 }

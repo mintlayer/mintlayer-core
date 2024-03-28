@@ -33,8 +33,10 @@ use crate::send_request::{
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
+use common::address::pubkeyhash::PublicKeyHash;
 use common::address::{Address, AddressError};
 use common::chain::block::timestamp::BlockTimestamp;
+use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::signature::inputsig::arbitrary_message::{
     ArbitraryMessageSignature, SignArbitraryMessageError,
 };
@@ -53,7 +55,7 @@ use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::u31::U31;
-use crypto::key::PublicKey;
+use crypto::key::{PrivateKey, PublicKey};
 use crypto::vrf::VRFPublicKey;
 use mempool::FeeRate;
 use pos_accounting::make_delegation_id;
@@ -65,6 +67,7 @@ use wallet_storage::{
     TransactionRwUnlocked, Transactional, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
+use wallet_types::account_info::{AccountStandaloneKey, AccountStandaloneKeyInfo};
 use wallet_types::chain_info::ChainInfo;
 use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
@@ -208,8 +211,6 @@ pub enum WalletError {
     PartiallySignedTransactionInDecommissionCommand,
     #[error("Failed to create decommission request as all the signatures are present. Use staking-decommission-pool command.")]
     FullySignedTransactionInDecommissionReq,
-    #[error("Input cannot be signed")]
-    InputCannotBeSigned,
     #[error("Destination does not belong to this wallet")]
     DestinationNotFromThisWallet,
     #[error("Sign message error: {0}")]
@@ -220,6 +221,8 @@ pub enum WalletError {
     FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
     #[error("The specified address is not found in this wallet")]
     AddressNotFound,
+    #[error("The specified standalone address is not found in this wallet")]
+    StandaloneAddressNotFound,
 }
 
 /// Result type used for the wallet
@@ -983,6 +986,27 @@ impl<B: storage::Backend> Wallet<B> {
         )
     }
 
+    pub fn get_multisig_utxos(
+        &self,
+        account_index: U31,
+        utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>> {
+        let account = self.get_account(account_index)?;
+        let utxos = account.get_multisig_utxos(
+            utxo_types,
+            self.latest_median_time,
+            utxo_states,
+            with_locked,
+        );
+        let utxos = utxos
+            .into_iter()
+            .map(|(outpoint, (txo, token_id))| (outpoint, txo.clone(), token_id))
+            .collect();
+        Ok(utxos)
+    }
+
     pub fn get_utxos(
         &self,
         account_index: U31,
@@ -1081,6 +1105,39 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(block_ids)
     }
 
+    pub fn add_standalone_address(
+        &mut self,
+        account_index: U31,
+        public_key_hash: PublicKeyHash,
+        label: Option<String>,
+    ) -> WalletResult<()> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.add_standalone_address(db_tx, public_key_hash, label)
+        })
+    }
+
+    pub fn add_standalone_private_key(
+        &mut self,
+        account_index: U31,
+        private_key: PrivateKey,
+        label: Option<String>,
+    ) -> WalletResult<()> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.add_standalone_private_key(db_tx, private_key, label)
+        })
+    }
+
+    pub fn add_standalone_multisig(
+        &mut self,
+        account_index: U31,
+        challenge: ClassicMultisigChallenge,
+        label: Option<String>,
+    ) -> WalletResult<PublicKeyHash> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.add_standalone_multisig(db_tx, challenge, label)
+        })
+    }
+
     pub fn get_new_address(
         &mut self,
         account_index: U31,
@@ -1146,6 +1203,27 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<BTreeMap<ChildNumber, Address<Destination>>> {
         let account = self.get_account(account_index)?;
         Ok(account.get_all_issued_addresses())
+    }
+
+    pub fn get_all_standalone_addresses(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<Vec<AccountStandaloneKeyInfo>> {
+        let account = self.get_account(account_index)?;
+        Ok(account.get_all_standalone_addresses())
+    }
+
+    pub fn get_all_standalone_address_details(
+        &self,
+        account_index: U31,
+        address: Destination,
+    ) -> WalletResult<(
+        Destination,
+        BTreeMap<Currency, Amount>,
+        &AccountStandaloneKey,
+    )> {
+        let account = self.get_account(account_index)?;
+        account.get_all_standalone_address_details(address, self.latest_median_time)
     }
 
     pub fn get_all_issued_vrf_public_keys(

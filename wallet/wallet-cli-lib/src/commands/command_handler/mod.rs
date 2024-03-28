@@ -36,8 +36,10 @@ use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     Balances, ComposedTransaction, ControllerConfig, CreatedWallet, InspectTransaction,
-    NewTransaction, NftMetadata, SignatureStats, TokenMetadata, ValidatedSignatures,
+    NewTransaction, NftMetadata, SignatureStats, StandaloneAddressDetails, TokenMetadata,
+    ValidatedSignatures,
 };
+use wallet_types::account_info::AccountStandaloneKeyType;
 
 use crate::errors::WalletCliError;
 
@@ -375,6 +377,76 @@ where
                 Ok(ConsoleCommand::Print(addresses_table.to_string()))
             }
 
+            ColdWalletCommand::ShowStandaloneAddresses => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                let addresses_with_label =
+                    wallet.get_standalone_addresses(selected_account).await?;
+
+                let addresses_table = {
+                    let mut addresses_table = prettytable::Table::new();
+                    addresses_table.set_titles(prettytable::row!["Address", "Type", "Label",]);
+
+                    addresses_table.extend(addresses_with_label.into_iter().map(|info| {
+                        let label = info.label.unwrap_or_default();
+                        let address_type = match info.address_type {
+                            AccountStandaloneKeyType::Address => "Address",
+                            AccountStandaloneKeyType::Multisig => "Multisig",
+                        };
+                        prettytable::row![info.address, address_type, label]
+                    }));
+
+                    addresses_table
+                };
+
+                Ok(ConsoleCommand::Print(addresses_table.to_string()))
+            }
+
+            ColdWalletCommand::ShowStandaloneAddressDetails { address } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                let addr_details =
+                    wallet.get_standalone_address_details(selected_account, address).await?;
+
+                let label_str =
+                    addr_details.label.map_or("None".into(), |label| format!("\"{label}\""));
+                let mut output = match addr_details.details {
+                    StandaloneAddressDetails::Address { has_private_key } => {
+                        let has_private_key = if has_private_key { "Yes" } else { "No" };
+
+                        format!(
+                            "Address: {}, label: {}, has_private_key: {}\nBalances:",
+                            addr_details.address, label_str, has_private_key
+                        )
+                    }
+                    StandaloneAddressDetails::Multisig {
+                        min_required_signatures,
+                        public_keys,
+                    } => {
+                        format!(
+                            "Address: {}, label: {}, min_required_signatures: {}, public_keys: {}",
+                            addr_details.address,
+                            label_str,
+                            min_required_signatures,
+                            public_keys.iter().join(", ")
+                        )
+                    }
+                };
+                let (coins, tokens) = addr_details.balances.into_coins_and_tokens();
+                let coins = coins.decimal();
+                writeln!(&mut output, "Coins amount: {coins}\n")
+                    .expect("Writing to a memory buffer should not fail");
+
+                for (token_id, amount) in tokens {
+                    let token_id = Address::new(chain_config, token_id)
+                        .expect("Encoding token id should never fail");
+                    let amount = amount.decimal();
+                    writeln!(&mut output, "Token: {token_id} amount: {amount}")
+                        .expect("Writing to a memory buffer should not fail");
+                }
+                output.pop();
+
+                Ok(ConsoleCommand::Print(output))
+            }
+
             ColdWalletCommand::NewVrfPublicKey => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let vrf_public_key = wallet.new_vrf_public_key(selected_account).await?;
@@ -625,6 +697,92 @@ where
                     status: self.repl_status().await?,
                     print_message: "Success, the account name has been successfully renamed".into(),
                 })
+            }
+
+            WalletCommand::AddStandaloneKey {
+                address,
+                label,
+                no_rescan,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                wallet
+                    .add_standalone_address(
+                        selected_account,
+                        address,
+                        label,
+                        no_rescan.unwrap_or(false),
+                    )
+                    .await?;
+
+                Ok(ConsoleCommand::SetStatus {
+                    status: self.repl_status().await?,
+                    print_message: "Success, the new address has been added to the account".into(),
+                })
+            }
+
+            WalletCommand::AddStandalonePrivateKey {
+                hex_private_key,
+                label,
+                no_rescan,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                wallet
+                    .add_standalone_private_key(
+                        selected_account,
+                        hex_private_key,
+                        label,
+                        no_rescan.unwrap_or(false),
+                    )
+                    .await?;
+
+                Ok(ConsoleCommand::SetStatus {
+                    status: self.repl_status().await?,
+                    print_message: "Success, the new private key has been added to the account"
+                        .into(),
+                })
+            }
+
+            WalletCommand::AddStandaloneMultisig {
+                min_required_signatures,
+                public_keys,
+                label,
+                no_rescan,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                let multisig_address = wallet
+                    .add_standalone_multisig(
+                        selected_account,
+                        min_required_signatures,
+                        public_keys,
+                        label,
+                        no_rescan.unwrap_or(false),
+                    )
+                    .await?;
+
+                Ok(ConsoleCommand::SetStatus {
+                    status: self.repl_status().await?,
+                    print_message: format!("Success. The following new multisig address has been added to the account\n{multisig_address}")
+                })
+            }
+
+            WalletCommand::ListMultisigUtxo {
+                utxo_type,
+                with_locked,
+                utxo_states,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                let utxos = wallet
+                    .get_multisig_utxos(
+                        selected_account,
+                        utxo_type.to_wallet_types(),
+                        CliUtxoState::to_wallet_states(utxo_states),
+                        with_locked.to_wallet_type(),
+                    )
+                    .await
+                    .map(serde_json::Value::Array)?;
+                Ok(ConsoleCommand::Print(
+                    serde_json::to_string(&utxos).expect("ok"),
+                ))
             }
 
             WalletCommand::SelectAccount { account_index } => {
