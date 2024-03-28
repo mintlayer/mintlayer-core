@@ -35,11 +35,10 @@ pub fn view_transactions(
     let mut transactions = Column::new();
 
     let current_transaction_list = &account.transaction_list;
-    let mut transaction_list = Grid::new().push(
+    let mut transaction_list = Grid::new().width(Length::Fill).push(
         GridRow::new()
             .push(field("#".into()))
             .push(field("Transaction Id".into()))
-            .push(field(String::new()))
             .push(field("Timestamp (UTC)".into()))
             .push(field("Type".into()))
             .push(field("Amount".into()))
@@ -59,16 +58,20 @@ pub fn view_transactions(
         transaction_list = transaction_list.push(
             GridRow::new()
                 .push(field(format!("{}", current_transaction_list.skip + index)))
-                .push(
+                .push(row![
                     tooltip(
-                        field(tx.txid.to_string()),
+                        container(Text::new(tx.txid.to_string()).font(iced::font::Font {
+                            family: iced::font::Family::Monospace,
+                            weight: Default::default(),
+                            stretch: Default::default(),
+                            style: iced::font::Style::Normal,
+                        }))
+                        .padding(5),
                         Text::new(full_tx_id_str.clone()),
                         Position::Bottom,
                     )
                     .gap(5)
                     .style(iced::theme::Container::Box),
-                )
-                .push(
                     button(
                         Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
                             .font(iced_aw::BOOTSTRAP_FONT),
@@ -76,7 +79,7 @@ pub fn view_transactions(
                     .style(iced::theme::Button::Text)
                     .width(Length::Shrink)
                     .on_press(WalletMessage::CopyToClipboard(full_tx_id_str)),
-                )
+                ])
                 .push(field(timestamp))
                 .push(field(tx.tx_type.type_name().to_owned()))
                 .push(field(amount_str))

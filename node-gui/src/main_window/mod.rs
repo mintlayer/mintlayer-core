@@ -55,7 +55,7 @@ enum ActiveDialog {
     WalletCreate {
         generated_mnemonic: wallet_controller::mnemonic::Mnemonic,
     },
-    WalletImport,
+    WalletRecover,
     WalletSetPassword {
         wallet_id: WalletId,
     },
@@ -251,8 +251,8 @@ impl MainWindow {
                     self.active_dialog = ActiveDialog::WalletCreate { generated_mnemonic };
                     Command::none()
                 }
-                MenuMessage::ImportWallet => {
-                    self.active_dialog = ActiveDialog::WalletImport;
+                MenuMessage::RecoverWallet => {
+                    self.active_dialog = ActiveDialog::WalletRecover;
                     Command::none()
                 }
                 MenuMessage::OpenWallet => {
@@ -710,7 +710,7 @@ impl MainWindow {
                 )
                 .into(),
 
-                ActiveDialog::WalletImport => wallet_mnemonic_dialog(
+                ActiveDialog::WalletRecover => wallet_mnemonic_dialog(
                     None,
                     Box::new(|mnemonic| MainWindowMessage::ImportWalletMnemonic {
                         mnemonic,

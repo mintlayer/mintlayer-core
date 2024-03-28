@@ -31,7 +31,7 @@ use crate::{backend::messages::AccountInfo, main_window::print_coin_amount};
 use super::{stake::MATURITY_PERIOD_TOOLTIP_TEXT, WalletMessage};
 
 const POOL_ID_TOOLTIP_TEXT: &str =
-    "The pool id of the pool that will get the delegation and stake the coins.";
+    "The pool address of the pool that will get the delegation and stake the coins.";
 const DELEGATION_ADDRESS_TOOLTIP_TEXT: &str =
     "The address, that will have the authority to sign withdrawals from a pool.";
 
@@ -70,16 +70,15 @@ pub fn view_delegation(
                     .push(field(String::new())),
             )
         } else {
-            let mut delegation_balance_grid = Grid::new().push(
-                GridRow::new()
-                    .push(field("Delegation Id".to_owned()))
-                    .push(field("".to_owned()))
-                    .push(field("Pool Id".to_owned()))
-                    .push(field("".to_owned()))
-                    .push(field("Delegation balance".to_owned()))
-                    .push(field("".to_owned()))
-                    .push(field("".to_owned())),
-            );
+            let mut delegation_balance_grid =
+                Grid::new().width(Length::Shrink).column_width(Length::Shrink).push(
+                    GridRow::new()
+                        .push(field("Delegation Address".to_owned()))
+                        .push(field("Pool Address".to_owned()))
+                        .push(field("Delegation balance".to_owned()))
+                        .push(field("".to_owned()))
+                        .push(field("".to_owned())),
+                );
             for (delegation_id, pool_id, balance) in account
                 .delegations_balance
                 .iter()
@@ -93,16 +92,22 @@ pub fn view_delegation(
                     delegate_staking_amounts.get(&delegation_id).cloned().unwrap_or(String::new());
                 delegation_balance_grid = delegation_balance_grid.push(
                     GridRow::new()
-                        .push(
+                        .push(row![
                             tooltip(
-                                field(delegation_address.to_short_string()),
+                                container(Text::new(delegation_address.to_short_string()).font(
+                                    iced::font::Font {
+                                        family: iced::font::Family::Monospace,
+                                        weight: Default::default(),
+                                        stretch: Default::default(),
+                                        style: iced::font::Style::Normal,
+                                    }
+                                ))
+                                .padding(5),
                                 Text::new(delegation_address.to_string()),
                                 Position::Bottom,
                             )
                             .gap(5)
                             .style(iced::theme::Container::Box),
-                        )
-                        .push(
                             button(
                                 Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
                                     .font(iced_aw::BOOTSTRAP_FONT),
@@ -112,17 +117,23 @@ pub fn view_delegation(
                             .on_press(WalletMessage::CopyToClipboard(
                                 delegation_address.to_string(),
                             )),
-                        )
-                        .push(
+                        ])
+                        .push(row![
                             tooltip(
-                                field(pool_address.to_short_string()),
+                                container(Text::new(pool_address.to_short_string()).font(
+                                    iced::font::Font {
+                                        family: iced::font::Family::Monospace,
+                                        weight: Default::default(),
+                                        stretch: Default::default(),
+                                        style: iced::font::Style::Normal,
+                                    }
+                                ))
+                                .padding(5),
                                 Text::new(pool_address.to_string()),
                                 Position::Bottom,
                             )
                             .gap(5)
                             .style(iced::theme::Container::Box),
-                        )
-                        .push(
                             button(
                                 Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
                                     .font(iced_aw::BOOTSTRAP_FONT),
@@ -130,7 +141,7 @@ pub fn view_delegation(
                             .style(iced::theme::Button::Text)
                             .width(Length::Shrink)
                             .on_press(WalletMessage::CopyToClipboard(pool_address.to_string())),
-                        )
+                        ])
                         .push(field(print_coin_amount(chain_config, balance)))
                         .push(
                             text_input("Amount", &delegate_staking_amount)
@@ -177,7 +188,7 @@ pub fn view_delegation(
         ],
         // ----- Create delegation
         row![
-            text_input("Pool Id for new delegation", pool_id)
+            text_input("Pool address for new delegation", pool_id)
                 .on_input(|value| {
                     if value.chars().all(|ch| ch.is_ascii_alphanumeric()) {
                         WalletMessage::DelegationPoolIdEdit(value)
@@ -268,7 +279,7 @@ pub fn view_delegation(
             .style(iced::theme::Container::Box)
         ],
         row![
-            text_input("Delegation Id", send_delegation_id)
+            text_input("Delegation address", send_delegation_id)
                 .on_input(|value| {
                     if value.chars().all(|ch| ch.is_ascii_alphanumeric()) {
                         WalletMessage::SendDelegationIdEdit(value)

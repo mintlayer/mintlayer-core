@@ -24,7 +24,7 @@ use iced_aw::menu::{Item, Menu, MenuBar};
 pub enum MenuMessage {
     NoOp,
     CreateNewWallet,
-    ImportWallet,
+    RecoverWallet,
     OpenWallet,
     Exit,
 }
@@ -38,10 +38,8 @@ impl MainMenu {
 
     pub fn view(&self) -> Element<MenuMessage> {
         let file_menu = make_menu_file();
-        let help_menu = make_menu_help();
 
-        let menu_bar =
-            MenuBar::new(vec![file_menu, help_menu]).spacing(4.0).check_bounds_width(30.0);
+        let menu_bar = MenuBar::new(vec![file_menu]).spacing(4.0).check_bounds_width(30.0);
 
         let c = iced::widget::column![container(menu_bar)];
 
@@ -105,22 +103,13 @@ fn make_menu_file<'a>() -> Item<'a, MenuMessage, Theme, iced::Renderer> {
         labeled_button("File", MenuMessage::NoOp),
         Menu::new(vec![
             menu_item("Create new wallet", MenuMessage::CreateNewWallet),
-            menu_item("Import wallet", MenuMessage::ImportWallet),
+            menu_item("Recover wallet", MenuMessage::RecoverWallet),
             menu_item("Open wallet", MenuMessage::OpenWallet),
             // TODO: enable setting when needed
             // menu_item("Settings", MenuMessage::NoOp),
             menu_item("Exit", MenuMessage::Exit),
         ])
         .width(110),
-    );
-
-    root
-}
-
-fn make_menu_help<'a>() -> Item<'a, MenuMessage, Theme, iced::Renderer> {
-    let root = Item::with_menu(
-        labeled_button("Help", MenuMessage::NoOp),
-        Menu::new(vec![menu_item("About", MenuMessage::NoOp)]).width(110),
     );
 
     root
