@@ -23,9 +23,9 @@ use common::{
     chain::{
         block::ConsensusData,
         output_value::OutputValue,
-        tokens::{IsTokenUnfreezable, TokenId},
-        AccountCommand, AccountSpending, Block, ChainConfig, OutPointSourceId, Transaction,
-        TxInput, TxOutput, UtxoOutPoint,
+        tokens::{IsTokenUnfreezable, NftIssuance, TokenId, TokenTotalSupply},
+        AccountCommand, AccountSpending, Block, ChainConfig, Destination, OutPointSourceId,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Idable},
     Uint256,
@@ -147,17 +147,24 @@ pub fn txoutput_to_json(
                 "type": "IssueNft",
                 "token_id": Address::new(chain_config, *token_id).expect("no error").as_str(),
                 "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
-                "data": data,
+                "data": nft_issuance_data_to_json(data, chain_config),
             })
         }
         TxOutput::IssueFungibleToken(data) => match data.as_ref() {
             common::chain::tokens::TokenIssuance::V1(data) => {
+                let supply = match data.total_supply {
+                    TokenTotalSupply::Lockable => json!({"type": "Lockable"}),
+                    TokenTotalSupply::Unlimited => json!({"type": "Unlimited"}),
+                    TokenTotalSupply::Fixed(amount) => {
+                        json!({"type": "Fixed", "amount": amount_to_json(amount, data.number_of_decimals)})
+                    }
+                };
                 json!({
                     "type": "IssueFungibleToken",
-                    "token_ticker": data.token_ticker,
+                    "token_ticker": to_json_string(&data.token_ticker),
                     "number_of_decimals": data.number_of_decimals,
-                    "metadata_uri": data.metadata_uri,
-                    "total_supply": data.total_supply,
+                    "metadata_uri": to_json_string(&data.metadata_uri),
+                    "total_supply": supply,
                     "authority": Address::new(chain_config, data.authority.clone()).expect("no error").as_str(),
                     "is_freezable": data.is_freezable,
                 })
@@ -174,6 +181,33 @@ pub fn txoutput_to_json(
                 "type": "ProduceBlockFromStake",
                 "pool_id": Address::new(chain_config, *pool_id).expect("no error").as_str(),
                 "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
+            })
+        }
+    }
+}
+
+pub fn nft_issuance_data_to_json(
+    data: &NftIssuance,
+    chain_config: &ChainConfig,
+) -> serde_json::Value {
+    match data {
+        NftIssuance::V0(data) => {
+            json!({
+                "creator": data.metadata.creator.as_ref().map(|addr| {
+                    Address::new(
+                        chain_config,
+                        Destination::PublicKey(addr.public_key.clone()),
+                    )
+                    .expect("no error")
+                    .into_string()
+                }),
+                "name": to_json_string(&data.metadata.name),
+                "description": to_json_string(&data.metadata.description),
+                "ticker": to_json_string(&data.metadata.ticker),
+                "icon_uri": data.metadata.icon_uri.as_opt_slice().map(to_json_string),
+                "additional_metadata_uri": data.metadata.additional_metadata_uri.as_opt_slice().map(to_json_string),
+                "media_uri": data.metadata.media_uri.as_opt_slice().map(to_json_string),
+                "media_hash": to_json_string(&data.metadata.media_hash),
             })
         }
     }
