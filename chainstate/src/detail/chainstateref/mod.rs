@@ -1084,7 +1084,9 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             let mut block_status = block_index.status();
             ensure!(
                 block_status.is_ok(),
-                BlockError::InvariantErrorAttemptToConnectInvalidBlock(block_index.get_id().into())
+                BlockError::InvariantErrorAttemptToConnectInvalidBlock(
+                    (*block_index.block_id()).into()
+                )
             );
 
             let block: WithId<Block> = self
