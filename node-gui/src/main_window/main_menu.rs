@@ -95,7 +95,7 @@ fn labeled_button<'a>(label: &str, msg: MenuMessage) -> button::Button<'a, MenuM
 }
 
 fn menu_item(label: &str, msg: MenuMessage) -> Item<'_, MenuMessage, Theme, iced::Renderer> {
-    Item::new(labeled_button(label, msg).width(Length::Fixed(100.0)))
+    Item::new(labeled_button(label, msg).width(Length::Fixed(140.0)))
 }
 
 fn make_menu_file<'a>() -> Item<'a, MenuMessage, Theme, iced::Renderer> {
@@ -109,7 +109,7 @@ fn make_menu_file<'a>() -> Item<'a, MenuMessage, Theme, iced::Renderer> {
             // menu_item("Settings", MenuMessage::NoOp),
             menu_item("Exit", MenuMessage::Exit),
         ])
-        .width(110),
+        .width(140),
     );
 
     root
