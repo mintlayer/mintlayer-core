@@ -22,7 +22,7 @@ use common::{
 use super::account::{RpcAccountCommand, RpcAccountSpending};
 
 #[derive(Debug, Clone, serde::Serialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "content")]
 pub enum RpcTxInput {
     Utxo {
         source_id: RpcOutPointSourceId,
@@ -65,7 +65,7 @@ impl RpcTxInput {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "content")]
 pub enum RpcOutPointSourceId {
     Transaction { tx_id: Id<Transaction> },
     BlockReward { block_id: Id<GenBlock> },

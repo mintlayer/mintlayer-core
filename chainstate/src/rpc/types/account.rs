@@ -23,7 +23,7 @@ use common::{
 };
 
 #[derive(Debug, Clone, serde::Serialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "content")]
 pub enum RpcAccountSpending {
     DelegationBalance {
         delegation_id: RpcAddress<DelegationId>,
@@ -49,7 +49,7 @@ impl RpcAccountSpending {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "content")]
 pub enum RpcAccountCommand {
     MintTokens {
         token_id: RpcAddress<TokenId>,

@@ -24,7 +24,7 @@ use common::{
 use rpc::types::{RpcHexString, RpcString};
 
 #[derive(Debug, Clone, serde::Serialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "content")]
 pub enum RpcTokenTotalSupply {
     Fixed { amount: RpcAmountOut },
     Lockable,

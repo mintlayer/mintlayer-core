@@ -24,7 +24,7 @@ use rpc::types::RpcHexString;
 use super::{block::RpcTypeSerializationError, input::RpcTxInput};
 
 #[derive(Debug, Clone, serde::Serialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "content")]
 pub enum RpcConsensusData {
     None,
     PoW,
