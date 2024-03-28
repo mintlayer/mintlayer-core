@@ -15,6 +15,7 @@
 
 use chainstate_types::BlockIndex;
 use common::{
+    address::AddressError,
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id, Idable},
 };
@@ -24,6 +25,14 @@ use super::{
     block_reward::RpcBlockReward, consensus_data::RpcConsensusData,
     signed_transaction::RpcSignedTransaction,
 };
+
+#[derive(thiserror::Error, Debug)]
+pub enum RpcTypeSerializationError {
+    #[error("Address error: {0}")]
+    Address(#[from] AddressError),
+    #[error("FromHex error: {0}")]
+    FromHex(#[from] hex::FromHexError),
+}
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RpcBlock {
@@ -46,7 +55,7 @@ impl RpcBlock {
         chain_config: &ChainConfig,
         block: Block,
         block_index: BlockIndex,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, RpcTypeSerializationError> {
         let rpc_consensus_data = RpcConsensusData::new(chain_config, block.consensus_data())?;
         let rpc_block_reward = RpcBlockReward::new(chain_config, block.block_reward())?;
         let rpc_transactions = block

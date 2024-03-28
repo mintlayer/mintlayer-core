@@ -21,7 +21,7 @@ use common::{
 };
 use rpc::types::RpcHexString;
 
-use super::input::RpcTxInput;
+use super::{block::RpcTypeSerializationError, input::RpcTxInput};
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(tag = "type")]
@@ -35,7 +35,7 @@ impl RpcConsensusData {
     pub fn new(
         chain_config: &ChainConfig,
         consensus_data: &ConsensusData,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, RpcTypeSerializationError> {
         let rpc_consensus_data = match consensus_data {
             ConsensusData::None => RpcConsensusData::None,
             ConsensusData::PoW(_) => RpcConsensusData::PoW,
