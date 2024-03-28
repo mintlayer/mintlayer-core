@@ -18,13 +18,14 @@
 use rpc::description::{Described, HasValueHint, Module, ValueHint as VH};
 
 use expect_test::expect_file;
+use serde_json::json;
 
 #[test]
 fn value_hint_trivial() {
     // Check trivial corner cases
     assert_eq!(VH::Prim("x").to_string(), "x");
     assert_eq!(VH::Choice(&[]).to_string(), "impossible");
-    assert_eq!(VH::Object(&[]).to_string(), "{}");
+    assert_eq!(VH::object(&[]).to_string(), "{}");
 }
 
 #[test]
@@ -32,30 +33,30 @@ fn value_hint_render() {
     // Set up a rather convoluted value hint, check what its string representation is
 
     const AUTH_HINT: VH = VH::Choice(&[
-        &VH::Object(&[
+        &VH::object(&[
             ("username", &VH::Prim("string")),
             (
                 "password",
                 &VH::Choice(&[
                     &VH::STRING,
                     &VH::NULL,
-                    &VH::Object(&[
+                    &VH::object(&[
                         ("password_file", &VH::STRING),
                         ("key", &VH::Choice(&[&VH::STRING, &VH::NUMBER, &VH::NULL])),
                     ]),
                 ]),
             ),
         ]),
-        &VH::Object(&[("cookie_file", &VH::STRING)]),
+        &VH::object(&[("cookie_file", &VH::STRING)]),
         &VH::NULL,
     ]);
 
     const COMMAND_HINT: VH = VH::Choice(&[
-        &VH::Object(&[("launch_missiles", &VH::NUMBER)]),
+        &VH::object(&[("launch_missiles", &VH::NUMBER)]),
         &VH::Prim("\"check_missile_stock\""),
     ]);
 
-    const HINT: VH = VH::Object(&[("auth", &AUTH_HINT), ("command", &COMMAND_HINT)]);
+    const HINT: VH = VH::object(&[("auth", &AUTH_HINT), ("command", &COMMAND_HINT)]);
 
     expect_file!["./HINT_RENDER.md"].assert_eq(&format!("{HINT}\n"));
 }
@@ -85,6 +86,36 @@ fn value_hint_untagged() {
 
     let actual = Untagged::HINT_SER.to_string();
     expect_file!["./HINT_UNTAGGED.txt"].assert_eq(&actual);
+}
+
+#[test]
+fn value_hint_internally_tagged() {
+    #[derive(HasValueHint, serde::Serialize)]
+    #[allow(unused)]
+    struct BigObject {
+        field: String,
+        maybe_number: Option<u64>,
+        flag: bool,
+    }
+
+    #[derive(HasValueHint, serde::Serialize)]
+    #[serde(tag = "kind")]
+    #[allow(unused)]
+    enum ExternallyTagged {
+        Hello,
+        World,
+        String { value: String },
+        BigObject(BigObject),
+    }
+
+    let json_hello = serde_json::to_value(ExternallyTagged::Hello).unwrap();
+    assert_eq!(json_hello, json!({"kind": "Hello"}));
+
+    let json_string = serde_json::to_value(ExternallyTagged::String { value: "x".into() }).unwrap();
+    assert_eq!(json_string, json!({"kind": "String", "value": "x"}));
+
+    let hint = ExternallyTagged::HINT_SER.to_string();
+    expect_file!["./HINT_EXTERNALLY_TAGGED.txt"].assert_eq(&hint);
 }
 
 #[test]

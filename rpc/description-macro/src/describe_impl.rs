@@ -221,7 +221,7 @@ impl quote::ToTokens for MethodMeta<'_> {
             ::rpc::description::Method {
                 name: #name,
                 description: #docs,
-                params: ::rpc::description::ValueHint::Object(&[#(#params),*]),
+                params: ::rpc::description::ValueHint::object(&[#(#params),*]),
                 kind_data: #kind_data,
             }
         })

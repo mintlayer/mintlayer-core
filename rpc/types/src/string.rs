@@ -151,8 +151,8 @@ impl From<RpcHexString> for RpcString {
 
 impl HasValueHint for RpcString {
     const HINT_SER: VH =
-        VH::Object(&[("text", &<Option<String>>::HINT_SER), ("hex", &VH::HEX_STRING)]);
-    const HINT_DE: VH = VH::Choice(&[&VH::STRING, &VH::Object(&[("hex", &VH::HEX_STRING)])]);
+        VH::object(&[("text", &<Option<String>>::HINT_SER), ("hex", &VH::HEX_STRING)]);
+    const HINT_DE: VH = VH::Choice(&[&VH::STRING, &VH::object(&[("hex", &VH::HEX_STRING)])]);
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
