@@ -421,59 +421,43 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                 .await;
             }
             TxOutput::Transfer(output_value, destination)
-            | TxOutput::LockThenTransfer(output_value, destination, _) => match destination {
-                Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
-                    let address = Address::<Destination>::new(&chain_config, destination.clone())
-                        .expect("Unable to encode destination");
-                    match output_value {
-                        OutputValue::TokenV0(_) => {}
-                        OutputValue::TokenV1(token_id, amount) => {
-                            increase_address_amount(
-                                db_tx,
-                                &address,
-                                amount,
-                                CoinOrTokenId::TokenId(*token_id),
-                                block_height,
-                            )
-                            .await;
-                        }
-                        OutputValue::Coin(amount) => {
-                            increase_address_amount(
-                                db_tx,
-                                &address,
-                                amount,
-                                CoinOrTokenId::Coin,
-                                block_height,
-                            )
-                            .await;
-                        }
+            | TxOutput::LockThenTransfer(output_value, destination, _) => {
+                let address = Address::<Destination>::new(&chain_config, destination.clone())
+                    .expect("Unable to encode destination");
+                match output_value {
+                    OutputValue::TokenV0(_) => {}
+                    OutputValue::TokenV1(token_id, amount) => {
+                        increase_address_amount(
+                            db_tx,
+                            &address,
+                            amount,
+                            CoinOrTokenId::TokenId(*token_id),
+                            block_height,
+                        )
+                        .await;
                     }
-                    set_utxo(
-                        OutPointSourceId::BlockReward(block_id),
-                        idx,
-                        output,
-                        db_tx,
-                        block_height,
-                        false,
-                        &chain_config,
-                    )
-                    .await;
+                    OutputValue::Coin(amount) => {
+                        increase_address_amount(
+                            db_tx,
+                            &address,
+                            amount,
+                            CoinOrTokenId::Coin,
+                            block_height,
+                        )
+                        .await;
+                    }
                 }
-                Destination::AnyoneCanSpend => {
-                    // for tests
-                    set_utxo(
-                        OutPointSourceId::BlockReward(block_id),
-                        idx,
-                        output,
-                        db_tx,
-                        block_height,
-                        false,
-                        &chain_config,
-                    )
-                    .await;
-                }
-                Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
-            },
+                set_utxo(
+                    OutPointSourceId::BlockReward(block_id),
+                    idx,
+                    output,
+                    db_tx,
+                    block_height,
+                    false,
+                    &chain_config,
+                )
+                .await;
+            }
         }
     }
 
@@ -969,70 +953,58 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         | TxOutput::IssueFungibleToken(_)
                         | TxOutput::CreateStakePool(_, _)
                         | TxOutput::ProduceBlockFromStake(_, _) => {}
-                        TxOutput::IssueNft(token_id, _, destination) => match destination {
-                            Destination::AnyoneCanSpend
-                            | Destination::ClassicMultisig(_)
-                            | Destination::ScriptHash(_) => {}
-                            Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
-                                let address =
-                                    Address::<Destination>::new(&chain_config, destination)
-                                        .expect("Unable to encode destination");
+                        TxOutput::IssueNft(token_id, _, destination) => {
+                            let address = Address::<Destination>::new(&chain_config, destination)
+                                .expect("Unable to encode destination");
 
-                                address_transactions
-                                    .entry(address.clone())
-                                    .or_default()
-                                    .insert(tx.get_id());
+                            address_transactions
+                                .entry(address.clone())
+                                .or_default()
+                                .insert(tx.get_id());
 
-                                decrease_address_amount(
-                                    db_tx,
-                                    address,
-                                    &Amount::from_atoms(1),
-                                    CoinOrTokenId::TokenId(token_id),
-                                    block_height,
-                                )
-                                .await;
-                            }
-                        },
+                            decrease_address_amount(
+                                db_tx,
+                                address,
+                                &Amount::from_atoms(1),
+                                CoinOrTokenId::TokenId(token_id),
+                                block_height,
+                            )
+                            .await;
+                        }
                         TxOutput::LockThenTransfer(output_value, destination, _)
-                        | TxOutput::Transfer(output_value, destination) => match destination {
-                            Destination::AnyoneCanSpend
-                            | Destination::ClassicMultisig(_)
-                            | Destination::ScriptHash(_) => {}
-                            Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
-                                let address =
-                                    Address::<Destination>::new(&chain_config, destination)
-                                        .expect("Unable to encode destination");
+                        | TxOutput::Transfer(output_value, destination) => {
+                            let address = Address::<Destination>::new(&chain_config, destination)
+                                .expect("Unable to encode destination");
 
-                                address_transactions
-                                    .entry(address.clone())
-                                    .or_default()
-                                    .insert(tx.get_id());
+                            address_transactions
+                                .entry(address.clone())
+                                .or_default()
+                                .insert(tx.get_id());
 
-                                match output_value {
-                                    OutputValue::TokenV0(_) => {}
-                                    OutputValue::TokenV1(token_id, amount) => {
-                                        decrease_address_amount(
-                                            db_tx,
-                                            address,
-                                            &amount,
-                                            CoinOrTokenId::TokenId(token_id),
-                                            block_height,
-                                        )
-                                        .await;
-                                    }
-                                    OutputValue::Coin(amount) => {
-                                        decrease_address_amount(
-                                            db_tx,
-                                            address,
-                                            &amount,
-                                            CoinOrTokenId::Coin,
-                                            block_height,
-                                        )
-                                        .await;
-                                    }
+                            match output_value {
+                                OutputValue::TokenV0(_) => {}
+                                OutputValue::TokenV1(token_id, amount) => {
+                                    decrease_address_amount(
+                                        db_tx,
+                                        address,
+                                        &amount,
+                                        CoinOrTokenId::TokenId(token_id),
+                                        block_height,
+                                    )
+                                    .await;
+                                }
+                                OutputValue::Coin(amount) => {
+                                    decrease_address_amount(
+                                        db_tx,
+                                        address,
+                                        &amount,
+                                        CoinOrTokenId::Coin,
+                                        block_height,
+                                    )
+                                    .await;
                                 }
                             }
-                        },
+                        }
                     }
                 }
             },
@@ -1174,64 +1146,46 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 .expect("Unable to encode address");
                 address_transactions.entry(address.clone()).or_default().insert(transaction_id);
             }
-            TxOutput::Transfer(output_value, destination) => match destination {
-                Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
-                    let address = Address::<Destination>::new(&chain_config, destination.clone())
-                        .expect("Unable to encode destination");
+            TxOutput::Transfer(output_value, destination) => {
+                let address = Address::<Destination>::new(&chain_config, destination.clone())
+                    .expect("Unable to encode destination");
 
-                    address_transactions.entry(address.clone()).or_default().insert(transaction_id);
+                address_transactions.entry(address.clone()).or_default().insert(transaction_id);
 
-                    let token_decimals = match output_value {
-                        OutputValue::TokenV0(_) => None,
-                        OutputValue::TokenV1(token_id, amount) => {
-                            increase_address_amount(
-                                db_tx,
-                                &address,
-                                amount,
-                                CoinOrTokenId::TokenId(*token_id),
-                                block_height,
-                            )
-                            .await;
-                            Some(token_decimals(*token_id, &BTreeMap::new(), db_tx).await?.1)
-                        }
-                        OutputValue::Coin(amount) => {
-                            increase_address_amount(
-                                db_tx,
-                                &address,
-                                amount,
-                                CoinOrTokenId::Coin,
-                                block_height,
-                            )
-                            .await;
-                            None
-                        }
-                    };
+                let token_decimals = match output_value {
+                    OutputValue::TokenV0(_) => None,
+                    OutputValue::TokenV1(token_id, amount) => {
+                        increase_address_amount(
+                            db_tx,
+                            &address,
+                            amount,
+                            CoinOrTokenId::TokenId(*token_id),
+                            block_height,
+                        )
+                        .await;
+                        Some(token_decimals(*token_id, &BTreeMap::new(), db_tx).await?.1)
+                    }
+                    OutputValue::Coin(amount) => {
+                        increase_address_amount(
+                            db_tx,
+                            &address,
+                            amount,
+                            CoinOrTokenId::Coin,
+                            block_height,
+                        )
+                        .await;
+                        None
+                    }
+                };
 
-                    let outpoint = UtxoOutPoint::new(
-                        OutPointSourceId::Transaction(transaction_id),
-                        idx as u32,
-                    );
-                    let utxo = Utxo::new(output.clone(), token_decimals, false);
-                    db_tx
-                        .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
-                        .await
-                        .expect("Unable to set utxo");
-                }
-                Destination::AnyoneCanSpend => {
-                    // for tests
-                    set_utxo(
-                        OutPointSourceId::Transaction(transaction_id),
-                        idx,
-                        output,
-                        db_tx,
-                        block_height,
-                        false,
-                        &chain_config,
-                    )
-                    .await;
-                }
-                Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
-            },
+                let outpoint =
+                    UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), idx as u32);
+                let utxo = Utxo::new(output.clone(), token_decimals, false);
+                db_tx
+                    .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
+                    .await
+                    .expect("Unable to set utxo");
+            }
             TxOutput::LockThenTransfer(output_value, destination, lock) => {
                 let address = Address::<Destination>::new(&chain_config, destination.clone())
                     .expect("Unable to encode destination");
