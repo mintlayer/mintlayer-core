@@ -137,6 +137,10 @@ class WalletComposeTransaction(BitcoinTestFramework):
             utxos = await wallet.list_utxos()
             assert_equal(len(utxos), len(addresses))
 
+            # try to compose an empty transaction should error
+            output = await wallet.compose_transaction([], [])
+            assert_in("Can't compose a transaction without any inputs", output)
+
             # compose a transaction with all our utxos and n outputs to the other acc and 1 as change
             output = await wallet.compose_transaction(outputs, utxos, True)
             assert_in("The hex encoded transaction is", output)

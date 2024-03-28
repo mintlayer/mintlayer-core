@@ -284,7 +284,8 @@ class WalletCliController:
 
     async def compose_transaction(self, outputs: List[TxOutput], selected_utxos: List[UtxoOutpoint], only_transaction: bool = False) -> str:
         only_tx = "--only-transaction" if only_transaction else ""
-        return await self._write_command(f"transaction-compose {' '.join(map(str, outputs))} --utxos {' --utxos '.join(map(str, selected_utxos))} {only_tx}\n")
+        utxos = f"--utxos {' --utxos '.join(map(str, selected_utxos))}" if selected_utxos else ""
+        return await self._write_command(f"transaction-compose {' '.join(map(str, outputs))} {utxos} {only_tx}\n")
 
     async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
         return await self._write_command(f"token-send {token_id} {address} {amount}\n")

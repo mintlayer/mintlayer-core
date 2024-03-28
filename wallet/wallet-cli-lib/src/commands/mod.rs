@@ -612,7 +612,7 @@ pub enum WalletCommand {
         /// You can choose what utxos to spend (space separated as additional arguments). A utxo can be from a transaction output or a block reward output:
         /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1) or
         /// block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
-        #[arg(long="utxos", default_values_t = Vec::<String>::new())]
+        #[arg(long = "utxos", default_values_t = Vec::<String>::new())]
         utxos: Vec<String>,
 
         #[arg(long = "only-transaction", default_value_t = false)]

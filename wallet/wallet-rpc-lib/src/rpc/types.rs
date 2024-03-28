@@ -106,6 +106,9 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Invalid hex data deposit")]
     InvalidHexData,
+
+    #[error("Can't compose a transaction without any inputs")]
+    ComposeTransactionEmptyInputs,
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
