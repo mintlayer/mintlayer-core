@@ -45,7 +45,7 @@ use crate::{
             types::{CategorizedMessage, Command, Message},
             ConnectivityHandle, DefaultNetworkingService,
         },
-        types::{ConnectivityEvent, PeerInfo, Role},
+        types::{ConnectionDirection, ConnectivityEvent, PeerInfo},
         ConnectivityService, NetworkingService,
     },
     peer_manager::{
@@ -107,7 +107,13 @@ where
         user_agent: mintlayer_core_user_agent(),
         common_services: NodeType::Full.into(),
     };
-    pm.accept_connection(address, bind_address, Role::Inbound, peer_info, None);
+    pm.accept_connection(
+        address,
+        bind_address,
+        ConnectionDirection::Inbound,
+        peer_info,
+        None,
+    );
     assert_eq!(pm.peers.len(), 1);
 
     // Check that nodes are allowed to send own address immediately after connecting
@@ -190,7 +196,7 @@ fn test_addr_list_handling_inbound(#[case] seed: Seed) {
     pm.accept_connection(
         TestAddressMaker::new_random_address(&mut rng),
         bind_address,
-        Role::Inbound,
+        ConnectionDirection::Inbound,
         peer_info,
         None,
     );
@@ -295,7 +301,13 @@ fn test_addr_list_handling_outbound(#[case] seed: Seed) {
         v => panic!("unexpected result: {v:?}"),
     }
 
-    pm.accept_connection(peer_address, bind_address, Role::Outbound, peer_info, None);
+    pm.accept_connection(
+        peer_address,
+        bind_address,
+        ConnectionDirection::Outbound,
+        peer_info,
+        None,
+    );
     assert_eq!(pm.peers.len(), 1);
 
     // Peer is accepted by the peer manager
@@ -408,7 +420,7 @@ async fn resend_own_addresses(#[case] seed: Seed) {
         pm.accept_connection(
             peer_address,
             listening_addresses[addr_idx],
-            Role::Outbound,
+            ConnectionDirection::Outbound,
             peer_info,
             Some(outbound_addresses[addr_idx].as_peer_address()),
         );

@@ -19,7 +19,7 @@ use p2p_types::socket_address::SocketAddress;
 
 use crate::net::{
     default_backend::transport::{impls::stream_adapter::traits::StreamAdapter, TransportSocket},
-    types::Role,
+    types::ConnectionDirection,
 };
 
 use super::wrapped_listener::AdaptedListener;
@@ -63,7 +63,7 @@ impl<M: Fn() -> S + Sync + Send + 'static, S: StreamAdapter<T::Stream>, T: Trans
         let stream_adapter = (self.stream_adapter_maker)();
         Box::pin(async move {
             let base = base.await?;
-            let stream = stream_adapter.handshake(base, Role::Outbound).await?;
+            let stream = stream_adapter.handshake(base, ConnectionDirection::Outbound).await?;
             Ok(stream)
         })
     }

@@ -39,7 +39,7 @@ use crate::{
             types::{Command, Message},
             DefaultNetworkingService,
         },
-        types::{PeerInfo, Role},
+        types::{ConnectionDirection, PeerInfo},
         ConnectivityService, NetworkingService,
     },
     peer_manager::{
@@ -330,7 +330,13 @@ async fn accept_conn<T, S>(
     T::ConnectivityHandle: ConnectivityService<T>,
     S: PeerDbStorage,
 {
-    peer_mgr.accept_connection(peer_addr, bind_addr, Role::Inbound, peer_info.clone(), None);
+    peer_mgr.accept_connection(
+        peer_addr,
+        bind_addr,
+        ConnectionDirection::Inbound,
+        peer_info.clone(),
+        None,
+    );
     let cmd = expect_recv!(cmd_receiver);
     assert_eq!(
         cmd,

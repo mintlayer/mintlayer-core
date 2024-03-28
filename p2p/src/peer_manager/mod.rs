@@ -58,7 +58,7 @@ use crate::{
     net::{
         types::{
             services::{Service, Services},
-            ConnectionType, ConnectivityEvent, PeerInfo, Role,
+            ConnectionDirection, ConnectionType, ConnectivityEvent, PeerInfo,
         },
         ConnectivityService, NetworkingService,
     },
@@ -1049,15 +1049,15 @@ where
         &mut self,
         peer_address: SocketAddress,
         bind_address: SocketAddress,
-        role: Role,
+        conn_dir: ConnectionDirection,
         info: PeerInfo,
         node_address_as_seen_by_peer: Option<PeerAddress>,
     ) {
         let peer_id = info.peer_id;
 
-        let (conn_type, response_sender) = match role {
-            Role::Inbound => (ConnectionType::Inbound, None),
-            Role::Outbound => {
+        let (conn_type, response_sender) = match conn_dir {
+            ConnectionDirection::Inbound => (ConnectionType::Inbound, None),
+            ConnectionDirection::Outbound => {
                 let pending_connect = self.pending_outbound_connects.remove(&peer_address).expect(
                     "the address must be present in pending_outbound_connects (accept_connection)",
                 );
@@ -1714,7 +1714,7 @@ where
                 self.accept_connection(
                     peer_address,
                     bind_address,
-                    Role::Inbound,
+                    ConnectionDirection::Inbound,
                     peer_info,
                     node_address_as_seen_by_peer,
                 );
@@ -1728,7 +1728,7 @@ where
                 self.accept_connection(
                     peer_address,
                     bind_address,
-                    Role::Outbound,
+                    ConnectionDirection::Outbound,
                     peer_info,
                     node_address_as_seen_by_peer,
                 );

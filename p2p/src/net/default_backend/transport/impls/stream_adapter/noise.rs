@@ -24,7 +24,7 @@ use crate::{
     error::P2pError,
     net::{
         default_backend::transport::{ConnectedSocketInfo, PeerStream},
-        types::Role,
+        types::ConnectionDirection,
     },
 };
 
@@ -77,15 +77,19 @@ impl std::fmt::Debug for NoiseEncryptionAdapter {
 impl<T: PeerStream + ConnectedSocketInfo + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
     type Stream = NoiseStream<T>;
 
-    fn handshake(&self, base: T, role: Role) -> BoxFuture<'static, crate::Result<Self::Stream>> {
+    fn handshake(
+        &self,
+        base: T,
+        conn_dir: ConnectionDirection,
+    ) -> BoxFuture<'static, crate::Result<Self::Stream>> {
         let local_key = Arc::clone(&self.local_key);
         let handshake_timeout = self.handshake_timeout;
         Box::pin(async move {
             let builder = snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
                 .local_private_key(&local_key.private);
-            let state = match role {
-                Role::Outbound => builder.build_initiator(),
-                Role::Inbound => builder.build_responder(),
+            let state = match conn_dir {
+                ConnectionDirection::Outbound => builder.build_initiator(),
+                ConnectionDirection::Inbound => builder.build_responder(),
             }
             .expect("snowstorm builder must succeed");
 
