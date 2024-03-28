@@ -115,10 +115,44 @@ this function returns an output that creates that staking pool.
 Note that the pool id is mandated to be taken from the hash of the first input.
 It is not arbitrary.
 
+### Function: `fungible_token_issuance_fee`
+
+Returns the fee that needs to be paid by a transaction for issuing a new fungible token
+
+### Function: `nft_issuance_fee`
+
+Given the current block height and a network type (mainnet, testnet, etc),
+this will return the fee that needs to be paid by a transaction for issuing a new NFT
+The current block height information is used in case a network upgrade changed the value.
+
+### Function: `token_supply_change_fee`
+
+Given the current block height and a network type (mainnet, testnet, etc),
+this will return the fee that needs to be paid by a transaction for changing the total supply of a token
+by either minting or unminting tokens
+The current block height information is used in case a network upgrade changed the value.
+
+### Function: `token_freeze_fee`
+
+Given the current block height and a network type (mainnet, testnet, etc),
+this will return the fee that needs to be paid by a transaction for freezing/unfreezing a token
+The current block height information is used in case a network upgrade changed the value.
+
+### Function: `token_change_authority_fee`
+
+Given the current block height and a network type (mainnet, testnet, etc),
+this will return the fee that needs to be paid by a transaction for changing the authority of a token
+The current block height information is used in case a network upgrade changed the value.
+
 ### Function: `encode_output_issue_fungible_token`
 
 Given the parameters needed to issue a fungible token, and a network type (mainnet, testnet, etc),
 this function creates an output that issues that token.
+
+### Function: `encode_output_issue_nft`
+
+Given the parameters needed to issue an NFT, and a network type (mainnet, testnet, etc),
+this function creates an output that issues that NFT.
 
 ### Function: `encode_output_data_deposit`
 
