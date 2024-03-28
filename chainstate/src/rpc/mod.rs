@@ -204,7 +204,6 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             })
             .await,
         )?;
-        let rpc_blk = both.map(|(block, block_index)| RpcBlock::new(block, block_index));
 
         let chain_config: Arc<ChainConfig> = rpc::handle_result(
             self.call(move |this| {
@@ -213,6 +212,12 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             })
             .await,
         )?;
+
+        let rpc_blk: Option<RpcBlock> = both
+            .map(|(block, block_index)| {
+                rpc::handle_result(RpcBlock::new(&chain_config, block, block_index))
+            })
+            .transpose()?;
 
         let result = rpc_blk.map(|rpc_blk| to_dehexified_json(&chain_config, rpc_blk)).transpose();
 
