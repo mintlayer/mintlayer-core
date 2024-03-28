@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_info;
 mod epoch_seal;
 mod in_memory_reorg;
 mod tx_verifier_storage;
@@ -32,8 +33,8 @@ use chainstate_types::{
 use common::{
     chain::{
         block::{
-            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockHeader,
-            BlockReward, ConsensusData,
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward,
+            ConsensusData,
         },
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
@@ -52,7 +53,7 @@ use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
 
 use crate::{BlockError, ChainstateConfig};
 
-use self::tx_verifier_storage::gen_block_index_getter;
+use self::{block_info::BlockInfo, tx_verifier_storage::gen_block_index_getter};
 
 use super::{
     median_time::calculate_median_time_past, transaction_verifier::flush::flush_to_storage,
@@ -1325,56 +1326,4 @@ pub enum ReorgError {
     BlockDataMissing(Id<Block>),
     #[error("Generic error during reorg: {0}")]
     OtherError(#[from] BlockError),
-}
-
-trait BlockInfo: Sized {
-    /// Get the block id; this may be cheaper than calling get_id on the header (which would
-    /// calculate the id from the header data).
-    fn get_or_calc_id(&self) -> Id<Block>;
-
-    /// Get the header.
-    fn get_header(&self) -> &BlockHeader;
-}
-
-impl BlockInfo for BlockIndex {
-    fn get_or_calc_id(&self) -> Id<Block> {
-        *self.block_id()
-    }
-
-    fn get_header(&self) -> &BlockHeader {
-        self.block_header().header()
-    }
-}
-
-impl BlockInfo for SignedBlockHeader {
-    fn get_or_calc_id(&self) -> Id<Block> {
-        self.get_id()
-    }
-
-    fn get_header(&self) -> &BlockHeader {
-        self.header()
-    }
-}
-
-impl BlockInfo for BlockHeader {
-    fn get_or_calc_id(&self) -> Id<Block> {
-        self.get_id()
-    }
-
-    fn get_header(&self) -> &BlockHeader {
-        self
-    }
-}
-
-impl<T> BlockInfo for WithId<T>
-where
-    T: Idable<Tag = Block> + BlockInfo,
-{
-    fn get_or_calc_id(&self) -> Id<Block> {
-        WithId::<T>::get(self).get_id()
-    }
-
-    fn get_header(&self) -> &BlockHeader {
-        WithId::<T>::get(self).get_header()
-    }
 }
