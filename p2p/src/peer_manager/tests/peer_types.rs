@@ -96,7 +96,7 @@ fn validate_services() {
         for services in 0..2u64.pow(Service::ALL.len() as u32) {
             let services = Services::from_u64(services);
 
-            // List all peer roles
+            // List all connection types
             for conn_type in ConnectionType::ALL {
                 let peer_id_1 = PeerId::new();
                 let peer_info = PeerInfo {

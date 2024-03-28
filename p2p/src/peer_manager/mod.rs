@@ -632,7 +632,7 @@ where
         };
 
         let conn_type: ConnectionType = (&outbound_connect_type).into();
-        log::debug!("Trying a new outbound connection, address: {:?}, local_services_override: {:?}, peer_role: {:?}",
+        log::debug!("Trying a new outbound connection, address: {:?}, local_services_override: {:?}, conn_type: {:?}",
             address, local_services_override, conn_type);
         let res = self.try_connect(address, local_services_override, conn_type);
 
@@ -1215,8 +1215,8 @@ where
 
     fn peer_addresses_iter(&self) -> impl Iterator<Item = (SocketAddress, ConnectionType)> + '_ {
         let pending = self.pending_outbound_connects.iter().map(|(addr, pending_conn)| {
-            let role = (&pending_conn.outbound_connect_type).into();
-            (*addr, role)
+            let conn_type = (&pending_conn.outbound_connect_type).into();
+            (*addr, conn_type)
         });
         let connected =
             self.peers.values().map(|peer_ctx| (peer_ctx.peer_address, peer_ctx.conn_type));
@@ -1267,12 +1267,12 @@ where
         let mut cur_outbound_block_relay_conn_count = 0;
         let mut cur_feeler_conn_count = 0;
         let mut cur_outbound_conn_addr_groups = BTreeSet::new();
-        let mut cur_conn_ip_port_to_role_map = BTreeMap::new();
+        let mut cur_conn_ip_port_to_conn_type_map = BTreeMap::new();
 
-        for (addr, role) in self.peer_addresses_iter() {
+        for (addr, conn_type) in self.peer_addresses_iter() {
             let addr_group = AddressGroup::from_peer_address(&addr.as_peer_address());
 
-            match role {
+            match conn_type {
                 ConnectionType::Inbound => {}
                 ConnectionType::OutboundReserved | ConnectionType::OutboundManual => {
                     cur_outbound_conn_addr_groups.insert(addr_group);
@@ -1291,7 +1291,8 @@ where
             }
 
             let socket_addr = addr.socket_addr();
-            cur_conn_ip_port_to_role_map.insert((socket_addr.ip(), socket_addr.port()), role);
+            cur_conn_ip_port_to_conn_type_map
+                .insert((socket_addr.ip(), socket_addr.port()), conn_type);
         }
 
         let needed_outbound_full_relay_conn_count = {
@@ -1309,7 +1310,7 @@ where
             &cur_outbound_conn_addr_groups,
             &|addr| {
                 self.allow_new_outbound_connection(
-                    &cur_conn_ip_port_to_role_map,
+                    &cur_conn_ip_port_to_conn_type_map,
                     addr,
                     ConnectionType::OutboundFullRelay,
                 )
@@ -1349,7 +1350,7 @@ where
             &cur_outbound_conn_addr_groups,
             &|addr| {
                 self.allow_new_outbound_connection(
-                    &cur_conn_ip_port_to_role_map,
+                    &cur_conn_ip_port_to_conn_type_map,
                     addr,
                     ConnectionType::OutboundBlockRelay,
                 )
@@ -1377,7 +1378,7 @@ where
         let new_reserved_conn_addresses = self.peerdb.select_reserved_outbound_addresses(&|addr| {
             !cur_pending_outbound_conn_addresses.contains(addr)
                 && self.allow_new_outbound_connection(
-                    &cur_conn_ip_port_to_role_map,
+                    &cur_conn_ip_port_to_conn_type_map,
                     addr,
                     ConnectionType::OutboundReserved,
                 )
@@ -1791,7 +1792,7 @@ where
 
     // Return an error if a connection to the specified address already exists and it prevents us
     // from establishing another connection to the same address with the connection type determined
-    // by `new_peer_role`.
+    // by `new_peer_conn_type`.
     fn maybe_reject_because_already_connected(
         &self,
         new_peer_addr: &SocketAddress,
@@ -1812,24 +1813,25 @@ where
         }
 
         let conflicting_connection =
-            self.peer_addresses_iter().find(|(existing_peer_addr, existing_peer_role)| {
-                // If the ip addresses are different, allow the connection.
-                if existing_peer_addr.ip_addr() != new_peer_addr.ip_addr() {
-                    return false;
-                }
+            self.peer_addresses_iter()
+                .find(|(existing_peer_addr, existing_peer_conn_type)| {
+                    // If the ip addresses are different, allow the connection.
+                    if existing_peer_addr.ip_addr() != new_peer_addr.ip_addr() {
+                        return false;
+                    }
 
-                !self.may_allow_outbound_connection_to_existing_ip(
-                    existing_peer_addr.socket_addr().port(),
-                    *existing_peer_role,
-                    new_peer_addr.socket_addr().port(),
-                    new_peer_conn_type,
-                )
-            });
+                    !self.may_allow_outbound_connection_to_existing_ip(
+                        existing_peer_addr.socket_addr().port(),
+                        *existing_peer_conn_type,
+                        new_peer_addr.socket_addr().port(),
+                        new_peer_conn_type,
+                    )
+                });
 
-        if let Some((existing_peer_addr, existing_peer_role)) = conflicting_connection {
+        if let Some((existing_peer_addr, existing_peer_conn_type)) = conflicting_connection {
             Err(P2pError::PeerError(PeerError::AlreadyConnected {
                 existing_peer_addr,
-                existing_peer_conn_type: existing_peer_role,
+                existing_peer_conn_type,
                 new_peer_addr: *new_peer_addr,
                 new_peer_conn_type,
             }))
@@ -1859,10 +1861,10 @@ where
         let new_peer_ip = new_peer_addr.socket_addr().ip();
         let new_peer_port = new_peer_addr.socket_addr().port();
         existing_connections.range((new_peer_ip, 0)..=(new_peer_ip, u16::MAX)).all(
-            |((_, existing_peer_port), existing_peer_role)| {
+            |((_, existing_peer_port), existing_peer_conn_type)| {
                 self.may_allow_outbound_connection_to_existing_ip(
                     *existing_peer_port,
-                    *existing_peer_role,
+                    *existing_peer_conn_type,
                     new_peer_port,
                     new_peer_conn_type,
                 )

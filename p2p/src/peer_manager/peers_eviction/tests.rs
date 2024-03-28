@@ -920,7 +920,7 @@ mod discouraged_candidate {
             ConnectionType::OutboundReserved
             | ConnectionType::OutboundManual
             | ConnectionType::Feeler => {
-                panic!("Unexpected peer role: {conn_type:?}");
+                panic!("Unexpected connection type: {conn_type:?}");
             }
         }
 
@@ -938,21 +938,21 @@ mod discouraged_candidate {
             ConnectionType::OutboundFullRelay,
             ConnectionType::OutboundBlockRelay
         )]
-        peer_role: ConnectionType,
+        conn_type: ConnectionType,
     ) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let config: PeerManagerConfig = Default::default();
-        let preserve_count = max_preserve_count(peer_role, &config);
+        let preserve_count = max_preserve_count(conn_type, &config);
         let now = Time::from_secs_since_epoch(rng.gen_range(0..10000));
 
         for _i in 0..5 {
             for candidates_count in [preserve_count - 1, preserve_count + 1] {
                 let candidates = (0..candidates_count)
-                    .map(|_| random_mature_candidate(peer_role, &config, &mut rng))
+                    .map(|_| random_mature_candidate(conn_type, &config, &mut rng))
                     .collect::<Vec<_>>();
 
                 let normally_evicted_peer_id =
-                    select_for_eviction(peer_role, candidates.clone(), &config, now, &mut rng);
+                    select_for_eviction(conn_type, candidates.clone(), &config, now, &mut rng);
 
                 let discouraged_candidate_idx = rng.gen_range(0..candidates_count);
                 let discouraged_peer_id = candidates[discouraged_candidate_idx].peer_id;
@@ -963,7 +963,7 @@ mod discouraged_candidate {
                 };
 
                 let evicted_peer_id =
-                    select_for_eviction(peer_role, candidates.clone(), &config, now, &mut rng);
+                    select_for_eviction(conn_type, candidates.clone(), &config, now, &mut rng);
 
                 assert_eq!(
                     evicted_peer_id.is_some(),

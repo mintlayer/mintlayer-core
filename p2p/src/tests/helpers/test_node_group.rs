@@ -65,7 +65,7 @@ where
         self.nodes.iter().map(|node| *node.local_address()).collect()
     }
 
-    pub async fn count_connections_by_role(&self, conn_type: ConnectionType) -> Vec<usize> {
+    pub async fn count_connections_by_type(&self, conn_type: ConnectionType) -> Vec<usize> {
         let mut result = Vec::with_capacity(self.nodes.len());
 
         for node in &self.nodes {

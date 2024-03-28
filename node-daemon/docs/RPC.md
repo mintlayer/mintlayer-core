@@ -920,7 +920,7 @@ Returns:
 [ {
     "peer_id": number,
     "address": string,
-    "peer_role": EITHER OF
+    "conn_type": EITHER OF
          1) "Inbound"
          2) "OutboundFullRelay"
          3) "OutboundBlockRelay"
