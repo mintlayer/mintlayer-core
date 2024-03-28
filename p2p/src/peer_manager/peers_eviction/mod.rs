@@ -19,7 +19,7 @@ use common::primitives::time::Time;
 use crypto::random::{seq::IteratorRandom, Rng};
 use utils::make_config_setting;
 
-use crate::{net::types::ConnectionType, types::peer_id::PeerId};
+use crate::{net::types::PeerRole, types::peer_id::PeerId};
 
 use super::{address_groups::AddressGroup, config::PeerManagerConfig, peer_context::PeerContext};
 
@@ -58,7 +58,7 @@ pub struct EvictionCandidate {
     ping_min: i64,
 
     /// Inbound or Outbound
-    conn_type: ConnectionType,
+    peer_role: PeerRole,
 
     last_tip_block_time: Option<Time>,
 
@@ -100,7 +100,7 @@ impl EvictionCandidate {
                 &AddressGroup::from_peer_address(&peer.peer_address.as_peer_address()),
             )),
             ping_min: peer.ping_min.map_or(i64::MAX, |val| val.as_micros() as i64),
-            conn_type: peer.conn_type,
+            peer_role: peer.peer_role,
             last_tip_block_time: peer.last_tip_block_time,
             last_tx_time: peer.last_tx_time,
 
@@ -199,7 +199,7 @@ pub fn select_for_eviction_inbound(
 ) -> Option<PeerId> {
     // TODO: Preserve connections from whitelisted IPs
 
-    debug_assert!(candidates.iter().all(|c| c.conn_type == ConnectionType::Inbound));
+    debug_assert!(candidates.iter().all(|c| c.peer_role == PeerRole::Inbound));
 
     if candidates.len() <= config.total_preserved_inbound_count() {
         return None;
@@ -232,7 +232,7 @@ pub fn select_for_eviction_block_relay(
 ) -> Option<PeerId> {
     select_for_eviction_outbound(
         candidates,
-        ConnectionType::OutboundBlockRelay,
+        PeerRole::OutboundBlockRelay,
         *config.outbound_block_relay_connection_min_age,
         *config.outbound_block_relay_count,
         now,
@@ -253,7 +253,7 @@ pub fn select_for_eviction_full_relay(
     // See https://github.com/mintlayer/mintlayer-core/issues/1432
     select_for_eviction_outbound(
         candidates,
-        ConnectionType::OutboundFullRelay,
+        PeerRole::OutboundFullRelay,
         *config.outbound_full_relay_connection_min_age,
         *config.outbound_full_relay_count,
         now,
@@ -294,13 +294,13 @@ impl EvictionCandidateExtOutbound {
 
 fn select_for_eviction_outbound(
     candidates: Vec<EvictionCandidate>,
-    conn_type: ConnectionType,
+    peer_role: PeerRole,
     min_age: Duration,
     max_count: usize,
     now: Time,
     rng: &mut impl Rng,
 ) -> Option<PeerId> {
-    debug_assert!(candidates.iter().all(|c| c.conn_type == conn_type));
+    debug_assert!(candidates.iter().all(|c| c.peer_role == peer_role));
 
     if candidates.len() <= max_count {
         return None;

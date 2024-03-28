@@ -45,7 +45,7 @@ use crate::{
             transport::{TransportListener, TransportSocket},
             DefaultNetworkingService,
         },
-        types::ConnectionType,
+        types::PeerRole,
         ConnectivityService,
     },
     peer_manager::{
@@ -359,16 +359,13 @@ where
         response_receiver.await.unwrap().unwrap();
     }
 
-    pub async fn assert_connected_to(
-        &self,
-        expected_connections: &[(SocketAddress, ConnectionType)],
-    ) {
+    pub async fn assert_connected_to(&self, expected_connections: &[(SocketAddress, PeerRole)]) {
         let peers_info = self.get_peers_info().await;
         assert_eq!(peers_info.info.len(), expected_connections.len());
 
-        for (addr, conn_type) in expected_connections {
+        for (addr, role) in expected_connections {
             let peer_info = peers_info.info.get(addr).unwrap();
-            assert_eq!(peer_info.conn_type, *conn_type);
+            assert_eq!(peer_info.role, *role);
         }
     }
 
@@ -380,9 +377,9 @@ where
 
         let peers_info = self.get_peers_info().await;
         let outbound_full_relay_peers_count =
-            peers_info.count_peers_by_role(ConnectionType::OutboundFullRelay);
+            peers_info.count_peers_by_role(PeerRole::OutboundFullRelay);
         let outbound_block_relay_peers_count =
-            peers_info.count_peers_by_role(ConnectionType::OutboundBlockRelay);
+            peers_info.count_peers_by_role(PeerRole::OutboundBlockRelay);
 
         assert!(outbound_full_relay_peers_count >= *peer_mgr_config.outbound_full_relay_count);
         assert!(
@@ -406,9 +403,9 @@ where
 
         let peers_info = self.get_peers_info().await;
         let outbound_full_relay_peers_count =
-            peers_info.count_peers_by_role(ConnectionType::OutboundFullRelay);
+            peers_info.count_peers_by_role(PeerRole::OutboundFullRelay);
         let outbound_block_relay_peers_count =
-            peers_info.count_peers_by_role(ConnectionType::OutboundBlockRelay);
+            peers_info.count_peers_by_role(PeerRole::OutboundBlockRelay);
 
         assert!(
             outbound_full_relay_peers_count

@@ -24,7 +24,7 @@ use common::{
 use mempool::error::{Error as MempoolError, MempoolBanScore};
 use utils::try_as::TryAsRef;
 
-use crate::{net::types::ConnectionType, peer_manager::peerdb_common, protocol::ProtocolVersion};
+use crate::{net::types::PeerRole, peer_manager::peerdb_common, protocol::ProtocolVersion};
 
 /// Errors related to invalid data/peer information that results in connection getting closed
 /// and the peer getting banned.
@@ -73,14 +73,14 @@ pub enum PeerError {
     #[error("Peer {0} already exists")]
     PeerAlreadyExists(PeerId),
     #[error(
-        "Rejecting {new_peer_conn_type:?} connection to {new_peer_addr:?} \
-             because we already have {existing_peer_conn_type:?} connection to {existing_peer_addr:?}"
+        "Rejecting {new_peer_role:?} connection to {new_peer_addr:?} \
+             because we already have {existing_peer_role:?} connection to {existing_peer_addr:?}"
     )]
     AlreadyConnected {
         existing_peer_addr: SocketAddress,
-        existing_peer_conn_type: ConnectionType,
+        existing_peer_role: PeerRole,
         new_peer_addr: SocketAddress,
-        new_peer_conn_type: ConnectionType,
+        new_peer_role: PeerRole,
     },
     #[error("Connection to address {0} already pending")]
     Pending(String),

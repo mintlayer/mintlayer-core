@@ -27,13 +27,13 @@ fn shuffle_vec<T>(mut vec: Vec<T>, rng: &mut impl Rng) -> Vec<T> {
 }
 
 // Make a random non-banned-or-discouraged candidate.
-fn random_candidate(conn_type: ConnectionType, rng: &mut impl Rng) -> EvictionCandidate {
+fn random_candidate(peer_role: PeerRole, rng: &mut impl Rng) -> EvictionCandidate {
     EvictionCandidate {
         age: Duration::from_secs(rng.gen_range(0..10000)),
         peer_id: PeerId::new(),
         net_group_keyed: NetGroupKeyed(rng.gen()),
         ping_min: rng.gen_range(0..100),
-        conn_type,
+        peer_role,
         last_tip_block_time: Some(Time::from_secs_since_epoch(rng.gen_range(0..10000))),
         last_tx_time: Some(Time::from_secs_since_epoch(rng.gen_range(0..10000))),
         expecting_blocks_since: Some(Time::from_secs_since_epoch(rng.gen_range(0..10000))),
@@ -61,7 +61,7 @@ mod inbound {
                 peer_id,
                 net_group_keyed,
                 ping_min: 0,
-                conn_type: ConnectionType::Inbound,
+                peer_role: PeerRole::Inbound,
                 last_tip_block_time: None,
                 last_tx_time: None,
                 expecting_blocks_since: None,
@@ -121,7 +121,7 @@ mod inbound {
                 peer_id,
                 net_group_keyed: NetGroupKeyed(1),
                 ping_min,
-                conn_type: ConnectionType::Inbound,
+                peer_role: PeerRole::Inbound,
                 last_tip_block_time: None,
                 last_tx_time: None,
                 expecting_blocks_since: None,
@@ -181,7 +181,7 @@ mod inbound {
                 peer_id,
                 net_group_keyed: NetGroupKeyed(1),
                 ping_min: 123,
-                conn_type: ConnectionType::Inbound,
+                peer_role: PeerRole::Inbound,
                 last_tip_block_time: last_tip_block_time_secs.map(Time::from_secs_since_epoch),
                 last_tx_time: None,
                 expecting_blocks_since: None,
@@ -238,7 +238,7 @@ mod inbound {
                 peer_id,
                 net_group_keyed: NetGroupKeyed(1),
                 ping_min: 123,
-                conn_type: ConnectionType::Inbound,
+                peer_role: PeerRole::Inbound,
                 last_tip_block_time: None,
                 last_tx_time: last_tx_time_secs.map(Time::from_secs_since_epoch),
                 expecting_blocks_since: None,
@@ -295,7 +295,7 @@ mod inbound {
                 peer_id,
                 net_group_keyed,
                 ping_min: 123,
-                conn_type: ConnectionType::Inbound,
+                peer_role: PeerRole::Inbound,
                 last_tip_block_time: None,
                 last_tx_time: None,
                 expecting_blocks_since: None,
@@ -394,7 +394,7 @@ mod inbound {
             for test in tests {
                 let count = rng.gen_range(0..150usize);
                 let mut candidates = (0..count)
-                    .map(|_| random_candidate(ConnectionType::Inbound, &mut rng))
+                    .map(|_| random_candidate(PeerRole::Inbound, &mut rng))
                     .collect::<Vec<_>>();
                 candidates.shuffle(&mut rng);
 
@@ -430,11 +430,11 @@ mod outbound {
         FullRelay,
     }
 
-    impl From<OutboundConnType> for ConnectionType {
+    impl From<OutboundConnType> for PeerRole {
         fn from(value: OutboundConnType) -> Self {
             match value {
-                OutboundConnType::BlockRelay => ConnectionType::OutboundBlockRelay,
-                OutboundConnType::FullRelay => ConnectionType::OutboundFullRelay,
+                OutboundConnType::BlockRelay => PeerRole::OutboundBlockRelay,
+                OutboundConnType::FullRelay => PeerRole::OutboundFullRelay,
             }
         }
     }
@@ -490,7 +490,7 @@ mod outbound {
                 peer_id,
                 net_group_keyed: NetGroupKeyed(1),
                 ping_min: 123,
-                conn_type: conn_type.into(),
+                peer_role: conn_type.into(),
                 last_tip_block_time: None,
                 last_tx_time: None,
                 expecting_blocks_since: None,
@@ -569,7 +569,7 @@ mod outbound {
                 peer_id,
                 net_group_keyed: NetGroupKeyed(1),
                 ping_min: 123,
-                conn_type: conn_type.into(),
+                peer_role: conn_type.into(),
                 last_tip_block_time: last_tip_block_time_secs.map(Time::from_secs_since_epoch),
                 last_tx_time: None,
                 expecting_blocks_since: expecting_blocks_since_secs
@@ -687,7 +687,7 @@ mod outbound {
                 peer_id,
                 net_group_keyed: NetGroupKeyed(1),
                 ping_min: 123,
-                conn_type: conn_type.into(),
+                peer_role: conn_type.into(),
                 last_tip_block_time: Some(Time::from_secs_since_epoch(last_tip_block_time_secs)),
                 last_tx_time: None,
                 expecting_blocks_since: expecting_blocks_since_secs
@@ -868,59 +868,53 @@ mod discouraged_candidate {
     use super::*;
 
     fn select_for_eviction(
-        conn_type: ConnectionType,
+        peer_role: PeerRole,
         candidates: Vec<EvictionCandidate>,
         config: &PeerManagerConfig,
         now: Time,
         rng: &mut impl Rng,
     ) -> Option<PeerId> {
-        match conn_type {
-            ConnectionType::Inbound => select_for_eviction_inbound(candidates, config, rng),
-            ConnectionType::OutboundFullRelay => {
+        match peer_role {
+            PeerRole::Inbound => select_for_eviction_inbound(candidates, config, rng),
+            PeerRole::OutboundFullRelay => {
                 select_for_eviction_full_relay(candidates, config, now, rng)
             }
-            ConnectionType::OutboundBlockRelay => {
+            PeerRole::OutboundBlockRelay => {
                 select_for_eviction_block_relay(candidates, config, now, rng)
             }
-            ConnectionType::OutboundReserved
-            | ConnectionType::OutboundManual
-            | ConnectionType::Feeler => {
-                panic!("Unexpected connection type: {conn_type:?}");
+            PeerRole::OutboundReserved | PeerRole::OutboundManual | PeerRole::Feeler => {
+                panic!("Unexpected peer role: {peer_role:?}");
             }
         }
     }
 
-    fn max_preserve_count(conn_type: ConnectionType, config: &PeerManagerConfig) -> usize {
-        match conn_type {
-            ConnectionType::Inbound => config.total_preserved_inbound_count(),
-            ConnectionType::OutboundFullRelay => *config.outbound_full_relay_count,
-            ConnectionType::OutboundBlockRelay => *config.outbound_block_relay_count,
-            ConnectionType::OutboundReserved
-            | ConnectionType::OutboundManual
-            | ConnectionType::Feeler => {
-                panic!("Unexpected connection type: {conn_type:?}");
+    fn max_preserve_count(peer_role: PeerRole, config: &PeerManagerConfig) -> usize {
+        match peer_role {
+            PeerRole::Inbound => config.total_preserved_inbound_count(),
+            PeerRole::OutboundFullRelay => *config.outbound_full_relay_count,
+            PeerRole::OutboundBlockRelay => *config.outbound_block_relay_count,
+            PeerRole::OutboundReserved | PeerRole::OutboundManual | PeerRole::Feeler => {
+                panic!("Unexpected peer role: {peer_role:?}");
             }
         }
     }
 
     fn random_mature_candidate(
-        conn_type: ConnectionType,
+        peer_role: PeerRole,
         config: &PeerManagerConfig,
         rng: &mut impl Rng,
     ) -> EvictionCandidate {
-        let mut candidate = random_candidate(conn_type, rng);
-        match conn_type {
-            ConnectionType::Inbound => {}
-            ConnectionType::OutboundFullRelay => {
+        let mut candidate = random_candidate(peer_role, rng);
+        match peer_role {
+            PeerRole::Inbound => {}
+            PeerRole::OutboundFullRelay => {
                 candidate.age = *config.outbound_full_relay_connection_min_age;
             }
-            ConnectionType::OutboundBlockRelay => {
+            PeerRole::OutboundBlockRelay => {
                 candidate.age = *config.outbound_block_relay_connection_min_age;
             }
-            ConnectionType::OutboundReserved
-            | ConnectionType::OutboundManual
-            | ConnectionType::Feeler => {
-                panic!("Unexpected peer role: {conn_type:?}");
+            PeerRole::OutboundReserved | PeerRole::OutboundManual | PeerRole::Feeler => {
+                panic!("Unexpected peer role: {peer_role:?}");
             }
         }
 
@@ -934,11 +928,11 @@ mod discouraged_candidate {
     fn test(
         #[case] seed: Seed,
         #[values(
-            ConnectionType::Inbound,
-            ConnectionType::OutboundFullRelay,
-            ConnectionType::OutboundBlockRelay
+            PeerRole::Inbound,
+            PeerRole::OutboundFullRelay,
+            PeerRole::OutboundBlockRelay
         )]
-        peer_role: ConnectionType,
+        peer_role: PeerRole,
     ) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let config: PeerManagerConfig = Default::default();

@@ -53,7 +53,7 @@ pub enum ConnectionDirection {
     rpc_description::HasValueHint,
     enum_iterator::Sequence,
 )]
-pub enum ConnectionType {
+pub enum PeerRole {
     Inbound,
     OutboundFullRelay,
     OutboundBlockRelay,
@@ -62,9 +62,9 @@ pub enum ConnectionType {
     Feeler,
 }
 
-impl ConnectionType {
+impl PeerRole {
     pub fn is_outbound(&self) -> bool {
-        use ConnectionType::*;
+        use PeerRole::*;
 
         match self {
             Inbound => false,
@@ -75,7 +75,7 @@ impl ConnectionType {
     }
 
     pub fn is_outbound_manual(&self) -> bool {
-        use ConnectionType::*;
+        use PeerRole::*;
 
         match self {
             OutboundManual => true,

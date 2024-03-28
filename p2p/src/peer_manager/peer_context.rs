@@ -20,7 +20,7 @@ use p2p_types::socket_address::SocketAddress;
 use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, set_flag::SetFlag};
 
 use crate::{
-    net::types::{ConnectionType, PeerInfo},
+    net::types::{PeerInfo, PeerRole},
     sync::sync_status::PeerBlockSyncStatus,
     utils::rate_limiter::RateLimiter,
 };
@@ -43,7 +43,7 @@ pub struct PeerContext {
     /// Bind address of this node's side of the connection.
     pub bind_address: SocketAddress,
 
-    pub conn_type: ConnectionType,
+    pub peer_role: PeerRole,
 
     /// Peer score
     pub score: u32,
