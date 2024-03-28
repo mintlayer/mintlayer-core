@@ -61,11 +61,11 @@ const CREATE_STAKING_POOL_TOOLTIP_TEXT: &str = "A staking pool locks the pledge 
 const START_STAKING_TOOLTIP_TEXT: &str =
     "If you have created pools, this will activate staking. The node must be kept running, in order to assist the network in creating blocks and earn rewards.";
 
-const DECOMMISSION_POOL_ID_TOOLTIP_TEXT: &str = "The pool ID to decommission.";
-const DECOMMISSION_POOL_ADDRESS_TOOLTIP_TEXT: &str =
+const DECOMMISSION_POOL_ADDRESS_TOOLTIP_TEXT: &str = "The address of the pool that will be decommissioned. Make sure to stop staking before going through with this.";
+const DECOMMISSION_COINS_DESTINATION_ADDRESS_TOOLTIP_TEXT: &str =
     "The output address where the coins will be sent after decommissioning the pool.";
 const DECOMMISSION_POOL_TOOLTIP_TEXT: &str =
-    "This will decommission the pool and lock the pledged amount for 720 blocks.";
+    "This will decommission the staking pool and lock the pledge amount for the maturity period (see above to learn how long). Locking implies that the coins cannot be moved until the lock period is over. This is needed for blockchain security reasons. Please STOP STAKING before doing this, otherwise decommissioning won't work. DO NOT use an exchange address for this. Most exchanges cannot handle locked outputs.";
 
 #[allow(clippy::too_many_arguments)]
 pub fn view_stake(
@@ -92,7 +92,7 @@ pub fn view_stake(
         } else {
             let mut staking_balance_grid = Grid::new().width(Length::Fill).push(
                 GridRow::new()
-                    .push(field("Pool Id".to_owned()))
+                    .push(field("Pool Address".to_owned()))
                     .push(field("Margin ratio".to_owned()))
                     .push(field("Cost per block".to_owned()))
                     .push(field("Pool balance".to_owned()))
@@ -105,7 +105,15 @@ pub fn view_stake(
                     GridRow::new()
                         .push(row!(
                             tooltip(
-                                field(pool_id_address.to_short_string()),
+                                container(Text::new(pool_id_address.to_short_string()).font(
+                                    iced::font::Font {
+                                        family: iced::font::Family::Monospace,
+                                        weight: Default::default(),
+                                        stretch: Default::default(),
+                                        style: iced::font::Style::Normal,
+                                    }
+                                ))
+                                .padding(5),
                                 Text::new(pool_id_address.to_string()),
                                 Position::Bottom,
                             )
@@ -276,7 +284,7 @@ pub fn view_stake(
         staking_balance_grid,
         iced::widget::horizontal_rule(10),
         row![
-            text_input("Decommission pool id", decommission_pool_id)
+            text_input("Pool address to decommission", decommission_pool_id)
                 .on_input(|value| {
                     if value.chars().all(|ch| ch.is_ascii_alphanumeric()) {
                         WalletMessage::DecommissionPoolIdEdit(value)
@@ -287,13 +295,13 @@ pub fn view_stake(
                 .padding(15),
             tooltip(
                 Text::new(iced_aw::BootstrapIcon::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
-                DECOMMISSION_POOL_ID_TOOLTIP_TEXT,
+                DECOMMISSION_POOL_ADDRESS_TOOLTIP_TEXT,
                 Position::Bottom)
             .gap(10)
             .style(iced::theme::Container::Box)
         ],
         row![
-            text_input("Decommission pool output address", decommission_pool_address)
+            text_input("Address that will receive the proceeds from the staking pool", decommission_pool_address)
                 .on_input(|value| {
                     if value.chars().all(|ch| ch.is_ascii_alphanumeric()) {
                         WalletMessage::DecommissionPoolAddressEdit(value)
@@ -304,7 +312,7 @@ pub fn view_stake(
                 .padding(15),
             tooltip(
                 Text::new(iced_aw::BootstrapIcon::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
-                DECOMMISSION_POOL_ADDRESS_TOOLTIP_TEXT,
+                DECOMMISSION_COINS_DESTINATION_ADDRESS_TOOLTIP_TEXT,
                 Position::Bottom)
             .gap(10)
             .style(iced::theme::Container::Box)

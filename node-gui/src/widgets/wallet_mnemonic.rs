@@ -79,7 +79,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletMnemonicDialog
     fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
         let (mnemonic, action_text) = match &self.generated_mnemonic_opt {
             Some(generated_mnemonic) => (generated_mnemonic.to_string(), "Create"),
-            None => (state.entered_mnemonic.clone(), "Import"),
+            None => (state.entered_mnemonic.clone(), "Recover"),
         };
 
         let button_enabled = !mnemonic.is_empty();
