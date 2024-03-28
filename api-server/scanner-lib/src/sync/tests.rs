@@ -403,6 +403,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
 
     let remaining_coins = remaining_coins - rng.gen_range(0..10);
     eprintln!("coins: {remaining_coins}");
+    let (_, deleg_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let transaction = TransactionBuilder::new()
         .add_input(
             TxInput::from_utxo(OutPointSourceId::Transaction(prev_tx_id), 0),
@@ -413,7 +414,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
             Destination::AnyoneCanSpend,
         ))
         .add_output(TxOutput::CreateDelegationId(
-            Destination::AnyoneCanSpend,
+            Destination::PublicKeyHash((&deleg_pk).into()),
             pool_id,
         ))
         .build();
@@ -1072,5 +1073,137 @@ async fn sync_and_compare(
 
         // address balance is not updated
         assert_eq!(balance, Amount::ZERO);
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+#[tokio::test]
+async fn check_all_destinations_are_trucked(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let mut tf = TestFramework::builder(&mut rng).build();
+
+    let chain_config = Arc::clone(tf.chainstate.get_chain_config());
+    let storage = {
+        let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+        db_tx.reinitialize_storage(&chain_config).await.unwrap();
+        db_tx.commit().await.unwrap();
+
+        storage
+    };
+    let mut local_state = BlockchainState::new(chain_config.clone(), storage);
+    local_state.scan_genesis(chain_config.genesis_block().as_ref()).await.unwrap();
+
+    let target_block_time = chain_config.target_block_spacing();
+
+    let (_priv_key, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+    let public_key_dest = Destination::PublicKey(pub_key.clone());
+    let public_key_hash_dest = Destination::PublicKeyHash((&pub_key).into());
+    let classic_multisig_dest = Destination::ClassicMultisig((&pub_key).into());
+    let script_dest = Destination::ScriptHash(Id::new(H256::from_slice(&rng.gen::<[u8; 32]>())));
+
+    let with_public_key = TxOutput::Transfer(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        public_key_dest.clone(),
+    );
+    let with_public_key_hash = TxOutput::Transfer(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        public_key_hash_dest.clone(),
+    );
+    let with_multisig = TxOutput::Transfer(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        classic_multisig_dest.clone(),
+    );
+    let with_script = TxOutput::Transfer(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        script_dest.clone(),
+    );
+
+    let locked_with_public_key = TxOutput::LockThenTransfer(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        public_key_dest.clone(),
+        OutputTimeLock::ForBlockCount(1),
+    );
+    let locked_with_public_key_hash = TxOutput::LockThenTransfer(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        public_key_hash_dest.clone(),
+        OutputTimeLock::ForBlockCount(1),
+    );
+    let locked_with_multisig = TxOutput::LockThenTransfer(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        classic_multisig_dest.clone(),
+        OutputTimeLock::ForBlockCount(1),
+    );
+    let locked_with_script = TxOutput::LockThenTransfer(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        script_dest.clone(),
+        OutputTimeLock::ForBlockCount(1),
+    );
+
+    let transaction = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(
+                OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                0,
+            ),
+            InputWitness::NoSignature(None),
+        )
+        // Add all different destinations
+        .add_output(with_script.clone())
+        .add_output(with_multisig.clone())
+        .add_output(with_public_key.clone())
+        .add_output(with_public_key_hash.clone())
+        // Add all different destinations while locked
+        .add_output(locked_with_script.clone())
+        .add_output(locked_with_multisig.clone())
+        .add_output(locked_with_public_key.clone())
+        .add_output(locked_with_public_key_hash.clone())
+        .build();
+
+    let prev_block_hash = chain_config.genesis_block_id();
+
+    tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+    let block = tf
+        .make_block_builder()
+        .with_parent(prev_block_hash)
+        .with_transactions(vec![transaction])
+        .build();
+
+    tf.process_block(block.clone(), BlockSource::Local).unwrap();
+    let block_height = local_state
+        .storage()
+        .transaction_ro()
+        .await
+        .unwrap()
+        .get_best_block()
+        .await
+        .unwrap()
+        .block_height();
+    local_state.scan_blocks(block_height, vec![block]).await.unwrap();
+
+    // Check all the utxos have been added in both locked and unlocked and balance has been updated
+    let db_tx = local_state.storage().transaction_ro().await.unwrap();
+    for dest in [script_dest, classic_multisig_dest, public_key_dest, public_key_hash_dest] {
+        let address = Address::new(&chain_config, dest.clone()).unwrap();
+        let amount =
+            db_tx.get_address_balance(address.as_str(), CoinOrTokenId::Coin).await.unwrap();
+
+        assert_eq!(amount, Some(Amount::from_atoms(1)));
+
+        let locked_amount = db_tx
+            .get_address_locked_balance(address.as_str(), CoinOrTokenId::Coin)
+            .await
+            .unwrap();
+
+        assert_eq!(locked_amount, Some(Amount::from_atoms(1)));
+
+        let utxos = db_tx.get_address_all_utxos(address.as_str()).await.unwrap();
+        // check we have 2 utxos one locked and one unlocked
+        assert_eq!(utxos.len(), 2);
     }
 }
