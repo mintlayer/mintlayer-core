@@ -20,7 +20,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, ChainConfig, SignedTransaction},
     primitives::{per_thousand::PerThousand, semver::SemVer, user_agent::UserAgent, Amount},
 };
-use iced::{widget::Text, Command, Element};
+use iced::{widget::Text, window, Command, Element};
 use iced_aw::native::Modal;
 use logging::log;
 use p2p::{net::types::services::Services, types::peer_id::PeerId, P2pEvent};
@@ -55,7 +55,7 @@ enum ActiveDialog {
     WalletCreate {
         generated_mnemonic: wallet_controller::mnemonic::Mnemonic,
     },
-    WalletImport,
+    WalletRecover,
     WalletSetPassword {
         wallet_id: WalletId,
     },
@@ -251,8 +251,8 @@ impl MainWindow {
                     self.active_dialog = ActiveDialog::WalletCreate { generated_mnemonic };
                     Command::none()
                 }
-                MenuMessage::ImportWallet => {
-                    self.active_dialog = ActiveDialog::WalletImport;
+                MenuMessage::RecoverWallet => {
+                    self.active_dialog = ActiveDialog::WalletRecover;
                     Command::none()
                 }
                 MenuMessage::OpenWallet => {
@@ -272,7 +272,7 @@ impl MainWindow {
                         identity,
                     )
                 }
-                MenuMessage::Exit => iced::window::close(),
+                MenuMessage::Exit => iced::window::close(window::Id::MAIN),
             },
 
             MainWindowMessage::MainWidgetMessage(MainWidgetMessage::TabsMessage(
@@ -501,6 +501,15 @@ impl MainWindow {
                     self.show_error(error.to_string());
                     Command::none()
                 }
+                BackendEvent::DecommissionPool(Ok(transaction_info)) => {
+                    self.wallet_msg = Some(WalletMessage::DecommissionPoolSucceed);
+                    self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };
+                    Command::none()
+                }
+                BackendEvent::DecommissionPool(Err(error)) => {
+                    self.show_error(error.to_string());
+                    Command::none()
+                }
                 BackendEvent::CreateDelegation(Ok(transaction_info)) => {
                     self.wallet_msg = Some(WalletMessage::CreateDelegationSucceed);
                     self.active_dialog = ActiveDialog::ConfirmTransaction { transaction_info };
@@ -701,7 +710,7 @@ impl MainWindow {
                 )
                 .into(),
 
-                ActiveDialog::WalletImport => wallet_mnemonic_dialog(
+                ActiveDialog::WalletRecover => wallet_mnemonic_dialog(
                     None,
                     Box::new(|mnemonic| MainWindowMessage::ImportWalletMnemonic {
                         mnemonic,

@@ -22,6 +22,7 @@ use std::convert::identity;
 use backend::messages::{BackendEvent, BackendRequest};
 use backend::{node_initialize, BackendControls, BackendSender};
 use common::time_getter::TimeGetter;
+use iced::advanced::graphics::core::window;
 use iced::widget::{column, container, text};
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced::{font, Subscription};
@@ -35,7 +36,10 @@ pub fn main() -> iced::Result {
     MintlayerNodeGUI::run(Settings {
         id: Some("mintlayer-gui".to_owned()),
         antialiasing: true,
-        exit_on_close_request: false,
+        window: window::Settings {
+            exit_on_close_request: false,
+            ..Default::default()
+        },
         ..Settings::default()
     })
 }
@@ -70,7 +74,7 @@ impl Application for MintlayerNodeGUI {
         (
             MintlayerNodeGUI::Loading,
             Command::batch(vec![
-                font::load(iced_aw::graphics::icons::ICON_FONT_BYTES).map(Message::FontLoaded),
+                font::load(iced_aw::graphics::icons::BOOTSTRAP_FONT_BYTES).map(Message::FontLoaded),
                 Command::perform(node_initialize(TimeGetter::default()), Message::Loaded),
             ]),
         )
@@ -116,7 +120,7 @@ impl Application for MintlayerNodeGUI {
                     Command::none()
                 }
                 Message::EventOccurred(event) => {
-                    if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
+                    if let iced::Event::Window(_, iced::window::Event::CloseRequested) = event {
                         panic!("Attempted shutdown during initialization")
                     } else {
                         // While the screen is loading, ignore all events
@@ -147,7 +151,7 @@ impl Application for MintlayerNodeGUI {
                     Command::none()
                 }
                 Message::EventOccurred(event) => {
-                    if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
+                    if let iced::Event::Window(_, iced::window::Event::CloseRequested) = event {
                         // TODO: this event doesn't cover the case of closing the Window through Cmd+Q in MacOS
                         backend_sender.send(BackendRequest::Shutdown);
                         Command::none()
@@ -155,7 +159,7 @@ impl Application for MintlayerNodeGUI {
                         Command::none()
                     }
                 }
-                Message::ShuttingDownFinished => iced::window::close(),
+                Message::ShuttingDownFinished => iced::window::close(window::Id::MAIN),
                 Message::MainWindowMessage(msg) => {
                     w.update(msg, backend_sender).map(Message::MainWindowMessage)
                 }
@@ -165,13 +169,13 @@ impl Application for MintlayerNodeGUI {
                 Message::Loaded(_) => Command::none(),
                 Message::FontLoaded(_) => Command::none(),
                 Message::EventOccurred(event) => {
-                    if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
-                        iced::window::close()
+                    if let iced::Event::Window(_, iced::window::Event::CloseRequested) = event {
+                        iced::window::close(window::Id::MAIN)
                     } else {
                         Command::none()
                     }
                 }
-                Message::ShuttingDownFinished => iced::window::close(),
+                Message::ShuttingDownFinished => iced::window::close(window::Id::MAIN),
                 Message::MainWindowMessage(_) => Command::none(),
             },
         }
@@ -214,7 +218,7 @@ impl Application for MintlayerNodeGUI {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        iced::subscription::events().map(Message::EventOccurred)
+        iced::event::listen().map(Message::EventOccurred)
     }
 }
 
