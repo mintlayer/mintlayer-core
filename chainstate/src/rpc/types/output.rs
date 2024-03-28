@@ -22,10 +22,12 @@ use common::{
     primitives::amount::RpcAmountOut,
 };
 use crypto::vrf::VRFPublicKey;
+use rpc::types::RpcHexString;
 
 use super::token::{RpcNftIssuance, RpcTokenIssuance};
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "type")]
 pub enum RpcOutputValue {
     Coin {
         amount: RpcAmountOut,
@@ -80,6 +82,7 @@ impl RpcStakePoolData {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "type")]
 pub enum RpcTxOutput {
     Transfer {
         value: RpcOutputValue,
@@ -118,7 +121,7 @@ pub enum RpcTxOutput {
         destination: RpcAddress<Destination>,
     },
     DataDeposit {
-        data: String,
+        data: RpcHexString,
     },
 }
 
@@ -166,7 +169,7 @@ impl RpcTxOutput {
                 destination: RpcAddress::new(chain_config, destination.clone())?,
             },
             TxOutput::DataDeposit(data) => RpcTxOutput::DataDeposit {
-                data: hex::encode(data),
+                data: RpcHexString::from_bytes(data.clone()),
             },
         };
         Ok(result)

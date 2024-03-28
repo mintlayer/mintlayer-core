@@ -13,14 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use common::{
-    address::{AddressError, RpcAddress},
+    address::RpcAddress,
     chain::{block::ConsensusData, ChainConfig, PoolId},
 };
+use rpc::types::RpcHexString;
 
 use super::input::RpcTxInput;
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "type")]
 pub enum RpcConsensusData {
     None,
     PoW,
@@ -31,7 +35,7 @@ impl RpcConsensusData {
     pub fn new(
         chain_config: &ChainConfig,
         consensus_data: &ConsensusData,
-    ) -> Result<Self, AddressError> {
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let rpc_consensus_data = match consensus_data {
             ConsensusData::None => RpcConsensusData::None,
             ConsensusData::PoW(_) => RpcConsensusData::PoW,
@@ -42,13 +46,17 @@ impl RpcConsensusData {
                     .map(|input| RpcTxInput::new(chain_config, input))
                     .collect::<Result<Vec<_>, _>>()?;
 
-                let compact_target = format!("{:x}", pos_data.compact_target().0);
+                let compact_target =
+                    RpcHexString::from_str(format!("{:x}", pos_data.compact_target().0).as_str())?;
 
-                let target = format!(
-                    "{:x}",
-                    TryInto::<common::Uint256>::try_into(pos_data.compact_target())
-                        .expect("valid target")
-                );
+                let target = RpcHexString::from_str(
+                    format!(
+                        "{:x}",
+                        TryInto::<common::Uint256>::try_into(pos_data.compact_target())
+                            .expect("valid target")
+                    )
+                    .as_str(),
+                )?;
 
                 RpcConsensusData::PoS {
                     pos_data: RpcPoSData {
@@ -71,6 +79,6 @@ pub struct RpcPoSData {
     kernel_input_count: u32,
     kernel_inputs: Vec<RpcTxInput>,
     stake_pool_id: RpcAddress<PoolId>,
-    compact_target: String,
-    target: String,
+    compact_target: RpcHexString,
+    target: RpcHexString,
 }

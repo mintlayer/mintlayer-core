@@ -15,7 +15,6 @@
 
 use chainstate_types::BlockIndex;
 use common::{
-    address::AddressError,
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id, Idable},
 };
@@ -47,7 +46,7 @@ impl RpcBlock {
         chain_config: &ChainConfig,
         block: Block,
         block_index: BlockIndex,
-    ) -> Result<Self, AddressError> {
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let rpc_consensus_data = RpcConsensusData::new(chain_config, block.consensus_data())?;
         let rpc_block_reward = RpcBlockReward::new(chain_config, block.block_reward())?;
         let rpc_transactions = block

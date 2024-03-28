@@ -35,6 +35,7 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id},
 };
+use jsonrpsee::types::{error::CALL_EXECUTION_FAILED_CODE, ErrorObject};
 use rpc::{subscription, RpcResult};
 use serialization::hex_encoded::HexEncoded;
 
@@ -215,7 +216,9 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
         let rpc_blk: Option<RpcBlock> = both
             .map(|(block, block_index)| {
-                rpc::handle_result(RpcBlock::new(&chain_config, block, block_index))
+                RpcBlock::new(&chain_config, block, block_index).map_err(|err| {
+                    ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, err.to_string(), None::<()>)
+                })
             })
             .transpose()?;
 

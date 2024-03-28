@@ -16,14 +16,14 @@
 use common::{
     address::{AddressError, RpcAddress},
     chain::{
-        tokens::TokenId, AccountCommand, AccountSpending, ChainConfig, DelegationId, Destination,
+        tokens::{IsTokenUnfreezable, TokenId},
+        AccountCommand, AccountSpending, ChainConfig, DelegationId, Destination,
     },
     primitives::amount::RpcAmountOut,
 };
 
-use super::token::RpcIsTokenUnfreezable;
-
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "type")]
 pub enum RpcAccountSpending {
     DelegationBalance {
         delegation_id: RpcAddress<DelegationId>,
@@ -49,6 +49,7 @@ impl RpcAccountSpending {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "type")]
 pub enum RpcAccountCommand {
     MintTokens {
         token_id: RpcAddress<TokenId>,
@@ -62,7 +63,7 @@ pub enum RpcAccountCommand {
     },
     FreezeToken {
         token_id: RpcAddress<TokenId>,
-        is_unfreezable: RpcIsTokenUnfreezable,
+        is_unfreezable: bool,
     },
     UnfreezeToken {
         token_id: RpcAddress<TokenId>,
@@ -88,7 +89,10 @@ impl RpcAccountCommand {
             },
             AccountCommand::FreezeToken(id, is_unfreezable) => RpcAccountCommand::FreezeToken {
                 token_id: RpcAddress::new(chain_config, *id)?,
-                is_unfreezable: (*is_unfreezable).into(),
+                is_unfreezable: match is_unfreezable {
+                    IsTokenUnfreezable::No => false,
+                    IsTokenUnfreezable::Yes => true,
+                },
             },
             AccountCommand::UnfreezeToken(id) => RpcAccountCommand::UnfreezeToken {
                 token_id: RpcAddress::new(chain_config, *id)?,
