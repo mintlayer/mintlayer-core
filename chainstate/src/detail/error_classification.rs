@@ -40,6 +40,13 @@ use super::{
     block_invalidation::BestChainCandidatesError, chainstateref::EpochSealError, BlockSizeError,
 };
 
+/// When handling errors during block processing, we need to differentiate between errors that
+/// should lead to block invalidation and those that shouldn't. Ideally, this separation should
+/// be done inside the BlockError type itself. But currently BlockError is a fairly deep tree
+/// of error types and on most of its levels there are errors that represent block invalidity
+/// and there are ones that don't (e.g. the storage error can be found on almost any level).
+/// So instead we introduce and implement a trait that allows to classify a BlockError instance.
+/// This enum represents the classes that we're interested in.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum BlockProcessingErrorClass {
     /// General error - the operation failed due to storage issues, invariant violations etc.
@@ -76,6 +83,7 @@ impl BlockProcessingErrorClass {
 // 3) The errors that should be treated carefully are those that can happen during normal
 // cause of operation and that don't represent a 100% invalid block (e.g. BlockFromTheFuture).
 
+/// The trait that handles the classification.
 pub trait BlockProcessingErrorClassification {
     fn classify(&self) -> BlockProcessingErrorClass;
 }
