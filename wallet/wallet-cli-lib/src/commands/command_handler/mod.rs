@@ -702,6 +702,16 @@ where
                 })
             }
 
+            WalletCommand::StandaloneAddressLabelRename { address, label } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                wallet.standalone_address_label_rename(selected_account, address, label).await?;
+
+                Ok(ConsoleCommand::SetStatus {
+                    status: self.repl_status().await?,
+                    print_message: "Success, the label has been changed.".into(),
+                })
+            }
+
             WalletCommand::AddStandaloneKey {
                 address,
                 label,

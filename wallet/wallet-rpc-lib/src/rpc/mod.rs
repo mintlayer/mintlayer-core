@@ -231,6 +231,31 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         Ok(NewAccountInfo::new(num, name))
     }
 
+    pub async fn standalone_address_label_rename(
+        &self,
+        account_index: U31,
+        address: RpcAddress<Destination>,
+        label: Option<String>,
+    ) -> WRpcResult<(), N> {
+        let dest = address
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidAddress)?;
+        let config = ControllerConfig {
+            in_top_x_mb: 5,
+            broadcast_to_mempool: true,
+        }; // irrelevant for issuing addresses
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    w.synced_controller(account_index, config)
+                        .await?
+                        .standalone_address_label_rename(dest, label)
+                })
+            })
+            .await??;
+        Ok(())
+    }
+
     pub async fn add_standalone_watch_only_address(
         &self,
         account_index: U31,

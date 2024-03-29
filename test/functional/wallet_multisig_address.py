@@ -164,6 +164,13 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 label = label if label else ''
                 assert_in(f"{multisig_address} | ClassicMultisig | {label}", output)
 
+                new_label = 'some_new_label' if random.choice([True, False]) else None
+                output = await wallet.standalone_address_label_rename(multisig_address, new_label)
+                assert_in("Success, the label has been changed.", output)
+                output = await wallet.get_standalone_addresses()
+                new_label = new_label if new_label else ''
+                assert_in(f"{multisig_address} | ClassicMultisig | {new_label}", output)
+
             # send some coins to the multisig address
             await wallet.close_wallet()
             await wallet.open_wallet('wallet0')

@@ -99,6 +99,8 @@ pub enum KeyChainError {
     NoPrivateKeyFound,
     #[error("No VRF private key found")]
     NoVRFPrivateKeyFound,
+    #[error("No standalone address found")]
+    NoStadaloneAddressFound,
 }
 
 /// Result type used for the key chain

@@ -259,6 +259,16 @@ pub enum WalletCommand {
         utxo_states: Vec<CliUtxoState>,
     },
 
+    #[clap(name = "standalone-address-label-rename")]
+    StandaloneAddressLabelRename {
+        /// The existing standalone address
+        address: String,
+
+        /// Optionally specify a new label, not specifying a label will remove the existing one
+        #[arg(long = "label")]
+        label: Option<String>,
+    },
+
     #[clap(name = "standalone-add-watch-only-address")]
     AddStandaloneKey {
         /// The new standalone watch only address to be added to the selected account

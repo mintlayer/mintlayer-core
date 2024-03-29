@@ -224,6 +224,10 @@ class WalletCliController:
     async def rename_account(self, name: Optional[str] = '') -> str:
         return await self._write_command(f"account-rename {name}\n")
 
+    async def standalone_address_label_rename(self, address: str, label: Optional[str] = None) -> str:
+        label_str = f'--label {label}' if label else ''
+        return await self._write_command(f"standalone-address-label-rename {address} {label_str}\n")
+
     async def add_standalone_address(self, address: str, label: Optional[str] = None) -> str:
         label_str = f'--label {label}' if label else ''
         return await self._write_command(f"standalone-add-watch-only-address {address} {label_str}\n")

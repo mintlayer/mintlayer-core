@@ -250,6 +250,18 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
+    async fn standalone_address_label_rename(
+        &self,
+        account_index: U31,
+        address: String,
+        label: Option<String>,
+    ) -> Result<(), Self::Error> {
+        self.wallet_rpc
+            .standalone_address_label_rename(account_index, address.into(), label)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
     async fn add_standalone_address(
         &self,
         account_index: U31,

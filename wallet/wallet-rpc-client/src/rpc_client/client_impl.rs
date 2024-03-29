@@ -200,6 +200,22 @@ impl WalletInterface for ClientWalletRpc {
             .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn standalone_address_label_rename(
+        &self,
+        account_index: U31,
+        address: String,
+        label: Option<String>,
+    ) -> Result<(), Self::Error> {
+        WalletRpcClient::standalone_address_label_rename(
+            &self.http_client,
+            account_index.into(),
+            address.into(),
+            label,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn add_standalone_address(
         &self,
         account_index: U31,

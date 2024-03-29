@@ -1608,6 +1608,16 @@ impl Account {
         Ok(())
     }
 
+    /// Add, rename or delete a label for a standalone address
+    pub fn standalone_address_label_rename(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        address: Destination,
+        label: Option<String>,
+    ) -> WalletResult<()> {
+        Ok(self.key_chain.standalone_address_label_rename(db_tx, address, label)?)
+    }
+
     /// Add a standalone address not derived from this account's key chain to be watched
     pub fn add_standalone_address(
         &mut self,

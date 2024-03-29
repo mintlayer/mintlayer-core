@@ -268,6 +268,17 @@ trait WalletRpc {
         name: Option<String>,
     ) -> rpc::RpcResult<NewAccountInfo>;
 
+    /// Add, rename or delete a label to an already added standalone address.
+    /// Specifying a lable will add or replace the existing one,
+    /// and not specifying a label will remove the existing one.
+    #[method(name = "standalone_address_label_rename")]
+    async fn standalone_address_label_rename(
+        &self,
+        account: AccountArg,
+        address: RpcAddress<Destination>,
+        label: Option<String>,
+    ) -> rpc::RpcResult<()>;
+
     /// Add a new standalone watch only address not derived from the selected account's key chain
     #[method(name = "standalone_add_watch_only_address")]
     async fn add_standalone_address(

@@ -447,7 +447,40 @@ impl AccountKeyChain {
         self.is_public_key_hash_mine(&pubkey_hash) || self.is_public_key_hash_watched(pubkey_hash)
     }
 
-    ///  Adds a new public key hash to be watched, standalone from the keys derived from this account
+    /// Adds a new public key hash to be watched, standalone from the keys derived from this account
+    pub fn standalone_address_label_rename(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        new_address: Destination,
+        new_label: Option<String>,
+    ) -> KeyChainResult<()> {
+        let mut key = self
+            .standalone_keys
+            .get(&new_address)
+            .ok_or(KeyChainError::NoStadaloneAddressFound)?
+            .clone();
+
+        match &mut key {
+            AccountStandaloneKey::Address {
+                label,
+                private_key: _,
+            }
+            | AccountStandaloneKey::Multisig {
+                label,
+                challenge: _,
+            } => {
+                *label = new_label;
+            }
+        };
+
+        let id = AccountPrefixedId::new(self.get_account_id(), new_address);
+        db_tx.set_standalone_key(&id, &key)?;
+        self.standalone_keys.insert(id.into_item_id(), key);
+
+        Ok(())
+    }
+
+    /// Adds a new public key hash to be watched, standalone from the keys derived from this account
     pub fn add_standalone_address(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,

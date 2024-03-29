@@ -1108,6 +1108,17 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(block_ids)
     }
 
+    pub fn standalone_address_label_rename(
+        &mut self,
+        account_index: U31,
+        address: Destination,
+        label: Option<String>,
+    ) -> WalletResult<()> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.standalone_address_label_rename(db_tx, address, label)
+        })
+    }
+
     pub fn add_standalone_address(
         &mut self,
         account_index: U31,

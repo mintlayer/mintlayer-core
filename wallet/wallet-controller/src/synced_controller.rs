@@ -176,6 +176,16 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             .map_err(ControllerError::WalletError)
     }
 
+    pub fn standalone_address_label_rename(
+        &mut self,
+        address: Destination,
+        label: Option<String>,
+    ) -> Result<(), ControllerError<T>> {
+        self.wallet
+            .standalone_address_label_rename(self.account_index, address, label)
+            .map_err(ControllerError::WalletError)
+    }
+
     pub fn add_standalone_address(
         &mut self,
         address: PublicKeyHash,

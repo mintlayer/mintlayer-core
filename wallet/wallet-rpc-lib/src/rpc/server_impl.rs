@@ -320,6 +320,18 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         rpc::handle_result(self.update_account_name(account_arg.index::<N>()?, name).await)
     }
 
+    async fn standalone_address_label_rename(
+        &self,
+        account_arg: AccountArg,
+        address: RpcAddress<Destination>,
+        label: Option<String>,
+    ) -> rpc::RpcResult<()> {
+        rpc::handle_result(
+            self.standalone_address_label_rename(account_arg.index::<N>()?, address, label)
+                .await,
+        )
+    }
+
     async fn add_standalone_address(
         &self,
         account_arg: AccountArg,
