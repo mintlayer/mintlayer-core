@@ -179,12 +179,17 @@ Returns `None` (null) if the UtxoOutPoint is not found or is already spent.
 
 Parameters:
 ```
-{ "outpoint": {
-    "id": EITHER OF
-         1) { "Transaction": hex string }
-         2) { "BlockReward": hex string },
-    "index": number,
-} }
+{ "outpoint": EITHER OF
+     1) {
+            "source": "Transaction",
+            "id": hex string,
+            "index": number,
+        }
+     2) {
+            "source": "BlockReward",
+            "id": hex string,
+            "index": number,
+        } }
 ```
 
 Returns:
@@ -375,7 +380,8 @@ Parameters:
 Returns:
 ```
 EITHER OF
-     1) { "FungibleToken": {
+     1) {
+            "type": "FungibleToken",
             "token_id": hex string,
             "token_ticker": {
                 "text": EITHER OF
@@ -392,31 +398,32 @@ EITHER OF
             },
             "circulating_supply": { "atoms": number string },
             "total_supply": EITHER OF
-                 1) { "Fixed": { "atoms": number string } }
-                 2) "Lockable"
-                 3) "Unlimited",
+                 1) {
+                        "type": "Fixed",
+                        "amount": { "atoms": number string },
+                    }
+                 2) { "type": "Lockable" }
+                 3) { "type": "Unlimited" },
             "is_locked": bool,
             "frozen": EITHER OF
-                 1) { "No": EITHER OF
-                         1) "No"
-                         2) "Yes" }
-                 2) { "Yes": EITHER OF
-                         1) "No"
-                         2) "Yes" },
-            "authority": EITHER OF
-                 1) "AnyoneCanSpend"
-                 2) { "PublicKeyHash": hex string }
-                 3) { "PublicKey": hex string }
-                 4) { "ScriptHash": hex string }
-                 5) { "ClassicMultisig": hex string },
-        } }
-     2) { "NonFungibleToken": {
+                 1) {
+                        "state": "NotFrozen",
+                        "freezable": bool,
+                    }
+                 2) {
+                        "state": "Frozen",
+                        "unfreezable": bool,
+                    },
+            "authority": bech32 string,
+        }
+     2) {
+            "type": "NonFungibleToken",
             "token_id": hex string,
             "creation_tx_id": hex string,
             "creation_block_id": hex string,
             "metadata": {
                 "creator": EITHER OF
-                     1) [ number, .. ]
+                     1) hex string
                      2) null,
                 "name": {
                     "text": EITHER OF
@@ -462,7 +469,7 @@ EITHER OF
                      2) null,
                 "media_hash": hex string,
             },
-        } }
+        }
      3) null
 ```
 

@@ -581,11 +581,34 @@ impl StakingStatus {
         }
     }
 }
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "source")]
+pub enum MnemonicInfo {
+    UserProvided,
+    NewlyGenerated {
+        mnemonic: String,
+        passphrase: Option<String>,
+    },
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-pub enum CreatedWallet {
-    UserProvidedMnemonic,
-    NewlyGeneratedMnemonic(String, Option<String>),
+pub struct CreatedWallet {
+    pub mnemonic: MnemonicInfo,
+}
+
+impl From<crate::CreatedWallet> for CreatedWallet {
+    fn from(value: crate::CreatedWallet) -> Self {
+        let mnemonic = match value {
+            crate::CreatedWallet::UserProvidedMnemonic => MnemonicInfo::UserProvided,
+            crate::CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase) => {
+                MnemonicInfo::NewlyGenerated {
+                    mnemonic: mnemonic.to_string(),
+                    passphrase,
+                }
+            }
+        };
+        Self { mnemonic }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]

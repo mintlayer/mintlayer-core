@@ -313,12 +313,17 @@ Parameters:
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
-    "selected_utxos": [ {
-        "id": EITHER OF
-             1) { "Transaction": hex string }
-             2) { "BlockReward": hex string },
-        "index": number,
-    }, .. ],
+    "selected_utxos": [ EITHER OF
+         1) {
+                "source": "Transaction",
+                "id": hex string,
+                "index": number,
+            }
+         2) {
+                "source": "BlockReward",
+                "id": hex string,
+                "index": number,
+            }, .. ],
     "options": { "in_top_x_mb": EITHER OF
          1) number
          2) null },
@@ -397,12 +402,17 @@ Parameters:
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
-    "selected_utxo": {
-        "id": EITHER OF
-             1) { "Transaction": hex string }
-             2) { "BlockReward": hex string },
-        "index": number,
-    },
+    "selected_utxo": EITHER OF
+         1) {
+                "source": "Transaction",
+                "id": hex string,
+                "index": number,
+            }
+         2) {
+                "source": "BlockReward",
+                "id": hex string,
+                "index": number,
+            },
     "change_address": EITHER OF
          1) bech32 string
          2) null,
@@ -1489,12 +1499,17 @@ and also prints the fees that will be paid by the transaction
 Parameters:
 ```
 {
-    "inputs": [ {
-        "id": EITHER OF
-             1) { "Transaction": hex string }
-             2) { "BlockReward": hex string },
-        "index": number,
-    }, .. ],
+    "inputs": [ EITHER OF
+         1) {
+                "source": "Transaction",
+                "id": hex string,
+                "index": number,
+            }
+         2) {
+                "source": "BlockReward",
+                "id": hex string,
+                "index": number,
+            }, .. ],
     "outputs": [ object, .. ],
     "only_transaction": bool,
 }
@@ -1692,14 +1707,15 @@ Parameters:
 
 Returns:
 ```
-EITHER OF
-     1) "UserProvidedMnemonic"
-     2) { "NewlyGeneratedMnemonic": [
-            string,
-            EITHER OF
+{ "mnemonic": EITHER OF
+     1) { "source": "UserProvided" }
+     2) {
+            "source": "NewlyGenerated",
+            "mnemonic": string,
+            "passphrase": EITHER OF
                  1) string
                  2) null,
-        ] }
+        } }
 ```
 
 ### Method `wallet_open`

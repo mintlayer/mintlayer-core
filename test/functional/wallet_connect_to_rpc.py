@@ -163,7 +163,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 output = await wallet2.get_transaction(tx_id)
                 output = output[0]["V1"]
                 assert_equal(1, len(output["inputs"]))
-                assert_equal(genesis_block_id, output["inputs"][0]["Utxo"]["id"]["BlockReward"])
+                assert_equal(genesis_block_id, output["inputs"][0]["Utxo"]["id"])
                 assert_equal(0, output["inputs"][0]["Utxo"]["index"])
 
                 assert_equal(1, len(output["outputs"]))

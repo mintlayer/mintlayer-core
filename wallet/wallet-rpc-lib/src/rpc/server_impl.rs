@@ -98,12 +98,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
                 passphrase,
             )
             .await
-            .map(|res| match res {
-                crate::CreatedWallet::UserProvidedMnemonic => CreatedWallet::UserProvidedMnemonic,
-                crate::CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase) => {
-                    CreatedWallet::NewlyGeneratedMnemonic(mnemonic.to_string(), passphrase)
-                }
-            }),
+            .map(Into::<CreatedWallet>::into),
         )
     }
 
