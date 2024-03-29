@@ -86,6 +86,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.chainstate_ref.get_block(id)
     }
 
+    pub fn get_existing_block(&self, id: Id<Block>) -> Result<Block, PropertyQueryError> {
+        self.chainstate_ref.get_block(id)?.ok_or(PropertyQueryError::BlockNotFound(id))
+    }
+
     pub fn get_mainchain_blocks(
         &self,
         mut from: BlockHeight,
@@ -272,10 +276,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             let mut best_height = BlockHeight::zero();
 
             for block_id in block_ids {
-                let block_index = self
-                    .chainstate_ref
-                    .get_gen_block_index(block_id)?
-                    .ok_or(PropertyQueryError::BlockIndexNotFound(*block_id))?;
+                let block_index = self.chainstate_ref.get_existing_gen_block_index(block_id)?;
                 let fork_point_block_index =
                     self.chainstate_ref.last_common_ancestor_in_main_chain(&block_index)?;
 

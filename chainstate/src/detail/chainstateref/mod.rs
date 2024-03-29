@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_info;
 mod epoch_seal;
 mod in_memory_reorg;
 mod tx_verifier_storage;
@@ -52,7 +53,7 @@ use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
 
 use crate::{BlockError, ChainstateConfig};
 
-use self::tx_verifier_storage::gen_block_index_getter;
+use self::{block_info::BlockInfo, tx_verifier_storage::gen_block_index_getter};
 
 use super::{
     median_time::calculate_median_time_past, transaction_verifier::flush::flush_to_storage,
@@ -202,6 +203,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     #[log_error]
+    pub fn get_existing_gen_block_index(
+        &self,
+        block_id: &Id<GenBlock>,
+    ) -> Result<GenBlockIndex, PropertyQueryError> {
+        self.get_gen_block_index(block_id)?
+            .ok_or(PropertyQueryError::BlockIndexNotFound(*block_id))
+    }
+
+    #[log_error]
     pub fn get_best_block_index(&self) -> Result<GenBlockIndex, PropertyQueryError> {
         self.get_gen_block_index(&self.get_best_block_id()?)?
             .ok_or(PropertyQueryError::BestBlockIndexNotFound)
@@ -211,11 +221,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     fn get_previous_block_index(
         &self,
-        block_index: &BlockIndex,
+        block_info: &impl BlockInfo,
     ) -> Result<GenBlockIndex, PropertyQueryError> {
-        let prev_block_id = block_index.prev_block_id();
+        let prev_block_id = block_info.get_header().prev_block_id();
+
         self.get_gen_block_index(prev_block_id)?
-            .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))
+            .ok_or(PropertyQueryError::PrevBlockIndexNotFound {
+                block_id: block_info.get_or_calc_id(),
+                prev_block_id: *prev_block_id,
+            })
     }
 
     #[log_error]
@@ -391,8 +405,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             GenBlockId::Genesis(_) => return Ok(Some(BlockHeight::zero())),
         };
 
-        let block_index = self.get_block_index(&id)?;
-        let block_index = block_index.ok_or(PropertyQueryError::BlockNotFound(id)).log_err()?;
+        let block_index = self.get_existing_block_index(&id)?;
         let mainchain_block_id = self.get_block_id_by_height(&block_index.block_height())?;
 
         // Note: this function may be called when the chain is still empty, so we don't unwrap
@@ -449,7 +462,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     /// The header's parent block must be known.
     #[log_error]
     fn enforce_checkpoints(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
-        let prev_block_index = self.get_previous_block_index_for_check_block(header)?;
+        let prev_block_index = self.get_previous_block_index(header)?;
         let current_height = prev_block_index.block_height().next_height();
 
         if self.enforce_exact_checkpoint_assuming_height(header, current_height)? {
@@ -489,7 +502,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         headers_to_check: &[SignedBlockHeader],
     ) -> Result<(), BlockError> {
         let checked_header_height = {
-            let prev_block_index = self.get_previous_block_index_for_check_block(checked_header)?;
+            let prev_block_index = self
+                .get_previous_block_index(checked_header)
+                .map_err(BlockError::PropertyQueryError)?;
             prev_block_index.block_height().next_height()
         };
 
@@ -520,7 +535,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         header: &SignedBlockHeader,
     ) -> Result<(), CheckBlockError> {
-        let prev_block_index = self.get_previous_block_index_for_check_block(header)?;
+        let prev_block_index = self.get_previous_block_index(header)?;
         let common_ancestor_height =
             self.last_common_ancestor_in_main_chain(&prev_block_index)?.block_height();
         let min_allowed_height = self.get_min_height_with_allowed_reorg()?;
@@ -538,31 +553,26 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    /// Return BlockIndex of the previous block.
-    #[log_error]
-    fn get_previous_block_index_for_check_block(
-        &self,
-        block_header: &SignedBlockHeader,
-    ) -> Result<GenBlockIndex, CheckBlockError> {
-        let prev_block_id = block_header.prev_block_id();
-        self.get_gen_block_index(prev_block_id)?
-            .ok_or(CheckBlockError::PrevBlockNotFound(
-                *prev_block_id,
-                block_header.get_id(),
-            ))
-    }
-
     /// Return Ok(()) if the specified block has a valid parent and an error otherwise.
     #[log_error]
     pub fn check_block_parent(
         &self,
         block_header: &SignedBlockHeader,
     ) -> Result<(), CheckBlockError> {
-        let parent_block_index = self.get_previous_block_index_for_check_block(block_header)?;
+        let parent_block_id = block_header.prev_block_id();
+        let parent_block_index = self.get_gen_block_index(parent_block_id)?.ok_or_else(|| {
+            CheckBlockError::ParentBlockMissing {
+                block_id: block_header.block_id(),
+                parent_block_id: *parent_block_id,
+            }
+        })?;
 
         ensure!(
             parent_block_index.status().is_ok(),
-            CheckBlockError::InvalidParent(block_header.block_id())
+            CheckBlockError::InvalidParent {
+                block_id: block_header.block_id(),
+                parent_block_id: *parent_block_id,
+            }
         );
 
         Ok(())
@@ -808,9 +818,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         let prev_block_height = self
             .get_gen_block_index(&block.prev_block_id())?
-            .ok_or(PropertyQueryError::PrevBlockIndexNotFound(
-                block.prev_block_id(),
-            ))?
+            .ok_or_else(|| PropertyQueryError::PrevBlockIndexNotFound {
+                block_id: block.get_id(),
+                prev_block_id: block.prev_block_id(),
+            })?
             .block_height();
 
         self.check_transactions(block, prev_block_height.next_height())
@@ -1214,7 +1225,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     #[log_error]
     pub fn set_new_block_index(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
         if self.db_tx.get_block_index(block_index.block_id())?.is_some() {
-            return Err(BlockError::BlockAlreadyExists(*block_index.block_id()));
+            return Err(BlockError::BlockIndexAlreadyExists(*block_index.block_id()));
         }
         self.set_block_index(block_index)
     }

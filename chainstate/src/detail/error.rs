@@ -50,6 +50,8 @@ pub enum BlockError {
     PrevBlockNotFoundForNewBlock(Id<Block>),
     #[error("Block {0} already exists")]
     BlockAlreadyExists(Id<Block>),
+    #[error("Block {0} index already exists")]
+    BlockIndexAlreadyExists(Id<Block>),
     #[error("Block {0} has already been processed")]
     BlockAlreadyProcessed(Id<Block>),
     #[error("Block {0} has already been processed and marked as invalid")]
@@ -81,6 +83,9 @@ pub enum BlockError {
     IsBlockInMainChainQueryError(Id<GenBlock>, PropertyQueryError),
     #[error("Failed to obtain the minimum height with allowed reorgs: {0}")]
     MinHeightForReorgQueryError(PropertyQueryError),
+
+    #[error("Error querying a property: {0}")]
+    PropertyQueryError(PropertyQueryError),
 
     #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
     InvariantErrorFailedToFindNewChainPath(Id<GenBlock>, Id<GenBlock>, PropertyQueryError),
@@ -115,10 +120,13 @@ pub enum CheckBlockError {
     StateUpdateFailed(#[from] ConnectTransactionError),
     #[error("Block has an invalid merkle root")]
     MerkleRootMismatch,
-    #[error("Previous block {0} of block {1} not found in database")]
-    PrevBlockNotFound(Id<GenBlock>, Id<Block>),
-    #[error("Block {0} not found in database")]
-    BlockNotFound(Id<GenBlock>),
+    #[error("Parent block {parent_block_id} of block {block_id} not found in database")]
+    ParentBlockMissing {
+        block_id: Id<Block>,
+        parent_block_id: Id<GenBlock>,
+    },
+    #[error("Block {0} not found in database during in-memory reorg")]
+    BlockNotFoundDuringInMemoryReorg(Id<GenBlock>),
     #[error("Block time ({0:?}) must be equal or higher than the median of its ancestors ({1:?})")]
     BlockTimeOrderInvalid(BlockTimestamp, BlockTimestamp),
     #[error("Block time too far into the future")]
@@ -145,8 +153,11 @@ pub enum CheckBlockError {
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("Error during sealing an epoch: {0}")]
     EpochSealError(#[from] EpochSealError),
-    #[error("Block {0} has invalid parent block")]
-    InvalidParent(Id<Block>),
+    #[error("Block {block_id} has invalid parent block {parent_block_id}")]
+    InvalidParent {
+        block_id: Id<Block>,
+        parent_block_id: Id<GenBlock>,
+    },
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -161,8 +172,8 @@ pub enum CheckBlockTransactionsError {
 pub enum OrphanCheckError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] chainstate_storage::Error),
-    #[error("Block index not found")]
-    PrevBlockIndexNotFound(PropertyQueryError),
+    #[error("Property query error: {0}")]
+    PropertyQueryError(PropertyQueryError),
     #[error("Orphan that was submitted legitimately through a local source")]
     LocalOrphan,
 }
