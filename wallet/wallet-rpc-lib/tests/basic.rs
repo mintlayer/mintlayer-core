@@ -138,12 +138,18 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
     let (utxo_amount, _outpoint0) = {
         let utxo0 = utxos[0].as_object().unwrap();
         let outpt = utxo0["outpoint"].as_object().unwrap();
-        let id = outpt["id"].as_object().unwrap()["BlockReward"].as_str().unwrap();
+        let id = outpt["source_id"].as_object().unwrap()["content"].as_object().unwrap()
+            ["block_id"]
+            .as_str()
+            .unwrap();
         let index = outpt["index"].as_u64().unwrap();
         assert_eq!(index, 0);
 
-        let output = &utxo0["output"].as_object().unwrap()["Transfer"].as_array().unwrap();
-        let amount_val = &output[0].as_object().unwrap()["Coin"].as_object().unwrap()["atoms"];
+        let output = &utxo0["output"].as_object().unwrap()["content"].as_object().unwrap()["value"]
+            .as_object()
+            .unwrap();
+        let amount_val =
+            &output["content"].as_object().unwrap()["amount"].as_object().unwrap()["atoms"];
         let amount = amount_val.as_str().unwrap().parse::<u128>().unwrap();
 
         let source_id: Id<Block> = wallet_test_node::decode_hex(id);
