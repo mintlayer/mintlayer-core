@@ -15,6 +15,7 @@
 
 mod chainstateref;
 mod error;
+mod error_classification;
 mod info;
 mod median_time;
 mod orphan_blocks;
@@ -75,6 +76,7 @@ pub use error::{
     BlockError, CheckBlockError, CheckBlockTransactionsError, DbCommittingContext,
     InitializationError, OrphanCheckError, StorageCompatibilityCheckError,
 };
+pub use error_classification::{BlockProcessingErrorClass, BlockProcessingErrorClassification};
 pub use orphan_blocks::OrphanBlocksRef;
 pub use transaction_verifier::{
     error::{ConnectTransactionError, SpendStakeError, TokenIssuanceError, TokensError},
@@ -313,18 +315,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     ) -> Result<bool, BlockIntegrationError> {
         let mut block_status = BlockStatus::new();
 
-        let result = chainstate_ref.check_block(block);
-        if result.is_err() {
-            // TODO: "technical" errors (e.g. a DB error) should not lead to permanent
-            // block invalidation. The same applies to the other unconditional
-            // call of "set_validation_failed" below.
-            // See https://github.com/mintlayer/mintlayer-core/issues/1033 (item #3).
-            block_status.set_validation_failed();
-        }
-
-        result
+        chainstate_ref
+            .check_block(block)
             .map_err(BlockError::CheckBlockFailed)
-            .map_err(|err| BlockIntegrationError::OtherValidationError(err, block_status))?;
+            .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
 
         block_status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
         let block_status = block_status;
@@ -333,7 +327,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         chainstate_ref
             .set_new_block_index(&block_index)
             .and_then(|_| chainstate_ref.persist_block(block))
-            .map_err(|err| BlockIntegrationError::OtherValidationError(err, block_status))?;
+            .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
 
         // Note: we don't advance the stage to FullyChecked if activate_best_chain succeeds even
         // if we know that a reorg has occurred, because during a reorg multiple blocks get
@@ -354,15 +348,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     block_id,
                 )
             }
-            ReorgError::BlockDataMissing(block_id) => {
-                BlockIntegrationError::ConnectBlockErrorDuringReorg(
-                    BlockError::BlockDataMissingForValidBlockIndex(block_id),
-                    block_status,
-                    block_id,
-                )
-            }
             ReorgError::OtherError(block_err) => {
-                BlockIntegrationError::OtherValidationError(block_err, block_status)
+                BlockIntegrationError::OtherReorgError(block_err, block_status)
             }
         })
     }
@@ -407,9 +394,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             },
         );
 
-        // Check the result and bail out on success or on a db error.
-        // On a validation error, retrieve its data for the next step.
-        let (err, status, first_invalid_block_id) = match integrate_block_result {
+        match integrate_block_result {
             Ok(reorg_occurred) => {
                 // If the above code has succeeded, then the block_index must be present in the DB.
                 // Note that we can't return the initially obtained block_index, because its
@@ -433,45 +418,97 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             Err(BlockIntegrationError::ConnectBlockErrorDuringReorg(
                 err,
                 status,
-                first_invalid_block_id,
-            )) => (err, status, Some(first_invalid_block_id)),
-            Err(BlockIntegrationError::OtherValidationError(err, status)) => (err, status, None),
+                first_invalid_parent_id,
+            )) => {
+                let is_block_in_main_chain = {
+                    let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
+                    is_block_in_main_chain(&chainstate_ref, &first_invalid_parent_id.into())?
+                };
+                assert!(!is_block_in_main_chain);
+
+                let error_class = err.classify();
+                if error_class.block_should_be_invalidated() {
+                    log::warn!(
+                        "Bad block {} found during reorg, invalidating",
+                        first_invalid_parent_id
+                    );
+
+                    // Since the failure occurred during reorg, the new block itself is ok.
+                    // Update its block status to persist its validation stage.
+                    // (Also, invalidate_block needs the block index to exist in order to be able to
+                    // set the corresponding failure bit.)
+                    debug_assert!(status.is_ok());
+                    // Ignore the result, because we already have an error to return.
+                    let _result = self.update_block_status(&block_index, status);
+
+                    // Again, we ignore the result here.
+                    let _result = BlockInvalidator::new(self).invalidate_block(
+                        &first_invalid_parent_id,
+                        block_invalidation::IsExplicit::No,
+                    );
+                } else {
+                    log::warn!(
+                        "Error occurred during reorg, but the block ({}) may not be invalid; skipping invalidation",
+                        first_invalid_parent_id
+                    );
+                    // Don't save an "ok" status for a block that hasn't been persisted.
+                }
+                return Err(err);
+            }
+            Err(BlockIntegrationError::OtherReorgError(err, _status)) => {
+                log::warn!("An error occurred during reorg, but none of the blocks can be blamed");
+                // Don't save an "ok" status for a block that hasn't been persisted.
+                return Err(err);
+            }
+            Err(BlockIntegrationError::BlockCheckError(err, status)) => {
+                // The failure occurred during the integration of the new block itself.
+
+                let error_class = err.classify();
+                if error_class.block_should_be_invalidated() {
+                    log::warn!(
+                        "Block {} integration failed, marking it as a bad block",
+                        block_id
+                    );
+
+                    let mut status = status;
+                    status.set_validation_failed();
+                    // Ignore the result, because we already have an error to return.
+                    let _result = self.update_block_status(&block_index, status);
+                } else {
+                    log::warn!(
+                        "Block {} integration failed, but it may not be a bad block",
+                        block_id
+                    );
+                    // Don't save an "ok" status for a block that hasn't been persisted.
+                }
+                return Err(err);
+            }
         };
+    }
 
-        // Update the block status; note that this is needed even if we're going to call
-        // invalidate_stale_block below, because it expects that all block indices
-        // already exist (also, it will update this block's status, setting the appropriate
-        // failure bit).
-        {
-            // Note: we already have an error to return, so we ignore the result of
-            // the following call.
-            let _result = self.with_rw_tx(
-                |chainstate_ref| chainstate_ref.update_block_status(block_index.clone(), status),
-                |attempt_number| {
-                    log::info!("Updating status for block {block_id}, attempt #{attempt_number}");
-                },
-                |attempts_count, db_err| {
-                    BlockError::DbCommitError(
-                        attempts_count,
-                        db_err,
-                        DbCommittingContext::BlockStatus(block_id),
-                    )
-                },
-            );
-        }
-
-        if let Some(first_invalid_block_id) = first_invalid_block_id {
-            let is_block_in_main_chain = {
-                let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
-                is_block_in_main_chain(&chainstate_ref, &first_invalid_block_id.into())?
-            };
-            assert!(!is_block_in_main_chain);
-            // Again, we ignore the result here.
-            let _result = BlockInvalidator::new(self)
-                .invalidate_block(&first_invalid_block_id, block_invalidation::IsExplicit::No);
-        }
-
-        Err(err)
+    #[log_error]
+    fn update_block_status(
+        &mut self,
+        block_index: &BlockIndex,
+        status: BlockStatus,
+    ) -> Result<(), BlockError> {
+        self.with_rw_tx(
+            |chainstate_ref| chainstate_ref.update_block_status(block_index.clone(), status),
+            |attempt_number| {
+                log::info!(
+                    "Updating status for block {}, attempt #{}",
+                    block_index.block_id(),
+                    attempt_number
+                );
+            },
+            |attempts_count, db_err| {
+                BlockError::DbCommitError(
+                    attempts_count,
+                    db_err,
+                    DbCommittingContext::BlockStatus(*block_index.block_id()),
+                )
+            },
+        )
     }
 
     /// process orphan blocks that depend on the given block, recursively
@@ -718,8 +755,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 enum BlockIntegrationError {
     #[error("Reorg error during block integration: {0}; resulting block status is {1}; first bad block id is {2}")]
     ConnectBlockErrorDuringReorg(BlockError, BlockStatus, Id<Block>),
-    #[error("Generic error during block integration: {0}; resulting block status is {1}")]
-    OtherValidationError(BlockError, BlockStatus),
+    #[error("Reorg error during block integration: {0}; resulting block status is {1}")]
+    OtherReorgError(BlockError, BlockStatus),
+    #[error("Error checking block during block integration: {0}; resulting block status is {1}")]
+    BlockCheckError(BlockError, BlockStatus),
     #[error("Failed to commit block data for block {0} after {1} attempts: {2}")]
     BlockCommitError(Id<Block>, usize, chainstate_storage::Error),
     #[error("Generic error: {0}")]

@@ -89,7 +89,8 @@ impl DisconnectionReason {
             | P2pError::InvalidStorageState(_)
             | P2pError::PeerDbStorageVersionMismatch { .. }
             | P2pError::MempoolError(_)
-            | P2pError::MessageCodecError(_) => None,
+            | P2pError::MessageCodecError(_)
+            | P2pError::SyncError(_) => None,
             P2pError::ConnectionValidationFailed(err) => match err {
                 ConnectionValidationError::UnsupportedProtocol {
                     peer_protocol_version: _,
