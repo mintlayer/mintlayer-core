@@ -15,7 +15,7 @@
 
 use common::{
     address::AddressError,
-    chain::{ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput},
+    chain::{ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, UtxoOutPoint},
     primitives::Id,
 };
 
@@ -69,4 +69,25 @@ impl RpcTxInput {
 pub enum RpcOutPointSourceId {
     Transaction { tx_id: Id<Transaction> },
     BlockReward { block_id: Id<GenBlock> },
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct RpcUtxoOutpoint {
+    source_id: RpcOutPointSourceId,
+    index: u32,
+}
+
+impl RpcUtxoOutpoint {
+    pub fn new(outpoint: UtxoOutPoint) -> Self {
+        let source_id = match outpoint.source_id() {
+            OutPointSourceId::Transaction(tx_id) => RpcOutPointSourceId::Transaction { tx_id },
+            OutPointSourceId::BlockReward(block_id) => {
+                RpcOutPointSourceId::BlockReward { block_id }
+            }
+        };
+        Self {
+            source_id,
+            index: outpoint.output_index(),
+        }
+    }
 }

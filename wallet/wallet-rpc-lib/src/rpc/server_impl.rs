@@ -17,7 +17,7 @@ use std::{fmt::Debug, num::NonZeroUsize, str::FromStr, time::Duration};
 
 use chainstate::ChainInfo;
 use common::{
-    address::dehexify::{dehexify_all_addresses, to_dehexified_json},
+    address::dehexify::dehexify_all_addresses,
     chain::{
         tokens::{IsTokenUnfreezable, TokenId},
         Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
@@ -433,7 +433,11 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
 
         let result = utxos
             .into_iter()
-            .map(|utxo| to_dehexified_json(&self.chain_config, UtxoInfo::from_tuple(utxo)))
+            .map(|(utxo_outpoint, tx_ouput)| {
+                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config)
+                    .map(serde_json::to_value);
+                rpc::handle_result(result)
+            })
             .collect::<Result<Vec<_>, _>>();
 
         rpc::handle_result(result)
@@ -451,7 +455,11 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
 
         let result = utxos
             .into_iter()
-            .map(|utxo| to_dehexified_json(&self.chain_config, UtxoInfo::from_tuple(utxo)))
+            .map(|(utxo_outpoint, tx_ouput)| {
+                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config)
+                    .map(serde_json::to_value);
+                rpc::handle_result(result)
+            })
             .collect::<Result<Vec<_>, _>>();
 
         rpc::handle_result(result)

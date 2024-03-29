@@ -31,7 +31,7 @@ impl RpcBlockReward {
         let rpc_outputs = reward
             .outputs()
             .iter()
-            .map(|output| RpcTxOutput::new(chain_config, output))
+            .map(|output| RpcTxOutput::new(chain_config, output.clone()))
             .collect::<Result<Vec<_>, _>>()?;
 
         let rpc_tx = Self {

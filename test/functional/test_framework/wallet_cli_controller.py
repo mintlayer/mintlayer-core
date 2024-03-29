@@ -266,14 +266,14 @@ class WalletCliController:
 
         j = json.loads(output)
 
-        return [UtxoOutpoint(id=match["outpoint"]["id"]["Transaction"], index=int(match["outpoint"]["index"])) for match in j]
+        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]["tx_id"], index=int(match["outpoint"]["index"])) for match in j]
 
     async def list_multisig_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
         output = await self._write_command(f"standalone-multisig-utxos {utxo_types} {with_locked} {''.join(utxo_states)}\n")
 
         j = json.loads(output)
 
-        return [UtxoOutpoint(id=match["outpoint"]["id"]["Transaction"], index=int(match["outpoint"]["index"])) for match in j]
+        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]["tx_id"], index=int(match["outpoint"]["index"])) for match in j]
 
     async def get_transaction(self, tx_id: str):
         out = await self._write_command(f"transaction-get {tx_id}\n")

@@ -15,8 +15,9 @@
 
 //! Types supporting the RPC interface
 
+use chainstate::rpc::{RpcTxOutput, RpcUtxoOutpoint};
 use common::{
-    address::Address,
+    address::{Address, AddressError},
     chain::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallengeError,
@@ -34,7 +35,7 @@ use crypto::{
     },
     vrf::VRFPublicKey,
 };
-use rpc::description::{HasValueHint, ValueHint as VH};
+use rpc::description::HasValueHint;
 use wallet::account::PoolData;
 
 pub use common::{
@@ -259,18 +260,20 @@ impl VrfPublicKeyInfo {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct UtxoInfo {
-    pub outpoint: UtxoOutPoint,
-    pub output: TxOutput,
-}
-
-impl rpc::description::HasValueHint for UtxoInfo {
-    const HINT_SER: VH =
-        VH::object(&[("outpoint", &UtxoOutPoint::HINT_SER), ("output", &VH::GENERIC_OBJECT)]);
+    pub outpoint: RpcUtxoOutpoint,
+    pub output: RpcTxOutput,
 }
 
 impl UtxoInfo {
-    pub fn from_tuple((outpoint, output): (UtxoOutPoint, TxOutput)) -> Self {
-        Self { outpoint, output }
+    pub fn new(
+        outpoint: UtxoOutPoint,
+        output: TxOutput,
+        chain_config: &ChainConfig,
+    ) -> Result<Self, AddressError> {
+        Ok(Self {
+            output: RpcTxOutput::new(chain_config, output)?,
+            outpoint: RpcUtxoOutpoint::new(outpoint),
+        })
     }
 }
 

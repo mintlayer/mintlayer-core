@@ -17,7 +17,7 @@ use std::{fmt::Debug, num::NonZeroUsize, path::PathBuf, str::FromStr};
 
 use chainstate::ChainInfo;
 use common::{
-    address::dehexify::{dehexify_all_addresses, to_dehexified_json},
+    address::{dehexify::dehexify_all_addresses, AddressError},
     chain::{
         tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
@@ -67,6 +67,9 @@ pub enum WalletRpcHandlesClientError<N: NodeInterface> {
 
     #[error(transparent)]
     HexEncodingError(#[from] hex::FromHexError),
+
+    #[error(transparent)]
+    AddressError(#[from] AddressError),
 }
 
 impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcHandlesClient<N> {
@@ -393,10 +396,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
 
         utxos
             .into_iter()
-            .map(|utxo| {
-                to_dehexified_json(self.wallet_rpc.chain_config(), UtxoInfo::from_tuple(utxo))
+            .map(|(utxo_outpoint, tx_ouput)| {
+                UtxoInfo::new(utxo_outpoint, tx_ouput, self.wallet_rpc.chain_config())
+                    .map(serde_json::to_value)
             })
-            .collect::<Result<Vec<_>, _>>()
+            .collect::<Result<Result<Vec<_>, _>, _>>()
+            .map_err(WalletRpcHandlesClientError::AddressError)?
             .map_err(WalletRpcHandlesClientError::SerializationError)
     }
 
@@ -420,10 +425,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
 
         utxos
             .into_iter()
-            .map(|utxo| {
-                to_dehexified_json(self.wallet_rpc.chain_config(), UtxoInfo::from_tuple(utxo))
+            .map(|(utxo_outpoint, tx_ouput)| {
+                UtxoInfo::new(utxo_outpoint, tx_ouput, self.wallet_rpc.chain_config())
+                    .map(serde_json::to_value)
             })
-            .collect::<Result<Vec<_>, _>>()
+            .collect::<Result<Result<Vec<_>, _>, _>>()
+            .map_err(WalletRpcHandlesClientError::AddressError)?
             .map_err(WalletRpcHandlesClientError::SerializationError)
     }
 

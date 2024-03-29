@@ -126,50 +126,50 @@ pub enum RpcTxOutput {
 }
 
 impl RpcTxOutput {
-    pub fn new(chain_config: &ChainConfig, output: &TxOutput) -> Result<Self, AddressError> {
+    pub fn new(chain_config: &ChainConfig, output: TxOutput) -> Result<Self, AddressError> {
         let result = match output {
             TxOutput::Transfer(value, destination) => RpcTxOutput::Transfer {
-                value: RpcOutputValue::new(chain_config, value.clone())?,
-                destination: RpcAddress::new(chain_config, destination.clone())?,
+                value: RpcOutputValue::new(chain_config, value)?,
+                destination: RpcAddress::new(chain_config, destination)?,
             },
             TxOutput::LockThenTransfer(value, destination, timelock) => {
                 RpcTxOutput::LockThenTransfer {
-                    value: RpcOutputValue::new(chain_config, value.clone())?,
-                    destination: RpcAddress::new(chain_config, destination.clone())?,
-                    timelock: *timelock,
+                    value: RpcOutputValue::new(chain_config, value)?,
+                    destination: RpcAddress::new(chain_config, destination)?,
+                    timelock,
                 }
             }
             TxOutput::Burn(value) => RpcTxOutput::Burn {
-                value: RpcOutputValue::new(chain_config, value.clone())?,
+                value: RpcOutputValue::new(chain_config, value)?,
             },
             TxOutput::CreateStakePool(id, data) => RpcTxOutput::CreateStakePool {
-                pool_id: RpcAddress::new(chain_config, *id)?,
-                data: Box::new(RpcStakePoolData::new(chain_config, data)?),
+                pool_id: RpcAddress::new(chain_config, id)?,
+                data: Box::new(RpcStakePoolData::new(chain_config, &data)?),
             },
             TxOutput::ProduceBlockFromStake(destination, id) => {
                 RpcTxOutput::ProduceBlockFromStake {
-                    destination: RpcAddress::new(chain_config, destination.clone())?,
-                    pool_id: RpcAddress::new(chain_config, *id)?,
+                    destination: RpcAddress::new(chain_config, destination)?,
+                    pool_id: RpcAddress::new(chain_config, id)?,
                 }
             }
             TxOutput::CreateDelegationId(destination, id) => RpcTxOutput::CreateDelegationId {
-                destination: RpcAddress::new(chain_config, destination.clone())?,
-                pool_id: RpcAddress::new(chain_config, *id)?,
+                destination: RpcAddress::new(chain_config, destination)?,
+                pool_id: RpcAddress::new(chain_config, id)?,
             },
             TxOutput::DelegateStaking(amount, id) => RpcTxOutput::DelegateStaking {
-                amount: RpcAmountOut::from_amount(*amount, chain_config.coin_decimals()),
-                delegation_id: RpcAddress::new(chain_config, *id)?,
+                amount: RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
+                delegation_id: RpcAddress::new(chain_config, id)?,
             },
             TxOutput::IssueFungibleToken(issuance) => RpcTxOutput::IssueFungibleToken {
-                data: Box::new(RpcTokenIssuance::new(chain_config, issuance)?),
+                data: Box::new(RpcTokenIssuance::new(chain_config, &issuance)?),
             },
             TxOutput::IssueNft(id, issuance, destination) => RpcTxOutput::IssueNft {
-                token_id: RpcAddress::new(chain_config, *id)?,
-                data: Box::new(RpcNftIssuance::new(chain_config, issuance)?),
-                destination: RpcAddress::new(chain_config, destination.clone())?,
+                token_id: RpcAddress::new(chain_config, id)?,
+                data: Box::new(RpcNftIssuance::new(chain_config, &issuance)?),
+                destination: RpcAddress::new(chain_config, destination)?,
             },
             TxOutput::DataDeposit(data) => RpcTxOutput::DataDeposit {
-                data: RpcHexString::from_bytes(data.clone()),
+                data: RpcHexString::from_bytes(data),
             },
         };
         Ok(result)
