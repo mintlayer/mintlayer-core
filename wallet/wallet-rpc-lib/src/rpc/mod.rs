@@ -319,15 +319,18 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
 
         let public_keys = public_keys
             .into_iter()
-            .map(|addr| {
+            .enumerate()
+            .map(|(idx, addr)| {
                 addr.decode_object(&self.chain_config)
-                    .map_err(|_| RpcError::InvalidAddress)
+                    .map_err(|_| RpcError::MultisigNotPublicKey(idx))
                     .and_then(|dest| match dest {
                         Destination::PublicKey(pk) => Ok(pk),
                         Destination::PublicKeyHash(_)
                         | Destination::AnyoneCanSpend
                         | Destination::ScriptHash(_)
-                        | Destination::ClassicMultisig(_) => Err(RpcError::MultisigNotPublicKey),
+                        | Destination::ClassicMultisig(_) => {
+                            Err(RpcError::MultisigNotPublicKey(idx))
+                        }
                     })
             })
             .collect::<WRpcResult<Vec<PublicKey>, N>>()?;

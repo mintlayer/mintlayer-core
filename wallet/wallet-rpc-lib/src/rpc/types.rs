@@ -113,8 +113,8 @@ pub enum RpcError<N: NodeInterface> {
     #[error("Can't compose a transaction without any inputs")]
     ComposeTransactionEmptyInputs,
 
-    #[error("Provided addresses to create a Multisig address are not all public keys. Only public keys can be used.")]
-    MultisigNotPublicKey,
+    #[error("Provided address to create a Multisig address at index {0} is not a valid public key. Only public keys can be used.")]
+    MultisigNotPublicKey(usize),
 
     #[error("Invalid multisig: {0}")]
     InvalidMultisigChallenge(#[from] ClassicMultisigChallengeError),

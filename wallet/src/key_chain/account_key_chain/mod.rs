@@ -592,7 +592,7 @@ impl AccountKeyChain {
                     private_key: _,
                 } => AccountStandaloneKeyInfo {
                     address: dest.clone(),
-                    address_type: AccountStandaloneKeyType::Address,
+                    address_type: AccountStandaloneKeyType::new(dest),
                     label: label.clone(),
                 },
                 AccountStandaloneKey::Multisig {
@@ -600,7 +600,7 @@ impl AccountKeyChain {
                     challenge: _,
                 } => AccountStandaloneKeyInfo {
                     address: dest.clone(),
-                    address_type: AccountStandaloneKeyType::Multisig,
+                    address_type: AccountStandaloneKeyType::new(dest),
                     label: label.clone(),
                 },
             })

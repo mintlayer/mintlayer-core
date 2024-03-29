@@ -126,8 +126,11 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             pub_key = await wallet.reveal_public_key_as_address()
             public_keys = [pub_key]
 
-            # invalid multisig address
+            # empty public keys for multisig
             assert_in("Public keys vector is empty", await wallet.add_standalone_multisig_address(1, []))
+
+            # invalid public key address
+            assert_in("Provided address to create a Multisig address at index 1 is not a valid public key", await wallet.add_standalone_multisig_address(1, [pub_key, "invalid-pub-key"]))
 
             # min_required_signatures is 0
             assert_in("Minimum number of signatures can't be 0", await wallet.add_standalone_multisig_address(0, [pub_key]))
@@ -158,9 +161,8 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 multisig_address = output.splitlines()[1]
 
                 output = await wallet.get_standalone_addresses()
-                assert_in(multisig_address, output)
-                if label:
-                    assert_in(label, output)
+                label = label if label else ''
+                assert_in(f"{multisig_address} | ClassicMultisig | {label}", output)
 
             # send some coins to the multisig address
             await wallet.close_wallet()
@@ -209,6 +211,13 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert_in("The transaction has been fully signed and is ready to be broadcast to network.", output)
             signed_tx = output.split('\n')[2]
 
+            output = await wallet.get_standalone_address_details(multisig_address)
+            assert_in(f"Address: {multisig_address}", output)
+            assert_in(f"min_required_signatures: {min_required_signatures}", output)
+            for pk in public_keys:
+                assert_in(pk, output)
+            assert_in(f"\nBalances:\nCoins amount: 1", output)
+
             assert_in("The transaction was submitted successfully", await wallet.submit_transaction(signed_tx))
             self.generate_block()
 
@@ -220,9 +229,12 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             assert_in(f"Coins amount: {coins_from_multisig}", await wallet.get_balance())
 
             output = await wallet.get_standalone_address_details(multisig_address)
+            assert_in(f"Address: {multisig_address}", output)
             assert_in(f"min_required_signatures: {min_required_signatures}", output)
             for pk in public_keys:
                 assert_in(pk, output)
+            # check we have spent from the multisig address
+            assert_in(f"\nBalances:\nCoins amount: 0", output)
 
 
 if __name__ == '__main__':

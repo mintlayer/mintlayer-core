@@ -389,8 +389,11 @@ where
                     addresses_table.extend(addresses_with_label.into_iter().map(|info| {
                         let label = info.label.unwrap_or_default();
                         let address_type = match info.address_type {
-                            AccountStandaloneKeyType::Address => "Address",
-                            AccountStandaloneKeyType::Multisig => "Multisig",
+                            AccountStandaloneKeyType::PublicKey => "PublicKey",
+                            AccountStandaloneKeyType::PublicKeyHash => "PublicKeyHash",
+                            AccountStandaloneKeyType::AnyoneCanSpend => "AnyoneCanSpend",
+                            AccountStandaloneKeyType::ScriptHash => "ScriptHash",
+                            AccountStandaloneKeyType::ClassicMultisig => "ClassicMultisig",
                         };
                         prettytable::row![info.address, address_type, label]
                     }));
@@ -413,7 +416,7 @@ where
                         let has_private_key = if has_private_key { "Yes" } else { "No" };
 
                         format!(
-                            "Address: {}, label: {}, has_private_key: {}\nBalances:",
+                            "Address: {}, label: {}, has_private_key: {}\nBalances:\n",
                             addr_details.address, label_str, has_private_key
                         )
                     }
@@ -422,7 +425,7 @@ where
                         public_keys,
                     } => {
                         format!(
-                            "Address: {}, label: {}, min_required_signatures: {}, public_keys: {}",
+                            "Address: {}, label: {}, min_required_signatures: {}, public_keys: {}\nBalances:\n",
                             addr_details.address,
                             label_str,
                             min_required_signatures,
@@ -704,19 +707,21 @@ where
                 label,
                 no_rescan,
             } => {
+                let no_rescan = no_rescan.unwrap_or(false);
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 wallet
-                    .add_standalone_address(
-                        selected_account,
-                        address,
-                        label,
-                        no_rescan.unwrap_or(false),
-                    )
+                    .add_standalone_address(selected_account, address, label, no_rescan)
                     .await?;
+
+                let output = if no_rescan {
+                    "Success, the new address has been added to the account."
+                } else {
+                    "Success, the new address has been added to the account.\nRescanning the blockchain to detect balance in added new addresses"
+                };
 
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status().await?,
-                    print_message: "Success, the new address has been added to the account".into(),
+                    print_message: output.into(),
                 })
             }
 
@@ -725,20 +730,21 @@ where
                 label,
                 no_rescan,
             } => {
+                let no_rescan = no_rescan.unwrap_or(false);
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 wallet
-                    .add_standalone_private_key(
-                        selected_account,
-                        hex_private_key,
-                        label,
-                        no_rescan.unwrap_or(false),
-                    )
+                    .add_standalone_private_key(selected_account, hex_private_key, label, no_rescan)
                     .await?;
+
+                let output = if no_rescan {
+                    "Success, the new private key has been added to the account."
+                } else {
+                    "Success, the new private key has been added to the account.\nRescanning the blockchain to detect balance in added new addresses"
+                };
 
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status().await?,
-                    print_message: "Success, the new private key has been added to the account"
-                        .into(),
+                    print_message: output.into(),
                 })
             }
 
@@ -748,6 +754,7 @@ where
                 label,
                 no_rescan,
             } => {
+                let no_rescan = no_rescan.unwrap_or(false);
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let multisig_address = wallet
                     .add_standalone_multisig(
@@ -755,13 +762,19 @@ where
                         min_required_signatures,
                         public_keys,
                         label,
-                        no_rescan.unwrap_or(false),
+                        no_rescan,
                     )
                     .await?;
 
+                let output = if no_rescan {
+                    format!("Success. The following new multisig address has been added to the account\n{multisig_address}")
+                } else {
+                    format!("Success. The following new multisig address has been added to the account\n{multisig_address}\nRescanning the blockchain to detect balance in added new addresses")
+                };
+
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status().await?,
-                    print_message: format!("Success. The following new multisig address has been added to the account\n{multisig_address}")
+                    print_message: output,
                 })
             }
 

@@ -600,6 +600,9 @@ impl<B: storage::Backend> Wallet<B> {
     /// Reset all scanned transactions and revert all accounts to the genesis block
     /// this will cause the wallet to rescan the blockchain
     pub fn reset_wallet_to_genesis(&mut self) -> WalletResult<()> {
+        logging::log::info!(
+            "Resetting the wallet to genesis and starting to rescan the blockchain"
+        );
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
         let mut accounts =
             Self::reset_wallet_transactions_and_load(self.chain_config.clone(), &mut db_tx)?;

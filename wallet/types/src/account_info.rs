@@ -124,8 +124,23 @@ pub enum AccountStandaloneKey {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub enum AccountStandaloneKeyType {
-    Address,
-    Multisig,
+    PublicKey,
+    PublicKeyHash,
+    ScriptHash,
+    ClassicMultisig,
+    AnyoneCanSpend,
+}
+
+impl AccountStandaloneKeyType {
+    pub fn new(dest: &Destination) -> Self {
+        match dest {
+            Destination::AnyoneCanSpend => Self::AnyoneCanSpend,
+            Destination::PublicKey(_) => Self::PublicKey,
+            Destination::PublicKeyHash(_) => Self::PublicKeyHash,
+            Destination::ScriptHash(_) => Self::ScriptHash,
+            Destination::ClassicMultisig(_) => Self::ClassicMultisig,
+        }
+    }
 }
 
 pub struct AccountStandaloneKeyInfo {
