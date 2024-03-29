@@ -101,6 +101,29 @@ Returns:
 }
 ```
 
+### Method `standalone_address_label_rename`
+
+Add, rename or delete a label to an already added standalone address.
+Specifying a lable will add or replace the existing one,
+and not specifying a label will remove the existing one.
+
+
+Parameters:
+```
+{
+    "account": number,
+    "address": bech32 string,
+    "label": EITHER OF
+         1) string
+         2) null,
+}
+```
+
+Returns:
+```
+nothing
+```
+
 ### Method `standalone_add_watch_only_address`
 
 Add a new standalone watch only address not derived from the selected account's key chain
@@ -1902,8 +1925,11 @@ Returns:
 [ {
     "address": string,
     "address_type": EITHER OF
-         1) "Address"
-         2) "Multisig",
+         1) "PublicKey"
+         2) "PublicKeyHash"
+         3) "ScriptHash"
+         4) "ClassicMultisig"
+         5) "AnyoneCanSpend",
     "label": EITHER OF
          1) string
          2) null,
