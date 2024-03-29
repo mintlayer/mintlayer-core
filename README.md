@@ -62,16 +62,16 @@ Here are the commands as recommended for different scenarios:
 
 #### Assuming you're using the source code
 
-Every release has a tag and a release branch. Make sure you checkout the release you need. For example, if you need v0.4.1, you should first run the following to check out the release branch:
+Every release has a tag and a release branch. Make sure you checkout the release you need. For example, if you need v0.4.2, you should first run the following to check out the release branch:
 
 ```sh
-git checkout release-v0.4.1
+git checkout release-v0.4.2
 ```
 
 or to checkout the tag:
 
 ```sh
-git checkout tags/v0.4.1
+git checkout tags/v0.4.2
 ```
 
 Release branches are more recommended than tags, because they get necessary security patches, if any. Tags are just markers.
