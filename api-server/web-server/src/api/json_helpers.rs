@@ -124,6 +124,8 @@ pub fn txoutput_to_json(
                     "vrf_public_key": Address::new(chain_config, data.vrf_public_key().clone()).expect("no error").as_str(),
                     "decommission_key": Address::new(chain_config, data.decommission_key().clone()).expect("no error").as_str(),
                     "margin_ratio_per_thousand": data.margin_ratio_per_thousand(),
+                    "margin_ratio_decimal": data.margin_ratio_per_thousand().into_decimal_str(),
+                    "margin_ratio_percentage": data.margin_ratio_per_thousand().into_percentage_str(),
                     "cost_per_block": amount_to_json(data.cost_per_block(), chain_config.coin_decimals())
                 },
             })

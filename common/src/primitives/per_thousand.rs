@@ -82,6 +82,14 @@ impl PerThousand {
         result
     }
 
+    pub fn into_decimal_str(&self) -> String {
+        Amount::from_atoms(self.0.into()).into_fixedpoint_str(3)
+    }
+
+    pub fn into_per_thousand_int(&self) -> u16 {
+        self.0
+    }
+
     fn write_as_percentage_str(&self, dest: &mut impl std::fmt::Write) -> std::fmt::Result {
         write!(
             dest,
@@ -188,31 +196,58 @@ mod tests {
     }
 
     #[test]
-    fn test_into_percentage_str() {
+    fn test_into_string() {
         assert_eq!(PerThousand::new(1).unwrap().into_percentage_str(), "0.1%");
+        assert_eq!(PerThousand::new(1).unwrap().into_decimal_str(), "0.001");
+        assert_eq!(PerThousand::new(1).unwrap().into_per_thousand_int(), 1);
         assert_eq!(PerThousand::new(10).unwrap().into_percentage_str(), "1%");
+        assert_eq!(PerThousand::new(10).unwrap().into_decimal_str(), "0.01");
+        assert_eq!(PerThousand::new(10).unwrap().into_per_thousand_int(), 10);
         assert_eq!(PerThousand::new(100).unwrap().into_percentage_str(), "10%");
+        assert_eq!(PerThousand::new(100).unwrap().into_decimal_str(), "0.1");
+        assert_eq!(PerThousand::new(100).unwrap().into_per_thousand_int(), 100);
         assert_eq!(
             PerThousand::new(1000).unwrap().into_percentage_str(),
             "100%"
         );
+        assert_eq!(PerThousand::new(1000).unwrap().into_decimal_str(), "1");
+        assert_eq!(
+            PerThousand::new(1000).unwrap().into_per_thousand_int(),
+            1000
+        );
 
         assert_eq!(PerThousand::new(11).unwrap().into_percentage_str(), "1.1%");
+        assert_eq!(PerThousand::new(11).unwrap().into_decimal_str(), "0.011");
+        assert_eq!(PerThousand::new(11).unwrap().into_per_thousand_int(), 11);
+
         assert_eq!(PerThousand::new(23).unwrap().into_percentage_str(), "2.3%");
+        assert_eq!(PerThousand::new(23).unwrap().into_decimal_str(), "0.023");
+        assert_eq!(PerThousand::new(23).unwrap().into_per_thousand_int(), 23);
+
         assert_eq!(PerThousand::new(98).unwrap().into_percentage_str(), "9.8%");
+        assert_eq!(PerThousand::new(98).unwrap().into_decimal_str(), "0.098");
+        assert_eq!(PerThousand::new(98).unwrap().into_per_thousand_int(), 98);
 
         assert_eq!(
             PerThousand::new(311).unwrap().into_percentage_str(),
             "31.1%"
         );
+        assert_eq!(PerThousand::new(311).unwrap().into_decimal_str(), "0.311");
+        assert_eq!(PerThousand::new(311).unwrap().into_per_thousand_int(), 311);
+
         assert_eq!(
             PerThousand::new(564).unwrap().into_percentage_str(),
             "56.4%"
         );
+        assert_eq!(PerThousand::new(564).unwrap().into_decimal_str(), "0.564");
+        assert_eq!(PerThousand::new(564).unwrap().into_per_thousand_int(), 564);
+
         assert_eq!(
             PerThousand::new(827).unwrap().into_percentage_str(),
             "82.7%"
         );
+        assert_eq!(PerThousand::new(827).unwrap().into_decimal_str(), "0.827");
+        assert_eq!(PerThousand::new(827).unwrap().into_per_thousand_int(), 827);
     }
 
     #[test]
