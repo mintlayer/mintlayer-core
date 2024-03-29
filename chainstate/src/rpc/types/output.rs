@@ -71,7 +71,7 @@ impl RpcStakePoolData {
             staker: RpcAddress::new(chain_config, data.staker().clone())?,
             vrf_public_key: RpcAddress::new(chain_config, data.vrf_public_key().clone())?,
             decommission_key: RpcAddress::new(chain_config, data.decommission_key().clone())?,
-            margin_ratio_per_thousand: data.margin_ratio_per_thousand().into_percentage_str(),
+            margin_ratio_per_thousand: data.margin_ratio_per_thousand().to_percentage_str(),
             cost_per_block: RpcAmountOut::from_amount(
                 data.cost_per_block(),
                 chain_config.coin_decimals(),

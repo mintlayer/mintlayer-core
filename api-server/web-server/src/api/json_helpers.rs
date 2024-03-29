@@ -123,9 +123,9 @@ pub fn txoutput_to_json(
                     "staker": Address::new(chain_config, data.staker().clone()).expect("no error").as_str(),
                     "vrf_public_key": Address::new(chain_config, data.vrf_public_key().clone()).expect("no error").as_str(),
                     "decommission_key": Address::new(chain_config, data.decommission_key().clone()).expect("no error").as_str(),
-                    "margin_ratio_per_thousand": data.margin_ratio_per_thousand().into_per_thousand_int(),
-                    "margin_ratio_decimal": data.margin_ratio_per_thousand().into_decimal_str(),
-                    "margin_ratio_percentage": data.margin_ratio_per_thousand().into_percentage_str(),
+                    "margin_ratio_per_thousand": data.margin_ratio_per_thousand().as_per_thousand_int(),
+                    "margin_ratio_decimal": data.margin_ratio_per_thousand().to_decimal_str(),
+                    "margin_ratio_percentage": data.margin_ratio_per_thousand().to_percentage_str(),
                     "cost_per_block": amount_to_json(data.cost_per_block(), chain_config.coin_decimals())
                 },
             })
