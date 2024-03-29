@@ -85,7 +85,7 @@ pub enum BlockError {
     MinHeightForReorgQueryError(PropertyQueryError),
 
     #[error("Error querying a property: {0}")]
-    PropertyQueryError(#[from] PropertyQueryError),
+    PropertyQueryError(PropertyQueryError),
 
     #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
     InvariantErrorFailedToFindNewChainPath(Id<GenBlock>, Id<GenBlock>, PropertyQueryError),
@@ -173,7 +173,7 @@ pub enum OrphanCheckError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] chainstate_storage::Error),
     #[error("Property query error: {0}")]
-    PropertyQueryError(#[from] PropertyQueryError),
+    PropertyQueryError(PropertyQueryError),
     #[error("Orphan that was submitted legitimately through a local source")]
     LocalOrphan,
 }

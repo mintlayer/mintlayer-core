@@ -502,7 +502,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         headers_to_check: &[SignedBlockHeader],
     ) -> Result<(), BlockError> {
         let checked_header_height = {
-            let prev_block_index = self.get_previous_block_index(checked_header)?;
+            let prev_block_index = self
+                .get_previous_block_index(checked_header)
+                .map_err(BlockError::PropertyQueryError)?;
             prev_block_index.block_height().next_height()
         };
 
