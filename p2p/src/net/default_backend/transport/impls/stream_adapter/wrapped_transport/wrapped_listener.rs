@@ -25,7 +25,7 @@ use crate::{
         default_backend::transport::{
             impls::stream_adapter::traits::StreamAdapter, TransportListener, TransportSocket,
         },
-        types::Role,
+        types::ConnectionDirection,
     },
     Result,
 };
@@ -75,7 +75,7 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener for Adap
                     match accept_res {
                         Ok((base, addr)) => {
                             // Store active handshakes because accept must be cancel safe
-                            let handshake = self.stream_adapter.handshake(base, Role::Inbound);
+                            let handshake = self.stream_adapter.handshake(base, ConnectionDirection::Inbound);
                             // Wrap one more time to store original address
                             let handshake_with_addr = Box::pin(async move {
                                 (handshake.await, addr)

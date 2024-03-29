@@ -23,7 +23,7 @@ use std::{
 };
 
 use common::primitives::user_agent::mintlayer_core_user_agent;
-use crypto::random::{make_pseudo_rng, Rng};
+use crypto::random::Rng;
 use futures::Future;
 use logging::log;
 use p2p_types::socket_address::SocketAddress;
@@ -175,16 +175,9 @@ impl TestAddressMaker {
         addrs.iter().copied().collect()
     }
 
-    pub fn new_random_address_with_rng(rng: &mut impl Rng) -> SocketAddress {
+    pub fn new_random_address(rng: &mut impl Rng) -> SocketAddress {
         let ip = Self::new_random_ipv6_addr(rng);
         SocketAddress::new(SocketAddr::new(IpAddr::V6(ip), rng.gen()))
-    }
-
-    // TODO: remove this function; rename new_random_address_with_rng to new_random_address and
-    // use it in all the tests.
-    pub fn new_random_address() -> SocketAddress {
-        let mut rng = make_pseudo_rng();
-        Self::new_random_address_with_rng(&mut rng)
     }
 }
 

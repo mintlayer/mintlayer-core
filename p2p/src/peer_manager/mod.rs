@@ -58,7 +58,7 @@ use crate::{
     net::{
         types::{
             services::{Service, Services},
-            ConnectivityEvent, PeerInfo, PeerRole, Role,
+            ConnectionDirection, ConnectivityEvent, PeerInfo, PeerRole,
         },
         ConnectivityService, NetworkingService,
     },
@@ -428,8 +428,6 @@ where
         }
     }
 
-    // TODO: this should probably be renamed to 'should_ignore_ban_score_adjustment' or something
-    // similar, because it only makes sense in that particular context.
     fn is_whitelisted_node(&self, peer_role: PeerRole, address: &SocketAddress) -> bool {
         match peer_role {
             PeerRole::Inbound
@@ -1040,15 +1038,15 @@ where
         &mut self,
         peer_address: SocketAddress,
         bind_address: SocketAddress,
-        role: Role,
+        conn_dir: ConnectionDirection,
         info: PeerInfo,
         node_address_as_seen_by_peer: Option<PeerAddress>,
     ) {
         let peer_id = info.peer_id;
 
-        let (peer_role, response_sender) = match role {
-            Role::Inbound => (PeerRole::Inbound, None),
-            Role::Outbound => {
+        let (peer_role, response_sender) = match conn_dir {
+            ConnectionDirection::Inbound => (PeerRole::Inbound, None),
+            ConnectionDirection::Outbound => {
                 let pending_connect = self.pending_outbound_connects.remove(&peer_address).expect(
                     "the address must be present in pending_outbound_connects (accept_connection)",
                 );
@@ -1226,10 +1224,6 @@ where
     /// This function maintains the overall connectivity state of peers by culling
     /// low-reputation peers and establishing new connections with peers that have higher
     /// reputation. It also updates peer scores and forgets those peers that are no longer needed.
-    ///
-    /// TODO: IP address diversity check?
-    /// TODO: exploratory peer connections?
-    /// TODO: close connection with low-score peers in favor of peers with higher score?
     ///
     /// The process starts by first checking if the number of active connections is less than
     /// the number of desired connections and there are available peers, the function tries to
@@ -1704,7 +1698,7 @@ where
                 self.accept_connection(
                     peer_address,
                     bind_address,
-                    Role::Inbound,
+                    ConnectionDirection::Inbound,
                     peer_info,
                     node_address_as_seen_by_peer,
                 );
@@ -1718,7 +1712,7 @@ where
                 self.accept_connection(
                     peer_address,
                     bind_address,
-                    Role::Outbound,
+                    ConnectionDirection::Outbound,
                     peer_info,
                     node_address_as_seen_by_peer,
                 );

@@ -40,7 +40,7 @@ use crate::{
     message::{TransactionResponse, TransactionSyncMessage},
     protocol::ProtocolConfig,
     sync::{
-        peer_v2::requested_transactions::REQUESTED_TX_EXPIRY_PERIOD,
+        peer::requested_transactions::REQUESTED_TX_EXPIRY_PERIOD,
         tests::helpers::{PeerManagerEventDesc, SyncManagerNotification, TestNode},
     },
     testing_utils::{for_each_protocol_version, test_p2p_config},

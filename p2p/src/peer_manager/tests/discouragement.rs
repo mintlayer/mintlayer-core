@@ -92,7 +92,7 @@ async fn discourage_connected_peer(#[case] seed: Seed) {
         peer_mgr
     });
 
-    let peer_addr = TestAddressMaker::new_random_address_with_rng(&mut rng);
+    let peer_addr = TestAddressMaker::new_random_address(&mut rng);
     let peer_id = inbound_block_relay_peer_accepted_by_backend(
         &conn_event_sender,
         peer_addr,
@@ -208,7 +208,7 @@ async fn dont_reject_incoming_connection_from_discouraged_peer_if_limit_not_reac
             time_getter.get_time_getter(),
         );
 
-    let peer_addr = TestAddressMaker::new_random_address_with_rng(&mut rng);
+    let peer_addr = TestAddressMaker::new_random_address(&mut rng);
 
     peer_mgr.discourage(peer_addr.as_bannable());
 

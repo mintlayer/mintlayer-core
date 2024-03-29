@@ -97,7 +97,7 @@ fn validate_services() {
             let services = Services::from_u64(services);
 
             // List all peer roles
-            for peer_role in PeerRole::ALL {
+            for peer_role in enum_iterator::all::<PeerRole>() {
                 let peer_id_1 = PeerId::new();
                 let peer_info = PeerInfo {
                     peer_id: peer_id_1,

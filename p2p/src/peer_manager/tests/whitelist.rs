@@ -20,7 +20,7 @@ use crate::{
     disconnection_reason::DisconnectionReason,
     net::{
         default_backend::{types::Command, ConnectivityHandle},
-        types::{PeerInfo, PeerRole, Role},
+        types::{ConnectionDirection, PeerInfo, PeerRole},
     },
     peer_manager::{
         peerdb::{salt::Salt, storage::PeerDbStorageWrite, CURRENT_STORAGE_VERSION},
@@ -39,6 +39,8 @@ use crate::{
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use p2p_types::bannable_address::BannableAddress;
+use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
 use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
@@ -114,7 +116,7 @@ where
     pm2.accept_connection(
         address,
         pm2.peer_connectivity_handle.local_addresses()[0],
-        Role::Inbound,
+        ConnectionDirection::Inbound,
         peer_info,
         None,
     );
@@ -229,7 +231,7 @@ where
     pm2.accept_connection(
         address,
         pm2.peer_connectivity_handle.local_addresses()[0],
-        Role::Inbound,
+        ConnectionDirection::Inbound,
         peer_info,
         None,
     );
@@ -269,12 +271,15 @@ async fn no_automatic_unban_for_whitelisted_noise() {
     .await;
 }
 
-#[tracing::instrument]
-#[test]
-fn manual_ban_overrides_whitelisting() {
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn manual_ban_overrides_whitelisting(#[case] seed: Seed) {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
-    let address_1 = TestAddressMaker::new_random_address();
-    let address_2 = TestAddressMaker::new_random_address();
+    let mut rng = make_seedable_rng(seed);
+    let address_1 = TestAddressMaker::new_random_address(&mut rng);
+    let address_2 = TestAddressMaker::new_random_address(&mut rng);
 
     let chain_config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(p2p_config_with_whitelisted(vec![address_1.ip_addr()]));
@@ -311,7 +316,7 @@ fn manual_ban_overrides_whitelisting() {
     pm.accept_connection(
         address_1,
         pm.peer_connectivity_handle.local_addresses()[0],
-        Role::Inbound,
+        ConnectionDirection::Inbound,
         peer_info,
         None,
     );

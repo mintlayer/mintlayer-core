@@ -24,6 +24,8 @@ use p2p::{
     types::socket_address::SocketAddress,
 };
 use p2p_test_utils::{expect_no_recv, expect_recv};
+use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
     crawler_p2p::{
@@ -36,15 +38,20 @@ use crate::{
     dns_server::DnsServerCommand,
 };
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn basic() {
+async fn basic(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let node_addr: SocketAddress = "1.2.3.4:3031".parse().unwrap();
     let node_soft_info = SoftwareInfo {
         user_agent: "foo".try_into().unwrap(),
         version: SemVer::new(1, 2, 3),
     };
 
-    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node_addr]);
+    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node_addr], &mut rng);
 
     // Node goes online, DNS record added
     state.node_online(node_addr, node_soft_info.clone());
@@ -79,8 +86,13 @@ async fn basic() {
 
 // Node comes offline and back online, but with different software info.
 // The new info should be stored in the db.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn software_info_update() {
+async fn software_info_update(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let node_addr: SocketAddress = "1.2.3.4:3031".parse().unwrap();
     let node_soft_info1 = SoftwareInfo {
         user_agent: "foo1".try_into().unwrap(),
@@ -91,7 +103,7 @@ async fn software_info_update() {
         version: SemVer::new(2, 3, 4),
     };
 
-    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node_addr]);
+    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node_addr], &mut rng);
 
     // Node goes online.
     state.node_online(node_addr, node_soft_info1.clone());
@@ -124,15 +136,20 @@ async fn software_info_update() {
     assert_known_addresses(&crawler, &[(node_addr, node_soft_info2)]);
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn long_offline() {
+async fn long_offline(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let node_addr: SocketAddress = "1.2.3.4:3031".parse().unwrap();
     let node_soft_info = SoftwareInfo {
         user_agent: "foo".try_into().unwrap(),
         version: SemVer::new(1, 2, 3),
     };
 
-    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node_addr]);
+    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node_addr], &mut rng);
 
     // Two weeks passed
     advance_time(
@@ -154,8 +171,13 @@ async fn long_offline() {
     assert_known_addresses(&crawler, &[(node_addr, node_soft_info)]);
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn announced_online() {
+async fn announced_online(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let node1_addr: SocketAddress = "1.2.3.4:3031".parse().unwrap();
     let node1_soft_info = SoftwareInfo {
         user_agent: "foo1".try_into().unwrap(),
@@ -171,7 +193,8 @@ async fn announced_online() {
         user_agent: "foo3".try_into().unwrap(),
         version: SemVer::new(3, 4, 5),
     };
-    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1_addr]);
+    let (mut crawler, state, mut command_rx, time_getter) =
+        test_crawler(vec![node1_addr], &mut rng);
 
     state.node_online(node1_addr, node1_soft_info.clone());
     state.node_online(node2_addr, node2_soft_info.clone());
@@ -207,8 +230,13 @@ async fn announced_online() {
     );
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn announced_offline() {
+async fn announced_offline(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let node1_addr: SocketAddress = "1.2.3.4:3031".parse().unwrap();
     let node1_soft_info = SoftwareInfo {
         user_agent: "foo1".try_into().unwrap(),
@@ -219,7 +247,8 @@ async fn announced_offline() {
         user_agent: "foo2".try_into().unwrap(),
         version: SemVer::new(2, 3, 4),
     };
-    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1_addr]);
+    let (mut crawler, state, mut command_rx, time_getter) =
+        test_crawler(vec![node1_addr], &mut rng);
 
     state.node_online(node1_addr, node1_soft_info.clone());
 
@@ -251,17 +280,23 @@ async fn announced_offline() {
     );
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn private_ip() {
+async fn private_ip(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let node1_addr: SocketAddress = "1.0.0.1:3031".parse().unwrap();
     let node2_addr: SocketAddress = "[2a00::1]:3031".parse().unwrap();
     let node3_addr: SocketAddress = "192.168.0.1:3031".parse().unwrap();
     let node4_addr: SocketAddress = "[fe80::1]:3031".parse().unwrap();
     let node5_addr: SocketAddress = "1.0.0.2:12345".parse().unwrap();
     let node6_addr: SocketAddress = "[2a00::2]:12345".parse().unwrap();
-    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![
-        node1_addr, node2_addr, node3_addr, node4_addr, node5_addr, node6_addr,
-    ]);
+    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(
+        vec![node1_addr, node2_addr, node3_addr, node4_addr, node5_addr, node6_addr],
+        &mut rng,
+    );
 
     let node_soft_info = SoftwareInfo {
         user_agent: "foo".try_into().unwrap(),
@@ -309,8 +344,13 @@ async fn private_ip() {
 // check that it's no longer banned and that its address is added to DNS.
 // 4) Wait for the misbehaved node's (i.e the one from (2)) ban time to expire, check that it's
 // no longer banned and that its address is added to DNS.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn ban_unban() {
+async fn ban_unban(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let node1_addr: SocketAddress = "1.2.3.4:3031".parse().unwrap();
     let node2_addr: SocketAddress = "2.3.4.5:3031".parse().unwrap();
     let node3_addr: SocketAddress = "3.4.5.6:3031".parse().unwrap();
@@ -321,7 +361,7 @@ async fn ban_unban() {
     };
 
     let (mut crawler, state, mut command_rx, time_getter) =
-        test_crawler(vec![node1_addr, node2_addr, node3_addr]);
+        test_crawler(vec![node1_addr, node2_addr, node3_addr], &mut rng);
 
     let erratic_node_conn_error = P2pError::ProtocolError(ProtocolError::HandshakeExpected);
     // Sanity check
@@ -430,8 +470,13 @@ async fn ban_unban() {
 
 // Check that a ConnectivityEvent::ConnectionError that is not accompanied by MisbehavedOnHandshake
 // doesn't result in a ban even if the error has a non-zero ban score.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn no_ban_on_connection_error() {
+async fn no_ban_on_connection_error(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
     let node1_addr: SocketAddress = "1.2.3.4:3031".parse().unwrap();
     let node2_addr: SocketAddress = "2.3.4.5:3031".parse().unwrap();
     let node3_addr: SocketAddress = "3.4.5.6:3031".parse().unwrap();
@@ -442,7 +487,7 @@ async fn no_ban_on_connection_error() {
     };
 
     let (mut crawler, state, mut command_rx, time_getter) =
-        test_crawler(vec![node1_addr, node2_addr, node3_addr]);
+        test_crawler(vec![node1_addr, node2_addr, node3_addr], &mut rng);
 
     // Note: this error won't normally appear inside ConnectivityEvent::ConnectionError, we use
     // it just because it's known to have a non-zero ban score.
