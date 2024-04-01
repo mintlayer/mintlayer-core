@@ -209,7 +209,7 @@ pub struct UtxoInfo {
 
 impl rpc::description::HasValueHint for UtxoInfo {
     const HINT_SER: VH =
-        VH::Object(&[("outpoint", &UtxoOutPoint::HINT_SER), ("output", &VH::GENERIC_OBJECT)]);
+        VH::object(&[("outpoint", &UtxoOutPoint::HINT_SER), ("output", &VH::GENERIC_OBJECT)]);
 }
 
 impl UtxoInfo {

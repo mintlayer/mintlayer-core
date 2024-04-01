@@ -13,18 +13,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::spanned::Spanned;
 
+enum EnumTag {
+    External,
+    Internal(String, Span),
+    None(Span),
+}
+
+impl EnumTag {
+    fn span(&self) -> Option<Span> {
+        match self {
+            EnumTag::External => None,
+            EnumTag::Internal(_, s) => Some(*s),
+            EnumTag::None(s) => Some(*s),
+        }
+    }
+}
+
 #[must_use = "Must check attributes"]
 struct SerdeAttributes {
-    untagged: Option<syn::Path>,
+    enum_tag: EnumTag,
 }
 
 impl SerdeAttributes {
     fn new(attrs: &[syn::Attribute]) -> syn::Result<Self> {
-        let mut untagged = None;
+        let mut enum_tag = EnumTag::External;
 
         for attr in attrs.iter().filter(|a| a.path().is_ident("serde")) {
             let err = || {
@@ -39,7 +55,10 @@ impl SerdeAttributes {
                 syn::Meta::List(la) => {
                     la.parse_nested_meta(|m| {
                         if m.path.is_ident("untagged") {
-                            untagged = Some(m.path.clone());
+                            enum_tag = EnumTag::None(m.path.span());
+                        } else if m.path.is_ident("tag") {
+                            let tag_name = m.value()?.parse::<syn::LitStr>()?.value();
+                            enum_tag = EnumTag::Internal(tag_name, m.path.span());
                         } else {
                             return Err(err());
                         }
@@ -50,25 +69,24 @@ impl SerdeAttributes {
             }
         }
 
-        Ok(Self { untagged })
+        Ok(Self { enum_tag })
     }
 
     // Require no attribute to be present
     fn check_none(self) -> syn::Result<()> {
-        let Self { untagged } = self;
-        if let Some(untagged) = untagged {
+        if let Some(span) = self.enum_tag.span() {
             return Err(syn::Error::new(
-                untagged.span(),
-                "Untagged not supported here by `HasValueHint`",
+                span,
+                "Enum representation not supported here by `HasValueHint`",
             ));
         }
         Ok(())
     }
 
     // Allow only untagged attribute to be present
-    fn into_untagged(self) -> syn::Result<bool> {
-        let Self { untagged } = self;
-        Ok(untagged.is_some())
+    fn into_enum_tag(self) -> EnumTag {
+        let Self { enum_tag } = self;
+        enum_tag
     }
 }
 
@@ -90,7 +108,7 @@ fn hint_for_fields(
                 })
                 .collect::<syn::Result<Vec<_>>>()?;
 
-            quote!(#desc_mod::ValueHint::Object(&[#(#entries,)*]))
+            quote!(#desc_mod::ValueHint::object(&[#(#entries,)*]))
         }
         syn::Fields::Unnamed(fields) => {
             if fields.unnamed.len() == 1 {
@@ -126,27 +144,48 @@ fn hint_for_item(
             hint_for_fields(&struct_item.fields, desc_mod, mode)
         }
         syn::Data::Enum(enum_item) => {
-            let untagged = SerdeAttributes::new(&item.attrs)?.into_untagged()?;
+            let repr = SerdeAttributes::new(&item.attrs)?.into_enum_tag();
             let variants = enum_item
                 .variants
                 .iter()
                 .map(|var| -> syn::Result<_> {
                     SerdeAttributes::new(&var.attrs)?.check_none()?;
-                    match &var.fields {
+                    let name = var.ident.to_string();
+                    let hint = match &var.fields {
                         fields @ (syn::Fields::Named(_) | syn::Fields::Unnamed(_)) => {
                             let subhints = hint_for_fields(fields, desc_mod, mode)?;
-                            let name = var.ident.to_string();
-                            if untagged {
-                                Ok(subhints)
-                            } else {
-                                Ok(quote!(#desc_mod::ValueHint::Object(&[(#name, &#subhints)])))
+                            match &repr {
+                                EnumTag::External => {
+                                    quote!(#desc_mod::ValueHint::object(&[(#name, &#subhints)]))
+                                }
+                                EnumTag::Internal(tag_name, _) => {
+                                    quote! {
+                                        #desc_mod::ValueHint::Object(#desc_mod::Fields::Cons(
+                                            #tag_name,
+                                            &#desc_mod::ValueHint::StrLit(#name),
+                                            #subhints.unwrap_object_fields(),
+                                        ))
+                                    }
+                                }
+                                EnumTag::None(_) => subhints,
                             }
                         }
-                        syn::Fields::Unit => {
-                            let name = var.ident.to_string();
-                            Ok(quote!(#desc_mod::ValueHint::StrLit(#name)))
-                        }
-                    }
+                        syn::Fields::Unit => match &repr {
+                            EnumTag::External => {
+                                quote!(#desc_mod::ValueHint::StrLit(#name))
+                            }
+                            EnumTag::Internal(tag_name, _) => {
+                                let tag_val = var.ident.to_string();
+                                let val = quote!(#desc_mod::ValueHint::StrLit(#tag_val));
+                                quote!(#desc_mod::ValueHint::object(&[(#tag_name, &#val)]))
+                            }
+                            EnumTag::None(span) => {
+                                let e = syn::Error::new(*span, "Incompatible with unit enum arms");
+                                return Err(e);
+                            }
+                        },
+                    };
+                    Ok(hint)
                 })
                 .collect::<syn::Result<Vec<_>>>()?;
 

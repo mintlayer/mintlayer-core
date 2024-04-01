@@ -13,9 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::{
-    NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU128,
-    NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU8, NonZeroUsize,
+use std::{
+    borrow::Cow,
+    num::{
+        NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU128,
+        NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU8, NonZeroUsize,
+    },
 };
 
 pub use rpc_description_macro::HasValueHint;
@@ -24,6 +27,35 @@ pub use rpc_description_macro::HasValueHint;
 pub trait HasValueHint {
     const HINT_SER: ValueHint;
     const HINT_DE: ValueHint = Self::HINT_SER;
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum Fields {
+    Cons(&'static str, &'static ValueHint, &'static Fields),
+    Rest(&'static [(&'static str, &'static ValueHint)]),
+}
+
+impl Fields {
+    pub fn to_slice(&self) -> Cow<[(&'static str, &'static ValueHint)]> {
+        if let Self::Rest(rest) = self {
+            return Cow::Borrowed(*rest);
+        }
+
+        let mut cur = self;
+        let mut ret = Vec::new();
+        loop {
+            match cur {
+                Fields::Cons(name, hint, next) => {
+                    ret.push((*name, *hint));
+                    cur = next;
+                }
+                Fields::Rest(rest) => {
+                    ret.extend(rest.iter());
+                    break Cow::Owned(ret);
+                }
+            }
+        }
+    }
 }
 
 /// A compositional way of describing values of RPC arguments and return values
@@ -39,7 +71,7 @@ pub enum ValueHint {
     Choice(&'static [&'static ValueHint]),
 
     /// A map with static members
-    Object(&'static [(&'static str, &'static ValueHint)]),
+    Object(Fields),
 
     /// A dynamic key-value map
     Map(&'static ValueHint, &'static ValueHint),
@@ -67,6 +99,17 @@ impl ValueHint {
     pub const HEX_STRING: VH = VH::Prim("hex string");
     pub const GENERIC_OBJECT: VH = VH::Prim("object");
     pub const JSON: VH = VH::Prim("json");
+
+    pub const fn object(fields: &'static [(&'static str, &'static ValueHint)]) -> Self {
+        Self::Object(Fields::Rest(fields))
+    }
+
+    pub const fn unwrap_object_fields(&self) -> &Fields {
+        match self {
+            Self::Object(fields) => fields,
+            _ => panic!("Not an object"),
+        }
+    }
 }
 
 impl HasValueHint for () {
