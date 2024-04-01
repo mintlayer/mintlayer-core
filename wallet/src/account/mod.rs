@@ -41,7 +41,7 @@ use serialization::hex_encoded::HexEncoded;
 use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
 use wallet_types::account_id::AccountPrefixedId;
-use wallet_types::account_info::{AccountStandaloneKey, AccountStandaloneKeyInfo};
+use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
@@ -1625,7 +1625,7 @@ impl Account {
         address: PublicKeyHash,
         label: Option<String>,
     ) -> WalletResult<()> {
-        Ok(self.key_chain.add_standalone_address(db_tx, address, label)?)
+        Ok(self.key_chain.add_standalone_watch_only_address(db_tx, address, label)?)
     }
 
     /// Add a standalone private key not derived from this account's key chain to be watched
@@ -1687,7 +1687,7 @@ impl Account {
         self.key_chain.get_all_issued_addresses()
     }
 
-    pub fn get_all_standalone_addresses(&self) -> Vec<AccountStandaloneKeyInfo> {
+    pub fn get_all_standalone_addresses(&self) -> StandaloneAddresses {
         self.key_chain.get_all_standalone_addresses()
     }
 
@@ -1698,7 +1698,7 @@ impl Account {
     ) -> WalletResult<(
         Destination,
         BTreeMap<Currency, Amount>,
-        &AccountStandaloneKey,
+        StandaloneAddressDetails,
     )> {
         let (address, standalone_key) = self
             .key_chain

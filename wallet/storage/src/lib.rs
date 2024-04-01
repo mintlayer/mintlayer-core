@@ -23,13 +23,19 @@ use common::{
     address::{Address, AddressError},
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
-use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
+use crypto::{
+    kdf::KdfChallenge,
+    key::{extended::ExtendedPublicKey, PrivateKey},
+    symkey::SymmetricKey,
+};
 pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use std::collections::BTreeMap;
 
 use wallet_types::{
-    account_id::AccountAddress,
-    account_info::{AccountStandaloneKey, AccountVrfKeys},
+    account_id::{AccountAddress, AccountPrivateKey},
+    account_info::{
+        AccountVrfKeys, StandaloneMultisig, StandalonePrivateKey, StandaloneWatchOnlyKey,
+    },
     chain_info::ChainInfo,
     keys::RootKeys,
     seed_phrase::SerializableSeedPhrase,
@@ -79,10 +85,18 @@ pub trait WalletStorageReadLocked {
     fn get_account_unconfirmed_tx_counter(&self, account_id: &AccountId) -> Result<Option<u64>>;
     fn get_account_vrf_public_keys(&self, account_id: &AccountId)
         -> Result<Option<AccountVrfKeys>>;
-    fn get_account_standalone_keys(
+    fn get_account_standalone_watch_only_keys(
         &self,
         account_id: &AccountId,
-    ) -> Result<BTreeMap<Destination, AccountStandaloneKey>>;
+    ) -> Result<BTreeMap<Destination, StandaloneWatchOnlyKey>>;
+    fn get_account_standalone_multisig_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<BTreeMap<Destination, StandaloneMultisig>>;
+    fn get_account_standalone_private_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<Vec<(PrivateKey, StandalonePrivateKey)>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<String>>;
     fn get_addresses(
@@ -141,8 +155,21 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
         tx: &SignedTransaction,
     ) -> Result<()>;
     fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()>;
-    fn set_standalone_key(&mut self, id: &AccountAddress, key: &AccountStandaloneKey)
-        -> Result<()>;
+    fn set_standalone_watch_only_key(
+        &mut self,
+        id: &AccountAddress,
+        key: &StandaloneWatchOnlyKey,
+    ) -> Result<()>;
+    fn set_standalone_multisig_key(
+        &mut self,
+        id: &AccountAddress,
+        key: &StandaloneMultisig,
+    ) -> Result<()>;
+    fn set_standalone_private_key(
+        &mut self,
+        id: &AccountPrivateKey,
+        key: &StandalonePrivateKey,
+    ) -> Result<()>;
     fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> Result<()>;
     fn del_account(&mut self, id: &AccountId) -> Result<()>;
     fn set_address(

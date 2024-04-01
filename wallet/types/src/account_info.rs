@@ -14,14 +14,14 @@
 // limitations under the License.
 
 use common::{
+    address::pubkeyhash::PublicKeyHash,
     chain::{classic_multisig::ClassicMultisigChallenge, ChainConfig, Destination, GenBlock},
     primitives::{BlockHeight, Id},
 };
 use crypto::{
-    key::{extended::ExtendedPublicKey, hdkd::u31::U31, PrivateKey},
+    key::{extended::ExtendedPublicKey, hdkd::u31::U31, PublicKey},
     vrf::ExtendedVRFPublicKey,
 };
-use rpc_description::HasValueHint;
 use serialization::{Decode, Encode};
 
 pub const DEFAULT_ACCOUNT_INDEX: U31 = match U31::from_u32(0) {
@@ -109,42 +109,47 @@ pub struct AccountVrfKeys {
 }
 
 #[derive(Debug, Clone, Encode, Decode)]
-pub enum AccountStandaloneKey {
-    #[codec(index = 0)]
-    Address {
-        label: Option<String>,
-        private_key: Option<PrivateKey>,
-    },
-    #[codec(index = 1)]
-    Multisig {
-        label: Option<String>,
-        challenge: ClassicMultisigChallenge,
-    },
+pub struct StandaloneWatchOnlyKey {
+    pub label: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
-pub enum AccountStandaloneKeyType {
-    PublicKey,
-    PublicKeyHash,
-    ScriptHash,
-    ClassicMultisig,
-    AnyoneCanSpend,
+impl StandaloneWatchOnlyKey {
+    pub fn with_new_label(&self, label: Option<String>) -> Self {
+        Self { label }
+    }
 }
 
-impl AccountStandaloneKeyType {
-    pub fn new(dest: &Destination) -> Self {
-        match dest {
-            Destination::AnyoneCanSpend => Self::AnyoneCanSpend,
-            Destination::PublicKey(_) => Self::PublicKey,
-            Destination::PublicKeyHash(_) => Self::PublicKeyHash,
-            Destination::ScriptHash(_) => Self::ScriptHash,
-            Destination::ClassicMultisig(_) => Self::ClassicMultisig,
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct StandaloneMultisig {
+    pub label: Option<String>,
+    pub challenge: ClassicMultisigChallenge,
+}
+
+impl StandaloneMultisig {
+    pub fn with_new_label(&self, label: Option<String>) -> Self {
+        Self {
+            label,
+            challenge: self.challenge.clone(),
         }
     }
 }
 
-pub struct AccountStandaloneKeyInfo {
-    pub address: Destination,
-    pub address_type: AccountStandaloneKeyType,
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct StandalonePrivateKey {
     pub label: Option<String>,
+    pub public_key: PublicKey,
+    pub public_key_hash: PublicKeyHash,
+}
+
+#[derive(Debug, Clone)]
+pub enum StandaloneAddressDetails {
+    WatchOnly(StandaloneWatchOnlyKey),
+    Multisig(StandaloneMultisig),
+    PrivateKey(Option<String>),
+}
+
+pub struct StandaloneAddresses {
+    pub watch_only_addresses: Vec<(Destination, StandaloneWatchOnlyKey)>,
+    pub multisig_addresses: Vec<(Destination, StandaloneMultisig)>,
+    pub private_keys: Vec<StandalonePrivateKey>,
 }

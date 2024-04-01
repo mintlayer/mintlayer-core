@@ -68,7 +68,7 @@ use wallet_controller::{
     DEFAULT_ACCOUNT_INDEX,
 };
 use wallet_types::{
-    account_info::AccountStandaloneKey, seed_phrase::StoreSeedPhrase, wallet_tx::TxData,
+    account_info::StandaloneAddressDetails, seed_phrase::StoreSeedPhrase, wallet_tx::TxData,
     with_locked::WithLocked,
 };
 
@@ -78,8 +78,9 @@ pub use self::types::RpcError;
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo,
     NewDelegation, NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
-    RpcTokenId, StakingStatus, StandaloneAddress, StandaloneAddressDetails,
-    StandaloneAddressWithDetails, VrfPublicKeyInfo,
+    RpcStandaloneAddress, RpcStandaloneAddressDetails, RpcStandaloneAddresses,
+    RpcStandalonePrivateKeyAddress, RpcTokenId, StakingStatus, StandaloneAddressWithDetails,
+    VrfPublicKeyInfo,
 };
 
 #[derive(Clone)]
@@ -503,24 +504,37 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     pub async fn get_standalone_addresses(
         &self,
         account_index: U31,
-    ) -> WRpcResult<Vec<StandaloneAddress>, N> {
+    ) -> WRpcResult<RpcStandaloneAddresses, N> {
         let addresses = self
             .wallet
             .call(move |controller| {
                 controller.readonly_controller(account_index).get_standalone_addresses()
             })
             .await??;
-        let result = addresses
-            .into_iter()
-            .map(|info| {
-                StandaloneAddress::new(
-                    info.address,
-                    info.address_type,
-                    info.label,
-                    &self.chain_config,
-                )
-            })
-            .collect();
+        let result = RpcStandaloneAddresses {
+            watch_only_addresses: addresses
+                .watch_only_addresses
+                .into_iter()
+                .map(|(dest, info)| RpcStandaloneAddress::new(dest, info.label, &self.chain_config))
+                .collect(),
+            multisig_addresses: addresses
+                .multisig_addresses
+                .into_iter()
+                .map(|(dest, info)| RpcStandaloneAddress::new(dest, info.label, &self.chain_config))
+                .collect(),
+            private_key_addresses: addresses
+                .private_keys
+                .into_iter()
+                .map(|info| {
+                    RpcStandalonePrivateKeyAddress::new(
+                        info.public_key,
+                        info.public_key_hash,
+                        info.label,
+                        &self.chain_config,
+                    )
+                })
+                .collect(),
+        };
         Ok(result)
     }
 
@@ -541,30 +555,38 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                     w.readonly_controller(account_index)
                         .get_standalone_address_details(address)
                         .await
-                        .map(|details| {
-                            let address = Address::new(&chain_config, details.address)
+                        .map(|info| {
+                            let address = Address::new(&chain_config, info.address)
                                 .expect("Addressable")
                                 .into_string();
-                            match details.address_type {
-                                AccountStandaloneKey::Address { label, private_key } => {
+                            match info.details {
+                                StandaloneAddressDetails::WatchOnly(watch_only) => {
                                     StandaloneAddressWithDetails {
                                         address,
-                                        label: label.clone(),
-                                        balances: details.balances,
-                                        details: StandaloneAddressDetails::Address {
-                                            has_private_key: private_key.is_some(),
-                                        },
+                                        label: watch_only.label.clone(),
+                                        balances: info.balances,
+                                        details: RpcStandaloneAddressDetails::WatchOnly,
                                     }
                                 }
-                                AccountStandaloneKey::Multisig { label, challenge } => {
+                                StandaloneAddressDetails::PrivateKey(label) => {
                                     StandaloneAddressWithDetails {
                                         address,
                                         label: label.clone(),
-                                        balances: details.balances,
-                                        details: StandaloneAddressDetails::Multisig {
-                                            min_required_signatures: challenge
+                                        balances: info.balances,
+                                        details: RpcStandaloneAddressDetails::FromPrivateKey,
+                                    }
+                                }
+                                StandaloneAddressDetails::Multisig(multisig) => {
+                                    StandaloneAddressWithDetails {
+                                        address,
+                                        label: multisig.label.clone(),
+                                        balances: info.balances,
+                                        details: RpcStandaloneAddressDetails::Multisig {
+                                            min_required_signatures: multisig
+                                                .challenge
                                                 .min_required_signatures(),
-                                            public_keys: challenge
+                                            public_keys: multisig
+                                                .challenge
                                                 .public_keys()
                                                 .iter()
                                                 .map(|pk| {
@@ -573,7 +595,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                                                         Destination::PublicKey(pk.clone()),
                                                     )
                                                     .expect("Addressable")
-                                                    .into_string()
+                                                    .into()
                                                 })
                                                 .collect(),
                                         },

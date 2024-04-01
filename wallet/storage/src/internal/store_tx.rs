@@ -24,7 +24,11 @@ use common::{
     address::Address,
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
-use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
+use crypto::{
+    kdf::KdfChallenge,
+    key::{extended::ExtendedPublicKey, PrivateKey},
+    symkey::SymmetricKey,
+};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::{schema, MakeMapRef};
 use utils::{
@@ -32,8 +36,10 @@ use utils::{
     maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError},
 };
 use wallet_types::{
-    account_id::AccountAddress,
-    account_info::{AccountStandaloneKey, AccountVrfKeys},
+    account_id::{AccountAddress, AccountPrivateKey},
+    account_info::{
+        AccountVrfKeys, StandaloneMultisig, StandalonePrivateKey, StandaloneWatchOnlyKey,
+    },
     chain_info::ChainInfo,
     keys::{RootKeyConstant, RootKeys},
     seed_phrase::{SeedPhraseConstant, SerializableSeedPhrase},
@@ -239,20 +245,46 @@ macro_rules! impl_read_ops {
                 self.read::<db::DBVRFPublicKeys, _, _>(account_id)
             }
 
-            fn get_account_standalone_keys(
+            fn get_account_standalone_watch_only_keys(
                 &self,
                 account_id: &AccountId,
-            ) -> crate::Result<BTreeMap<Destination, AccountStandaloneKey>> {
+            ) -> crate::Result<BTreeMap<Destination, StandaloneWatchOnlyKey>> {
                 self.storage
-                    .get::<db::DBStandaloneKeys, _>()
+                    .get::<db::DBStandaloneWatchOnlyKeys, _>()
                     .prefix_iter_decoded(account_id)
                     .map_err(crate::Error::from)
                     .map(|iter| {
-                        iter.map(|(key, value): (AccountAddress, AccountStandaloneKey)| {
+                        iter.map(|(key, value): (AccountAddress, StandaloneWatchOnlyKey)| {
                             (key.into_item_id(), value)
                         })
                         .collect()
                     })
+            }
+            fn get_account_standalone_multisig_keys(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<BTreeMap<Destination, StandaloneMultisig>> {
+                self.storage
+                    .get::<db::DBStandaloneMultisigKeys, _>()
+                    .prefix_iter_decoded(account_id)
+                    .map_err(crate::Error::from)
+                    .map(|iter| {
+                        iter.map(|(key, value): (AccountAddress, StandaloneMultisig)| {
+                            (key.into_item_id(), value)
+                        })
+                        .collect()
+                    })
+            }
+
+            fn get_account_standalone_private_keys(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<Vec<(PrivateKey, StandalonePrivateKey)>> {
+                self.storage
+                    .get::<db::DBStandalonePrivateKeys, _>()
+                    .prefix_iter_decoded(account_id)
+                    .map_err(crate::Error::from)
+                    .map(|iter| iter.map(|(key, value)| (key.into_item_id(), value)).collect())
             }
 
             fn get_keychain_usage_state(
@@ -472,12 +504,27 @@ macro_rules! impl_write_ops {
                 self.storage.get_mut::<db::DBUserTx, _>().del(id).map_err(Into::into)
             }
 
-            fn set_standalone_key(
+            fn set_standalone_watch_only_key(
                 &mut self,
                 id: &AccountAddress,
-                key: &AccountStandaloneKey,
+                key: &StandaloneWatchOnlyKey,
             ) -> crate::Result<()> {
-                self.write::<db::DBStandaloneKeys, _, _, _>(id, key)
+                self.write::<db::DBStandaloneWatchOnlyKeys, _, _, _>(id, key)
+            }
+            fn set_standalone_multisig_key(
+                &mut self,
+                id: &AccountAddress,
+                key: &StandaloneMultisig,
+            ) -> crate::Result<()> {
+                self.write::<db::DBStandaloneMultisigKeys, _, _, _>(id, key)
+            }
+
+            fn set_standalone_private_key(
+                &mut self,
+                id: &AccountPrivateKey,
+                key: &StandalonePrivateKey,
+            ) -> crate::Result<()> {
+                self.write::<db::DBStandalonePrivateKeys, _, _, _>(id, key)
             }
 
             fn set_account(&mut self, id: &AccountId, tx: &AccountInfo) -> crate::Result<()> {

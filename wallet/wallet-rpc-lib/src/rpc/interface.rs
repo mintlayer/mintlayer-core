@@ -38,8 +38,8 @@ use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction, CreatedWallet,
     DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
     NewAccountInfo, NewDelegation, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
-    PublicKeyInfo, RpcAmountIn, RpcTokenId, RpcUtxoState, RpcUtxoType, StakePoolBalance,
-    StakingStatus, StandaloneAddress, StandaloneAddressWithDetails, TokenMetadata,
+    PublicKeyInfo, RpcAmountIn, RpcStandaloneAddresses, RpcTokenId, RpcUtxoState, RpcUtxoType,
+    StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
     TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
@@ -140,7 +140,7 @@ trait ColdWalletRpc {
     async fn get_standalone_addresses(
         &self,
         account: AccountArg,
-    ) -> rpc::RpcResult<Vec<StandaloneAddress>>;
+    ) -> rpc::RpcResult<RpcStandaloneAddresses>;
 
     /// Show standalone addresses details.
     #[method(name = "standalone_address_details")]

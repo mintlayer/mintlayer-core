@@ -14,12 +14,12 @@
 // limitations under the License.
 
 use common::chain::Destination;
-use wallet_types::account_info::AccountStandaloneKey;
+use wallet_types::account_info::StandaloneAddressDetails;
 
 use super::Balances;
 
 pub struct AccountStandaloneKeyDetails {
     pub address: Destination,
-    pub address_type: AccountStandaloneKey,
+    pub details: StandaloneAddressDetails,
     pub balances: Balances,
 }

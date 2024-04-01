@@ -1922,18 +1922,27 @@ Parameters:
 
 Returns:
 ```
-[ {
-    "address": string,
-    "address_type": EITHER OF
-         1) "PublicKey"
-         2) "PublicKeyHash"
-         3) "ScriptHash"
-         4) "ClassicMultisig"
-         5) "AnyoneCanSpend",
-    "label": EITHER OF
-         1) string
-         2) null,
-}, .. ]
+{
+    "watch_only_addresses": [ {
+        "address": bech32 string,
+        "label": EITHER OF
+             1) string
+             2) null,
+    }, .. ],
+    "multisig_addresses": [ {
+        "address": bech32 string,
+        "label": EITHER OF
+             1) string
+             2) null,
+    }, .. ],
+    "private_key_addresses": [ {
+        "public_key": bech32 string,
+        "public_key_hash": bech32 string,
+        "label": EITHER OF
+             1) string
+             2) null,
+    }, .. ],
+}
 ```
 
 ### Method `standalone_address_details`
@@ -1957,11 +1966,15 @@ Returns:
          1) string
          2) null,
     "details": EITHER OF
-         1) { "Address": { "has_private_key": bool } }
-         2) { "Multisig": {
-                "min_required_signatures": number,
-                "public_keys": [ string, .. ],
-            } },
+         1) { "type": "WatchOnly" }
+         2) { "type": "FromPrivateKey" }
+         3) {
+                "type": "Multisig",
+                "content": {
+                    "min_required_signatures": number,
+                    "public_keys": [ bech32 string, .. ],
+                },
+            },
     "balances": {
         "coins": {
             "atoms": number string,

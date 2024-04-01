@@ -38,7 +38,7 @@ use wallet::{
     DefaultWallet,
 };
 use wallet_types::{
-    account_info::AccountStandaloneKeyInfo,
+    account_info::StandaloneAddresses,
     utxo_types::{UtxoStates, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
@@ -210,9 +210,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     }
 
     /// Get all standalone addresses with their labels
-    pub fn get_standalone_addresses(
-        &self,
-    ) -> Result<Vec<AccountStandaloneKeyInfo>, ControllerError<T>> {
+    pub fn get_standalone_addresses(&self) -> Result<StandaloneAddresses, ControllerError<T>> {
         self.wallet
             .get_all_standalone_addresses(self.account_index)
             .map_err(ControllerError::WalletError)
@@ -223,7 +221,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         &self,
         address: Destination,
     ) -> Result<AccountStandaloneKeyDetails, ControllerError<T>> {
-        let (address, balances, address_type) = self
+        let (address, balances, details) = self
             .wallet
             .get_all_standalone_address_details(self.account_index, address)
             .map_err(ControllerError::WalletError)?;
@@ -233,7 +231,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         Ok(AccountStandaloneKeyDetails {
             address,
             balances,
-            address_type: address_type.clone(),
+            details,
         })
     }
 

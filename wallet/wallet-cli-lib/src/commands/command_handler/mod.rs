@@ -36,10 +36,9 @@ use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     Balances, ComposedTransaction, ControllerConfig, CreatedWallet, InspectTransaction,
-    NewTransaction, NftMetadata, SignatureStats, StandaloneAddressDetails, TokenMetadata,
+    NewTransaction, NftMetadata, RpcStandaloneAddressDetails, SignatureStats, TokenMetadata,
     ValidatedSignatures,
 };
-use wallet_types::account_info::AccountStandaloneKeyType;
 
 use crate::errors::WalletCliError;
 
@@ -379,24 +378,34 @@ where
 
             ColdWalletCommand::ShowStandaloneAddresses => {
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
-                let addresses_with_label =
-                    wallet.get_standalone_addresses(selected_account).await?;
+                let addresses = wallet.get_standalone_addresses(selected_account).await?;
 
                 let addresses_table = {
                     let mut addresses_table = prettytable::Table::new();
                     addresses_table.set_titles(prettytable::row!["Address", "Type", "Label",]);
 
-                    addresses_table.extend(addresses_with_label.into_iter().map(|info| {
+                    addresses_table.extend(addresses.watch_only_addresses.into_iter().map(
+                        |info| {
+                            let label = info.label.unwrap_or_default();
+                            let address_type = "Watch Only";
+                            prettytable::row![info.address, address_type, label]
+                        },
+                    ));
+                    addresses_table.extend(addresses.multisig_addresses.into_iter().map(|info| {
                         let label = info.label.unwrap_or_default();
-                        let address_type = match info.address_type {
-                            AccountStandaloneKeyType::PublicKey => "PublicKey",
-                            AccountStandaloneKeyType::PublicKeyHash => "PublicKeyHash",
-                            AccountStandaloneKeyType::AnyoneCanSpend => "AnyoneCanSpend",
-                            AccountStandaloneKeyType::ScriptHash => "ScriptHash",
-                            AccountStandaloneKeyType::ClassicMultisig => "ClassicMultisig",
-                        };
+                        let address_type = "Multisig";
                         prettytable::row![info.address, address_type, label]
                     }));
+                    addresses_table.extend(addresses.private_key_addresses.into_iter().flat_map(
+                        |info| {
+                            let label = info.label.unwrap_or_default();
+                            let address_type = "From Private key";
+                            [
+                                prettytable::row![info.public_key_hash, address_type, label],
+                                prettytable::row![info.public_key, address_type, label],
+                            ]
+                        },
+                    ));
 
                     addresses_table
                 };
@@ -412,15 +421,23 @@ where
                 let label_str =
                     addr_details.label.map_or("None".into(), |label| format!("\"{label}\""));
                 let mut output = match addr_details.details {
-                    StandaloneAddressDetails::Address { has_private_key } => {
-                        let has_private_key = if has_private_key { "Yes" } else { "No" };
+                    RpcStandaloneAddressDetails::WatchOnly => {
+                        let has_private_key = "No";
 
                         format!(
                             "Address: {}, label: {}, has_private_key: {}\nBalances:\n",
                             addr_details.address, label_str, has_private_key
                         )
                     }
-                    StandaloneAddressDetails::Multisig {
+                    RpcStandaloneAddressDetails::FromPrivateKey => {
+                        let has_private_key = "Yes";
+
+                        format!(
+                            "Address: {}, label: {}, has_private_key: {}\nBalances:\n",
+                            addr_details.address, label_str, has_private_key
+                        )
+                    }
+                    RpcStandaloneAddressDetails::Multisig {
                         min_required_signatures,
                         public_keys,
                     } => {

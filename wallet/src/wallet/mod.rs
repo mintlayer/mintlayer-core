@@ -67,7 +67,7 @@ use wallet_storage::{
     TransactionRwUnlocked, Transactional, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
-use wallet_types::account_info::{AccountStandaloneKey, AccountStandaloneKeyInfo};
+use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::chain_info::ChainInfo;
 use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
@@ -1222,7 +1222,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn get_all_standalone_addresses(
         &self,
         account_index: U31,
-    ) -> WalletResult<Vec<AccountStandaloneKeyInfo>> {
+    ) -> WalletResult<StandaloneAddresses> {
         let account = self.get_account(account_index)?;
         Ok(account.get_all_standalone_addresses())
     }
@@ -1234,7 +1234,7 @@ impl<B: storage::Backend> Wallet<B> {
     ) -> WalletResult<(
         Destination,
         BTreeMap<Currency, Amount>,
-        &AccountStandaloneKey,
+        StandaloneAddressDetails,
     )> {
         let account = self.get_account(account_index)?;
         account.get_all_standalone_address_details(address, self.latest_median_time)

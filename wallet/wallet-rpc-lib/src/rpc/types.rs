@@ -17,7 +17,7 @@
 
 use chainstate::rpc::{RpcTxOutput, RpcUtxoOutpoint};
 use common::{
-    address::{Address, AddressError},
+    address::{pubkeyhash::PublicKeyHash, Address, AddressError},
     chain::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallengeError,
@@ -36,6 +36,7 @@ use crypto::{
     vrf::VRFPublicKey,
 };
 use rpc::description::HasValueHint;
+use rpc_description::ValueHint;
 use wallet::account::PoolData;
 
 pub use common::{
@@ -51,7 +52,6 @@ pub use wallet_controller::types::{
 };
 pub use wallet_controller::{ControllerConfig, NodeInterface};
 use wallet_controller::{UtxoState, UtxoType};
-use wallet_types::account_info::AccountStandaloneKeyType;
 
 use crate::service::SubmitError;
 
@@ -160,42 +160,88 @@ impl AddressInfo {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-pub enum StandaloneAddressDetails {
-    Address {
-        has_private_key: bool,
-    },
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type", content = "content")]
+pub enum RpcStandaloneAddressDetails {
+    WatchOnly,
+    FromPrivateKey,
     Multisig {
         min_required_signatures: u8,
-        public_keys: Vec<String>,
+        public_keys: Vec<RpcAddress<Destination>>,
     },
+}
+
+impl HasValueHint for RpcStandaloneAddressDetails {
+    const HINT_SER: ValueHint = ValueHint::Choice(&[
+        &ValueHint::Object(&[("type", &ValueHint::StrLit("WatchOnly"))]),
+        &ValueHint::Object(&[("type", &ValueHint::StrLit("FromPrivateKey"))]),
+        &ValueHint::Object(&[
+            ("type", &ValueHint::StrLit("Multisig")),
+            (
+                "content",
+                &ValueHint::Object(&[
+                    ("min_required_signatures", &u8::HINT_SER),
+                    ("public_keys", &Vec::<RpcAddress<Destination>>::HINT_SER),
+                ]),
+            ),
+        ]),
+    ]);
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct StandaloneAddressWithDetails {
     pub address: String,
     pub label: Option<String>,
-    pub details: StandaloneAddressDetails,
+    pub details: RpcStandaloneAddressDetails,
     pub balances: Balances,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-pub struct StandaloneAddress {
-    pub address: String,
-    pub address_type: AccountStandaloneKeyType,
+pub struct RpcStandaloneAddresses {
+    pub watch_only_addresses: Vec<RpcStandaloneAddress>,
+    pub multisig_addresses: Vec<RpcStandaloneAddress>,
+    pub private_key_addresses: Vec<RpcStandalonePrivateKeyAddress>,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct RpcStandaloneAddress {
+    pub address: RpcAddress<Destination>,
     pub label: Option<String>,
 }
 
-impl StandaloneAddress {
+impl RpcStandaloneAddress {
+    pub fn new(dest: Destination, label: Option<String>, chain_config: &ChainConfig) -> Self {
+        Self {
+            address: Address::new(chain_config, dest).expect("addressable").into(),
+            label,
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct RpcStandalonePrivateKeyAddress {
+    pub public_key: RpcAddress<Destination>,
+    pub public_key_hash: RpcAddress<Destination>,
+    pub label: Option<String>,
+}
+
+impl RpcStandalonePrivateKeyAddress {
     pub fn new(
-        dest: Destination,
-        address_type: AccountStandaloneKeyType,
+        public_key: PublicKey,
+        public_key_hash: PublicKeyHash,
         label: Option<String>,
         chain_config: &ChainConfig,
     ) -> Self {
         Self {
-            address: Address::new(chain_config, dest).expect("addressable").into_string(),
-            address_type,
+            public_key: Address::new(chain_config, Destination::PublicKey(public_key))
+                .expect("addressable")
+                .into(),
+            public_key_hash: Address::new(
+                chain_config,
+                Destination::PublicKeyHash(public_key_hash),
+            )
+            .expect("addressable")
+            .into(),
             label,
         }
     }
