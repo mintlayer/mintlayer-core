@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, GenBlock, Genesis},
+    chain::{block::timestamp::BlockTimestamp, ChainConfig, GenBlock, Genesis},
     primitives::{id::WithId, BlockHeight, Id, Idable},
     Uint256,
 };
@@ -93,6 +93,10 @@ impl GenBlockIndex {
             GenBlockIndex::Block(b) => b.chain_transaction_count(),
             GenBlockIndex::Genesis(_) => 0,
         }
+    }
+
+    pub fn genesis(chain_config: &ChainConfig) -> Self {
+        Self::Genesis(Arc::clone(chain_config.genesis_block()))
     }
 }
 

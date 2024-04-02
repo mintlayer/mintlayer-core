@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use crate::detail::{
     chainstateref::ChainstateRef,
@@ -153,9 +153,7 @@ pub fn gen_block_index_getter<S: BlockchainStorageRead>(
     block_id: &Id<GenBlock>,
 ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
     match block_id.classify(chain_config) {
-        GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
-            chain_config.genesis_block(),
-        )))),
+        GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::genesis(chain_config))),
         GenBlockId::Block(id) => db_tx.get_block_index(&id).map(|b| b.map(GenBlockIndex::Block)),
     }
 }

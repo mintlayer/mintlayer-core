@@ -732,9 +732,7 @@ mod produce_block {
             mock_chainstate.expect_is_initial_block_download().returning(|| false);
 
             let mut expected_return_values = vec![
-                Ok(GenBlockIndex::Genesis(Arc::clone(
-                    chain_config.genesis_block(),
-                ))),
+                Ok(GenBlockIndex::genesis(&chain_config)),
                 Err(ChainstateError::FailedToReadProperty(
                     PropertyQueryError::BestBlockIndexNotFound,
                 )),
@@ -802,12 +800,8 @@ mod produce_block {
             mock_chainstate.expect_is_initial_block_download().returning(|| false);
 
             let mut expected_return_values = vec![
-                Ok(GenBlockIndex::Genesis(Arc::clone(
-                    chain_config.genesis_block(),
-                ))),
-                Ok(GenBlockIndex::Genesis(Arc::clone(
-                    create_testnet().genesis_block(),
-                ))),
+                Ok(GenBlockIndex::genesis(&chain_config)),
+                Ok(GenBlockIndex::genesis(&create_testnet())),
             ];
 
             mock_chainstate

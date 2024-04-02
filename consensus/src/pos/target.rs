@@ -228,8 +228,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use chainstate_types::{
         BlockIndex, BlockStatus, GenBlockIndex, GetAncestorError, PropertyQueryError,
     };
@@ -369,9 +367,7 @@ mod tests {
             }
 
             if ancestor_height == BlockHeight::new(0) {
-                Ok(GenBlockIndex::Genesis(Arc::clone(
-                    self.chain_config.genesis_block(),
-                )))
+                Ok(GenBlockIndex::genesis(self.chain_config))
             } else {
                 Ok(self
                     .get_block_index_by_height(ancestor_height)
