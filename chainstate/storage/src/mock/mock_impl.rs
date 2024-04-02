@@ -50,6 +50,7 @@ mockall::mock! {
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+        fn block_exists(&self, id: Id<Block>) -> crate::Result<bool>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
         fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
@@ -320,6 +321,7 @@ mockall::mock! {
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+        fn block_exists(&self, id: Id<Block>) -> crate::Result<bool>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
         fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
@@ -432,6 +434,7 @@ mockall::mock! {
         fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+        fn block_exists(&self, id: Id<Block>) -> crate::Result<bool>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
         fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;

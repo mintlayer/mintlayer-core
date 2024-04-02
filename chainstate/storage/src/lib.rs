@@ -64,6 +64,11 @@ pub trait BlockchainStorageRead:
     + EpochStorageRead
     + TokensAccountingStorageRead<Error = crate::Error>
 {
+    // TODO: below (and in lots of other places too) Id is sometimes passes by ref and sometimes
+    // by value. It's better to choose one "canonical" approach and use it everywhere.
+    // Same applies to other "primitive" types, like BlockHeight (the latter, being 64 bit long,
+    // should probably be passed by value even if we decide to pass Id by ref).
+
     /// Get storage version
     fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
 
@@ -83,9 +88,9 @@ pub trait BlockchainStorageRead:
     /// Get block by its hash
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
 
-    // TODO: sometimes get_block is used just to check for block existence in the db; it's better
-    // to add a separate function for this, which wouldn't have the overhead of copying and decoding
-    // of the block's data.
+    /// Return true if the block exists in the db and false otherwise.
+    /// This is cheaper than calling `get_block` and checking for `is_some`.
+    fn block_exists(&self, id: Id<Block>) -> crate::Result<bool>;
 
     fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 

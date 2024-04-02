@@ -117,6 +117,11 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
     }
 
     #[log_error]
+    fn block_exists(&self, id: Id<Block>) -> crate::Result<bool> {
+        self.entry_exists::<db::DBBlock, _, _>(id)
+    }
+
+    #[log_error]
     fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>> {
         let block_index = self.read::<db::DBBlockIndex, _, _>(id)?;
         Ok(block_index.map(|block_index| block_index.into_block_header()))
@@ -369,6 +374,11 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     #[log_error]
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
         self.read::<db::DBBlock, _, _>(id)
+    }
+
+    #[log_error]
+    fn block_exists(&self, id: Id<Block>) -> crate::Result<bool> {
+        self.entry_exists::<db::DBBlock, _, _>(id)
     }
 
     #[log_error]

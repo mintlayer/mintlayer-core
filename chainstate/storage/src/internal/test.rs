@@ -40,6 +40,19 @@ fn test_storage_get_default_version_in_tx() {
     })
 }
 
+fn assert_block_exists<DbTx: BlockchainStorageRead>(db_tx: &DbTx, block: &Block) {
+    assert_eq!(
+        db_tx.get_block(block.get_id()).unwrap().as_ref(),
+        Some(block)
+    );
+    assert!(db_tx.block_exists(block.get_id()).unwrap());
+}
+
+fn assert_no_block<DbTx: BlockchainStorageRead>(db_tx: &DbTx, block_id: Id<Block>) {
+    assert_eq!(db_tx.get_block(block_id).unwrap().as_ref(), None);
+    assert!(!db_tx.block_exists(block_id).unwrap());
+}
+
 #[test]
 #[cfg(not(loom))]
 fn test_storage_manipulation() {
@@ -80,29 +93,35 @@ fn test_storage_manipulation() {
     // Storage version manipulation
     assert_eq!(db_tx.get_storage_version(), Ok(None));
     assert_eq!(
-        db_tx.set_storage_version(ChainstateStorageVersion::new(0)),
+        db_tx.set_storage_version(ChainstateStorageVersion::new(12345)),
         Ok(())
     );
     assert_eq!(
         db_tx.get_storage_version(),
-        Ok(Some(ChainstateStorageVersion::new(0)))
+        Ok(Some(ChainstateStorageVersion::new(12345)))
     );
 
     // Store is now empty, the block is not there
-    assert_eq!(db_tx.get_block(block0.get_id()), Ok(None));
+    assert_no_block(&db_tx, block0.get_id());
 
     // Insert the first block and check it is there
     assert_eq!(db_tx.add_block(&block0), Ok(()));
-    assert_eq!(&db_tx.get_block(block0.get_id()).unwrap().unwrap(), &block0);
+    assert_block_exists(&db_tx, &block0);
 
     // Insert, remove, and reinsert the second block
-    assert_eq!(db_tx.get_block(block1.get_id()), Ok(None));
+    assert_no_block(&db_tx, block1.get_id());
+
     assert_eq!(db_tx.add_block(&block1), Ok(()));
-    assert_eq!(&db_tx.get_block(block0.get_id()).unwrap().unwrap(), &block0);
+    assert_block_exists(&db_tx, &block0);
+    assert_block_exists(&db_tx, &block1);
+
     assert_eq!(db_tx.del_block(block1.get_id()), Ok(()));
-    assert_eq!(db_tx.get_block(block1.get_id()), Ok(None));
+    assert_block_exists(&db_tx, &block0);
+    assert_no_block(&db_tx, block1.get_id());
+
     assert_eq!(db_tx.add_block(&block1), Ok(()));
-    assert_eq!(&db_tx.get_block(block0.get_id()).unwrap().unwrap(), &block0);
+    assert_block_exists(&db_tx, &block0);
+    assert_block_exists(&db_tx, &block1);
 
     // Test the transaction extraction from a block
     let enc_tx0 = tx0.encode();
@@ -122,6 +141,18 @@ fn test_storage_manipulation() {
     assert_eq!(db_tx.set_best_block_id(&block0.get_id().into()), Ok(()));
     assert_eq!(db_tx.get_best_block_id(), Ok(Some(block0.get_id().into())));
     assert_eq!(db_tx.set_best_block_id(&block1.get_id().into()), Ok(()));
+    assert_eq!(db_tx.get_best_block_id(), Ok(Some(block1.get_id().into())));
+
+    db_tx.commit().unwrap();
+
+    // Perform the latest checks on the ro transaction as well.
+    let db_tx = store.transaction_ro().unwrap();
+    assert_eq!(
+        db_tx.get_storage_version(),
+        Ok(Some(ChainstateStorageVersion::new(12345)))
+    );
+    assert_block_exists(&db_tx, &block0);
+    assert_block_exists(&db_tx, &block1);
     assert_eq!(db_tx.get_best_block_id(), Ok(Some(block1.get_id().into())));
 }
 

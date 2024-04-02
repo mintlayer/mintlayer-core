@@ -255,6 +255,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     #[log_error]
+    pub fn block_exists(&self, block_id: Id<Block>) -> Result<bool, PropertyQueryError> {
+        self.db_tx.block_exists(block_id).map_err(PropertyQueryError::from)
+    }
+
+    #[log_error]
     pub fn get_block_header(
         &self,
         block_id: Id<Block>,
@@ -1194,7 +1199,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
     #[log_error]
     pub fn persist_block(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
-        if (self.db_tx.get_block(block.get_id()).map_err(BlockError::from)?).is_some() {
+        if self.db_tx.block_exists(block.get_id()).map_err(BlockError::from)? {
             return Err(BlockError::BlockAlreadyExists(block.get_id()));
         }
 
