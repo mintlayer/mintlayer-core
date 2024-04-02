@@ -121,6 +121,7 @@ fn read_config_override_values() {
     let rpc_password = "password";
     let rpc_cookie_file = "cookie_file";
     let min_tx_relay_fee_rate = 321;
+    let enable_chainstate_heavy_checks = true;
 
     let options = RunOptions {
         blockprod_min_peers_to_produce_blocks: Some(blockprod_min_peers_to_produce_blocks),
@@ -157,6 +158,7 @@ fn read_config_override_values() {
         clean_data: Some(false),
         min_tx_relay_fee_rate: Some(min_tx_relay_fee_rate),
         force_allow_run_as_root_outer: Default::default(),
+        enable_chainstate_heavy_checks: Some(enable_chainstate_heavy_checks),
     };
     let config = NodeConfigFile::read(&chain_config, &config_path, &options).unwrap();
 
@@ -186,6 +188,11 @@ fn read_config_override_values() {
     assert_eq!(
         config.mempool.unwrap().min_tx_relay_fee_rate,
         Some(min_tx_relay_fee_rate)
+    );
+
+    assert_eq!(
+        config.chainstate.clone().unwrap().chainstate_config.enable_heavy_checks,
+        Some(enable_chainstate_heavy_checks)
     );
 
     assert_eq!(

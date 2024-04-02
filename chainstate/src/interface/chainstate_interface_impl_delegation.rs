@@ -446,6 +446,7 @@ mod tests {
                 max_orphan_blocks: 0.into(),
                 min_max_bootstrap_import_buffer_sizes: Default::default(),
                 max_tip_age: Default::default(),
+                enable_heavy_checks: Some(true),
             };
             let chainstate_storage = Store::new_empty().unwrap();
 

@@ -624,6 +624,7 @@ fn initial_block_download(#[case] seed: Seed) {
                 max_orphan_blocks: Default::default(),
                 min_max_bootstrap_import_buffer_sizes: Default::default(),
                 max_tip_age: Duration::from_secs(1).into(),
+                enable_heavy_checks: Some(true),
             })
             .with_initial_time_since_genesis(2)
             .build();
@@ -670,6 +671,7 @@ fn header_check_for_orphan(#[case] seed: Seed) {
                 max_orphan_blocks: Default::default(),
                 min_max_bootstrap_import_buffer_sizes: Default::default(),
                 max_tip_age: Default::default(),
+                enable_heavy_checks: Some(true),
             })
             .build();
 

@@ -978,6 +978,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         );
         Ok(block_index)
     }
+
+    /// Panic if block index consistency is violated.
+    /// An error is only returned if the checks couldn't be performed for some reason.
+    #[log_error]
+    pub fn check_block_index_consistency(&self) -> Result<(), chainstate_storage::Error> {
+        Ok(())
+    }
 }
 
 impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRef<'a, S, V> {

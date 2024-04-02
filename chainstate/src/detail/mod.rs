@@ -39,7 +39,7 @@ use self::{
     query::ChainstateQuery,
     tx_verification_strategy::TransactionVerificationStrategy,
 };
-use crate::{ChainstateConfig, ChainstateEvent};
+use crate::{BlockInvalidatorError, ChainstateConfig, ChainstateEvent};
 use chainstate_storage::{
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag,
     TipStorageTag, TransactionRw, Transactional,
@@ -59,6 +59,7 @@ use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingOperations, PoSAccountingUndo};
 use tx_verifier::transaction_verifier;
 use utils::{
+    const_value::ConstValue,
     ensure,
     eventhandler::{EventHandler, EventsController},
     log_error,
@@ -93,7 +94,7 @@ pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 #[must_use]
 pub struct Chainstate<S, V> {
     chain_config: Arc<ChainConfig>,
-    chainstate_config: ChainstateConfig,
+    chainstate_config: ConstValue<ChainstateConfig>,
     chainstate_storage: S,
     tx_verification_strategy: V,
     orphan_blocks: OrphansProxy,
@@ -195,6 +196,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         chainstate.update_initial_block_download_flag()?;
 
+        chainstate
+            .check_block_index_consistency()
+            .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))?;
+
         Ok(chainstate)
     }
 
@@ -211,7 +216,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         let rpc_events = broadcaster::Broadcaster::new();
         Self {
             chain_config,
-            chainstate_config,
+            chainstate_config: chainstate_config.into(),
             chainstate_storage,
             tx_verification_strategy,
             orphan_blocks,
@@ -490,6 +495,18 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         };
     }
 
+    /// If heavy checks are enabled, perform block index consistency check; panic if it's violated.
+    /// An error is only returned if the checks couldn't be performed for some reason.
+    #[log_error]
+    fn check_block_index_consistency(&self) -> Result<(), chainstate_storage::Error> {
+        if !self.chainstate_config.heavy_checks_enabled(&self.chain_config) {
+            return Ok(());
+        }
+
+        let chainstate_ref = self.make_db_tx_ro()?;
+        chainstate_ref.check_block_index_consistency()
+    }
+
     #[log_error]
     fn set_new_block_index(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
         self.with_rw_tx(
@@ -605,7 +622,12 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        self.process_block_and_related_orphans(block, block_source)
+        let result = self.process_block_and_related_orphans(block, block_source);
+        // Note: we don't ignore the result of check_block_index_consistency even though we may
+        // already have an error to return (if the checks are enabled but couldn't be done for
+        // some reason, we don't want to miss this).
+        self.check_block_index_consistency()?;
+        result
     }
 
     /// Initialize chainstate with genesis block
@@ -639,6 +661,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         db_tx.commit().expect("Genesis database initialization failed");
         Ok(())
+    }
+
+    #[log_error]
+    pub fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), BlockInvalidatorError> {
+        let result = BlockInvalidator::new(self)
+            .invalidate_block(block_id, block_invalidation::IsExplicit::Yes);
+        // Note: we don't ignore the result of check_block_index_consistency even though we may
+        // already have an error to return (if the checks are enabled but couldn't be done for
+        // some reason, we don't want to miss this).
+        self.check_block_index_consistency()?;
+        result
     }
 
     #[log_error]
