@@ -953,9 +953,20 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         | TxOutput::DelegateStaking(_, _)
                         | TxOutput::Burn(_)
                         | TxOutput::DataDeposit(_)
-                        | TxOutput::IssueFungibleToken(_)
-                        | TxOutput::CreateStakePool(_, _)
-                        | TxOutput::ProduceBlockFromStake(_, _) => {}
+                        | TxOutput::IssueFungibleToken(_) => {}
+                        | TxOutput::CreateStakePool(pool_id, _)
+                        | TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                            let pool_data = db_tx
+                                .get_pool_data(pool_id)
+                                .await?
+                                .expect("pool data should exist")
+                                .decommission_pool();
+
+                            db_tx
+                                .set_pool_data_at_height(pool_id, &pool_data, block_height)
+                                .await
+                                .expect("unable to update pool data");
+                        }
                         TxOutput::IssueNft(token_id, _, destination) => {
                             let address = Address::<Destination>::new(&chain_config, destination)
                                 .expect("Unable to encode destination");

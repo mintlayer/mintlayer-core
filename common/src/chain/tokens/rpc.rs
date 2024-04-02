@@ -56,7 +56,16 @@ impl RPCTokenInfo {
 }
 
 #[derive(
-    Debug, Clone, Copy, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+    HasValueHint,
 )]
 pub enum RPCTokenTotalSupply {
     Fixed(Amount),
@@ -76,7 +85,16 @@ impl From<TokenTotalSupply> for RPCTokenTotalSupply {
 
 // Indicates whether a token an be frozen
 #[derive(
-    Debug, Copy, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint,
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+    HasValueHint,
 )]
 pub enum RPCIsTokenFreezable {
     #[codec(index = 0)]
@@ -96,7 +114,16 @@ impl From<IsTokenFreezable> for RPCIsTokenFreezable {
 
 // Indicates whether a token an be unfrozen after being frozen
 #[derive(
-    Debug, Copy, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint,
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+    HasValueHint,
 )]
 pub enum RPCIsTokenUnfreezable {
     #[codec(index = 0)]
@@ -118,7 +145,16 @@ impl From<IsTokenUnfreezable> for RPCIsTokenUnfreezable {
 // Meaning transfers, burns, minting, unminting, supply locks etc. Frozen token can only be unfrozen
 // is such an option was provided while freezing.
 #[derive(
-    Debug, Copy, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint,
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+    HasValueHint,
 )]
 pub enum RPCIsTokenFrozen {
     #[codec(index = 0)]
@@ -203,6 +239,12 @@ impl RPCNonFungibleTokenInfo {
 
 #[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RPCTokenCreator(Vec<u8>);
+
+impl RPCTokenCreator {
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.0
+    }
+}
 
 impl From<&TokenCreator> for RPCTokenCreator {
     fn from(creator: &TokenCreator) -> Self {
