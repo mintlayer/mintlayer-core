@@ -406,7 +406,7 @@ fn check_block_reorg_state(
     if spend_status != TestSpentStatus::NotInMainchain {
         match tf.block_indexes.iter().find(|x| x.block_id() == block_id) {
             Some(block_index) => {
-                let block = tf.chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
+                let block = tf.block(*block_index.block_id());
                 for tx in block.transactions() {
                     check_spend_status(tf, tx.transaction(), &spend_status);
                 }

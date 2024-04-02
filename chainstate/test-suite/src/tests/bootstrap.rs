@@ -156,13 +156,7 @@ fn bootstrap_tests(#[case] seed: Seed) {
         let largest_block_size = {
             all_blocks
                 .iter()
-                .map(|id| {
-                    tf1.chainstate
-                        .get_block(*id)
-                        .expect("Block read failed")
-                        .expect("Block not found even though we just read it")
-                        .encoded_size()
-                })
+                .map(|id| tf1.block(*id).encoded_size())
                 .max()
                 .expect("The list can't be empty so this must have something in it")
         };

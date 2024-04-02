@@ -227,10 +227,7 @@ pub fn process_block_spend_tx(
 }
 
 pub fn assert_block_data_exists(tf: &TestFramework, block_id: &Id<Block>, should_exist: bool) {
-    assert_eq!(
-        tf.chainstate.get_block(*block_id).unwrap().is_some(),
-        should_exist
-    );
+    assert_eq!(tf.block_opt(*block_id).is_some(), should_exist);
 }
 
 pub fn assert_orphan_added_result<T: std::fmt::Debug>(result: Result<T, ChainstateError>) {

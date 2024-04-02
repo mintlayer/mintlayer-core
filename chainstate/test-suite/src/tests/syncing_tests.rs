@@ -725,11 +725,7 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
             let mut tf = TestFramework::builder(&mut rng).build();
             let parent_block_id =
                 tf.create_chain_return_ids(&tf.genesis().get_id().into(), 1, &mut rng).unwrap()[0];
-            let parent_block = tf
-                .chainstate
-                .get_block(tf.to_chain_block_id(&parent_block_id))
-                .unwrap()
-                .unwrap();
+            let parent_block = tf.block(tf.to_chain_block_id(&parent_block_id));
             let ids =
                 tf.create_chain_return_ids(&parent_block.get_id().into(), 10, &mut rng).unwrap();
             let block_headers = ids
