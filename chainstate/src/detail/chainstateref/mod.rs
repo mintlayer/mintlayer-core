@@ -1219,9 +1219,21 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         self.set_block_index(block_index)
     }
 
+    /// Delete the block index for the specified block id.
+    /// Panic if the index to be deleted is marked as persistent.
     #[log_error]
-    pub fn del_block_index(&mut self, block_id: &Id<Block>) -> Result<(), BlockError> {
-        self.db_tx.del_block_index(*block_id).map_err(BlockError::from)
+    pub fn del_non_persistent_block_index(
+        &mut self,
+        block_id: &Id<Block>,
+    ) -> Result<(), BlockError> {
+        if let Some(existing_block_index) = self.db_tx.get_block_index(block_id)? {
+            assert!(
+                !existing_block_index.is_persistent(),
+                "Trying to delete a persistent block index"
+            );
+            self.db_tx.del_block_index(*block_id)?;
+        }
+        Ok(())
     }
 
     /// Update the status of the passed `block_index`.

@@ -36,7 +36,12 @@ pub struct BlockIndex {
     #[codec(compact)]
     /// The total number of transactions up to this block
     chain_transaction_count: u128,
+    /// The block status.
     status: BlockStatus,
+    /// If true, this block index will stay in the db forever; otherwise, it may be deleted
+    /// at some point. Note: in practice, a block index is persistent if the corresponding
+    /// block has been saved into the db.
+    is_persistent: bool,
 }
 
 impl BlockIndex {
@@ -59,6 +64,7 @@ impl BlockIndex {
             chain_time_max,
             chain_transaction_count,
             status,
+            is_persistent: false,
         }
     }
 
@@ -108,6 +114,15 @@ impl BlockIndex {
 
     pub fn with_status(mut self, status: BlockStatus) -> Self {
         self.status = status;
+        self
+    }
+
+    pub fn is_persistent(&self) -> bool {
+        self.is_persistent
+    }
+
+    pub fn make_persistent(mut self) -> Self {
+        self.is_persistent = true;
         self
     }
 

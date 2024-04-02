@@ -81,6 +81,13 @@ impl GenBlockIndex {
         }
     }
 
+    pub fn is_persistent(&self) -> bool {
+        match self {
+            GenBlockIndex::Block(b) => b.is_persistent(),
+            GenBlockIndex::Genesis(..) => true,
+        }
+    }
+
     pub fn chain_transaction_count(&self) -> u128 {
         match self {
             GenBlockIndex::Block(b) => b.chain_transaction_count(),

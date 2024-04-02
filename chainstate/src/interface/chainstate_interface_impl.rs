@@ -314,7 +314,7 @@ where
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_block_index(block_id)
+            .get_persistent_block_index(block_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
@@ -326,7 +326,7 @@ where
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_gen_block_index(id)
+            .get_persistent_gen_block_index(id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
