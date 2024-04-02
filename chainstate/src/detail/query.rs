@@ -124,13 +124,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(res)
     }
 
-    pub fn get_block_index(
-        &self,
-        id: &Id<Block>,
-    ) -> Result<Option<BlockIndex>, PropertyQueryError> {
-        self.chainstate_ref.get_block_index(id)
-    }
-
     pub fn get_persistent_block_index(
         &self,
         id: &Id<Block>,
@@ -139,11 +132,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(index.and_then(|index| index.is_persistent().then_some(index)))
     }
 
-    pub fn get_gen_block_index(
+    pub fn get_any_block_index(
         &self,
-        id: &Id<GenBlock>,
-    ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
-        self.chainstate_ref.get_gen_block_index(id)
+        id: &Id<Block>,
+    ) -> Result<Option<BlockIndex>, PropertyQueryError> {
+        self.chainstate_ref.get_block_index(id)
     }
 
     pub fn get_persistent_gen_block_index(
@@ -152,6 +145,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
         let index = self.chainstate_ref.get_gen_block_index(id)?;
         Ok(index.and_then(|index| index.is_persistent().then_some(index)))
+    }
+
+    pub fn get_any_gen_block_index(
+        &self,
+        id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
+        self.chainstate_ref.get_gen_block_index(id)
     }
 
     pub fn get_best_block_index(&self) -> Result<GenBlockIndex, PropertyQueryError> {

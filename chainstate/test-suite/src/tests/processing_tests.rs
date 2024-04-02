@@ -420,11 +420,7 @@ fn straight_chain(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let genesis_index = tf
-            .chainstate
-            .get_gen_block_index(&tf.genesis().get_id().into())
-            .unwrap()
-            .unwrap();
+        let genesis_index = tf.block_index_opt(&tf.genesis().get_id().into()).unwrap();
 
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
         assert_eq!(genesis_index.chain_trust(), Uint256::ZERO);

@@ -239,7 +239,7 @@ fn get_headers_for_ids(tf: &TestFramework, ids: &[Id<GenBlock>]) -> Vec<SignedBl
     let mut result = Vec::with_capacity(ids.len());
     for id in ids {
         let id = id.classify(tf.chainstate.get_chain_config()).chain_block_id().unwrap();
-        let block_index = tf.chainstate.get_block_index(&id).unwrap().unwrap();
+        let block_index = tf.chainstate.get_persistent_block_index(&id).unwrap().unwrap();
         result.push(block_index.block_header().clone());
     }
     result

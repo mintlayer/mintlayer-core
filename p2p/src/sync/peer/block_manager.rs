@@ -504,9 +504,9 @@ where
                     // probably won't care about it anyway, because its impact - erroneously discourage/or be discouraged
                     // by a peer - is low.)
                     // Also see a similar note in send_block.
-                    let index = c.get_block_index(&id)?.ok_or(P2pError::ProtocolError(
-                        ProtocolError::UnknownBlockRequested(id),
-                    ))?;
+                    let index = c.get_persistent_block_index(&id)?.ok_or(
+                        P2pError::ProtocolError(ProtocolError::UnknownBlockRequested(id)),
+                    )?;
 
                     if let Some(ref best_sent_block) = best_sent_block {
                         if index.block_height() <= best_sent_block.block_height() {
@@ -634,7 +634,11 @@ where
 
         let first_header_is_connected_to_chainstate = self
             .chainstate_handle
-            .call(move |c| Ok(c.get_gen_block_index(&first_header_prev_id)?))
+            // Use get_any_gen_block_index instead of get_persistent_gen_block_index to avoid
+            // bailing out with the DisconnectedHeaders early (the appropriate  error will
+            // be generated when checking the header later and its ban score will be bigger).
+            // FIXME: "hide" this in chainstate?
+            .call(move |c| Ok(c.get_any_gen_block_index(&first_header_prev_id)?))
             .await?
             .is_some();
 
@@ -740,7 +744,7 @@ where
             .chainstate_handle
             .call_mut(move |c| {
                 // If the block already exists in the block tree, skip it.
-                let new_tip_received = if c.get_block_index(&block.get_id())?.is_some() {
+                let new_tip_received = if c.get_persistent_block_index(&block.get_id())?.is_some() {
                     log::debug!(
                         "[peer id = {}] The peer sent a block that already exists ({})",
                         peer_id,
@@ -836,7 +840,7 @@ where
         let (block, block_index) = self
             .chainstate_handle
             .call(move |c| {
-                let index = c.get_block_index(&id);
+                let index = c.get_persistent_block_index(&id);
                 let block = c.get_block(id);
                 Ok((block, index))
             })

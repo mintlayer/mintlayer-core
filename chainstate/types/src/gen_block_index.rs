@@ -101,3 +101,19 @@ impl From<BlockIndex> for GenBlockIndex {
         GenBlockIndex::Block(bi)
     }
 }
+
+impl PartialEq for GenBlockIndex {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Block(b1), Self::Block(b2)) => b1 == b2,
+            (Self::Genesis(g1), Self::Genesis(g2)) => {
+                let eq = Arc::ptr_eq(g1, g2);
+                debug_assert!(eq, "Attempt to compare different geneses");
+                eq
+            }
+            (Self::Block(_), Self::Genesis(_)) | (Self::Genesis(_), Self::Block(_)) => false,
+        }
+    }
+}
+
+impl Eq for GenBlockIndex {}

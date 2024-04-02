@@ -83,10 +83,12 @@ impl ReorgData {
         new_tip_id: Id<GenBlock>,
     ) -> Result<Self, ReorgError> {
         let common_id = {
-            let old_index =
-                chainstate.get_gen_block_index(&old_tip_id)?.ok_or(ReorgError::OldTipIndex)?;
-            let new_index =
-                chainstate.get_gen_block_index(&new_tip_id)?.ok_or(ReorgError::NewTipIndex)?;
+            let old_index = chainstate
+                .get_persistent_gen_block_index(&old_tip_id)?
+                .ok_or(ReorgError::OldTipIndex)?;
+            let new_index = chainstate
+                .get_persistent_gen_block_index(&new_tip_id)?
+                .ok_or(ReorgError::NewTipIndex)?;
             let common_index = chainstate.last_common_ancestor(&old_index, &new_index)?;
             common_index.block_id()
         };

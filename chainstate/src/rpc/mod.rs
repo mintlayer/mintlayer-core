@@ -195,7 +195,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         let both: Option<(Block, BlockIndex)> = rpc::handle_result(
             self.call(move |this| {
                 let block = this.get_block(id);
-                let block_index = this.get_block_index(&id);
+                let block_index = this.get_persistent_block_index(&id);
                 match (block, block_index) {
                     (Ok(block), Ok(block_index)) => Ok(block.zip(block_index)),
                     (Err(e), _) => Err(e),

@@ -170,15 +170,29 @@ where
         self.deref().split_off_leading_known_headers(headers)
     }
 
-    fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError> {
-        self.deref().get_block_index(id)
+    fn get_persistent_block_index(
+        &self,
+        id: &Id<Block>,
+    ) -> Result<Option<BlockIndex>, ChainstateError> {
+        self.deref().get_persistent_block_index(id)
     }
 
-    fn get_gen_block_index(
+    fn get_any_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError> {
+        self.deref().get_any_block_index(id)
+    }
+
+    fn get_persistent_gen_block_index(
         &self,
         id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, ChainstateError> {
-        self.deref().get_gen_block_index(id)
+        self.deref().get_persistent_gen_block_index(id)
+    }
+
+    fn get_any_gen_block_index(
+        &self,
+        id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex>, ChainstateError> {
+        self.deref().get_any_gen_block_index(id)
     }
 
     fn get_best_block_index(&self) -> Result<GenBlockIndex, ChainstateError> {

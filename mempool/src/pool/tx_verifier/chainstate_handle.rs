@@ -194,21 +194,24 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
         block_id: &Id<GenBlock>,
     ) -> Result<Option<chainstate::GenBlockIndex>, storage_result::Error> {
         let block_id = *block_id;
-        self.call(move |c| c.get_gen_block_index(&block_id)).map_err(|e| match e {
-            // TODO Handle this properly. For now we just panic on non-storage errors which should
-            // not happen. A more principled solution is to have a more accurate error types that
-            // communicate that so panics can be avoided completely.
-            Error::Chainstate(e) => match e {
-                ChainstateError::ProcessBlockError(chainstate::BlockError::StorageError(e)) => e,
-                ChainstateError::FailedToReadProperty(
-                    chainstate::PropertyQueryError::StorageError(e),
-                ) => e,
-                _ => panic!("unexpected non-storage error"),
-            },
-            // TODO Handle this properly. This is a consequence of the error being
-            // `storage_result::Error` rather than `Self::Error`.
-            Error::Subsystem(_) => panic!("subsystem failure"),
-        })
+        self.call(move |c| c.get_persistent_gen_block_index(&block_id))
+            .map_err(|e| match e {
+                // TODO Handle this properly. For now we just panic on non-storage errors which should
+                // not happen. A more principled solution is to have a more accurate error types that
+                // communicate that so panics can be avoided completely.
+                Error::Chainstate(e) => match e {
+                    ChainstateError::ProcessBlockError(chainstate::BlockError::StorageError(e)) => {
+                        e
+                    }
+                    ChainstateError::FailedToReadProperty(
+                        chainstate::PropertyQueryError::StorageError(e),
+                    ) => e,
+                    _ => panic!("unexpected non-storage error"),
+                },
+                // TODO Handle this properly. This is a consequence of the error being
+                // `storage_result::Error` rather than `Self::Error`.
+                Error::Subsystem(_) => panic!("subsystem failure"),
+            })
     }
 
     fn get_token_aux_data(&self, token_id: &TokenId) -> Result<Option<TokenAuxiliaryData>, Error> {

@@ -28,14 +28,10 @@ use test_utils::random::make_seedable_rng;
 use test_utils::random::Seed;
 
 /// Ensure that the blocks vector put blocks in order with height in the blockchain
-fn check_height_order<C: ChainstateInterface>(blocks: &[Id<Block>], chainstate: &C) {
+fn check_height_order(blocks: &[Id<Block>], tf: &TestFramework) {
     let mut last_height = 0;
     for block_id in blocks {
-        let height = chainstate
-            .get_block_index(block_id)
-            .expect("Database error")
-            .expect("Block index not found")
-            .block_height();
+        let height = tf.block_index(block_id).block_height();
         let current_height: u64 = height.into();
         assert!(current_height >= last_height);
         last_height = current_height;
@@ -61,8 +57,8 @@ fn bootstrap_tests(#[case] seed: Seed) {
             assert_eq!(mainchain_vec, tree_vec);
             assert_eq!(mainchain_vec.len(), 5);
 
-            check_height_order(&mainchain_vec, &tf1.chainstate);
-            check_height_order(&tree_vec, &tf1.chainstate);
+            check_height_order(&mainchain_vec, &tf1);
+            check_height_order(&tree_vec, &tf1);
 
             mainchain_vec
         };
@@ -79,8 +75,8 @@ fn bootstrap_tests(#[case] seed: Seed) {
             assert_eq!(mainchain_vec.len(), 15);
             assert_eq!(tree_vec.len(), 20);
 
-            check_height_order(&mainchain_vec, &tf1.chainstate);
-            check_height_order(&tree_vec, &tf1.chainstate);
+            check_height_order(&mainchain_vec, &tf1);
+            check_height_order(&tree_vec, &tf1);
 
             mainchain_vec
         };
@@ -98,8 +94,8 @@ fn bootstrap_tests(#[case] seed: Seed) {
             assert_eq!(mainchain_vec.len(), 25);
             assert_eq!(tree_vec.len(), 45);
 
-            check_height_order(&mainchain_vec, &tf1.chainstate);
-            check_height_order(&tree_vec, &tf1.chainstate);
+            check_height_order(&mainchain_vec, &tf1);
+            check_height_order(&tree_vec, &tf1);
 
             mainchain_vec
         };
@@ -128,8 +124,8 @@ fn bootstrap_tests(#[case] seed: Seed) {
             );
             assert_eq!(tree_vec.len(), 45 + new_branch_len);
 
-            check_height_order(&mainchain_vec, &tf1.chainstate);
-            check_height_order(&tree_vec, &tf1.chainstate);
+            check_height_order(&mainchain_vec, &tf1);
+            check_height_order(&tree_vec, &tf1);
 
             mainchain_vec
         };

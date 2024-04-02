@@ -369,8 +369,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         for attempt_idx in 0..MAX_TX_ADDITION_ATTEMPTS {
             let (tip, current_best) = chainstate_handle.call(|chainstate| {
                 let tip = chainstate.get_best_block_id()?;
-                let tip_index =
-                    chainstate.get_gen_block_index(&tip)?.expect("tip block index to exist");
+                let tip_index = chainstate
+                    .get_persistent_gen_block_index(&tip)?
+                    .expect("tip block index to exist");
                 Ok::<_, chainstate::ChainstateError>((tip, tip_index))
             })??;
 
