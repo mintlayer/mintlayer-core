@@ -137,7 +137,7 @@ impl TestFramework {
     ) -> Result<Option<BlockIndex>, ChainstateError> {
         let id = block.get_id();
         let block_index_result = self.chainstate.process_block(block, source)?;
-        let index = match self.block_index(&id.into()) {
+        let index = match self.gen_block_index(&id.into()) {
             GenBlockIndex::Genesis(..) => panic!("we have processed the genesis block"),
             GenBlockIndex::Block(block_index) => block_index,
         };
@@ -278,7 +278,7 @@ impl TestFramework {
     }
 
     pub fn parent_block_id(&self, id: &Id<GenBlock>) -> Id<GenBlock> {
-        self.block_index(id).prev_block_id().expect("The block has no parent")
+        self.gen_block_index(id).prev_block_id().expect("The block has no parent")
     }
 
     /// Returns a block identifier for the specified height.
@@ -311,34 +311,80 @@ impl TestFramework {
         self.chainstate.get_block(id).unwrap().unwrap()
     }
 
-    /// Return the block index by block id. Ensure consistency of chainstate's get_any_gen_block_index
-    /// and get_persistent_gen_block_index functions.
-    pub fn block_index_opt(&self, id: &Id<GenBlock>) -> Option<GenBlockIndex> {
-        let any_block_index_opt = self.chainstate.get_any_gen_block_index(id).unwrap();
-        let persistent_block_index_opt =
+    fn check_block_index_consistency(&self, id: &Id<GenBlock>) {
+        // First, check consistency of get_any_gen_block_index and get_persistent_gen_block_index.
+        let any_gen_block_index_opt = self.chainstate.get_any_gen_block_index(id).unwrap();
+        let persistent_gen_block_index_opt =
             self.chainstate.get_persistent_gen_block_index(id).unwrap();
 
-        if let Some(any_block_index) = &any_block_index_opt {
+        if let Some(any_block_index) = &any_gen_block_index_opt {
             if any_block_index.is_persistent() {
-                assert_eq!(persistent_block_index_opt, any_block_index_opt);
+                assert_eq!(persistent_gen_block_index_opt, any_gen_block_index_opt);
             } else {
-                assert_eq!(persistent_block_index_opt, None);
+                assert_eq!(persistent_gen_block_index_opt, None);
             }
-
-            any_block_index_opt
         } else {
-            assert_eq!(persistent_block_index_opt, None);
-            None
+            assert_eq!(persistent_gen_block_index_opt, None);
+        }
+
+        match id.classify(self.chain_config()) {
+            GenBlockId::Block(ref id) => {
+                // Now check consistency of get_any_block_index and get_persistent_block_index
+                // as well as get_any_block_index and get_any_gen_block_index,
+                let any_block_index_opt = self.chainstate.get_any_block_index(id).unwrap();
+                let persistent_block_index_opt =
+                    self.chainstate.get_persistent_block_index(id).unwrap();
+
+                if let Some(any_block_index) = &any_block_index_opt {
+                    if any_block_index.is_persistent() {
+                        assert_eq!(persistent_block_index_opt, any_block_index_opt);
+                    } else {
+                        assert_eq!(persistent_block_index_opt, None);
+                    }
+
+                    assert_eq!(
+                        any_gen_block_index_opt,
+                        Some(GenBlockIndex::Block(any_block_index.clone()))
+                    );
+                } else {
+                    assert_eq!(persistent_block_index_opt, None);
+
+                    assert_eq!(any_gen_block_index_opt, None);
+                }
+            }
+            GenBlockId::Genesis(_) => {
+                assert_eq!(
+                    any_gen_block_index_opt,
+                    Some(GenBlockIndex::genesis(self.chain_config()))
+                );
+            }
         }
     }
 
     /// Returns a block index corresponding to the specified id.
-    pub fn block_index(&self, id: &Id<GenBlock>) -> GenBlockIndex {
+    pub fn gen_block_index(&self, id: &Id<GenBlock>) -> GenBlockIndex {
+        self.gen_block_index_opt(id).unwrap()
+    }
+
+    /// Returns a block index corresponding to the specified id.
+    pub fn gen_block_index_opt(&self, id: &Id<GenBlock>) -> Option<GenBlockIndex> {
+        self.check_block_index_consistency(id);
+        self.chainstate.get_any_gen_block_index(id).unwrap()
+    }
+
+    /// Returns a block index corresponding to the specified id.
+    pub fn block_index_opt(&self, id: &Id<Block>) -> Option<BlockIndex> {
+        self.check_block_index_consistency(id.into());
+        self.chainstate.get_any_block_index(id).unwrap()
+    }
+
+    /// Returns a block index corresponding to the specified id.
+    pub fn block_index(&self, id: &Id<Block>) -> BlockIndex {
         self.block_index_opt(id).unwrap()
     }
 
     pub fn block_index_exists(&self, id: &Id<GenBlock>) -> bool {
-        self.block_index_opt(id).is_some()
+        self.gen_block_index_opt(id).is_some()
     }
 
     pub fn index_at(&self, at: usize) -> &BlockIndex {

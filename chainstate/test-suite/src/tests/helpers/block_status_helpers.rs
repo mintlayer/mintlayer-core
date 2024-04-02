@@ -18,7 +18,7 @@ use chainstate_types::{BlockStatus, BlockValidationStage};
 use common::{chain::Block, primitives::Id};
 
 pub fn get_block_status(tf: &TestFramework, block_id: &Id<Block>) -> BlockStatus {
-    tf.block_index(block_id.into()).status()
+    tf.block_index(block_id).status()
 }
 
 pub fn assert_fully_valid_block(block_status: BlockStatus) {

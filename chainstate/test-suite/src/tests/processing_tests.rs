@@ -305,7 +305,7 @@ fn orphans_chains(#[case] seed: Seed) {
             .chain_block_id()
             .unwrap();
         assert_eq!(
-            tf.block_index(&current_best.into()).block_height(),
+            tf.block_index(&current_best).block_height(),
             (MAX_ORPHANS_COUNT_IN_TEST as u64).into()
         );
         // There should be no more orphan blocks left.
@@ -420,7 +420,7 @@ fn straight_chain(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let genesis_index = tf.block_index_opt(&tf.genesis().get_id().into()).unwrap();
+        let genesis_index = tf.gen_block_index_opt(&tf.genesis().get_id().into()).unwrap();
 
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
         assert_eq!(genesis_index.chain_trust(), Uint256::ZERO);
@@ -579,7 +579,7 @@ fn get_ancestor(#[case] seed: Seed) {
         ancestor.block_id(),
         tf.chainstate
             .get_ancestor(
-                &tf.block_index(&last_block_in_second_chain),
+                &tf.gen_block_index(&last_block_in_second_chain),
                 u64::try_from(ANCESTOR_HEIGHT).unwrap().into()
             )
             .expect("ancestor")
@@ -622,7 +622,7 @@ fn last_common_ancestor(#[case] seed: Seed) {
             &mut rng,
         )
         .unwrap();
-    let last_block_in_second_chain = tf.block_index(&last_block_in_second_chain);
+    let last_block_in_second_chain = tf.gen_block_index(&last_block_in_second_chain);
 
     assert_eq!(
         tf.chainstate

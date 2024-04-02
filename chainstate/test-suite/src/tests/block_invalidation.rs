@@ -612,8 +612,8 @@ fn test_tip_invalidation_with_no_better_candidates(#[case] seed: Seed) {
         assert_ok_blocks_at_stage(&tf, &[a0_id], BlockValidationStage::CheckBlockOk);
 
         assert_eq!(
-            tf.block_index((&a0_id).into()).chain_trust(),
-            tf.block_index((&m0_id).into()).chain_trust()
+            tf.block_index(&a0_id).chain_trust(),
+            tf.block_index(&m0_id).chain_trust()
         );
 
         tf.chainstate.invalidate_block(&m1_id).unwrap();
@@ -775,10 +775,10 @@ fn test_invalidation_with_reorg_attempt_to_chain_with_lower_chain_trust(#[case] 
         );
 
         // Some sanity checks
-        let m0_ct = tf.block_index(&m0_id.into()).chain_trust();
-        let m1_ct = tf.block_index(&m1_id.into()).chain_trust();
-        let a0_ct = tf.block_index(&a0_id.into()).chain_trust();
-        let a1_ct = tf.block_index(&a1_id.into()).chain_trust();
+        let m0_ct = tf.block_index(&m0_id).chain_trust();
+        let m1_ct = tf.block_index(&m1_id).chain_trust();
+        let a0_ct = tf.block_index(&a0_id).chain_trust();
+        let a1_ct = tf.block_index(&a1_id).chain_trust();
         assert_eq!(m0_ct, a0_ct);
         assert!(m1_ct > m0_ct);
         assert!(a1_ct > a0_ct);

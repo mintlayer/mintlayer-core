@@ -254,7 +254,7 @@ impl<'f> PoSBlockBuilder<'f> {
     }
 
     fn mine_pos_block(&self) -> (PoSData, BlockTimestamp) {
-        let parent_block_index = self.framework.block_index(&self.prev_block_hash);
+        let parent_block_index = self.framework.gen_block_index(&self.prev_block_hash);
 
         let kernel_input_outpoint = self.kernel_input_outpoint.clone().unwrap_or_else(|| {
             // if staking outpoint is not set try to extract it from the parent

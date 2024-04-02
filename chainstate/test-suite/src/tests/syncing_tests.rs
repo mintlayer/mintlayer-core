@@ -231,7 +231,7 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
 
         let headers = tf.chainstate.get_mainchain_headers_by_locator(&locator, 2000).unwrap();
         let id = headers[0].prev_block_id();
-        assert!(tf.block_index(id).block_height() <= BlockHeight::new(common_height as u64));
+        assert!(tf.gen_block_index(id).block_height() <= BlockHeight::new(common_height as u64));
     });
 }
 
@@ -239,7 +239,7 @@ fn get_headers_for_ids(tf: &TestFramework, ids: &[Id<GenBlock>]) -> Vec<SignedBl
     let mut result = Vec::with_capacity(ids.len());
     for id in ids {
         let id = id.classify(tf.chainstate.get_chain_config()).chain_block_id().unwrap();
-        let block_index = tf.chainstate.get_persistent_block_index(&id).unwrap().unwrap();
+        let block_index = tf.block_index(&id);
         result.push(block_index.block_header().clone());
     }
     result
@@ -518,7 +518,7 @@ fn get_headers_different_chains(#[case] seed: Seed) {
             .get_mainchain_headers_by_locator(&locator, header_count_limit)
             .unwrap();
         let id = *headers[0].prev_block_id();
-        tf1.block_index(&id); // This panics if the ID is not found
+        tf1.gen_block_index(&id); // This panics if the ID is not found
 
         let locator = tf2.chainstate.get_locator().unwrap();
         let headers = tf1
@@ -526,7 +526,7 @@ fn get_headers_different_chains(#[case] seed: Seed) {
             .get_mainchain_headers_by_locator(&locator, header_count_limit)
             .unwrap();
         let id = *headers[0].prev_block_id();
-        tf2.block_index(&id); // This panics if the ID is not found
+        tf2.gen_block_index(&id); // This panics if the ID is not found
     });
 }
 
