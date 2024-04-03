@@ -197,7 +197,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         chainstate.update_initial_block_download_flag()?;
 
         chainstate
-            .check_block_index_consistency()
+            .check_consistency()
             .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))?;
 
         Ok(chainstate)
@@ -498,13 +498,13 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     /// If heavy checks are enabled, perform block index consistency check; panic if it's violated.
     /// An error is only returned if the checks couldn't be performed for some reason.
     #[log_error]
-    fn check_block_index_consistency(&self) -> Result<(), chainstate_storage::Error> {
+    fn check_consistency(&self) -> Result<(), chainstate_storage::Error> {
         if !self.chainstate_config.heavy_checks_enabled(&self.chain_config) {
             return Ok(());
         }
 
         let chainstate_ref = self.make_db_tx_ro()?;
-        chainstate_ref.check_block_index_consistency()
+        chainstate_ref.check_consistency()
     }
 
     #[log_error]
@@ -623,10 +623,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
         let result = self.process_block_and_related_orphans(block, block_source);
-        // Note: we don't ignore the result of check_block_index_consistency even though we may
-        // already have an error to return (if the checks are enabled but couldn't be done for
-        // some reason, we don't want to miss this).
-        self.check_block_index_consistency()?;
+        // Note: we don't ignore the result of check_consistency even though we may already have
+        // an error to return (if the checks are enabled but couldn't be done for some reason,
+        // we don't want to miss this).
+        self.check_consistency()?;
         result
     }
 
@@ -667,10 +667,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     pub fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), BlockInvalidatorError> {
         let result = BlockInvalidator::new(self)
             .invalidate_block(block_id, block_invalidation::IsExplicit::Yes);
-        // Note: we don't ignore the result of check_block_index_consistency even though we may
-        // already have an error to return (if the checks are enabled but couldn't be done for
-        // some reason, we don't want to miss this).
-        self.check_block_index_consistency()?;
+        // Note: we don't ignore the result of check_consistency even though we may already have
+        // an error to return (if the checks are enabled but couldn't be done for some reason,
+        // we don't want to miss this).
+        self.check_consistency()?;
         result
     }
 
