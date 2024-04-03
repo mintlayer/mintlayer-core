@@ -113,6 +113,7 @@ fn own_output(key_chain: &AccountKeyChainImpl, output: &TxOutput) -> bool {
         TxOutput::Transfer(_, dest) | TxOutput::LockThenTransfer(_, dest, _) => KeyPurpose::ALL
             .iter()
             .any(|purpose| key_chain.get_leaf_key_chain(*purpose).is_destination_mine(dest)),
+        TxOutput::Htlc(_, _) => false, // TODO: support htlc
         TxOutput::Burn(_)
         | TxOutput::CreateStakePool(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)

@@ -185,6 +185,18 @@ pub fn txoutput_to_json(
                 "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
             })
         }
+        TxOutput::Htlc(value, htlc) => {
+            json!({
+                "type": "Htlc",
+                "value": outputvalue_to_json(value, chain_config, token_decimals),
+                "htlc": {
+                    "secret_hash": to_json_string(htlc.secret_hash.as_bytes()),
+                    "spend_key": Address::new(chain_config, htlc.spend_key.clone()).expect("no error").as_str(),
+                    "refund_timelock": htlc.refund_timelock,
+                    "refund_key": Address::new(chain_config, htlc.refund_key.clone()).expect("no error").as_str(),
+                },
+            })
+        }
     }
 }
 

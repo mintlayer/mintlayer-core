@@ -478,6 +478,7 @@ impl MempoolBanScore for CheckTransactionError {
             CheckTransactionError::DataDepositMaxSizeExceeded(_, _, _) => 100,
             CheckTransactionError::TxSizeTooLarge(_, _, _) => 100,
             CheckTransactionError::DeprecatedTokenOperationVersion(_, _) => 100,
+            CheckTransactionError::HtlcsAreNotActivated => 100,
         }
     }
 }

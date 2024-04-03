@@ -302,7 +302,8 @@ where
             | TxOutput::Burn(_)
             | TxOutput::IssueFungibleToken(_)
             | TxOutput::IssueNft(_, _, _)
-            | TxOutput::DataDeposit(_) => Ok(None),
+            | TxOutput::DataDeposit(_)
+            | TxOutput::Htlc(_, _) => Ok(None),
         }
     }
 
@@ -421,7 +422,8 @@ where
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::IssueNft(_, _, _)
-                | TxOutput::DataDeposit(_) => None,
+                | TxOutput::DataDeposit(_)
+                | TxOutput::Htlc(_, _) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -597,7 +599,8 @@ where
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::IssueNft(_, _, _)
-                | TxOutput::DataDeposit(_) => None,
+                | TxOutput::DataDeposit(_)
+                | TxOutput::Htlc(_, _) => None,
                 TxOutput::IssueFungibleToken(issuance_data) => {
                     let result = make_token_id(tx.inputs())
                         .ok_or(ConnectTransactionError::TokensError(
@@ -668,7 +671,8 @@ where
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::DataDeposit(_) => Ok(()),
+                    | TxOutput::DataDeposit(_)
+                    | TxOutput::Htlc(_, _) => Ok(()),
                 }
             })
     }

@@ -1081,6 +1081,7 @@ fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedT
         TxOutput::Transfer(v, d) => TxOutput::Transfer(add_value(v), d),
         TxOutput::LockThenTransfer(v, d, l) => TxOutput::LockThenTransfer(add_value(v), d, l),
         TxOutput::Burn(v) => TxOutput::Burn(add_value(v)),
+        TxOutput::Htlc(_, _) => todo!(),
         TxOutput::CreateStakePool(_, _) => unreachable!(), // TODO: come back to this later
         TxOutput::ProduceBlockFromStake(_, _) => unreachable!(), // TODO: come back to this later
         TxOutput::CreateDelegationId(_, _) => unreachable!(), // TODO: come back to this later

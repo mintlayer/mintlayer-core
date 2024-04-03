@@ -220,7 +220,7 @@ pub enum WalletError {
     #[error("Sign message error: {0}")]
     SignMessageError(#[from] SignArbitraryMessageError),
     #[error("Input cannot be spent {0:?}")]
-    InputCannotBeSpent(TxOutput),
+    InputCannotBeSpent(UtxoOutPoint),
     #[error("Failed to convert partially signed tx to signed")]
     FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
     #[error("The specified address is not found in this wallet")]

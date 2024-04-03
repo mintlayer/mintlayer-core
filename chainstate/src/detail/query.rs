@@ -348,7 +348,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::DataDeposit(_) => None,
+                    | TxOutput::DataDeposit(_)
+                    | TxOutput::Htlc(_, _) => None,
                     TxOutput::IssueNft(_, issuance, _) => match issuance.as_ref() {
                         NftIssuance::V0(nft) => {
                             Some(RPCTokenInfo::new_nonfungible(RPCNonFungibleTokenInfo::new(

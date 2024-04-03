@@ -75,8 +75,8 @@ fn create_stake_pool_data(rng: &mut (impl Rng + CryptoRng), atoms_to_stake: u128
 #[trace]
 #[case(Seed::from_entropy())]
 fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
-    let source_inputs = [lock_then_transfer(), transfer()];
-    let source_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
+    let source_inputs = [lock_then_transfer(), transfer(), htlc()];
+    let source_outputs = [lock_then_transfer(), transfer(), htlc(), burn(), delegate_staking()];
 
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
         .consensus_upgrades(NetUpgrades::regtest_with_pos())
@@ -214,7 +214,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
-    let source_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
+    let source_outputs = [lock_then_transfer(), transfer(), htlc(), burn(), delegate_staking()];
 
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
         .consensus_upgrades(NetUpgrades::regtest_with_pos())

@@ -22,8 +22,11 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub enum OutputValue {
+    #[codec(index = 0)]
     Coin(Amount),
+    #[codec(index = 1)]
     TokenV0(Box<TokenData>),
+    #[codec(index = 2)]
     TokenV1(TokenId, Amount),
 }
 

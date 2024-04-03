@@ -48,6 +48,7 @@ use read::ReadOnlyController;
 use sync::InSync;
 use synced_controller::SyncedController;
 
+use chainstate::ConnectTransactionError;
 use common::{
     address::AddressError,
     chain::{
@@ -55,7 +56,7 @@ use common::{
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::signature_hash,
-            DestinationSigError,
+            DestinationSigError, Transactable,
         },
         tokens::{RPCTokenInfo, TokenId},
         Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxInput,
@@ -625,7 +626,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::IssueFungibleToken(_)
             | TxOutput::IssueNft(_, _, _)
-            | TxOutput::DataDeposit(_) => None,
+            | TxOutput::DataDeposit(_)
+            | TxOutput::Htlc(_, _) => None,
         });
         let mut balances = BTreeMap::new();
         for pool_id in pool_ids {
@@ -780,13 +782,9 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 (InputWitness::NoSignature(_), None) => SignatureStatus::FullySigned,
                 (InputWitness::NoSignature(_), Some(_)) => SignatureStatus::NotSigned,
                 (InputWitness::Standard(_), None) => SignatureStatus::InvalidSignature,
-                (InputWitness::Standard(sig), Some(dest)) => self.verify_tx_signature(
-                    sig,
-                    stx.transaction(),
-                    &inputs_utxos_refs,
-                    input_num,
-                    &dest,
-                ),
+                (InputWitness::Standard(_), Some(dest)) => {
+                    self.verify_tx_signature(stx, &inputs_utxos_refs, input_num, &dest)
+                }
             })
             .collect();
         Ok((fees, signature_statuses))
@@ -808,8 +806,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 (Some(InputWitness::NoSignature(_)), None) => SignatureStatus::FullySigned,
                 (Some(InputWitness::NoSignature(_)), Some(_)) => SignatureStatus::InvalidSignature,
                 (Some(InputWitness::Standard(_)), None) => SignatureStatus::UnknownSignature,
-                (Some(InputWitness::Standard(sig)), Some(dest)) => {
-                    self.verify_tx_signature(sig, ptx.tx(), &inputs_utxos_refs, input_num, dest)
+                (Some(InputWitness::Standard(_)), Some(dest)) => {
+                    self.verify_tx_signature(&ptx, &inputs_utxos_refs, input_num, dest)
                 }
                 (None, _) => SignatureStatus::NotSigned,
             })
@@ -857,32 +855,32 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         })
     }
 
-    fn verify_tx_signature(
+    fn verify_tx_signature<S: Transactable>(
         &self,
-        sig: &StandardInputSignature,
-        tx: &Transaction,
+        tx: &S,
         inputs_utxos_refs: &[Option<&TxOutput>],
         input_num: usize,
         dest: &Destination,
     ) -> SignatureStatus {
-        signature_hash(sig.sighash_type(), tx, inputs_utxos_refs, input_num).map_or(
-            SignatureStatus::InvalidSignature,
-            |sighash| {
-                let valid = sig.verify_signature(&self.chain_config, dest, &sighash);
+        let valid = common::chain::signature::verify_signature(
+            &self.chain_config,
+            dest,
+            tx,
+            inputs_utxos_refs,
+            input_num,
+        );
 
-                match valid {
-                    Err(DestinationSigError::IncompleteClassicalMultisigSignature(
-                        required_signatures,
-                        num_signatures,
-                    )) => SignatureStatus::PartialMultisig {
-                        required_signatures,
-                        num_signatures,
-                    },
-                    Err(_) => SignatureStatus::InvalidSignature,
-                    Ok(_) => SignatureStatus::FullySigned,
-                }
+        match valid {
+            Err(DestinationSigError::IncompleteClassicalMultisigSignature(
+                required_signatures,
+                num_signatures,
+            )) => SignatureStatus::PartialMultisig {
+                required_signatures,
+                num_signatures,
             },
-        )
+            Err(_) => SignatureStatus::InvalidSignature,
+            Ok(_) => SignatureStatus::FullySigned,
+        }
     }
 
     pub async fn compose_transaction(

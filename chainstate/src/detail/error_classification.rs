@@ -786,9 +786,8 @@ impl BlockProcessingErrorClassification for CheckTransactionError {
             | CheckTransactionError::NoSignatureDataNotAllowed(_)
             | CheckTransactionError::DataDepositMaxSizeExceeded(_, _, _)
             | CheckTransactionError::TxSizeTooLarge(_, _, _)
-            | CheckTransactionError::DeprecatedTokenOperationVersion(_, _) => {
-                BlockProcessingErrorClass::BadBlock
-            }
+            | CheckTransactionError::DeprecatedTokenOperationVersion(_, _)
+            | CheckTransactionError::HtlcsAreNotActivated => BlockProcessingErrorClass::BadBlock,
 
             CheckTransactionError::PropertyQueryError(err) => err.classify(),
             CheckTransactionError::TokensError(err) => err.classify(),

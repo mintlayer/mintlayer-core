@@ -39,11 +39,18 @@ pub enum TokensFeeVersion {
     V1,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum HtlcActivated {
+    Yes,
+    No,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
     reward_distribution_version: RewardDistributionVersion,
     tokens_fee_version: TokensFeeVersion,
+    htlc_activated: HtlcActivated,
 }
 
 impl ChainstateUpgrade {
@@ -51,11 +58,13 @@ impl ChainstateUpgrade {
         token_issuance_version: TokenIssuanceVersion,
         reward_distribution_version: RewardDistributionVersion,
         tokens_fee_version: TokensFeeVersion,
+        htlc_activated: HtlcActivated,
     ) -> Self {
         Self {
             token_issuance_version,
             reward_distribution_version,
             tokens_fee_version,
+            htlc_activated,
         }
     }
 
@@ -69,6 +78,10 @@ impl ChainstateUpgrade {
 
     pub fn tokens_fee_version(&self) -> TokensFeeVersion {
         self.tokens_fee_version
+    }
+
+    pub fn htlc_activated(&self) -> HtlcActivated {
+        self.htlc_activated
     }
 }
 

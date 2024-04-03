@@ -37,7 +37,8 @@ fn tx_stake_multiple_pools(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let source_inputs = super::outputs_utils::valid_tx_inputs_utxos();
-    let source_valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
+    let source_valid_outputs =
+        [lock_then_transfer(), transfer(), htlc(), burn(), delegate_staking()];
     let source_invalid_outputs = [stake_pool()];
 
     let inputs = get_random_outputs_combination(&mut rng, &source_inputs, 1);
@@ -71,7 +72,8 @@ fn tx_create_multiple_delegations(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let source_inputs = super::outputs_utils::valid_tx_inputs_utxos();
-    let source_valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
+    let source_valid_outputs =
+        [lock_then_transfer(), transfer(), htlc(), burn(), delegate_staking()];
     let source_invalid_outputs = [create_delegation()];
 
     let inputs = get_random_outputs_combination(&mut rng, &source_inputs, 1);
@@ -111,6 +113,7 @@ fn tx_many_to_many_valid(#[case] seed: Seed) {
     let valid_outputs = [
         lock_then_transfer(),
         transfer(),
+        htlc(),
         burn(),
         delegate_staking(),
         issue_tokens(),
@@ -208,7 +211,7 @@ fn produce_block_in_tx_output(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn tx_create_pool_and_delegation_same_tx(#[case] seed: Seed) {
-    let source_inputs = [transfer(), lock_then_transfer()];
+    let source_inputs = [transfer(), htlc(), lock_then_transfer()];
     let outputs = [stake_pool(), create_delegation()];
 
     let mut rng = make_seedable_rng(seed);

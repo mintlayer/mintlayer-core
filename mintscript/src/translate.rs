@@ -118,6 +118,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                         .ok_or(TranslationError::PoolNotFound(*pool_id))?;
                     Ok(checksig(pool_data.decommission_destination()))
                 }
+                TxOutput::Htlc(_, _) => todo!(),
                 TxOutput::IssueNft(_id, _issuance, dest) => Ok(checksig(dest)),
                 TxOutput::DelegateStaking(_amount, _deleg_id) => Err(TranslationError::Unspendable),
                 TxOutput::CreateDelegationId(_dest, _pool_id) => Err(TranslationError::Unspendable),
@@ -163,7 +164,8 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_>
                 match utxo.output() {
                     TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::IssueNft(_, _, _) => Err(TranslationError::IllegalOutputSpend),
+                    | TxOutput::IssueNft(_, _, _)
+                    | TxOutput::Htlc(_, _) => Err(TranslationError::IllegalOutputSpend),
                     TxOutput::CreateDelegationId(_, _)
                     | TxOutput::Burn(_)
                     | TxOutput::DataDeposit(_)
@@ -200,6 +202,7 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 TxOutput::LockThenTransfer(_val, _dest, timelock) => {
                     Ok(WitnessScript::timelock(*timelock))
                 }
+                TxOutput::Htlc(_, _) => todo!(),
                 TxOutput::Transfer(_, _)
                 | TxOutput::CreateStakePool(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)

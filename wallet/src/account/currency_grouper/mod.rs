@@ -43,9 +43,10 @@ pub(crate) fn group_outputs<T, Grouped: Clone>(
     for output in outputs {
         // Get the supported output value
         let output_value = match get_tx_output(&output) {
-            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
-                v.clone()
-            }
+            TxOutput::Transfer(v, _)
+            | TxOutput::LockThenTransfer(v, _, _)
+            | TxOutput::Burn(v)
+            | TxOutput::Htlc(v, _) => v.clone(),
             TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.pledge()),
             TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
             TxOutput::CreateDelegationId(_, _)
@@ -92,9 +93,10 @@ pub fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
     for output in outputs {
         // Get the supported output value
         let output_value = match get_tx_output(&output) {
-            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
-                v.clone()
-            }
+            TxOutput::Transfer(v, _)
+            | TxOutput::LockThenTransfer(v, _, _)
+            | TxOutput::Burn(v)
+            | TxOutput::Htlc(v, _) => v.clone(),
             TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.pledge()),
             TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
             TxOutput::IssueFungibleToken(_) => {
@@ -132,17 +134,19 @@ pub fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
 
 fn output_spendable_value(output: &TxOutput) -> Result<(Currency, Amount), UtxoSelectorError> {
     let value = match output {
-        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => match v {
-            OutputValue::Coin(output_amount) => (Currency::Coin, *output_amount),
-            OutputValue::TokenV0(_) => {
-                return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
-                    output.clone(),
-                )))
+        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Htlc(v, _) => {
+            match v {
+                OutputValue::Coin(output_amount) => (Currency::Coin, *output_amount),
+                OutputValue::TokenV0(_) => {
+                    return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
+                        output.clone(),
+                    )))
+                }
+                OutputValue::TokenV1(token_id, output_amount) => {
+                    (Currency::Token(*token_id), *output_amount)
+                }
             }
-            OutputValue::TokenV1(token_id, output_amount) => {
-                (Currency::Token(*token_id), *output_amount)
-            }
-        },
+        }
 
         TxOutput::IssueNft(token_id, _, _) => (Currency::Token(*token_id), Amount::from_atoms(1)),
         TxOutput::CreateStakePool(_, _)

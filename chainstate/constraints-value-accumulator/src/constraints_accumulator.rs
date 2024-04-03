@@ -133,7 +133,9 @@ impl ConstrainedValueAccumulator {
         StakerBalanceGetterFn: Fn(PoolId) -> Result<Option<Amount>, Error>,
     {
         match input_utxo {
-            TxOutput::Transfer(value, _) | TxOutput::LockThenTransfer(value, _, _) => {
+            TxOutput::Transfer(value, _)
+            | TxOutput::LockThenTransfer(value, _, _)
+            | TxOutput::Htlc(value, _) => {
                 match value {
                     OutputValue::Coin(amount) => insert_or_increase(
                         &mut self.unconstrained_value,
@@ -269,19 +271,21 @@ impl ConstrainedValueAccumulator {
 
         for output in outputs {
             match output {
-                TxOutput::Transfer(value, _) | TxOutput::Burn(value) => match value {
-                    OutputValue::Coin(amount) => insert_or_increase(
-                        &mut accumulator.unconstrained_value,
-                        CoinOrTokenId::Coin,
-                        *amount,
-                    )?,
-                    OutputValue::TokenV0(_) => { /* ignore */ }
-                    OutputValue::TokenV1(token_id, amount) => insert_or_increase(
-                        &mut accumulator.unconstrained_value,
-                        CoinOrTokenId::TokenId(*token_id),
-                        *amount,
-                    )?,
-                },
+                TxOutput::Transfer(value, _) | TxOutput::Burn(value) | TxOutput::Htlc(value, _) => {
+                    match value {
+                        OutputValue::Coin(amount) => insert_or_increase(
+                            &mut accumulator.unconstrained_value,
+                            CoinOrTokenId::Coin,
+                            *amount,
+                        )?,
+                        OutputValue::TokenV0(_) => { /* ignore */ }
+                        OutputValue::TokenV1(token_id, amount) => insert_or_increase(
+                            &mut accumulator.unconstrained_value,
+                            CoinOrTokenId::TokenId(*token_id),
+                            *amount,
+                        )?,
+                    }
+                }
                 TxOutput::DelegateStaking(coins, _) => insert_or_increase(
                     &mut accumulator.unconstrained_value,
                     CoinOrTokenId::Coin,

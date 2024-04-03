@@ -498,7 +498,8 @@ fn should_include_in_utxo_set(output: &TxOutput) -> bool {
         | TxOutput::LockThenTransfer(..)
         | TxOutput::CreateStakePool(..)
         | TxOutput::ProduceBlockFromStake(..)
-        | TxOutput::IssueNft(..) => true,
+        | TxOutput::IssueNft(..)
+        | TxOutput::Htlc(_, _) => true,
         TxOutput::CreateDelegationId(..)
         | TxOutput::DelegateStaking(..)
         | TxOutput::Burn(..)

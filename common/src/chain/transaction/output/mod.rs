@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO: consider removing this in the future when fixed-hash fixes this problem
+#![allow(clippy::non_canonical_clone_impl)]
+
 use crate::{
     address::{
         hexified::HexifiedAddress, pubkeyhash::PublicKeyHash, traits::Addressable, Address,
@@ -31,12 +34,22 @@ use script::Script;
 use serialization::{Decode, DecodeAll, Encode};
 use variant_count::VariantCount;
 
-use self::{stakelock::StakePoolData, timelock::OutputTimeLock};
+use self::{htlc::HashedTimelockContract, stakelock::StakePoolData, timelock::OutputTimeLock};
 
 pub mod classic_multisig;
+pub mod htlc;
 pub mod output_value;
 pub mod stakelock;
 pub mod timelock;
+
+fixed_hash::construct_fixed_hash! {
+    #[derive(Encode, Decode, serde::Serialize, serde::Deserialize)]
+    pub struct SecretHash(20);
+}
+
+impl rpc_description::HasValueHint for SecretHash {
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, VariantCount)]
 pub enum Destination {
@@ -133,6 +146,8 @@ pub enum TxOutput {
     /// Deposit data into the blockchain. This output cannot be spent.
     #[codec(index = 9)]
     DataDeposit(Vec<u8>),
+    #[codec(index = 10)]
+    Htlc(OutputValue, HashedTimelockContract),
 }
 
 impl TxOutput {
@@ -146,7 +161,8 @@ impl TxOutput {
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::IssueFungibleToken(_)
             | TxOutput::IssueNft(_, _, _)
-            | TxOutput::DataDeposit(_) => None,
+            | TxOutput::DataDeposit(_)
+            | TxOutput::Htlc(_, _) => None,
             TxOutput::LockThenTransfer(_, _, tl) => Some(tl),
         }
     }
@@ -289,7 +305,7 @@ impl TextSummary for TxOutput {
             }
             TxOutput::DelegateStaking(amount, del_ig) => {
                 format!(
-                    "DelegateStaking(Owner({}), StakingPool({}))",
+                    "DelegateStaking(Amount({}), Delegation({}))",
                     fmt_ml(amount),
                     fmt_delid(del_ig)
                 )
@@ -307,6 +323,16 @@ impl TextSummary for TxOutput {
             }
             TxOutput::DataDeposit(data) => {
                 format!("DataDeposit(0x{})", hex::encode(data))
+            }
+            TxOutput::Htlc(value, htlc) => {
+                format!(
+                    "Htlc({}, Htlc:(SecretHash:(0x{}), Spend({}), RefundTimelock({}), Refund({}))",
+                    fmt_val(value),
+                    hex::encode(htlc.secret_hash),
+                    fmt_dest(&htlc.spend_key),
+                    fmt_timelock(&htlc.refund_timelock),
+                    fmt_dest(&htlc.refund_key)
+                )
             }
         }
     }

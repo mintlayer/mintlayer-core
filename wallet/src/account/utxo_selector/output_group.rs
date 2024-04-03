@@ -55,7 +55,9 @@ impl OutputGroup {
         weight: u32,
     ) -> Result<Self, UtxoSelectorError> {
         let output_value = match &output.1 {
-            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => v.clone(),
+            TxOutput::Transfer(v, _)
+            | TxOutput::LockThenTransfer(v, _, _)
+            | TxOutput::Htlc(v, _) => v.clone(),
             TxOutput::IssueNft(token_id, _, _) => {
                 OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
             }

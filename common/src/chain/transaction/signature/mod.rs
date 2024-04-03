@@ -129,29 +129,30 @@ impl Signable for Transaction {
     }
 }
 
-impl Signable for SignedTransaction {
-    fn inputs(&self) -> Option<&[TxInput]> {
-        Some(self.inputs())
-    }
-
-    fn outputs(&self) -> Option<&[TxOutput]> {
-        Some(self.outputs())
-    }
-
-    fn version_byte(&self) -> Option<u8> {
-        Some(self.version_byte())
-    }
-
-    fn flags(&self) -> Option<u128> {
-        Some(self.flags())
-    }
-}
-
-impl Transactable for SignedTransaction {
-    fn signatures(&self) -> Option<&[InputWitness]> {
-        Some(self.signatures())
-    }
-}
+// FIXME: fix
+//impl Signable for SignedTransaction {
+//    fn inputs(&self) -> Option<&[TxInput]> {
+//        Some(self.inputs())
+//    }
+//
+//    fn outputs(&self) -> Option<&[TxOutput]> {
+//        Some(self.outputs())
+//    }
+//
+//    fn version_byte(&self) -> Option<u8> {
+//        Some(self.version_byte())
+//    }
+//
+//    fn flags(&self) -> Option<u128> {
+//        Some(self.flags())
+//    }
+//}
+//
+//impl Transactable for SignedTransaction {
+//    fn signatures(&self) -> Option<&[InputWitness]> {
+//        Some(self.signatures())
+//    }
+//}
 
 pub fn verify_signature<T: Transactable>(
     chain_config: &ChainConfig,

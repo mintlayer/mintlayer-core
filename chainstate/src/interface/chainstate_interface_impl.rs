@@ -776,9 +776,10 @@ fn get_output_coin_amount(
     output: &TxOutput,
 ) -> Result<Option<Amount>, ChainstateError> {
     let amount = match output {
-        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
-            v.coin_amount()
-        }
+        TxOutput::Transfer(v, _)
+        | TxOutput::LockThenTransfer(v, _, _)
+        | TxOutput::Burn(v)
+        | TxOutput::Htlc(v, _) => v.coin_amount(),
         TxOutput::CreateStakePool(_, data) => Some(data.pledge()),
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
             let pledge_amount = pos_accounting_view

@@ -697,7 +697,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         | TxOutput::DelegateStaking(_, _)
                         | TxOutput::IssueFungibleToken(_)
                         | TxOutput::IssueNft(_, _, _)
-                        | TxOutput::DataDeposit(_) => Err(
+                        | TxOutput::DataDeposit(_)
+                        | TxOutput::Htlc(_, _) => Err(
                             CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                         ),
                     },
@@ -713,7 +714,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                             | TxOutput::DelegateStaking(_, _)
                             | TxOutput::IssueFungibleToken(_)
                             | TxOutput::IssueNft(_, _, _)
-                            | TxOutput::DataDeposit(_) => Err(
+                            | TxOutput::DataDeposit(_)
+                            | TxOutput::Htlc(_, _) => Err(
                                 CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                             ),
                         }

@@ -395,7 +395,8 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
             | TxOutput::DataDeposit(_)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::IssueFungibleToken(_)
-            | TxOutput::IssueNft(_, _, _) => {}
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::Htlc(_, _) => {}
             TxOutput::ProduceBlockFromStake(_, _) => {
                 set_utxo(
                     outpoint,
@@ -569,7 +570,8 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
                 | TxOutput::DataDeposit(_)
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::ProduceBlockFromStake(_, _) => None,
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::Htlc(_, _) => None,
             })
         })
         .collect();
@@ -601,7 +603,8 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::ProduceBlockFromStake(_, _) => None,
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::Htlc(_, _) => None,
                 },
                 TxInput::Account(_) => None,
                 TxInput::AccountCommand(_, cmd) => match cmd {
@@ -726,7 +729,8 @@ async fn prefetch_pool_amounts<T: ApiServerStorageWrite>(
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::IssueNft(_, _, _)
-                | TxOutput::IssueFungibleToken(_),
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::Htlc(_, _),
             ) => {}
             None => {}
         }
@@ -1103,7 +1107,8 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         | TxOutput::DataDeposit(_)
                         | TxOutput::CreateDelegationId(_, _)
                         | TxOutput::DelegateStaking(_, _)
-                        | TxOutput::IssueFungibleToken(_) => {}
+                        | TxOutput::IssueFungibleToken(_)
+                        | TxOutput::Htlc(_, _) => {}
                         TxOutput::CreateStakePool(pool_id, _)
                         | TxOutput::ProduceBlockFromStake(_, pool_id) => {
                             let pool_data = db_tx
@@ -1196,6 +1201,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             )
                             .await;
                         }
+                        TxOutput::Htlc(_, _) => {} // TODO: support htlc
                         TxOutput::LockThenTransfer(output_value, destination, _)
                         | TxOutput::Transfer(output_value, destination) => {
                             let address = Address::<Destination>::new(&chain_config, destination)
@@ -1610,6 +1616,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                         .expect("Unable to set locked utxo");
                 }
             }
+            TxOutput::Htlc(_, _) => {} // TODO: support htlc
         }
     }
 
@@ -1809,5 +1816,6 @@ fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         | TxOutput::Burn(_)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_) => None,
+        TxOutput::Htlc(_, _) => None, // TODO: support htlc
     }
 }

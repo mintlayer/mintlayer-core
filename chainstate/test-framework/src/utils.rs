@@ -59,9 +59,10 @@ pub fn anyonecanspend_address() -> Destination {
 
 pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
     match output {
-        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
-            Some(v.clone())
-        }
+        TxOutput::Transfer(v, _)
+        | TxOutput::LockThenTransfer(v, _, _)
+        | TxOutput::Burn(v)
+        | TxOutput::Htlc(v, _) => Some(v.clone()),
         TxOutput::CreateStakePool(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
@@ -127,7 +128,8 @@ pub fn create_utxo_data(
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::IssueNft(_, _, _)
-        | TxOutput::DataDeposit(_) => None,
+        | TxOutput::DataDeposit(_)
+        | TxOutput::Htlc(_, _) => None,
     }
 }
 
@@ -383,7 +385,8 @@ pub fn find_create_pool_tx_in_genesis(genesis: &Genesis, pool_id: &PoolId) -> Op
         | TxOutput::DelegateStaking(..)
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::IssueNft(_, _, _)
-        | TxOutput::DataDeposit(_) => false,
+        | TxOutput::DataDeposit(_)
+        | TxOutput::Htlc(_, _) => false,
         TxOutput::CreateStakePool(genesis_pool_id, _) => genesis_pool_id == pool_id,
     });
 

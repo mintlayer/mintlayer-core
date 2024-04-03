@@ -28,9 +28,9 @@ use crate::{
         },
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
-        ChainstateUpgrade, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
-        PoSChainConfig, PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
-        TokenIssuanceVersion, TokensFeeVersion,
+        ChainstateUpgrade, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
+        HtlcActivated, NetUpgrades, PoSChainConfig, PoSConsensusVersion, PoWChainConfig,
+        RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
@@ -50,6 +50,9 @@ const TESTNET_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78440);
 // The fork, at which we upgrade chainstate to distribute reward to staker proportionally to their balance
 // and change various tokens fees
 const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(138244);
+// The fork, at which txs with htlc outputs become valid
+const TESTNET_HTLC_FORK_HEIGHT: BlockHeight = BlockHeight::new(99999999);
+const MAINNET_HTLC_FORK_HEIGHT: BlockHeight = BlockHeight::new(99999999);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -156,14 +159,26 @@ impl ChainType {
     fn default_chainstate_upgrades(&self) -> NetUpgrades<ChainstateUpgrade> {
         match self {
             ChainType::Mainnet => {
-                let upgrades = vec![(
-                    BlockHeight::new(0),
-                    ChainstateUpgrade::new(
-                        TokenIssuanceVersion::V1,
-                        RewardDistributionVersion::V1,
-                        TokensFeeVersion::V1,
+                let upgrades = vec![
+                    (
+                        BlockHeight::new(0),
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            HtlcActivated::No,
+                        ),
                     ),
-                )];
+                    (
+                        MAINNET_HTLC_FORK_HEIGHT,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            HtlcActivated::Yes,
+                        ),
+                    ),
+                ];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
             ChainType::Regtest | ChainType::Signet => {
@@ -173,6 +188,7 @@ impl ChainType {
                         TokenIssuanceVersion::V1,
                         RewardDistributionVersion::V1,
                         TokensFeeVersion::V1,
+                        HtlcActivated::Yes,
                     ),
                 )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
@@ -185,6 +201,7 @@ impl ChainType {
                             TokenIssuanceVersion::V0,
                             RewardDistributionVersion::V0,
                             TokensFeeVersion::V0,
+                            HtlcActivated::No,
                         ),
                     ),
                     (
@@ -193,6 +210,7 @@ impl ChainType {
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V0,
                             TokensFeeVersion::V0,
+                            HtlcActivated::No,
                         ),
                     ),
                     (
@@ -201,6 +219,16 @@ impl ChainType {
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V1,
                             TokensFeeVersion::V1,
+                            HtlcActivated::No,
+                        ),
+                    ),
+                    (
+                        TESTNET_HTLC_FORK_HEIGHT,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            HtlcActivated::Yes,
                         ),
                     ),
                 ];

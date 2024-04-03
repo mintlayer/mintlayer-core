@@ -21,8 +21,8 @@ use serialization::{Decode, DecodeAll, Encode};
 use crate::{
     chain::{
         signature::{
-            sighash::sighashtype::SigHashType, sighash::signature_hash, DestinationSigError,
-            Signable,
+            sighash::{sighashtype::SigHashType, signature_hash},
+            DestinationSigError, Signable,
         },
         ChainConfig, Destination, Transaction, TxOutput,
     },
@@ -119,7 +119,6 @@ impl StandardInputSignature {
                 sig.encode()
             }
             Destination::ScriptHash(_) => return Err(DestinationSigError::Unsupported),
-
             Destination::AnyoneCanSpend => {
                 // AnyoneCanSpend must use InputWitness::NoSignature, so this is unreachable
                 return Err(DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend);
@@ -129,6 +128,7 @@ impl StandardInputSignature {
                 DestinationSigError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
             ),
         };
+
         Ok(Self {
             sighash_type,
             raw_signature: serialized_sig,
@@ -230,7 +230,7 @@ mod test {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn produce_signature_address_missmatch(#[case] seed: Seed) {
+    fn produce_signature_address_mismatch(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
@@ -262,7 +262,7 @@ mod test {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn produce_signature_key_missmatch(#[case] seed: Seed) {
+    fn produce_signature_key_mismatch(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
