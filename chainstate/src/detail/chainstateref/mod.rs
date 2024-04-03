@@ -18,7 +18,7 @@ mod epoch_seal;
 mod in_memory_reorg;
 mod tx_verifier_storage;
 
-use itertools::Itertools;
+use itertools::{EitherOrBoth, Itertools};
 use std::{cmp::max, collections::BTreeSet};
 use thiserror::Error;
 
@@ -986,38 +986,112 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         // Certain tests check for this panic message.
         let panic_msg = "Inconsistent chainstate";
 
-        let block_index_map_keys = self.db_tx.get_block_index_map_keys()?;
         let block_map_keys = self.db_tx.get_block_map_keys()?;
+        let block_index_map = self.db_tx.get_block_index_map()?;
+        let block_by_height_map = self.db_tx.get_block_by_height_map()?;
 
-        // There shouldn't be block objects without block index objects.
-        let ids_blocks_without_index =
-            block_map_keys.difference(&block_index_map_keys).collect::<BTreeSet<_>>();
-        assert_eq!(ids_blocks_without_index, BTreeSet::new(), "{panic_msg}");
+        // Check the block map vs block index map consistency.
+        for merged in block_map_keys
+            .iter()
+            .merge_join_by(block_index_map.iter(), |id1, (id2, _)| Ord::cmp(id1, id2))
+        {
+            match merged {
+                EitherOrBoth::Left(block_id) => {
+                    // The block object is present, the index object is not.
+                    panic!("{panic_msg}: block index data missing for block {block_id}");
+                }
+                EitherOrBoth::Right((block_id, block_index)) => {
+                    // The block index object is present, the block object is not.
+                    // The index object must not be marked as persistent and must not have an "ok" status.
+                    assert!(
+                        !block_index.is_persistent(),
+                        "{panic_msg}: block {block_id} can't be persistent"
+                    );
+                    assert!(
+                        !block_index.status().is_ok(),
+                        "{panic_msg}: block {block_id} can't be ok"
+                    );
+                }
+                EitherOrBoth::Both(_, (block_id, block_index)) => {
+                    // Both the block and block index objects are present.
 
-        let ids_block_indices_without_blocks =
-            block_index_map_keys.difference(&block_map_keys).collect::<BTreeSet<_>>();
+                    // The index object must be marked as persistent.
+                    assert!(
+                        block_index.is_persistent(),
+                        "{panic_msg}: block {block_id} must be persistent"
+                    );
 
-        // Block index objects that correspond to missing block objects must not be marked
-        // as persistent and must not have an "ok" status.
-        for block_id in ids_block_indices_without_blocks {
-            let block_index = self
-                .get_existing_block_index(block_id)
-                .expect("The block index is known to exist");
+                    // Check the parent, if it's not genesis.
+                    if let Some(parent_id) =
+                        block_index.prev_block_id().classify(self.chain_config).chain_block_id()
+                    {
+                        let parent_block_index =
+                            block_index_map.get(&parent_id).unwrap_or_else(|| {
+                                panic!("{panic_msg}: block {block_id} parent index not found");
+                            });
+                        // Since this index object is persistent, the parent must be persistent too.
+                        assert!(
+                            parent_block_index.is_persistent(),
+                            "{panic_msg}: parent block {parent_id} of persistent block {block_id} is not persistent"
+                        );
 
-            assert!(!block_index.is_persistent(), "{panic_msg}");
-            assert!(!block_index.status().is_ok(), "{panic_msg}");
+                        if block_index.status().is_ok() {
+                            // If a block has ok status, its parent must also be ok.
+                            assert!(
+                                parent_block_index.status().is_ok(),
+                                "{panic_msg}: parent block {parent_id} of ok block {block_id} is not ok"
+                            );
+                        }
+
+                        // In any case, the parent block must be at least as valid as the child.
+                        assert!(
+                            parent_block_index.status().last_valid_stage() >= block_index.status().last_valid_stage(),
+                            "{panic_msg}: parent block {parent_id} is less valid than its child {block_id}"
+                        );
+                    }
+                }
+            }
         }
 
-        // FIXME check that parents of persistent blocks are alway persistent.
-        // Parents of ok blocks are ok.
-        // Parents of fully checked blocks are fully checked; (the validation stage of parent is same or bigger)
-        // Also, all parents are present.
-        // FIXME check blocks by height map:
-        // 1) all consecutive heights must be present;
-        // 2) lower height is a parent of the higher one;
-        // 3) block index is present for all of them - persistent and fully checked.
+        let block_at_zero_height = *block_by_height_map.get(&0.into()).unwrap_or_else(|| {
+            panic!("{panic_msg}: no block at zero height");
+        });
+        assert_eq!(
+            block_at_zero_height,
+            self.chain_config.genesis_block_id(),
+            "{panic_msg}: block at zero height is not genesis"
+        );
 
-        // FIXME optimize???
+        for ((prev_height, prev_id), (cur_height, cur_id)) in
+            block_by_height_map.iter().tuple_windows()
+        {
+            assert_eq!(
+                cur_height,
+                &prev_height.next_height(),
+                "{panic_msg}: gap in the block-by-height map found - {cur_height} follows {prev_height}"
+            );
+
+            let cur_id = cur_id.classify(self.chain_config).chain_block_id().unwrap_or_else(|| {
+                panic!("{panic_msg}: genesis at non-zero-height {cur_height}");
+            });
+            let cur_block_index = block_index_map.get(&cur_id).unwrap_or_else(|| {
+                panic!("{panic_msg}: block {cur_id} index not found");
+            });
+            assert_eq!(
+                cur_block_index.prev_block_id(),
+                prev_id,
+                "{panic_msg}: block {prev_id} at height {prev_height} is not a parent of the next block {cur_id}"
+            );
+
+            assert!(
+                cur_block_index.is_persistent(),
+                "{panic_msg}: mainchain block {cur_id} must be persistent"
+            );
+            assert!(
+                cur_block_index.status().is_fully_valid(),
+                "{panic_msg}: mainchain block {cur_id} must be fully valid"
+            );
+        }
 
         // FIXME add todo for other checks (e.g. other db maps)
 

@@ -222,10 +222,10 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
     }
 
     #[log_error]
-    fn get_block_index_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>> {
+    fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>> {
         let map = self.0.get::<db::DBBlockIndex, _>();
-        let items = map.prefix_iter_keys(&())?;
-        Ok(items.collect::<BTreeSet<_>>())
+        let items = map.prefix_iter_decoded(&())?;
+        Ok(items.collect::<BTreeMap<_, _>>())
     }
 
     #[log_error]
@@ -507,10 +507,10 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
 
     // TODO: same as above.
     #[log_error]
-    fn get_block_index_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>> {
+    fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>> {
         let map = self.0.get::<db::DBBlockIndex, _>();
-        let items = map.prefix_iter_keys(&())?;
-        Ok(items.collect::<BTreeSet<_>>())
+        let items = map.prefix_iter_decoded(&())?;
+        Ok(items.collect::<BTreeMap<_, _>>())
     }
 
     // TODO: same as above.

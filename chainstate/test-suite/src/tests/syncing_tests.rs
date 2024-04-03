@@ -48,7 +48,17 @@ fn process_a_trivial_block(#[case] seed: Seed) {
 fn get_locator(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut btf = TestFramework::builder(&mut rng).build();
+        let mut btf = TestFramework::builder(&mut rng)
+            .with_chainstate_config(ChainstateConfig {
+                // With the heavy checks enabled, this test takes several minutes to complete in debug builds.
+                enable_heavy_checks: Some(false),
+
+                max_db_commit_attempts: Default::default(),
+                max_orphan_blocks: Default::default(),
+                min_max_bootstrap_import_buffer_sizes: Default::default(),
+                max_tip_age: Default::default(),
+            })
+            .build();
 
         let locator = btf.chainstate.get_locator().unwrap();
         assert_eq!(locator.len(), 1);

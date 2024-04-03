@@ -91,8 +91,8 @@ mockall::mock! {
 
         fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
 
-        fn get_block_index_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
         fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
+        fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>>;
         fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>>;
     }
 
@@ -361,8 +361,8 @@ mockall::mock! {
 
         fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
 
-        fn get_block_index_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
         fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
+        fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>>;
         fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>>;
     }
 
@@ -478,8 +478,8 @@ mockall::mock! {
 
         fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
 
-        fn get_block_index_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
         fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
+        fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>>;
         fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>>;
     }
 

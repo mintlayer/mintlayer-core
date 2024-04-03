@@ -141,12 +141,12 @@ pub trait BlockchainStorageRead:
     /// Get nonce value for specific account
     fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
 
-    /// Get all keys (block ids) from the block index map. This is used in the chainstate's
-    /// "heavy" consistency checks.
-    fn get_block_index_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
     /// Get all keys (block ids) from the block map. This is used in the chainstate's
     /// "heavy" consistency checks.
     fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
+    /// Get the entire block index map as BTreeMap. This is used in the chainstate's
+    /// "heavy" consistency checks.
+    fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>>;
     /// Get the entire block-by-height map as BTreeMap. This is used in the chainstate's
     /// "heavy" consistency checks.
     fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>>;

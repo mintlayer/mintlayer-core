@@ -51,7 +51,6 @@ use crypto::{
     random::Rng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use logging::log;
 use rstest::rstest;
 use test_utils::{
     assert_matches,
@@ -1249,7 +1248,7 @@ fn temporarily_bad_block_not_invalidated_during_integration(#[case] seed: Seed) 
 // Check that a block is not invalidated if it is rejected with the "TemporarilyBadBlock" kind
 // of error, when it happens during a reorg. Also check that the block can be successfully
 // reorged to later, when it's no longer considered invalid.
-// 1) Advance time into the future and add a sidechain block at that time;
+// 1) Advance time into the future and add a stale-chain block at that time;
 // 2) Reset the time; reset the "future" blocks status, so that check_block will be called again
 // on it during a reorg.
 // 3) Add some valid blocks on top of the future block, triggering a reorg.
@@ -1294,7 +1293,6 @@ fn temporarily_bad_block_not_invalidated_after_reorg(#[case] seed: Seed) {
         assert!(result.is_ok());
 
         let (c0_id, result) = process_block(&mut tf, &future_block_id.into(), &mut rng);
-        log::error!("result = {result:?}");
         assert!(result.is_ok());
         let (c1_id, result) = process_block(&mut tf, &c0_id.into(), &mut rng);
         assert!(result.is_ok());
@@ -1311,6 +1309,10 @@ fn temporarily_bad_block_not_invalidated_after_reorg(#[case] seed: Seed) {
 
         // We want the bad block to be Unchecked, so that check_block is called again on it during reorg.
         tf.set_block_status(&future_block_id, BlockStatus::new());
+        // Reset the statuses of c0 and c1 as well, to preserve the invariant that the parent must be
+        // at least as valid as its children.
+        tf.set_block_status(&c0_id, BlockStatus::new());
+        tf.set_block_status(&c1_id, BlockStatus::new());
 
         let c2 = build_block(&mut tf, &c1_id.into(), &mut rng);
         let c2_id = c2.get_id();
@@ -1329,8 +1331,11 @@ fn temporarily_bad_block_not_invalidated_after_reorg(#[case] seed: Seed) {
 
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
-        assert_ok_blocks_at_stage(&tf, &[future_block_id], BlockValidationStage::Unchecked);
-        assert_ok_blocks_at_stage(&tf, &[c0_id, c1_id], BlockValidationStage::CheckBlockOk);
+        assert_ok_blocks_at_stage(
+            &tf,
+            &[future_block_id, c0_id, c1_id],
+            BlockValidationStage::Unchecked,
+        );
         // An "ok" block index is not saved for a block that wasn't persisted.
         assert_no_block_indices(&tf, &[c2_id]);
 
