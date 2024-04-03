@@ -637,7 +637,6 @@ where
             // Use get_any_gen_block_index instead of get_persistent_gen_block_index to avoid
             // bailing out with the DisconnectedHeaders early (the appropriate  error will
             // be generated when checking the header later and its ban score will be bigger).
-            // FIXME: "hide" this in chainstate?
             .call(move |c| Ok(c.get_any_gen_block_index(&first_header_prev_id)?))
             .await?
             .is_some();

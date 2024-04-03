@@ -214,7 +214,6 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         self.read::<db::DBAccountNonceCount, _, _>(account)
     }
 
-    // FIXME code duplication
     #[log_error]
     fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>> {
         let map = self.0.get::<db::DBBlock, _>();
@@ -222,7 +221,6 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         Ok(items.collect::<BTreeSet<_>>())
     }
 
-    // FIXME code duplication
     #[log_error]
     fn get_block_index_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>> {
         let map = self.0.get::<db::DBBlockIndex, _>();
@@ -230,7 +228,6 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         Ok(items.collect::<BTreeSet<_>>())
     }
 
-    // FIXME code duplication
     #[log_error]
     fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>> {
         let map = self.0.get::<db::DBBlockByHeight, _>();
@@ -498,7 +495,9 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         self.read::<db::DBAccountNonceCount, _, _>(account)
     }
 
-    // FIXME code duplication
+    // TODO: we had to duplicate this function from "impl BlockchainStorageRead for StoreTxRo" even
+    // though it's never called on StoreTxRw. This is ugly and dangerous; need to get rid of all
+    // the logic duplication between StoreTxRo and StoreTxRw.
     #[log_error]
     fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>> {
         let map = self.0.get::<db::DBBlock, _>();
@@ -506,7 +505,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         Ok(items.collect::<BTreeSet<_>>())
     }
 
-    // FIXME code duplication
+    // TODO: same as above.
     #[log_error]
     fn get_block_index_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>> {
         let map = self.0.get::<db::DBBlockIndex, _>();
@@ -514,7 +513,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         Ok(items.collect::<BTreeSet<_>>())
     }
 
-    // FIXME code duplication
+    // TODO: same as above.
     #[log_error]
     fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>> {
         let map = self.0.get::<db::DBBlockByHeight, _>();

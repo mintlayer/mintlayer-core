@@ -266,7 +266,6 @@ where
         let first_non_existing_block_idx = {
             let mut idx = 0;
             for header in headers.iter() {
-                // FIXME any?
                 if self.get_persistent_block_index(&header.get_id())?.is_none() {
                     break;
                 }
