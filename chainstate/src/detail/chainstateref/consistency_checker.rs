@@ -22,6 +22,7 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 use itertools::{EitherOrBoth, Itertools};
+use logging::log;
 
 use super::calc_min_height_with_allowed_reorg;
 
@@ -69,6 +70,8 @@ impl<'a, 'b, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, 'b, DbTx> {
     }
 
     pub fn check(&self) {
+        log::debug!("Running chainstate consistency checks");
+
         self.check_block_index_consistency();
         self.check_block_height_map_consistency();
         // TODO: add consistency checks for other maps in the chainstate db.

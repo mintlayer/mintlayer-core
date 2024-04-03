@@ -364,6 +364,10 @@ impl TestFramework {
         self.block_opt(id).unwrap()
     }
 
+    /// Check consistency of block-index-related functions with respect to the given block id.
+    /// Note: this is not the same as the db consistency checks that chainstate itself performs
+    /// regularly, here we test what chainstate's functions return and the chainstate itself
+    /// only checks the consistency of its db.
     fn check_block_index_consistency(&self, id: &Id<GenBlock>) {
         // First, check consistency of get_any_gen_block_index and get_persistent_gen_block_index.
         let any_gen_block_index_opt = self.chainstate.get_any_gen_block_index(id).unwrap();
@@ -410,24 +414,24 @@ impl TestFramework {
         }
     }
 
-    /// Returns a block index corresponding to the specified id.
-    pub fn gen_block_index(&self, id: &Id<GenBlock>) -> GenBlockIndex {
-        self.gen_block_index_opt(id).unwrap()
-    }
-
-    /// Returns a block index corresponding to the specified id.
+    /// Return a block index corresponding to the specified id; perform consistency checks.
     pub fn gen_block_index_opt(&self, id: &Id<GenBlock>) -> Option<GenBlockIndex> {
         self.check_block_index_consistency(id);
         self.chainstate.get_any_gen_block_index(id).unwrap()
     }
 
-    /// Returns a block index corresponding to the specified id.
+    /// Return a block index corresponding to the specified id; perform consistency checks.
+    pub fn gen_block_index(&self, id: &Id<GenBlock>) -> GenBlockIndex {
+        self.gen_block_index_opt(id).unwrap()
+    }
+
+    /// Return a block index corresponding to the specified id; perform consistency checks.
     pub fn block_index_opt(&self, id: &Id<Block>) -> Option<BlockIndex> {
         self.check_block_index_consistency(id.into());
         self.chainstate.get_any_block_index(id).unwrap()
     }
 
-    /// Returns a block index corresponding to the specified id.
+    /// Return a block index corresponding to the specified id; perform consistency checks.
     pub fn block_index(&self, id: &Id<Block>) -> BlockIndex {
         self.block_index_opt(id).unwrap()
     }
