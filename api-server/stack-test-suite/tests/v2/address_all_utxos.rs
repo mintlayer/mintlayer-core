@@ -118,9 +118,6 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                     .build();
 
                 let previous_transaction_id = transaction.transaction().get_id();
-                let utxo =
-                    UtxoOutPoint::new(OutPointSourceId::Transaction(previous_transaction_id), 0);
-                alice_utxos.insert(utxo, previous_tx_out.clone());
 
                 let mut previous_witness = InputWitness::Standard(
                     StandardInputSignature::produce_uniparty_signature_for_input(
@@ -369,13 +366,6 @@ async fn ok(#[case] seed: Seed) {
                     .build();
 
                 let mut previous_transaction_id = transaction.transaction().get_id();
-                alice_utxos.insert(
-                    UtxoOutPoint::new(
-                        OutPointSourceId::Transaction(transaction.transaction().get_id()),
-                        0,
-                    ),
-                    previous_tx_out.clone(),
-                );
 
                 let mut previous_witness = InputWitness::Standard(
                     StandardInputSignature::produce_uniparty_signature_for_input(

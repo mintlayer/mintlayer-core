@@ -601,16 +601,10 @@ where
                 .await
                 .unwrap();
 
-            // should return only once the first utxo and also the locked utxo
+            // should return only the locked utxo as the other one is spent
             let utxos = db_tx.get_address_all_utxos(bob_address.as_str()).await.unwrap();
-            assert_eq!(utxos.len(), 2);
-            assert_eq!(
-                utxos.iter().find(|utxo| utxo.0 == outpoint),
-                Some(&(
-                    outpoint.clone(),
-                    UtxoWithExtraInfo::new(output.clone(), None)
-                ))
-            );
+            assert_eq!(utxos.len(), 1);
+            assert_eq!(utxos.iter().find(|utxo| utxo.0 == outpoint), None,);
             assert_eq!(
                 utxos.iter().find(|utxo| utxo.0 == locked_outpoint),
                 Some(&(locked_outpoint, UtxoWithExtraInfo::new(locked_output, None)))

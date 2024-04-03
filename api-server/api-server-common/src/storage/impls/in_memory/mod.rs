@@ -445,23 +445,23 @@ impl ApiServerInMemoryStorage {
             .get(address)
             .unwrap_or(&BTreeSet::new())
             .union(self.address_locked_utxos.get(address).unwrap_or(&BTreeSet::new()))
-            .map(|outpoint| {
-                (
-                    outpoint.clone(),
-                    self.get_utxo(outpoint.clone()).expect("no error").map_or_else(
-                        || {
-                            self.locked_utxo_table
-                                .get(outpoint)
-                                .expect("must exit")
-                                .values()
-                                .last()
-                                .expect("not empty")
-                                .utxo_with_extra_info()
-                                .clone()
-                        },
-                        |utxo| utxo.utxo_with_extra_info().clone(),
-                    ),
-                )
+            .filter_map(|outpoint| {
+                if let Some(utxo) = self.get_utxo(outpoint.clone()).expect("no error") {
+                    (!utxo.spent())
+                        .then_some((outpoint.clone(), utxo.utxo_with_extra_info().clone()))
+                } else {
+                    Some((
+                        outpoint.clone(),
+                        self.locked_utxo_table
+                            .get(outpoint)
+                            .expect("must exit")
+                            .values()
+                            .last()
+                            .expect("not empty")
+                            .utxo_with_extra_info()
+                            .clone(),
+                    ))
+                }
             })
             .collect();
         Ok(result)

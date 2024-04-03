@@ -383,6 +383,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
     block_id: Id<GenBlock>,
 ) -> Result<(), ApiServerStorageError> {
     for (idx, output) in block_rewards.iter().enumerate() {
+        let outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(block_id), idx as u32);
         match output {
             TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
@@ -392,9 +393,9 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
             | TxOutput::IssueNft(_, _, _) => {}
             TxOutput::ProduceBlockFromStake(_, _) => {
                 set_utxo(
-                    OutPointSourceId::BlockReward(block_id),
-                    idx,
+                    outpoint,
                     output,
+                    None,
                     db_tx,
                     block_height,
                     false,
@@ -410,9 +411,9 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                     .await
                     .expect("unable to update pool data");
                 set_utxo(
-                    OutPointSourceId::BlockReward(block_id),
-                    idx,
+                    outpoint,
                     output,
+                    None,
                     db_tx,
                     block_height,
                     false,
@@ -424,8 +425,8 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
             | TxOutput::LockThenTransfer(output_value, destination, _) => {
                 let address = Address::<Destination>::new(&chain_config, destination.clone())
                     .expect("Unable to encode destination");
-                match output_value {
-                    OutputValue::TokenV0(_) => {}
+                let token_decimals = match output_value {
+                    OutputValue::TokenV0(_) => None,
                     OutputValue::TokenV1(token_id, amount) => {
                         increase_address_amount(
                             db_tx,
@@ -435,6 +436,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                             block_height,
                         )
                         .await;
+                        Some(token_decimals(*token_id, &BTreeMap::new(), db_tx).await?.1)
                     }
                     OutputValue::Coin(amount) => {
                         increase_address_amount(
@@ -445,12 +447,13 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                             block_height,
                         )
                         .await;
+                        None
                     }
-                }
+                };
                 set_utxo(
-                    OutPointSourceId::BlockReward(block_id),
-                    idx,
+                    outpoint,
                     output,
+                    token_decimals,
                     db_tx,
                     block_height,
                     false,
@@ -710,9 +713,9 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                         let utxo =
                             db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
                         set_utxo(
-                            outpoint.source_id(),
-                            outpoint.output_index() as usize,
+                            outpoint.clone(),
                             utxo.output(),
+                            None,
                             db_tx,
                             block_height,
                             true,
@@ -887,9 +890,9 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                 OutPointSourceId::BlockReward(_) => {
                     let utxo = db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
                     set_utxo(
-                        outpoint.source_id(),
-                        outpoint.output_index() as usize,
+                        outpoint.clone(),
                         utxo.output(),
+                        utxo.utxo_with_extra_info().token_decimals,
                         db_tx,
                         block_height,
                         true,
@@ -935,9 +938,9 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                 OutPointSourceId::Transaction(_) => {
                     let utxo = db_tx.get_utxo(outpoint.clone()).await?.expect("must be present");
                     set_utxo(
-                        outpoint.source_id(),
-                        outpoint.output_index() as usize,
+                        outpoint.clone(),
                         utxo.output(),
+                        utxo.utxo_with_extra_info().token_decimals,
                         db_tx,
                         block_height,
                         true,
@@ -1042,6 +1045,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
         BTreeMap::new();
 
     for (idx, output) in outputs.iter().enumerate() {
+        let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), idx as u32);
         match output {
             TxOutput::Burn(_) | TxOutput::DataDeposit(_) => {}
             TxOutput::IssueFungibleToken(issuance) => {
@@ -1063,9 +1067,9 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
             TxOutput::IssueNft(token_id, issuance, _) => {
                 db_tx.set_nft_token_issuance(*token_id, block_height, *issuance.clone()).await?;
                 set_utxo(
-                    OutPointSourceId::Transaction(transaction_id),
-                    idx,
+                    outpoint,
                     output,
+                    Some(1),
                     db_tx,
                     block_height,
                     false,
@@ -1102,9 +1106,9 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .await
                     .expect("Unable to update pool balance");
                 set_utxo(
-                    OutPointSourceId::Transaction(transaction_id),
-                    idx,
+                    outpoint,
                     output,
+                    None,
                     db_tx,
                     block_height,
                     false,
@@ -1383,16 +1387,15 @@ async fn decrease_address_locked_amount<T: ApiServerStorageWrite>(
 }
 
 async fn set_utxo<T: ApiServerStorageWrite>(
-    outpoint_source_id: OutPointSourceId,
-    idx: usize,
+    outpoint: UtxoOutPoint,
     output: &TxOutput,
+    token_decimals: Option<u8>,
     db_tx: &mut T,
     block_height: BlockHeight,
     spent: bool,
     chain_config: &ChainConfig,
 ) {
-    let outpoint = UtxoOutPoint::new(outpoint_source_id, idx as u32);
-    let utxo = Utxo::new(output.clone(), None, spent);
+    let utxo = Utxo::new(output.clone(), token_decimals, spent);
     if let Some(destination) = get_tx_output_destination(output) {
         let address = Address::<Destination>::new(chain_config, destination.clone())
             .expect("Unable to encode destination");

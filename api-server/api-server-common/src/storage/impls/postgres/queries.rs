@@ -1551,14 +1551,17 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let rows = self
             .tx
             .query(
-                r#"
+                r#"SELECT outpoint, utxo
+                FROM (
+                    SELECT outpoint, utxo, spent, ROW_NUMBER() OVER(PARTITION BY outpoint ORDER BY block_height DESC) as newest
+                    FROM ml.utxo
+                    WHERE address = $1
+                ) AS sub
+                WHERE newest = 1 AND spent = false
+                UNION ALL
                 SELECT outpoint, utxo
-                FROM ml.utxo
-                WHERE address = $1
-                UNION
-                SELECT outpoint, utxo
-                FROM ml.locked_utxo
-                WHERE address = $1
+                FROM ml.locked_utxo AS locked
+                WHERE locked.address = $1 AND NOT EXISTS (SELECT 1 FROM ml.utxo WHERE outpoint = locked.outpoint)
                 ;"#,
                 &[&address],
             )
