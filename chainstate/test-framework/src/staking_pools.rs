@@ -20,6 +20,7 @@ use common::chain::{PoolId, UtxoOutPoint};
 use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
 
 /// Struct that holds possible pools and info required for staking
+#[derive(Debug, Clone)]
 pub struct StakingPools {
     staking_pools: BTreeMap<PoolId, (PrivateKey, VRFPrivateKey, UtxoOutPoint)>,
 }

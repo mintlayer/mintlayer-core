@@ -1286,83 +1286,169 @@ async fn simulation(
     let num_blocks = rng.gen_range((max_blocks / 2)..max_blocks);
 
     let mut utxo_outpoints = Vec::new();
-    let mut staking_pools = BTreeSet::new();
+    let mut staking_pools: BTreeSet<PoolId> = BTreeSet::new();
+    staking_pools.insert(genesis_pool_id);
+
     let mut delegations = BTreeSet::new();
     let mut token_ids = BTreeSet::new();
 
+    let mut data_per_block_height = BTreeMap::new();
+    data_per_block_height.insert(
+        BlockHeight::zero(),
+        (
+            utxo_outpoints.clone(),
+            staking_pools.clone(),
+            delegations.clone(),
+            token_ids.clone(),
+        ),
+    );
+
+    let mut tf_internal_staking_pools = BTreeMap::new();
+    tf_internal_staking_pools.insert(BlockHeight::zero(), tf.staking_pools.clone());
+
     // Generate a random chain
-    for height in 0..num_blocks {
-        let block_height = BlockHeight::new(height as u64);
-        let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
+    for current_height in 0..num_blocks {
+        let create_reorg = rng.gen_bool(0.1);
+        let height_to_continue_from = if create_reorg {
+            rng.gen_range(0..=current_height)
+        } else {
+            current_height
+        };
 
-        for _ in 0..rng.gen_range(10..max_tx_per_block) {
-            block_builder = block_builder.add_test_transaction(&mut rng);
+        tf = if create_reorg {
+            let blocks = if height_to_continue_from > 0 {
+                tf.chainstate
+                    .get_mainchain_blocks(BlockHeight::new(1), height_to_continue_from)
+                    .unwrap()
+            } else {
+                vec![]
+            };
+            let mut new_tf = TestFramework::builder(&mut rng)
+                .with_chain_config(chain_config.clone())
+                .with_initial_time_since_genesis(target_time.as_secs())
+                .with_staking_pools(BTreeMap::from_iter([(
+                    genesis_pool_id,
+                    (
+                        staking_sk.clone(),
+                        vrf_sk.clone(),
+                        genesis_pool_outpoint.clone(),
+                    ),
+                )]))
+                .build();
+            for block in blocks {
+                new_tf.progress_time_seconds_since_epoch(target_time.as_secs());
+                new_tf.process_block(block.clone(), BlockSource::Local).unwrap();
+            }
+            new_tf.staking_pools = tf_internal_staking_pools
+                .get(&BlockHeight::new(height_to_continue_from as u64))
+                .unwrap()
+                .clone();
+
+            (utxo_outpoints, staking_pools, delegations, token_ids) = data_per_block_height
+                .get(&BlockHeight::new(height_to_continue_from as u64))
+                .unwrap()
+                .clone();
+
+            new_tf
+        } else {
+            tf
+        };
+
+        let block_height_to_continue_from = BlockHeight::new(height_to_continue_from as u64);
+        let mut prev_block_hash = tf
+            .chainstate
+            .get_block_id_from_height(&block_height_to_continue_from)
+            .unwrap()
+            .unwrap();
+
+        for block_height_idx in 0..=(current_height - height_to_continue_from) {
+            let block_height =
+                BlockHeight::new((height_to_continue_from + block_height_idx) as u64);
+
+            let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
+
+            for _ in 0..rng.gen_range(10..max_tx_per_block) {
+                block_builder = block_builder.add_test_transaction(&mut rng);
+            }
+
+            let block = block_builder.build();
+            for tx in block.transactions() {
+                let new_utxos = (0..tx.inputs().len()).map(|output_index| {
+                    UtxoOutPoint::new(
+                        OutPointSourceId::Transaction(tx.transaction().get_id()),
+                        output_index as u32,
+                    )
+                });
+                utxo_outpoints.extend(new_utxos);
+
+                let new_pools = tx.outputs().iter().filter_map(|out| match out {
+                    TxOutput::CreateStakePool(pool_id, _) => Some(pool_id),
+                    TxOutput::Burn(_)
+                    | TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::DataDeposit(_)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::IssueNft(_, _, _) => None,
+                });
+                staking_pools.extend(new_pools);
+
+                let new_delegations = tx.outputs().iter().filter_map(|out| match out {
+                    TxOutput::CreateDelegationId(_, _) => {
+                        let input0_outpoint =
+                            tx.inputs().iter().find_map(|input| input.utxo_outpoint()).unwrap();
+                        Some(make_delegation_id(input0_outpoint))
+                    }
+                    TxOutput::CreateStakePool(_, _)
+                    | TxOutput::Burn(_)
+                    | TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::DataDeposit(_)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::IssueNft(_, _, _) => None,
+                });
+                delegations.extend(new_delegations);
+
+                let new_tokens = tx.outputs().iter().filter_map(|out| match out {
+                    TxOutput::IssueNft(_, _, _) | TxOutput::IssueFungibleToken(_) => {
+                        Some(make_token_id(tx.inputs()).unwrap())
+                    }
+                    TxOutput::CreateStakePool(_, _)
+                    | TxOutput::Burn(_)
+                    | TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::DataDeposit(_)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::ProduceBlockFromStake(_, _) => None,
+                });
+                token_ids.extend(new_tokens);
+            }
+
+            prev_block_hash = block.get_id().into();
+            tf.process_block(block.clone(), BlockSource::Local).unwrap();
+
+            // save current state
+            tf_internal_staking_pools.insert(block_height.next_height(), tf.staking_pools.clone());
+            data_per_block_height.insert(
+                block_height.next_height(),
+                (
+                    utxo_outpoints.clone(),
+                    staking_pools.clone(),
+                    delegations.clone(),
+                    token_ids.clone(),
+                ),
+            );
+
+            local_state.scan_blocks(block_height, vec![block]).await.unwrap();
         }
 
-        let block = block_builder.build();
-        for tx in block.transactions() {
-            let new_utxos = (0..tx.inputs().len()).map(|output_index| {
-                UtxoOutPoint::new(
-                    OutPointSourceId::Transaction(tx.transaction().get_id()),
-                    output_index as u32,
-                )
-            });
-            utxo_outpoints.extend(new_utxos);
-
-            let new_pools = tx.outputs().iter().filter_map(|out| match out {
-                TxOutput::CreateStakePool(pool_id, _) => Some(pool_id),
-                TxOutput::Burn(_)
-                | TxOutput::Transfer(_, _)
-                | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::DataDeposit(_)
-                | TxOutput::DelegateStaking(_, _)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::IssueFungibleToken(_)
-                | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::IssueNft(_, _, _) => None,
-            });
-            staking_pools.extend(new_pools);
-
-            let new_delegations = tx.outputs().iter().filter_map(|out| match out {
-                TxOutput::CreateDelegationId(_, _) => {
-                    let input0_outpoint =
-                        tx.inputs().iter().find_map(|input| input.utxo_outpoint()).unwrap();
-                    Some(make_delegation_id(input0_outpoint))
-                }
-                TxOutput::CreateStakePool(_, _)
-                | TxOutput::Burn(_)
-                | TxOutput::Transfer(_, _)
-                | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::DataDeposit(_)
-                | TxOutput::DelegateStaking(_, _)
-                | TxOutput::IssueFungibleToken(_)
-                | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::IssueNft(_, _, _) => None,
-            });
-            delegations.extend(new_delegations);
-
-            let new_tokens = tx.outputs().iter().filter_map(|out| match out {
-                TxOutput::IssueNft(_, _, _) | TxOutput::IssueFungibleToken(_) => {
-                    Some(make_token_id(tx.inputs()).unwrap())
-                }
-                TxOutput::CreateStakePool(_, _)
-                | TxOutput::Burn(_)
-                | TxOutput::Transfer(_, _)
-                | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::DataDeposit(_)
-                | TxOutput::DelegateStaking(_, _)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::ProduceBlockFromStake(_, _) => None,
-            });
-            token_ids.extend(new_tokens);
-        }
-
-        tf.process_block(block.clone(), BlockSource::Local).unwrap();
-        tf.progress_time_seconds_since_epoch(target_time.as_secs());
-
-        let median_time = tf.chainstate.calculate_median_time_past(&block.get_id().into()).unwrap();
-
-        local_state.scan_blocks(block_height, vec![block]).await.unwrap();
+        let block_height = BlockHeight::new(current_height as u64);
+        let median_time = tf.chainstate.calculate_median_time_past(&prev_block_hash).unwrap();
 
         check_utxos(
             &tf,
