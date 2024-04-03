@@ -987,7 +987,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     /// An error is only returned if the checks couldn't be performed for some reason.
     #[log_error]
     pub fn check_consistency(&self) -> Result<(), chainstate_storage::Error> {
-        Ok(ConsistencyChecker::new(&self.db_tx, self.chain_config)?.check())
+        ConsistencyChecker::new(&self.db_tx, self.chain_config)?.check();
+        Ok(())
     }
 }
 
@@ -1263,11 +1264,6 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         self.set_block_index(&block_index.with_status(block_status))
     }
 
-    fn calc_min_height_with_allowed_reorg(&self, current_tip_height: BlockHeight) -> BlockHeight {
-        let result = current_tip_height - self.chain_config.max_depth_for_reorg();
-        result.unwrap_or(0.into())
-    }
-
     #[log_error]
     pub fn update_min_height_with_allowed_reorg(&mut self) -> Result<(), BlockError> {
         let stored_min_height = self
@@ -1277,7 +1273,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             .get_best_block_index()
             .map_err(BlockError::BestBlockIndexQueryError)?
             .block_height();
-        let calculated_min_height = self.calc_min_height_with_allowed_reorg(current_tip_height);
+        let calculated_min_height =
+            calc_min_height_with_allowed_reorg(self.chain_config, current_tip_height);
         self.db_tx
             .set_min_height_with_allowed_reorg(max(stored_min_height, calculated_min_height))?;
         Ok(())
@@ -1335,6 +1332,14 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         consumed_epoch_data.flush(&mut self.db_tx)?;
         Ok(())
     }
+}
+
+fn calc_min_height_with_allowed_reorg(
+    chain_config: &ChainConfig,
+    current_tip_height: BlockHeight,
+) -> BlockHeight {
+    let result = current_tip_height - chain_config.max_depth_for_reorg();
+    result.unwrap_or(0.into())
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

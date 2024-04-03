@@ -47,7 +47,7 @@ fn test_consistency_check_enabled_by_default(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut tf = TestFramework::builder(&mut rng).build();
 
-    assert!(tf.chainstate.get_chainstate_config().heavy_checks_enabled(&tf.chain_config()));
+    assert!(tf.chainstate.get_chainstate_config().heavy_checks_enabled(tf.chain_config()));
     make_chainstate_inconsistent(&mut tf, &mut rng);
     tf.create_chain(&tf.genesis().get_id().into(), 1, &mut rng).unwrap();
 }
@@ -61,7 +61,7 @@ fn test_consistency_check_enabled_for_regtest(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(create_regtest()).build();
 
-    assert!(tf.chainstate.get_chainstate_config().heavy_checks_enabled(&tf.chain_config()));
+    assert!(tf.chainstate.get_chainstate_config().heavy_checks_enabled(tf.chain_config()));
     make_chainstate_inconsistent(&mut tf, &mut rng);
     tf.create_chain(&tf.genesis().get_id().into(), 1, &mut rng).unwrap();
 }
@@ -82,7 +82,7 @@ fn test_consistency_check_explicitly_disabled(#[case] seed: Seed) {
         })
         .build();
 
-    assert!(!tf.chainstate.get_chainstate_config().heavy_checks_enabled(&tf.chain_config()));
+    assert!(!tf.chainstate.get_chainstate_config().heavy_checks_enabled(tf.chain_config()));
     make_chainstate_inconsistent(&mut tf, &mut rng);
     tf.create_chain(&tf.genesis().get_id().into(), 1, &mut rng).unwrap();
 }
@@ -104,7 +104,7 @@ fn test_consistency_check_disabled_for_testnet(#[case] seed: Seed) {
         )
         .build();
 
-    assert!(!tf.chainstate.get_chainstate_config().heavy_checks_enabled(&tf.chain_config()));
+    assert!(!tf.chainstate.get_chainstate_config().heavy_checks_enabled(tf.chain_config()));
     make_chainstate_inconsistent(&mut tf, &mut rng);
     tf.create_chain(&tf.genesis().get_id().into(), 1, &mut rng).unwrap();
 }
@@ -133,7 +133,7 @@ fn test_consistency_check_explicitly_enabled_for_testnet(#[case] seed: Seed) {
         })
         .build();
 
-    assert!(tf.chainstate.get_chainstate_config().heavy_checks_enabled(&tf.chain_config()));
+    assert!(tf.chainstate.get_chainstate_config().heavy_checks_enabled(tf.chain_config()));
     make_chainstate_inconsistent(&mut tf, &mut rng);
     tf.create_chain(&tf.genesis().get_id().into(), 1, &mut rng).unwrap();
 }

@@ -23,6 +23,8 @@ use common::{
 };
 use itertools::{EitherOrBoth, Itertools};
 
+use super::calc_min_height_with_allowed_reorg;
+
 // Certain tests check for this panic message.
 const PANIC_MSG: &str = "Inconsistent chainstate";
 
@@ -35,6 +37,10 @@ pub struct ConsistencyChecker<'a, 'b, DbTx> {
     block_index_map: BTreeMap<Id<Block>, BlockIndex>,
     /// The entire block-by-height map.
     block_by_height_map: BTreeMap<BlockHeight, Id<GenBlock>>,
+    /// Best block id from the db.
+    best_block_id: Id<GenBlock>,
+    /// The min_height_with_allowed_reorg from the db.
+    min_height_with_allowed_reorg: BlockHeight,
 }
 
 impl<'a, 'b, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, 'b, DbTx> {
@@ -45,6 +51,11 @@ impl<'a, 'b, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, 'b, DbTx> {
         let block_map_keys = db_tx.get_block_map_keys()?;
         let block_index_map = db_tx.get_block_index_map()?;
         let block_by_height_map = db_tx.get_block_by_height_map()?;
+        let best_block_id = db_tx.get_best_block_id()?.unwrap_or_else(|| {
+            panic!("{PANIC_MSG}: best block id not stored");
+        });
+        let min_height_with_allowed_reorg =
+            db_tx.get_min_height_with_allowed_reorg()?.unwrap_or(0.into());
 
         Ok(Self {
             _db_tx: db_tx,
@@ -52,7 +63,15 @@ impl<'a, 'b, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, 'b, DbTx> {
             block_map_keys,
             block_index_map,
             block_by_height_map,
+            best_block_id,
+            min_height_with_allowed_reorg,
         })
+    }
+
+    pub fn check(&self) {
+        self.check_block_index_consistency();
+        self.check_block_height_map_consistency();
+        // TODO: add consistency checks for other maps in the chainstate db.
     }
 
     /// Check the block map vs block index map consistency.
@@ -123,7 +142,9 @@ impl<'a, 'b, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, 'b, DbTx> {
         }
     }
 
+    /// Check consistency of the block-by-height map.
     fn check_block_height_map_consistency(&self) {
+        // The block at zero height must be the genesis.
         let block_at_zero_height = *self.block_by_height_map.get(&0.into()).unwrap_or_else(|| {
             panic!("{PANIC_MSG}: no block at zero height");
         });
@@ -133,6 +154,34 @@ impl<'a, 'b, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, 'b, DbTx> {
             "{PANIC_MSG}: block at zero height is not genesis"
         );
 
+        // The block at the max height must be the same as best_block_id.
+        let (max_height, block_at_max_height_id) = self
+            .block_by_height_map
+            .iter()
+            .next_back()
+            .expect("The map is known to be non-empty");
+        assert_eq!(
+            *block_at_max_height_id,
+            self.best_block_id,
+            "{PANIC_MSG}: block at max height {block_at_max_height_id} is not the same as the best block {bb}",
+            bb = self.best_block_id
+        );
+
+        // The min_height_with_allowed_reorg value must be consistent with the one calculated
+        // from the current max height,
+        // Note: the stored min_height_with_allowed_reorg never goes down; so it's possible
+        // for the stored value to become bigger than the one calculated from the current tip
+        // if some mainchain blocks were invalidated in the past.
+        let calculated_min_height_with_allowed_reorg =
+            calc_min_height_with_allowed_reorg(self.chain_config, *max_height);
+        assert!(
+            self.min_height_with_allowed_reorg >= calculated_min_height_with_allowed_reorg,
+            "The stored min_height_with_allowed_reorg {} is less then the calculated value {}",
+            self.min_height_with_allowed_reorg,
+            calculated_min_height_with_allowed_reorg
+        );
+
+        // Check the consistency of the map itself.
         for ((prev_height, prev_id), (cur_height, cur_id)) in
             self.block_by_height_map.iter().tuple_windows()
         {
@@ -154,6 +203,8 @@ impl<'a, 'b, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, 'b, DbTx> {
                 "{PANIC_MSG}: block {prev_id} at height {prev_height} is not a parent of the next block {cur_id}"
             );
 
+            // Since the map contains mainchain blocks, the corresponding indices must be persistent
+            // and have the fully checked status.
             assert!(
                 cur_block_index.is_persistent(),
                 "{PANIC_MSG}: mainchain block {cur_id} must be persistent"
@@ -163,11 +214,5 @@ impl<'a, 'b, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, 'b, DbTx> {
                 "{PANIC_MSG}: mainchain block {cur_id} must be fully valid"
             );
         }
-    }
-
-    pub fn check(&self) {
-        self.check_block_index_consistency();
-        self.check_block_height_map_consistency();
-        // FIXME add todo for other checks (e.g. other db maps)
     }
 }
