@@ -1008,6 +1008,19 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             assert!(!block_index.status().is_ok(), "{panic_msg}");
         }
 
+        // FIXME check that parents of persistent blocks are alway persistent.
+        // Parents of ok blocks are ok.
+        // Parents of fully checked blocks are fully checked; (the validation stage of parent is same or bigger)
+        // Also, all parents are present.
+        // FIXME check blocks by height map:
+        // 1) all consecutive heights must be present;
+        // 2) lower height is a parent of the higher one;
+        // 3) block index is present for all of them - persistent and fully checked.
+
+        // FIXME optimize???
+
+        // FIXME add todo for other checks (e.g. other db maps)
+
         Ok(())
     }
 }
