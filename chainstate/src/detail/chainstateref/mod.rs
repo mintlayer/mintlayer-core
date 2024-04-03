@@ -983,6 +983,31 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     /// An error is only returned if the checks couldn't be performed for some reason.
     #[log_error]
     pub fn check_block_index_consistency(&self) -> Result<(), chainstate_storage::Error> {
+        // Certain tests check for this panic message.
+        let panic_msg = "Inconsistent chainstate";
+
+        let block_index_map_keys = self.db_tx.get_block_index_map_keys()?;
+        let block_map_keys = self.db_tx.get_block_map_keys()?;
+
+        // There shouldn't be block objects without block index objects.
+        let ids_blocks_without_index =
+            block_map_keys.difference(&block_index_map_keys).collect::<BTreeSet<_>>();
+        assert_eq!(ids_blocks_without_index, BTreeSet::new(), "{panic_msg}");
+
+        let ids_block_indices_without_blocks =
+            block_index_map_keys.difference(&block_map_keys).collect::<BTreeSet<_>>();
+
+        // Block index objects that correspond to missing block objects must not be marked
+        // as persistent and must not have an "ok" status.
+        for block_id in ids_block_indices_without_blocks {
+            let block_index = self
+                .get_existing_block_index(block_id)
+                .expect("The block index is known to exist");
+
+            assert!(!block_index.is_persistent(), "{panic_msg}");
+            assert!(!block_index.status().is_ok(), "{panic_msg}");
+        }
+
         Ok(())
     }
 }

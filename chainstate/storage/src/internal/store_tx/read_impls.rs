@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::db;
 use chainstate_types::{BlockIndex, EpochData, EpochStorageRead};
@@ -212,6 +212,30 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
     #[log_error]
     fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>> {
         self.read::<db::DBAccountNonceCount, _, _>(account)
+    }
+
+    // FIXME code duplication
+    #[log_error]
+    fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>> {
+        let map = self.0.get::<db::DBBlock, _>();
+        let items = map.prefix_iter_keys(&())?;
+        Ok(items.collect::<BTreeSet<_>>())
+    }
+
+    // FIXME code duplication
+    #[log_error]
+    fn get_block_index_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>> {
+        let map = self.0.get::<db::DBBlockIndex, _>();
+        let items = map.prefix_iter_keys(&())?;
+        Ok(items.collect::<BTreeSet<_>>())
+    }
+
+    // FIXME code duplication
+    #[log_error]
+    fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>> {
+        let map = self.0.get::<db::DBBlockByHeight, _>();
+        let items = map.prefix_iter_decoded(&())?;
+        Ok(items.collect::<BTreeMap<_, _>>())
     }
 }
 
@@ -472,6 +496,30 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     #[log_error]
     fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>> {
         self.read::<db::DBAccountNonceCount, _, _>(account)
+    }
+
+    // FIXME code duplication
+    #[log_error]
+    fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>> {
+        let map = self.0.get::<db::DBBlock, _>();
+        let items = map.prefix_iter_keys(&())?;
+        Ok(items.collect::<BTreeSet<_>>())
+    }
+
+    // FIXME code duplication
+    #[log_error]
+    fn get_block_index_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>> {
+        let map = self.0.get::<db::DBBlockIndex, _>();
+        let items = map.prefix_iter_keys(&())?;
+        Ok(items.collect::<BTreeSet<_>>())
+    }
+
+    // FIXME code duplication
+    #[log_error]
+    fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>> {
+        let map = self.0.get::<db::DBBlockByHeight, _>();
+        let items = map.prefix_iter_decoded(&())?;
+        Ok(items.collect::<BTreeMap<_, _>>())
     }
 }
 

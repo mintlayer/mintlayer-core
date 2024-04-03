@@ -21,7 +21,7 @@ mod is_transaction_seal;
 pub mod mock;
 pub mod schema;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use chainstate_types::{BlockIndex, EpochStorageRead, EpochStorageWrite};
 use common::{
@@ -140,6 +140,11 @@ pub trait BlockchainStorageRead:
 
     /// Get nonce value for specific account
     fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
+
+    // FIXME docs
+    fn get_block_index_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
+    fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
+    fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>>;
 }
 
 /// Modifying operations on persistent blockchain data
