@@ -36,6 +36,7 @@ mod data_deposit;
 mod delegation_tests;
 mod double_spend_tests;
 mod events_tests;
+mod framework_tests;
 mod fungible_tokens;
 mod fungible_tokens_v1;
 mod history_iteration;
