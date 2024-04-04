@@ -293,16 +293,16 @@ fn token_issue_test(#[case] seed: Seed) {
         });
         let (result, tx_id, _) = process_block_with_issuance(issuance);
         assert_eq!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTransactionError(
                         CheckTransactionError::TokensError(TokensError::IssueError(
                             TokenIssuanceError::IssueErrorInvalidTickerLength,
                             tx_id,
                         ))
                     )
-                ))
+                )
             ))
         );
 
@@ -317,16 +317,16 @@ fn token_issue_test(#[case] seed: Seed) {
         });
         let (result, tx_id, _) = process_block_with_issuance(issuance);
         assert_eq!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTransactionError(
                         CheckTransactionError::TokensError(TokensError::IssueError(
                             TokenIssuanceError::IssueErrorInvalidTickerLength,
                             tx_id,
                         ))
                     )
-                ))
+                )
             ))
         );
 
@@ -354,16 +354,16 @@ fn token_issue_test(#[case] seed: Seed) {
                 let (result, tx_id, _) = process_block_with_issuance(issuance);
 
                 assert_eq!(
-                    result,
-                    Err(ChainstateError::ProcessBlockError(
-                        BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                    result.unwrap_err(),
+                    ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                        CheckBlockError::CheckTransactionFailed(
                             CheckBlockTransactionsError::CheckTransactionError(
                                 CheckTransactionError::TokensError(TokensError::IssueError(
                                     TokenIssuanceError::IssueErrorTickerHasNoneAlphaNumericChar,
                                     tx_id,
                                 ))
                             )
-                        ))
+                        )
                     ))
                 );
             }
@@ -385,16 +385,16 @@ fn token_issue_test(#[case] seed: Seed) {
             });
             let (result, tx_id, _) = process_block_with_issuance(issuance);
             assert_eq!(
-                result,
-                Err(ChainstateError::ProcessBlockError(
-                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckTransactionFailed(
                         CheckBlockTransactionsError::CheckTransactionError(
                             CheckTransactionError::TokensError(TokensError::IssueError(
                                 TokenIssuanceError::IssueErrorTooManyDecimals,
                                 tx_id,
                             ))
                         )
-                    ))
+                    )
                 ))
             );
         }
@@ -415,16 +415,16 @@ fn token_issue_test(#[case] seed: Seed) {
             });
             let (result, tx_id, _) = process_block_with_issuance(issuance);
             assert_eq!(
-                result,
-                Err(ChainstateError::ProcessBlockError(
-                    BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    CheckBlockError::CheckTransactionFailed(
                         CheckBlockTransactionsError::CheckTransactionError(
                             CheckTransactionError::TokensError(TokensError::IssueError(
                                 TokenIssuanceError::IssueErrorIncorrectMetadataURI,
                                 tx_id,
                             ))
                         )
-                    ))
+                    )
                 ))
             );
         }
@@ -440,16 +440,16 @@ fn token_issue_test(#[case] seed: Seed) {
         });
         let (result, tx_id, _) = process_block_with_issuance(issuance);
         assert_eq!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTransactionError(
                         CheckTransactionError::TokensError(TokensError::IssueError(
                             TokenIssuanceError::IssueErrorIncorrectMetadataURI,
                             tx_id,
                         ))
                     )
-                ))
+                )
             ))
         );
 
@@ -3937,15 +3937,15 @@ fn token_issue_mint_and_data_deposit_not_enough_fee(#[case] seed: Seed) {
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::ConstrainedValueAccumulatorError(
                     constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                         CoinOrTokenId::Coin
                     ),
                     tx_id.into()
                 ))
-            ))
+            )
         );
 
         tf.make_block_builder()

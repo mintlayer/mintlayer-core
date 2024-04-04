@@ -98,18 +98,12 @@ impl GenBlockIndex {
     pub fn genesis(chain_config: &ChainConfig) -> Self {
         Self::Genesis(Arc::clone(chain_config.genesis_block()))
     }
-}
 
-impl From<BlockIndex> for GenBlockIndex {
-    fn from(bi: BlockIndex) -> Self {
-        GenBlockIndex::Block(bi)
-    }
-}
-
-impl PartialEq for GenBlockIndex {
-    fn eq(&self, other: &Self) -> bool {
+    /// Return true if all fields of this GenBlockIndex are exactly the same as other's.
+    /// Note: same as in BlockIndex, we deliberately don't call this relation "equality".
+    pub fn is_identical_to(&self, other: &GenBlockIndex) -> bool {
         match (self, other) {
-            (Self::Block(b1), Self::Block(b2)) => b1 == b2,
+            (Self::Block(b1), Self::Block(b2)) => b1.is_identical_to(b2),
             (Self::Genesis(g1), Self::Genesis(g2)) => {
                 let eq = Arc::ptr_eq(g1, g2);
                 debug_assert!(eq, "Attempt to compare different geneses");
@@ -120,4 +114,8 @@ impl PartialEq for GenBlockIndex {
     }
 }
 
-impl Eq for GenBlockIndex {}
+impl From<BlockIndex> for GenBlockIndex {
+    fn from(bi: BlockIndex) -> Self {
+        GenBlockIndex::Block(bi)
+    }
+}

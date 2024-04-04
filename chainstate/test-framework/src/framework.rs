@@ -23,7 +23,10 @@ use rstest::rstest;
 use crate::{
     pos_block_builder::PoSBlockBuilder,
     staking_pools::StakingPools,
-    utils::{outputs_from_block, outputs_from_genesis},
+    utils::{
+        assert_block_index_opt_identical_to, assert_gen_block_index_identical_to,
+        assert_gen_block_index_opt_identical_to, outputs_from_block, outputs_from_genesis,
+    },
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
@@ -154,12 +157,15 @@ impl TestFramework {
                 assert!(saved_index.is_persistent());
 
                 if let Some(returned_index) = &block_index_result {
-                    assert_eq!(
-                        GenBlockIndex::Block(returned_index.clone()),
-                        new_best_block_index
+                    assert_gen_block_index_identical_to(
+                        &GenBlockIndex::Block(returned_index.clone()),
+                        &new_best_block_index,
                     );
                 } else {
-                    assert_eq!(new_best_block_index, orig_best_block_index);
+                    assert_gen_block_index_identical_to(
+                        &new_best_block_index,
+                        &orig_best_block_index,
+                    );
                 }
 
                 self.block_indexes.push(saved_index);
@@ -181,7 +187,7 @@ impl TestFramework {
                     }
                 }
 
-                assert_eq!(new_best_block_index, orig_best_block_index);
+                assert_gen_block_index_identical_to(&new_best_block_index, &orig_best_block_index);
 
                 Err(err)
             }
@@ -375,9 +381,12 @@ impl TestFramework {
             self.chainstate.get_persistent_gen_block_index(id).unwrap();
 
         if any_gen_block_index_opt.as_ref().is_some_and(|idx| idx.is_persistent()) {
-            assert_eq!(persistent_gen_block_index_opt, any_gen_block_index_opt);
+            assert_gen_block_index_opt_identical_to(
+                persistent_gen_block_index_opt.as_ref(),
+                any_gen_block_index_opt.as_ref(),
+            );
         } else {
-            assert_eq!(persistent_gen_block_index_opt, None);
+            assert_gen_block_index_opt_identical_to(persistent_gen_block_index_opt.as_ref(), None);
         }
 
         match id.classify(self.chain_config()) {
@@ -392,22 +401,28 @@ impl TestFramework {
                     self.chainstate.get_persistent_block_index(id).unwrap();
 
                 if any_block_index_opt.as_ref().is_some_and(|idx| idx.is_persistent()) {
-                    assert_eq!(persistent_block_index_opt, any_block_index_opt);
+                    assert_block_index_opt_identical_to(
+                        persistent_block_index_opt.as_ref(),
+                        any_block_index_opt.as_ref(),
+                    );
                     assert!(self.chainstate.get_block(*id).unwrap().is_some());
                 } else {
-                    assert_eq!(persistent_block_index_opt, None);
+                    assert_block_index_opt_identical_to(persistent_block_index_opt.as_ref(), None);
                     assert!(self.chainstate.get_block(*id).unwrap().is_none());
                 }
 
                 let any_gen_block_index_opt2 =
                     any_block_index_opt.map(|idx| GenBlockIndex::Block(idx.clone()));
-                assert_eq!(any_gen_block_index_opt2, any_gen_block_index_opt);
+                assert_gen_block_index_opt_identical_to(
+                    any_gen_block_index_opt2.as_ref(),
+                    any_gen_block_index_opt.as_ref(),
+                );
             }
             GenBlockId::Genesis(_) => {
                 let any_gen_block_index = any_gen_block_index_opt.unwrap();
-                assert_eq!(
-                    any_gen_block_index,
-                    GenBlockIndex::genesis(self.chain_config())
+                assert_gen_block_index_identical_to(
+                    &any_gen_block_index,
+                    &GenBlockIndex::genesis(self.chain_config()),
                 );
                 assert!(any_gen_block_index.is_persistent());
             }

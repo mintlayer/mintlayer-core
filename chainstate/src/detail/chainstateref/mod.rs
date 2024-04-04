@@ -1258,7 +1258,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     ) -> Result<(), BlockError> {
         #[cfg(debug_assertions)]
         if let Some(existing_block_index) = self.db_tx.get_block_index(block_index.block_id())? {
-            assert!(existing_block_index == block_index);
+            assert!(existing_block_index.is_identical_to(&block_index));
         }
 
         self.set_block_index(&block_index.with_status(block_status))

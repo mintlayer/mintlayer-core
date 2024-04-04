@@ -143,15 +143,15 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::ConstrainedValueAccumulatorError(
                     constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                         CoinOrTokenId::TokenId(token_id)
                     ),
                     tx_id.into()
                 ))
-            ))
+            )
         );
 
         // Try to transfer 0 NFT
@@ -280,15 +280,15 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::ConstrainedValueAccumulatorError(
                     constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                         CoinOrTokenId::TokenId(first_token_id)
                     ),
                     tx_id.into()
                 ))
-            ))
+            )
         );
     })
 }

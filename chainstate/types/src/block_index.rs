@@ -22,7 +22,7 @@ use serialization::{Decode, Encode};
 
 use crate::{BlockStatus, GenBlockIndex};
 
-#[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
+#[derive(Debug, Clone, Encode, Decode)]
 pub struct BlockIndex {
     block_id: Id<Block>,
     block_header: SignedBlockHeader,
@@ -132,5 +132,37 @@ impl BlockIndex {
 
     pub fn into_gen_block_index(self) -> GenBlockIndex {
         self.into()
+    }
+
+    /// Return true if all fields of this BlockIndex are exactly the same as other's.
+    /// Note that we don't call this relation "equality" (and don't implement Eq/PartialEq)
+    /// because it's ambiguous what "equality" should mean for a BlockIndex.
+    pub fn is_identical_to<'a>(&'a self, other: &'a BlockIndex) -> bool {
+        let as_ref_tuple = |bi: &'a BlockIndex| {
+            let BlockIndex {
+                block_id,
+                block_header,
+                some_ancestor,
+                chain_trust,
+                height,
+                chain_time_max,
+                chain_transaction_count,
+                status,
+                is_persistent,
+            } = bi;
+            (
+                block_id,
+                block_header,
+                some_ancestor,
+                chain_trust,
+                height,
+                chain_time_max,
+                chain_transaction_count,
+                status,
+                is_persistent,
+            )
+        };
+
+        as_ref_tuple(self) == as_ref_tuple(other)
     }
 }

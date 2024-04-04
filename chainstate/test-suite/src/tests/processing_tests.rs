@@ -1217,7 +1217,7 @@ fn temporarily_bad_block_not_invalidated_during_integration(#[case] seed: Seed) 
             .with_timestamp(BlockTimestamp::from_int_seconds(future_block_time_secs))
             .build();
         let future_block_id = future_block.get_id();
-        let result = tf.process_block(future_block.clone(), BlockSource::Local);
+        let error = tf.process_block(future_block.clone(), BlockSource::Local).unwrap_err();
 
         let expected_error =
             BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture(future_block_id));
@@ -1225,10 +1225,7 @@ fn temporarily_bad_block_not_invalidated_during_integration(#[case] seed: Seed) 
             expected_error.classify(),
             BlockProcessingErrorClass::TemporarilyBadBlock
         );
-        assert_eq!(
-            result,
-            Err(ChainstateError::ProcessBlockError(expected_error))
-        );
+        assert_eq!(error, ChainstateError::ProcessBlockError(expected_error));
 
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
@@ -1316,7 +1313,7 @@ fn temporarily_bad_block_not_invalidated_after_reorg(#[case] seed: Seed) {
 
         let c2 = build_block(&mut tf, &c1_id.into(), &mut rng);
         let c2_id = c2.get_id();
-        let result = tf.process_block(c2.clone(), BlockSource::Local);
+        let error = tf.process_block(c2.clone(), BlockSource::Local).unwrap_err();
 
         let expected_error =
             BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture(future_block_id));
@@ -1324,10 +1321,7 @@ fn temporarily_bad_block_not_invalidated_after_reorg(#[case] seed: Seed) {
             expected_error.classify(),
             BlockProcessingErrorClass::TemporarilyBadBlock
         );
-        assert_eq!(
-            result,
-            Err(ChainstateError::ProcessBlockError(expected_error))
-        );
+        assert_eq!(error, ChainstateError::ProcessBlockError(expected_error));
 
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
