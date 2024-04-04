@@ -28,6 +28,10 @@ pub enum Recoverable {
     #[error("The database has temporarily exhausted some resource")]
     TemporarilyUnavailable,
 
+    /// Memory map is full and has to be resized.
+    #[error("Memory map is full")]
+    MemMapFull,
+
     /// Database file failed to initialize. For example, if the DB file format is wrong.
     #[error("The database file failed to initialize")]
     DbInit,
