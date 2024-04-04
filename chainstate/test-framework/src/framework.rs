@@ -396,7 +396,9 @@ impl TestFramework {
                 // Now check consistency of get_block_index_for_any_block and get_block_index_for_persisted_block
                 // as well as get_block_index_for_any_block and get_gen_block_index_for_any_block.
                 // Also check that a block index has the persistence flag set iff the corresponding block data
-                // is in the db.
+                // is in the db (note that this part is somewhat redundant, because the chainstate consistency
+                // checks also verify this; but this function will be called more often, so at least
+                // it has a chance to catch a problem earlier).
 
                 let any_block_index_opt =
                     self.chainstate.get_block_index_for_any_block(id).unwrap();

@@ -634,8 +634,8 @@ where
 
         let first_header_is_connected_to_chainstate = self
             .chainstate_handle
-            // Use get_gen_block_index_for_any_block instead of get_gen_block_index_for_persisted_block to avoid
-            // bailing out with the DisconnectedHeaders early (the appropriate  error will
+            // Use get_gen_block_index_for_any_block instead of get_gen_block_index_for_persisted_block
+            // to avoid bailing out with the DisconnectedHeaders error early (the appropriate error will
             // be generated when checking the header later and its ban score will be bigger).
             .call(move |c| Ok(c.get_gen_block_index_for_any_block(&first_header_prev_id)?))
             .await?

@@ -112,7 +112,7 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
                 EitherOrBoth::Both(_, (block_id, block_index)) => {
                     // Both the block and block index objects are present.
 
-                    // The persistence flag must be true.
+                    // The persistence flag must be set.
                     assert!(
                         block_index.is_persisted(),
                         "{PANIC_MSG}: block {block_id} must be persisted"
@@ -138,7 +138,7 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
                         panic!("{PANIC_MSG}: block {block_id} parent index not found");
                     });
                 if block_index.is_persisted() {
-                    // If this block is "persisted", the parent must be too.
+                    // If this block is persisted, the parent must be too.
                     assert!(
                         parent_block_index.is_persisted(),
                         "{PANIC_MSG}: parent block {parent_id} of persisted block {block_id} is not persisted"
