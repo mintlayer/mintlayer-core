@@ -81,6 +81,8 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
 
     /// Check the block map vs block index map consistency.
     fn check_block_index_consistency(&self) {
+        // Loop over block_map_keys and block_index_map simultaneously via merge_join_by, looking
+        // for ids that are present in one of them and missing in the other.
         for merged in self
             .block_map_keys
             .iter()
@@ -88,7 +90,7 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
                 Ord::cmp(id1, id2)
             })
         {
-            match merged {
+            let (block_id, block_index) = match merged {
                 EitherOrBoth::Left(block_id) => {
                     // The block object is present, the index object is not.
                     panic!("{PANIC_MSG}: block index data missing for block {block_id}");
@@ -104,6 +106,8 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
                         !block_index.status().is_ok(),
                         "{PANIC_MSG}: block {block_id} can't be ok"
                     );
+
+                    (block_id, block_index)
                 }
                 EitherOrBoth::Both(_, (block_id, block_index)) => {
                     // Both the block and block index objects are present.
@@ -114,35 +118,47 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
                         "{PANIC_MSG}: block {block_id} must be persistent"
                     );
 
-                    // Check the parent, if it's not genesis.
-                    if let Some(parent_id) =
-                        block_index.prev_block_id().classify(self.chain_config).chain_block_id()
-                    {
-                        let parent_block_index =
-                            self.block_index_map.get(&parent_id).unwrap_or_else(|| {
-                                panic!("{PANIC_MSG}: block {block_id} parent index not found");
-                            });
-                        // Since this index object is persistent, the parent must be persistent too.
-                        assert!(
-                            parent_block_index.is_persistent(),
-                            "{PANIC_MSG}: parent block {parent_id} of persistent block {block_id} is not persistent"
-                        );
-
-                        if block_index.status().is_ok() {
-                            // If a block has ok status, its parent must also be ok.
-                            assert!(
-                                parent_block_index.status().is_ok(),
-                                "{PANIC_MSG}: parent block {parent_id} of ok block {block_id} is not ok"
-                            );
-                        }
-
-                        // In any case, the parent block must be at least as valid as the child.
-                        assert!(
-                            parent_block_index.status().last_valid_stage() >= block_index.status().last_valid_stage(),
-                            "{PANIC_MSG}: parent block {parent_id} is less valid than its child {block_id}"
-                        );
-                    }
+                    (block_id, block_index)
                 }
+            };
+
+            let block_id_in_block_index = block_index.block_id();
+            assert_eq!(
+                block_id,
+                block_id_in_block_index,
+                "{PANIC_MSG}: block id from BlockIndex {block_id_in_block_index} doesn't match {block_id}"
+            );
+
+            // Check the parent, if it's not genesis.
+            if let Some(parent_id) =
+                block_index.prev_block_id().classify(self.chain_config).chain_block_id()
+            {
+                let parent_block_index =
+                    self.block_index_map.get(&parent_id).unwrap_or_else(|| {
+                        panic!("{PANIC_MSG}: block {block_id} parent index not found");
+                    });
+                if block_index.is_persistent() {
+                    // If this index object is persistent, the parent must be persistent too.
+                    assert!(
+                        parent_block_index.is_persistent(),
+                        "{PANIC_MSG}: parent block {parent_id} of persistent block {block_id} is not persistent"
+                    );
+                }
+
+                if block_index.status().is_ok() {
+                    // If a block has ok status, its parent must also be ok.
+                    assert!(
+                        parent_block_index.status().is_ok(),
+                        "{PANIC_MSG}: parent block {parent_id} of ok block {block_id} is not ok"
+                    );
+                }
+
+                // In any case, the parent block must be at least as valid as the child.
+                assert!(
+                    parent_block_index.status().last_valid_stage()
+                        >= block_index.status().last_valid_stage(),
+                    "{PANIC_MSG}: parent block {parent_id} is less valid than its child {block_id}"
+                );
             }
         }
     }
