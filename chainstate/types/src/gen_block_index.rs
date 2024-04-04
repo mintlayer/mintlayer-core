@@ -20,6 +20,7 @@ use common::{
     primitives::{id::WithId, BlockHeight, Id, Idable},
     Uint256,
 };
+use static_assertions::assert_not_impl_any;
 
 use crate::{BlockIndex, BlockStatus};
 
@@ -119,3 +120,6 @@ impl From<BlockIndex> for GenBlockIndex {
         GenBlockIndex::Block(bi)
     }
 }
+
+// Forbid implementing Eq and PartialEq for GenBlockIndex.
+assert_not_impl_any!(GenBlockIndex: Eq, PartialEq);

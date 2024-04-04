@@ -19,6 +19,7 @@ use common::chain::{Block, GenBlock};
 use common::primitives::{BlockHeight, Id, Idable, H256};
 use common::Uint256;
 use serialization::{Decode, Encode};
+use static_assertions::assert_not_impl_any;
 
 use crate::{BlockStatus, GenBlockIndex};
 
@@ -166,3 +167,6 @@ impl BlockIndex {
         as_ref_tuple(self) == as_ref_tuple(other)
     }
 }
+
+// Forbid implementing Eq and PartialEq for BlockIndex.
+assert_not_impl_any!(BlockIndex: Eq, PartialEq);
