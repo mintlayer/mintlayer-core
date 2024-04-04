@@ -28,7 +28,8 @@ use common::{
             TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId,
-        Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        Destination, GenBlockId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -506,25 +507,45 @@ impl<'a> RandomTxMaker<'a> {
                     inputs.len(),
                 ),
                 TxOutput::LockThenTransfer(v, _, timelock) => {
-                    let timelock_passed = match timelock {
-                        OutputTimeLock::UntilHeight(_)
-                        | OutputTimeLock::UntilTime(_)
-                        | OutputTimeLock::ForSeconds(_) => unimplemented!(),
-                        OutputTimeLock::ForBlockCount(block_count) => {
-                            let utxo_block_height = self
-                                .chainstate
-                                .utxo(outpoint)
-                                .unwrap()
-                                .unwrap()
-                                .source()
-                                .clone()
-                                .blockchain_height()
-                                .unwrap();
-                            let current_height =
-                                self.chainstate.get_best_block_height().unwrap().next_height();
-                            utxo_block_height.into_int() + *block_count <= current_height.into_int()
+                    let utxo_block_height = self
+                        .chainstate
+                        .utxo(outpoint)
+                        .unwrap()
+                        .unwrap()
+                        .source()
+                        .clone()
+                        .blockchain_height()
+                        .unwrap();
+                    let utxo_block_id = self
+                        .chainstate
+                        .get_block_id_from_height(&utxo_block_height)
+                        .unwrap()
+                        .unwrap()
+                        .classify(self.chainstate.get_chain_config());
+
+                    let time_of_tx = match utxo_block_id {
+                        GenBlockId::Block(id) => {
+                            self.chainstate.get_block_header(id).unwrap().unwrap().timestamp()
+                        }
+                        GenBlockId::Genesis(_) => {
+                            self.chainstate.get_chain_config().genesis_block().timestamp()
                         }
                     };
+                    let current_time = self
+                        .chainstate
+                        .calculate_median_time_past(&self.chainstate.get_best_block_id().unwrap())
+                        .unwrap();
+                    let current_height = self.chainstate.get_best_block_height().unwrap();
+
+                    let timelock_passed = tx_verifier::timelock_check::check_timelock(
+                        &utxo_block_height,
+                        &time_of_tx,
+                        timelock,
+                        &current_height,
+                        &current_time,
+                        outpoint,
+                    )
+                    .is_ok();
 
                     if timelock_passed {
                         self.spend_output_value(
@@ -700,10 +721,57 @@ impl<'a> RandomTxMaker<'a> {
                             }
                         }
 
-                        TxOutput::Transfer(
-                            OutputValue::Coin(new_value),
-                            Destination::AnyoneCanSpend,
-                        )
+                        match rng.gen_range(0..5) {
+                            0 => TxOutput::LockThenTransfer(
+                                OutputValue::Coin(new_value),
+                                Destination::AnyoneCanSpend,
+                                OutputTimeLock::ForBlockCount(rng.gen_range(0..5)),
+                            ),
+                            1 => TxOutput::LockThenTransfer(
+                                OutputValue::Coin(new_value),
+                                Destination::AnyoneCanSpend,
+                                OutputTimeLock::UntilHeight(
+                                    self.chainstate
+                                        .get_best_block_height()
+                                        .unwrap()
+                                        .checked_add(rng.gen_range(0..5))
+                                        .unwrap(),
+                                ),
+                            ),
+                            2 => TxOutput::LockThenTransfer(
+                                OutputValue::Coin(new_value),
+                                Destination::AnyoneCanSpend,
+                                OutputTimeLock::ForSeconds(
+                                    self.chainstate
+                                        .get_chain_config()
+                                        .target_block_spacing()
+                                        .as_secs()
+                                        * rng.gen_range(0..5),
+                                ),
+                            ),
+                            3 => TxOutput::LockThenTransfer(
+                                OutputValue::Coin(new_value),
+                                Destination::AnyoneCanSpend,
+                                OutputTimeLock::UntilTime(
+                                    self.chainstate
+                                        .get_best_block_index()
+                                        .unwrap()
+                                        .block_timestamp()
+                                        .add_int_seconds(
+                                            self.chainstate
+                                                .get_chain_config()
+                                                .target_block_spacing()
+                                                .as_secs()
+                                                * rng.gen_range(0..5),
+                                        )
+                                        .unwrap(),
+                                ),
+                            ),
+                            _ => TxOutput::Transfer(
+                                OutputValue::Coin(new_value),
+                                Destination::AnyoneCanSpend,
+                            ),
+                        }
                     }
                 })
                 .collect::<Vec<_>>();

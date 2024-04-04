@@ -56,8 +56,9 @@ use common::{
             make_token_id, NftIssuance, RPCIsTokenFrozen, RPCTokenInfo, RPCTokenTotalSupply,
             TokenId,
         },
-        CoinUnit, ConsensusUpgrade, DelegationId, Destination, NetUpgrades, OutPointSourceId,
-        PoSChainConfigBuilder, PoolId, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
+        CoinUnit, ConsensusUpgrade, DelegationId, Destination, GenBlockId, NetUpgrades,
+        OutPointSourceId, PoSChainConfigBuilder, PoolId, SignedTransaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockCount, CoinOrTokenId, Idable, H256},
 };
@@ -1499,8 +1500,16 @@ async fn check_utxo(
         .and_then(|utxo| utxo.output().timelock().zip(utxo.source().blockchain_height().ok()))
         .map(|(lock, height)| {
             let block_id = tf.block_id(height.into_int());
-            let median_time = tf.chainstate.calculate_median_time_past(&block_id).unwrap();
-            UtxoLock::from_output_lock(*lock, median_time, height).into_time_and_height()
+            let utxo_block_id = block_id.classify(tf.chainstate.get_chain_config());
+            let time_of_tx = match utxo_block_id {
+                GenBlockId::Block(id) => {
+                    tf.chainstate.get_block_header(id).unwrap().unwrap().timestamp()
+                }
+                GenBlockId::Genesis(_) => {
+                    tf.chainstate.get_chain_config().genesis_block().timestamp()
+                }
+            };
+            UtxoLock::from_output_lock(*lock, time_of_tx, height).into_time_and_height()
         });
 
     let tx = local_state.storage().transaction_ro().await.unwrap();
