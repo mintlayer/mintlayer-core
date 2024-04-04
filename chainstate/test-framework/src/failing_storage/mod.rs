@@ -32,9 +32,9 @@ pub struct FailureParams {
 
 impl FailureParams {
     // Set the default probability of failure for affected operations to 5%. Also limit the max
-    // number of spurious failures to two, since that is the maximum amount the system is designed
-    // to handle by default, making max 3 attempts before giving up.
-    pub const FAILING: Self = Self::new_unchecked(0.05, 2);
+    // number of spurious failures to 4, since that is the maximum amount the system is designed
+    // to handle by default, making max 10 attempts before giving up.
+    pub const FAILING: Self = Self::new_unchecked(0.05, 4);
 
     // Reliable storage can be achieved by either setting the failure probability to zero or by
     // limiting the max number of spurious errors to zero. Here, we do both just in case.
@@ -185,7 +185,7 @@ impl<T> FailingStorageTxRw<'_, T> {
 }
 
 impl<T: TransactionRw> TransactionRw for FailingStorageTxRw<'_, T> {
-    fn abort(self) {
+    fn abort(self) -> chainstate_storage::Result<()> {
         self.inner.abort()
     }
 
