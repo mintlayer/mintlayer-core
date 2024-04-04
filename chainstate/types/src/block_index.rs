@@ -38,10 +38,10 @@ pub struct BlockIndex {
     chain_transaction_count: u128,
     /// The block status.
     status: BlockStatus,
-    /// If true, this block index will stay in the db forever; otherwise, it may be deleted
-    /// at some point. Note: in practice, a block index is persistent if the corresponding
-    /// block has been saved into the db.
-    is_persistent: bool,
+    /// If true, the corresponding block has been persisted in the db.
+    /// This also means that the block index object can't be deleted from the db (unless the
+    /// block gets purged).
+    is_persisted: bool,
 }
 
 impl BlockIndex {
@@ -64,7 +64,7 @@ impl BlockIndex {
             chain_time_max,
             chain_transaction_count,
             status,
-            is_persistent: false,
+            is_persisted: false,
         }
     }
 
@@ -117,12 +117,12 @@ impl BlockIndex {
         self
     }
 
-    pub fn is_persistent(&self) -> bool {
-        self.is_persistent
+    pub fn is_persisted(&self) -> bool {
+        self.is_persisted
     }
 
-    pub fn make_persistent(mut self) -> Self {
-        self.is_persistent = true;
+    pub fn make_persisted(mut self) -> Self {
+        self.is_persisted = true;
         self
     }
 
@@ -148,7 +148,7 @@ impl BlockIndex {
                 chain_time_max,
                 chain_transaction_count,
                 status,
-                is_persistent,
+                is_persisted,
             } = bi;
             (
                 block_id,
@@ -159,7 +159,7 @@ impl BlockIndex {
                 chain_time_max,
                 chain_transaction_count,
                 status,
-                is_persistent,
+                is_persisted,
             )
         };
 

@@ -138,7 +138,7 @@ fn test_consistency_check_explicitly_enabled_for_testnet(#[case] seed: Seed) {
     tf.create_chain(&tf.genesis().get_id().into(), 1, &mut rng).unwrap();
 }
 
-// Store a persistent block index in the storage but without storing the corresponding block.
+// Store a block index with the persistence flag set, but without storing the corresponding block.
 fn make_chainstate_inconsistent(tf: &mut TestFramework, rng: &mut impl Rng) {
     let genesis_id = tf.chain_config().genesis_block_id();
     let block = build_block(tf, &genesis_id, rng);
@@ -152,7 +152,7 @@ fn make_chainstate_inconsistent(tf: &mut TestFramework, rng: &mut impl Rng) {
         0,
         BlockStatus::new_at_stage(BlockValidationStage::FullyChecked),
     )
-    .make_persistent();
+    .make_persisted();
 
     let mut tx_rw = tf.storage.transaction_rw(None).unwrap();
     tx_rw.set_block_index(&block_index).unwrap();

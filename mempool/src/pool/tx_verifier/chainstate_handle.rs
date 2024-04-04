@@ -194,7 +194,7 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
         block_id: &Id<GenBlock>,
     ) -> Result<Option<chainstate::GenBlockIndex>, storage_result::Error> {
         let block_id = *block_id;
-        self.call(move |c| c.get_persistent_gen_block_index(&block_id))
+        self.call(move |c| c.get_gen_block_index_for_persisted_block(&block_id))
             .map_err(|e| match e {
                 // TODO Handle this properly. For now we just panic on non-storage errors which should
                 // not happen. A more principled solution is to have a more accurate error types that

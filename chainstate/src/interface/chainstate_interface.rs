@@ -130,26 +130,31 @@ pub trait ChainstateInterface: Send + Sync {
     ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError>;
 
     /// Return the block index given a block id.
-    /// This function will only return persistent block indices; if a non-persistent index
-    /// is found for the id, None will be returned.
-    fn get_persistent_block_index(
+    /// This function will only return block indices for persisted blocks; if the corresponding
+    /// block hasn't been persisted, None will be returned.
+    fn get_block_index_for_persisted_block(
         &self,
         id: &Id<Block>,
     ) -> Result<Option<BlockIndex>, ChainstateError>;
 
-    /// Return the block index (persistent or not) given a block id.
-    fn get_any_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError>;
+    /// Return the block index given a block id. The corresponding block may or may not be persisted.
+    /// Note that a block index object for a non-persisted block may be deleted from the db at any moment.
+    fn get_block_index_for_any_block(
+        &self,
+        id: &Id<Block>,
+    ) -> Result<Option<BlockIndex>, ChainstateError>;
 
-    /// Return the generic block index given a generic block id.
-    /// This function will only return persistent block indices; if a non-persistent index
-    /// is found for the id, None will be returned.
-    fn get_persistent_gen_block_index(
+    /// Return the block index given a block id.
+    /// This function will only return block indices for persisted blocks; if the corresponding
+    /// block hasn't been persisted, None will be returned.
+    fn get_gen_block_index_for_persisted_block(
         &self,
         id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, ChainstateError>;
 
-    /// Return the generic block index (persistent or not) given a generic block id.
-    fn get_any_gen_block_index(
+    /// Return the block index given a block id. The corresponding block may or may not be persisted.
+    /// Note that a block index object for a non-persisted block may be deleted from the db at any moment.
+    fn get_gen_block_index_for_any_block(
         &self,
         id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, ChainstateError>;

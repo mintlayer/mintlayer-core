@@ -126,7 +126,7 @@ impl TestFramework {
         for index in &mut self.block_indexes {
             *index = self
                 .chainstate
-                .get_any_block_index(index.block_id())?
+                .get_block_index_for_any_block(index.block_id())?
                 .expect("Old block index must still be present");
         }
 
@@ -150,11 +150,11 @@ impl TestFramework {
 
         // Note: below we examine block indices but don't check for the existence of the block itself,
         // because this is redundant (the consistency check in best_block_index has already ensured
-        // that a block can exist iff its block index is persistent).
+        // that a block can exist iff its block index has the persistence flag set).
         match process_block_result {
             Ok(block_index_result) => {
                 let saved_index = new_block_index_opt.unwrap();
-                assert!(saved_index.is_persistent());
+                assert!(saved_index.is_persisted());
 
                 if let Some(returned_index) = &block_index_result {
                     assert_gen_block_index_identical_to(
@@ -172,14 +172,15 @@ impl TestFramework {
                 Ok(block_index_result)
             }
             Err(err) => {
-                let had_persistent_block_index =
-                    orig_block_index_opt.as_ref().is_some_and(|idx| idx.is_persistent());
-                let have_persistent_block_index =
-                    new_block_index_opt.as_ref().is_some_and(|idx| idx.is_persistent());
+                let was_persisted =
+                    orig_block_index_opt.as_ref().is_some_and(|idx| idx.is_persisted());
+                let is_persisted =
+                    new_block_index_opt.as_ref().is_some_and(|idx| idx.is_persisted());
 
-                // If block index was persistent, it should stay persistent.
-                // On the other hand, failed process_block should not save a new persistent block index.
-                assert_eq!(had_persistent_block_index, have_persistent_block_index);
+                // If block was persisted, it should stay persisted.
+                // On the other hand, failed process_block should not save a new block index with
+                // persistence flag set.
+                assert_eq!(was_persisted, is_persisted);
 
                 if let Some(new_block_index) = &new_block_index_opt {
                     if orig_block_index_opt.is_none() {
@@ -375,39 +376,41 @@ impl TestFramework {
     /// regularly, here we test what chainstate's functions return and the chainstate itself
     /// only checks the consistency of its db.
     fn check_block_index_consistency(&self, id: &Id<GenBlock>) {
-        // First, check consistency of get_any_gen_block_index and get_persistent_gen_block_index.
-        let any_gen_block_index_opt = self.chainstate.get_any_gen_block_index(id).unwrap();
-        let persistent_gen_block_index_opt =
-            self.chainstate.get_persistent_gen_block_index(id).unwrap();
+        // First, check consistency of get_gen_block_index_for_any_block and get_gen_block_index_for_persisted_block.
+        let any_gen_block_index_opt =
+            self.chainstate.get_gen_block_index_for_any_block(id).unwrap();
+        let persisted_gen_block_index_opt =
+            self.chainstate.get_gen_block_index_for_persisted_block(id).unwrap();
 
-        if any_gen_block_index_opt.as_ref().is_some_and(|idx| idx.is_persistent()) {
+        if any_gen_block_index_opt.as_ref().is_some_and(|idx| idx.is_persisted()) {
             assert_gen_block_index_opt_identical_to(
-                persistent_gen_block_index_opt.as_ref(),
+                persisted_gen_block_index_opt.as_ref(),
                 any_gen_block_index_opt.as_ref(),
             );
         } else {
-            assert_gen_block_index_opt_identical_to(persistent_gen_block_index_opt.as_ref(), None);
+            assert_gen_block_index_opt_identical_to(persisted_gen_block_index_opt.as_ref(), None);
         }
 
         match id.classify(self.chain_config()) {
             GenBlockId::Block(ref id) => {
-                // Now check consistency of get_any_block_index and get_persistent_block_index
-                // as well as get_any_block_index and get_any_gen_block_index.
-                // Also check that a block index is persistent iff the corresponding block data
+                // Now check consistency of get_block_index_for_any_block and get_block_index_for_persisted_block
+                // as well as get_block_index_for_any_block and get_gen_block_index_for_any_block.
+                // Also check that a block index has the persistence flag set iff the corresponding block data
                 // is in the db.
 
-                let any_block_index_opt = self.chainstate.get_any_block_index(id).unwrap();
-                let persistent_block_index_opt =
-                    self.chainstate.get_persistent_block_index(id).unwrap();
+                let any_block_index_opt =
+                    self.chainstate.get_block_index_for_any_block(id).unwrap();
+                let persisted_block_index_opt =
+                    self.chainstate.get_block_index_for_persisted_block(id).unwrap();
 
-                if any_block_index_opt.as_ref().is_some_and(|idx| idx.is_persistent()) {
+                if any_block_index_opt.as_ref().is_some_and(|idx| idx.is_persisted()) {
                     assert_block_index_opt_identical_to(
-                        persistent_block_index_opt.as_ref(),
+                        persisted_block_index_opt.as_ref(),
                         any_block_index_opt.as_ref(),
                     );
                     assert!(self.chainstate.get_block(*id).unwrap().is_some());
                 } else {
-                    assert_block_index_opt_identical_to(persistent_block_index_opt.as_ref(), None);
+                    assert_block_index_opt_identical_to(persisted_block_index_opt.as_ref(), None);
                     assert!(self.chainstate.get_block(*id).unwrap().is_none());
                 }
 
@@ -424,7 +427,7 @@ impl TestFramework {
                     &any_gen_block_index,
                     &GenBlockIndex::genesis(self.chain_config()),
                 );
-                assert!(any_gen_block_index.is_persistent());
+                assert!(any_gen_block_index.is_persisted());
             }
         }
     }
@@ -432,7 +435,7 @@ impl TestFramework {
     /// Return a block index corresponding to the specified id; perform consistency checks.
     pub fn gen_block_index_opt(&self, id: &Id<GenBlock>) -> Option<GenBlockIndex> {
         self.check_block_index_consistency(id);
-        self.chainstate.get_any_gen_block_index(id).unwrap()
+        self.chainstate.get_gen_block_index_for_any_block(id).unwrap()
     }
 
     /// Return a block index corresponding to the specified id; perform consistency checks.
@@ -443,7 +446,7 @@ impl TestFramework {
     /// Return a block index corresponding to the specified id; perform consistency checks.
     pub fn block_index_opt(&self, id: &Id<Block>) -> Option<BlockIndex> {
         self.check_block_index_consistency(id.into());
-        self.chainstate.get_any_block_index(id).unwrap()
+        self.chainstate.get_block_index_for_any_block(id).unwrap()
     }
 
     /// Return a block index corresponding to the specified id; perform consistency checks.

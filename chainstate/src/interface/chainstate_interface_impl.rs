@@ -266,7 +266,7 @@ where
         let first_non_existing_block_idx = {
             let mut idx = 0;
             for header in headers.iter() {
-                if self.get_persistent_block_index(&header.get_id())?.is_none() {
+                if self.get_block_index_for_persisted_block(&header.get_id())?.is_none() {
                     break;
                 }
                 idx += 1;
@@ -310,50 +310,50 @@ where
     }
 
     #[tracing::instrument(skip_all, fields(block_id = %block_id))]
-    fn get_persistent_block_index(
+    fn get_block_index_for_persisted_block(
         &self,
         block_id: &Id<Block>,
     ) -> Result<Option<BlockIndex>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_persistent_block_index(block_id)
+            .get_block_index_for_persisted_block(block_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
     #[tracing::instrument(skip_all, fields(block_id = %block_id))]
-    fn get_any_block_index(
+    fn get_block_index_for_any_block(
         &self,
         block_id: &Id<Block>,
     ) -> Result<Option<BlockIndex>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_any_block_index(block_id)
+            .get_block_index_for_any_block(block_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
     #[tracing::instrument(skip_all, fields(id = %id))]
-    fn get_persistent_gen_block_index(
+    fn get_gen_block_index_for_persisted_block(
         &self,
         id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_persistent_gen_block_index(id)
+            .get_gen_block_index_for_persisted_block(id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
     #[tracing::instrument(skip_all, fields(id = %id))]
-    fn get_any_gen_block_index(
+    fn get_gen_block_index_for_any_block(
         &self,
         id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_any_gen_block_index(id)
+            .get_gen_block_index_for_any_block(id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 

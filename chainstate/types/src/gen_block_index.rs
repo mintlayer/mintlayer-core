@@ -81,9 +81,9 @@ impl GenBlockIndex {
         }
     }
 
-    pub fn is_persistent(&self) -> bool {
+    pub fn is_persisted(&self) -> bool {
         match self {
-            GenBlockIndex::Block(b) => b.is_persistent(),
+            GenBlockIndex::Block(b) => b.is_persisted(),
             GenBlockIndex::Genesis(..) => true,
         }
     }

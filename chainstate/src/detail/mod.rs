@@ -328,11 +328,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block_status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
         let block_status = block_status;
 
-        // Note: we mark the block index as persistent here - if integrate_block eventually
-        // succeeds, we'll save both the index and the block itself via the same db tx (having
-        // a block in the db is the necessary condition for a block index to be persistent);
+        // Note: we mark the block as persisted here - if integrate_block eventually
+        // succeeds, we'll save both the index and the block itself via the same db tx;
         // and if it fails, neither will be saved.
-        let block_index = block_index.with_status(block_status).make_persistent();
+        let block_index = block_index.with_status(block_status).make_persisted();
         chainstate_ref
             .set_new_block_index(&block_index)
             .and_then(|_| chainstate_ref.persist_block(block))

@@ -294,7 +294,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
 
                     if should_delete_index {
                         chainstate_ref
-                            .del_non_persistent_block_index(cur_index.block_id())
+                            .del_block_index_of_non_persisted_block(cur_index.block_id())
                             .map_err(|err| {
                                 BlockInvalidatorError::DelBlockIndexError(
                                     *cur_index.block_id(),

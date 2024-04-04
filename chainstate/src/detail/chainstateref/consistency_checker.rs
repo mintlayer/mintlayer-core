@@ -96,15 +96,15 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
                     panic!("{PANIC_MSG}: block index data missing for block {block_id}");
                 }
                 EitherOrBoth::Right((block_id, block_index)) => {
-                    // The block index object is present, the block object is not.
-                    // The index object must not be marked as persistent and must not have an "ok" status.
+                    // The block index object is present, the block object is not;
+                    // The persistence flag must be unset and the status must not be "ok".
                     assert!(
-                        !block_index.is_persistent(),
-                        "{PANIC_MSG}: block {block_id} can't be persistent"
+                        !block_index.is_persisted(),
+                        "{PANIC_MSG}: block {block_id} must not be persisted"
                     );
                     assert!(
                         !block_index.status().is_ok(),
-                        "{PANIC_MSG}: block {block_id} can't be ok"
+                        "{PANIC_MSG}: block {block_id} must not be ok"
                     );
 
                     (block_id, block_index)
@@ -112,10 +112,10 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
                 EitherOrBoth::Both(_, (block_id, block_index)) => {
                     // Both the block and block index objects are present.
 
-                    // The index object must be marked as persistent.
+                    // The persistence flag must be true.
                     assert!(
-                        block_index.is_persistent(),
-                        "{PANIC_MSG}: block {block_id} must be persistent"
+                        block_index.is_persisted(),
+                        "{PANIC_MSG}: block {block_id} must be persisted"
                     );
 
                     (block_id, block_index)
@@ -137,11 +137,11 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
                     self.block_index_map.get(&parent_id).unwrap_or_else(|| {
                         panic!("{PANIC_MSG}: block {block_id} parent index not found");
                     });
-                if block_index.is_persistent() {
-                    // If this index object is persistent, the parent must be persistent too.
+                if block_index.is_persisted() {
+                    // If this block is "persisted", the parent must be too.
                     assert!(
-                        parent_block_index.is_persistent(),
-                        "{PANIC_MSG}: parent block {parent_id} of persistent block {block_id} is not persistent"
+                        parent_block_index.is_persisted(),
+                        "{PANIC_MSG}: parent block {parent_id} of persisted block {block_id} is not persisted"
                     );
                 }
 
@@ -224,11 +224,10 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
                 "{PANIC_MSG}: block {prev_id} at height {prev_height} is not a parent of the next block {cur_id}"
             );
 
-            // Since the map contains mainchain blocks, the corresponding indices must be persistent
-            // and have the fully checked status.
+            // Since the map contains mainchain blocks, they must be persisted and have the fully checked status.
             assert!(
-                cur_block_index.is_persistent(),
-                "{PANIC_MSG}: mainchain block {cur_id} must be persistent"
+                cur_block_index.is_persisted(),
+                "{PANIC_MSG}: mainchain block {cur_id} must be persisted"
             );
             assert!(
                 cur_block_index.status().is_fully_valid(),

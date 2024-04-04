@@ -129,10 +129,10 @@ pub fn choose_peers_best_block(
         (Some(id), None) | (None, Some(id)) => Ok(Some(id)),
         (Some(old_id), Some(new_id)) => {
             let old_block_chain_trust = chainstate
-                .get_persistent_gen_block_index(&old_id)?
+                .get_gen_block_index_for_persisted_block(&old_id)?
                 .map_or(Uint256::ZERO, |idx| idx.chain_trust());
             let new_block_chain_trust = chainstate
-                .get_persistent_gen_block_index(&new_id)?
+                .get_gen_block_index_for_persisted_block(&new_id)?
                 .map_or(Uint256::ZERO, |idx| idx.chain_trust());
             if new_block_chain_trust >= old_block_chain_trust {
                 Ok(Some(new_id))

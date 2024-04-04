@@ -370,7 +370,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             let (tip, current_best) = chainstate_handle.call(|chainstate| {
                 let tip = chainstate.get_best_block_id()?;
                 let tip_index = chainstate
-                    .get_persistent_gen_block_index(&tip)?
+                    .get_gen_block_index_for_persisted_block(&tip)?
                     .expect("tip block index to exist");
                 Ok::<_, chainstate::ChainstateError>((tip, tip_index))
             })??;
