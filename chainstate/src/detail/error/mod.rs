@@ -36,6 +36,11 @@ use common::{
 };
 use consensus::ConsensusVerificationError;
 
+mod classification;
+pub mod intermittency;
+
+pub use classification::{BlockProcessingErrorClass, BlockProcessingErrorClassification};
+
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
     #[error("Block storage error: `{0}`")]

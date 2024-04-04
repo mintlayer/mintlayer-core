@@ -386,6 +386,16 @@ enum ReorgDuringInvalidationError {
     OtherDbError(#[from] chainstate_storage::Error),
 }
 
+impl super::error::intermittency::CheckIntermittency for ReorgDuringInvalidationError {
+    fn check_intermittency(&self) -> super::intermittency::Intermittency {
+        match self {
+            Self::ReorgError(e) => e.check_intermittency(),
+            Self::OtherError(e) => e.check_intermittency(),
+            Self::OtherDbError(e) => e.check_intermittency(),
+        }
+    }
+}
+
 #[log_error]
 fn is_block_in_main_chain<S, V>(
     chainstate_ref: &ChainstateRef<S, V>,

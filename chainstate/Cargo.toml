@@ -18,6 +18,7 @@ pos-accounting = {path = '../pos-accounting'}
 rpc = {path = '../rpc'}
 rpc-description = {path = '../rpc/description'}
 serialization = {path = "../serialization"}
+storage-core = {path = '../storage/core'}
 subsystem = {path = '../subsystem'}
 tx-verifier = {path = './tx-verifier'}
 tokens-accounting = {path = '../tokens-accounting'}

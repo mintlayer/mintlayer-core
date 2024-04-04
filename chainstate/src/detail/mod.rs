@@ -15,7 +15,6 @@
 
 mod chainstateref;
 mod error;
-mod error_classification;
 mod info;
 mod median_time;
 mod orphan_blocks;
@@ -73,10 +72,10 @@ pub use self::{
 };
 pub use chainstate_types::Locator;
 pub use error::{
-    BlockError, CheckBlockError, CheckBlockTransactionsError, DbCommittingContext,
-    InitializationError, OrphanCheckError, StorageCompatibilityCheckError,
+    BlockError, BlockProcessingErrorClass, BlockProcessingErrorClassification, CheckBlockError,
+    CheckBlockTransactionsError, DbCommittingContext, InitializationError, OrphanCheckError,
+    StorageCompatibilityCheckError,
 };
-pub use error_classification::{BlockProcessingErrorClass, BlockProcessingErrorClassification};
 pub use orphan_blocks::OrphanBlocksRef;
 pub use transaction_verifier::{
     error::{ConnectTransactionError, SpendStakeError, TokenIssuanceError, TokensError},
@@ -273,31 +272,44 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     /// On each iteration, before doing anything else, call `on_new_attempt`
     /// (this can be used for logging).
     #[log_error]
-    fn with_rw_tx<MainAction, OnNewAttempt, OnDbCommitErr, Res, Err>(
+    fn with_rw_tx<MainAction, OnNewAttempt, OnDbCommitErr, Res, E>(
         &mut self,
         mut main_action: MainAction,
         mut on_new_attempt: OnNewAttempt,
         on_db_commit_err: OnDbCommitErr,
-    ) -> Result<Res, Err>
+    ) -> Result<Res, E>
     where
-        MainAction: FnMut(&mut ChainstateRef<TxRw<'_, S>, V>) -> Result<Res, Err>,
+        MainAction: FnMut(&mut ChainstateRef<TxRw<'_, S>, V>) -> Result<Res, E>,
         OnNewAttempt: FnMut(/*attempt_number:*/ usize),
-        OnDbCommitErr: FnOnce(/*attempts_count:*/ usize, chainstate_storage::Error) -> Err,
-        Err: From<chainstate_storage::Error> + std::fmt::Display,
+        OnDbCommitErr: FnOnce(/*attempts_count:*/ usize, chainstate_storage::Error) -> E,
+        E: From<chainstate_storage::Error> + std::fmt::Display + intermittency::CheckIntermittency,
     {
         let mut attempts_count = 0;
         loop {
             on_new_attempt(attempts_count);
             attempts_count += 1;
+            let last_attempt = attempts_count >= *self.chainstate_config.max_db_commit_attempts;
 
-            let mut chainstate_ref = self.make_db_tx().map_err(Err::from)?;
-            let result = main_action(&mut chainstate_ref).log_err()?;
-            let db_commit_result = chainstate_ref.commit_db_tx();
+            let mut chainstate_ref = self.make_db_tx().map_err(E::from)?;
+
+            let result = intermittency::classify(main_action(&mut chainstate_ref).log_err())?;
+
+            let result = match result {
+                Ok(result) => result,
+                Err(err) => {
+                    if last_attempt {
+                        return Err(on_db_commit_err(attempts_count, err));
+                    }
+                    continue;
+                }
+            };
+
+            let db_commit_result = intermittency::classify(chainstate_ref.commit_db_tx())?;
 
             match db_commit_result {
-                Ok(_) => return Ok(result),
+                Ok(()) => return Ok(result),
                 Err(err) => {
-                    if attempts_count >= *self.chainstate_config.max_db_commit_attempts {
+                    if last_attempt {
                         return Err(on_db_commit_err(attempts_count, err));
                     }
                 }

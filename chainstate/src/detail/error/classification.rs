@@ -34,10 +34,11 @@ use tx_verifier::{
 };
 use utxo::UtxosBlockUndoError;
 
-use crate::{BlockError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError};
-
-use super::{
-    block_invalidation::BestChainCandidatesError, chainstateref::EpochSealError, BlockSizeError,
+use crate::{
+    detail::{
+        block_invalidation::BestChainCandidatesError, chainstateref::EpochSealError, BlockSizeError,
+    },
+    BlockError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
 
 /// When handling errors during block processing, we need to differentiate between errors that

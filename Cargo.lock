@@ -1152,6 +1152,7 @@ dependencies = [
  "serialization",
  "static_assertions",
  "storage",
+ "storage-core",
  "subsystem",
  "test-utils",
  "thiserror",
