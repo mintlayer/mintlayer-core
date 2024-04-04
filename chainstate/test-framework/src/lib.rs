@@ -20,13 +20,14 @@ mod framework;
 mod framework_builder;
 mod pos_block_builder;
 mod random_tx_maker;
+mod failing_storage;
 mod staking_pools;
 mod transaction_builder;
 mod tx_verification_strategy;
 mod utils;
 
 /// Storage backend used for testing (the in-memory backend)
-pub type TestStore = chainstate_storage::inmemory::Store;
+pub type TestStore = FailingStorage<chainstate_storage::inmemory::Store>;
 
 /// Chainstate instantiation for testing, using the in-memory storage backend
 pub type TestChainstate = Box<dyn chainstate::chainstate_interface::ChainstateInterface>;
@@ -40,5 +41,6 @@ pub use {
     block_builder::BlockBuilder,
     framework::TestFramework,
     framework_builder::{OrphanErrorHandler, TestFrameworkBuilder, TxVerificationStrategy},
+    failing_storage::{FailingStorage, FailureParams as StorageFailureParams},
     transaction_builder::TransactionBuilder,
 };
