@@ -20,7 +20,7 @@ use crate::{
     tx_verification_strategy::{
         DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
     },
-    TestFramework, TestStore,
+    StorageFailureParams, TestFramework, TestStore,
 };
 use chainstate::{BlockError, ChainstateConfig, DefaultTransactionVerificationStrategy};
 use common::{
@@ -113,8 +113,13 @@ impl TestFrameworkBuilder {
         }
     }
 
-    pub fn with_storage(mut self, s: TestStore) -> Self {
-        self.chainstate_storage = s;
+    pub fn with_storage(mut self, s: impl Into<TestStore>) -> Self {
+        self.chainstate_storage = s.into();
+        self
+    }
+
+    pub fn with_storage_failures(mut self, params: StorageFailureParams, seed: Seed) -> Self {
+        self.chainstate_storage.set_failures(params, seed);
         self
     }
 

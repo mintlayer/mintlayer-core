@@ -1218,6 +1218,7 @@ dependencies = [
  "pos-accounting",
  "rstest",
  "serialization",
+ "storage-core",
  "test-utils",
  "tokens-accounting",
  "tx-verifier",

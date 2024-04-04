@@ -15,8 +15,10 @@ common = { path = "../../common" }
 consensus = { path = "../../consensus" }
 constraints-value-accumulator = {path = '../constraints-value-accumulator'}
 crypto = { path = "../../crypto" }
+logging = { path = "../../logging" }
 pos-accounting = { path = "../../pos-accounting" }
 serialization = { path = "../../serialization" }
+storage-core = { path = "../../storage/core" }
 test-utils = { path = "../../test-utils" }
 tokens-accounting = {path = '../../tokens-accounting'}
 tx-verifier = { path = "../tx-verifier" }
@@ -29,6 +31,5 @@ variant_count.workspace = true
 
 [dev-dependencies]
 consensus = { path = "../../consensus" }
-logging = { path = "../../logging" }
 
 hex.workspace = true
