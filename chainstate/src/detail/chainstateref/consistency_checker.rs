@@ -29,9 +29,9 @@ use super::calc_min_height_with_allowed_reorg;
 // Certain tests check for this panic message.
 const PANIC_MSG: &str = "Inconsistent chainstate";
 
-pub struct ConsistencyChecker<'a, 'b, DbTx> {
+pub struct ConsistencyChecker<'a, DbTx> {
     _db_tx: &'a DbTx,
-    chain_config: &'b ChainConfig,
+    chain_config: &'a ChainConfig,
     /// Keys (block ids) of the block map.
     block_map_keys: BTreeSet<Id<Block>>,
     /// The entire block index map.
@@ -44,10 +44,10 @@ pub struct ConsistencyChecker<'a, 'b, DbTx> {
     min_height_with_allowed_reorg: BlockHeight,
 }
 
-impl<'a, 'b, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, 'b, DbTx> {
+impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
     pub fn new(
         db_tx: &'a DbTx,
-        chain_config: &'b ChainConfig,
+        chain_config: &'a ChainConfig,
     ) -> Result<Self, chainstate_storage::Error> {
         let block_map_keys = db_tx.get_block_map_keys()?;
         let block_index_map = db_tx.get_block_index_map()?;
@@ -74,7 +74,9 @@ impl<'a, 'b, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, 'b, DbTx> {
 
         self.check_block_index_consistency();
         self.check_block_height_map_consistency();
+
         // TODO: add consistency checks for other maps in the chainstate db.
+        // https://github.com/mintlayer/mintlayer-core/issues/1710
     }
 
     /// Check the block map vs block index map consistency.

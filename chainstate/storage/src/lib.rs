@@ -147,7 +147,7 @@ pub trait BlockchainStorageRead:
     /// Get the entire block index map as BTreeMap. This is used in the chainstate's
     /// "heavy" consistency checks.
     fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>>;
-    /// Get the entire block-by-height map as BTreeMap. This is used in the chainstate's
+    /// Get the entire mainchain-block-by-height map as BTreeMap. This is used in the chainstate's
     /// "heavy" consistency checks.
     fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>>;
 }
