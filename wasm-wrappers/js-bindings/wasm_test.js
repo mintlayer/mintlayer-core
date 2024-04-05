@@ -23,6 +23,7 @@ import {
   encode_lock_until_height,
   encode_output_create_stake_pool,
   encode_output_lock_then_transfer,
+  encode_output_token_lock_then_transfer,
   encode_stake_pool_data,
   encode_witness,
   SignatureHashType,
@@ -261,6 +262,7 @@ export async function run_test() {
     }
 
     const address = "tmt1q9dn5m4svn8sds3fcy09kpxrefnu75xekgr5wa3n";
+    const token_id = "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
 
     try {
       const invalid_lock = "invalid lock";
@@ -276,6 +278,42 @@ export async function run_test() {
         throw e;
       }
       console.log("Tested invalid lock successfully");
+    }
+
+    try {
+      const invalid_lock = "invalid lock";
+      encode_output_token_lock_then_transfer(
+        Amount.from_atoms("100"),
+        address,
+        token_id,
+        invalid_lock,
+        Network.Testnet
+      );
+      throw new Error("Invalid lock worked somehow!");
+    } catch (e) {
+      if (!e.includes("Invalid time lock encoding")) {
+        throw e;
+      }
+      console.log("Tested invalid lock successfully");
+    }
+
+    try {
+      const invalid_token_id = "asd";
+      const lock = encode_lock_until_height(BigInt(100));
+      encode_output_token_lock_then_transfer(
+        Amount.from_atoms("100"),
+        address,
+        invalid_token_id,
+        lock,
+        Network.Testnet
+      );
+      throw new Error("Invalid token id worked somehow!");
+    } catch (e) {
+      console.log(`err: ${e}`);
+      if (!e.includes("Invalid addressable encoding")) {
+        throw e;
+      }
+      console.log("Tested invalid token id successfully");
     }
 
     const lock = encode_lock_until_height(BigInt(100));
@@ -341,7 +379,6 @@ export async function run_test() {
 
     try {
       console.log("Testing invalid creator successfully..");
-      const token_id = "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
       const creator_public_key_hash = address;
       encode_output_issue_nft(token_id, address, "nft", "XXX", "desc", "123", creator_public_key_hash, undefined, undefined, undefined, BigInt(1), Network.Testnet);
       throw new Error("Invalid creator worked somehow!");
@@ -354,7 +391,6 @@ export async function run_test() {
 
     try {
       console.log("Testing invalid nft ticker successfully..");
-      const token_id = "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
       const empty_ticker = "";
       encode_output_issue_nft(token_id, address, "nft", empty_ticker, "desc", "123", undefined, undefined, undefined, undefined, BigInt(1), Network.Testnet);
       throw new Error("Invalid ticker worked somehow!");
@@ -367,7 +403,6 @@ export async function run_test() {
 
     try {
       console.log("Testing invalid nft name successfully..");
-      const token_id = "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
       const empty_name = "";
       encode_output_issue_nft(token_id, address, empty_name, "xxx", "desc", "123", undefined, undefined, undefined, undefined, BigInt(1), Network.Testnet);
       throw new Error("Invalid name worked somehow!");
@@ -380,7 +415,6 @@ export async function run_test() {
 
     try {
       console.log("Testing invalid nft description successfully..");
-      const token_id = "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
       const empty_description = "";
       encode_output_issue_nft(token_id, address, "name", "XXX", empty_description, "123", undefined, undefined, undefined, undefined, BigInt(1), Network.Testnet);
       throw new Error("Invalid description worked somehow!");
