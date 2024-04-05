@@ -133,7 +133,10 @@ fn get_mainchain_headers_by_locator(#[case] seed: Seed) {
         let headers_count = rng.gen_range(1000..header_limit);
         let blocks_count = rng.gen_range(1000..2000);
 
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = TestFramework::builder(&mut rng)
+            // With the heavy checks enabled, this test takes a few minutes to complete in debug builds.
+            .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
+            .build();
         let mut last_block_id = tf.genesis().get_id().into();
         last_block_id = tf.create_chain(&last_block_id, blocks_count, &mut rng).unwrap();
 

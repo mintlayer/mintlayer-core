@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![cfg_attr(debug_assertions, allow(unused_imports))]
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use chainstate_storage::BlockchainStorageRead;
@@ -32,7 +30,6 @@ use super::calc_min_height_with_allowed_reorg;
 const PANIC_MSG: &str = "Inconsistent chainstate";
 
 pub struct ConsistencyChecker<'a, DbTx> {
-    #[cfg_attr(debug_assertions, allow(unused))]
     db_tx: &'a DbTx,
     chain_config: &'a ChainConfig,
     /// Keys (block ids) of the block map.
@@ -138,9 +135,6 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
             // If the block is persisted, calculate its id and check that it matches the id
             // that was used as the key. Also compare the block header stored in the index vs the one
             // in the block itself.
-            // Note that this check is relatively heavy, because it has to load the whole block from the db,
-            // so we do it only in release builds.
-            #[cfg(not(debug_assertions))]
             if block_index.is_persisted() {
                 let block =
                     self.db_tx.get_block(*block_id)?.expect("The block is known to be present");
