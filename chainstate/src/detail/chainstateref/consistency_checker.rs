@@ -13,13 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![cfg_attr(debug_assertions, allow(unused_imports))]
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::BlockIndex;
 use common::{
     chain::{Block, ChainConfig, GenBlock},
-    primitives::{BlockHeight, Id},
+    primitives::{BlockHeight, Id, Idable},
 };
 use itertools::{EitherOrBoth, Itertools};
 use logging::log;
@@ -30,7 +32,8 @@ use super::calc_min_height_with_allowed_reorg;
 const PANIC_MSG: &str = "Inconsistent chainstate";
 
 pub struct ConsistencyChecker<'a, DbTx> {
-    _db_tx: &'a DbTx,
+    #[cfg_attr(debug_assertions, allow(unused))]
+    db_tx: &'a DbTx,
     chain_config: &'a ChainConfig,
     /// Keys (block ids) of the block map.
     block_map_keys: BTreeSet<Id<Block>>,
@@ -59,7 +62,7 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
             db_tx.get_min_height_with_allowed_reorg()?.unwrap_or(0.into());
 
         Ok(Self {
-            _db_tx: db_tx,
+            db_tx,
             chain_config,
             block_map_keys,
             block_index_map,
@@ -69,18 +72,20 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
         })
     }
 
-    pub fn check(&self) {
+    pub fn check(&self) -> Result<(), chainstate_storage::Error> {
         log::debug!("Running chainstate consistency checks");
 
-        self.check_block_index_consistency();
+        self.check_block_index_consistency()?;
         self.check_block_height_map_consistency();
 
         // TODO: add consistency checks for other maps in the chainstate db.
         // https://github.com/mintlayer/mintlayer-core/issues/1710
+
+        Ok(())
     }
 
     /// Check the block map vs block index map consistency.
-    fn check_block_index_consistency(&self) {
+    fn check_block_index_consistency(&self) -> Result<(), chainstate_storage::Error> {
         // Loop over block_map_keys and block_index_map simultaneously via merge_join_by, looking
         // for ids that are present in one of them and missing in the other.
         for merged in self
@@ -122,12 +127,35 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
                 }
             };
 
+            // Check that the id stored in the block index matches the supposed id of the block.
             let block_id_in_block_index = block_index.block_id();
             assert_eq!(
                 block_id,
                 block_id_in_block_index,
                 "{PANIC_MSG}: block id from BlockIndex {block_id_in_block_index} doesn't match {block_id}"
             );
+
+            // If the block is persisted, calculate its id and check that it matches the id
+            // that was used as the key. Also compare the block header stored in the index vs the one
+            // in the block itself.
+            // Note that this check is relatively heavy, because it has to load the whole block from the db,
+            // so we do it only in release builds.
+            #[cfg(not(debug_assertions))]
+            if block_index.is_persisted() {
+                let block =
+                    self.db_tx.get_block(*block_id)?.expect("The block is known to be present");
+                let calculated_block_id = block.get_id();
+                assert_eq!(
+                    calculated_block_id, *block_id,
+                    "{PANIC_MSG}: calculated block id {calculated_block_id} doesn't match {block_id}"
+                );
+
+                assert_eq!(
+                    block.header(),
+                    block_index.block_header(),
+                    "{PANIC_MSG}: block headers are different in the index and the block itself for block {block_id}"
+                );
+            }
 
             // Check the parent, if it's not genesis.
             if let Some(parent_id) =
@@ -161,6 +189,8 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
                 );
             }
         }
+
+        Ok(())
     }
 
     /// Check consistency of the block-by-height map.

@@ -987,8 +987,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     /// An error is only returned if the checks couldn't be performed for some reason.
     #[log_error]
     pub fn check_consistency(&self) -> Result<(), chainstate_storage::Error> {
-        ConsistencyChecker::new(&self.db_tx, self.chain_config)?.check();
-        Ok(())
+        ConsistencyChecker::new(&self.db_tx, self.chain_config)?.check()
     }
 }
 
