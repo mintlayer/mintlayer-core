@@ -355,7 +355,7 @@ pub fn encode_output_transfer(
     Ok(output.encode())
 }
 
-/// Given a destination address, an amount, token ID and a network type (mainnet, testnet, etc), this function
+/// Given a destination address, an amount, token ID (in address form) and a network type (mainnet, testnet, etc), this function
 /// creates an output of type Transfer for tokens, and returns it as bytes.
 #[wasm_bindgen]
 pub fn encode_output_token_transfer(
@@ -441,7 +441,7 @@ pub fn encode_output_lock_then_transfer(
     Ok(output.encode())
 }
 
-/// Given a valid receiving address, token ID, a locking rule as bytes (available in this file),
+/// Given a valid receiving address, token ID (in address form), a locking rule as bytes (available in this file),
 /// and a network type (mainnet, testnet, etc), this function creates an output of type
 /// LockThenTransfer with the parameters provided.
 #[wasm_bindgen]
@@ -471,7 +471,8 @@ pub fn encode_output_coin_burn(amount: Amount) -> Result<Vec<u8>, Error> {
     Ok(output.encode())
 }
 
-/// Given an amount, token ID and network type, this function creates an output (as bytes) to burn a given amount of tokens
+/// Given an amount, token ID (in address form) and network type (mainnet, testnet, etc),
+/// this function creates an output (as bytes) to burn a given amount of tokens
 #[wasm_bindgen]
 pub fn encode_output_token_burn(
     amount: Amount,

@@ -52,6 +52,11 @@ such as transaction input witness.
 Given a destination address, an amount and a network type (mainnet, testnet, etc), this function
 creates an output of type Transfer, and returns it as bytes.
 
+### Function: `encode_output_token_transfer`
+
+Given a destination address, an amount, token ID (in address form) and a network type (mainnet, testnet, etc), this function
+creates an output of type Transfer for tokens, and returns it as bytes.
+
 ### Function: `staking_pool_spend_maturity_block_count`
 
 Given the current block height and a network type (mainnet, testnet, etc),
@@ -88,9 +93,20 @@ Given a valid receiving address, and a locking rule as bytes (available in this 
 and a network type (mainnet, testnet, etc), this function creates an output of type
 LockThenTransfer with the parameters provided.
 
+### Function: `encode_output_token_lock_then_transfer`
+
+Given a valid receiving address, token ID (in address form), a locking rule as bytes (available in this file),
+and a network type (mainnet, testnet, etc), this function creates an output of type
+LockThenTransfer with the parameters provided.
+
 ### Function: `encode_output_coin_burn`
 
 Given an amount, this function creates an output (as bytes) to burn a given amount of coins
+
+### Function: `encode_output_token_burn`
+
+Given an amount, token ID (in address form) and network type (mainnet, testnet, etc),
+this function creates an output (as bytes) to burn a given amount of tokens
 
 ### Function: `encode_output_create_delegation`
 
