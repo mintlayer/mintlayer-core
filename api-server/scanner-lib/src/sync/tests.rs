@@ -1344,6 +1344,7 @@ async fn simulation(
                 .get(&BlockHeight::new(height_to_continue_from as u64))
                 .unwrap()
                 .clone();
+            new_tf.key_manager = tf.key_manager;
 
             (utxo_outpoints, staking_pools, delegations, token_ids) = data_per_block_height
                 .get(&BlockHeight::new(height_to_continue_from as u64))

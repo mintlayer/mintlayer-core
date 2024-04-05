@@ -47,7 +47,11 @@ pub fn random_token_issuance(chain_config: &ChainConfig, rng: &mut impl Rng) -> 
     }
 }
 
-pub fn random_token_issuance_v1(chain_config: &ChainConfig, rng: &mut impl Rng) -> TokenIssuanceV1 {
+pub fn random_token_issuance_v1(
+    chain_config: &ChainConfig,
+    authority: Destination,
+    rng: &mut impl Rng,
+) -> TokenIssuanceV1 {
     let max_ticker_len = chain_config.token_max_ticker_len(BlockHeight::zero());
     let max_dec_count = chain_config.token_max_dec_count();
     let max_uri_len = chain_config.token_max_uri_len();
@@ -58,7 +62,7 @@ pub fn random_token_issuance_v1(chain_config: &ChainConfig, rng: &mut impl Rng) 
         metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
         total_supply: TokenTotalSupply::Lockable,
         is_freezable: IsTokenFreezable::Yes,
-        authority: Destination::AnyoneCanSpend,
+        authority,
     }
 }
 

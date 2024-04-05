@@ -190,7 +190,11 @@ fn tokens_homomorphism(#[case] seed: Seed) {
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
-                random_token_issuance_v1(tf.chain_config().as_ref(), &mut rng),
+                random_token_issuance_v1(
+                    tf.chain_config().as_ref(),
+                    Destination::AnyoneCanSpend,
+                    &mut rng,
+                ),
             ))))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(

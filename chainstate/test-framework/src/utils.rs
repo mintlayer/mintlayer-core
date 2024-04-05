@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{framework::BlockOutputs, TestFramework};
+use crate::{framework::BlockOutputs, key_manager::KeyManager, TestChainstate, TestFramework};
 use chainstate::{BlockIndex, GenBlockIndex};
 use chainstate_storage::{BlockchainStorageRead, TipStorageTag};
 use chainstate_types::pos_randomness::PoSRandomness;
@@ -27,9 +27,9 @@ use common::{
             sighash::sighashtype::SigHashType,
         },
         stakelock::StakePoolData,
-        Block, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
-        OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId, TxInput, TxOutput,
-        UtxoOutPoint,
+        AccountCommand, AccountSpending, Block, CoinUnit, ConsensusUpgrade, Destination, GenBlock,
+        Genesis, NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
@@ -39,7 +39,9 @@ use crypto::{
     random::Rng,
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
-use pos_accounting::{PoSAccountingDB, PoSAccountingView};
+use itertools::Itertools;
+use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB, PoSAccountingView};
+use tokens_accounting::InMemoryTokensAccounting;
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
     use crypto::random::SliceRandom;
@@ -340,4 +342,79 @@ pub fn assert_gen_block_index_opt_identical_to(
         (Some(_), None) | (None, Some(_)) => false,
     };
     assert!(identical, "{bi1:?} should be identical to {bi2:?}");
+}
+
+pub fn sign_witnesses(
+    key_manager: &KeyManager,
+    chainstate: &TestChainstate,
+    tokens_accounting_store: &InMemoryTokensAccounting,
+    pos_accounting_store: &InMemoryPoSAccounting,
+    tx: &common::chain::Transaction,
+    input_utxos: Vec<Option<TxOutput>>,
+) -> Vec<InputWitness> {
+    let witnesses = tx
+        .inputs()
+        .iter()
+        .zip_eq(&input_utxos)
+        .enumerate()
+        .map(|(idx, (inp, utxo))| {
+            let destination = match inp {
+                TxInput::Utxo(_) => match utxo.as_ref().unwrap() {
+                    TxOutput::Transfer(_, d)
+                    | TxOutput::LockThenTransfer(_, d, _)
+                    | TxOutput::IssueNft(_, _, d) => d.clone(),
+                    TxOutput::ProduceBlockFromStake(_, pool_id) => chainstate
+                        .get_stake_pool_data(*pool_id)
+                        .unwrap()
+                        .unwrap()
+                        .decommission_destination()
+                        .clone(),
+                    TxOutput::CreateStakePool(_, data) => data.decommission_key().clone(),
+                    TxOutput::Burn(_)
+                    | TxOutput::DataDeposit(_)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::IssueFungibleToken(_) => panic!("can't be spent"),
+                },
+                TxInput::Account(acc) => match acc.account() {
+                    AccountSpending::DelegationBalance(deleg_id, _) => pos_accounting_store
+                        .all_delegation_data()
+                        .get(deleg_id)
+                        .unwrap()
+                        .spend_destination()
+                        .clone(),
+                },
+                TxInput::AccountCommand(_, cmd) => match cmd {
+                    AccountCommand::MintTokens(token_id, _)
+                    | AccountCommand::UnmintTokens(token_id)
+                    | AccountCommand::FreezeToken(token_id, _)
+                    | AccountCommand::UnfreezeToken(token_id)
+                    | AccountCommand::LockTokenSupply(token_id) => {
+                        match tokens_accounting_store.tokens_data().get(token_id).unwrap() {
+                            tokens_accounting::TokenData::FungibleToken(data) => data.authority(),
+                        }
+                        .clone()
+                    }
+                    AccountCommand::ChangeTokenAuthority(token_id, _) => {
+                        match chainstate.get_token_data(token_id).unwrap().unwrap() {
+                            tokens_accounting::TokenData::FungibleToken(data) => {
+                                data.authority().clone()
+                            }
+                        }
+                    }
+                },
+            };
+            let input_utxos = input_utxos.iter().map(Option::as_ref).collect_vec();
+            key_manager
+                .get_signature(
+                    &destination,
+                    chainstate.get_chain_config().as_ref(),
+                    tx,
+                    &input_utxos,
+                    idx,
+                )
+                .unwrap()
+        })
+        .collect();
+    witnesses
 }

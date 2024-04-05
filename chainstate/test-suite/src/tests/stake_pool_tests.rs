@@ -162,7 +162,11 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
                 Box::new(stake_pool_data),
             ))
             .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
-                random_token_issuance_v1(tf.chain_config().as_ref(), &mut rng),
+                random_token_issuance_v1(
+                    tf.chain_config().as_ref(),
+                    Destination::AnyoneCanSpend,
+                    &mut rng,
+                ),
             ))))
             .build();
 
@@ -197,7 +201,11 @@ fn stake_pool_and_mint_tokens_same_tx(#[case] seed: Seed) {
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
-                random_token_issuance_v1(tf.chain_config().as_ref(), &mut rng),
+                random_token_issuance_v1(
+                    tf.chain_config().as_ref(),
+                    Destination::AnyoneCanSpend,
+                    &mut rng,
+                ),
             ))))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(amount_to_stake),

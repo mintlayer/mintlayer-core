@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     random_tx_maker::StakingPoolsObserver,
-    utils::{pos_mine, produce_kernel_signature},
+    utils::{pos_mine, produce_kernel_signature, sign_witnesses},
     TestFramework,
 };
 use chainstate::{BlockSource, ChainstateError};
@@ -378,7 +378,7 @@ impl<'f> PoSBlockBuilder<'f> {
             })
         });
 
-        let (tx, new_tokens_delta, new_pos_accounting_delta) =
+        let (tx, input_utxos, new_tokens_delta, new_pos_accounting_delta) =
             super::random_tx_maker::RandomTxMaker::new(
                 &self.framework.chainstate,
                 &utxo_set,
@@ -387,7 +387,11 @@ impl<'f> PoSBlockBuilder<'f> {
                 self.staking_pool,
                 account_nonce_getter,
             )
-            .make(rng, &mut self.framework.staking_pools);
+            .make(
+                rng,
+                &mut self.framework.staking_pools,
+                &mut self.framework.key_manager,
+            );
 
         if !tx.inputs().is_empty() && !tx.outputs().is_empty() {
             // flush new tokens info to the in-memory store
@@ -414,7 +418,14 @@ impl<'f> PoSBlockBuilder<'f> {
                 };
             });
 
-            let witnesses = tx.inputs().iter().map(|_| super::empty_witness(rng)).collect();
+            let witnesses = sign_witnesses(
+                &self.framework.key_manager,
+                &self.framework.chainstate,
+                &self.tokens_accounting_store,
+                &self.pos_accounting_store,
+                &tx,
+                input_utxos,
+            );
             let tx = SignedTransaction::new(tx, witnesses).expect("invalid witness count");
 
             self.add_transaction(tx)
