@@ -19,8 +19,8 @@ use ::tx_verifier::transaction_verifier::storage::{
     TransactionVerifierStorageError, TransactionVerifierStorageRef,
 };
 use chainstate_storage::{BlockchainStorageRead, TipStorageTag, Transactional};
-use chainstate_types::{storage_result, GenBlockIndex};
 use chainstate_test_framework::TestStore;
+use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
