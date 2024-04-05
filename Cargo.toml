@@ -257,8 +257,13 @@ panic = "abort" # prevent panic catching (mostly for the tokio runtime)
 
 [profile.release]
 panic = "abort" # prevent panic catching (mostly for the tokio runtime)
-debug-assertions = true
 overflow-checks = true
+
+# "Release" profile with debug info and debug assertions enabled.
+[profile.release-with-debug]
+inherits = "release"
+debug = true
+debug-assertions = true
 
 [profile.test]
 debug-assertions = true

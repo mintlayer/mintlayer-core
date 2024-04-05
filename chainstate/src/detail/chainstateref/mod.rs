@@ -49,7 +49,7 @@ use common::{
 use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
 use tx_verifier::transaction_verifier::TransactionVerifier;
-use utils::{ensure, log_error, tap_log::TapLog};
+use utils::{debug_assert_or_log, ensure, log_error, tap_log::TapLog};
 use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
 
 use crate::{BlockError, ChainstateConfig};
@@ -1239,10 +1239,13 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         block_id: &Id<Block>,
     ) -> Result<(), BlockError> {
         if let Some(existing_block_index) = self.db_tx.get_block_index(block_id)? {
-            assert!(
+            // Note: here we're being extra-cautious about someone mis-using this function, so we only panic in
+            // debug mode.
+            debug_assert_or_log!(
                 !existing_block_index.is_persisted(),
                 "Trying to delete a block index for a persisted block {block_id}"
             );
+
             self.db_tx.del_block_index(*block_id)?;
         }
         Ok(())
