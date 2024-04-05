@@ -14,7 +14,7 @@
 // limitations under the License.
 
 pub use crypto::random as inner_random;
-pub use crypto::random::{CryptoRng, Rng, SeedableRng, RngCore};
+pub use crypto::random::{CryptoRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use std::{num::ParseIntError, str::FromStr};
 
