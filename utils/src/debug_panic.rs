@@ -21,7 +21,7 @@ macro_rules! debug_panic_or_log {
         if cfg!(debug_assertions) {
             panic!($($arg)*);
         } else {
-            logging::log::error!("CRITICAL - debug build would panic: {}", format!($($arg)*));
+            logging::log::error!("CRITICAL: debug build would panic: {}", format!($($arg)*));
         }
     }
 }

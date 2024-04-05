@@ -98,7 +98,7 @@ impl TransactionalApiServerPostgresStorage {
             while let Some(conn) = conn_rx.recv().await {
                 conn.batch_execute("ROLLBACK").await.unwrap_or_else(|e| {
                     logging::log::error!(
-                        "CRITICAL ERROR: failed to rollback failed postgres RW transaction: {e}"
+                        "CRITICAL: failed to rollback failed postgres RW transaction: {e}"
                     )
                 });
             }
