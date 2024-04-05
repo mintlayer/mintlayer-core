@@ -49,15 +49,8 @@ fn get_locator(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut btf = TestFramework::builder(&mut rng)
-            .with_chainstate_config(ChainstateConfig {
-                // With the heavy checks enabled, this test takes several minutes to complete in debug builds.
-                enable_heavy_checks: Some(false),
-
-                max_db_commit_attempts: Default::default(),
-                max_orphan_blocks: Default::default(),
-                min_max_bootstrap_import_buffer_sizes: Default::default(),
-                max_tip_age: Default::default(),
-            })
+            // With the heavy checks enabled, this test takes several minutes to complete in debug builds.
+            .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
             .build();
 
         let locator = btf.chainstate.get_locator().unwrap();
@@ -675,15 +668,7 @@ fn initial_block_download(#[case] seed: Seed) {
 fn header_check_for_orphan(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_chainstate_config(ChainstateConfig {
-                max_db_commit_attempts: Default::default(),
-                max_orphan_blocks: Default::default(),
-                min_max_bootstrap_import_buffer_sizes: Default::default(),
-                max_tip_age: Default::default(),
-                enable_heavy_checks: Some(true),
-            })
-            .build();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         tf.progress_time_seconds_since_epoch(3);
         let block = tf.make_block_builder().make_orphan(&mut rng).build();

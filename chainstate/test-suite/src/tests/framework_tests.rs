@@ -73,13 +73,7 @@ fn test_consistency_check_enabled_for_regtest(#[case] seed: Seed) {
 fn test_consistency_check_explicitly_disabled(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut tf = TestFramework::builder(&mut rng)
-        .with_chainstate_config(ChainstateConfig {
-            max_db_commit_attempts: Default::default(),
-            max_orphan_blocks: Default::default(),
-            min_max_bootstrap_import_buffer_sizes: Default::default(),
-            max_tip_age: Default::default(),
-            enable_heavy_checks: Some(false),
-        })
+        .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
         .build();
 
     assert!(!tf.chainstate.get_chainstate_config().heavy_checks_enabled(tf.chain_config()));
@@ -124,13 +118,7 @@ fn test_consistency_check_explicitly_enabled_for_testnet(#[case] seed: Seed) {
                 .checkpoints(BTreeMap::new())
                 .build(),
         )
-        .with_chainstate_config(ChainstateConfig {
-            max_db_commit_attempts: Default::default(),
-            max_orphan_blocks: Default::default(),
-            min_max_bootstrap_import_buffer_sizes: Default::default(),
-            max_tip_age: Default::default(),
-            enable_heavy_checks: Some(true),
-        })
+        .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(true))
         .build();
 
     assert!(tf.chainstate.get_chainstate_config().heavy_checks_enabled(tf.chain_config()));

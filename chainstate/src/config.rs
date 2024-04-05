@@ -75,6 +75,11 @@ impl ChainstateConfig {
         self
     }
 
+    pub fn with_heavy_checks_enabled(mut self, enable: bool) -> Self {
+        self.enable_heavy_checks = Some(enable);
+        self
+    }
+
     pub fn heavy_checks_enabled(&self, chain_config: &ChainConfig) -> bool {
         if let Some(enable_heavy_checks) = self.enable_heavy_checks {
             return enable_heavy_checks;
