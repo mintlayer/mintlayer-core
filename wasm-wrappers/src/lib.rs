@@ -21,7 +21,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         config::{Builder, ChainType, BIP44_PATH},
-        output_value::OutputValue::Coin,
+        output_value::OutputValue::{Coin, TokenV1},
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::sighashtype::SigHashType,
@@ -29,8 +29,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{
-            IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenCreator, TokenIssuance,
-            TokenIssuanceV1, TokenTotalSupply,
+            IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenCreator, TokenId,
+            TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
         AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination, OutPointSourceId,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -355,6 +355,24 @@ pub fn encode_output_transfer(
     Ok(output.encode())
 }
 
+/// Given a destination address, an amount, token ID (in address form) and a network type (mainnet, testnet, etc), this function
+/// creates an output of type Transfer for tokens, and returns it as bytes.
+#[wasm_bindgen]
+pub fn encode_output_token_transfer(
+    amount: Amount,
+    address: &str,
+    token_id: &str,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let amount = amount.as_internal_amount()?;
+    let destination = parse_addressable::<Destination>(&chain_config, address)?;
+    let token = parse_addressable::<TokenId>(&chain_config, token_id)?;
+
+    let output = TxOutput::Transfer(TokenV1(token, amount), destination);
+    Ok(output.encode())
+}
+
 /// Given the current block height and a network type (mainnet, testnet, etc),
 /// this function returns the number of blocks, after which a pool that decommissioned,
 /// will have its funds unlocked and available for spending.
@@ -423,12 +441,49 @@ pub fn encode_output_lock_then_transfer(
     Ok(output.encode())
 }
 
+/// Given a valid receiving address, token ID (in address form), a locking rule as bytes (available in this file),
+/// and a network type (mainnet, testnet, etc), this function creates an output of type
+/// LockThenTransfer with the parameters provided.
+#[wasm_bindgen]
+pub fn encode_output_token_lock_then_transfer(
+    amount: Amount,
+    address: &str,
+    token_id: &str,
+    lock: &[u8],
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let amount = amount.as_internal_amount()?;
+    let destination = parse_addressable::<Destination>(&chain_config, address)?;
+    let lock = OutputTimeLock::decode_all(&mut &lock[..]).map_err(|_| Error::InvalidTimeLock)?;
+    let token = parse_addressable::<TokenId>(&chain_config, token_id)?;
+
+    let output = TxOutput::LockThenTransfer(TokenV1(token, amount), destination, lock);
+    Ok(output.encode())
+}
+
 /// Given an amount, this function creates an output (as bytes) to burn a given amount of coins
 #[wasm_bindgen]
 pub fn encode_output_coin_burn(amount: Amount) -> Result<Vec<u8>, Error> {
     let amount = amount.as_internal_amount()?;
 
     let output = TxOutput::Burn(Coin(amount));
+    Ok(output.encode())
+}
+
+/// Given an amount, token ID (in address form) and network type (mainnet, testnet, etc),
+/// this function creates an output (as bytes) to burn a given amount of tokens
+#[wasm_bindgen]
+pub fn encode_output_token_burn(
+    amount: Amount,
+    token_id: &str,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let amount = amount.as_internal_amount()?;
+    let token = parse_addressable::<TokenId>(&chain_config, token_id)?;
+
+    let output = TxOutput::Burn(TokenV1(token, amount));
     Ok(output.encode())
 }
 
