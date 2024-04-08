@@ -292,18 +292,41 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     {
         let mut attempts_count = 0;
         loop {
-            on_new_attempt(attempts_count);
             attempts_count += 1;
+            on_new_attempt(attempts_count);
+            let is_last_attempt = attempts_count >= *self.chainstate_config.max_db_commit_attempts;
 
             let mut chainstate_ref = self.make_db_tx().map_err(Err::from)?;
-            let result = main_action(&mut chainstate_ref).log_err()?;
+            let main_action_result = main_action(&mut chainstate_ref).log_err();
+
+            let result = match main_action_result {
+                Ok(result) => result,
+                err @ Err(_) => {
+                    let abort_result = chainstate_ref.abort_db_tx();
+                    match abort_result {
+                        // There is an error but not related to storage, no point retrying.
+                        Ok(()) => (),
+
+                        // Storage error seen, retry unless the attempt limit has been reached.
+                        Err(dbtx_err) => {
+                            if is_last_attempt {
+                                return Err(on_db_commit_err(attempts_count, dbtx_err));
+                            } else if dbtx_err.is_intermittent() {
+                                continue;
+                            }
+                        }
+                    }
+                    return err;
+                }
+            };
+
             let db_commit_result = chainstate_ref.commit_db_tx();
 
             match db_commit_result {
-                Ok(_) => return Ok(result),
-                Err(err) => {
-                    if attempts_count >= *self.chainstate_config.max_db_commit_attempts {
-                        return Err(on_db_commit_err(attempts_count, err));
+                Ok(()) => return Ok(result),
+                Err(dbtx_err) => {
+                    if is_last_attempt || !dbtx_err.is_intermittent() {
+                        return Err(on_db_commit_err(attempts_count, dbtx_err));
                     }
                 }
             }

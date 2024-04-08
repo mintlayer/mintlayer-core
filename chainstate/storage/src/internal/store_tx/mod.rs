@@ -60,7 +60,15 @@ mod well_known {
 pub struct StoreTxRo<'st, B: storage::Backend>(pub(super) storage::TransactionRo<'st, B, Schema>);
 
 /// Read-write chainstate storage transaction
-pub struct StoreTxRw<'st, B: storage::Backend>(pub(super) storage::TransactionRw<'st, B, Schema>);
+pub struct StoreTxRw<'st, B: storage::Backend> {
+    // The underlying storage transaction
+    db_tx: storage::TransactionRw<'st, B, Schema>,
+
+    // Track if an error was encountered during the execution of the transaction. If so, it will be
+    // recorded here and returned by all subsequent operations up to and including the final
+    // `.commit()` or `.abort()`.
+    error: crate::Result<()>,
+}
 
 impl<'st, B: storage::Backend> StoreTxRo<'st, B> {
     // Read a value from the database and decode it
@@ -97,6 +105,25 @@ impl<'st, B: storage::Backend> StoreTxRo<'st, B> {
 }
 
 impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
+    pub(super) fn new(db_tx: storage::TransactionRw<'st, B, Schema>) -> Self {
+        let error = Ok(());
+        Self { db_tx, error }
+    }
+
+    fn check_error(&self) -> crate::Result<()> {
+        self.error.clone()
+    }
+
+    fn track_error<R>(
+        &mut self,
+        func: impl FnOnce(&mut Self) -> crate::Result<R>,
+    ) -> crate::Result<R> {
+        self.check_error()?;
+        let result = func(self);
+        self.error = result.as_ref().map(|_| ()).map_err(Clone::clone);
+        result
+    }
+
     // Read a value from the database and decode it
     fn read<DbMap, I, K>(&self, key: K) -> crate::Result<Option<DbMap::Value>>
     where
@@ -104,7 +131,14 @@ impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
         Schema: schema::HasDbMap<DbMap, I>,
         K: EncodeLike<DbMap::Key>,
     {
-        let map = self.0.get::<DbMap, I>();
+        logging::log::trace!(
+            "Reading {}/{}",
+            DbMap::NAME,
+            serialization::hex_encoded::HexEncoded::new(&key),
+        );
+
+        self.check_error()?;
+        let map = self.db_tx.get::<DbMap, I>();
         map.get(key).map_err(crate::Error::from).map(|x| x.map(|x| x.decode()))
     }
 
@@ -116,7 +150,7 @@ impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
         Schema: schema::HasDbMap<DbMap, I>,
         K: EncodeLike<DbMap::Key>,
     {
-        let map = self.0.get::<DbMap, I>();
+        let map = self.db_tx.get::<DbMap, I>();
         map.get(key).map_err(crate::Error::from).map(|x| x.is_some())
     }
 
@@ -128,9 +162,7 @@ impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
             })
         })
     }
-}
 
-impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
     // Encode a value and write it to the database
     fn write<DbMap, I, K, V>(&mut self, key: K, value: V) -> crate::Result<()>
     where
@@ -139,12 +171,28 @@ impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
         K: EncodeLike<<DbMap as schema::DbMap>::Key>,
         V: EncodeLike<<DbMap as schema::DbMap>::Value>,
     {
-        self.0.get_mut::<DbMap, I>().put(key, value).map_err(Into::into)
+        logging::log::trace!(
+            "Writing {}/{}",
+            DbMap::NAME,
+            serialization::hex_encoded::HexEncoded::new(&key),
+        );
+
+        self.track_error(|this| Ok(this.db_tx.get_mut::<DbMap, I>().put(key, value)?))
     }
 
     // Write a value for a well-known entry
     fn write_value<E: well_known::Entry>(&mut self, val: &E::Value) -> crate::Result<()> {
         self.write::<db::DBValue, _, _, _>(E::KEY, val.encode())
+    }
+
+    // Encode a value and write it to the database
+    fn del<DbMap, I, K>(&mut self, key: K) -> crate::Result<()>
+    where
+        DbMap: schema::DbMap,
+        Schema: schema::HasDbMap<DbMap, I>,
+        K: EncodeLike<<DbMap as schema::DbMap>::Key>,
+    {
+        self.track_error(|this| Ok(this.db_tx.get_mut::<DbMap, I>().del(key)?))
     }
 }
 
@@ -156,10 +204,13 @@ impl<'st, B: storage::Backend> crate::TransactionRo for StoreTxRo<'st, B> {
 
 impl<'st, B: storage::Backend> crate::TransactionRw for StoreTxRw<'st, B> {
     fn commit(self) -> crate::Result<()> {
-        self.0.commit().map_err(Into::into)
+        self.check_error()?;
+        self.db_tx.commit().map_err(Into::into)
     }
 
-    fn abort(self) {
-        self.0.abort()
+    fn abort(self) -> crate::Result<()> {
+        self.check_error()?;
+        self.db_tx.abort();
+        Ok(())
     }
 }

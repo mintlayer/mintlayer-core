@@ -410,7 +410,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
 
     #[log_error]
     fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>> {
-        let store = self.0.get::<db::DBBlock, _>();
+        let store = self.db_tx.get::<db::DBBlock, _>();
         let encoded_block = store.get(block_index.block_id());
         private::block_index_to_block_reward(block_index, encoded_block)
     }
@@ -453,7 +453,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         &self,
         start_from: BlockHeight,
     ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>> {
-        let map = self.0.get::<db::DBBlockIndex, _>();
+        let map = self.db_tx.get::<db::DBBlockIndex, _>();
         let items = map.prefix_iter_decoded(&())?;
 
         let mut result = BTreeMap::<BlockHeight, Vec<Id<Block>>>::new();
@@ -500,7 +500,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     // the logic duplication between StoreTxRo and StoreTxRw.
     #[log_error]
     fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>> {
-        let map = self.0.get::<db::DBBlock, _>();
+        let map = self.db_tx.get::<db::DBBlock, _>();
         let items = map.prefix_iter_keys(&())?;
         Ok(items.collect::<BTreeSet<_>>())
     }
@@ -508,7 +508,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     // TODO: same as above.
     #[log_error]
     fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>> {
-        let map = self.0.get::<db::DBBlockIndex, _>();
+        let map = self.db_tx.get::<db::DBBlockIndex, _>();
         let items = map.prefix_iter_decoded(&())?;
         Ok(items.collect::<BTreeMap<_, _>>())
     }
@@ -516,7 +516,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     // TODO: same as above.
     #[log_error]
     fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>> {
-        let map = self.0.get::<db::DBBlockByHeight, _>();
+        let map = self.db_tx.get::<db::DBBlockByHeight, _>();
         let items = map.prefix_iter_decoded(&())?;
         Ok(items.collect::<BTreeMap<_, _>>())
     }
@@ -575,7 +575,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
         &self,
         pool_id: PoolId,
     ) -> crate::Result<Option<BTreeMap<DelegationId, Amount>>> {
-        let db_map = self.0.get::<db::DBAccountingPoolDelegationSharesTip, _>();
+        let db_map = self.db_tx.get::<db::DBAccountingPoolDelegationSharesTip, _>();
         let shares_iter = db_map.prefix_iter_decoded(&())?;
         private::filter_delegation_shares_for_poolid(pool_id, shares_iter)
     }
@@ -621,7 +621,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
         &self,
         pool_id: PoolId,
     ) -> crate::Result<Option<BTreeMap<DelegationId, Amount>>> {
-        let db_map = self.0.get::<db::DBAccountingPoolDelegationSharesSealed, _>();
+        let db_map = self.db_tx.get::<db::DBAccountingPoolDelegationSharesSealed, _>();
         let shares_iter = db_map.prefix_iter_decoded(&())?;
         private::filter_delegation_shares_for_poolid(pool_id, shares_iter)
     }

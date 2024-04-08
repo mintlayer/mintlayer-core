@@ -106,7 +106,7 @@ impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
         &'st self,
         size: Option<usize>,
     ) -> crate::Result<Self::TransactionRw> {
-        self.0.transaction_rw(size).map_err(crate::Error::from).map(StoreTxRw)
+        self.0.transaction_rw(size).map_err(crate::Error::from).map(StoreTxRw::new)
     }
 }
 

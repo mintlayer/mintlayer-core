@@ -219,7 +219,7 @@ fn attach_to_top_no_best_block() {
     store.expect_transaction_rw().returning(move |_| {
         let mut tx = MockStoreTxRw::new();
         tx.expect_get_best_block_id().return_const(Ok(None));
-        tx.expect_abort().return_const(());
+        tx.expect_abort().return_const(Ok(()));
         Ok(tx)
     });
 
@@ -235,7 +235,7 @@ fn attach_to_top_bad_parent() {
     store.expect_transaction_rw().returning(move |_| {
         let mut tx = MockStoreTxRw::new();
         tx.expect_get_best_block_id().return_const(Ok(Some(top_id)));
-        tx.expect_abort().return_const(());
+        tx.expect_abort().return_const(Ok(()));
         Ok(tx)
     });
 

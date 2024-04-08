@@ -37,13 +37,15 @@ fn process<T>(err: Error, default: storage_core::Result<T>) -> storage_core::Res
             Err(Recoverable::TemporarilyUnavailable.into())
         }
 
+        // Memory map is full
+        Error::MapFull => Err(Recoverable::MemMapFull.into()),
+
         // These signify an implementation flaw
         err @ (Error::BadDbi
         | Error::Panic
         | Error::CursorFull
         | Error::PageFull
         | Error::BadRslot
-        | Error::MapFull
         | Error::MapResized) => Err(Fatal::InternalError(err.to_string()).into()),
 
         // These signify the database flags are not in sync with the schema

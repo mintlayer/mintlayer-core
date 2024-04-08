@@ -20,6 +20,18 @@ pub enum Error {
     Storage(storage::error::Recoverable),
 }
 
+impl Error {
+    pub fn is_intermittent(&self) -> bool {
+        use storage::error::Recoverable as E;
+        match self {
+            Error::Storage(err) => match err {
+                E::TransactionFailed | E::TemporarilyUnavailable | E::MemMapFull => true,
+                E::DbInit | E::Io(_, _) => false,
+            }
+        }
+    }
+}
+
 impl From<storage::Error> for Error {
     fn from(e: storage::Error) -> Self {
         Error::Storage(e.recoverable())

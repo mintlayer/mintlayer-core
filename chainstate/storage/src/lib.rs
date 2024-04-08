@@ -266,7 +266,7 @@ pub trait TransactionRo: BlockchainStorageRead {
 /// Operations on read-write transactions
 pub trait TransactionRw: BlockchainStorageWrite {
     /// Abort the transaction
-    fn abort(self);
+    fn abort(self) -> crate::Result<()>;
 
     /// Commit the transaction
     fn commit(self) -> crate::Result<()>;
