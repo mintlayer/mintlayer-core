@@ -180,9 +180,7 @@ impl<'f> BlockBuilder<'f> {
 
             let witnesses = sign_witnesses(
                 &self.framework.key_manager,
-                &self.framework.chainstate,
-                &self.tokens_accounting_store,
-                &self.pos_accounting_store,
+                self.framework.chainstate.get_chain_config(),
                 &tx,
                 input_utxos,
             );
