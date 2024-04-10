@@ -161,7 +161,7 @@ impl AddressInfo {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "type", content = "content")]
+#[serde(tag = "type")]
 pub enum RpcStandaloneAddressDetails {
     WatchOnly,
     FromPrivateKey,
@@ -173,13 +173,13 @@ pub enum RpcStandaloneAddressDetails {
 
 impl HasValueHint for RpcStandaloneAddressDetails {
     const HINT_SER: ValueHint = ValueHint::Choice(&[
-        &ValueHint::Object(&[("type", &ValueHint::StrLit("WatchOnly"))]),
-        &ValueHint::Object(&[("type", &ValueHint::StrLit("FromPrivateKey"))]),
-        &ValueHint::Object(&[
+        &ValueHint::object(&[("type", &ValueHint::StrLit("WatchOnly"))]),
+        &ValueHint::object(&[("type", &ValueHint::StrLit("FromPrivateKey"))]),
+        &ValueHint::object(&[
             ("type", &ValueHint::StrLit("Multisig")),
             (
                 "content",
-                &ValueHint::Object(&[
+                &ValueHint::object(&[
                     ("min_required_signatures", &u8::HINT_SER),
                     ("public_keys", &Vec::<RpcAddress<Destination>>::HINT_SER),
                 ]),
