@@ -19,7 +19,7 @@ use common::chain::SignedTransaction;
 use crypto::key::extended::ExtendedPublicKey;
 use utils::maybe_encrypted::MaybeEncrypted;
 use wallet_types::{
-    account_id::{AccountAddress, AccountPrivateKey},
+    account_id::{AccountAddress, AccountPublicKeyHash},
     account_info::{
         AccountVrfKeys, StandaloneMultisig, StandalonePrivateKey, StandaloneWatchOnlyKey,
     },
@@ -61,6 +61,6 @@ storage::decl_schema! {
         /// Store for standalone multisig keys added to accounts
         pub DBStandaloneMultisigKeys: Map<AccountAddress, StandaloneMultisig>,
         /// Store for standalone private keys added to accounts
-        pub DBStandalonePrivateKeys: Map<AccountPrivateKey, StandalonePrivateKey>,
+        pub DBStandalonePrivateKeys: Map<AccountPublicKeyHash, MaybeEncrypted<StandalonePrivateKey>>,
     }
 }

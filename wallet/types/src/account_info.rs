@@ -14,12 +14,11 @@
 // limitations under the License.
 
 use common::{
-    address::pubkeyhash::PublicKeyHash,
     chain::{classic_multisig::ClassicMultisigChallenge, ChainConfig, Destination, GenBlock},
     primitives::{BlockHeight, Id},
 };
 use crypto::{
-    key::{extended::ExtendedPublicKey, hdkd::u31::U31, PublicKey},
+    key::{extended::ExtendedPublicKey, hdkd::u31::U31, PrivateKey, PublicKey},
     vrf::ExtendedVRFPublicKey,
 };
 use serialization::{Decode, Encode};
@@ -137,8 +136,7 @@ impl StandaloneMultisig {
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct StandalonePrivateKey {
     pub label: Option<String>,
-    pub public_key: PublicKey,
-    pub public_key_hash: PublicKeyHash,
+    pub private_key: PrivateKey,
 }
 
 #[derive(Debug, Clone)]
@@ -151,5 +149,5 @@ pub enum StandaloneAddressDetails {
 pub struct StandaloneAddresses {
     pub watch_only_addresses: Vec<(Destination, StandaloneWatchOnlyKey)>,
     pub multisig_addresses: Vec<(Destination, StandaloneMultisig)>,
-    pub private_keys: Vec<StandalonePrivateKey>,
+    pub private_keys: Vec<(PublicKey, Option<String>)>,
 }

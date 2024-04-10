@@ -525,13 +525,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             private_key_addresses: addresses
                 .private_keys
                 .into_iter()
-                .map(|info| {
-                    RpcStandalonePrivateKeyAddress::new(
-                        info.public_key,
-                        info.public_key_hash,
-                        info.label,
-                        &self.chain_config,
-                    )
+                .map(|(pk, label)| {
+                    let pkh = (&pk).into();
+                    RpcStandalonePrivateKeyAddress::new(pk, pkh, label, &self.chain_config)
                 })
                 .collect(),
         };

@@ -21,14 +21,10 @@ use crate::{
     WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
 use common::{
-    address::Address,
+    address::{pubkeyhash::PublicKeyHash, Address},
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
-use crypto::{
-    kdf::KdfChallenge,
-    key::{extended::ExtendedPublicKey, PrivateKey},
-    symkey::SymmetricKey,
-};
+use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::{schema, MakeMapRef};
 use utils::{
@@ -36,7 +32,7 @@ use utils::{
     maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError},
 };
 use wallet_types::{
-    account_id::{AccountAddress, AccountPrivateKey},
+    account_id::{AccountAddress, AccountPublicKeyHash},
     account_info::{
         AccountVrfKeys, StandaloneMultisig, StandalonePrivateKey, StandaloneWatchOnlyKey,
     },
@@ -47,7 +43,6 @@ use wallet_types::{
     AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
     AccountWalletTxId, KeychainUsageState, WalletTx,
 };
-
 mod well_known {
     use common::chain::block::timestamp::BlockTimestamp;
     use crypto::kdf::KdfChallenge;
@@ -276,17 +271,6 @@ macro_rules! impl_read_ops {
                     })
             }
 
-            fn get_account_standalone_private_keys(
-                &self,
-                account_id: &AccountId,
-            ) -> crate::Result<Vec<(PrivateKey, StandalonePrivateKey)>> {
-                self.storage
-                    .get::<db::DBStandalonePrivateKeys, _>()
-                    .prefix_iter_decoded(account_id)
-                    .map_err(crate::Error::from)
-                    .map(|iter| iter.map(|(key, value)| (key.into_item_id(), value)).collect())
-            }
-
             fn get_keychain_usage_state(
                 &self,
                 id: &AccountKeyPurposeId,
@@ -416,6 +400,27 @@ macro_rules! impl_read_unlocked_ops {
                     }),
                 )
             }
+
+            fn get_account_standalone_private_keys(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<Vec<(PublicKeyHash, StandalonePrivateKey)>> {
+                self.storage
+                    .get::<db::DBStandalonePrivateKeys, _>()
+                    .prefix_iter_decoded(account_id)
+                    .map_err(crate::Error::from)
+                    .map(|iter| {
+                        iter.map(|(key, value)| {
+                            (
+                                key.into_item_id(),
+                                value
+                                    .try_take(self.encryption_key)
+                                    .expect("key waas chacked when unlocked"),
+                            )
+                        })
+                        .collect()
+                    })
+            }
         }
     };
 }
@@ -517,14 +522,6 @@ macro_rules! impl_write_ops {
                 key: &StandaloneMultisig,
             ) -> crate::Result<()> {
                 self.write::<db::DBStandaloneMultisigKeys, _, _, _>(id, key)
-            }
-
-            fn set_standalone_private_key(
-                &mut self,
-                id: &AccountPrivateKey,
-                key: &StandalonePrivateKey,
-            ) -> crate::Result<()> {
-                self.write::<db::DBStandalonePrivateKeys, _, _, _>(id, key)
             }
 
             fn set_account(&mut self, id: &AccountId, tx: &AccountInfo) -> crate::Result<()> {
@@ -683,6 +680,17 @@ impl<'st, B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<
             .get_mut::<db::DBRootKeys, _>()
             .del(&RootKeyConstant {})
             .map_err(Into::into)
+    }
+
+    fn set_standalone_private_key(
+        &mut self,
+        id: &AccountPublicKeyHash,
+        key: &StandalonePrivateKey,
+    ) -> crate::Result<()> {
+        self.write::<db::DBStandalonePrivateKeys, _, _, _>(
+            id,
+            MaybeEncrypted::new(key, self.encryption_key),
+        )
     }
 
     fn set_seed_phrase(&mut self, seed_phrase: SerializableSeedPhrase) -> crate::Result<()> {

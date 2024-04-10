@@ -32,6 +32,7 @@ use std::sync::Arc;
 use utils::const_value::ConstValue;
 use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
+    WalletStorageWriteUnlocked,
 };
 use wallet_types::account_id::AccountPrefixedId;
 use wallet_types::account_info::{
@@ -69,8 +70,7 @@ pub struct AccountKeyChain {
     standalone_multisig_keys: BTreeMap<Destination, StandaloneMultisig>,
 
     /// Standalone private keys added by the user not derived from this account's chain
-    standalone_private_keys: BTreeMap<Destination, (PrivateKey, Option<String>)>,
-    standalone_private_keys_info: Vec<StandalonePrivateKey>,
+    standalone_private_keys: BTreeMap<Destination, StandalonePrivateKey>,
 
     /// The number of unused addresses that need to be checked after the last used address
     lookahead_size: ConstValue<u32>,
@@ -149,7 +149,6 @@ impl AccountKeyChain {
             standalone_watch_only_keys: BTreeMap::new(),
             standalone_multisig_keys: BTreeMap::new(),
             standalone_private_keys: BTreeMap::new(),
-            standalone_private_keys_info: Vec::new(),
             lookahead_size: lookahead_size.into(),
         };
 
@@ -182,7 +181,7 @@ impl AccountKeyChain {
     /// Load the key chain from the database
     pub fn load_from_database(
         chain_config: Arc<ChainConfig>,
-        db_tx: &impl WalletStorageReadLocked,
+        db_tx: &impl WalletStorageReadUnlocked,
         id: &AccountId,
         account_info: &AccountInfo,
     ) -> KeyChainResult<Self> {
@@ -214,21 +213,13 @@ impl AccountKeyChain {
             &AccountId::new_from_xpub(account_info.account_key()),
         )?;
 
-        let standalone_private_keys_info =
-            standalone_private_keys.iter().map(|(_, info)| info.clone()).collect();
-
         let standalone_private_keys = standalone_private_keys
             .into_iter()
-            .flat_map(|(private_key, info)| {
+            .flat_map(|(public_key_hash, info)| {
+                let pub_key = PublicKey::from_private_key(&info.private_key);
                 [
-                    (
-                        Destination::PublicKey(info.public_key),
-                        (private_key.clone(), info.label.clone()),
-                    ),
-                    (
-                        Destination::PublicKeyHash(info.public_key_hash),
-                        (private_key, info.label),
-                    ),
+                    (Destination::PublicKey(pub_key), info.clone()),
+                    (Destination::PublicKeyHash(public_key_hash), info),
                 ]
             })
             .collect();
@@ -243,7 +234,6 @@ impl AccountKeyChain {
             standalone_watch_only_keys,
             standalone_multisig_keys,
             standalone_private_keys,
-            standalone_private_keys_info,
             lookahead_size: account_info.lookahead_size().into(),
         })
     }
@@ -380,8 +370,10 @@ impl AccountKeyChain {
             }
         }
 
-        let standalone_pk =
-            self.standalone_private_keys.get(destination).map(|info| info.0.clone());
+        let standalone_pk = self
+            .standalone_private_keys
+            .get(destination)
+            .map(|info| info.private_key.clone());
 
         Ok(standalone_pk)
     }
@@ -524,29 +516,23 @@ impl AccountKeyChain {
     ///  Adds a new private key to be watched, standalone from the keys derived from this account
     pub fn add_standalone_private_key(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteLocked,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
         new_private_key: PrivateKey,
         label: Option<String>,
     ) -> KeyChainResult<()> {
         let public_key = PublicKey::from_private_key(&new_private_key);
         let public_key_hash = PublicKeyHash::from(&public_key);
-        let id = AccountPrefixedId::new(self.get_account_id(), new_private_key);
+        let id = AccountPrefixedId::new(self.get_account_id(), public_key_hash);
         let key = StandalonePrivateKey {
             label: label.clone(),
-            public_key: public_key.clone(),
-            public_key_hash,
+            private_key: new_private_key,
         };
 
         db_tx.set_standalone_private_key(&id, &key)?;
-        let new_private_key = id.into_item_id();
-        self.standalone_private_keys.insert(
-            Destination::PublicKey(public_key),
-            (new_private_key.clone(), label.clone()),
-        );
-        self.standalone_private_keys.insert(
-            Destination::PublicKeyHash(public_key_hash),
-            (new_private_key, label),
-        );
+        self.standalone_private_keys
+            .insert(Destination::PublicKey(public_key), key.clone());
+        self.standalone_private_keys
+            .insert(Destination::PublicKeyHash(public_key_hash), key);
 
         Ok(())
     }
@@ -648,7 +634,17 @@ impl AccountKeyChain {
         StandaloneAddresses {
             watch_only_addresses: self.standalone_watch_only_keys.clone().into_iter().collect(),
             multisig_addresses: self.standalone_multisig_keys.clone().into_iter().collect(),
-            private_keys: self.standalone_private_keys_info.clone(),
+            private_keys: self
+                .standalone_private_keys
+                .iter()
+                .filter_map(|(dest, info)| match dest {
+                    Destination::PublicKey(pk) => Some((pk.clone(), info.label.clone())),
+                    Destination::PublicKeyHash(_)
+                    | Destination::AnyoneCanSpend
+                    | Destination::ScriptHash(_)
+                    | Destination::ClassicMultisig(_) => None,
+                })
+                .collect(),
         }
     }
 
@@ -661,7 +657,7 @@ impl AccountKeyChain {
         } else if let Some(details) = self.standalone_private_keys.get(&address) {
             Some((
                 address,
-                StandaloneAddressDetails::PrivateKey(details.1.clone()),
+                StandaloneAddressDetails::PrivateKey(details.label.clone()),
             ))
         } else {
             self.standalone_watch_only_keys

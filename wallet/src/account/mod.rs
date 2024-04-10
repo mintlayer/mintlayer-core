@@ -227,7 +227,7 @@ pub struct Account {
 impl Account {
     pub fn load_from_database(
         chain_config: Arc<ChainConfig>,
-        db_tx: &impl WalletStorageReadLocked,
+        db_tx: &impl WalletStorageReadUnlocked,
         id: &AccountId,
     ) -> WalletResult<Account> {
         let mut account_infos = db_tx.get_accounts_info()?;
@@ -1631,7 +1631,7 @@ impl Account {
     /// Add a standalone private key not derived from this account's key chain to be watched
     pub fn add_standalone_private_key(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteLocked,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
         private_key: PrivateKey,
         label: Option<String>,
     ) -> WalletResult<()> {
