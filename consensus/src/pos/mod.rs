@@ -21,6 +21,13 @@ pub mod kernel;
 pub mod target;
 
 mod effective_pool_balance;
+use common::chain::config::EpochIndex;
+use common::chain::CoinUnit;
+use common::primitives::Amount;
+use common::Uint256;
+use crypto::vrf::VRFPrivateKey;
+use crypto::vrf::VRFPublicKey;
+use crypto::vrf::VRFReturn;
 pub use effective_pool_balance::effective_pool_balance as calculate_effective_pool_balance;
 pub use effective_pool_balance::EffectivePoolBalanceError;
 
@@ -30,23 +37,17 @@ use chainstate_types::{
     BlockIndexHandle, EpochStorageRead, GenBlockIndex,
 };
 use common::{
-    address::Address,
     chain::{
         block::{
             consensus_data::PoSData, signed_block_header::SignedBlockHeader,
-            timestamp::BlockTimestamp, BlockHeader, ConsensusData,
+            timestamp::BlockTimestamp,
         },
         ChainConfig, PoSChainConfig, PoSStatus, TxOutput,
     },
     primitives::{BlockHeight, Idable},
 };
-use logging::log;
 use pos_accounting::PoSAccountingView;
-use std::sync::Arc;
-use utils::{
-    atomics::{AcqRelAtomicU64, RelaxedAtomicBool},
-    ensure,
-};
+use utils::ensure;
 use utxo::UtxosView;
 
 use crate::{
@@ -54,12 +55,18 @@ use crate::{
     PoSFinalizeBlockInputData,
 };
 
-#[must_use]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StakeResult {
-    Success,
-    Failed,
-    Stopped,
+pub trait PosDataExt {
+    fn target(&self) -> Result<Uint256, ConsensusPoSError>;
+}
+
+impl PosDataExt for PoSData {
+    fn target(&self) -> Result<Uint256, ConsensusPoSError> {
+        let target: Uint256 = self
+            .compact_target()
+            .try_into()
+            .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(self.compact_target()))?;
+        Ok(target)
+    }
 }
 
 fn randomness_of_sealed_epoch<S: EpochStorageRead>(
@@ -181,7 +188,7 @@ where
         .final_supply()
         .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
 
-    hash_check::check_pos_hash(
+    hash_check::check_pos_hash_for_pos_data(
         pos_status.get_chain_config().consensus_version(),
         current_epoch_index,
         &random_seed,
@@ -196,82 +203,85 @@ where
     Ok(())
 }
 
-pub fn stake(
+pub fn find_timestamp_for_staking(
     chain_config: &ChainConfig,
     pos_config: &PoSChainConfig,
-    pos_data: &mut Box<PoSData>,
-    block_header: &mut BlockHeader,
-    block_timestamp_seconds: Arc<AcqRelAtomicU64>,
-    finalize_pos_data: PoSFinalizeBlockInputData,
-    stop_flag: Arc<RelaxedAtomicBool>,
-) -> Result<StakeResult, ConsensusPoSError> {
-    let sealed_epoch_randomness = finalize_pos_data.sealed_epoch_randomness();
-    let vrf_pk = finalize_pos_data.vrf_public_key();
+    target: &Uint256,
+    first_timestamp: BlockTimestamp,
+    max_timestamp: BlockTimestamp,
+    finalize_pos_data: &PoSFinalizeBlockInputData,
+) -> Result<Option<(BlockTimestamp, VRFReturn)>, ConsensusPoSError> {
     let final_supply = chain_config
         .final_supply()
         .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
 
-    let mut block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
+    find_timestamp_for_staking_impl(
+        final_supply,
+        pos_config,
+        target,
+        first_timestamp,
+        max_timestamp,
+        finalize_pos_data.sealed_epoch_randomness(),
+        finalize_pos_data.epoch_index(),
+        finalize_pos_data.pledge_amount(),
+        finalize_pos_data.pool_balance(),
+        finalize_pos_data.vrf_private_key(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn find_timestamp_for_staking_impl(
+    final_supply: CoinUnit,
+    pos_config: &PoSChainConfig,
+    target: &Uint256,
+    first_timestamp: BlockTimestamp,
+    max_timestamp: BlockTimestamp,
+    sealed_epoch_randomness: &PoSRandomness,
+    epoch_index: EpochIndex,
+    pledge_amount: Amount,
+    pool_balance: Amount,
+    vrf_private_key: &VRFPrivateKey,
+) -> Result<Option<(BlockTimestamp, VRFReturn)>, ConsensusPoSError> {
+    let vrf_pk = VRFPublicKey::from_private_key(vrf_private_key);
 
     ensure!(
-        block_timestamp <= finalize_pos_data.max_block_timestamp(),
+        first_timestamp <= max_timestamp,
         ConsensusPoSError::FutureTimestampInThePast
     );
 
-    log::debug!(
-        "Search for a valid block ({}..{}), pool_id: {}",
-        block_timestamp,
-        finalize_pos_data.max_block_timestamp(),
-        Address::new(chain_config, *pos_data.stake_pool_id())
-            .expect("Pool id to address cannot fail")
-    );
+    let mut timestamp = first_timestamp;
 
-    while block_timestamp <= finalize_pos_data.max_block_timestamp() {
+    loop {
         let vrf_data = {
-            let transcript = construct_transcript(
-                finalize_pos_data.epoch_index(),
-                &sealed_epoch_randomness.value(),
-                block_timestamp,
-            );
+            let transcript =
+                construct_transcript(epoch_index, &sealed_epoch_randomness.value(), timestamp);
 
-            finalize_pos_data.vrf_private_key().produce_vrf_data(transcript)
+            vrf_private_key.produce_vrf_data(transcript)
         };
-
-        pos_data.update_vrf_data(vrf_data);
 
         if hash_check::check_pos_hash(
             pos_config.consensus_version(),
-            finalize_pos_data.epoch_index(),
+            epoch_index,
             sealed_epoch_randomness,
-            pos_data,
+            target,
+            &vrf_data,
             &vrf_pk,
-            block_timestamp,
-            finalize_pos_data.pledge_amount(),
-            finalize_pos_data.pool_balance(),
+            timestamp,
+            pledge_amount,
+            pool_balance,
             final_supply.to_amount_atoms(),
         )
         .is_ok()
         {
-            log::info!(
-                "Valid block found, timestamp: {}, pool_id: {}",
-                block_timestamp,
-                pos_data.stake_pool_id()
-            );
-
-            block_header.update_consensus_data(ConsensusData::PoS(pos_data.clone()));
-            block_header.update_timestamp(block_timestamp);
-            return Ok(StakeResult::Success);
+            return Ok(Some((timestamp, vrf_data)));
         }
 
-        if stop_flag.load() {
-            return Ok(StakeResult::Stopped);
+        if timestamp == max_timestamp {
+            return Ok(None);
         }
 
-        block_timestamp =
-            block_timestamp.add_int_seconds(1).ok_or(ConsensusPoSError::TimestampOverflow)?;
-
-        block_timestamp_seconds.store(block_timestamp.as_int_seconds());
+        timestamp = timestamp
+            .add_int_seconds(1)
+            .expect("timestamp can't overflow if it's below the maximum");
     }
-
-    Ok(StakeResult::Failed)
 }

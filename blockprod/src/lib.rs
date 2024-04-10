@@ -22,8 +22,8 @@ use std::sync::Arc;
 
 use chainstate::ChainstateHandle;
 use common::{
-    chain::{block::BlockCreationError, ChainConfig, GenBlock, Transaction},
-    primitives::{BlockHeight, Id},
+    chain::{block::BlockCreationError, ChainConfig, Transaction},
+    primitives::Id,
     time_getter::TimeGetter,
 };
 use config::BlockProdConfig;
@@ -40,8 +40,6 @@ use subsystem::error::CallError;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum BlockProductionError {
-    #[error("Failed to retrieve chainstate info")]
-    ChainstateInfoRetrievalError,
     #[error("Wait for chainstate to sync before producing blocks")]
     ChainstateWaitForSync,
     #[error("Subsystem call error")]
@@ -60,8 +58,6 @@ pub enum BlockProductionError {
     PeerCountBelowRequiredThreshold(usize, usize),
     #[error("Block not found in this round")]
     TryAgainLater,
-    #[error("Tip has changed. Stopping block production for previous tip {0} with height {1} to new tip {2} with height {3}")]
-    TipChanged(Id<GenBlock>, BlockHeight, Id<GenBlock>, BlockHeight),
     #[error("Job already exists")]
     JobAlreadyExists(JobKey),
     #[error("Job manager error: {0}")]
@@ -70,6 +66,12 @@ pub enum BlockProductionError {
     MempoolBlockConstruction(#[from] mempool::error::BlockConstructionError),
     #[error("Failed to decrypt generate-block input data: {0}")]
     E2eError(#[from] ephemeral_e2e::error::Error),
+    #[error("Task exited prematurely")]
+    TaskExitedPrematurely,
+    #[error("Recoverable mempool error")]
+    RecoverableMempoolError,
+    #[error("Chainstate error: `{0}`")]
+    ChainstateError(#[from] consensus::ChainstateError),
 }
 
 pub type BlockProductionSubsystem = Box<dyn BlockProductionInterface>;

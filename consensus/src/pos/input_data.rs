@@ -24,7 +24,6 @@ use chainstate_types::{
 use common::{
     chain::block::{
         consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, BlockRewardTransactable,
-        ConsensusData,
     },
     chain::{
         config::EpochIndex,
@@ -134,8 +133,6 @@ pub struct PoSFinalizeBlockInputData {
     epoch_index: EpochIndex,
     /// The sealed epoch randomness (i.e used in producing VRF data)
     sealed_epoch_randomness: PoSRandomness,
-    /// The maximum timestamp to try and staking with
-    max_block_timestamp: BlockTimestamp,
     /// The amount pledged to the pool
     pledge_amount: Amount,
     /// The current pool balance of the stake pool
@@ -148,7 +145,6 @@ impl PoSFinalizeBlockInputData {
         vrf_private_key: VRFPrivateKey,
         epoch_index: EpochIndex,
         sealed_epoch_randomness: PoSRandomness,
-        max_block_timestamp: BlockTimestamp,
         pledge_amount: Amount,
         pool_balance: Amount,
     ) -> Self {
@@ -157,7 +153,6 @@ impl PoSFinalizeBlockInputData {
             vrf_private_key,
             epoch_index,
             sealed_epoch_randomness,
-            max_block_timestamp,
             pledge_amount,
             pool_balance,
         }
@@ -165,10 +160,6 @@ impl PoSFinalizeBlockInputData {
 
     pub fn epoch_index(&self) -> EpochIndex {
         self.epoch_index
-    }
-
-    pub fn max_block_timestamp(&self) -> BlockTimestamp {
-        self.max_block_timestamp
     }
 
     pub fn pool_balance(&self) -> Amount {
@@ -206,7 +197,7 @@ pub fn generate_pos_consensus_data_and_reward<G>(
     block_timestamp: BlockTimestamp,
     block_height: BlockHeight,
     get_ancestor: G,
-) -> Result<(ConsensusData, BlockReward), ConsensusCreationError>
+) -> Result<(PoSData, BlockReward), ConsensusCreationError>
 where
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
 {
@@ -258,13 +249,13 @@ where
         get_ancestor,
     )?;
 
-    let consensus_data = ConsensusData::PoS(Box::new(PoSData::new(
+    let consensus_data = PoSData::new(
         pos_input_data.kernel_inputs().clone(),
         vec![input_witness],
         pos_input_data.pool_id(),
         vrf_data,
         target_required,
-    )));
+    );
 
     let block_reward = BlockReward::new(kernel_output);
 

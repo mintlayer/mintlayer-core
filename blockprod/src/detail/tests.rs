@@ -22,12 +22,12 @@ use tokio::{
     time::sleep,
 };
 
-use chainstate::{ChainstateError, ChainstateHandle, GenBlockIndex, PropertyQueryError};
+use chainstate::{ChainstateError, ChainstateHandle, PropertyQueryError};
 use chainstate_test_framework::TransactionBuilder;
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockCreationError},
-        config::{create_testnet, create_unit_test_config, Builder, ChainType},
+        block::timestamp::BlockTimestamp,
+        config::{create_unit_test_config, Builder, ChainType},
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
@@ -73,7 +73,11 @@ use crate::{
     BlockProduction, BlockProductionError, JobKey,
 };
 
-mod collect_transactions {
+mod collect_transactions_tests {
+    use test_utils::assert_matches;
+
+    use crate::detail::collect_transactions;
+
     use super::*;
 
     // A dummy timestamp for tests where the block timestamp is irrelevant
@@ -83,7 +87,7 @@ mod collect_transactions {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn collect_txs_failed() {
-        let (mut manager, chain_config, chainstate, _mempool, p2p) =
+        let (mut manager, chain_config, _chainstate, _mempool, _p2p) =
             setup_blockprod_test(None, TimeGetter::default());
 
         let mut mock_mempool = MockMempoolInterface::default();
@@ -99,33 +103,22 @@ mod collect_transactions {
 
         let shutdown = manager.make_shutdown_trigger();
         let tester = tokio::spawn(async move {
-            let block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate,
-                mock_mempool_subsystem,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
+            let result = collect_transactions(
+                &mock_mempool_subsystem,
+                &chain_config,
+                current_tip,
+                DUMMY_TIMESTAMP,
+                vec![],
+                vec![],
+                PackingStrategy::FillSpaceFromMempool,
             )
-            .expect("Error initializing blockprod");
-
-            let accumulator = block_production
-                .collect_transactions(
-                    current_tip,
-                    DUMMY_TIMESTAMP,
-                    vec![],
-                    vec![],
-                    PackingStrategy::FillSpaceFromMempool,
-                )
-                .await;
-
-            match accumulator {
+            .await;
+            assert_matches!(
+                result,
                 Err(BlockProductionError::MempoolBlockConstruction(
                     BlockConstructionError::Validity(TxValidationError::CallError(_)),
-                )) => {}
-                _ => panic!("Expected collect_tx() to fail"),
-            };
+                ))
+            );
 
             shutdown.initiate();
         });
@@ -135,7 +128,7 @@ mod collect_transactions {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn subsystem_error() {
-        let (mut manager, chain_config, chainstate, _mempool, p2p) =
+        let (mut manager, chain_config, _chainstate, _mempool, _p2p) =
             setup_blockprod_test(None, TimeGetter::default());
 
         let mock_mempool = MockMempoolInterface::default();
@@ -156,32 +149,17 @@ mod collect_transactions {
 
         // spawn rather than adding a subsystem as manager is moved into main() above
         tokio::spawn(async move {
-            let block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate,
-                mock_mempool_subsystem,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
+            let result = collect_transactions(
+                &mock_mempool_subsystem,
+                &chain_config,
+                current_tip,
+                DUMMY_TIMESTAMP,
+                vec![],
+                vec![],
+                PackingStrategy::LeaveEmptySpace,
             )
-            .expect("Error initializing blockprod");
-
-            let accumulator = block_production
-                .collect_transactions(
-                    current_tip,
-                    DUMMY_TIMESTAMP,
-                    vec![],
-                    vec![],
-                    PackingStrategy::LeaveEmptySpace,
-                )
-                .await;
-
-            match accumulator {
-                Ok(_) => panic!("Expected an error"),
-                Err(BlockProductionError::SubsystemCallError(_)) => {}
-                Err(err) => panic!("Expected a subsystem error, got {err:?}"),
-            };
+            .await;
+            assert_matches!(result, Err(BlockProductionError::SubsystemCallError(_)));
         })
         .await
         .expect("Subsystem error thread failed");
@@ -189,7 +167,7 @@ mod collect_transactions {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn succeeded() {
-        let (mut manager, chain_config, chainstate, _mempool, p2p) =
+        let (mut manager, chain_config, _chainstate, _mempool, _p2p) =
             setup_blockprod_test(None, TimeGetter::default());
 
         let mut mock_mempool = MockMempoolInterface::default();
@@ -209,17 +187,6 @@ mod collect_transactions {
 
         let current_tip = Id::new(H256::zero());
 
-        let block_production = BlockProduction::new(
-            chain_config,
-            Arc::new(test_blockprod_config()),
-            chainstate,
-            mock_mempool_subsystem,
-            p2p,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
-
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
             async move {
@@ -228,20 +195,18 @@ mod collect_transactions {
                     shutdown_trigger.initiate();
                 });
 
-                let accumulator = block_production
-                    .collect_transactions(
-                        current_tip,
-                        DUMMY_TIMESTAMP,
-                        vec![],
-                        vec![],
-                        PackingStrategy::FillSpaceFromMempool,
-                    )
-                    .await;
+                let result = collect_transactions(
+                    &mock_mempool_subsystem,
+                    &chain_config,
+                    current_tip,
+                    DUMMY_TIMESTAMP,
+                    vec![],
+                    vec![],
+                    PackingStrategy::FillSpaceFromMempool,
+                )
+                .await;
 
-                assert!(
-                    accumulator.is_ok(),
-                    "Expected collect_transactions() to succeed"
-                );
+                assert!(result.is_ok(), "Expected collect_transactions() to succeed");
             }
         });
 
@@ -252,6 +217,7 @@ mod collect_transactions {
 
 mod produce_block {
     use common::chain::{ChainConfig, PoSChainConfigBuilder};
+    use test_utils::assert_matches;
     use utils::atomics::SeqCstAtomicU64;
 
     use super::*;
@@ -411,12 +377,12 @@ mod produce_block {
                     )
                     .await;
 
-                match result {
-                    Err(BlockProductionError::FailedToConstructBlock(
-                        BlockCreationError::CurrentTipRetrievalError,
-                    )) => {}
-                    _ => panic!("Unexpected return value"),
-                }
+                assert_matches!(
+                    result,
+                    Err(BlockProductionError::ChainstateError(
+                        consensus::ChainstateError::FailedToObtainBestBlockIndex(_)
+                    ))
+                );
             }
         });
 
@@ -488,8 +454,10 @@ mod produce_block {
                 vec![],
             );
 
-            let override_chain_config =
-                Builder::new(ChainType::Regtest).genesis_custom(genesis_block).build();
+            let override_chain_config = Builder::new(ChainType::Regtest)
+                .genesis_custom(genesis_block)
+                .consensus_upgrades(NetUpgrades::unit_tests())
+                .build();
 
             setup_blockprod_test(Some(override_chain_config), TimeGetter::default())
         };
@@ -541,6 +509,7 @@ mod produce_block {
     async fn overflow_max_blocktimestamp() {
         let override_chain_config = Builder::new(ChainType::Regtest)
             .max_future_block_time_offset(Duration::MAX)
+            .consensus_upgrades(NetUpgrades::unit_tests())
             .build();
 
         let (manager, chain_config, chainstate, mempool, p2p) =
@@ -678,8 +647,10 @@ mod produce_block {
                 vec![],
             );
 
-            let override_chain_config =
-                Builder::new(ChainType::Regtest).genesis_custom(genesis_block).build();
+            let override_chain_config = Builder::new(ChainType::Regtest)
+                .genesis_custom(genesis_block)
+                .consensus_upgrades(NetUpgrades::unit_tests())
+                .build();
 
             let time_value_secs = last_used_block_timestamp
                 .saturating_duration_sub(*override_chain_config.max_future_block_time_offset())
@@ -727,145 +698,6 @@ mod produce_block {
                 };
 
                 assert_job_count(&block_production, 0).await;
-            }
-        });
-
-        manager.main().await;
-        join_handle.await.unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn pull_consensus_data_error() {
-        let (mut manager, chain_config, _, mempool, p2p) =
-            setup_blockprod_test(None, TimeGetter::default());
-
-        let chainstate_subsystem: ChainstateHandle = {
-            let mut mock_chainstate = MockChainstateInterface::new();
-            mock_chainstate
-                .expect_subscribe_to_subsystem_events()
-                .times(..=1)
-                .returning(|_| ());
-            mock_chainstate.expect_is_initial_block_download().returning(|| false);
-
-            let mut expected_return_values = vec![
-                Ok(GenBlockIndex::genesis(&chain_config)),
-                Err(ChainstateError::FailedToReadProperty(
-                    PropertyQueryError::BestBlockIndexNotFound,
-                )),
-            ];
-
-            mock_chainstate
-                .expect_get_best_block_index()
-                .times(expected_return_values.len())
-                .returning(move || expected_return_values.remove(0));
-
-            manager.add_subsystem("mock-chainstate", mock_chainstate)
-        };
-
-        let join_handle = tokio::spawn({
-            let shutdown_trigger = manager.make_shutdown_trigger();
-            async move {
-                // Ensure a shutdown signal will be sent by the end of the scope
-                let _shutdown_signal = OnceDestructor::new(move || {
-                    shutdown_trigger.initiate();
-                });
-
-                let block_production = BlockProduction::new(
-                    chain_config,
-                    Arc::new(test_blockprod_config()),
-                    chainstate_subsystem,
-                    mempool,
-                    p2p,
-                    Default::default(),
-                    prepare_thread_pool(1),
-                )
-                .expect("Error initializing blockprod");
-
-                let result = block_production
-                    .produce_block(
-                        GenerateBlockInputData::None,
-                        vec![],
-                        vec![],
-                        PackingStrategy::LeaveEmptySpace,
-                    )
-                    .await;
-
-                match result {
-                    Err(BlockProductionError::FailedConsensusInitialization(
-                        ConsensusCreationError::BestBlockIndexNotFound,
-                    )) => {}
-                    _ => panic!("Unexpected return value"),
-                }
-            }
-        });
-
-        manager.main().await;
-        join_handle.await.unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn tip_changed() {
-        let (mut manager, chain_config, _, mempool, p2p) =
-            setup_blockprod_test(None, TimeGetter::default());
-
-        let chainstate_subsystem: ChainstateHandle = {
-            let mut mock_chainstate = MockChainstateInterface::new();
-            mock_chainstate
-                .expect_subscribe_to_subsystem_events()
-                .times(..=1)
-                .returning(|_| ());
-            mock_chainstate.expect_is_initial_block_download().returning(|| false);
-
-            let mut expected_return_values = vec![
-                Ok(GenBlockIndex::genesis(&chain_config)),
-                Ok(GenBlockIndex::genesis(&create_testnet())),
-            ];
-
-            mock_chainstate
-                .expect_get_best_block_index()
-                .times(expected_return_values.len())
-                .returning(move || expected_return_values.remove(0));
-
-            // Doesn't matter for this test.
-            mock_chainstate
-                .expect_calculate_median_time_past()
-                .returning(|_| Ok(BlockTimestamp::from_int_seconds(0)));
-
-            manager.add_subsystem("mock-chainstate", mock_chainstate)
-        };
-
-        let join_handle = tokio::spawn({
-            let shutdown_trigger = manager.make_shutdown_trigger();
-            async move {
-                // Ensure a shutdown signal will be sent by the end of the scope
-                let _shutdown_signal = OnceDestructor::new(move || {
-                    shutdown_trigger.initiate();
-                });
-
-                let block_production = BlockProduction::new(
-                    chain_config,
-                    Arc::new(test_blockprod_config()),
-                    chainstate_subsystem,
-                    mempool,
-                    p2p,
-                    Default::default(),
-                    prepare_thread_pool(1),
-                )
-                .expect("Error initializing blockprod");
-
-                let result = block_production
-                    .produce_block(
-                        GenerateBlockInputData::None,
-                        vec![],
-                        vec![],
-                        PackingStrategy::LeaveEmptySpace,
-                    )
-                    .await;
-
-                match result {
-                    Err(BlockProductionError::TipChanged(_, _, _, _)) => {}
-                    _ => panic!("Unexpected return value"),
-                }
             }
         });
 

@@ -23,31 +23,27 @@ use common::{
     primitives::Amount,
     Uint256, Uint512,
 };
-use crypto::vrf::VRFPublicKey;
+use crypto::vrf::{VRFPublicKey, VRFReturn};
 use utils::ensure;
 
 use crate::pos::error::ConsensusPoSError;
 
-use super::effective_pool_balance::effective_pool_balance;
+use super::{effective_pool_balance::effective_pool_balance, PosDataExt};
 
 fn check_pos_hash_v0(
     epoch_index: EpochIndex,
     random_seed: &PoSRandomness,
-    pos_data: &PoSData,
+    target: &Uint256,
+    vrf_data: &VRFReturn,
     vrf_pub_key: &VRFPublicKey,
     block_timestamp: BlockTimestamp,
     pool_balance: Amount,
 ) -> Result<(), ConsensusPoSError> {
-    let target: Uint256 = pos_data
-        .compact_target()
-        .try_into()
-        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(pos_data.compact_target()))?;
-
     let hash: Uint256 = PoSRandomness::from_block(
         epoch_index,
         block_timestamp,
         random_seed,
-        pos_data,
+        vrf_data,
         vrf_pub_key,
     )?
     .value()
@@ -57,7 +53,7 @@ fn check_pos_hash_v0(
     let pool_balance: Uint512 = pool_balance.into();
 
     ensure!(
-        hash <= (pool_balance * target.into())
+        hash <= (pool_balance * (*target).into())
             .expect("Cannot fail because both were converted from smaller type"),
         ConsensusPoSError::StakeKernelHashTooHigh
     );
@@ -69,23 +65,19 @@ fn check_pos_hash_v0(
 fn check_pos_hash_v1(
     epoch_index: EpochIndex,
     random_seed: &PoSRandomness,
-    pos_data: &PoSData,
+    target: &Uint256,
+    vrf_data: &VRFReturn,
     vrf_pub_key: &VRFPublicKey,
     block_timestamp: BlockTimestamp,
     pledge_amount: Amount,
     pool_balance: Amount,
     final_supply: Amount,
 ) -> Result<(), ConsensusPoSError> {
-    let target: Uint256 = pos_data
-        .compact_target()
-        .try_into()
-        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(pos_data.compact_target()))?;
-
     let hash: Uint256 = PoSRandomness::from_block(
         epoch_index,
         block_timestamp,
         random_seed,
-        pos_data,
+        vrf_data,
         vrf_pub_key,
     )?
     .value()
@@ -96,7 +88,7 @@ fn check_pos_hash_v1(
     let effective_balance: Uint512 = effective_balance.into();
 
     ensure!(
-        hash <= (effective_balance * target.into())
+        hash <= (effective_balance * (*target).into())
             .expect("Cannot fail because both were converted from smaller type"),
         ConsensusPoSError::StakeKernelHashTooHigh
     );
@@ -109,7 +101,8 @@ pub fn check_pos_hash(
     consensus_version: PoSConsensusVersion,
     epoch_index: EpochIndex,
     random_seed: &PoSRandomness,
-    pos_data: &PoSData,
+    target: &Uint256,
+    vrf_data: &VRFReturn,
     vrf_pub_key: &VRFPublicKey,
     block_timestamp: BlockTimestamp,
     pledge_amount: Amount,
@@ -120,7 +113,8 @@ pub fn check_pos_hash(
         PoSConsensusVersion::V0 => check_pos_hash_v0(
             epoch_index,
             random_seed,
-            pos_data,
+            target,
+            vrf_data,
             vrf_pub_key,
             block_timestamp,
             pool_balance,
@@ -128,7 +122,8 @@ pub fn check_pos_hash(
         PoSConsensusVersion::V1 => check_pos_hash_v1(
             epoch_index,
             random_seed,
-            pos_data,
+            target,
+            vrf_data,
             vrf_pub_key,
             block_timestamp,
             pledge_amount,
@@ -137,4 +132,30 @@ pub fn check_pos_hash(
         ),
         _ => Err(ConsensusPoSError::UnsupportedConsensusVersion),
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn check_pos_hash_for_pos_data(
+    consensus_version: PoSConsensusVersion,
+    epoch_index: EpochIndex,
+    random_seed: &PoSRandomness,
+    pos_data: &PoSData,
+    vrf_pub_key: &VRFPublicKey,
+    block_timestamp: BlockTimestamp,
+    pledge_amount: Amount,
+    pool_balance: Amount,
+    final_supply: Amount,
+) -> Result<(), ConsensusPoSError> {
+    check_pos_hash(
+        consensus_version,
+        epoch_index,
+        random_seed,
+        &pos_data.target()?,
+        pos_data.vrf_data(),
+        vrf_pub_key,
+        block_timestamp,
+        pledge_amount,
+        pool_balance,
+        final_supply,
+    )
 }

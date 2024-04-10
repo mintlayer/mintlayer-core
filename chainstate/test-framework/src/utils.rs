@@ -34,6 +34,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
 };
+use consensus::find_timestamp_for_staking_impl;
 use crypto::{
     key::{PrivateKey, PublicKey},
     vrf::{VRFPrivateKey, VRFPublicKey},
@@ -249,7 +250,6 @@ pub fn produce_kernel_signature(
     .unwrap()
 }
 
-// TODO: consider replacing this function with consensus::pos::stake
 #[allow(clippy::too_many_arguments)]
 pub fn pos_mine(
     storage: &impl BlockchainStorageRead,
@@ -262,50 +262,37 @@ pub fn pos_mine(
     pool_id: PoolId,
     final_supply: CoinUnit,
     epoch_index: EpochIndex,
-    target: Compact,
+    compact_target: Compact,
 ) -> Option<(PoSData, BlockTimestamp)> {
     let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&storage);
 
     let pool_balance = pos_db.get_pool_balance(pool_id).unwrap().unwrap();
     let pledge_amount = pos_db.get_pool_data(pool_id).unwrap().unwrap().staker_balance().unwrap();
 
-    let mut timestamp = initial_timestamp;
-    for _ in 0..1000 {
-        let transcript = chainstate_types::vrf_tools::construct_transcript(
-            epoch_index,
-            &sealed_epoch_randomness.value(),
-            timestamp,
-        );
-        let vrf_data = vrf_sk.produce_vrf_data(transcript);
-
+    find_timestamp_for_staking_impl(
+        final_supply,
+        pos_config,
+        &compact_target.try_into().unwrap(),
+        initial_timestamp,
+        initial_timestamp.add_int_seconds(1000).unwrap(),
+        &sealed_epoch_randomness,
+        epoch_index,
+        pledge_amount,
+        pool_balance,
+        vrf_sk,
+    )
+    .unwrap()
+    .map(|(timestamp, vrf_data)| {
         let pos_data = PoSData::new(
             vec![kernel_outpoint.clone().into()],
             vec![kernel_witness.clone()],
             pool_id,
             vrf_data,
-            target,
+            compact_target,
         );
 
-        let vrf_pk = VRFPublicKey::from_private_key(vrf_sk);
-        if consensus::check_pos_hash(
-            pos_config.consensus_version(),
-            epoch_index,
-            &sealed_epoch_randomness,
-            &pos_data,
-            &vrf_pk,
-            timestamp,
-            pledge_amount,
-            pool_balance,
-            final_supply.to_amount_atoms(),
-        )
-        .is_ok()
-        {
-            return Some((pos_data, timestamp));
-        }
-
-        timestamp = timestamp.add_int_seconds(1).unwrap();
-    }
-    None
+        (pos_data, timestamp)
+    })
 }
 
 #[allow(unused)]

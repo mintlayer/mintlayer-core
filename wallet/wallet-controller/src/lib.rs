@@ -971,6 +971,9 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 continue;
             }
 
+            let staking_start_time = std::time::Instant::now();
+            log::debug!("Starting staking loop");
+
             for account_index in staking_started.iter() {
                 let generate_res = self
                     .generate_block(
@@ -996,6 +999,11 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                     continue 'outer;
                 }
             }
+
+            log::debug!(
+                "Ended staking loop, elapsed time = {:?}",
+                staking_start_time.elapsed()
+            );
 
             tokio::time::sleep(NORMAL_DELAY).await;
 

@@ -1322,7 +1322,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         1,
         block_e.timestamp(),
         &initial_randomness,
-        block_e_pos_data,
+        block_e_pos_data.vrf_data(),
         &vrf_pk,
     )
     .unwrap();

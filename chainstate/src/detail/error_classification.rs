@@ -565,11 +565,11 @@ impl BlockProcessingErrorClassification for consensus::ChainstateError {
 
         match self {
             // These all represent a general chainstate failure.
-            // TODO: it's better to delegate to the inner error anyway.
-            ChainstateError::FailedToObtainEpochData(_, _err)
-            | ChainstateError::FailedToCalculateMedianTimePast(_, _err)
-            | ChainstateError::StakePoolDataReadError(_, _err)
-            | ChainstateError::PoolBalanceReadError(_, _err) => BlockProcessingErrorClass::General,
+            ChainstateError::FailedToObtainEpochData(_, _)
+            | ChainstateError::FailedToCalculateMedianTimePast(_, _)
+            | ChainstateError::FailedToObtainBestBlockIndex(_)
+            | ChainstateError::StakePoolDataReadError(_, _)
+            | ChainstateError::PoolBalanceReadError(_, _) => BlockProcessingErrorClass::General,
         }
     }
 }

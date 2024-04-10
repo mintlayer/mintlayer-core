@@ -115,6 +115,8 @@ pub enum ChainstateError {
     FailedToObtainEpochData(BlockHeight, String),
     #[error("Failed to calculate median time past starting from block {0}: {1}")]
     FailedToCalculateMedianTimePast(Id<GenBlock>, String),
+    #[error("Failed to obtain best block index: {0}")]
+    FailedToObtainBestBlockIndex(String),
     #[error("Failed to read data of pool {0}: {1}")]
     StakePoolDataReadError(PoolId, String),
     #[error("Failed to read balance of pool {0}: {1}")]
