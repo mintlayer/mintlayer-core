@@ -63,9 +63,9 @@ use tx_verifier::error::TokenIssuanceError;
 use tx_verifier::{check_transaction, CheckTransactionError};
 use utils::ensure;
 use wallet_storage::{
-    DefaultBackend, Store, StoreTxRw, StoreTxRwUnlocked, TransactionRoUnlocked,
-    TransactionRwLocked, TransactionRwUnlocked, Transactional, WalletStorageReadLocked,
-    WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
+    DefaultBackend, Store, StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked, TransactionRwLocked,
+    TransactionRwUnlocked, Transactional, WalletStorageReadLocked, WalletStorageReadUnlocked,
+    WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::chain_info::ChainInfo;
@@ -573,7 +573,7 @@ impl<B: storage::Backend> Wallet<B> {
         db: &Store<B>,
         chain_config: Arc<ChainConfig>,
     ) -> WalletResult<()> {
-        let mut db_tx = db.transaction_rw_unlocked(None)?;
+        let mut db_tx = db.transaction_rw(None)?;
         db_tx.set_wallet_type(WalletType::Cold)?;
         Self::reset_wallet_transactions_and_load(chain_config, &mut db_tx)?;
         db_tx.commit()?;
@@ -603,7 +603,7 @@ impl<B: storage::Backend> Wallet<B> {
         logging::log::info!(
             "Resetting the wallet to genesis and starting to rescan the blockchain"
         );
-        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
+        let mut db_tx = self.db.transaction_rw(None)?;
         let mut accounts =
             Self::reset_wallet_transactions_and_load(self.chain_config.clone(), &mut db_tx)?;
         self.next_unused_account = accounts.pop_last().expect("not empty accounts");
@@ -645,7 +645,7 @@ impl<B: storage::Backend> Wallet<B> {
 
     fn reset_wallet_transactions_and_load(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
     ) -> WalletResult<BTreeMap<U31, Account>> {
         Self::reset_wallet_transactions(chain_config.clone(), db_tx)?;
 
@@ -709,7 +709,7 @@ impl<B: storage::Backend> Wallet<B> {
 
         // Please continue to use read-only transaction here.
         // Some unit tests expect that loading the wallet does not change the DB.
-        let db_tx = db.transaction_ro_unlocked()?;
+        let db_tx = db.transaction_ro()?;
 
         Self::validate_chain_info(chain_config.as_ref(), &db_tx, wallet_type)?;
 
@@ -793,7 +793,7 @@ impl<B: storage::Backend> Wallet<B> {
             );
         }
 
-        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
+        let mut db_tx = self.db.transaction_rw(None)?;
         db_tx.set_lookahead_size(lookahead_size)?;
         let mut accounts =
             Self::reset_wallet_transactions_and_load(self.chain_config.clone(), &mut db_tx)?;

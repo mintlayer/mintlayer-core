@@ -227,7 +227,7 @@ pub struct Account {
 impl Account {
     pub fn load_from_database(
         chain_config: Arc<ChainConfig>,
-        db_tx: &impl WalletStorageReadUnlocked,
+        db_tx: &impl WalletStorageReadLocked,
         id: &AccountId,
     ) -> WalletResult<Account> {
         let mut account_infos = db_tx.get_accounts_info()?;

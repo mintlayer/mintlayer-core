@@ -19,8 +19,8 @@ use common::{
     chain::{Destination, OutPointSourceId, Transaction},
     primitives::Id,
 };
-use crypto::key::extended::ExtendedPublicKey;
 use crypto::key::hdkd::derivation_path::DerivationPath;
+use crypto::key::{extended::ExtendedPublicKey, PublicKey};
 use serialization::{Decode, Encode};
 use storage::HasPrefix;
 
@@ -82,4 +82,4 @@ pub type AccountWalletTxId = AccountPrefixedId<OutPointSourceId>;
 pub type AccountDerivationPathId = AccountPrefixedId<DerivationPath>;
 pub type AccountKeyPurposeId = AccountPrefixedId<KeyPurpose>;
 pub type AccountAddress = AccountPrefixedId<Destination>;
-pub type AccountPublicKeyHash = AccountPrefixedId<PublicKeyHash>;
+pub type AccountPublicKey = AccountPrefixedId<PublicKey>;

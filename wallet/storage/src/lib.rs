@@ -20,18 +20,20 @@ mod is_transaction_seal;
 pub mod schema;
 
 use common::{
-    address::{pubkeyhash::PublicKeyHash, Address, AddressError},
+    address::{Address, AddressError},
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
-use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
+use crypto::{
+    kdf::KdfChallenge,
+    key::{extended::ExtendedPublicKey, PrivateKey},
+    symkey::SymmetricKey,
+};
 pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use std::collections::BTreeMap;
 
 use wallet_types::{
-    account_id::{AccountAddress, AccountPublicKeyHash},
-    account_info::{
-        AccountVrfKeys, StandaloneMultisig, StandalonePrivateKey, StandaloneWatchOnlyKey,
-    },
+    account_id::{AccountAddress, AccountPublicKey},
+    account_info::{AccountVrfKeys, StandaloneMultisig, StandaloneWatchOnlyKey},
     chain_info::ChainInfo,
     keys::RootKeys,
     seed_phrase::SerializableSeedPhrase,
@@ -89,6 +91,10 @@ pub trait WalletStorageReadLocked {
         &self,
         account_id: &AccountId,
     ) -> Result<BTreeMap<Destination, StandaloneMultisig>>;
+    fn get_account_standalone_private_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<Vec<(AccountPublicKey, Option<String>)>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<String>>;
     fn get_addresses(
@@ -118,10 +124,10 @@ pub trait WalletStorageReadLocked {
 pub trait WalletStorageReadUnlocked: WalletStorageReadLocked {
     fn get_root_key(&self) -> Result<Option<RootKeys>>;
     fn get_seed_phrase(&self) -> Result<Option<SerializableSeedPhrase>>;
-    fn get_account_standalone_private_keys(
+    fn get_account_standalone_private_key(
         &self,
-        account_id: &AccountId,
-    ) -> Result<Vec<(PublicKeyHash, StandalonePrivateKey)>>;
+        account_pubkey: &AccountPublicKey,
+    ) -> Result<Option<PrivateKey>>;
 }
 
 /// Queries on persistent wallet data for encryption
@@ -201,8 +207,9 @@ pub trait WalletStorageWriteUnlocked: WalletStorageReadUnlocked + WalletStorageW
     fn del_seed_phrase(&mut self) -> Result<Option<SerializableSeedPhrase>>;
     fn set_standalone_private_key(
         &mut self,
-        id: &AccountPublicKeyHash,
-        key: &StandalonePrivateKey,
+        id: &AccountPublicKey,
+        key: &PrivateKey,
+        label: Option<String>,
     ) -> Result<()>;
 }
 

@@ -174,7 +174,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
 
     let mut key_chain = AccountKeyChain::load_from_database(
         Arc::clone(&chain_config),
-        &db.transaction_ro_unlocked().unwrap(),
+        &db.transaction_ro().unwrap(),
         &id,
         &account_info,
     )
@@ -242,7 +242,7 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
 
     let mut key_chain = AccountKeyChain::load_from_database(
         chain_config,
-        &db.transaction_ro_unlocked().unwrap(),
+        &db.transaction_ro().unwrap(),
         &id,
         &account_info,
     )

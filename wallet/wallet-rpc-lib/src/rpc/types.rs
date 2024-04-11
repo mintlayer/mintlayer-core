@@ -36,7 +36,6 @@ use crypto::{
     vrf::VRFPublicKey,
 };
 use rpc::description::HasValueHint;
-use rpc_description::ValueHint;
 use wallet::account::PoolData;
 
 pub use common::{
@@ -160,7 +159,7 @@ impl AddressInfo {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 #[serde(tag = "type")]
 pub enum RpcStandaloneAddressDetails {
     WatchOnly,
@@ -169,23 +168,6 @@ pub enum RpcStandaloneAddressDetails {
         min_required_signatures: u8,
         public_keys: Vec<RpcAddress<Destination>>,
     },
-}
-
-impl HasValueHint for RpcStandaloneAddressDetails {
-    const HINT_SER: ValueHint = ValueHint::Choice(&[
-        &ValueHint::object(&[("type", &ValueHint::StrLit("WatchOnly"))]),
-        &ValueHint::object(&[("type", &ValueHint::StrLit("FromPrivateKey"))]),
-        &ValueHint::object(&[
-            ("type", &ValueHint::StrLit("Multisig")),
-            (
-                "content",
-                &ValueHint::object(&[
-                    ("min_required_signatures", &u8::HINT_SER),
-                    ("public_keys", &Vec::<RpcAddress<Destination>>::HINT_SER),
-                ]),
-            ),
-        ]),
-    ]);
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]

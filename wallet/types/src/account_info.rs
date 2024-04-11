@@ -22,6 +22,7 @@ use crypto::{
     vrf::ExtendedVRFPublicKey,
 };
 use serialization::{Decode, Encode};
+use utils::maybe_encrypted::MaybeEncrypted;
 
 pub const DEFAULT_ACCOUNT_INDEX: U31 = match U31::from_u32(0) {
     Some(v) => v,
@@ -133,10 +134,10 @@ impl StandaloneMultisig {
     }
 }
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Encode, Decode)]
 pub struct StandalonePrivateKey {
     pub label: Option<String>,
-    pub private_key: PrivateKey,
+    pub private_key: MaybeEncrypted<PrivateKey>,
 }
 
 #[derive(Debug, Clone)]

@@ -34,10 +34,9 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
     WalletStorageWriteUnlocked,
 };
-use wallet_types::account_id::AccountPrefixedId;
+use wallet_types::account_id::{AccountPrefixedId, AccountPublicKey};
 use wallet_types::account_info::{
-    StandaloneAddressDetails, StandaloneAddresses, StandaloneMultisig, StandalonePrivateKey,
-    StandaloneWatchOnlyKey,
+    StandaloneAddressDetails, StandaloneAddresses, StandaloneMultisig, StandaloneWatchOnlyKey,
 };
 use wallet_types::keys::KeyPurpose;
 use wallet_types::{AccountId, AccountInfo, KeychainUsageState};
@@ -70,7 +69,7 @@ pub struct AccountKeyChain {
     standalone_multisig_keys: BTreeMap<Destination, StandaloneMultisig>,
 
     /// Standalone private keys added by the user not derived from this account's chain
-    standalone_private_keys: BTreeMap<Destination, StandalonePrivateKey>,
+    standalone_private_keys: BTreeMap<Destination, (Option<String>, AccountPublicKey)>,
 
     /// The number of unused addresses that need to be checked after the last used address
     lookahead_size: ConstValue<u32>,
@@ -181,7 +180,7 @@ impl AccountKeyChain {
     /// Load the key chain from the database
     pub fn load_from_database(
         chain_config: Arc<ChainConfig>,
-        db_tx: &impl WalletStorageReadUnlocked,
+        db_tx: &impl WalletStorageReadLocked,
         id: &AccountId,
         account_info: &AccountInfo,
     ) -> KeyChainResult<Self> {
@@ -215,11 +214,18 @@ impl AccountKeyChain {
 
         let standalone_private_keys = standalone_private_keys
             .into_iter()
-            .flat_map(|(public_key_hash, info)| {
-                let pub_key = PublicKey::from_private_key(&info.private_key);
+            .flat_map(|(acc_public_key, label)| {
+                let public_key = acc_public_key.clone().into_item_id();
+                let public_key_hash = (&public_key).into();
                 [
-                    (Destination::PublicKey(pub_key), info.clone()),
-                    (Destination::PublicKeyHash(public_key_hash), info),
+                    (
+                        Destination::PublicKey(public_key),
+                        (label.clone(), acc_public_key.clone()),
+                    ),
+                    (
+                        Destination::PublicKeyHash(public_key_hash),
+                        (label, acc_public_key),
+                    ),
                 ]
             })
             .collect();
@@ -373,7 +379,9 @@ impl AccountKeyChain {
         let standalone_pk = self
             .standalone_private_keys
             .get(destination)
-            .map(|info| info.private_key.clone());
+            .map(|(_, acc_public_key)| db_tx.get_account_standalone_private_key(acc_public_key))
+            .transpose()?
+            .flatten();
 
         Ok(standalone_pk)
     }
@@ -522,17 +530,15 @@ impl AccountKeyChain {
     ) -> KeyChainResult<()> {
         let public_key = PublicKey::from_private_key(&new_private_key);
         let public_key_hash = PublicKeyHash::from(&public_key);
-        let id = AccountPrefixedId::new(self.get_account_id(), public_key_hash);
-        let key = StandalonePrivateKey {
-            label: label.clone(),
-            private_key: new_private_key,
-        };
+        let id = AccountPrefixedId::new(self.get_account_id(), public_key.clone());
 
-        db_tx.set_standalone_private_key(&id, &key)?;
+        db_tx.set_standalone_private_key(&id, &new_private_key, label.clone())?;
+        self.standalone_private_keys.insert(
+            Destination::PublicKey(public_key),
+            (label.clone(), id.clone()),
+        );
         self.standalone_private_keys
-            .insert(Destination::PublicKey(public_key), key.clone());
-        self.standalone_private_keys
-            .insert(Destination::PublicKeyHash(public_key_hash), key);
+            .insert(Destination::PublicKeyHash(public_key_hash), (label, id));
 
         Ok(())
     }
@@ -637,8 +643,8 @@ impl AccountKeyChain {
             private_keys: self
                 .standalone_private_keys
                 .iter()
-                .filter_map(|(dest, info)| match dest {
-                    Destination::PublicKey(pk) => Some((pk.clone(), info.label.clone())),
+                .filter_map(|(dest, (label, _))| match dest {
+                    Destination::PublicKey(pk) => Some((pk.clone(), label.clone())),
                     Destination::PublicKeyHash(_)
                     | Destination::AnyoneCanSpend
                     | Destination::ScriptHash(_)
@@ -654,11 +660,8 @@ impl AccountKeyChain {
     ) -> Option<(Destination, StandaloneAddressDetails)> {
         if let Some(details) = self.standalone_multisig_keys.get(&address).cloned() {
             Some((address, StandaloneAddressDetails::Multisig(details)))
-        } else if let Some(details) = self.standalone_private_keys.get(&address) {
-            Some((
-                address,
-                StandaloneAddressDetails::PrivateKey(details.label.clone()),
-            ))
+        } else if let Some((label, _)) = self.standalone_private_keys.get(&address) {
+            Some((address, StandaloneAddressDetails::PrivateKey(label.clone())))
         } else {
             self.standalone_watch_only_keys
                 .get(&address)

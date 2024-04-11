@@ -1970,10 +1970,8 @@ Returns:
          2) { "type": "FromPrivateKey" }
          3) {
                 "type": "Multisig",
-                "content": {
-                    "min_required_signatures": number,
-                    "public_keys": [ bech32 string, .. ],
-                },
+                "min_required_signatures": number,
+                "public_keys": [ bech32 string, .. ],
             },
     "balances": {
         "coins": {

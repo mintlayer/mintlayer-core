@@ -21,10 +21,14 @@ use crate::{
     WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
 use common::{
-    address::{pubkeyhash::PublicKeyHash, Address},
+    address::Address,
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
-use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
+use crypto::{
+    kdf::KdfChallenge,
+    key::{extended::ExtendedPublicKey, PrivateKey},
+    symkey::SymmetricKey,
+};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::{schema, MakeMapRef};
 use utils::{
@@ -32,7 +36,7 @@ use utils::{
     maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError},
 };
 use wallet_types::{
-    account_id::{AccountAddress, AccountPublicKeyHash},
+    account_id::{AccountAddress, AccountPublicKey},
     account_info::{
         AccountVrfKeys, StandaloneMultisig, StandalonePrivateKey, StandaloneWatchOnlyKey,
     },
@@ -271,6 +275,17 @@ macro_rules! impl_read_ops {
                     })
             }
 
+            fn get_account_standalone_private_keys(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<Vec<(AccountPublicKey, Option<String>)>> {
+                self.storage
+                    .get::<db::DBStandalonePrivateKeys, _>()
+                    .prefix_iter_decoded(account_id)
+                    .map_err(crate::Error::from)
+                    .map(|iter| iter.map(|(key, value)| (key, value.label)).collect())
+            }
+
             fn get_keychain_usage_state(
                 &self,
                 id: &AccountKeyPurposeId,
@@ -401,25 +416,17 @@ macro_rules! impl_read_unlocked_ops {
                 )
             }
 
-            fn get_account_standalone_private_keys(
+            fn get_account_standalone_private_key(
                 &self,
-                account_id: &AccountId,
-            ) -> crate::Result<Vec<(PublicKeyHash, StandalonePrivateKey)>> {
-                self.storage
-                    .get::<db::DBStandalonePrivateKeys, _>()
-                    .prefix_iter_decoded(account_id)
-                    .map_err(crate::Error::from)
-                    .map(|iter| {
-                        iter.map(|(key, value)| {
-                            (
-                                key.into_item_id(),
-                                value
-                                    .try_take(self.encryption_key)
-                                    .expect("key waas chacked when unlocked"),
-                            )
-                        })
-                        .collect()
-                    })
+                account_pubkey: &AccountPublicKey,
+            ) -> crate::Result<Option<PrivateKey>> {
+                Ok(
+                    self.read::<db::DBStandalonePrivateKeys, _, _>(account_pubkey)?.map(|v| {
+                        v.private_key
+                            .try_take(self.encryption_key)
+                            .expect("key was checked when unlocked")
+                    }),
+                )
             }
         }
     };
@@ -684,12 +691,16 @@ impl<'st, B: storage::Backend> WalletStorageWriteUnlocked for StoreTxRwUnlocked<
 
     fn set_standalone_private_key(
         &mut self,
-        id: &AccountPublicKeyHash,
-        key: &StandalonePrivateKey,
+        id: &AccountPublicKey,
+        key: &PrivateKey,
+        label: Option<String>,
     ) -> crate::Result<()> {
         self.write::<db::DBStandalonePrivateKeys, _, _, _>(
             id,
-            MaybeEncrypted::new(key, self.encryption_key),
+            StandalonePrivateKey {
+                label,
+                private_key: MaybeEncrypted::new(key, self.encryption_key),
+            },
         )
     }
 
