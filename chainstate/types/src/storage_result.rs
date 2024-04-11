@@ -27,7 +27,7 @@ impl Error {
             Error::Storage(err) => match err {
                 E::TransactionFailed | E::TemporarilyUnavailable | E::MemMapFull => true,
                 E::DbInit | E::Io(_, _) => false,
-            }
+            },
         }
     }
 }

@@ -20,9 +20,9 @@ use super::helpers::new_pub_key_destination;
 
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use chainstate::BlockSource;
-use chainstate_storage::{inmemory::Store, BlockchainStorageRead, Transactional};
+use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+    anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
 };
 use common::{
     chain::{
@@ -129,7 +129,7 @@ fn make_tx_with_stake_pool(
 #[case(Seed::from_entropy())]
 fn store_pool_data_and_balance(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let storage = Store::new_empty().unwrap();
+        let storage = TestStore::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
         let amount_to_stake = tf.chainstate.get_chain_config().min_stake_pool_pledge();
@@ -188,7 +188,7 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let storage = Store::new_empty().unwrap();
+        let storage = TestStore::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let chain_config = ConfigBuilder::test_chain()
             .epoch_length(NonZeroU64::new(3).unwrap())
@@ -317,7 +317,7 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let storage = Store::new_empty().unwrap();
+        let storage = TestStore::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let chain_config =
             ConfigBuilder::test_chain().epoch_length(NonZeroU64::new(1).unwrap()).build();
@@ -445,7 +445,7 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let storage = Store::new_empty().unwrap();
+        let storage = TestStore::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let chain_config = ConfigBuilder::test_chain()
             .epoch_length(NonZeroU64::new(1).unwrap())
@@ -603,7 +603,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn accounting_storage_seal_every_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let storage = Store::new_empty().unwrap();
+        let storage = TestStore::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let chain_config = ConfigBuilder::test_chain()
             .epoch_length(NonZeroU64::new(1).unwrap())
@@ -700,7 +700,7 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn accounting_storage_no_accounting_data(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let storage = Store::new_empty().unwrap();
+        let storage = TestStore::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let chain_config = ConfigBuilder::test_chain()
             .epoch_length(NonZeroU64::new(1).unwrap())

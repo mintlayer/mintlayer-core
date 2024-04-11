@@ -69,7 +69,7 @@ impl<B: storage::Backend> Store<B> {
     }
 
     #[log_error]
-    fn from_backend(backend: B) -> crate::Result<Self> {
+    pub fn from_backend(backend: B) -> crate::Result<Self> {
         let storage = Self(storage::Storage::new(backend).map_err(crate::Error::from)?);
         Ok(storage)
     }

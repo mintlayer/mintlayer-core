@@ -21,7 +21,7 @@ use super::helpers::{block_creation_helpers::*, block_status_helpers::*};
 use chainstate::{
     BlockError, BlockInvalidatorError, BlockSource, ChainstateError, CheckBlockError,
 };
-use chainstate_test_framework::TestFramework;
+use chainstate_test_framework::{storage::Builder as StorageBuilder, TestFramework};
 use chainstate_types::{BlockStatus, BlockValidationStage};
 use common::{
     chain::{
@@ -39,16 +39,30 @@ use test_utils::{
 };
 use utils::atomics::SeqCstAtomicU64;
 
+fn failing_storage() -> StorageBuilder {
+    use chainstate_storage::schema;
+    use chainstate_test_framework::storage::StorageError;
+    StorageBuilder::new(|conf_builder| {
+        conf_builder
+            .write_errors::<schema::DBBlock, _>(0.03, StorageError::MemMapFull)
+            .del_errors::<schema::DBBlock, _>(0.03, StorageError::MemMapFull)
+    })
+}
+
 // Invalidate a0 in:
 // /----a0----a1----a2
 // G----m0----m1----m2----m3
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
-fn test_stale_chain_invalidation(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), StorageBuilder::reliable())]
+#[trace]
+#[case(Seed::from_entropy(), failing_storage())]
+fn test_stale_chain_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_storage(sb.clone().build(Seed(rng.gen())))
+            .build();
         let genesis_id = tf.genesis().get_id();
 
         let m_tip_id = tf.create_chain(&genesis_id.into(), 4, &mut rng).unwrap();

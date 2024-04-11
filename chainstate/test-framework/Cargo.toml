@@ -17,6 +17,8 @@ constraints-value-accumulator = {path = '../constraints-value-accumulator'}
 crypto = { path = "../../crypto" }
 pos-accounting = { path = "../../pos-accounting" }
 serialization = { path = "../../serialization" }
+storage-failing = { path = "../../storage/failing" }
+storage-inmemory = { path = "../../storage/inmemory" }
 test-utils = { path = "../../test-utils" }
 tokens-accounting = {path = '../../tokens-accounting'}
 tx-verifier = { path = "../tx-verifier" }

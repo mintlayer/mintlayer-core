@@ -18,7 +18,8 @@ use std::collections::BTreeMap;
 use ::tx_verifier::transaction_verifier::storage::{
     TransactionVerifierStorageError, TransactionVerifierStorageRef,
 };
-use chainstate_storage::{inmemory::Store, BlockchainStorageRead, TipStorageTag, Transactional};
+use chainstate_storage::{BlockchainStorageRead, TipStorageTag, Transactional};
+use chainstate_test_framework::TestStore;
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
@@ -37,12 +38,12 @@ use tx_verifier::{
 use utxo::UtxosStorageRead;
 
 pub struct InMemoryStorageWrapper {
-    storage: Store,
+    storage: TestStore,
     chain_config: ChainConfig,
 }
 
 impl InMemoryStorageWrapper {
-    pub fn new(storage: Store, chain_config: ChainConfig) -> Self {
+    pub fn new(storage: TestStore, chain_config: ChainConfig) -> Self {
         Self {
             storage,
             chain_config,

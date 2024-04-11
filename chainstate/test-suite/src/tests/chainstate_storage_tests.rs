@@ -16,9 +16,9 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use chainstate_storage::{inmemory::Store, BlockchainStorageRead, Transactional};
+use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+    anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
 };
 use common::{
     chain::{
@@ -38,7 +38,7 @@ use utxo::{Utxo, UtxosStorageRead, UtxosTxUndo};
 #[case(Seed::from_entropy())]
 fn store_coin(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let storage = Store::new_empty().unwrap();
+        let storage = TestStore::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
 
@@ -105,7 +105,7 @@ fn store_coin(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn store_fungible_token_v0(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let storage = Store::new_empty().unwrap();
+        let storage = TestStore::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng)
             .with_storage(storage.clone())
@@ -183,7 +183,7 @@ fn store_fungible_token_v0(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn store_nft_v0(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let storage = Store::new_empty().unwrap();
+        let storage = TestStore::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng)
             .with_storage(storage.clone())
@@ -258,7 +258,7 @@ fn store_nft_v0(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn reorg_store_coin(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let storage = Store::new_empty().unwrap();
+        let storage = TestStore::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
         let genesis_id = tf.genesis().get_id();
@@ -372,7 +372,7 @@ fn reorg_store_coin(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn reorg_store_coin_disposable(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let storage = Store::new_empty().unwrap();
+        let storage = TestStore::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng)
             .with_storage(storage.clone())
