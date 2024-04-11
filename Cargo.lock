@@ -7027,6 +7027,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "storage-failing"
+version = "0.4.2"
+dependencies = [
+ "enumflags2",
+ "storage",
+ "storage-core",
+ "test-utils",
+ "thiserror",
+ "utils",
+]
+
+[[package]]
 name = "storage-inmemory"
 version = "0.4.2"
 dependencies = [
