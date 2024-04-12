@@ -26,7 +26,7 @@ use super::*;
 async fn at_genesis() {
     let url = "/api/v2/chain/tip";
 
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -86,7 +86,7 @@ async fn at_genesis() {
 async fn height_n(#[case] seed: Seed) {
     let url = "/api/v2/chain/tip";
 
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
     let (tx, rx) = tokio::sync::oneshot::channel();

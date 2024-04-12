@@ -129,7 +129,7 @@ arraytools = "0.1"
 assert_cmd = "2.0"
 async-trait = "0.1"
 atomic-traits = "0.4"
-axum = "0.6"
+axum = "0.7"
 base64 = "0.22"
 bech32 = "0.11"
 bip39 = { version = "2.0", default-features = false }
@@ -228,6 +228,7 @@ tokio-util = { version = "0.7", default-features = false }
 toml = "0.8"
 tower = "0.4"
 tower-http = "0.4"
+tower-http-axum = { package = "tower-http", version = "0.5" }
 trust-dns-client = "0.23"
 trust-dns-server = "0.23"
 variant_count = "1.1"

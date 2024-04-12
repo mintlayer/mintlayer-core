@@ -72,7 +72,6 @@ use rstest::rstest;
 use serde_json::json;
 use std::{
     collections::BTreeMap,
-    net::TcpListener,
     sync::{Arc, RwLock},
 };
 use test_utils::random::{make_seedable_rng, Rng, Seed};
@@ -81,7 +80,7 @@ use test_utils::random::{make_seedable_rng, Rng, Seed};
 async fn chain_genesis() {
     let url = "/api/v2/chain/genesis";
 
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
     let (tx, rx) = tokio::sync::oneshot::channel();

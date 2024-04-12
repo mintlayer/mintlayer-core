@@ -104,7 +104,7 @@ async fn main() -> Result<(), ApiServerWebServerInitError> {
     };
 
     web_server(
-        args.bind_address.unwrap_or_default().tcp_listener(),
+        args.bind_address.unwrap_or_default().tcp_listener().await,
         state,
         args.enable_post_routes,
     )

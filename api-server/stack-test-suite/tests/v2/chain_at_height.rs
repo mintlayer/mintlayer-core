@@ -80,7 +80,7 @@ async fn height_n(#[case] seed: Seed) {
     let n_blocks = rng.gen_range(block_height..100);
     let url = format!("/api/v2/chain/{block_height}");
 
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
     let (tx, rx) = tokio::sync::oneshot::channel();
