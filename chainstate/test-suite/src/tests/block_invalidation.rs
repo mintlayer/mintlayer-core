@@ -39,14 +39,29 @@ use test_utils::{
 };
 use utils::atomics::SeqCstAtomicU64;
 
-fn failing_storage() -> StorageBuilder {
+mod storage_configs {
+    use super::StorageBuilder;
     use chainstate_storage::schema;
     use chainstate_test_framework::storage::StorageError;
-    StorageBuilder::new(|conf_builder| {
-        conf_builder
-            .write_errors::<schema::DBBlock, _>(0.03, StorageError::MemMapFull)
-            .del_errors::<schema::DBBlock, _>(0.03, StorageError::MemMapFull)
-    })
+
+    pub fn reliable() -> StorageBuilder {
+        StorageBuilder::reliable()
+    }
+
+    pub fn failing() -> StorageBuilder {
+        // Unfortunately, letting the commit operation fail throws off the test framework
+        StorageBuilder::new(|conf_builder| {
+            conf_builder
+                .write_errors::<schema::DBBlock, _>(0.03, StorageError::MemMapFull)
+                .del_errors::<schema::DBBlock, _>(0.03, StorageError::MemMapFull)
+        })
+    }
+
+    pub fn failing_add_only() -> StorageBuilder {
+        StorageBuilder::new(|conf_builder| {
+            conf_builder.write_errors::<schema::DBBlock, _>(0.03, StorageError::MemMapFull)
+        })
+    }
 }
 
 // Invalidate a0 in:
@@ -54,9 +69,9 @@ fn failing_storage() -> StorageBuilder {
 // G----m0----m1----m2----m3
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy(), StorageBuilder::reliable())]
+#[case(Seed::from_entropy(), storage_configs::reliable())]
 #[trace]
-#[case(Seed::from_entropy(), failing_storage())]
+#[case(Seed::from_entropy(), storage_configs::failing())]
 fn test_stale_chain_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -106,11 +121,15 @@ fn test_stale_chain_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder)
 // G----m0----m1
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
-fn test_basic_tip_invalidation(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), storage_configs::reliable())]
+#[trace]
+#[case(Seed::from_entropy(), storage_configs::failing())]
+fn test_basic_tip_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_storage(sb.clone().build(Seed(rng.gen())))
+            .build();
         let genesis_id = tf.genesis().get_id();
 
         let (m0_id, result) = process_block(&mut tf, &genesis_id.into(), &mut rng);
@@ -137,11 +156,15 @@ fn test_basic_tip_invalidation(#[case] seed: Seed) {
 // G----m0----m1
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
-fn test_basic_parent_invalidation(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), storage_configs::reliable())]
+#[trace]
+#[case(Seed::from_entropy(), storage_configs::failing())]
+fn test_basic_parent_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_storage(sb.clone().build(Seed(rng.gen())))
+            .build();
         let genesis_id = tf.genesis().get_id();
 
         let (m0_id, result) = process_block(&mut tf, &genesis_id.into(), &mut rng);
@@ -606,11 +629,15 @@ fn complex_test_after_reload(#[case] seed: Seed) {
 // where a0 and m0 have the same chain trust. The reorg should not occur.
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
-fn test_tip_invalidation_with_no_better_candidates(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), storage_configs::reliable())]
+#[trace]
+#[case(Seed::from_entropy(), storage_configs::failing())]
+fn test_tip_invalidation_with_no_better_candidates(#[case] seed: Seed, #[case] sb: StorageBuilder) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_storage(sb.clone().build(Seed(rng.gen())))
+            .build();
         let genesis_id = tf.genesis().get_id();
 
         let (m0_id, result) = process_block(&mut tf, &genesis_id.into(), &mut rng);
@@ -873,11 +900,15 @@ fn test_invalidation_with_reorg_to_chain_with_tip_far_in_the_future(#[case] seed
 // its status to ok and add 2 more blocks on top of it.
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
-fn test_reset_bad_stale_tip_status_and_add_blocks(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), storage_configs::reliable())]
+#[trace]
+#[case(Seed::from_entropy(), storage_configs::failing_add_only())]
+fn test_reset_bad_stale_tip_status_and_add_blocks(#[case] seed: Seed, #[case] sb: StorageBuilder) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_storage(sb.clone().build(Seed(rng.gen())))
+            .build();
         let genesis_id = tf.genesis().get_id();
 
         let (m0_id, result) = process_block(&mut tf, &genesis_id.into(), &mut rng);
