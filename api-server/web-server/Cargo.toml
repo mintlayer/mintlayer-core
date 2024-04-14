@@ -25,7 +25,6 @@ axum.workspace = true
 async-trait.workspace = true
 clap = { workspace = true, features = ["derive"] }
 hex.workspace = true
-hyper.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
