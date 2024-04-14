@@ -167,8 +167,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
                             help="Don't use the syscall sandbox")
         parser.add_argument("--noshutdown", dest="noshutdown", default=False, action="store_true",
                             help="Don't stop bitcoinds after the test execution")
-        parser.add_argument("--cachedir", dest="cachedir", default=os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + "/../../cache"),
-                            help="Directory for caching pregenerated datadirs (default: %(default)s)")
+        parser.add_argument("--cachedir", dest="cachedir", help="Directory for caching pregenerated datadirs (default: tmpdir/cache)")
         parser.add_argument("--tmpdir", dest="tmpdir", help="Root directory for datadirs")
         parser.add_argument("-l", "--loglevel", dest="loglevel", default="INFO",
                             help="log events at this level and higher to the console. Can be set to DEBUG, INFO, WARNING, ERROR or CRITICAL. Passing --loglevel DEBUG will output all logs to console. Note that logs at all levels are always written to the test_framework.log file in the temporary test directory.")
@@ -208,6 +207,9 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         # source: https://stackoverflow.com/questions/48796169/how-to-fix-ipykernel-launcher-py-error-unrecognized-arguments-in-jupyter/56349168#56349168
         parser.add_argument("-f", "--fff", help="a dummy argument to fool ipython", default="1")
         self.options = parser.parse_args()
+        # if not specified set the cachedir to be inside the tmpdir
+        if self.options.cachedir:
+            self.options.cachedir = self.options.tmpdir + "/cache"
         self.options.previous_releases_path = previous_releases_path
 
         config = configparser.ConfigParser()
