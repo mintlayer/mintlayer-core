@@ -196,6 +196,7 @@ Parameters:
 ```
 {
     "input_tx_id": hex string,
+    "input_idx": number,
     "num_transactions": number,
     "amount_to_spend": number,
     "fee_per_tx": number,

@@ -105,6 +105,7 @@ trait RpcTestFunctionsRpc {
     async fn generate_transactions(
         &self,
         input_tx_id: Id<Transaction>,
+        input_idx: u32,
         num_transactions: u32,
         amount_to_spend: u64,
         fee_per_tx: u64,
@@ -294,6 +295,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
     async fn generate_transactions(
         &self,
         mut input_tx_id: Id<Transaction>,
+        mut input_idx: u32,
         num_transactions: u32,
         amount_to_spend: u64,
         fee_per_tx: u64,
@@ -308,7 +310,8 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         let fee_per_tx = (fee_per_tx as u128) * coin_decimal_factor;
         let mut transactions = vec![];
         for _ in 0..num_transactions {
-            let inputs = vec![TxInput::from_utxo(OutPointSourceId::Transaction(input_tx_id), 0)];
+            let inputs =
+                vec![TxInput::from_utxo(OutPointSourceId::Transaction(input_tx_id), input_idx)];
             let mut outputs = vec![TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(amount_to_spend)),
                 Destination::AnyoneCanSpend,
@@ -327,6 +330,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
             .expect("num signatures ok");
 
             input_tx_id = transaction.transaction().get_id();
+            input_idx = 0;
             amount_to_spend -= 10000;
             amount_to_spend -= fee_per_tx;
 

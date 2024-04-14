@@ -154,7 +154,6 @@ BASE_SCRIPTS = [
     'wallet_decommission_request.py',
     'wallet_delegations.py',
     'wallet_delegations_rpc.py',
-    'wallet_high_fee.py',
     'wallet_generate_addresses.py',
     'wallet_set_lookahead_size.py',
     'wallet_connect_to_rpc.py',
@@ -166,6 +165,7 @@ BASE_SCRIPTS = [
     'mempool_submit_tx.py',
     'mempool_timelocked_tx.py',
     'mempool_feerate_points.py',
+    'wallet_high_fee.py',
 
     # Don't append tests at the end to avoid merge conflicts
     # Put them in a random line within the section that fits their approximate run-time
