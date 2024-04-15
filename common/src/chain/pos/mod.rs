@@ -144,13 +144,16 @@ pub fn pos_initial_difficulty(chain_type: ChainType) -> Uint256 {
             0xFFFFFFFFFFFFFFFF,
             0x00000000FFFFFFFF,
         ]),
-        // Note: the value is Uint256::MAX / target_block_time which helps staking without long warm up.
-        // It's hardcoded because division for Uint256 is not const
+        // Note: this is Uint256::MAX / min_stake_pool_pledge / 2, rounded down.
+        // Using this value makes staking succeed quickly in tests. On the other hand, it also
+        // guarantees some variety, ensuring that staking on top of genesis with a "typical"
+        // test pool (with pledge = balance = min_stake_pool_pledge) will succeed on the first
+        // attempted timestamp with the probability not bigger than 0.5.
         ChainType::Regtest => Uint256([
-            0x2222222222222222,
-            0x2222222222222222,
-            0x2222222222222222,
-            0x0222222222222222,
+            0x0000000000000000,
+            0x0000000000000000,
+            0x0000000000000000,
+            0x0000000000000900,
         ]),
     }
 }

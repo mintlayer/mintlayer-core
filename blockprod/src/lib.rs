@@ -138,7 +138,9 @@ mod tests {
         },
         primitives::{per_thousand::PerThousand, Amount, BlockHeight, Idable, H256},
         time_getter::TimeGetter,
+        Uint256, Uint512,
     };
+    use consensus::calculate_effective_pool_balance;
     use crypto::{
         key::{KeyKind, PrivateKey},
         random::Rng,
@@ -287,19 +289,21 @@ mod tests {
     pub fn setup_pos(seed: Seed) -> (ChainConfig, PrivateKey, VRFPrivateKey, TxOutput) {
         let mut rng = make_seedable_rng(seed);
 
+        let initial_target = pos_initial_difficulty(ChainType::Regtest);
+
         let (genesis_stake_private_key, genesis_stake_public_key) =
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
         let (genesis_vrf_private_key, genesis_vrf_public_key) =
             VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-        let create_genesis_pool_txoutput = {
-            let min_stake_pool_pledge = {
-                // throw away just to get value
-                let chain_config = create_unit_test_config();
-                chain_config.min_stake_pool_pledge()
-            };
+        let min_stake_pool_pledge = {
+            // throw away just to get value
+            let chain_config = create_unit_test_config();
+            chain_config.min_stake_pool_pledge()
+        };
 
+        let create_genesis_pool_txoutput = {
             TxOutput::CreateStakePool(
                 H256::zero().into(),
                 Box::new(StakePoolData::new(
@@ -334,7 +338,7 @@ mod tests {
                 (
                     BlockHeight::new(1),
                     ConsensusUpgrade::PoS {
-                        initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
+                        initial_difficulty: Some(initial_target.into()),
                         config: PoSChainConfigBuilder::new_for_unit_test().build(),
                     },
                 ),
@@ -346,6 +350,25 @@ mod tests {
                 .consensus_upgrades(net_upgrades)
                 .build()
         };
+
+        {
+            // Sanity check - ensure that the initial target is not too big, so that staking on top
+            // of the genesis will actually need to advance the timestamp to succeed.
+            let typical_test_pool_effective_balance: Uint512 = calculate_effective_pool_balance(
+                min_stake_pool_pledge,
+                min_stake_pool_pledge,
+                pos_chain_config.final_supply().unwrap().to_amount_atoms(),
+            )
+            .unwrap()
+            .into();
+
+            let effective_target =
+                (typical_test_pool_effective_balance * initial_target.into()).unwrap();
+            assert!(
+                effective_target <= (Uint256::MAX / Uint256::from_u64(2)).unwrap().into(),
+                "Initial target is too big"
+            );
+        }
 
         (
             pos_chain_config,
