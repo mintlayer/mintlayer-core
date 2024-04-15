@@ -227,7 +227,6 @@ tokio-stream = "0.1"
 tokio-util = { version = "0.7", default-features = false }
 toml = "0.8"
 tower = "0.4"
-tower-http = "0.4"
 tower-http-axum = { package = "tower-http", version = "0.5" }
 trust-dns-client = "0.23"
 trust-dns-server = "0.23"

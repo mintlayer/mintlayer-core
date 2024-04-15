@@ -28,7 +28,9 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tower = { workspace = true, features = ["util"] }
-tower-http = { workspace = true, features = ["auth", "set-header"] }
+
+# This we keep here, and not in the workspace, because it comes from jsonrpsee and requires an older version
+tower-http = { version = "0.4", features = ["auth", "set-header"] }
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
