@@ -514,9 +514,9 @@ async fn send_block_from_the_future_again(#[case] seed: Seed) {
                 .chainstate()
                 .call(move |cs| {
                     (
-                        cs.get_block_index(&normal_block_id).unwrap(),
+                        cs.get_block_index_for_any_block(&normal_block_id).unwrap(),
                         cs.get_block(normal_block_id).unwrap(),
-                        cs.get_block_index(&future_block_id).unwrap(),
+                        cs.get_block_index_for_any_block(&future_block_id).unwrap(),
                         cs.get_block(future_block_id).unwrap(),
                     )
                 })
@@ -560,7 +560,7 @@ async fn send_block_from_the_future_again(#[case] seed: Seed) {
                 .chainstate()
                 .call(move |cs| {
                     (
-                        cs.get_block_index(&future_block_id).unwrap(),
+                        cs.get_block_index_for_persisted_block(&future_block_id).unwrap(),
                         cs.get_block(future_block_id).unwrap(),
                     )
                 })

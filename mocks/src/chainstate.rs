@@ -92,11 +92,19 @@ mockall::mock! {
             &self,
             headers: Vec<SignedBlockHeader>,
         ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError>;
-        fn get_block_index(
+        fn get_block_index_for_persisted_block(
             &self,
             id: &Id<Block>
         ) -> Result<Option<BlockIndex>, ChainstateError>;
-        fn get_gen_block_index(
+        fn get_block_index_for_any_block(
+            &self,
+            id: &Id<Block>
+        ) -> Result<Option<BlockIndex>, ChainstateError>;
+        fn get_gen_block_index_for_persisted_block(
+            &self,
+            id: &Id<GenBlock>,
+        ) -> Result<Option<GenBlockIndex>, ChainstateError>;
+        fn get_gen_block_index_for_any_block(
             &self,
             id: &Id<GenBlock>,
         ) -> Result<Option<GenBlockIndex>, ChainstateError>;

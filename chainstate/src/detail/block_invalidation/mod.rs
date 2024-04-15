@@ -286,17 +286,15 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
         self.chainstate.with_rw_tx(
             |chainstate_ref| {
                 for cur_index in &block_indices_to_clear {
-                    let should_delete_index = chainstate_ref
-                        .get_block(*cur_index.block_id())
-                        .map_err(|err| {
-                            BlockInvalidatorError::BlockQueryError(*cur_index.block_id(), err)
-                        })?
-                        .is_none();
-
-                    if should_delete_index {
-                        chainstate_ref.del_block_index(cur_index.block_id()).map_err(|err| {
-                            BlockInvalidatorError::DelBlockIndexError(*cur_index.block_id(), err)
-                        })?;
+                    if !cur_index.is_persisted() {
+                        chainstate_ref
+                            .del_block_index_of_non_persisted_block(cur_index.block_id())
+                            .map_err(|err| {
+                                BlockInvalidatorError::DelBlockIndexError(
+                                    *cur_index.block_id(),
+                                    err,
+                                )
+                            })?;
                     } else {
                         update_block_status(
                             chainstate_ref,
@@ -356,8 +354,6 @@ pub enum BlockInvalidatorError {
     BestBlockIndexQueryError(PropertyQueryError),
     #[error("Failed to obtain block index for block {0}: {1}")]
     BlockIndexQueryError(Id<GenBlock>, PropertyQueryError),
-    #[error("Failed to obtain block {0}: {1}")]
-    BlockQueryError(Id<Block>, PropertyQueryError),
     #[error("Error deleting index for block {0}: {1}")]
     DelBlockIndexError(Id<Block>, BlockError),
 }

@@ -124,14 +124,30 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(res)
     }
 
-    pub fn get_block_index(
+    pub fn get_block_index_for_persisted_block(
+        &self,
+        id: &Id<Block>,
+    ) -> Result<Option<BlockIndex>, PropertyQueryError> {
+        let index = self.chainstate_ref.get_block_index(id)?;
+        Ok(index.and_then(|index| index.is_persisted().then_some(index)))
+    }
+
+    pub fn get_block_index_for_any_block(
         &self,
         id: &Id<Block>,
     ) -> Result<Option<BlockIndex>, PropertyQueryError> {
         self.chainstate_ref.get_block_index(id)
     }
 
-    pub fn get_gen_block_index(
+    pub fn get_gen_block_index_for_persisted_block(
+        &self,
+        id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
+        let index = self.chainstate_ref.get_gen_block_index(id)?;
+        Ok(index.and_then(|index| index.is_persisted().then_some(index)))
+    }
+
+    pub fn get_gen_block_index_for_any_block(
         &self,
         id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {

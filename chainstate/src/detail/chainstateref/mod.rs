@@ -14,6 +14,7 @@
 // limitations under the License.
 
 mod block_info;
+mod consistency_checker;
 mod epoch_seal;
 mod in_memory_reorg;
 mod tx_verifier_storage;
@@ -48,12 +49,15 @@ use common::{
 use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
 use tx_verifier::transaction_verifier::TransactionVerifier;
-use utils::{ensure, log_error, tap_log::TapLog};
+use utils::{debug_assert_or_log, ensure, log_error, tap_log::TapLog};
 use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
 
 use crate::{BlockError, ChainstateConfig};
 
-use self::{block_info::BlockInfo, tx_verifier_storage::gen_block_index_getter};
+use self::{
+    block_info::BlockInfo, consistency_checker::ConsistencyChecker,
+    tx_verifier_storage::gen_block_index_getter,
+};
 
 use super::{
     median_time::calculate_median_time_past, transaction_verifier::flush::flush_to_storage,
@@ -252,6 +256,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
         self.db_tx.get_block(block_id).map_err(PropertyQueryError::from)
+    }
+
+    #[log_error]
+    pub fn block_exists(&self, block_id: Id<Block>) -> Result<bool, PropertyQueryError> {
+        self.db_tx.block_exists(block_id).map_err(PropertyQueryError::from)
     }
 
     #[log_error]
@@ -973,6 +982,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         );
         Ok(block_index)
     }
+
+    /// Panic if block index consistency is violated.
+    /// An error is only returned if the checks couldn't be performed for some reason.
+    #[log_error]
+    pub fn check_consistency(&self) -> Result<(), chainstate_storage::Error> {
+        ConsistencyChecker::new(&self.db_tx, self.chain_config)?.check()
+    }
 }
 
 impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> ChainstateRef<'a, S, V> {
@@ -1194,7 +1210,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
     #[log_error]
     pub fn persist_block(&mut self, block: &WithId<Block>) -> Result<(), BlockError> {
-        if (self.db_tx.get_block(block.get_id()).map_err(BlockError::from)?).is_some() {
+        if self.db_tx.block_exists(block.get_id()).map_err(BlockError::from)? {
             return Err(BlockError::BlockAlreadyExists(block.get_id()));
         }
 
@@ -1214,9 +1230,24 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         self.set_block_index(block_index)
     }
 
+    /// Delete the block index for the specified block id.
+    /// Panic if the block is marked as persisted.
     #[log_error]
-    pub fn del_block_index(&mut self, block_id: &Id<Block>) -> Result<(), BlockError> {
-        self.db_tx.del_block_index(*block_id).map_err(BlockError::from)
+    pub fn del_block_index_of_non_persisted_block(
+        &mut self,
+        block_id: &Id<Block>,
+    ) -> Result<(), BlockError> {
+        if let Some(existing_block_index) = self.db_tx.get_block_index(block_id)? {
+            // Note: here we're being extra-cautious about someone mis-using this function, so we only panic in
+            // debug mode.
+            debug_assert_or_log!(
+                !existing_block_index.is_persisted(),
+                "Trying to delete a block index for a persisted block {block_id}"
+            );
+
+            self.db_tx.del_block_index(*block_id)?;
+        }
+        Ok(())
     }
 
     /// Update the status of the passed `block_index`.
@@ -1229,15 +1260,10 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     ) -> Result<(), BlockError> {
         #[cfg(debug_assertions)]
         if let Some(existing_block_index) = self.db_tx.get_block_index(block_index.block_id())? {
-            assert!(existing_block_index == block_index);
+            assert!(existing_block_index.is_identical_to(&block_index));
         }
 
         self.set_block_index(&block_index.with_status(block_status))
-    }
-
-    fn calc_min_height_with_allowed_reorg(&self, current_tip_height: BlockHeight) -> BlockHeight {
-        let result = current_tip_height - self.chain_config.max_depth_for_reorg();
-        result.unwrap_or(0.into())
     }
 
     #[log_error]
@@ -1249,7 +1275,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             .get_best_block_index()
             .map_err(BlockError::BestBlockIndexQueryError)?
             .block_height();
-        let calculated_min_height = self.calc_min_height_with_allowed_reorg(current_tip_height);
+        let calculated_min_height =
+            calc_min_height_with_allowed_reorg(self.chain_config, current_tip_height);
         self.db_tx
             .set_min_height_with_allowed_reorg(max(stored_min_height, calculated_min_height))?;
         Ok(())
@@ -1307,6 +1334,14 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         consumed_epoch_data.flush(&mut self.db_tx)?;
         Ok(())
     }
+}
+
+fn calc_min_height_with_allowed_reorg(
+    chain_config: &ChainConfig,
+    current_tip_height: BlockHeight,
+) -> BlockHeight {
+    let result = current_tip_height - chain_config.max_depth_for_reorg();
+    result.unwrap_or(0.into())
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

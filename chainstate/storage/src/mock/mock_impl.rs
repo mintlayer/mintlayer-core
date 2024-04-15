@@ -15,7 +15,7 @@
 
 //! A mock version of the blockchain storage.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use chainstate_types::{BlockIndex, EpochData, EpochStorageRead, EpochStorageWrite};
 use common::{
@@ -50,6 +50,7 @@ mockall::mock! {
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+        fn block_exists(&self, id: Id<Block>) -> crate::Result<bool>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
         fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
@@ -89,6 +90,10 @@ mockall::mock! {
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
         fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
+
+        fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
+        fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>>;
+        fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>>;
     }
 
     impl EpochStorageRead for Store {
@@ -320,6 +325,7 @@ mockall::mock! {
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+        fn block_exists(&self, id: Id<Block>) -> crate::Result<bool>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
         fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
@@ -354,6 +360,10 @@ mockall::mock! {
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
         fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
+
+        fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
+        fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>>;
+        fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>>;
     }
 
     impl EpochStorageRead for StoreTxRo {
@@ -432,6 +442,7 @@ mockall::mock! {
         fn get_chain_type(&self) -> crate::Result<Option<String>>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+        fn block_exists(&self, id: Id<Block>) -> crate::Result<bool>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
         fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
@@ -465,7 +476,11 @@ mockall::mock! {
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
-       fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
+        fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
+
+        fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>>;
+        fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>>;
+        fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>>;
     }
 
     impl EpochStorageRead for StoreTxRw {

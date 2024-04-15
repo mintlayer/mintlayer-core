@@ -29,7 +29,6 @@ use crypto::random::CryptoRng;
 fn genesis_check_ok(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
     // Get initial storage from the test framework.
 
-    use chainstate::ChainstateConfig;
     let storage = {
         let mut tf = TestFramework::builder(rng).build();
         for _ in 0..num_blocks {
@@ -49,26 +48,15 @@ fn genesis_check_ok(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
         tf.storage
     };
 
-    let chainstate_config = ChainstateConfig {
-        max_db_commit_attempts: Default::default(),
-        max_orphan_blocks: Default::default(),
-        min_max_bootstrap_import_buffer_sizes: Default::default(),
-        max_tip_age: Default::default(),
-    };
-
     // Initialize a different test framework with given storage.
     // The test framework should pass the genesis check (panics if not)
-    let _tf = TestFramework::builder(rng)
-        .with_chainstate_config(chainstate_config)
-        .with_storage(storage)
-        .build();
+    let _tf = TestFramework::builder(rng).with_storage(storage).build();
 }
 
 #[cfg(not(loom))]
 fn genesis_check_err(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
     // Two different configs with separate genesis IDs.
 
-    use chainstate::ChainstateConfig;
     let conf0 = ChainConfigBuilder::new(ChainType::Regtest)
         .consensus_upgrades(NetUpgrades::unit_tests())
         .genesis_unittest(common::chain::Destination::ScriptHash(Id::new(
@@ -103,17 +91,9 @@ fn genesis_check_err(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
         tf.storage
     };
 
-    let chainstate_config = ChainstateConfig {
-        max_db_commit_attempts: Default::default(),
-        max_orphan_blocks: Default::default(),
-        min_max_bootstrap_import_buffer_sizes: Default::default(),
-        max_tip_age: Default::default(),
-    };
-
     // Start another chain with different genesis using the previous storage
     let result = TestFramework::builder(rng)
         .with_chain_config(conf1)
-        .with_chainstate_config(chainstate_config)
         .with_storage(storage)
         .try_build();
 

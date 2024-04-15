@@ -16,10 +16,11 @@
 use std::sync::Arc;
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, GenBlock, Genesis},
+    chain::{block::timestamp::BlockTimestamp, ChainConfig, GenBlock, Genesis},
     primitives::{id::WithId, BlockHeight, Id, Idable},
     Uint256,
 };
+use static_assertions::assert_not_impl_any;
 
 use crate::{BlockIndex, BlockStatus};
 
@@ -81,10 +82,35 @@ impl GenBlockIndex {
         }
     }
 
+    pub fn is_persisted(&self) -> bool {
+        match self {
+            GenBlockIndex::Block(b) => b.is_persisted(),
+            GenBlockIndex::Genesis(..) => true,
+        }
+    }
+
     pub fn chain_transaction_count(&self) -> u128 {
         match self {
             GenBlockIndex::Block(b) => b.chain_transaction_count(),
             GenBlockIndex::Genesis(_) => 0,
+        }
+    }
+
+    pub fn genesis(chain_config: &ChainConfig) -> Self {
+        Self::Genesis(Arc::clone(chain_config.genesis_block()))
+    }
+
+    /// Return true if all fields of this GenBlockIndex are exactly the same as other's.
+    /// Note: same as in BlockIndex, we deliberately don't call this relation "equality".
+    pub fn is_identical_to(&self, other: &GenBlockIndex) -> bool {
+        match (self, other) {
+            (Self::Block(b1), Self::Block(b2)) => b1.is_identical_to(b2),
+            (Self::Genesis(g1), Self::Genesis(g2)) => {
+                let eq = Arc::ptr_eq(g1, g2);
+                debug_assert!(eq, "Attempt to compare different geneses");
+                eq
+            }
+            (Self::Block(_), Self::Genesis(_)) | (Self::Genesis(_), Self::Block(_)) => false,
         }
     }
 }
@@ -94,3 +120,6 @@ impl From<BlockIndex> for GenBlockIndex {
         GenBlockIndex::Block(bi)
     }
 }
+
+// Forbid implementing Eq and PartialEq for GenBlockIndex.
+assert_not_impl_any!(GenBlockIndex: Eq, PartialEq);

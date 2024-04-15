@@ -51,7 +51,6 @@ use crypto::{
     random::Rng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use logging::log;
 use rstest::rstest;
 use test_utils::{
     assert_matches,
@@ -305,7 +304,7 @@ fn orphans_chains(#[case] seed: Seed) {
             .chain_block_id()
             .unwrap();
         assert_eq!(
-            tf.block_index(&current_best.into()).block_height(),
+            tf.block_index(&current_best).block_height(),
             (MAX_ORPHANS_COUNT_IN_TEST as u64).into()
         );
         // There should be no more orphan blocks left.
@@ -420,19 +419,14 @@ fn straight_chain(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let genesis_index = tf
-            .chainstate
-            .get_gen_block_index(&tf.genesis().get_id().into())
-            .unwrap()
-            .unwrap();
+        let genesis_index = tf.gen_block_index_opt(&tf.genesis().get_id().into()).unwrap();
 
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
         assert_eq!(genesis_index.chain_trust(), Uint256::ZERO);
         assert_eq!(genesis_index.block_height(), BlockHeight::new(0));
 
         let chain_config_clone = tf.chainstate.get_chain_config();
-        let mut block_index =
-            GenBlockIndex::Genesis(Arc::clone(chain_config_clone.genesis_block()));
+        let mut block_index = GenBlockIndex::genesis(chain_config_clone);
         let mut prev_blk_id: Id<GenBlock> = tf.genesis().get_id().into();
 
         for _ in 0..rng.gen_range(100..200) {
@@ -584,7 +578,7 @@ fn get_ancestor(#[case] seed: Seed) {
         ancestor.block_id(),
         tf.chainstate
             .get_ancestor(
-                &tf.block_index(&last_block_in_second_chain),
+                &tf.gen_block_index(&last_block_in_second_chain),
                 u64::try_from(ANCESTOR_HEIGHT).unwrap().into()
             )
             .expect("ancestor")
@@ -607,7 +601,7 @@ fn last_common_ancestor(#[case] seed: Seed) {
     tf.create_chain(&tf.genesis().get_id().into(), SPLIT_HEIGHT, &mut rng)
         .expect("Chain creation to succeed");
     let config_clone = tf.chainstate.get_chain_config();
-    let genesis = GenBlockIndex::Genesis(Arc::clone(config_clone.genesis_block()));
+    let genesis = GenBlockIndex::genesis(config_clone);
     let split = GenBlockIndex::Block(tf.index_at(SPLIT_HEIGHT).clone());
 
     // First branch of fork
@@ -627,7 +621,7 @@ fn last_common_ancestor(#[case] seed: Seed) {
             &mut rng,
         )
         .unwrap();
-    let last_block_in_second_chain = tf.block_index(&last_block_in_second_chain);
+    let last_block_in_second_chain = tf.gen_block_index(&last_block_in_second_chain);
 
     assert_eq!(
         tf.chainstate
@@ -1223,7 +1217,7 @@ fn temporarily_bad_block_not_invalidated_during_integration(#[case] seed: Seed) 
             .with_timestamp(BlockTimestamp::from_int_seconds(future_block_time_secs))
             .build();
         let future_block_id = future_block.get_id();
-        let result = tf.process_block(future_block.clone(), BlockSource::Local);
+        let error = tf.process_block(future_block.clone(), BlockSource::Local).unwrap_err();
 
         let expected_error =
             BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture(future_block_id));
@@ -1231,10 +1225,7 @@ fn temporarily_bad_block_not_invalidated_during_integration(#[case] seed: Seed) 
             expected_error.classify(),
             BlockProcessingErrorClass::TemporarilyBadBlock
         );
-        assert_eq!(
-            result,
-            Err(ChainstateError::ProcessBlockError(expected_error))
-        );
+        assert_eq!(error, ChainstateError::ProcessBlockError(expected_error));
 
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
@@ -1254,7 +1245,7 @@ fn temporarily_bad_block_not_invalidated_during_integration(#[case] seed: Seed) 
 // Check that a block is not invalidated if it is rejected with the "TemporarilyBadBlock" kind
 // of error, when it happens during a reorg. Also check that the block can be successfully
 // reorged to later, when it's no longer considered invalid.
-// 1) Advance time into the future and add a sidechain block at that time;
+// 1) Advance time into the future and add a stale-chain block at that time;
 // 2) Reset the time; reset the "future" blocks status, so that check_block will be called again
 // on it during a reorg.
 // 3) Add some valid blocks on top of the future block, triggering a reorg.
@@ -1299,7 +1290,6 @@ fn temporarily_bad_block_not_invalidated_after_reorg(#[case] seed: Seed) {
         assert!(result.is_ok());
 
         let (c0_id, result) = process_block(&mut tf, &future_block_id.into(), &mut rng);
-        log::error!("result = {result:?}");
         assert!(result.is_ok());
         let (c1_id, result) = process_block(&mut tf, &c0_id.into(), &mut rng);
         assert!(result.is_ok());
@@ -1316,10 +1306,14 @@ fn temporarily_bad_block_not_invalidated_after_reorg(#[case] seed: Seed) {
 
         // We want the bad block to be Unchecked, so that check_block is called again on it during reorg.
         tf.set_block_status(&future_block_id, BlockStatus::new());
+        // Reset the statuses of c0 and c1 as well, to preserve the invariant that the parent must be
+        // at least as valid as its children.
+        tf.set_block_status(&c0_id, BlockStatus::new());
+        tf.set_block_status(&c1_id, BlockStatus::new());
 
         let c2 = build_block(&mut tf, &c1_id.into(), &mut rng);
         let c2_id = c2.get_id();
-        let result = tf.process_block(c2.clone(), BlockSource::Local);
+        let error = tf.process_block(c2.clone(), BlockSource::Local).unwrap_err();
 
         let expected_error =
             BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture(future_block_id));
@@ -1327,15 +1321,15 @@ fn temporarily_bad_block_not_invalidated_after_reorg(#[case] seed: Seed) {
             expected_error.classify(),
             BlockProcessingErrorClass::TemporarilyBadBlock
         );
-        assert_eq!(
-            result,
-            Err(ChainstateError::ProcessBlockError(expected_error))
-        );
+        assert_eq!(error, ChainstateError::ProcessBlockError(expected_error));
 
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
-        assert_ok_blocks_at_stage(&tf, &[future_block_id], BlockValidationStage::Unchecked);
-        assert_ok_blocks_at_stage(&tf, &[c0_id, c1_id], BlockValidationStage::CheckBlockOk);
+        assert_ok_blocks_at_stage(
+            &tf,
+            &[future_block_id, c0_id, c1_id],
+            BlockValidationStage::Unchecked,
+        );
         // An "ok" block index is not saved for a block that wasn't persisted.
         assert_no_block_indices(&tf, &[c2_id]);
 

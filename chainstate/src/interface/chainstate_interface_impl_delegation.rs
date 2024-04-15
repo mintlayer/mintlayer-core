@@ -170,15 +170,32 @@ where
         self.deref().split_off_leading_known_headers(headers)
     }
 
-    fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError> {
-        self.deref().get_block_index(id)
+    fn get_block_index_for_persisted_block(
+        &self,
+        id: &Id<Block>,
+    ) -> Result<Option<BlockIndex>, ChainstateError> {
+        self.deref().get_block_index_for_persisted_block(id)
     }
 
-    fn get_gen_block_index(
+    fn get_block_index_for_any_block(
+        &self,
+        id: &Id<Block>,
+    ) -> Result<Option<BlockIndex>, ChainstateError> {
+        self.deref().get_block_index_for_any_block(id)
+    }
+
+    fn get_gen_block_index_for_persisted_block(
         &self,
         id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, ChainstateError> {
-        self.deref().get_gen_block_index(id)
+        self.deref().get_gen_block_index_for_persisted_block(id)
+    }
+
+    fn get_gen_block_index_for_any_block(
+        &self,
+        id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex>, ChainstateError> {
+        self.deref().get_gen_block_index_for_any_block(id)
     }
 
     fn get_best_block_index(&self) -> Result<GenBlockIndex, ChainstateError> {
@@ -432,6 +449,7 @@ mod tests {
                 max_orphan_blocks: 0.into(),
                 min_max_bootstrap_import_buffer_sizes: Default::default(),
                 max_tip_age: Default::default(),
+                enable_heavy_checks: Some(true),
             };
             let chainstate_storage = Store::new_empty().unwrap();
 

@@ -83,15 +83,15 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
 
         assert_eq!(
-            result,
-            Err(ChainstateError::ProcessBlockError(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::ConstrainedValueAccumulatorError(
                     constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
                         CoinOrTokenId::TokenId(token_id)
                     ),
                     tx_id.into()
                 ))
-            ))
+            )
         );
 
         // Burn zero NFT

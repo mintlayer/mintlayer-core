@@ -63,10 +63,10 @@ fn data_deposited_too_large(#[case] seed: Seed, #[case] expect_success: bool) {
                 .unwrap()
                 .unwrap();
         } else {
-            let result = tf.process_block(block.clone(), chainstate::BlockSource::Local);
+            let err = tf.process_block(block.clone(), chainstate::BlockSource::Local).unwrap_err();
 
-            let expected_err = Err(ChainstateError::ProcessBlockError(
-                BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+            let expected_err = ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTransactionError(
                         CheckTransactionError::DataDepositMaxSizeExceeded(
                             deposited_data_len,
@@ -74,10 +74,10 @@ fn data_deposited_too_large(#[case] seed: Seed, #[case] expect_success: bool) {
                             tx.transaction().get_id(),
                         ),
                     ),
-                )),
+                ),
             ));
 
-            assert_eq!(result, expected_err);
+            assert_eq!(err, expected_err);
         }
     })
 }
@@ -154,16 +154,16 @@ fn data_deposit_insufficient_fee(
                 .unwrap()
                 .unwrap();
         } else {
-            let result = tf.process_block(block.clone(), chainstate::BlockSource::Local);
+            let err = tf.process_block(block.clone(), chainstate::BlockSource::Local).unwrap_err();
 
-            let expected_err = Err(ChainstateError::ProcessBlockError(
+            let expected_err = ChainstateError::ProcessBlockError(
                 BlockError::StateUpdateFailed(ConnectTransactionError::ConstrainedValueAccumulatorError(
                     constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin),
                     tx_id.into(),
                 )),
-            ));
+            );
 
-            assert_eq!(result, expected_err);
+            assert_eq!(err, expected_err);
         }
     })
 }
@@ -221,19 +221,17 @@ fn data_deposit_output_attempt_spend(#[case] seed: Seed) {
 
         let block = tf.make_block_builder().add_transaction(tx.clone()).build();
 
-        let result = tf.process_block(block.clone(), chainstate::BlockSource::Local);
+        let err = tf.process_block(block.clone(), chainstate::BlockSource::Local).unwrap_err();
 
         // The data output isn't included in the utxo set, so it can't be spent and will be seen as missing.
         // This is because of how "non-spendable" outputs are handled in the UTXO set, where they're simply ignored.
-        let expected_err = Err(ChainstateError::ProcessBlockError(
-            BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent(
-                UtxoOutPoint::new(
-                    OutPointSourceId::Transaction(tx_with_data_as_output.transaction().get_id()),
-                    1,
-                ),
+        let expected_err = ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+            ConnectTransactionError::MissingOutputOrSpent(UtxoOutPoint::new(
+                OutPointSourceId::Transaction(tx_with_data_as_output.transaction().get_id()),
+                1,
             )),
         ));
 
-        assert_eq!(result, expected_err);
+        assert_eq!(err, expected_err);
     })
 }

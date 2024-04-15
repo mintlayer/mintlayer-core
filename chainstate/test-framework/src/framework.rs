@@ -23,7 +23,10 @@ use rstest::rstest;
 use crate::{
     pos_block_builder::PoSBlockBuilder,
     staking_pools::StakingPools,
-    utils::{outputs_from_block, outputs_from_genesis},
+    utils::{
+        assert_block_index_opt_identical_to, assert_gen_block_index_identical_to,
+        assert_gen_block_index_opt_identical_to, outputs_from_block, outputs_from_genesis,
+    },
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
@@ -123,7 +126,7 @@ impl TestFramework {
         for index in &mut self.block_indexes {
             *index = self
                 .chainstate
-                .get_block_index(index.block_id())?
+                .get_block_index_for_any_block(index.block_id())?
                 .expect("Old block index must still be present");
         }
 
@@ -135,14 +138,61 @@ impl TestFramework {
         block: Block,
         source: BlockSource,
     ) -> Result<Option<BlockIndex>, ChainstateError> {
-        let id = block.get_id();
-        let block_index_result = self.chainstate.process_block(block, source)?;
-        let index = match self.chainstate.get_gen_block_index(&id.into()).unwrap().unwrap() {
-            GenBlockIndex::Genesis(..) => panic!("we have processed the genesis block"),
-            GenBlockIndex::Block(block_index) => block_index,
-        };
-        self.block_indexes.push(index);
-        Ok(block_index_result)
+        let block_id = block.get_id();
+
+        // Call block_index_opt/best_block_index unconditionally before and after process_block,
+        // in order to perform the corresponding consistency checks.
+        let orig_best_block_index = self.best_block_index();
+        let orig_block_index_opt = self.block_index_opt(&block_id);
+        let process_block_result = self.chainstate.process_block(block, source);
+        let new_best_block_index = self.best_block_index();
+        let new_block_index_opt = self.block_index_opt(&block_id);
+
+        // Note: below we examine block indices but don't check for the existence of the block itself,
+        // because this is redundant (the consistency check in best_block_index has already ensured
+        // that a block can exist iff its block index has the persistence flag set).
+        match process_block_result {
+            Ok(block_index_result) => {
+                let saved_index = new_block_index_opt.unwrap();
+                assert!(saved_index.is_persisted());
+
+                if let Some(returned_index) = &block_index_result {
+                    assert_gen_block_index_identical_to(
+                        &GenBlockIndex::Block(returned_index.clone()),
+                        &new_best_block_index,
+                    );
+                } else {
+                    assert_gen_block_index_identical_to(
+                        &new_best_block_index,
+                        &orig_best_block_index,
+                    );
+                }
+
+                self.block_indexes.push(saved_index);
+                Ok(block_index_result)
+            }
+            Err(err) => {
+                let was_persisted =
+                    orig_block_index_opt.as_ref().is_some_and(|idx| idx.is_persisted());
+                let is_persisted =
+                    new_block_index_opt.as_ref().is_some_and(|idx| idx.is_persisted());
+
+                // If block was persisted, it should stay persisted.
+                // On the other hand, failed process_block should not save a new block index with
+                // persistence flag set.
+                assert_eq!(was_persisted, is_persisted);
+
+                if let Some(new_block_index) = &new_block_index_opt {
+                    if orig_block_index_opt.is_none() {
+                        assert!(!new_block_index.status().is_ok());
+                    }
+                }
+
+                assert_gen_block_index_identical_to(&new_best_block_index, &orig_best_block_index);
+
+                Err(err)
+            }
+        }
     }
 
     /// Processes the given block.
@@ -264,10 +314,14 @@ impl TestFramework {
         self.chainstate.get_chain_config().genesis_block().clone()
     }
 
-    /// Returns the best block index.
+    /// Return the best block index, while doing some consistency checks.
     #[track_caller]
     pub fn best_block_index(&self) -> GenBlockIndex {
-        self.chainstate.get_best_block_index().unwrap()
+        let best_block_index = self.chainstate.get_best_block_index().unwrap();
+        let best_block_id = self.chainstate.get_best_block_id().unwrap();
+        assert_eq!(best_block_index.block_id(), best_block_id);
+        assert!(self.chainstate.is_block_in_main_chain(&best_block_id).unwrap());
+        best_block_index
     }
 
     /// Return the best block identifier.
@@ -277,7 +331,7 @@ impl TestFramework {
     }
 
     pub fn parent_block_id(&self, id: &Id<GenBlock>) -> Id<GenBlock> {
-        self.block_index(id).prev_block_id().expect("The block has no parent")
+        self.gen_block_index(id).prev_block_id().expect("The block has no parent")
     }
 
     /// Returns a block identifier for the specified height.
@@ -304,19 +358,106 @@ impl TestFramework {
         }
     }
 
-    /// Returns a block corresponding to the specified identifier.
+    /// Return a block given an id. Perform consistency checks.
     #[track_caller]
-    pub fn block(&self, id: Id<Block>) -> Block {
-        self.chainstate.get_block(id).unwrap().unwrap()
+    pub fn block_opt(&self, id: Id<Block>) -> Option<Block> {
+        self.check_block_index_consistency(&id.into());
+        self.chainstate.get_block(id).unwrap()
     }
 
-    /// Returns a block index corresponding to the specified id.
-    pub fn block_index(&self, id: &Id<GenBlock>) -> GenBlockIndex {
-        self.chainstate.get_gen_block_index(id).unwrap().unwrap()
+    /// Return a block given an id. Perform consistency checks.
+    #[track_caller]
+    pub fn block(&self, id: Id<Block>) -> Block {
+        self.block_opt(id).unwrap()
+    }
+
+    /// Check consistency of block-index-related functions with respect to the given block id.
+    /// Note: this is not the same as the db consistency checks that chainstate itself performs
+    /// regularly, here we test what chainstate's functions return and the chainstate itself
+    /// only checks the consistency of its db.
+    fn check_block_index_consistency(&self, id: &Id<GenBlock>) {
+        // First, check consistency of get_gen_block_index_for_any_block and get_gen_block_index_for_persisted_block.
+        let any_gen_block_index_opt =
+            self.chainstate.get_gen_block_index_for_any_block(id).unwrap();
+        let persisted_gen_block_index_opt =
+            self.chainstate.get_gen_block_index_for_persisted_block(id).unwrap();
+
+        if any_gen_block_index_opt.as_ref().is_some_and(|idx| idx.is_persisted()) {
+            assert_gen_block_index_opt_identical_to(
+                persisted_gen_block_index_opt.as_ref(),
+                any_gen_block_index_opt.as_ref(),
+            );
+        } else {
+            assert_gen_block_index_opt_identical_to(persisted_gen_block_index_opt.as_ref(), None);
+        }
+
+        match id.classify(self.chain_config()) {
+            GenBlockId::Block(ref id) => {
+                // Now check consistency of get_block_index_for_any_block and get_block_index_for_persisted_block
+                // as well as get_block_index_for_any_block and get_gen_block_index_for_any_block.
+                // Also check that a block index has the persistence flag set iff the corresponding block data
+                // is in the db (note that this part is somewhat redundant, because the chainstate consistency
+                // checks also verify this; but this function will be called more often, so at least
+                // it has a chance to catch a problem earlier).
+
+                let any_block_index_opt =
+                    self.chainstate.get_block_index_for_any_block(id).unwrap();
+                let persisted_block_index_opt =
+                    self.chainstate.get_block_index_for_persisted_block(id).unwrap();
+
+                if any_block_index_opt.as_ref().is_some_and(|idx| idx.is_persisted()) {
+                    assert_block_index_opt_identical_to(
+                        persisted_block_index_opt.as_ref(),
+                        any_block_index_opt.as_ref(),
+                    );
+                    assert!(self.chainstate.get_block(*id).unwrap().is_some());
+                } else {
+                    assert_block_index_opt_identical_to(persisted_block_index_opt.as_ref(), None);
+                    assert!(self.chainstate.get_block(*id).unwrap().is_none());
+                }
+
+                let any_gen_block_index_opt2 =
+                    any_block_index_opt.map(|idx| GenBlockIndex::Block(idx.clone()));
+                assert_gen_block_index_opt_identical_to(
+                    any_gen_block_index_opt2.as_ref(),
+                    any_gen_block_index_opt.as_ref(),
+                );
+            }
+            GenBlockId::Genesis(_) => {
+                let any_gen_block_index = any_gen_block_index_opt.unwrap();
+                assert_gen_block_index_identical_to(
+                    &any_gen_block_index,
+                    &GenBlockIndex::genesis(self.chain_config()),
+                );
+                assert!(any_gen_block_index.is_persisted());
+            }
+        }
+    }
+
+    /// Return a block index corresponding to the specified id; perform consistency checks.
+    pub fn gen_block_index_opt(&self, id: &Id<GenBlock>) -> Option<GenBlockIndex> {
+        self.check_block_index_consistency(id);
+        self.chainstate.get_gen_block_index_for_any_block(id).unwrap()
+    }
+
+    /// Return a block index corresponding to the specified id; perform consistency checks.
+    pub fn gen_block_index(&self, id: &Id<GenBlock>) -> GenBlockIndex {
+        self.gen_block_index_opt(id).unwrap()
+    }
+
+    /// Return a block index corresponding to the specified id; perform consistency checks.
+    pub fn block_index_opt(&self, id: &Id<Block>) -> Option<BlockIndex> {
+        self.check_block_index_consistency(id.into());
+        self.chainstate.get_block_index_for_any_block(id).unwrap()
+    }
+
+    /// Return a block index corresponding to the specified id; perform consistency checks.
+    pub fn block_index(&self, id: &Id<Block>) -> BlockIndex {
+        self.block_index_opt(id).unwrap()
     }
 
     pub fn block_index_exists(&self, id: &Id<GenBlock>) -> bool {
-        self.chainstate.get_gen_block_index(id).unwrap().is_some()
+        self.gen_block_index_opt(id).is_some()
     }
 
     pub fn index_at(&self, at: usize) -> &BlockIndex {

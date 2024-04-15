@@ -74,6 +74,18 @@ impl<'st, B: storage::Backend> StoreTxRo<'st, B> {
         map.get(key).map_err(crate::Error::from).map(|x| x.map(|x| x.decode()))
     }
 
+    // Return true if an entry for the given key exists in the db.
+    // This is cheaper than calling `read` and checking for is_some.
+    fn entry_exists<DbMap, I, K>(&self, key: K) -> crate::Result<bool>
+    where
+        DbMap: schema::DbMap,
+        Schema: schema::HasDbMap<DbMap, I>,
+        K: EncodeLike<DbMap::Key>,
+    {
+        let map = self.0.get::<DbMap, I>();
+        map.get(key).map_err(crate::Error::from).map(|x| x.is_some())
+    }
+
     // Read a value for a well-known entry
     fn read_value<E: well_known::Entry>(&self) -> crate::Result<Option<E::Value>> {
         self.read::<db::DBValue, _, _>(E::KEY).map(|x| {
@@ -94,6 +106,18 @@ impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
     {
         let map = self.0.get::<DbMap, I>();
         map.get(key).map_err(crate::Error::from).map(|x| x.map(|x| x.decode()))
+    }
+
+    // Return true if an entry for the given key exists in the db.
+    // This is cheaper than calling `read` and checking for is_some.
+    fn entry_exists<DbMap, I, K>(&self, key: K) -> crate::Result<bool>
+    where
+        DbMap: schema::DbMap,
+        Schema: schema::HasDbMap<DbMap, I>,
+        K: EncodeLike<DbMap::Key>,
+    {
+        let map = self.0.get::<DbMap, I>();
+        map.get(key).map_err(crate::Error::from).map(|x| x.is_some())
     }
 
     // Read a value for a well-known entry

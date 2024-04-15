@@ -40,6 +40,8 @@ pub trait ChainstateInterface: Send + Sync {
         handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>,
     );
     fn subscribe_to_rpc_events(&mut self) -> broadcaster::Receiver<ChainstateEvent>;
+    /// Process the given block. If a reorg occurs, return the block index of the new tip.
+    /// Otherwise return None.
     fn process_block(
         &mut self,
         block: Block,
@@ -127,11 +129,36 @@ pub trait ChainstateInterface: Send + Sync {
         headers: Vec<SignedBlockHeader>,
     ) -> Result<(Vec<SignedBlockHeader>, Vec<SignedBlockHeader>), ChainstateError>;
 
-    fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError>;
-    fn get_gen_block_index(
+    /// Return the block index given a block id.
+    /// This function will only return block indices for persisted blocks; if the corresponding
+    /// block hasn't been persisted, None will be returned.
+    fn get_block_index_for_persisted_block(
+        &self,
+        id: &Id<Block>,
+    ) -> Result<Option<BlockIndex>, ChainstateError>;
+
+    /// Return the block index given a block id. The corresponding block may or may not be persisted.
+    /// Note that a block index object for a non-persisted block may be deleted from the db at any moment.
+    fn get_block_index_for_any_block(
+        &self,
+        id: &Id<Block>,
+    ) -> Result<Option<BlockIndex>, ChainstateError>;
+
+    /// Return the block index given a block id.
+    /// This function will only return block indices for persisted blocks; if the corresponding
+    /// block hasn't been persisted, None will be returned.
+    fn get_gen_block_index_for_persisted_block(
         &self,
         id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, ChainstateError>;
+
+    /// Return the block index given a block id. The corresponding block may or may not be persisted.
+    /// Note that a block index object for a non-persisted block may be deleted from the db at any moment.
+    fn get_gen_block_index_for_any_block(
+        &self,
+        id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex>, ChainstateError>;
+
     fn get_best_block_index(&self) -> Result<GenBlockIndex, ChainstateError>;
 
     fn get_chain_config(&self) -> &Arc<ChainConfig>;

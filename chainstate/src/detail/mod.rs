@@ -39,7 +39,7 @@ use self::{
     query::ChainstateQuery,
     tx_verification_strategy::TransactionVerificationStrategy,
 };
-use crate::{ChainstateConfig, ChainstateEvent};
+use crate::{BlockInvalidatorError, ChainstateConfig, ChainstateEvent};
 use chainstate_storage::{
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag,
     TipStorageTag, TransactionRw, Transactional,
@@ -59,6 +59,7 @@ use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingOperations, PoSAccountingUndo};
 use tx_verifier::transaction_verifier;
 use utils::{
+    const_value::ConstValue,
     ensure,
     eventhandler::{EventHandler, EventsController},
     log_error,
@@ -93,7 +94,7 @@ pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 #[must_use]
 pub struct Chainstate<S, V> {
     chain_config: Arc<ChainConfig>,
-    chainstate_config: ChainstateConfig,
+    chainstate_config: ConstValue<ChainstateConfig>,
     chainstate_storage: S,
     tx_verification_strategy: V,
     orphan_blocks: OrphansProxy,
@@ -195,6 +196,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         chainstate.update_initial_block_download_flag()?;
 
+        chainstate
+            .check_consistency()
+            .map_err(|e| ChainstateError::FailedToInitializeChainstate(e.into()))?;
+
         Ok(chainstate)
     }
 
@@ -211,7 +216,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         let rpc_events = broadcaster::Broadcaster::new();
         Self {
             chain_config,
-            chainstate_config,
+            chainstate_config: chainstate_config.into(),
             chainstate_storage,
             tx_verification_strategy,
             orphan_blocks,
@@ -323,7 +328,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block_status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
         let block_status = block_status;
 
-        let block_index = block_index.with_status(block_status);
+        // Note: we mark the block as persisted here - if integrate_block eventually
+        // succeeds, we'll save both the index and the block itself via the same db tx;
+        // and if it fails, neither will be saved.
+        let block_index = block_index.with_status(block_status).make_persisted();
         chainstate_ref
             .set_new_block_index(&block_index)
             .and_then(|_| chainstate_ref.persist_block(block))
@@ -439,7 +447,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     // set the corresponding failure bit.)
                     debug_assert!(status.is_ok());
                     // Ignore the result, because we already have an error to return.
-                    let _result = self.update_block_status(&block_index, status);
+                    let _result = self.set_new_block_index(&block_index.with_status(status));
 
                     // Again, we ignore the result here.
                     let _result = BlockInvalidator::new(self).invalidate_block(
@@ -473,7 +481,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                     let mut status = status;
                     status.set_validation_failed();
                     // Ignore the result, because we already have an error to return.
-                    let _result = self.update_block_status(&block_index, status);
+                    let _result = self.set_new_block_index(&block_index.with_status(status));
                 } else {
                     log::warn!(
                         "Block {} integration failed, but it may not be a bad block",
@@ -486,14 +494,22 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         };
     }
 
+    /// If heavy checks are enabled, perform block index consistency check; panic if it's violated.
+    /// An error is only returned if the checks couldn't be performed for some reason.
     #[log_error]
-    fn update_block_status(
-        &mut self,
-        block_index: &BlockIndex,
-        status: BlockStatus,
-    ) -> Result<(), BlockError> {
+    fn check_consistency(&self) -> Result<(), chainstate_storage::Error> {
+        if !self.chainstate_config.heavy_checks_enabled(&self.chain_config) {
+            return Ok(());
+        }
+
+        let chainstate_ref = self.make_db_tx_ro()?;
+        chainstate_ref.check_consistency()
+    }
+
+    #[log_error]
+    fn set_new_block_index(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
         self.with_rw_tx(
-            |chainstate_ref| chainstate_ref.update_block_status(block_index.clone(), status),
+            |chainstate_ref| chainstate_ref.set_new_block_index(block_index),
             |attempt_number| {
                 log::info!(
                     "Updating status for block {}, attempt #{}",
@@ -605,7 +621,12 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        self.process_block_and_related_orphans(block, block_source)
+        let result = self.process_block_and_related_orphans(block, block_source);
+        // Note: we don't ignore the result of check_consistency even though we may already have
+        // an error to return (if the checks are enabled but couldn't be done for some reason,
+        // we don't want to miss this).
+        self.check_consistency()?;
+        result
     }
 
     /// Initialize chainstate with genesis block
@@ -639,6 +660,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         db_tx.commit().expect("Genesis database initialization failed");
         Ok(())
+    }
+
+    #[log_error]
+    pub fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), BlockInvalidatorError> {
+        let result = BlockInvalidator::new(self)
+            .invalidate_block(block_id, block_invalidation::IsExplicit::Yes);
+        // Note: we don't ignore the result of check_consistency even though we may already have
+        // an error to return (if the checks are enabled but couldn't be done for some reason,
+        // we don't want to miss this).
+        self.check_consistency()?;
+        result
     }
 
     #[log_error]

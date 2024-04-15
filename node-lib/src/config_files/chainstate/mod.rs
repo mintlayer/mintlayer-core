@@ -34,6 +34,8 @@ pub struct ChainstateConfigFile {
     /// The initial block download is finished if the difference between the current time and the
     /// tip time is less than this value.
     pub max_tip_age: Option<u64>,
+    /// If true, additional computationally-expensive consistency checks will be performed by the chainstate.
+    pub enable_heavy_checks: Option<bool>,
 }
 
 impl From<ChainstateConfigFile> for ChainstateConfig {
@@ -43,6 +45,7 @@ impl From<ChainstateConfigFile> for ChainstateConfig {
             max_orphan_blocks,
             min_max_bootstrap_import_buffer_sizes,
             max_tip_age,
+            enable_heavy_checks,
         } = config_file;
 
         ChainstateConfig {
@@ -50,6 +53,7 @@ impl From<ChainstateConfigFile> for ChainstateConfig {
             max_orphan_blocks: max_orphan_blocks.into(),
             min_max_bootstrap_import_buffer_sizes: min_max_bootstrap_import_buffer_sizes.into(),
             max_tip_age: max_tip_age.map(Duration::from_secs).into(),
+            enable_heavy_checks,
         }
     }
 }

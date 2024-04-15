@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::{framework::BlockOutputs, TestFramework};
+use chainstate::{BlockIndex, GenBlockIndex};
 use chainstate_storage::{BlockchainStorageRead, TipStorageTag};
 use chainstate_types::pos_randomness::PoSRandomness;
 use common::{
@@ -303,4 +304,40 @@ pub fn pos_mine(
         timestamp = timestamp.add_int_seconds(1).unwrap();
     }
     None
+}
+
+#[allow(unused)]
+pub fn assert_block_index_identical_to(bi1: &BlockIndex, bi2: &BlockIndex) {
+    assert!(
+        bi1.is_identical_to(bi2),
+        "{bi1:?} should be identical to {bi2:?}"
+    );
+}
+
+pub fn assert_gen_block_index_identical_to(bi1: &GenBlockIndex, bi2: &GenBlockIndex) {
+    assert!(
+        bi1.is_identical_to(bi2),
+        "{bi1:?} should be identical to {bi2:?}"
+    );
+}
+
+pub fn assert_block_index_opt_identical_to(bi1: Option<&BlockIndex>, bi2: Option<&BlockIndex>) {
+    let identical = match (bi1, bi2) {
+        (Some(bi1), Some(bi2)) => bi1.is_identical_to(bi2),
+        (None, None) => true,
+        (Some(_), None) | (None, Some(_)) => false,
+    };
+    assert!(identical, "{bi1:?} should be identical to {bi2:?}");
+}
+
+pub fn assert_gen_block_index_opt_identical_to(
+    bi1: Option<&GenBlockIndex>,
+    bi2: Option<&GenBlockIndex>,
+) {
+    let identical = match (bi1, bi2) {
+        (Some(bi1), Some(bi2)) => bi1.is_identical_to(bi2),
+        (None, None) => true,
+        (Some(_), None) | (None, Some(_)) => false,
+    };
+    assert!(identical, "{bi1:?} should be identical to {bi2:?}");
 }

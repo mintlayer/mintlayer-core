@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use crate::transaction_verifier::{
     pos_accounting_undo_cache::CachedPoSBlockUndo,
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
@@ -359,7 +357,7 @@ fn hierarchy_test_block_index(#[case] seed: Seed) {
     let chain_config = ConfigBuilder::test_chain().build();
 
     let block_id: Id<Block> = Id::new(H256::random_using(&mut rng));
-    let block_index = GenBlockIndex::Genesis(Arc::clone(chain_config.genesis_block()));
+    let block_index = GenBlockIndex::genesis(&chain_config);
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store

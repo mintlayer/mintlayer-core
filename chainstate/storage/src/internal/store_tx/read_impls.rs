@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::db;
 use chainstate_types::{BlockIndex, EpochData, EpochStorageRead};
@@ -117,6 +117,11 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
     }
 
     #[log_error]
+    fn block_exists(&self, id: Id<Block>) -> crate::Result<bool> {
+        self.entry_exists::<db::DBBlock, _, _>(id)
+    }
+
+    #[log_error]
     fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>> {
         let block_index = self.read::<db::DBBlockIndex, _, _>(id)?;
         Ok(block_index.map(|block_index| block_index.into_block_header()))
@@ -207,6 +212,27 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
     #[log_error]
     fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>> {
         self.read::<db::DBAccountNonceCount, _, _>(account)
+    }
+
+    #[log_error]
+    fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>> {
+        let map = self.0.get::<db::DBBlock, _>();
+        let items = map.prefix_iter_keys(&())?;
+        Ok(items.collect::<BTreeSet<_>>())
+    }
+
+    #[log_error]
+    fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>> {
+        let map = self.0.get::<db::DBBlockIndex, _>();
+        let items = map.prefix_iter_decoded(&())?;
+        Ok(items.collect::<BTreeMap<_, _>>())
+    }
+
+    #[log_error]
+    fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>> {
+        let map = self.0.get::<db::DBBlockByHeight, _>();
+        let items = map.prefix_iter_decoded(&())?;
+        Ok(items.collect::<BTreeMap<_, _>>())
     }
 }
 
@@ -372,6 +398,11 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     }
 
     #[log_error]
+    fn block_exists(&self, id: Id<Block>) -> crate::Result<bool> {
+        self.entry_exists::<db::DBBlock, _, _>(id)
+    }
+
+    #[log_error]
     fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>> {
         let block_index = self.read::<db::DBBlockIndex, _, _>(id)?;
         Ok(block_index.map(|block_index| block_index.into_block_header()))
@@ -462,6 +493,32 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     #[log_error]
     fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>> {
         self.read::<db::DBAccountNonceCount, _, _>(account)
+    }
+
+    // TODO: we had to duplicate this function from "impl BlockchainStorageRead for StoreTxRo" even
+    // though it's never called on StoreTxRw. This is ugly and dangerous; need to get rid of all
+    // the logic duplication between StoreTxRo and StoreTxRw.
+    #[log_error]
+    fn get_block_map_keys(&self) -> crate::Result<BTreeSet<Id<Block>>> {
+        let map = self.0.get::<db::DBBlock, _>();
+        let items = map.prefix_iter_keys(&())?;
+        Ok(items.collect::<BTreeSet<_>>())
+    }
+
+    // TODO: same as above.
+    #[log_error]
+    fn get_block_index_map(&self) -> crate::Result<BTreeMap<Id<Block>, BlockIndex>> {
+        let map = self.0.get::<db::DBBlockIndex, _>();
+        let items = map.prefix_iter_decoded(&())?;
+        Ok(items.collect::<BTreeMap<_, _>>())
+    }
+
+    // TODO: same as above.
+    #[log_error]
+    fn get_block_by_height_map(&self) -> crate::Result<BTreeMap<BlockHeight, Id<GenBlock>>> {
+        let map = self.0.get::<db::DBBlockByHeight, _>();
+        let items = map.prefix_iter_decoded(&())?;
+        Ok(items.collect::<BTreeMap<_, _>>())
     }
 }
 

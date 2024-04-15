@@ -15,6 +15,7 @@
 
 use std::time::Duration;
 
+use common::chain::{config::ChainType, ChainConfig};
 use utils::make_config_setting;
 
 const DEFAULT_MIN_IMPORT_BUFFER_SIZE: usize = 1 << 22; // 4 MB
@@ -45,6 +46,9 @@ pub struct ChainstateConfig {
     /// The initial block download is finished if the difference between the current time and the
     /// tip time is less than this value.
     pub max_tip_age: MaxTipAge,
+    /// If true, additional computationally-expensive consistency checks will be performed by
+    /// the chainstate. The default value depends on the chain type.
+    pub enable_heavy_checks: Option<bool>,
 }
 
 impl ChainstateConfig {
@@ -69,5 +73,21 @@ impl ChainstateConfig {
     ) -> Self {
         self.min_max_bootstrap_import_buffer_sizes = min_max_bootstrap_import_buffer_sizes.into();
         self
+    }
+
+    pub fn with_heavy_checks_enabled(mut self, enable: bool) -> Self {
+        self.enable_heavy_checks = Some(enable);
+        self
+    }
+
+    pub fn heavy_checks_enabled(&self, chain_config: &ChainConfig) -> bool {
+        if let Some(enable_heavy_checks) = self.enable_heavy_checks {
+            return enable_heavy_checks;
+        }
+
+        match chain_config.chain_type() {
+            ChainType::Mainnet | ChainType::Testnet | ChainType::Signet => false,
+            ChainType::Regtest => true,
+        }
     }
 }

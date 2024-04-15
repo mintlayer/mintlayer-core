@@ -19,10 +19,11 @@ use common::chain::{Block, GenBlock};
 use common::primitives::{BlockHeight, Id, Idable, H256};
 use common::Uint256;
 use serialization::{Decode, Encode};
+use static_assertions::assert_not_impl_any;
 
 use crate::{BlockStatus, GenBlockIndex};
 
-#[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
+#[derive(Debug, Clone, Encode, Decode)]
 pub struct BlockIndex {
     block_id: Id<Block>,
     block_header: SignedBlockHeader,
@@ -36,7 +37,12 @@ pub struct BlockIndex {
     #[codec(compact)]
     /// The total number of transactions up to this block
     chain_transaction_count: u128,
+    /// The block status.
     status: BlockStatus,
+    /// If true, the corresponding block has been persisted in the db.
+    /// This also means that the block index object can't be deleted from the db (unless the
+    /// block gets purged).
+    is_persisted: bool,
 }
 
 impl BlockIndex {
@@ -59,6 +65,7 @@ impl BlockIndex {
             chain_time_max,
             chain_transaction_count,
             status,
+            is_persisted: false,
         }
     }
 
@@ -111,6 +118,15 @@ impl BlockIndex {
         self
     }
 
+    pub fn is_persisted(&self) -> bool {
+        self.is_persisted
+    }
+
+    pub fn make_persisted(mut self) -> Self {
+        self.is_persisted = true;
+        self
+    }
+
     pub fn into_block_header(self) -> SignedBlockHeader {
         self.block_header
     }
@@ -118,4 +134,39 @@ impl BlockIndex {
     pub fn into_gen_block_index(self) -> GenBlockIndex {
         self.into()
     }
+
+    /// Return true if all fields of this BlockIndex are exactly the same as other's.
+    /// Note that we don't call this relation "equality" (and don't implement Eq/PartialEq)
+    /// because it's ambiguous what "equality" should mean for a BlockIndex.
+    pub fn is_identical_to<'a>(&'a self, other: &'a BlockIndex) -> bool {
+        let as_ref_tuple = |bi: &'a BlockIndex| {
+            let BlockIndex {
+                block_id,
+                block_header,
+                some_ancestor,
+                chain_trust,
+                height,
+                chain_time_max,
+                chain_transaction_count,
+                status,
+                is_persisted,
+            } = bi;
+            (
+                block_id,
+                block_header,
+                some_ancestor,
+                chain_trust,
+                height,
+                chain_time_max,
+                chain_transaction_count,
+                status,
+                is_persisted,
+            )
+        };
+
+        as_ref_tuple(self) == as_ref_tuple(other)
+    }
 }
+
+// Forbid implementing Eq and PartialEq for BlockIndex.
+assert_not_impl_any!(BlockIndex: Eq, PartialEq);

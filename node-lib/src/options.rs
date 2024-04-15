@@ -226,6 +226,11 @@ pub struct RunOptions {
 
     #[clap(flatten)]
     pub force_allow_run_as_root_outer: ForceRunAsRootOptions,
+
+    /// If true, additional computationally-expensive consistency checks will be performed by the chainstate.
+    /// Defaults to true for regtest and false in other cases.
+    #[clap(long, value_name = "VAL")]
+    pub enable_chainstate_heavy_checks: Option<bool>,
 }
 
 impl Options {

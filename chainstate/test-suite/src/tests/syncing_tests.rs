@@ -48,7 +48,10 @@ fn process_a_trivial_block(#[case] seed: Seed) {
 fn get_locator(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut btf = TestFramework::builder(&mut rng).build();
+        let mut btf = TestFramework::builder(&mut rng)
+            // With the heavy checks enabled, this test takes several minutes to complete in debug builds.
+            .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
+            .build();
 
         let locator = btf.chainstate.get_locator().unwrap();
         assert_eq!(locator.len(), 1);
@@ -130,7 +133,10 @@ fn get_mainchain_headers_by_locator(#[case] seed: Seed) {
         let headers_count = rng.gen_range(1000..header_limit);
         let blocks_count = rng.gen_range(1000..2000);
 
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = TestFramework::builder(&mut rng)
+            // With the heavy checks enabled, this test takes a few minutes to complete in debug builds.
+            .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
+            .build();
         let mut last_block_id = tf.genesis().get_id().into();
         last_block_id = tf.create_chain(&last_block_id, blocks_count, &mut rng).unwrap();
 
@@ -231,7 +237,7 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
 
         let headers = tf.chainstate.get_mainchain_headers_by_locator(&locator, 2000).unwrap();
         let id = headers[0].prev_block_id();
-        assert!(tf.block_index(id).block_height() <= BlockHeight::new(common_height as u64));
+        assert!(tf.gen_block_index(id).block_height() <= BlockHeight::new(common_height as u64));
     });
 }
 
@@ -239,7 +245,7 @@ fn get_headers_for_ids(tf: &TestFramework, ids: &[Id<GenBlock>]) -> Vec<SignedBl
     let mut result = Vec::with_capacity(ids.len());
     for id in ids {
         let id = id.classify(tf.chainstate.get_chain_config()).chain_block_id().unwrap();
-        let block_index = tf.chainstate.get_block_index(&id).unwrap().unwrap();
+        let block_index = tf.block_index(&id);
         result.push(block_index.block_header().clone());
     }
     result
@@ -518,7 +524,7 @@ fn get_headers_different_chains(#[case] seed: Seed) {
             .get_mainchain_headers_by_locator(&locator, header_count_limit)
             .unwrap();
         let id = *headers[0].prev_block_id();
-        tf1.block_index(&id); // This panics if the ID is not found
+        tf1.gen_block_index(&id); // This panics if the ID is not found
 
         let locator = tf2.chainstate.get_locator().unwrap();
         let headers = tf1
@@ -526,7 +532,7 @@ fn get_headers_different_chains(#[case] seed: Seed) {
             .get_mainchain_headers_by_locator(&locator, header_count_limit)
             .unwrap();
         let id = *headers[0].prev_block_id();
-        tf2.block_index(&id); // This panics if the ID is not found
+        tf2.gen_block_index(&id); // This panics if the ID is not found
     });
 }
 
@@ -624,6 +630,7 @@ fn initial_block_download(#[case] seed: Seed) {
                 max_orphan_blocks: Default::default(),
                 min_max_bootstrap_import_buffer_sizes: Default::default(),
                 max_tip_age: Duration::from_secs(1).into(),
+                enable_heavy_checks: Some(true),
             })
             .with_initial_time_since_genesis(2)
             .build();
@@ -664,14 +671,7 @@ fn initial_block_download(#[case] seed: Seed) {
 fn header_check_for_orphan(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_chainstate_config(ChainstateConfig {
-                max_db_commit_attempts: Default::default(),
-                max_orphan_blocks: Default::default(),
-                min_max_bootstrap_import_buffer_sizes: Default::default(),
-                max_tip_age: Default::default(),
-            })
-            .build();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         tf.progress_time_seconds_since_epoch(3);
         let block = tf.make_block_builder().make_orphan(&mut rng).build();
@@ -725,11 +725,7 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
             let mut tf = TestFramework::builder(&mut rng).build();
             let parent_block_id =
                 tf.create_chain_return_ids(&tf.genesis().get_id().into(), 1, &mut rng).unwrap()[0];
-            let parent_block = tf
-                .chainstate
-                .get_block(tf.to_chain_block_id(&parent_block_id))
-                .unwrap()
-                .unwrap();
+            let parent_block = tf.block(tf.to_chain_block_id(&parent_block_id));
             let ids =
                 tf.create_chain_return_ids(&parent_block.get_id().into(), 10, &mut rng).unwrap();
             let block_headers = ids

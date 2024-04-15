@@ -33,7 +33,7 @@ use crate::storage::storage_api::{
 
 use super::{queries::QueryFromConnection, TransactionalApiServerPostgresStorage};
 
-const CONN_ERR: &str = "CRITICAL ERROR: failed to get postgres tx connection. Invariant broken.";
+const CONN_ERR: &str = "CRITICAL: failed to get postgres tx connection. Invariant broken.";
 
 pub struct ApiServerPostgresTransactionalRo<'a> {
     // Note: This is an Option due to needing to pry the connection out of Self in Drop
@@ -167,7 +167,7 @@ impl<'a> Drop for ApiServerPostgresTransactionalRw<'a> {
                 .send(self.connection.take().expect(CONN_ERR))
                 .unwrap_or_else(|e| {
                     logging::log::error!(
-                        "CRITICAL ERROR: failed to send postgres RW transaction connection for closure: {e}"
+                        "CRITICAL: failed to send postgres RW transaction connection for closure: {e}"
                     )
                 });
         }
@@ -240,7 +240,7 @@ impl<'a> Drop for ApiServerPostgresTransactionalRo<'a> {
                 .send(self.connection.take().expect(CONN_ERR))
                 .unwrap_or_else(|e| {
                     logging::log::error!(
-                        "CRITICAL ERROR: failed to send postgres RO transaction connection for closure: {e}"
+                        "CRITICAL: failed to send postgres RO transaction connection for closure: {e}"
                     )
                 });
         }
