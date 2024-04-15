@@ -22,7 +22,7 @@ use common::{
         tokens::{get_tokens_issuance_count, NftIssuance},
         ChainConfig, SignedTransaction, Transaction, TransactionSize, TxOutput,
     },
-    primitives::{Id, Idable},
+    primitives::{BlockHeight, Id, Idable},
 };
 use thiserror::Error;
 use utils::ensure;
@@ -56,12 +56,13 @@ pub enum CheckTransactionError {
 
 pub fn check_transaction(
     chain_config: &ChainConfig,
+    block_height: BlockHeight,
     tx: &SignedTransaction,
 ) -> Result<(), CheckTransactionError> {
     check_size(chain_config, tx)?;
     check_duplicate_inputs(tx)?;
     check_witness_count(tx)?;
-    check_tokens_tx(chain_config, tx)?;
+    check_tokens_tx(chain_config, block_height, tx)?;
     check_no_signature_size(chain_config, tx)?;
     check_data_deposit_outputs(chain_config, tx)?;
     Ok(())
@@ -127,6 +128,7 @@ fn check_witness_count(tx: &SignedTransaction) -> Result<(), CheckTransactionErr
 
 fn check_tokens_tx(
     chain_config: &ChainConfig,
+    _block_height: BlockHeight,
     tx: &SignedTransaction,
 ) -> Result<(), CheckTransactionError> {
     // We can't issue multiple tokens in a single tx

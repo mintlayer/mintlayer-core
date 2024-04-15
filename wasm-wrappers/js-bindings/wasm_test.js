@@ -253,7 +253,8 @@ export async function run_test() {
 
     assert_eq_arrays(inputs, expected_inputs);
 
-    const token_id = "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
+    const token_id =
+      "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
     try {
       encode_output_coin_burn(Amount.from_atoms("invalid amount"));
       throw new Error("Invalid value for amount worked somehow!");
@@ -264,7 +265,11 @@ export async function run_test() {
       console.log("Tested invalid amount successfully");
     }
     try {
-      encode_output_token_burn(Amount.from_atoms("invalid amount"), token_id, Network.Testnet);
+      encode_output_token_burn(
+        Amount.from_atoms("invalid amount"),
+        token_id,
+        Network.Testnet
+      );
       throw new Error("Invalid value for amount worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid amount")) {
@@ -274,7 +279,11 @@ export async function run_test() {
     }
     try {
       const invalid_token_id = "asd";
-      encode_output_token_burn(Amount.from_atoms("100"), invalid_token_id, Network.Testnet);
+      encode_output_token_burn(
+        Amount.from_atoms("100"),
+        invalid_token_id,
+        Network.Testnet
+      );
       throw new Error("Invalid token id worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid addressable encoding")) {
@@ -283,13 +292,15 @@ export async function run_test() {
       console.log("Tested invalid token id successfully for token burn");
     }
 
-    const token_burn = encode_output_token_burn(Amount.from_atoms("100"), token_id, Network.Testnet);
+    const token_burn = encode_output_token_burn(
+      Amount.from_atoms("100"),
+      token_id,
+      Network.Testnet
+    );
     const expected_token_burn = [
-      2, 2, 162, 208, 145, 194, 165, 27,
-      14, 118, 31, 139, 199, 254, 11, 190,
-      108, 15, 64, 180, 50, 106, 211, 26,
-      107, 242, 121, 29, 55, 172, 185, 5,
-      196, 119, 145, 1
+      2, 2, 162, 208, 145, 194, 165, 27, 14, 118, 31, 139, 199, 254, 11, 190,
+      108, 15, 64, 180, 50, 106, 211, 26, 107, 242, 121, 29, 55, 172, 185, 5,
+      196, 119, 145, 1,
     ];
     assert_eq_arrays(token_burn, expected_token_burn);
 
@@ -363,12 +374,10 @@ export async function run_test() {
       Network.Testnet
     );
     const expected_token_lock_transfer_out = [
-      1, 2, 162, 208, 145, 194, 165, 27, 14, 118, 31,
-      139, 199, 254, 11, 190, 108, 15, 64, 180, 50, 106,
-      211, 26, 107, 242, 121, 29, 55, 172, 185, 5, 196,
-      119, 145, 1, 1, 91, 58, 110, 176, 100, 207, 6,
-      194, 41, 193, 30, 91, 4, 195, 202, 103, 207, 80,
-      217, 178, 0, 145, 1
+      1, 2, 162, 208, 145, 194, 165, 27, 14, 118, 31, 139, 199, 254, 11, 190,
+      108, 15, 64, 180, 50, 106, 211, 26, 107, 242, 121, 29, 55, 172, 185, 5,
+      196, 119, 145, 1, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91,
+      4, 195, 202, 103, 207, 80, 217, 178, 0, 145, 1,
     ];
     assert_eq_arrays(token_lock_transfer_out, expected_token_lock_transfer_out);
 
@@ -385,7 +394,9 @@ export async function run_test() {
       if (!e.includes("Invalid addressable encoding")) {
         throw e;
       }
-      console.log("Tested invalid address in encode output token transfer successfully");
+      console.log(
+        "Tested invalid address in encode output token transfer successfully"
+      );
     }
 
     try {
@@ -402,7 +413,9 @@ export async function run_test() {
       if (!e.includes("Invalid addressable encoding")) {
         throw e;
       }
-      console.log("Tested invalid token id successfully in output token transfer");
+      console.log(
+        "Tested invalid token id successfully in output token transfer"
+      );
     }
 
     const token_transfer_out = encode_output_token_transfer(
@@ -412,12 +425,10 @@ export async function run_test() {
       Network.Testnet
     );
     const expected_token_transfer_out = [
-      0, 2, 162, 208, 145, 194, 165, 27, 14, 118, 31,
-      139, 199, 254, 11, 190, 108, 15, 64, 180, 50, 106,
-      211, 26, 107, 242, 121, 29, 55, 172, 185, 5, 196,
-      119, 145, 1, 1, 91, 58, 110, 176, 100, 207, 6,
-      194, 41, 193, 30, 91, 4, 195, 202, 103, 207, 80,
-      217, 178
+      0, 2, 162, 208, 145, 194, 165, 27, 14, 118, 31, 139, 199, 254, 11, 190,
+      108, 15, 64, 180, 50, 106, 211, 26, 107, 242, 121, 29, 55, 172, 185, 5,
+      196, 119, 145, 1, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193, 30, 91,
+      4, 195, 202, 103, 207, 80, 217, 178,
     ];
 
     assert_eq_arrays(token_transfer_out, expected_token_transfer_out);
@@ -465,7 +476,20 @@ export async function run_test() {
 
     try {
       const invalid_token_id = "asd";
-      encode_output_issue_nft(invalid_token_id, address, "nft", "XXX", "desc", "123", undefined, undefined, undefined, undefined, Network.Testnet);
+      encode_output_issue_nft(
+        invalid_token_id,
+        address,
+        "nft",
+        "XXX",
+        "desc",
+        "123",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        BigInt(1),
+        Network.Testnet
+      );
       throw new Error("Invalid token id worked somehow!");
     } catch (e) {
       console.log(`err: ${e}`);
@@ -478,7 +502,20 @@ export async function run_test() {
     try {
       console.log("Testing invalid creator successfully..");
       const creator_public_key_hash = address;
-      encode_output_issue_nft(token_id, address, "nft", "XXX", "desc", "123", creator_public_key_hash, undefined, undefined, undefined, Network.Testnet);
+      encode_output_issue_nft(
+        token_id,
+        address,
+        "nft",
+        "XXX",
+        "desc",
+        "123",
+        creator_public_key_hash,
+        undefined,
+        undefined,
+        undefined,
+        BigInt(1),
+        Network.Testnet
+      );
       throw new Error("Invalid creator worked somehow!");
     } catch (e) {
       if (!e.includes("NFT Creator needs to be a public key address")) {
@@ -490,7 +527,20 @@ export async function run_test() {
     try {
       console.log("Testing invalid nft ticker successfully..");
       const empty_ticker = "";
-      encode_output_issue_nft(token_id, address, "nft", empty_ticker, "desc", "123", undefined, undefined, undefined, undefined, Network.Testnet);
+      encode_output_issue_nft(
+        token_id,
+        address,
+        "nft",
+        empty_ticker,
+        "desc",
+        "123",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        BigInt(1),
+        Network.Testnet
+      );
       throw new Error("Invalid ticker worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid ticker length")) {
@@ -502,7 +552,20 @@ export async function run_test() {
     try {
       console.log("Testing invalid nft name successfully..");
       const empty_name = "";
-      encode_output_issue_nft(token_id, address, empty_name, "xxx", "desc", "123", undefined, undefined, undefined, undefined, Network.Testnet);
+      encode_output_issue_nft(
+        token_id,
+        address,
+        empty_name,
+        "xxx",
+        "desc",
+        "123",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        BigInt(1),
+        Network.Testnet
+      );
       throw new Error("Invalid name worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid name length")) {
@@ -514,7 +577,20 @@ export async function run_test() {
     try {
       console.log("Testing invalid nft description successfully..");
       const empty_description = "";
-      encode_output_issue_nft(token_id, address, "name", "XXX", empty_description, "123", undefined, undefined, undefined, undefined, Network.Testnet);
+      encode_output_issue_nft(
+        token_id,
+        address,
+        "name",
+        "XXX",
+        empty_description,
+        "123",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        BigInt(1),
+        Network.Testnet
+      );
       throw new Error("Invalid description worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid description length")) {

@@ -749,7 +749,11 @@ where
         tx: &SignedTransaction,
         median_time_past: &BlockTimestamp,
     ) -> Result<AccumulatedFee, ConnectTransactionError> {
-        check_transaction::check_transaction(self.chain_config.as_ref(), tx)?;
+        check_transaction::check_transaction(
+            self.chain_config.as_ref(),
+            tx_source.expected_block_height(),
+            tx,
+        )?;
 
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 

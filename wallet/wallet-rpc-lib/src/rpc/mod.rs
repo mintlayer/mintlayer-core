@@ -419,7 +419,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         options: TxOptionsOverrides,
     ) -> WRpcResult<NewTransaction, N> {
         let tx = tx.take();
-        check_transaction(&self.chain_config, &tx).map_err(|err| {
+        let block_height = self.best_block().await?.height;
+        check_transaction(&self.chain_config, block_height, &tx).map_err(|err| {
             RpcError::Controller(ControllerError::WalletError(
                 WalletError::InvalidTransaction(err),
             ))

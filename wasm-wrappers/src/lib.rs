@@ -635,6 +635,7 @@ pub fn encode_output_issue_fungible_token(
     total_supply: TotalSupply,
     supply_amount: Option<Amount>,
     is_token_freezable: FreezableToken,
+    _current_block_height: u64,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
@@ -674,6 +675,7 @@ pub fn encode_output_issue_nft(
     media_uri: Option<Vec<u8>>,
     icon_uri: Option<Vec<u8>>,
     additional_metadata_uri: Option<Vec<u8>>,
+    _current_block_height: u64,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
