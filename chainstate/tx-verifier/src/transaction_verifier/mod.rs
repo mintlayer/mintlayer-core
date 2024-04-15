@@ -73,9 +73,8 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::make_token_id,
-        AccountCommand, AccountNonce, AccountSpending, AccountType, AccountsBalancesCheckVersion,
-        Block, ChainConfig, DelegationId, GenBlock, TokenIssuanceVersion, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
+        DelegationId, GenBlock, TokenIssuanceVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
@@ -430,34 +429,15 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        match self
-            .chain_config
-            .as_ref()
-            .chainstate_upgrades()
-            .version_at_height(tx_source.expected_block_height())
-            .1
-            .accounts_balances_version()
-        {
-            AccountsBalancesCheckVersion::V0 => {
-                if let Some(delegation_id) = check_delegation {
-                    let _ = self
-                        .pos_accounting_adapter
-                        .accounting_delta()
-                        .get_delegation_balance(delegation_id)?;
-                }
-            }
-            AccountsBalancesCheckVersion::V1 => {
-                // Iterate over all delegations that have spending and get the balance.
-                // By retrieving the balance we apply all the deltas from the accounting and can verify
-                // that final balance is not negative.
-                // This check is not mandatory but a safe-net to ensure no overspends happen.
-                for delegation_id in delegations_with_spendings {
-                    let _ = self
-                        .pos_accounting_adapter
-                        .accounting_delta()
-                        .get_delegation_balance(delegation_id)?;
-                }
-            }
+        // Iterate over all delegations that have spending and get the balance.
+        // By retrieving the balance we apply all the deltas from the accounting and can verify
+        // that final balance is not negative.
+        // This check is not mandatory but a safe-net to ensure no overspends happen.
+        for delegation_id in delegations_with_spendings {
+            let _ = self
+                .pos_accounting_adapter
+                .accounting_delta()
+                .get_delegation_balance(delegation_id)?;
         }
 
         // Store pos accounting operations undos

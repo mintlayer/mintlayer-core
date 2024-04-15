@@ -22,8 +22,7 @@ use chainstate::{
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::chain::tokens::{Metadata, NftIssuanceV0, TokenIssuanceV0, TokenTransfer};
 use common::chain::{
-    AccountsBalancesCheckVersion, NftIdMismatchCheck, RewardDistributionVersion,
-    TokensTickerMaxLengthVersion, UtxoOutPoint,
+    NftIdMismatchCheck, RewardDistributionVersion, TokensTickerMaxLengthVersion, UtxoOutPoint,
 };
 use common::primitives::{id, BlockHeight, Id};
 use common::{
@@ -61,7 +60,6 @@ fn make_test_framework_with_v0(rng: &mut (impl Rng + CryptoRng)) -> TestFramewor
                             TokensFeeVersion::V1,
                             TokensTickerMaxLengthVersion::V1,
                             NftIdMismatchCheck::Yes,
-                            AccountsBalancesCheckVersion::V1,
                         ),
                     )])
                     .unwrap(),
@@ -967,7 +965,6 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                                 TokensFeeVersion::V1,
                                 TokensTickerMaxLengthVersion::V1,
                                 NftIdMismatchCheck::Yes,
-                                AccountsBalancesCheckVersion::V1,
                             ),
                         )])
                         .unwrap(),
@@ -1028,7 +1025,6 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
                                     TokensFeeVersion::V1,
                                     TokensTickerMaxLengthVersion::V1,
                                     NftIdMismatchCheck::Yes,
-                                    AccountsBalancesCheckVersion::V1,
                                 ),
                             ),
                             (
@@ -1039,7 +1035,6 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
                                     TokensFeeVersion::V1,
                                     TokensTickerMaxLengthVersion::V1,
                                     NftIdMismatchCheck::Yes,
-                                    AccountsBalancesCheckVersion::V1,
                                 ),
                             ),
                         ])
