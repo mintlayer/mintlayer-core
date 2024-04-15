@@ -169,7 +169,7 @@ impl FailureConfig {
     }
 
     pub fn builder<Sch>() -> builder::Builder<Sch> {
-        builder::Builder::new(Self::inactive(1_u32 << 31, 5))
+        builder::Builder::new(Self::inactive(5, 5))
     }
 
     pub fn error_generation_for_write(&self, map_id: DbMapId) -> &ErrorGeneration {
