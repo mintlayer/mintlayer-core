@@ -13,19 +13,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
+
+use rstest::rstest;
+use static_assertions::const_assert;
+use tokio::{
+    sync::{mpsc::unbounded_channel, oneshot},
+    time::sleep,
+};
 
 use chainstate::{ChainstateError, ChainstateHandle, GenBlockIndex, PropertyQueryError};
+use chainstate_test_framework::TransactionBuilder;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockCreationError},
         config::{create_testnet, create_unit_test_config, Builder, ChainType},
+        output_value::OutputValue,
+        signature::inputsig::InputWitness,
         stakelock::StakePoolData,
+        timelock::OutputTimeLock,
         transaction::TxInput,
-        ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId, PoolId,
-        RequiredConsensus, TxOutput,
+        CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId,
+        PoolId, RequiredConsensus, TxOutput,
     },
-    primitives::{per_thousand::PerThousand, time, Amount, BlockHeight, Id, H256},
+    primitives::{per_thousand::PerThousand, time, Amount, BlockHeight, Id, Idable, H256},
     time_getter::TimeGetter,
     Uint256,
 };
@@ -41,17 +52,14 @@ use crypto::{
 use mempool::{
     error::{BlockConstructionError, TxValidationError},
     tx_accumulator::{DefaultTxAccumulator, PackingStrategy},
+    tx_origin::LocalTxOrigin,
+    TxOptions,
 };
 use mocks::{MockChainstateInterface, MockMempoolInterface};
-use rstest::rstest;
 use subsystem::error::ResponseError;
 use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
     random::{make_seedable_rng, Seed},
-};
-use tokio::{
-    sync::{mpsc::unbounded_channel, oneshot},
-    time::sleep,
 };
 use utils::once_destructor::OnceDestructor;
 
@@ -61,7 +69,7 @@ use crate::{
         CustomId, GenerateBlockInputData,
     },
     prepare_thread_pool, test_blockprod_config,
-    tests::{assert_process_block, setup_blockprod_test, setup_pos},
+    tests::{assert_process_block, make_genesis_timestamp, setup_blockprod_test, setup_pos},
     BlockProduction, BlockProductionError, JobKey,
 };
 
@@ -76,7 +84,7 @@ mod collect_transactions {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn collect_txs_failed() {
         let (mut manager, chain_config, chainstate, _mempool, p2p) =
-            setup_blockprod_test(None, None);
+            setup_blockprod_test(None, TimeGetter::default());
 
         let mut mock_mempool = MockMempoolInterface::default();
         mock_mempool.expect_collect_txs().return_once(|_, _, _| {
@@ -128,7 +136,7 @@ mod collect_transactions {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn subsystem_error() {
         let (mut manager, chain_config, chainstate, _mempool, p2p) =
-            setup_blockprod_test(None, None);
+            setup_blockprod_test(None, TimeGetter::default());
 
         let mock_mempool = MockMempoolInterface::default();
         let mock_mempool_subsystem = manager.add_subsystem("mock-mempool", mock_mempool);
@@ -182,7 +190,7 @@ mod collect_transactions {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn succeeded() {
         let (mut manager, chain_config, chainstate, _mempool, p2p) =
-            setup_blockprod_test(None, None);
+            setup_blockprod_test(None, TimeGetter::default());
 
         let mut mock_mempool = MockMempoolInterface::default();
 
@@ -243,7 +251,7 @@ mod collect_transactions {
 }
 
 mod produce_block {
-    use common::chain::PoSChainConfigBuilder;
+    use common::chain::{ChainConfig, PoSChainConfigBuilder};
     use utils::atomics::SeqCstAtomicU64;
 
     use super::*;
@@ -251,7 +259,8 @@ mod produce_block {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn initial_block_download() {
-        let (mut manager, chain_config, _, mempool, p2p) = setup_blockprod_test(None, None);
+        let (mut manager, chain_config, _, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let chainstate_subsystem: ChainstateHandle = {
             let mut mock_chainstate = MockChainstateInterface::new();
@@ -306,7 +315,8 @@ mod produce_block {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn below_peer_count() {
-        let (manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -352,7 +362,8 @@ mod produce_block {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn pull_best_block_index_error() {
-        let (mut manager, chain_config, _, mempool, p2p) = setup_blockprod_test(None, None);
+        let (mut manager, chain_config, _, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let chainstate_subsystem: ChainstateHandle = {
             let mut mock_chainstate = Box::new(MockChainstateInterface::new());
@@ -415,7 +426,8 @@ mod produce_block {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn add_job_error() {
-        let (manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -479,7 +491,7 @@ mod produce_block {
             let override_chain_config =
                 Builder::new(ChainType::Regtest).genesis_custom(genesis_block).build();
 
-            setup_blockprod_test(Some(override_chain_config), None)
+            setup_blockprod_test(Some(override_chain_config), TimeGetter::default())
         };
 
         let join_handle = tokio::spawn({
@@ -532,7 +544,7 @@ mod produce_block {
             .build();
 
         let (manager, chain_config, chainstate, mempool, p2p) =
-            setup_blockprod_test(Some(override_chain_config), None);
+            setup_blockprod_test(Some(override_chain_config), TimeGetter::default());
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -582,15 +594,17 @@ mod produce_block {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn update_last_used_block_timestamp(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let time_getter = TimeGetter::default();
         let (
             pos_chain_config,
             genesis_stake_private_key,
             genesis_vrf_private_key,
             create_genesis_pool_txoutput,
-        ) = setup_pos(seed);
+        ) = setup_pos(&time_getter, BlockHeight::new(1), &[], &mut rng);
 
         let (manager, chain_config, chainstate, mempool, p2p) =
-            setup_blockprod_test(Some(pos_chain_config), None);
+            setup_blockprod_test(Some(pos_chain_config), time_getter);
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -655,8 +669,8 @@ mod produce_block {
         // Ensure we reset the global mock time on exit
         let _reset_time_destructor = OnceDestructor::new(time::reset);
 
-        let ((manager, chain_config, chainstate, mempool, p2p), time_value) = {
-            let last_used_block_timestamp = TimeGetter::get_time(&TimeGetter::default());
+        let ((manager, chain_config, chainstate, mempool, p2p), time_getter) = {
+            let last_used_block_timestamp = TimeGetter::default().get_time();
 
             let genesis_block = Genesis::new(
                 "blockprod-testing".into(),
@@ -671,10 +685,11 @@ mod produce_block {
                 .saturating_duration_sub(*override_chain_config.max_future_block_time_offset())
                 .as_secs_since_epoch();
             let time_value = Arc::new(SeqCstAtomicU64::new(time_value_secs));
+            let time_getter = mocked_time_getter_seconds(time_value);
 
             (
-                setup_blockprod_test(Some(override_chain_config), Some(time_value.clone())),
-                time_value,
+                setup_blockprod_test(Some(override_chain_config), time_getter.clone()),
+                time_getter,
             )
         };
 
@@ -692,7 +707,7 @@ mod produce_block {
                     chainstate.clone(),
                     mempool,
                     p2p,
-                    mocked_time_getter_seconds(time_value),
+                    time_getter,
                     prepare_thread_pool(1),
                 )
                 .expect("Error initializing blockprod");
@@ -721,7 +736,8 @@ mod produce_block {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn pull_consensus_data_error() {
-        let (mut manager, chain_config, _, mempool, p2p) = setup_blockprod_test(None, None);
+        let (mut manager, chain_config, _, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let chainstate_subsystem: ChainstateHandle = {
             let mut mock_chainstate = MockChainstateInterface::new();
@@ -789,7 +805,8 @@ mod produce_block {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn tip_changed() {
-        let (mut manager, chain_config, _, mempool, p2p) = setup_blockprod_test(None, None);
+        let (mut manager, chain_config, _, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let chainstate_subsystem: ChainstateHandle = {
             let mut mock_chainstate = MockChainstateInterface::new();
@@ -808,6 +825,11 @@ mod produce_block {
                 .expect_get_best_block_index()
                 .times(expected_return_values.len())
                 .returning(move || expected_return_values.remove(0));
+
+            // Doesn't matter for this test.
+            mock_chainstate
+                .expect_calculate_median_time_past()
+                .returning(|_| Ok(BlockTimestamp::from_int_seconds(0)));
 
             manager.add_subsystem("mock-chainstate", mock_chainstate)
         };
@@ -854,7 +876,7 @@ mod produce_block {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn transaction_source_mempool_error() {
         let (mut manager, chain_config, chainstate, _mempool, p2p) =
-            setup_blockprod_test(None, None);
+            setup_blockprod_test(None, TimeGetter::default());
 
         let mut mock_mempool = MockMempoolInterface::default();
 
@@ -909,7 +931,8 @@ mod produce_block {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn transaction_source_mempool() {
-        let (manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -954,7 +977,8 @@ mod produce_block {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn transaction_source_provided() {
-        let (manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -1018,7 +1042,7 @@ mod produce_block {
         };
 
         let (manager, chain_config, chainstate, mempool, p2p) =
-            setup_blockprod_test(Some(override_chain_config), None);
+            setup_blockprod_test(Some(override_chain_config), TimeGetter::default());
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -1087,7 +1111,8 @@ mod produce_block {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn solved_ignore_consensus() {
-        let (manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -1144,7 +1169,7 @@ mod produce_block {
         };
 
         let (manager, chain_config, chainstate, mempool, p2p) =
-            setup_blockprod_test(Some(override_chain_config), None);
+            setup_blockprod_test(Some(override_chain_config), TimeGetter::default());
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -1193,15 +1218,17 @@ mod produce_block {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn solved_pos_consensus(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let time_getter = TimeGetter::default();
         let (
             pos_chain_config,
             genesis_stake_private_key,
             genesis_vrf_private_key,
             create_genesis_pool_txoutput,
-        ) = setup_pos(seed);
+        ) = setup_pos(&time_getter, BlockHeight::new(1), &[], &mut rng);
 
         let (manager, chain_config, chainstate, mempool, p2p) =
-            setup_blockprod_test(Some(pos_chain_config), None);
+            setup_blockprod_test(Some(pos_chain_config), time_getter);
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -1254,12 +1281,332 @@ mod produce_block {
         join_handle.await.unwrap();
     }
 
+    // The height at which the transaction_selection_xxx tests will create their test block.
+    // Any value will do as long as it's bigger than the span used to calculate the median past time.
+    const TRANSACTION_SELECTION_TESTS_BLOCK_HEIGHT: usize = 15;
+    const_assert!(TRANSACTION_SELECTION_TESTS_BLOCK_HEIGHT > chainstate::MEDIAN_TIME_SPAN);
+
+    // Common implementation for the transaction_selection_xxx tests below.
+    // The passed chain config is assumed to switch to the consensus type required by the test
+    // at the height TRANSACTION_SELECTION_TESTS_BLOCK_HEIGHT.
+    // `genesis_premint_output_index` specifies the genesis tx that mints some coins that can
+    // be spent by the test.
+    // Steps:
+    // 1) Create trivial blocks up to the height (TRANSACTION_SELECTION_TESTS_BLOCK_HEIGHT - 1).
+    // Calculate the "median time past" using the current tip.
+    // 2) Create the "main" tx that spends the genesis output by splitting it into multiple
+    // utxos with different time locks. One of the locks is at the "median time past", the rest are
+    // below and above that point.
+    // Then create a bunch of "dependent" txs, each of which spends one of the utxos.
+    // Add all the txs to the mempool.
+    // 3) Produce a block using the provided input data.
+    // Expected result:
+    // a) The block is valid.
+    // b) The block contains the main tx and all dependent txs up to and including the one at
+    // the "median time past" time.
+    async fn transaction_selection_test_impl(
+        chain_config: ChainConfig,
+        input_data: GenerateBlockInputData,
+        time_getter: TimeGetter,
+        genesis_premint_output_index: u32,
+    ) {
+        let (manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(Some(chain_config), time_getter.clone());
+
+        let genesis_timestamp = chain_config.genesis_block().timestamp();
+        let expected_median_time_past = genesis_timestamp.add_int_seconds(9).unwrap();
+
+        let join_handle = tokio::spawn({
+            let shutdown_trigger = manager.make_shutdown_trigger();
+            async move {
+                // Ensure a shutdown signal will be sent by the end of the scope
+                let _shutdown_signal = OnceDestructor::new(move || {
+                    shutdown_trigger.initiate();
+                });
+
+                let block_production = BlockProduction::new(
+                    chain_config.clone(),
+                    Arc::new(test_blockprod_config()),
+                    chainstate.clone(),
+                    mempool.clone(),
+                    p2p,
+                    Default::default(),
+                    prepare_thread_pool(1),
+                )
+                .unwrap();
+
+                for i in 1..TRANSACTION_SELECTION_TESTS_BLOCK_HEIGHT {
+                    let (new_block, job_finished_receiver) = block_production
+                        .produce_block(
+                            GenerateBlockInputData::None,
+                            vec![],
+                            vec![],
+                            PackingStrategy::LeaveEmptySpace,
+                        )
+                        .await
+                        .unwrap();
+
+                    job_finished_receiver.await.unwrap();
+
+                    let expected_timestamp = genesis_timestamp.add_int_seconds(i as u64).unwrap();
+                    assert_eq!(new_block.timestamp(), expected_timestamp);
+
+                    assert_job_count(&block_production, 0).await;
+                    assert_process_block(&chainstate, &mempool, new_block).await;
+                }
+
+                let median_time_past = chainstate
+                    .call(|cs| cs.calculate_median_time_past(&cs.get_best_block_id().unwrap()))
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(median_time_past, expected_median_time_past);
+
+                let timestamp_offsets_count = 10i64;
+                let tx_count = timestamp_offsets_count * 2 + 1;
+                let main_tx = {
+                    let mut builder = TransactionBuilder::new().add_input(
+                        TxInput::from_utxo(
+                            OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                            genesis_premint_output_index,
+                        ),
+                        InputWitness::NoSignature(None),
+                    );
+
+                    for timestamp_offset_secs in -timestamp_offsets_count..=timestamp_offsets_count
+                    {
+                        let lock_until_secs =
+                            (median_time_past.as_int_seconds() as i64) + timestamp_offset_secs;
+                        assert!(lock_until_secs > 0);
+                        let lock_until = BlockTimestamp::from_int_seconds(lock_until_secs as u64);
+
+                        let output = TxOutput::LockThenTransfer(
+                            OutputValue::Coin(Amount::from_atoms(2 * CoinUnit::ATOMS_PER_COIN)),
+                            Destination::AnyoneCanSpend,
+                            OutputTimeLock::UntilTime(lock_until),
+                        );
+                        builder = builder.add_output(output);
+                    }
+
+                    builder.build()
+                };
+                let main_tx_id = main_tx.transaction().get_id();
+
+                let dependent_txs = {
+                    let mut txs = Vec::new();
+
+                    for i in 0..tx_count {
+                        let tx = TransactionBuilder::new()
+                            .add_input(
+                                TxInput::from_utxo(
+                                    OutPointSourceId::Transaction(main_tx_id),
+                                    i as u32,
+                                ),
+                                InputWitness::NoSignature(None),
+                            )
+                            .add_output(TxOutput::Transfer(
+                                OutputValue::Coin(Amount::from_atoms(CoinUnit::ATOMS_PER_COIN)),
+                                Destination::AnyoneCanSpend,
+                            ))
+                            .build();
+                        txs.push(tx);
+                    }
+
+                    txs
+                };
+
+                mempool
+                    .call_mut({
+                        let dependent_txs = dependent_txs.clone();
+                        |mp| {
+                            let origin = LocalTxOrigin::Mempool;
+                            let options = TxOptions::default_for(origin.into());
+
+                            for tx in std::iter::once(main_tx).chain(dependent_txs.into_iter()) {
+                                mp.add_transaction_local(tx, origin, options.clone()).unwrap();
+                            }
+                        }
+                    })
+                    .await
+                    .unwrap();
+
+                let (new_block, job_finished_receiver) = block_production
+                    .produce_block(
+                        input_data,
+                        vec![],
+                        vec![],
+                        PackingStrategy::FillSpaceFromMempool,
+                    )
+                    .await
+                    .unwrap();
+
+                // We want the block to be slightly in the past, to ensure that blockprod doesn't
+                // rely on the current time when collecting transactions.
+                assert!(new_block.timestamp().into_time() < time_getter.get_time());
+
+                let block_tx_ids = new_block
+                    .transactions()
+                    .iter()
+                    .map(|tx| tx.transaction().get_id())
+                    .collect::<BTreeSet<_>>();
+
+                job_finished_receiver.await.unwrap();
+
+                assert_job_count(&block_production, 0).await;
+                // First ensure that the produced block is actually correct.
+                assert_process_block(&chainstate, &mempool, new_block).await;
+
+                // Now check the transaction ids.
+                let expected_tx_ids = dependent_txs[..=timestamp_offsets_count as usize]
+                    .iter()
+                    .map(|tx| tx.transaction().get_id())
+                    .chain(std::iter::once(main_tx_id))
+                    .collect::<BTreeSet<_>>();
+                assert_eq!(block_tx_ids, expected_tx_ids);
+            }
+        });
+
+        manager.main().await;
+        join_handle.await.unwrap();
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn transaction_selection_test_pos(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let initial_time_value_secs = TimeGetter::default().get_time().as_secs_since_epoch();
+        let initial_time_value = Arc::new(SeqCstAtomicU64::new(initial_time_value_secs));
+        let time_getter = mocked_time_getter_seconds(Arc::clone(&initial_time_value));
+
+        let extra_genesis_txs = [TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1000 * CoinUnit::ATOMS_PER_COIN)),
+            Destination::AnyoneCanSpend,
+        )];
+
+        let (
+            chain_config,
+            genesis_stake_private_key,
+            genesis_vrf_private_key,
+            create_genesis_pool_txoutput,
+        ) = setup_pos(
+            &time_getter,
+            BlockHeight::new(TRANSACTION_SELECTION_TESTS_BLOCK_HEIGHT as u64),
+            &extra_genesis_txs,
+            &mut rng,
+        );
+
+        let input_data = GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
+            genesis_stake_private_key,
+            genesis_vrf_private_key,
+            PoolId::new(H256::zero()),
+            vec![TxInput::from_utxo(
+                OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                0,
+            )],
+            vec![create_genesis_pool_txoutput],
+        )));
+
+        transaction_selection_test_impl(chain_config, input_data, time_getter, 1).await;
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn transaction_selection_test_pow(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let initial_time_value_secs = TimeGetter::default().get_time().as_secs_since_epoch();
+        let initial_time_value = Arc::new(SeqCstAtomicU64::new(initial_time_value_secs));
+        let time_getter = mocked_time_getter_seconds(Arc::clone(&initial_time_value));
+
+        let extra_genesis_txs = vec![TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1000 * CoinUnit::ATOMS_PER_COIN)),
+            Destination::AnyoneCanSpend,
+        )];
+
+        let genesis_timestamp = make_genesis_timestamp(&time_getter, &mut rng);
+        let genesis = Genesis::new(
+            "blockprod-testing".into(),
+            genesis_timestamp,
+            extra_genesis_txs,
+        );
+
+        let chain_config = {
+            let net_upgrades = NetUpgrades::initialize(vec![
+                (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+                (
+                    BlockHeight::new(TRANSACTION_SELECTION_TESTS_BLOCK_HEIGHT as u64),
+                    ConsensusUpgrade::PoW {
+                        initial_difficulty: Uint256::MAX.into(),
+                    },
+                ),
+            ])
+            .unwrap();
+
+            Builder::new(ChainType::Regtest)
+                .genesis_custom(genesis)
+                .consensus_upgrades(net_upgrades)
+                .build()
+        };
+
+        let input_data = GenerateBlockInputData::PoW(Box::new(PoWGenerateBlockInputData::new(
+            Destination::AnyoneCanSpend,
+        )));
+
+        transaction_selection_test_impl(chain_config, input_data, time_getter, 0).await;
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn transaction_selection_test_ignore_consensus(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let initial_time_value_secs = TimeGetter::default().get_time().as_secs_since_epoch();
+        let initial_time_value = Arc::new(SeqCstAtomicU64::new(initial_time_value_secs));
+        let time_getter = mocked_time_getter_seconds(Arc::clone(&initial_time_value));
+
+        let extra_genesis_txs = vec![TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1000 * CoinUnit::ATOMS_PER_COIN)),
+            Destination::AnyoneCanSpend,
+        )];
+
+        let genesis_timestamp = make_genesis_timestamp(&time_getter, &mut rng);
+        let genesis = Genesis::new(
+            "blockprod-testing".into(),
+            genesis_timestamp,
+            extra_genesis_txs,
+        );
+
+        let chain_config = {
+            let net_upgrades = NetUpgrades::initialize(vec![(
+                BlockHeight::new(0),
+                ConsensusUpgrade::IgnoreConsensus,
+            )])
+            .unwrap();
+
+            Builder::new(ChainType::Regtest)
+                .genesis_custom(genesis)
+                .consensus_upgrades(net_upgrades)
+                .build()
+        };
+
+        transaction_selection_test_impl(chain_config, GenerateBlockInputData::None, time_getter, 0)
+            .await;
+    }
+
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn solve_lots_of_blocks_with_differing_consensus(#[case] seed: Seed) {
+        use crate::tests::make_genesis_timestamp;
+
         let mut rng = make_seedable_rng(seed);
+
+        let time_getter = TimeGetter::default();
 
         let (genesis_stake_private_key, genesis_stake_public_key) =
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
@@ -1292,16 +1639,7 @@ mod produce_block {
         let override_chain_config = {
             let genesis_block = Genesis::new(
                 "blockprod-testing".into(),
-                BlockTimestamp::from_int_seconds(
-                    (TimeGetter::default().get_time()
-                        - Duration::new(
-                            // Genesis must be in the past: now - (1 day..2 weeks)
-                            rng.gen_range(60 * 60 * 24..60 * 60 * 24 * 14),
-                            0,
-                        ))
-                    .expect("No time underflow")
-                    .as_secs_since_epoch(),
-                ),
+                make_genesis_timestamp(&time_getter, &mut rng),
                 vec![kernel_input_utxo.clone()],
             );
 
@@ -1344,7 +1682,7 @@ mod produce_block {
         };
 
         let (manager, chain_config, chainstate, mempool, p2p) =
-            setup_blockprod_test(Some(override_chain_config), None);
+            setup_blockprod_test(Some(override_chain_config), time_getter);
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -1549,7 +1887,8 @@ mod produce_block {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn multiple_jobs_with_wait(#[case] seed: Seed) {
-        let (manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -1603,7 +1942,8 @@ mod process_block_with_custom_id {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn multiple_jobs_with_wait(#[case] seed: Seed) {
-        let (manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let mut rng = make_seedable_rng(seed);
 
@@ -1662,7 +2002,8 @@ mod process_block_with_custom_id {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn multiple_jobs_without_wait_same_jobkey(#[case] seed: Seed) {
-        let (manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let mut rng = make_seedable_rng(seed);
 
@@ -1726,7 +2067,8 @@ mod stop_all_jobs {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn error() {
-        let (_manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (_manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let mut block_production = BlockProduction::new(
             chain_config,
@@ -1761,7 +2103,8 @@ mod stop_all_jobs {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn ok(#[case] seed: Seed) {
-        let (_manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (_manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let mut rng = make_seedable_rng(seed);
 
@@ -1808,7 +2151,8 @@ mod stop_all_jobs {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn mocked_ok(#[case] seed: Seed) {
-        let (_manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (_manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let mut block_production = BlockProduction::new(
             chain_config,
@@ -1846,7 +2190,8 @@ mod stop_job {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn error(#[case] seed: Seed) {
-        let (_manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (_manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let mut block_production = BlockProduction::new(
             chain_config,
@@ -1887,7 +2232,8 @@ mod stop_job {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn existing_job_ok(#[case] seed: Seed) {
-        let (_manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (_manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let mut rng = make_seedable_rng(seed);
 
@@ -1934,7 +2280,8 @@ mod stop_job {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn multiple_jobs_ok(#[case] seed: Seed) {
-        let (_manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (_manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let mut rng = make_seedable_rng(seed);
 
@@ -1993,7 +2340,8 @@ mod stop_job {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn non_existent_job_ok(#[case] seed: Seed) {
-        let (_manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (_manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let mut rng = make_seedable_rng(seed);
 
@@ -2035,7 +2383,8 @@ mod stop_job {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn mocked_ok(#[case] seed: Seed) {
-        let (_manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(None, None);
+        let (_manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(None, TimeGetter::default());
 
         let mut block_production = BlockProduction::new(
             chain_config,
