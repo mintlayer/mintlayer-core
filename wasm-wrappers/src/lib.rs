@@ -635,7 +635,6 @@ pub fn encode_output_issue_fungible_token(
     total_supply: TotalSupply,
     supply_amount: Option<Amount>,
     is_token_freezable: FreezableToken,
-    current_block_height: u64,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
@@ -654,11 +653,7 @@ pub fn encode_output_issue_fungible_token(
         is_freezable,
     });
 
-    tx_verifier::check_tokens_issuance(
-        &chain_config,
-        BlockHeight::new(current_block_height),
-        &token_issuance,
-    )?;
+    tx_verifier::check_tokens_issuance(&chain_config, &token_issuance)?;
 
     let output = TxOutput::IssueFungibleToken(Box::new(token_issuance));
     Ok(output.encode())
@@ -679,7 +674,6 @@ pub fn encode_output_issue_nft(
     media_uri: Option<Vec<u8>>,
     icon_uri: Option<Vec<u8>>,
     additional_metadata_uri: Option<Vec<u8>>,
-    current_block_height: u64,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
@@ -716,11 +710,7 @@ pub fn encode_output_issue_nft(
         },
     };
 
-    tx_verifier::check_nft_issuance_data(
-        &chain_config,
-        BlockHeight::new(current_block_height),
-        &nft_issuance,
-    )?;
+    tx_verifier::check_nft_issuance_data(&chain_config, &nft_issuance)?;
 
     let output = TxOutput::IssueNft(token_id, Box::new(NftIssuance::V0(nft_issuance)), authority);
     Ok(output.encode())

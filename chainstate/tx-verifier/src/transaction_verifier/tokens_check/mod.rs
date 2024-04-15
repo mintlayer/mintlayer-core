@@ -17,12 +17,9 @@ use self::check_utils::check_media_hash;
 
 use crate::error::TokenIssuanceError;
 
-use common::{
-    chain::{
-        tokens::{NftIssuanceV0, TokenIssuance},
-        ChainConfig,
-    },
-    primitives::BlockHeight,
+use common::chain::{
+    tokens::{NftIssuanceV0, TokenIssuance},
+    ChainConfig,
 };
 use serialization::{DecodeAll, Encode};
 use utils::ensure;
@@ -31,10 +28,9 @@ mod check_utils;
 
 pub fn check_nft_issuance_data(
     chain_config: &ChainConfig,
-    block_height: BlockHeight,
     issuance: &NftIssuanceV0,
 ) -> Result<(), TokenIssuanceError> {
-    check_utils::check_token_ticker(chain_config, block_height, &issuance.metadata.ticker)?;
+    check_utils::check_token_ticker(chain_config, &issuance.metadata.ticker)?;
     check_utils::check_nft_name(chain_config, &issuance.metadata.name)?;
     check_utils::check_nft_description(chain_config, &issuance.metadata.description)?;
 
@@ -83,17 +79,12 @@ pub fn check_nft_issuance_data(
 
 pub fn check_tokens_issuance(
     chain_config: &ChainConfig,
-    block_height: BlockHeight,
     issuance: &TokenIssuance,
 ) -> Result<(), TokenIssuanceError> {
     match issuance {
         TokenIssuance::V1(issuance_data) => {
             // Check token ticker
-            check_utils::check_token_ticker(
-                chain_config,
-                block_height,
-                &issuance_data.token_ticker,
-            )?;
+            check_utils::check_token_ticker(chain_config, &issuance_data.token_ticker)?;
 
             // Check decimals
             ensure!(

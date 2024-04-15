@@ -22,7 +22,7 @@ use common::{
         signature::inputsig::InputWitness,
         tokens::{make_token_id, NftIssuance, TokenId},
         ChainstateUpgrade, Destination, NetUpgrades, OutPointSourceId, RewardDistributionVersion,
-        TokenIssuanceVersion, TokensFeeVersion, TokensTickerMaxLengthVersion, TxInput, TxOutput,
+        TokenIssuanceVersion, TokensFeeVersion, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId},
 };
@@ -369,7 +369,6 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
                                 TokenIssuanceVersion::V1,
                                 RewardDistributionVersion::V1,
                                 TokensFeeVersion::V1,
-                                TokensTickerMaxLengthVersion::V1,
                             ),
                         )])
                         .unwrap(),

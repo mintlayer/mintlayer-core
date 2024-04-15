@@ -465,7 +465,7 @@ export async function run_test() {
 
     try {
       const invalid_token_id = "asd";
-      encode_output_issue_nft(invalid_token_id, address, "nft", "XXX", "desc", "123", undefined, undefined, undefined, undefined, BigInt(1), Network.Testnet);
+      encode_output_issue_nft(invalid_token_id, address, "nft", "XXX", "desc", "123", undefined, undefined, undefined, undefined, Network.Testnet);
       throw new Error("Invalid token id worked somehow!");
     } catch (e) {
       console.log(`err: ${e}`);
@@ -478,7 +478,7 @@ export async function run_test() {
     try {
       console.log("Testing invalid creator successfully..");
       const creator_public_key_hash = address;
-      encode_output_issue_nft(token_id, address, "nft", "XXX", "desc", "123", creator_public_key_hash, undefined, undefined, undefined, BigInt(1), Network.Testnet);
+      encode_output_issue_nft(token_id, address, "nft", "XXX", "desc", "123", creator_public_key_hash, undefined, undefined, undefined, Network.Testnet);
       throw new Error("Invalid creator worked somehow!");
     } catch (e) {
       if (!e.includes("NFT Creator needs to be a public key address")) {
@@ -490,7 +490,7 @@ export async function run_test() {
     try {
       console.log("Testing invalid nft ticker successfully..");
       const empty_ticker = "";
-      encode_output_issue_nft(token_id, address, "nft", empty_ticker, "desc", "123", undefined, undefined, undefined, undefined, BigInt(1), Network.Testnet);
+      encode_output_issue_nft(token_id, address, "nft", empty_ticker, "desc", "123", undefined, undefined, undefined, undefined, Network.Testnet);
       throw new Error("Invalid ticker worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid ticker length")) {
@@ -502,7 +502,7 @@ export async function run_test() {
     try {
       console.log("Testing invalid nft name successfully..");
       const empty_name = "";
-      encode_output_issue_nft(token_id, address, empty_name, "xxx", "desc", "123", undefined, undefined, undefined, undefined, BigInt(1), Network.Testnet);
+      encode_output_issue_nft(token_id, address, empty_name, "xxx", "desc", "123", undefined, undefined, undefined, undefined, Network.Testnet);
       throw new Error("Invalid name worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid name length")) {
@@ -514,7 +514,7 @@ export async function run_test() {
     try {
       console.log("Testing invalid nft description successfully..");
       const empty_description = "";
-      encode_output_issue_nft(token_id, address, "name", "XXX", empty_description, "123", undefined, undefined, undefined, undefined, BigInt(1), Network.Testnet);
+      encode_output_issue_nft(token_id, address, "name", "XXX", empty_description, "123", undefined, undefined, undefined, undefined, Network.Testnet);
       throw new Error("Invalid description worked somehow!");
     } catch (e) {
       if (!e.includes("Invalid description length")) {

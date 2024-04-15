@@ -947,10 +947,9 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<SignedTransaction>,
     ) -> WalletResult<SignedTransaction> {
-        let (_, block_height) = self.get_best_block_for_account(account_index)?;
         self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
             let tx = f(account, db_tx)?;
-            check_transaction(chain_config, block_height.next_height(), &tx)?;
+            check_transaction(chain_config, &tx)?;
             Ok(tx)
         })
     }
@@ -1484,11 +1483,7 @@ impl<B: storage::Backend> Wallet<B> {
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<(TokenId, SignedTransaction)> {
-        let outputs = make_issue_token_outputs(
-            token_issuance,
-            self.chain_config.as_ref(),
-            self.get_best_block_for_account(account_index)?.1.next_height(),
-        )?;
+        let outputs = make_issue_token_outputs(token_issuance, self.chain_config.as_ref())?;
 
         let tx = self.create_transaction_to_addresses(
             account_index,

@@ -25,8 +25,7 @@ use common::{
         output_value::OutputValue,
         tokens::{make_token_id, NftIssuance, TokenAuxiliaryData, TokenIssuanceV0},
         ChainstateUpgrade, Destination, NetUpgrades, OutPointSourceId, RewardDistributionVersion,
-        TokenIssuanceVersion, TokensFeeVersion, TokensTickerMaxLengthVersion, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
+        TokenIssuanceVersion, TokensFeeVersion, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, Idable},
 };
@@ -119,7 +118,6 @@ fn store_fungible_token_v0(#[case] seed: Seed) {
                                 TokenIssuanceVersion::V0,
                                 RewardDistributionVersion::V1,
                                 TokensFeeVersion::V1,
-                                TokensTickerMaxLengthVersion::V1,
                             ),
                         )])
                         .unwrap(),
@@ -198,7 +196,6 @@ fn store_nft_v0(#[case] seed: Seed) {
                                 TokenIssuanceVersion::V0,
                                 RewardDistributionVersion::V1,
                                 TokensFeeVersion::V1,
-                                TokensTickerMaxLengthVersion::V1,
                             ),
                         )])
                         .unwrap(),
@@ -508,7 +505,6 @@ fn store_aux_data_from_issue_nft(#[case] seed: Seed) {
                                 TokenIssuanceVersion::V1,
                                 RewardDistributionVersion::V1,
                                 TokensFeeVersion::V1,
-                                TokensTickerMaxLengthVersion::V1,
                             ),
                         )])
                         .unwrap(),
