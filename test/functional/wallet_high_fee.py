@@ -30,7 +30,7 @@ from time import time
 import scalecodec
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (calc_tx_id, make_tx_dict, reward_input, tx_input, ATOMS_PER_COIN, tx_output)
-from test_framework.util import assert_in, assert_equal
+from test_framework.util import assert_greater_than, assert_in, assert_equal
 from test_framework.mintlayer import mintlayer_hash, block_input_data_obj
 from test_framework.wallet_cli_controller import WalletCliController
 
@@ -106,11 +106,12 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             output = {
                     'Transfer': [ { 'Coin': 10 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
             }
-            total = 300000
+            inputs = list(range(5))
+            total = 300000//len(inputs)
             output2 = {
                 'Transfer': [ { 'Coin': total * ATOMS_PER_COIN }, { 'AnyoneCanSpend': None } ],
             }
-            encoded_tx, tx_id = self.make_tx([reward_input(tip_id)], [output2, output], 0)
+            encoded_tx, tx_id = self.make_tx([reward_input(tip_id)], [output2] * len(inputs) + [output], 0)
 
             self.log.debug(f"Encoded transaction {tx_id}: {encoded_tx}")
 
@@ -134,16 +135,40 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             balance = await wallet.get_balance()
             assert_in("Coins amount: 10", balance)
 
-            transactions = node.test_functions_generate_transactions(tx_id, 25, total - 300, 300)
-            for idx, encoded_tx in enumerate(transactions):
-                self.log.info(f"submitting tx {idx}")
-                node.mempool_submit_transaction(encoded_tx, {})
+            # check fee rate before inserting txs
+            output = node.mempool_get_fee_rate(1)
+            assert_equal(int(output['amount_per_kb']['atoms']), 1000)
+
+            total_size_of_txs_in_mempool = 0
+            for inp_idx in inputs:
+                transactions = node.test_functions_generate_transactions(tx_id, inp_idx, 5, total - 300, 300)
+                for encoded_tx in transactions:
+                    node.mempool_submit_transaction(encoded_tx, {})
+                    total_size_of_txs_in_mempool += len(bytes.fromhex(encoded_tx))
+
+
+            self.log.info(f"total size {total_size_of_txs_in_mempool}")
+            #check total size of txs are more then 1MB
+            assert_greater_than(total_size_of_txs_in_mempool, 1_000_000)
+            # check the feerate has increased
+            output = node.mempool_get_fee_rate(1)
+            self.log.info(f"feerate: {output}")
+            assert_greater_than(int(output['amount_per_kb']['atoms']), 3 * ATOMS_PER_COIN)
+
+            balance = await wallet.get_balance()
+            self.log.info(f"balance: {balance}")
+            assert_in("Coins amount: 10", balance)
 
             # try to send 9 out of 10 to itself, 1 coin should not be enough to pay the high fee
             address = await wallet.new_address()
             output = await wallet.send_to_address(address, 9)
             self.log.info(output)
             assert "successfully" not in output
+
+            # sending 6 and having 4 for fee should be enough
+            output = await wallet.send_to_address(address, 6)
+            self.log.info(output)
+            assert "successfully" in output
 
 
 if __name__ == '__main__':
