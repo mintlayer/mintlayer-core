@@ -767,6 +767,7 @@ impl<'a> RandomTxMaker<'a> {
                         );
                         TxOutput::CreateStakePool(dummy_pool_id, Box::new(pool_data))
                     } else {
+                        const MAX_LOCK_FOR_NUM_BLOCKS: u64 = 5;
                         if rng.gen_bool(0.3) {
                             // Send coins to random delegation
                             if let Some((delegation_id, _)) = get_random_delegation_data(
@@ -783,11 +784,15 @@ impl<'a> RandomTxMaker<'a> {
 
                         let destination =
                             key_manager.new_destination(self.chainstate.get_chain_config(), rng);
+                        let target_block_spacing_sec =
+                            self.chainstate.get_chain_config().target_block_spacing().as_secs();
                         match rng.gen_range(0..5) {
                             0 => TxOutput::LockThenTransfer(
                                 OutputValue::Coin(new_value),
                                 destination,
-                                OutputTimeLock::ForBlockCount(rng.gen_range(0..5)),
+                                OutputTimeLock::ForBlockCount(
+                                    rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS),
+                                ),
                             ),
                             1 => TxOutput::LockThenTransfer(
                                 OutputValue::Coin(new_value),
@@ -796,7 +801,7 @@ impl<'a> RandomTxMaker<'a> {
                                     self.chainstate
                                         .get_best_block_height()
                                         .unwrap()
-                                        .checked_add(rng.gen_range(0..5))
+                                        .checked_add(rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS))
                                         .unwrap(),
                                 ),
                             ),
@@ -804,11 +809,9 @@ impl<'a> RandomTxMaker<'a> {
                                 OutputValue::Coin(new_value),
                                 destination,
                                 OutputTimeLock::ForSeconds(
-                                    self.chainstate
-                                        .get_chain_config()
-                                        .target_block_spacing()
-                                        .as_secs()
-                                        * rng.gen_range(0..5),
+                                    target_block_spacing_sec
+                                        * rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)
+                                        + rng.gen_range(0..=target_block_spacing_sec),
                                 ),
                             ),
                             3 => TxOutput::LockThenTransfer(
@@ -820,11 +823,9 @@ impl<'a> RandomTxMaker<'a> {
                                         .unwrap()
                                         .block_timestamp()
                                         .add_int_seconds(
-                                            self.chainstate
-                                                .get_chain_config()
-                                                .target_block_spacing()
-                                                .as_secs()
-                                                * rng.gen_range(0..5),
+                                            target_block_spacing_sec
+                                                * rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)
+                                                + rng.gen_range(0..=target_block_spacing_sec),
                                         )
                                         .unwrap(),
                                 ),
