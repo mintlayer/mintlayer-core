@@ -528,7 +528,7 @@ where
                         let qr_code_string = qrcode_or_error_string(&result_hex.to_string());
 
                         format!(
-                            "Not all transaction inputs have been signed. This wallet does not have all the keys for that.\
+                            "Not all transaction inputs have been signed. This wallet does not have all the keys for that. \
                              Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n{result_hex}\n\n\
                              Or scan the Qr code with it:\n\n{qr_code_string}"
                         )

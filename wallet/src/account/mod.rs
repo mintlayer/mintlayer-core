@@ -54,7 +54,7 @@ use crate::send_request::{
 use crate::wallet::WalletPoolsFilter;
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{get_tx_output_destination, SendRequest, WalletError, WalletResult};
-use common::address::Address;
+use common::address::{Address, RpcAddress};
 use common::chain::output_value::OutputValue;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use common::chain::signature::inputsig::InputWitness;
@@ -1702,8 +1702,11 @@ impl Account {
     )> {
         let (address, standalone_key) = self
             .key_chain
-            .get_all_standalone_address_details(address)
-            .ok_or(WalletError::StandaloneAddressNotFound)?;
+            .get_all_standalone_address_details(address.clone())
+            .ok_or_else(|| {
+                let addr = RpcAddress::new(&self.chain_config, address).expect("addressable");
+                WalletError::StandaloneAddressNotFound(addr)
+            })?;
 
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),

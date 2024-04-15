@@ -269,7 +269,7 @@ trait WalletRpc {
     ) -> rpc::RpcResult<NewAccountInfo>;
 
     /// Add, rename or delete a label to an already added standalone address.
-    /// Specifying a lable will add or replace the existing one,
+    /// Specifying a label will add or replace the existing one,
     /// and not specifying a label will remove the existing one.
     #[method(name = "standalone_address_label_rename")]
     async fn standalone_address_label_rename(

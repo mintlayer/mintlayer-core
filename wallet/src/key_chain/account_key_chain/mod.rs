@@ -17,7 +17,7 @@ use crate::key_chain::leaf_key_chain::LeafKeySoftChain;
 use crate::key_chain::with_purpose::WithPurpose;
 use crate::key_chain::{make_account_path, KeyChainError, KeyChainResult};
 use common::address::pubkeyhash::PublicKeyHash;
-use common::address::Address;
+use common::address::{Address, RpcAddress};
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
@@ -476,7 +476,7 @@ impl AccountKeyChain {
         self.is_public_key_hash_mine(&pubkey_hash) || self.is_public_key_hash_watched(pubkey_hash)
     }
 
-    /// Adds a new public key hash to be watched, standalone from the keys derived from this account
+    /// Add, rename or delete a label for a standalone address not from the keys derived from this account
     pub fn standalone_address_label_rename(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -498,7 +498,8 @@ impl AccountKeyChain {
             self.standalone_multisig_keys.insert(id.into_item_id(), key);
             Ok(())
         } else {
-            Err(KeyChainError::NoStadaloneAddressFound)
+            let addr = RpcAddress::new(&self.chain_config, new_address)?;
+            Err(KeyChainError::NoStandaloneAddressFound(addr))
         }
     }
 
@@ -509,10 +510,13 @@ impl AccountKeyChain {
         new_address: PublicKeyHash,
         label: Option<String>,
     ) -> KeyChainResult<()> {
-        let id = AccountPrefixedId::new(
-            self.get_account_id(),
-            Destination::PublicKeyHash(new_address),
-        );
+        let destination = Destination::PublicKeyHash(new_address);
+        if self.standalone_watch_only_keys.contains_key(&destination) {
+            let addr = RpcAddress::new(&self.chain_config, destination)?;
+            return Err(KeyChainError::StandaloneAddressAlreadyExists(addr));
+        }
+
+        let id = AccountPrefixedId::new(self.get_account_id(), destination);
         let key = StandaloneWatchOnlyKey { label };
 
         db_tx.set_standalone_watch_only_key(&id, &key)?;
@@ -529,14 +533,17 @@ impl AccountKeyChain {
         label: Option<String>,
     ) -> KeyChainResult<()> {
         let public_key = PublicKey::from_private_key(&new_private_key);
+        let destination = Destination::PublicKey(public_key.clone());
+        if self.standalone_private_keys.contains_key(&destination) {
+            let addr = RpcAddress::new(&self.chain_config, destination)?;
+            return Err(KeyChainError::StandaloneAddressAlreadyExists(addr));
+        }
+
         let public_key_hash = PublicKeyHash::from(&public_key);
-        let id = AccountPrefixedId::new(self.get_account_id(), public_key.clone());
+        let id = AccountPrefixedId::new(self.get_account_id(), public_key);
 
         db_tx.set_standalone_private_key(&id, &new_private_key, label.clone())?;
-        self.standalone_private_keys.insert(
-            Destination::PublicKey(public_key),
-            (label.clone(), id.clone()),
-        );
+        self.standalone_private_keys.insert(destination, (label.clone(), id.clone()));
         self.standalone_private_keys
             .insert(Destination::PublicKeyHash(public_key_hash), (label, id));
 
@@ -550,18 +557,20 @@ impl AccountKeyChain {
         challenge: ClassicMultisigChallenge,
         label: Option<String>,
     ) -> KeyChainResult<PublicKeyHash> {
-        let destination_multisig: PublicKeyHash = (&challenge).into();
+        let multisig_pkh: PublicKeyHash = (&challenge).into();
+        let destination = Destination::ClassicMultisig(multisig_pkh);
+        if self.standalone_multisig_keys.contains_key(&destination) {
+            let addr = RpcAddress::new(&self.chain_config, destination)?;
+            return Err(KeyChainError::StandaloneAddressAlreadyExists(addr));
+        }
 
-        let id = AccountPrefixedId::new(
-            self.get_account_id(),
-            Destination::ClassicMultisig(destination_multisig),
-        );
+        let id = AccountPrefixedId::new(self.get_account_id(), destination);
         let key = StandaloneMultisig { label, challenge };
 
         db_tx.set_standalone_multisig_key(&id, &key)?;
         self.standalone_multisig_keys.insert(id.into_item_id(), key);
 
-        Ok(destination_multisig)
+        Ok(multisig_pkh)
     }
 
     /// Find the corresponding public key for a given public key hash

@@ -171,6 +171,10 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 new_label = new_label if new_label else ''
                 assert_in(f"{multisig_address} | Multisig | {new_label}", output)
 
+                # try to add it again should return an error that it already exists
+                output = await wallet.add_standalone_multisig_address(min_required_signatures, public_keys, label)
+                assert_in("Standalone address already exists", output)
+
             # send some coins to the multisig address
             await wallet.close_wallet()
             await wallet.open_wallet('wallet0')

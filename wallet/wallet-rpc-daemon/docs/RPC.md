@@ -104,7 +104,7 @@ Returns:
 ### Method `standalone_address_label_rename`
 
 Add, rename or delete a label to an already added standalone address.
-Specifying a lable will add or replace the existing one,
+Specifying a label will add or replace the existing one,
 and not specifying a label will remove the existing one.
 
 

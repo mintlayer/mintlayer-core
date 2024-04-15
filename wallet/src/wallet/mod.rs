@@ -34,7 +34,7 @@ use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
 use common::address::pubkeyhash::PublicKeyHash;
-use common::address::{Address, AddressError};
+use common::address::{Address, AddressError, RpcAddress};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::signature::inputsig::arbitrary_message::{
@@ -221,8 +221,8 @@ pub enum WalletError {
     FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
     #[error("The specified address is not found in this wallet")]
     AddressNotFound,
-    #[error("The specified standalone address is not found in this wallet")]
-    StandaloneAddressNotFound,
+    #[error("The specified standalone address {0} is not found in this wallet")]
+    StandaloneAddressNotFound(RpcAddress<Destination>),
 }
 
 /// Result type used for the wallet
