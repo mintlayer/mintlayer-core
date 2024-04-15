@@ -47,19 +47,12 @@ pub enum TokensTickerMaxLengthVersion {
     V1,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-pub enum NftIdMismatchCheck {
-    Yes,
-    No,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
     reward_distribution_version: RewardDistributionVersion,
     tokens_fee_version: TokensFeeVersion,
     tokens_ticker_length_version: TokensTickerMaxLengthVersion,
-    nft_id_mismatch_check: NftIdMismatchCheck,
 }
 
 impl ChainstateUpgrade {
@@ -68,14 +61,12 @@ impl ChainstateUpgrade {
         reward_distribution_version: RewardDistributionVersion,
         tokens_fee_version: TokensFeeVersion,
         tokens_ticker_length_version: TokensTickerMaxLengthVersion,
-        nft_id_mismatch_check: NftIdMismatchCheck,
     ) -> Self {
         Self {
             token_issuance_version,
             reward_distribution_version,
             tokens_fee_version,
             tokens_ticker_length_version,
-            nft_id_mismatch_check,
         }
     }
 
@@ -93,10 +84,6 @@ impl ChainstateUpgrade {
 
     pub fn tokens_ticker_length_version(&self) -> TokensTickerMaxLengthVersion {
         self.tokens_ticker_length_version
-    }
-
-    pub fn nft_id_mismatch_check(&self) -> NftIdMismatchCheck {
-        self.nft_id_mismatch_check
     }
 }
 

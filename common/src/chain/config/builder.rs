@@ -29,9 +29,8 @@ use crate::{
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
         ChainstateUpgrade, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
-        NftIdMismatchCheck, PoSChainConfig, PoSConsensusVersion, PoWChainConfig,
-        RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
-        TokensTickerMaxLengthVersion,
+        PoSChainConfig, PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
+        TokenIssuanceVersion, TokensFeeVersion, TokensTickerMaxLengthVersion,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
@@ -164,7 +163,6 @@ impl ChainType {
                         RewardDistributionVersion::V1,
                         TokensFeeVersion::V1,
                         TokensTickerMaxLengthVersion::V1,
-                        NftIdMismatchCheck::Yes,
                     ),
                 )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
@@ -177,7 +175,6 @@ impl ChainType {
                         RewardDistributionVersion::V1,
                         TokensFeeVersion::V1,
                         TokensTickerMaxLengthVersion::V1,
-                        NftIdMismatchCheck::Yes,
                     ),
                 )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
@@ -191,7 +188,6 @@ impl ChainType {
                             RewardDistributionVersion::V0,
                             TokensFeeVersion::V0,
                             TokensTickerMaxLengthVersion::V0,
-                            NftIdMismatchCheck::No,
                         ),
                     ),
                     (
@@ -201,7 +197,6 @@ impl ChainType {
                             RewardDistributionVersion::V0,
                             TokensFeeVersion::V0,
                             TokensTickerMaxLengthVersion::V0,
-                            NftIdMismatchCheck::No,
                         ),
                     ),
                     (
@@ -211,7 +206,6 @@ impl ChainType {
                             RewardDistributionVersion::V1,
                             TokensFeeVersion::V1,
                             TokensTickerMaxLengthVersion::V1,
-                            NftIdMismatchCheck::Yes,
                         ),
                     ),
                 ];
