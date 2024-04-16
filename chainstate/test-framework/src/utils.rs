@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{framework::BlockOutputs, TestFramework};
+use crate::{framework::BlockOutputs, key_manager::KeyManager, TestFramework};
 use chainstate::{BlockIndex, GenBlockIndex};
 use chainstate_storage::{BlockchainStorageRead, TipStorageTag};
 use chainstate_types::pos_randomness::PoSRandomness;
@@ -27,9 +27,9 @@ use common::{
             sighash::sighashtype::SigHashType,
         },
         stakelock::StakePoolData,
-        Block, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
-        OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId, TxInput, TxOutput,
-        UtxoOutPoint,
+        Block, ChainConfig, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
+        NetUpgrades, OutPointSourceId, PoSChainConfig, PoSChainConfigBuilder, PoolId, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
@@ -39,6 +39,7 @@ use crypto::{
     random::Rng,
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
+use itertools::Itertools;
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
@@ -340,4 +341,23 @@ pub fn assert_gen_block_index_opt_identical_to(
         (Some(_), None) | (None, Some(_)) => false,
     };
     assert!(identical, "{bi1:?} should be identical to {bi2:?}");
+}
+
+pub fn sign_witnesses(
+    key_manager: &KeyManager,
+    chain_config: &ChainConfig,
+    tx: &common::chain::Transaction,
+    input_utxos: Vec<(Option<TxOutput>, Destination)>,
+) -> Vec<InputWitness> {
+    let input_utxos_refs = input_utxos.iter().map(|(utxo, _)| utxo.as_ref()).collect_vec();
+    let witnesses = input_utxos
+        .iter()
+        .enumerate()
+        .map(|(idx, (_, dest))| {
+            key_manager
+                .get_signature(dest, chain_config, tx, &input_utxos_refs, idx)
+                .unwrap()
+        })
+        .collect();
+    witnesses
 }

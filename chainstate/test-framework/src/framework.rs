@@ -21,6 +21,7 @@ use chainstate_storage::{
 use rstest::rstest;
 
 use crate::{
+    key_manager::KeyManager,
     pos_block_builder::PoSBlockBuilder,
     staking_pools::StakingPools,
     utils::{
@@ -58,6 +59,7 @@ pub struct TestFramework {
 
     // All pools from the tip that can be used for staking
     pub staking_pools: StakingPools,
+    pub key_manager: KeyManager,
 }
 
 pub type BlockOutputs = BTreeMap<OutPointSourceId, Vec<TxOutput>>;

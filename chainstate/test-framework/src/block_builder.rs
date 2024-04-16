@@ -16,7 +16,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::framework::BlockOutputs;
-use crate::utils::{create_new_outputs, outputs_from_block};
+use crate::utils::{create_new_outputs, outputs_from_block, sign_witnesses};
 use crate::TestFramework;
 use chainstate::{BlockSource, ChainstateError};
 use chainstate_storage::{BlockchainStorageRead, Transactional};
@@ -138,7 +138,7 @@ impl<'f> BlockBuilder<'f> {
             })
         });
 
-        let (tx, new_tokens_delta, new_pos_accounting_delta) =
+        let (tx, input_utxos, new_tokens_delta, new_pos_accounting_delta) =
             super::random_tx_maker::RandomTxMaker::new(
                 &self.framework.chainstate,
                 &utxo_set,
@@ -147,7 +147,11 @@ impl<'f> BlockBuilder<'f> {
                 None,
                 account_nonce_getter,
             )
-            .make(rng, &mut self.framework.staking_pools);
+            .make(
+                rng,
+                &mut self.framework.staking_pools,
+                &mut self.framework.key_manager,
+            );
 
         if !tx.inputs().is_empty() && !tx.outputs().is_empty() {
             // flush new tokens info to the in-memory store
@@ -174,7 +178,12 @@ impl<'f> BlockBuilder<'f> {
                 };
             });
 
-            let witnesses = tx.inputs().iter().map(|_| super::empty_witness(rng)).collect();
+            let witnesses = sign_witnesses(
+                &self.framework.key_manager,
+                self.framework.chainstate.get_chain_config(),
+                &tx,
+                input_utxos,
+            );
             let tx = SignedTransaction::new(tx, witnesses).expect("invalid witness count");
 
             self.add_transaction(tx)

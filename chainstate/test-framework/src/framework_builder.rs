@@ -16,6 +16,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
+    key_manager::KeyManager,
     staking_pools::StakingPools,
     tx_verification_strategy::{
         DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
@@ -227,6 +228,9 @@ impl TestFrameworkBuilder {
             ),
         }?;
 
+        let key_manager =
+            KeyManager::new(self.staking_pools.staking_pools().values().map(|(pk, _, _)| pk));
+
         Ok(TestFramework {
             chainstate,
             storage: self.chainstate_storage,
@@ -234,6 +238,7 @@ impl TestFrameworkBuilder {
             time_getter,
             time_value,
             staking_pools: self.staking_pools,
+            key_manager,
         })
     }
 

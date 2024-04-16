@@ -167,7 +167,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 update_tables_from_transaction(
                     Arc::clone(&self.chain_config),
                     &mut db_tx,
-                    block_height,
+                    (block_height, block_timestamp),
                     new_median_time,
                     tx,
                 )
@@ -777,7 +777,7 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
 async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
-    block_height: BlockHeight,
+    (block_height, block_timestamp): (BlockHeight, BlockTimestamp),
     median_time: BlockTimestamp,
     transaction: &SignedTransaction,
 ) -> Result<(), ApiServerStorageError> {
@@ -794,7 +794,7 @@ async fn update_tables_from_transaction<T: ApiServerStorageWrite>(
     update_tables_from_transaction_outputs(
         Arc::clone(&chain_config),
         db_tx,
-        block_height,
+        (block_height, block_timestamp),
         median_time,
         transaction.transaction().get_id(),
         transaction.transaction().inputs(),
@@ -953,9 +953,20 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                         | TxOutput::DelegateStaking(_, _)
                         | TxOutput::Burn(_)
                         | TxOutput::DataDeposit(_)
-                        | TxOutput::IssueFungibleToken(_)
-                        | TxOutput::CreateStakePool(_, _)
-                        | TxOutput::ProduceBlockFromStake(_, _) => {}
+                        | TxOutput::IssueFungibleToken(_) => {}
+                        | TxOutput::CreateStakePool(pool_id, _)
+                        | TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                            let pool_data = db_tx
+                                .get_pool_data(pool_id)
+                                .await?
+                                .expect("pool data should exist")
+                                .decommission_pool();
+
+                            db_tx
+                                .set_pool_data_at_height(pool_id, &pool_data, block_height)
+                                .await
+                                .expect("unable to update pool data");
+                        }
                         TxOutput::IssueNft(token_id, _, destination) => {
                             let address = Address::<Destination>::new(&chain_config, destination)
                                 .expect("Unable to encode destination");
@@ -1035,7 +1046,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
 async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
     chain_config: Arc<ChainConfig>,
     db_tx: &mut T,
-    block_height: BlockHeight,
+    (block_height, block_timestamp): (BlockHeight, BlockTimestamp),
     median_time: BlockTimestamp,
     transaction_id: Id<Transaction>,
     inputs: &[TxInput],
@@ -1200,7 +1211,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
 
                 let already_unlocked = tx_verifier::timelock_check::check_timelock(
                     &block_height,
-                    &median_time,
+                    &block_timestamp,
                     lock,
                     &block_height,
                     &median_time,
@@ -1263,7 +1274,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                         .await
                         .expect("Unable to set utxo");
                 } else {
-                    let lock = UtxoLock::from_output_lock(*lock, median_time, block_height);
+                    let lock = UtxoLock::from_output_lock(*lock, block_timestamp, block_height);
                     let utxo = LockedUtxo::new(output.clone(), token_decimals, lock);
                     db_tx
                         .set_locked_utxo_at_height(outpoint, utxo, address.as_str(), block_height)

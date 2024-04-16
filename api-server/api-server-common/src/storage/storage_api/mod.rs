@@ -20,8 +20,8 @@ use common::{
         block::timestamp::BlockTimestamp,
         timelock::OutputTimeLock,
         tokens::{
-            IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, TokenId,
-            TokenTotalSupply,
+            IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, RPCFungibleTokenInfo,
+            TokenId, TokenTotalSupply,
         },
         AccountNonce, Block, ChainConfig, DelegationId, Destination, PoolId, SignedTransaction,
         Transaction, TxOutput, UtxoOutPoint,
@@ -267,6 +267,20 @@ pub struct FungibleTokenData {
 }
 
 impl FungibleTokenData {
+    pub fn into_rpc_token_info(self, token_id: TokenId) -> RPCFungibleTokenInfo {
+        RPCFungibleTokenInfo {
+            token_id,
+            token_ticker: self.token_ticker.into(),
+            number_of_decimals: self.number_of_decimals,
+            metadata_uri: self.metadata_uri.into(),
+            circulating_supply: self.circulating_supply,
+            total_supply: self.total_supply.into(),
+            is_locked: self.is_locked,
+            frozen: self.frozen.into(),
+            authority: self.authority,
+        }
+    }
+
     pub fn mint_tokens(mut self, amount: Amount) -> Self {
         self.circulating_supply = (self.circulating_supply + amount).expect("no overflow");
         self

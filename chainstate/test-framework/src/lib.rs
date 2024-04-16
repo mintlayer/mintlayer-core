@@ -18,6 +18,7 @@
 mod block_builder;
 mod framework;
 mod framework_builder;
+mod key_manager;
 mod pos_block_builder;
 mod random_tx_maker;
 mod staking_pools;
