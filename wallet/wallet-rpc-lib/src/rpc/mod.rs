@@ -941,6 +941,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         outputs: Vec<TxOutput>,
         only_transaction: bool,
     ) -> WRpcResult<(TransactionToSign, Balances), N> {
+        ensure!(!inputs.is_empty(), RpcError::ComposeTransactionEmptyInputs);
         self.wallet
             .call_async(move |w| {
                 Box::pin(
