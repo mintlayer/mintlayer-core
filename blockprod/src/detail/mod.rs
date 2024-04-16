@@ -189,7 +189,7 @@ impl BlockProduction {
     pub async fn collect_transactions(
         &self,
         current_tip: Id<GenBlock>,
-        block_timestamp: BlockTimestamp,
+        current_tip_median_time_past: BlockTimestamp,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
@@ -197,7 +197,7 @@ impl BlockProduction {
         let mut accumulator = Box::new(DefaultTxAccumulator::new(
             self.chain_config.max_block_size_from_std_scripts(),
             current_tip,
-            block_timestamp,
+            current_tip_median_time_past,
         ));
 
         for transaction in transactions.into_iter() {
@@ -226,8 +226,8 @@ impl BlockProduction {
         (
             ConsensusData,
             BlockReward,
-            GenBlockIndex,
-            /*median_time_past:*/ BlockTimestamp,
+            /*best_block_index:*/ GenBlockIndex,
+            /*current_tip_median_time_past:*/ BlockTimestamp,
             FinalizeBlockInputData,
         ),
         BlockProductionError,
@@ -260,7 +260,7 @@ impl BlockProduction {
                     };
 
                     let best_block_id = best_block_index.block_id();
-                    let median_time_past =
+                    let current_tip_median_time_past =
                         this.calculate_median_time_past(&best_block_id).map_err(|err| {
                             ConsensusPoSError::ChainstateError(
                                 consensus::ChainstateError::FailedToCalculateMedianTimePast(
@@ -311,7 +311,7 @@ impl BlockProduction {
                         consensus_data,
                         block_reward,
                         best_block_index,
-                        median_time_past,
+                        current_tip_median_time_past,
                         finalize_block_data,
                     ))
                 }
@@ -468,7 +468,13 @@ impl BlockProduction {
                 consensus_data,
                 block_reward,
                 current_tip_index,
-                median_time_past,
+                // The so-called "median time past" timestamp calculated from the current tip.
+                // Note: when validating a block, the lock-time constraints of its transactions
+                // are validated against the "median time past" of the block's parent, rather than
+                // the timestamp of the block itself.
+                // So when constructing a new block we must make sure that transactions with locks
+                // after this point are not included, otherwise the block will be incorrect.
+                current_tip_median_time_past,
                 finalize_block_data,
             ) = self.pull_consensus_data(input_data.clone(), self.time_getter.clone()).await?;
 
@@ -491,7 +497,7 @@ impl BlockProduction {
             let accumulator = self
                 .collect_transactions(
                     current_tip_index.block_id(),
-                    median_time_past,
+                    current_tip_median_time_past,
                     transactions.clone(),
                     transaction_ids.clone(),
                     packing_strategy,

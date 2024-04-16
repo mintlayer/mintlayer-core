@@ -76,7 +76,7 @@ pub fn collect_txs<M>(
     packing_strategy: PackingStrategy,
 ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError> {
     let mempool_tip = mempool.best_block_id();
-    let block_timestamp = tx_accumulator.block_timestamp();
+    let unlock_timestamp = tx_accumulator.unlock_timestamp();
 
     if tx_accumulator.expected_tip() != mempool_tip {
         return Ok(None);
@@ -106,7 +106,7 @@ pub fn collect_txs<M>(
         .iter()
         .map(|transaction| {
             let _fee =
-                tx_verifier.connect_transaction(&tx_source, transaction, &block_timestamp)?;
+                tx_verifier.connect_transaction(&tx_source, transaction, &unlock_timestamp)?;
             Ok(transaction.transaction().get_id())
         })
         .collect::<Result<Vec<_>, TxValidationError>>()?;
@@ -154,7 +154,7 @@ pub fn collect_txs<M>(
                 &utxo_view,
                 tx.transaction(),
                 &tx_source,
-                &block_timestamp,
+                &unlock_timestamp,
             );
             ensure!(timelock_check.is_ok());
             Some(tx)
@@ -193,7 +193,7 @@ pub fn collect_txs<M>(
         };
 
         let verification_result =
-            tx_verifier.connect_transaction(&tx_source, next_tx.transaction(), &block_timestamp);
+            tx_verifier.connect_transaction(&tx_source, next_tx.transaction(), &unlock_timestamp);
 
         if let Err(err) = verification_result {
             // TODO Narrow down when the critical error is presented. Printing the error may be a
