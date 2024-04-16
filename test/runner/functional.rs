@@ -22,6 +22,7 @@
 
 use libtest_mimic::{run, Arguments as HarnessArgs, Failed, Trial};
 use std::env::consts::EXE_SUFFIX;
+use std::fs;
 use std::path::PathBuf;
 use std::{env, ffi::OsString, path::Path, process::Command};
 
@@ -90,8 +91,14 @@ fn do_run(runner_args: &[OsString]) -> Result<(), Failed> {
     // Various derived paths
     let top_source_dir = Path::new(CRATE_DIR).parent().unwrap().to_str().unwrap();
     let binary_dir = Path::new(NODE_BINARY).parent().unwrap().to_str().unwrap();
-    let config_file_path = Path::new(TEMP_DIR).join("config.ini");
     let runner_path = Path::new(CRATE_DIR).join("functional").join("test_runner.py");
+    let mut tmp_dir = PathBuf::from(TEMP_DIR);
+    tmp_dir.pop();
+    tmp_dir.push("functional-tests-output");
+    fs::create_dir_all(&tmp_dir)?;
+
+    let config_file_path = tmp_dir.join("config.ini");
+    let tmp_dir = tmp_dir.to_string_lossy();
 
     // Generate a config file
     let config_str = format!(
@@ -133,7 +140,7 @@ ENABLE_BITCOIND=true
         // Pass command-line arguments
         .arg(runner_path)
         .arg(format!("--configfile={}", config_file_path.display()))
-        .arg(format!("--tmpdirprefix={TEMP_DIR}"))
+        .arg(format!("--tmpdirprefix={tmp_dir}"))
         // Forward the rest of the arguments from this executable
         .args(runner_args)
         // Wait for exit status
