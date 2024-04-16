@@ -2138,6 +2138,24 @@ Returns:
 {
     "hex": string,
     "is_complete": bool,
+    "previous_signatures": [ EITHER OF
+         1) { "type": "NotSigned" }
+         2) { "type": "InvalidSignature" }
+         3) { "type": "FullySigned" }
+         4) {
+                "type": "PartialMultisig",
+                "required_signatures": number,
+                "num_signatures": number,
+            }, .. ],
+    "current_signatures": [ EITHER OF
+         1) { "type": "NotSigned" }
+         2) { "type": "InvalidSignature" }
+         3) { "type": "FullySigned" }
+         4) {
+                "type": "PartialMultisig",
+                "required_signatures": number,
+                "num_signatures": number,
+            }, .. ],
 }
 ```
 
