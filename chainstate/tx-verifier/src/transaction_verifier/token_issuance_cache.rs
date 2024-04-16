@@ -18,9 +18,9 @@ use std::collections::{btree_map::Entry, BTreeMap};
 use common::{
     chain::{
         tokens::{make_token_id, TokenAuxiliaryData, TokenId},
-        Block, ChainConfig, NftIdMismatchCheck, Transaction, TxOutput,
+        Block, Transaction, TxOutput,
     },
-    primitives::{BlockHeight, Id, Idable, H256},
+    primitives::{Id, Idable, H256},
 };
 use utils::ensure;
 
@@ -68,8 +68,6 @@ impl TokenIssuanceCache {
     // This helps in finding the relevant information of the token at any time in the future.
     pub fn register<E>(
         &mut self,
-        chain_config: &ChainConfig,
-        block_height: BlockHeight,
         block_id: Option<Id<Block>>,
         tx: &Transaction,
         token_data_getter: impl Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, E>,
@@ -81,20 +79,13 @@ impl TokenIssuanceCache {
             let expected_token_id =
                 make_token_id(tx.inputs()).ok_or(TokensError::TokenIdCantBeCalculated)?;
 
-            if let NftIdMismatchCheck::Yes = chain_config
-                .chainstate_upgrades()
-                .version_at_height(block_height)
-                .1
-                .nft_id_mismatch_check()
-            {
-                ensure!(
-                    token_id == expected_token_id,
-                    ConnectTransactionError::TokensError(TokensError::IssueError(
-                        TokenIssuanceError::TokenIdMismatch(token_id, expected_token_id),
-                        tx.get_id()
-                    ))
-                );
-            }
+            ensure!(
+                token_id == expected_token_id,
+                ConnectTransactionError::TokensError(TokensError::IssueError(
+                    TokenIssuanceError::TokenIdMismatch(token_id, expected_token_id),
+                    tx.get_id()
+                ))
+            );
 
             self.precache_token_issuance(token_data_getter, token_id)?;
 

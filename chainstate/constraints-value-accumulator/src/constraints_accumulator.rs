@@ -18,8 +18,7 @@ use std::{collections::BTreeMap, num::NonZeroU64};
 use common::{
     chain::{
         output_value::OutputValue, timelock::OutputTimeLock, AccountCommand, AccountSpending,
-        AccountsBalancesCheckVersion, ChainConfig, DelegationId, PoolId, TxInput, TxOutput,
-        UtxoOutPoint,
+        ChainConfig, DelegationId, PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Subsidy},
 };
@@ -97,7 +96,6 @@ impl ConstrainedValueAccumulator {
                         block_height,
                         outpoint.account(),
                         &mut accounts_balances_tracker,
-                        &delegation_balance_getter,
                     )?;
                 }
                 TxInput::AccountCommand(_, command) => {
@@ -201,31 +199,13 @@ impl ConstrainedValueAccumulator {
         block_height: BlockHeight,
         account: &AccountSpending,
         accounts_balances_tracker: &mut AccountsBalancesTracker<DelegationBalanceGetterFn>,
-        delegation_balance_getter: &DelegationBalanceGetterFn,
     ) -> Result<(), Error>
     where
         DelegationBalanceGetterFn: Fn(DelegationId) -> Result<Option<Amount>, Error>,
     {
         match account {
-            AccountSpending::DelegationBalance(delegation_id, spend_amount) => {
-                match chain_config
-                    .chainstate_upgrades()
-                    .version_at_height(block_height)
-                    .1
-                    .accounts_balances_version()
-                {
-                    AccountsBalancesCheckVersion::V0 => {
-                        let delegation_balance = delegation_balance_getter(*delegation_id)?
-                            .ok_or(Error::DelegationBalanceNotFound(*delegation_id))?;
-                        ensure!(
-                            *spend_amount <= delegation_balance,
-                            Error::AttemptToPrintMoney(CoinOrTokenId::Coin)
-                        );
-                    }
-                    AccountsBalancesCheckVersion::V1 => {
-                        accounts_balances_tracker.spend_from_account(account.clone())?;
-                    }
-                }
+            AccountSpending::DelegationBalance(_, spend_amount) => {
+                accounts_balances_tracker.spend_from_account(account.clone())?;
 
                 let maturity_distance =
                     chain_config.staking_pool_spend_maturity_block_count(block_height);

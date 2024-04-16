@@ -128,7 +128,7 @@ fn check_witness_count(tx: &SignedTransaction) -> Result<(), CheckTransactionErr
 
 fn check_tokens_tx(
     chain_config: &ChainConfig,
-    block_height: BlockHeight,
+    _block_height: BlockHeight,
     tx: &SignedTransaction,
 ) -> Result<(), CheckTransactionError> {
     // We can't issue multiple tokens in a single tx
@@ -144,12 +144,10 @@ fn check_tokens_tx(
     tx.outputs()
         .iter()
         .try_for_each(|output| match output {
-            TxOutput::IssueFungibleToken(issuance) => {
-                check_tokens_issuance(chain_config, block_height, issuance)
-                    .map_err(|e| TokensError::IssueError(e, tx.transaction().get_id()))
-            }
+            TxOutput::IssueFungibleToken(issuance) => check_tokens_issuance(chain_config, issuance)
+                .map_err(|e| TokensError::IssueError(e, tx.transaction().get_id())),
             TxOutput::IssueNft(_, issuance, _) => match issuance.as_ref() {
-                NftIssuance::V0(data) => check_nft_issuance_data(chain_config, block_height, data)
+                NftIssuance::V0(data) => check_nft_issuance_data(chain_config, data)
                     .map_err(|e| TokensError::IssueError(e, tx.transaction().get_id())),
             },
             TxOutput::Transfer(_, _)

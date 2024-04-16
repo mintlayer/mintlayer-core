@@ -257,8 +257,7 @@ fn token_issue_test(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
-        let token_max_ticker_len =
-            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
+        let token_max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
         let token_max_dec_count = tf.chainstate.get_chain_config().token_max_dec_count();
         let token_max_uri_len = tf.chainstate.get_chain_config().token_max_uri_len();
 
@@ -3802,8 +3801,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_block_id = tf.best_block_id();
 
-        let max_ticker_len =
-            tf.chainstate.get_chain_config().token_max_ticker_len(BlockHeight::zero());
+        let max_ticker_len = tf.chainstate.get_chain_config().token_max_ticker_len();
 
         // Try not ascii alphanumeric ticker
         let c = test_utils::get_random_non_ascii_alphanumeric_byte(&mut rng);

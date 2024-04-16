@@ -23,7 +23,7 @@ use common::{
         },
         Destination,
     },
-    primitives::{Amount, BlockHeight},
+    primitives::Amount,
 };
 use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::{CryptoRng, Rng};
@@ -35,7 +35,7 @@ pub fn random_creator(rng: &mut (impl Rng + CryptoRng)) -> TokenCreator {
 }
 
 pub fn random_token_issuance(chain_config: &ChainConfig, rng: &mut impl Rng) -> TokenIssuanceV0 {
-    let max_ticker_len = chain_config.token_max_ticker_len(BlockHeight::zero());
+    let max_ticker_len = chain_config.token_max_ticker_len();
     let max_dec_count = chain_config.token_max_dec_count();
     let max_uri_len = chain_config.token_max_uri_len();
 
@@ -52,7 +52,7 @@ pub fn random_token_issuance_v1(
     authority: Destination,
     rng: &mut impl Rng,
 ) -> TokenIssuanceV1 {
-    let max_ticker_len = chain_config.token_max_ticker_len(BlockHeight::zero());
+    let max_ticker_len = chain_config.token_max_ticker_len();
     let max_dec_count = chain_config.token_max_dec_count();
     let max_uri_len = chain_config.token_max_uri_len();
 
@@ -72,7 +72,7 @@ pub fn random_nft_issuance(
 ) -> NftIssuanceV0 {
     let max_desc_len = chain_config.token_max_description_len();
     let max_name_len = chain_config.token_max_name_len();
-    let max_ticker_len = chain_config.token_max_ticker_len(BlockHeight::zero());
+    let max_ticker_len = chain_config.token_max_ticker_len();
 
     NftIssuanceV0 {
         metadata: Metadata {

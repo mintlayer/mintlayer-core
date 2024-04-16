@@ -1018,11 +1018,7 @@ impl Account {
         let nft_issuance = NftIssuanceV0 {
             metadata: nft_issue_arguments.metadata,
         };
-        tx_verifier::check_nft_issuance_data(
-            &self.chain_config,
-            self.account_info.best_block_height().next_height(),
-            &nft_issuance,
-        )?;
+        tx_verifier::check_nft_issuance_data(&self.chain_config, &nft_issuance)?;
 
         // the first UTXO is needed in advance to issue a new nft, so just make a dummy one
         // and then replace it with when we can calculate the pool_id

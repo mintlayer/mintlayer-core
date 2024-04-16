@@ -18,8 +18,7 @@ mod consensus_upgrade;
 mod netupgrade;
 
 pub use chainstate_upgrade::{
-    AccountsBalancesCheckVersion, ChainstateUpgrade, NftIdMismatchCheck, RewardDistributionVersion,
-    TokenIssuanceVersion, TokensFeeVersion, TokensTickerMaxLengthVersion,
+    ChainstateUpgrade, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
 };
 pub use consensus_upgrade::{ConsensusUpgrade, PoSStatus, PoWStatus, RequiredConsensus};
 pub use netupgrade::{Activate, NetUpgrades};

@@ -1484,11 +1484,7 @@ impl<B: storage::Backend> Wallet<B> {
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<(TokenId, SignedTransaction)> {
-        let outputs = make_issue_token_outputs(
-            token_issuance,
-            self.chain_config.as_ref(),
-            self.get_best_block_for_account(account_index)?.1.next_height(),
-        )?;
+        let outputs = make_issue_token_outputs(token_issuance, self.chain_config.as_ref())?;
 
         let tx = self.create_transaction_to_addresses(
             account_index,

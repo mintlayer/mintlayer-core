@@ -27,11 +27,10 @@ use common::{
         signature::inputsig::{standard_signature::StandardInputSignature, InputWitness},
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
-        AccountNonce, AccountOutPoint, AccountSpending, AccountType, AccountsBalancesCheckVersion,
-        ChainstateUpgrade, DelegationId, Destination, NetUpgrades, OutPointSourceId, PoolId,
-        SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId, Destination,
+        OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Idable, H256},
+    primitives::{per_thousand::PerThousand, Amount, Idable, H256},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -905,35 +904,11 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
 // Check ok.
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy(), AccountsBalancesCheckVersion::V0)]
-#[case(Seed::from_entropy(), AccountsBalancesCheckVersion::V1)]
-fn delegate_and_spend_share_same_tx(
-    #[case] seed: Seed,
-    #[case] accumulator_version: AccountsBalancesCheckVersion,
-) {
+#[case(Seed::from_entropy())]
+fn delegate_and_spend_share_same_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_chain_config(
-                common::chain::config::Builder::test_chain()
-                    .chainstate_upgrades(
-                        NetUpgrades::initialize(vec![(
-                            BlockHeight::zero(),
-                            ChainstateUpgrade::new(
-                                common::chain::TokenIssuanceVersion::V1,
-                                common::chain::RewardDistributionVersion::V1,
-                                common::chain::TokensFeeVersion::V1,
-                                common::chain::TokensTickerMaxLengthVersion::V1,
-                                common::chain::NftIdMismatchCheck::Yes,
-                                accumulator_version,
-                            ),
-                        )])
-                        .unwrap(),
-                    )
-                    .genesis_unittest(Destination::AnyoneCanSpend)
-                    .build(),
-            )
-            .build();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let (_, _, delegation_id, _, transfer_outpoint) = prepare_delegation(&mut rng, &mut tf);
         let available_amount = Amount::from_atoms(1000);
@@ -992,34 +967,17 @@ fn delegate_and_spend_share_same_tx(
         let tx_id = tx.transaction().get_id();
 
         let res = tf.make_block_builder().add_transaction(tx).build_and_process();
-        match accumulator_version {
-            AccountsBalancesCheckVersion::V0 => {
-                assert_eq!(
-                    res.unwrap_err(),
-                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                        ConnectTransactionError::ConstrainedValueAccumulatorError(
-                            constraints_value_accumulator::Error::AttemptToPrintMoney(
-                                CoinOrTokenId::Coin
-                            ),
-                            tx_id.into()
-                        )
-                    ))
-                );
-            }
-            AccountsBalancesCheckVersion::V1 => {
-                assert_eq!(
-                    res.unwrap_err(),
-                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                        ConnectTransactionError::ConstrainedValueAccumulatorError(
-                            constraints_value_accumulator::Error::NegativeAccountBalance(
-                                AccountType::Delegation(delegation_id)
-                            ),
-                            tx_id.into()
-                        )
-                    ))
-                );
-            }
-        }
+        assert_eq!(
+            res.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::NegativeAccountBalance(
+                        AccountType::Delegation(delegation_id)
+                    ),
+                    tx_id.into()
+                )
+            ))
+        );
     });
 }
 
@@ -1030,35 +988,11 @@ fn delegate_and_spend_share_same_tx(
 // Check ok.
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy(), AccountsBalancesCheckVersion::V0)]
-#[case(Seed::from_entropy(), AccountsBalancesCheckVersion::V1)]
-fn delegate_and_spend_share_same_tx_no_overspend_per_input(
-    #[case] seed: Seed,
-    #[case] accumulator_version: AccountsBalancesCheckVersion,
-) {
+#[case(Seed::from_entropy())]
+fn delegate_and_spend_share_same_tx_no_overspend_per_input(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_chain_config(
-                common::chain::config::Builder::test_chain()
-                    .chainstate_upgrades(
-                        NetUpgrades::initialize(vec![(
-                            BlockHeight::zero(),
-                            ChainstateUpgrade::new(
-                                common::chain::TokenIssuanceVersion::V1,
-                                common::chain::RewardDistributionVersion::V1,
-                                common::chain::TokensFeeVersion::V1,
-                                common::chain::TokensTickerMaxLengthVersion::V1,
-                                common::chain::NftIdMismatchCheck::Yes,
-                                accumulator_version,
-                            ),
-                        )])
-                        .unwrap(),
-                    )
-                    .genesis_unittest(Destination::AnyoneCanSpend)
-                    .build(),
-            )
-            .build();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let (_, _, delegation_id, _, transfer_outpoint) = prepare_delegation(&mut rng, &mut tf);
         let available_amount = get_coin_amount_from_outpoint(&tf.storage, &transfer_outpoint);
@@ -1128,24 +1062,17 @@ fn delegate_and_spend_share_same_tx_no_overspend_per_input(
 
         let res = tf.make_block_builder().add_transaction(tx).build_and_process();
 
-        match accumulator_version {
-            AccountsBalancesCheckVersion::V0 => {
-                res.unwrap();
-            }
-            AccountsBalancesCheckVersion::V1 => {
-                assert_eq!(
-                    res.unwrap_err(),
-                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                        ConnectTransactionError::ConstrainedValueAccumulatorError(
-                            constraints_value_accumulator::Error::NegativeAccountBalance(
-                                AccountType::Delegation(delegation_id)
-                            ),
-                            tx_id.into()
-                        )
-                    ))
-                );
-            }
-        }
+        assert_eq!(
+            res.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::NegativeAccountBalance(
+                        AccountType::Delegation(delegation_id)
+                    ),
+                    tx_id.into()
+                )
+            ))
+        );
     });
 }
 
@@ -1155,35 +1082,11 @@ fn delegate_and_spend_share_same_tx_no_overspend_per_input(
 // Check it's an error even though if both txs are applied the block would be valid.
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy(), AccountsBalancesCheckVersion::V0)]
-#[case(Seed::from_entropy(), AccountsBalancesCheckVersion::V1)]
-fn delegate_and_spend_share_same_block(
-    #[case] seed: Seed,
-    #[case] accumulator_version: AccountsBalancesCheckVersion,
-) {
+#[case(Seed::from_entropy())]
+fn delegate_and_spend_share_same_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_chain_config(
-                common::chain::config::Builder::test_chain()
-                    .chainstate_upgrades(
-                        NetUpgrades::initialize(vec![(
-                            BlockHeight::zero(),
-                            ChainstateUpgrade::new(
-                                common::chain::TokenIssuanceVersion::V1,
-                                common::chain::RewardDistributionVersion::V1,
-                                common::chain::TokensFeeVersion::V1,
-                                common::chain::TokensTickerMaxLengthVersion::V1,
-                                common::chain::NftIdMismatchCheck::Yes,
-                                accumulator_version,
-                            ),
-                        )])
-                        .unwrap(),
-                    )
-                    .genesis_unittest(Destination::AnyoneCanSpend)
-                    .build(),
-            )
-            .build();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let (_, _, delegation_id, _, transfer_outpoint) = prepare_delegation(&mut rng, &mut tf);
         let available_amount = get_coin_amount_from_outpoint(&tf.storage, &transfer_outpoint);
@@ -1245,35 +1148,17 @@ fn delegate_and_spend_share_same_block(
             .build();
 
         let res = tf.make_block_builder().with_transactions(vec![tx1, tx2]).build_and_process();
-
-        match accumulator_version {
-            AccountsBalancesCheckVersion::V0 => {
-                assert_eq!(
-                    res.unwrap_err(),
-                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                        ConnectTransactionError::ConstrainedValueAccumulatorError(
-                            constraints_value_accumulator::Error::AttemptToPrintMoney(
-                                CoinOrTokenId::Coin
-                            ),
-                            tx1_id.into()
-                        )
-                    ))
-                );
-            }
-            AccountsBalancesCheckVersion::V1 => {
-                assert_eq!(
-                    res.unwrap_err(),
-                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                        ConnectTransactionError::ConstrainedValueAccumulatorError(
-                            constraints_value_accumulator::Error::NegativeAccountBalance(
-                                AccountType::Delegation(delegation_id)
-                            ),
-                            tx1_id.into()
-                        )
-                    ))
-                );
-            }
-        }
+        assert_eq!(
+            res.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::NegativeAccountBalance(
+                        AccountType::Delegation(delegation_id)
+                    ),
+                    tx1_id.into()
+                )
+            ))
+        );
     });
 }
 
@@ -1284,35 +1169,11 @@ fn delegate_and_spend_share_same_block(
 // Check an error.
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy(), AccountsBalancesCheckVersion::V0)]
-#[case(Seed::from_entropy(), AccountsBalancesCheckVersion::V1)]
-fn try_overspend_delegation(
-    #[case] seed: Seed,
-    #[case] accumulator_version: AccountsBalancesCheckVersion,
-) {
+#[case(Seed::from_entropy())]
+fn try_overspend_delegation(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_chain_config(
-                common::chain::config::Builder::test_chain()
-                    .chainstate_upgrades(
-                        NetUpgrades::initialize(vec![(
-                            BlockHeight::zero(),
-                            ChainstateUpgrade::new(
-                                common::chain::TokenIssuanceVersion::V1,
-                                common::chain::RewardDistributionVersion::V1,
-                                common::chain::TokensFeeVersion::V1,
-                                common::chain::TokensTickerMaxLengthVersion::V1,
-                                common::chain::NftIdMismatchCheck::Yes,
-                                accumulator_version,
-                            ),
-                        )])
-                        .unwrap(),
-                    )
-                    .genesis_unittest(Destination::AnyoneCanSpend)
-                    .build(),
-            )
-            .build();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let (_, _, delegation_id, _, transfer_outpoint) = prepare_delegation(&mut rng, &mut tf);
         let available_amount = get_coin_amount_from_outpoint(&tf.storage, &transfer_outpoint);
@@ -1376,67 +1237,27 @@ fn try_overspend_delegation(
 
         let res = tf.make_block_builder().add_transaction(tx).build_and_process();
 
-        match accumulator_version {
-            AccountsBalancesCheckVersion::V0 => {
-                assert_eq!(
-                    res.unwrap_err(),
-                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                        ConnectTransactionError::PoSAccountingError(
-                            pos_accounting::Error::AccountingError(
-                                accounting::Error::ArithmeticErrorSumToUnsignedFailed
-                            )
-                        )
-                    ))
-                );
-            }
-            AccountsBalancesCheckVersion::V1 => {
-                assert_eq!(
-                    res.unwrap_err(),
-                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                        ConnectTransactionError::ConstrainedValueAccumulatorError(
-                            constraints_value_accumulator::Error::NegativeAccountBalance(
-                                AccountType::Delegation(delegation_id)
-                            ),
-                            tx_id.into()
-                        )
-                    ))
-                );
-            }
-        }
+        assert_eq!(
+            res.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::NegativeAccountBalance(
+                        AccountType::Delegation(delegation_id)
+                    ),
+                    tx_id.into()
+                )
+            ))
+        );
     });
 }
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy(), AccountsBalancesCheckVersion::V0)]
-#[case(Seed::from_entropy(), AccountsBalancesCheckVersion::V1)]
-fn delegate_and_spend_share_same_block_multiple_delegations(
-    #[case] seed: Seed,
-    #[case] accumulator_version: AccountsBalancesCheckVersion,
-) {
+#[case(Seed::from_entropy())]
+fn delegate_and_spend_share_same_block_multiple_delegations(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng)
-            .with_chain_config(
-                common::chain::config::Builder::test_chain()
-                    .chainstate_upgrades(
-                        NetUpgrades::initialize(vec![(
-                            BlockHeight::zero(),
-                            ChainstateUpgrade::new(
-                                common::chain::TokenIssuanceVersion::V1,
-                                common::chain::RewardDistributionVersion::V1,
-                                common::chain::TokensFeeVersion::V1,
-                                common::chain::TokensTickerMaxLengthVersion::V1,
-                                common::chain::NftIdMismatchCheck::Yes,
-                                accumulator_version,
-                            ),
-                        )])
-                        .unwrap(),
-                    )
-                    .genesis_unittest(Destination::AnyoneCanSpend)
-                    .build(),
-            )
-            .build();
+        let mut tf = TestFramework::builder(&mut rng).build();
 
         let (pool_id, _, delegation_id_1, _, transfer_outpoint) =
             prepare_delegation(&mut rng, &mut tf);
@@ -1553,24 +1374,17 @@ fn delegate_and_spend_share_same_block_multiple_delegations(
             .build();
 
         let res = tf.make_block_builder().with_transactions(vec![tx1, tx2]).build_and_process();
-        match accumulator_version {
-            AccountsBalancesCheckVersion::V0 => {
-                res.unwrap();
-            }
-            AccountsBalancesCheckVersion::V1 => {
-                assert_eq!(
-                    res.unwrap_err(),
-                    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                        ConnectTransactionError::ConstrainedValueAccumulatorError(
-                            constraints_value_accumulator::Error::NegativeAccountBalance(
-                                AccountType::Delegation(delegation_id_1)
-                            ),
-                            tx_id_1.into()
-                        )
-                    ))
-                );
-            }
-        }
+        assert_eq!(
+            res.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::NegativeAccountBalance(
+                        AccountType::Delegation(delegation_id_1)
+                    ),
+                    tx_id_1.into()
+                )
+            ))
+        );
     });
 }
 

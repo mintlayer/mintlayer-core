@@ -16,9 +16,9 @@
 use common::{
     chain::{
         config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
-        timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade, DelegationId,
-        Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxInput,
-        TxOutput, UtxoOutPoint,
+        timelock::OutputTimeLock, AccountNonce, AccountSpending, AccountType, ConsensusUpgrade,
+        DelegationId, Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
         per_thousand::PerThousand, Amount, BlockCount, BlockHeight, CoinOrTokenId, Fee, Id, H256,
@@ -547,7 +547,7 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
 
         assert_eq!(
             inputs_accumulator.unwrap_err(),
-            Error::AttemptToPrintMoney(CoinOrTokenId::Coin)
+            Error::NegativeAccountBalance(AccountType::Delegation(delegation_id))
         );
     }
 

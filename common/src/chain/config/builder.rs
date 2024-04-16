@@ -28,10 +28,9 @@ use crate::{
         },
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
-        AccountsBalancesCheckVersion, ChainstateUpgrade, CoinUnit, ConsensusUpgrade, Destination,
-        GenBlock, Genesis, NetUpgrades, NftIdMismatchCheck, PoSChainConfig, PoSConsensusVersion,
-        PoWChainConfig, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
-        TokensTickerMaxLengthVersion,
+        ChainstateUpgrade, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades,
+        PoSChainConfig, PoSConsensusVersion, PoWChainConfig, RewardDistributionVersion,
+        TokenIssuanceVersion, TokensFeeVersion,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
@@ -48,12 +47,9 @@ use super::{
 
 // The fork, at which we upgrade consensus to dis-incentivize large pools + enable tokens v1
 const TESTNET_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78440);
-// The fork, at which we upgrade chainstate to distribute reward to staker proportionally to its balance,
-// changed various tokens fees and also increased max ticker length for tokens
+// The fork, at which we upgrade chainstate to distribute reward to staker proportionally to their balance
+// and change various tokens fees
 const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(138244);
-const TESTNET_CONSTRAINTS_ACCUMULATOR_FORK_HEIGHT: BlockHeight = BlockHeight::new(185891);
-
-const MAINNET_CONSTRAINTS_ACCUMULATOR_FORK_HEIGHT: BlockHeight = BlockHeight::new(58344);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -160,30 +156,14 @@ impl ChainType {
     fn default_chainstate_upgrades(&self) -> NetUpgrades<ChainstateUpgrade> {
         match self {
             ChainType::Mainnet => {
-                let upgrades = vec![
-                    (
-                        BlockHeight::new(0),
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            TokensTickerMaxLengthVersion::V1,
-                            NftIdMismatchCheck::Yes,
-                            AccountsBalancesCheckVersion::V0,
-                        ),
+                let upgrades = vec![(
+                    BlockHeight::new(0),
+                    ChainstateUpgrade::new(
+                        TokenIssuanceVersion::V1,
+                        RewardDistributionVersion::V1,
+                        TokensFeeVersion::V1,
                     ),
-                    (
-                        MAINNET_CONSTRAINTS_ACCUMULATOR_FORK_HEIGHT,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            TokensTickerMaxLengthVersion::V1,
-                            NftIdMismatchCheck::Yes,
-                            AccountsBalancesCheckVersion::V1,
-                        ),
-                    ),
-                ];
+                )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
             ChainType::Regtest | ChainType::Signet => {
@@ -193,9 +173,6 @@ impl ChainType {
                         TokenIssuanceVersion::V1,
                         RewardDistributionVersion::V1,
                         TokensFeeVersion::V1,
-                        TokensTickerMaxLengthVersion::V1,
-                        NftIdMismatchCheck::Yes,
-                        AccountsBalancesCheckVersion::V1,
                     ),
                 )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
@@ -208,9 +185,6 @@ impl ChainType {
                             TokenIssuanceVersion::V0,
                             RewardDistributionVersion::V0,
                             TokensFeeVersion::V0,
-                            TokensTickerMaxLengthVersion::V0,
-                            NftIdMismatchCheck::No,
-                            AccountsBalancesCheckVersion::V0,
                         ),
                     ),
                     (
@@ -219,9 +193,6 @@ impl ChainType {
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V0,
                             TokensFeeVersion::V0,
-                            TokensTickerMaxLengthVersion::V0,
-                            NftIdMismatchCheck::No,
-                            AccountsBalancesCheckVersion::V0,
                         ),
                     ),
                     (
@@ -230,20 +201,6 @@ impl ChainType {
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V1,
                             TokensFeeVersion::V1,
-                            TokensTickerMaxLengthVersion::V1,
-                            NftIdMismatchCheck::Yes,
-                            AccountsBalancesCheckVersion::V0,
-                        ),
-                    ),
-                    (
-                        TESTNET_CONSTRAINTS_ACCUMULATOR_FORK_HEIGHT,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            TokensTickerMaxLengthVersion::V1,
-                            NftIdMismatchCheck::Yes,
-                            AccountsBalancesCheckVersion::V1,
                         ),
                     ),
                 ];
