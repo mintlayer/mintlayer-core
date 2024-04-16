@@ -1781,6 +1781,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     let amount_to_delegate = Amount::from_atoms(rng.gen_range(100..100_000));
     // mint amount == amount to delegate to avoid dealing with fees
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        &mut rng,
         amount_to_delegate,
         genesis_pool_id,
         stake_pool_data,

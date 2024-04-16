@@ -1520,6 +1520,7 @@ fn delegate_same_pool_as_staking(#[case] seed: Seed) {
 
     let mint_amount = Amount::from_atoms(rng.gen_range(100..100_000));
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        &mut rng,
         mint_amount,
         genesis_pool_id,
         stake_pool_data,
