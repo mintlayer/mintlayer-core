@@ -1,0 +1,17 @@
+EITHER OF
+     1) { "type": "Hello" }
+     2) { "type": "World" }
+     3) {
+            "type": "String",
+            "content": { "value": string },
+        }
+     4) {
+            "type": "BigObject",
+            "content": {
+                "field": string,
+                "maybe_number": EITHER OF
+                     1) number
+                     2) null,
+                "flag": bool,
+            },
+        }

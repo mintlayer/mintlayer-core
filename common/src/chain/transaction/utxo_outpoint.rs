@@ -99,7 +99,7 @@ impl rpc_description::HasValueHint for UtxoOutPoint {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
-#[serde(tag = "source")]
+#[serde(tag = "type", content = "content")]
 enum RpcUtxoOutPoint {
     Transaction { id: Id<Transaction>, index: u32 },
     BlockReward { id: Id<GenBlock>, index: u32 },

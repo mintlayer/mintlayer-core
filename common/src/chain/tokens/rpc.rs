@@ -13,10 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{
-    IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, Metadata, TokenCreator, TokenId,
-    TokenTotalSupply,
-};
+use super::{IsTokenFrozen, Metadata, TokenCreator, TokenId, TokenTotalSupply};
 use crate::{
     chain::{Block, Destination, Transaction},
     primitives::{Amount, Id},
@@ -26,7 +23,7 @@ use rpc_types::{RpcHexString, RpcString};
 use serialization::Encode;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "content")]
 pub enum RPCTokenInfo {
     FungibleToken(RPCFungibleTokenInfo),
     NonFungibleToken(Box<RPCNonFungibleTokenInfo>),
@@ -57,7 +54,7 @@ impl RPCTokenInfo {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "content")]
 pub enum RPCTokenTotalSupply {
     Fixed { amount: Amount },
     Lockable,
@@ -74,43 +71,11 @@ impl From<TokenTotalSupply> for RPCTokenTotalSupply {
     }
 }
 
-// Indicates whether a token an be frozen
-#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
-pub enum RPCIsTokenFreezable {
-    No,
-    Yes,
-}
-
-impl From<IsTokenFreezable> for RPCIsTokenFreezable {
-    fn from(value: IsTokenFreezable) -> Self {
-        match value {
-            IsTokenFreezable::No => RPCIsTokenFreezable::No,
-            IsTokenFreezable::Yes => RPCIsTokenFreezable::Yes,
-        }
-    }
-}
-
-// Indicates whether a token an be unfrozen after being frozen
-#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
-pub enum RPCIsTokenUnfreezable {
-    No,
-    Yes,
-}
-
-impl From<IsTokenUnfreezable> for RPCIsTokenUnfreezable {
-    fn from(value: IsTokenUnfreezable) -> Self {
-        match value {
-            IsTokenUnfreezable::No => RPCIsTokenUnfreezable::No,
-            IsTokenUnfreezable::Yes => RPCIsTokenUnfreezable::Yes,
-        }
-    }
-}
-
 // Indicates whether a token is frozen at the moment or not. If it is then no operations wish this token can be performed.
 // Meaning transfers, burns, minting, unminting, supply locks etc. Frozen token can only be unfrozen
 // is such an option was provided while freezing.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
-#[serde(tag = "state")]
+#[serde(tag = "type", content = "content")]
 pub enum RPCIsTokenFrozen {
     NotFrozen { freezable: bool },
     Frozen { unfreezable: bool },

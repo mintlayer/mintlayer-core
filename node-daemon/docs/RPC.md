@@ -181,14 +181,18 @@ Parameters:
 ```
 { "outpoint": EITHER OF
      1) {
-            "source": "Transaction",
-            "id": hex string,
-            "index": number,
+            "type": "Transaction",
+            "content": {
+                "id": hex string,
+                "index": number,
+            },
         }
      2) {
-            "source": "BlockReward",
-            "id": hex string,
-            "index": number,
+            "type": "BlockReward",
+            "content": {
+                "id": hex string,
+                "index": number,
+            },
         } }
 ```
 
@@ -382,92 +386,96 @@ Returns:
 EITHER OF
      1) {
             "type": "FungibleToken",
-            "token_id": hex string,
-            "token_ticker": {
-                "text": EITHER OF
-                     1) string
-                     2) null,
-                "hex": hex string,
+            "content": {
+                "token_id": hex string,
+                "token_ticker": {
+                    "text": EITHER OF
+                         1) string
+                         2) null,
+                    "hex": hex string,
+                },
+                "number_of_decimals": number,
+                "metadata_uri": {
+                    "text": EITHER OF
+                         1) string
+                         2) null,
+                    "hex": hex string,
+                },
+                "circulating_supply": { "atoms": number string },
+                "total_supply": EITHER OF
+                     1) {
+                            "type": "Fixed",
+                            "content": { "amount": { "atoms": number string } },
+                        }
+                     2) { "type": "Lockable" }
+                     3) { "type": "Unlimited" },
+                "is_locked": bool,
+                "frozen": EITHER OF
+                     1) {
+                            "type": "NotFrozen",
+                            "content": { "freezable": bool },
+                        }
+                     2) {
+                            "type": "Frozen",
+                            "content": { "unfreezable": bool },
+                        },
+                "authority": bech32 string,
             },
-            "number_of_decimals": number,
-            "metadata_uri": {
-                "text": EITHER OF
-                     1) string
-                     2) null,
-                "hex": hex string,
-            },
-            "circulating_supply": { "atoms": number string },
-            "total_supply": EITHER OF
-                 1) {
-                        "type": "Fixed",
-                        "amount": { "atoms": number string },
-                    }
-                 2) { "type": "Lockable" }
-                 3) { "type": "Unlimited" },
-            "is_locked": bool,
-            "frozen": EITHER OF
-                 1) {
-                        "state": "NotFrozen",
-                        "freezable": bool,
-                    }
-                 2) {
-                        "state": "Frozen",
-                        "unfreezable": bool,
-                    },
-            "authority": bech32 string,
         }
      2) {
             "type": "NonFungibleToken",
-            "token_id": hex string,
-            "creation_tx_id": hex string,
-            "creation_block_id": hex string,
-            "metadata": {
-                "creator": EITHER OF
-                     1) hex string
-                     2) null,
-                "name": {
-                    "text": EITHER OF
-                         1) string
+            "content": {
+                "token_id": hex string,
+                "creation_tx_id": hex string,
+                "creation_block_id": hex string,
+                "metadata": {
+                    "creator": EITHER OF
+                         1) hex string
                          2) null,
-                    "hex": hex string,
-                },
-                "description": {
-                    "text": EITHER OF
-                         1) string
+                    "name": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "description": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "ticker": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "icon_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
                          2) null,
-                    "hex": hex string,
-                },
-                "ticker": {
-                    "text": EITHER OF
-                         1) string
+                    "additional_metadata_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
                          2) null,
-                    "hex": hex string,
+                    "media_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
+                         2) null,
+                    "media_hash": hex string,
                 },
-                "icon_uri": EITHER OF
-                     1) {
-                            "text": EITHER OF
-                                 1) string
-                                 2) null,
-                            "hex": hex string,
-                        }
-                     2) null,
-                "additional_metadata_uri": EITHER OF
-                     1) {
-                            "text": EITHER OF
-                                 1) string
-                                 2) null,
-                            "hex": hex string,
-                        }
-                     2) null,
-                "media_uri": EITHER OF
-                     1) {
-                            "text": EITHER OF
-                                 1) string
-                                 2) null,
-                            "hex": hex string,
-                        }
-                     2) null,
-                "media_hash": hex string,
             },
         }
      3) null
@@ -541,10 +549,13 @@ Parameters:
 
 Produces:
 ```
-{ "NewTip": {
-    "id": hex string,
-    "height": number,
-} }
+{
+    "type": "NewTip",
+    "content": {
+        "id": hex string,
+        "height": number,
+    },
+}
 ```
 
 Unsubscribe using `chainstate_unsubscribe_events`.

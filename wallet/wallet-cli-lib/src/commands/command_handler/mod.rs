@@ -35,9 +35,9 @@ use utils::qrcode::{QrCode, QrCodeError};
 use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
-    Balances, ComposedTransaction, ControllerConfig, InspectTransaction,
-    MnemonicInfo, NewTransaction, NftMetadata, RpcStandaloneAddressDetails, SignatureStats,
-    TokenMetadata, ValidatedSignatures,
+    Balances, ComposedTransaction, ControllerConfig, InspectTransaction, MnemonicInfo,
+    NewTransaction, NftMetadata, RpcStandaloneAddressDetails, SignatureStats, TokenMetadata,
+    ValidatedSignatures,
 };
 
 use crate::errors::WalletCliError;

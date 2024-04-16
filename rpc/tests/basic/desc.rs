@@ -25,7 +25,7 @@ fn value_hint_trivial() {
     // Check trivial corner cases
     assert_eq!(VH::Prim("x").to_string(), "x");
     assert_eq!(VH::Choice(&[]).to_string(), "impossible");
-    assert_eq!(VH::object(&[]).to_string(), "{}");
+    assert_eq!(VH::Object(&[]).to_string(), "{}");
 }
 
 #[test]
@@ -33,41 +33,41 @@ fn value_hint_render() {
     // Set up a rather convoluted value hint, check what its string representation is
 
     const AUTH_HINT: VH = VH::Choice(&[
-        &VH::object(&[
+        &VH::Object(&[
             ("username", &VH::Prim("string")),
             (
                 "password",
                 &VH::Choice(&[
                     &VH::STRING,
                     &VH::NULL,
-                    &VH::object(&[
+                    &VH::Object(&[
                         ("password_file", &VH::STRING),
                         ("key", &VH::Choice(&[&VH::STRING, &VH::NUMBER, &VH::NULL])),
                     ]),
                 ]),
             ),
         ]),
-        &VH::object(&[("cookie_file", &VH::STRING)]),
+        &VH::Object(&[("cookie_file", &VH::STRING)]),
         &VH::NULL,
     ]);
 
     const COMMAND_HINT: VH = VH::Choice(&[
-        &VH::object(&[("launch_missiles", &VH::NUMBER)]),
+        &VH::Object(&[("launch_missiles", &VH::NUMBER)]),
         &VH::Prim("\"check_missile_stock\""),
     ]);
 
-    const HINT: VH = VH::object(&[("auth", &AUTH_HINT), ("command", &COMMAND_HINT)]);
+    const HINT: VH = VH::Object(&[("auth", &AUTH_HINT), ("command", &COMMAND_HINT)]);
 
     expect_file!["./HINT_RENDER.md"].assert_eq(&format!("{HINT}\n"));
 }
 
 #[test]
-fn value_hint_tagged() {
+fn value_hint_tagged_plain() {
     #[derive(HasValueHint, serde::Serialize)]
     #[allow(unused)]
     enum Tagged {
-        Int(u64),
-        String(String),
+        One,
+        Two,
     }
 
     let actual = Tagged::HINT_SER.to_string();
@@ -89,8 +89,8 @@ fn value_hint_untagged() {
 }
 
 #[test]
-fn value_hint_internally_tagged() {
-    #[derive(HasValueHint, serde::Serialize)]
+fn value_hint_adjacently_tagged() {
+    #[derive(Debug, PartialEq, Eq, HasValueHint, serde::Serialize, serde::Deserialize)]
     #[allow(unused)]
     struct BigObject {
         field: String,
@@ -98,24 +98,31 @@ fn value_hint_internally_tagged() {
         flag: bool,
     }
 
-    #[derive(HasValueHint, serde::Serialize)]
-    #[serde(tag = "kind")]
+    #[derive(Debug, PartialEq, Eq, HasValueHint, serde::Serialize, serde::Deserialize)]
+    #[serde(tag = "type", content = "content")]
     #[allow(unused)]
-    enum ExternallyTagged {
+    enum AdjacentlyTagged {
         Hello,
         World,
         String { value: String },
         BigObject(BigObject),
     }
 
-    let json_hello = serde_json::to_value(ExternallyTagged::Hello).unwrap();
-    assert_eq!(json_hello, json!({"kind": "Hello"}));
+    let json_hello = serde_json::to_value(AdjacentlyTagged::Hello).unwrap();
+    assert_eq!(json_hello, json!({"type": "Hello"}));
+    assert_eq!(
+        serde_json::from_value::<AdjacentlyTagged>(json_hello).unwrap(),
+        AdjacentlyTagged::Hello
+    );
 
-    let json_string = serde_json::to_value(ExternallyTagged::String { value: "x".into() }).unwrap();
-    assert_eq!(json_string, json!({"kind": "String", "value": "x"}));
+    let json_string = serde_json::to_value(AdjacentlyTagged::String { value: "x".into() }).unwrap();
+    assert_eq!(
+        json_string,
+        json!({"type": "String", "content": {"value": "x"}})
+    );
 
-    let hint = ExternallyTagged::HINT_SER.to_string();
-    expect_file!["./HINT_EXTERNALLY_TAGGED.txt"].assert_eq(&hint);
+    let hint = AdjacentlyTagged::HINT_SER.to_string();
+    expect_file!["./HINT_ADJACENTLY_TAGGED.txt"].assert_eq(&hint);
 }
 
 #[test]

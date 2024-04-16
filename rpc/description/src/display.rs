@@ -167,7 +167,7 @@ impl ValueHint {
                 }
             },
 
-            ValueHint::Object(hints) => match hints.to_slice().as_ref() {
+            ValueHint::Object(hints) => match *hints {
                 [] => f.write_str("{}")?,
                 [(name, hint)] => {
                     write!(f, "{{ {name:?}: ")?;

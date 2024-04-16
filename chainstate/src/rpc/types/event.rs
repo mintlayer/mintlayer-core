@@ -21,6 +21,7 @@ use common::{
 use crate::ChainstateEvent;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc::description::HasValueHint)]
+#[serde(tag = "type", content = "content")]
 pub enum RpcEvent {
     NewTip { id: Id<Block>, height: BlockHeight },
 }

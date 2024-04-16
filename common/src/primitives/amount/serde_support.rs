@@ -108,8 +108,8 @@ pub enum RpcAmountInSerde {
 
 impl HasValueHint for RpcAmountInSerde {
     const HINT_SER: VH = VH::Choice(&[
-        &VH::object(&[("atoms", &AtomsInner::HINT_SER)]),
-        &VH::object(&[("decimal", &DecimalInner::HINT_SER)]),
+        &VH::Object(&[("atoms", &AtomsInner::HINT_SER)]),
+        &VH::Object(&[("decimal", &DecimalInner::HINT_SER)]),
     ]);
 }
 

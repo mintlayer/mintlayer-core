@@ -19,7 +19,7 @@ use syn::spanned::Spanned;
 
 enum EnumTag {
     External,
-    Internal(String, Span),
+    Adjacent(String, String, Span, Span),
     None(Span),
 }
 
@@ -27,7 +27,7 @@ impl EnumTag {
     fn span(&self) -> Option<Span> {
         match self {
             EnumTag::External => None,
-            EnumTag::Internal(_, s) => Some(*s),
+            EnumTag::Adjacent(_, _, s, _) => Some(*s),
             EnumTag::None(s) => Some(*s),
         }
     }
@@ -40,7 +40,9 @@ struct SerdeAttributes {
 
 impl SerdeAttributes {
     fn new(attrs: &[syn::Attribute]) -> syn::Result<Self> {
-        let mut enum_tag = EnumTag::External;
+        let mut tag_name = None;
+        let mut content_key = None;
+        let mut untagged = None;
 
         for attr in attrs.iter().filter(|a| a.path().is_ident("serde")) {
             let err = || {
@@ -54,11 +56,13 @@ impl SerdeAttributes {
             match &attr.meta {
                 syn::Meta::List(la) => {
                     la.parse_nested_meta(|m| {
+                        let span = m.path.span();
                         if m.path.is_ident("untagged") {
-                            enum_tag = EnumTag::None(m.path.span());
+                            untagged = Some(span);
                         } else if m.path.is_ident("tag") {
-                            let tag_name = m.value()?.parse::<syn::LitStr>()?.value();
-                            enum_tag = EnumTag::Internal(tag_name, m.path.span());
+                            tag_name = Some((m.value()?.parse::<syn::LitStr>()?.value(), span));
+                        } else if m.path.is_ident("content") {
+                            content_key = Some((m.value()?.parse::<syn::LitStr>()?.value(), span));
                         } else {
                             return Err(err());
                         }
@@ -68,6 +72,25 @@ impl SerdeAttributes {
                 syn::Meta::Path(_) | syn::Meta::NameValue(_) => return Err(err()),
             }
         }
+
+        let enum_tag = match (tag_name, untagged) {
+            (None, None) => EnumTag::External,
+            (Some((tag_name, span)), None) => match content_key {
+                Some((content_key, ck_span)) => {
+                    EnumTag::Adjacent(tag_name, content_key, span, ck_span)
+                }
+                None => {
+                    return Err(syn::Error::new(
+                        span,
+                        "Internal enum tagging not supported by `HasValueHint` macro",
+                    ));
+                }
+            },
+            (None, Some(span)) => EnumTag::None(span),
+            (Some(_), Some(span)) => {
+                return Err(syn::Error::new(span, "Conflicting tag specifiers"))
+            }
+        };
 
         Ok(Self { enum_tag })
     }
@@ -83,10 +106,23 @@ impl SerdeAttributes {
         Ok(())
     }
 
-    // Allow only untagged attribute to be present
-    fn into_enum_tag(self) -> EnumTag {
+    // Get enum tag format. Enforce the adjacent representation has the tag key "type" and content
+    // key "content".
+    fn into_supported_enum_tag(self) -> syn::Result<EnumTag> {
         let Self { enum_tag } = self;
-        enum_tag
+        match &enum_tag {
+            EnumTag::External => (),
+            EnumTag::Adjacent(tag, content, tag_s, ck_s) => {
+                if tag != "type" {
+                    return Err(syn::Error::new(*tag_s, "Tag must be \"type\""));
+                }
+                if content != "content" {
+                    return Err(syn::Error::new(*ck_s, "Content must be \"content\""));
+                }
+            }
+            EnumTag::None(_) => (),
+        }
+        Ok(enum_tag)
     }
 }
 
@@ -108,7 +144,7 @@ fn hint_for_fields(
                 })
                 .collect::<syn::Result<Vec<_>>>()?;
 
-            quote!(#desc_mod::ValueHint::object(&[#(#entries,)*]))
+            quote!(#desc_mod::ValueHint::Object(&[#(#entries,)*]))
         }
         syn::Fields::Unnamed(fields) => {
             if fields.unnamed.len() == 1 {
@@ -144,7 +180,7 @@ fn hint_for_item(
             hint_for_fields(&struct_item.fields, desc_mod, mode)
         }
         syn::Data::Enum(enum_item) => {
-            let repr = SerdeAttributes::new(&item.attrs)?.into_enum_tag();
+            let repr = SerdeAttributes::new(&item.attrs)?.into_supported_enum_tag()?;
             let variants = enum_item
                 .variants
                 .iter()
@@ -156,15 +192,17 @@ fn hint_for_item(
                             let subhints = hint_for_fields(fields, desc_mod, mode)?;
                             match &repr {
                                 EnumTag::External => {
-                                    quote!(#desc_mod::ValueHint::object(&[(#name, &#subhints)]))
+                                    return Err(syn::Error::new(
+                                        fields.span(),
+                                        "Only data-less enum arms allowed for external format",
+                                    ));
                                 }
-                                EnumTag::Internal(tag_name, _) => {
+                                EnumTag::Adjacent(tag_name, content_key, _, _) => {
                                     quote! {
-                                        #desc_mod::ValueHint::Object(#desc_mod::Fields::Cons(
-                                            #tag_name,
-                                            &#desc_mod::ValueHint::StrLit(#name),
-                                            #subhints.unwrap_object_fields(),
-                                        ))
+                                        #desc_mod::ValueHint::Object(&[
+                                            (#tag_name, &#desc_mod::ValueHint::StrLit(#name)),
+                                            (#content_key, &#subhints),
+                                        ])
                                     }
                                 }
                                 EnumTag::None(_) => subhints,
@@ -174,10 +212,10 @@ fn hint_for_item(
                             EnumTag::External => {
                                 quote!(#desc_mod::ValueHint::StrLit(#name))
                             }
-                            EnumTag::Internal(tag_name, _) => {
+                            EnumTag::Adjacent(tag_name, _, _, _) => {
                                 let tag_val = var.ident.to_string();
                                 let val = quote!(#desc_mod::ValueHint::StrLit(#tag_val));
-                                quote!(#desc_mod::ValueHint::object(&[(#tag_name, &#val)]))
+                                quote!(#desc_mod::ValueHint::Object(&[(#tag_name, &#val)]))
                             }
                             EnumTag::None(span) => {
                                 let e = syn::Error::new(*span, "Incompatible with unit enum arms");

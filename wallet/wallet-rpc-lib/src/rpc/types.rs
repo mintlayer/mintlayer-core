@@ -160,7 +160,7 @@ impl AddressInfo {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "content")]
 pub enum RpcStandaloneAddressDetails {
     WatchOnly,
     FromPrivateKey,
@@ -496,6 +496,7 @@ impl From<&UtxoState> for RpcUtxoState {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type", content = "content")]
 pub enum TokenTotalSupply {
     Fixed(RpcAmountIn),
     Lockable,
@@ -582,7 +583,7 @@ impl StakingStatus {
     }
 }
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-#[serde(tag = "source")]
+#[serde(tag = "type", content = "content")]
 pub enum MnemonicInfo {
     UserProvided,
     NewlyGenerated {

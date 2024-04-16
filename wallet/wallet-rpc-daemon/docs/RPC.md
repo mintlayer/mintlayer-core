@@ -315,14 +315,18 @@ Parameters:
          2) { "decimal": decimal string },
     "selected_utxos": [ EITHER OF
          1) {
-                "source": "Transaction",
-                "id": hex string,
-                "index": number,
+                "type": "Transaction",
+                "content": {
+                    "id": hex string,
+                    "index": number,
+                },
             }
          2) {
-                "source": "BlockReward",
-                "id": hex string,
-                "index": number,
+                "type": "BlockReward",
+                "content": {
+                    "id": hex string,
+                    "index": number,
+                },
             }, .. ],
     "options": { "in_top_x_mb": EITHER OF
          1) number
@@ -404,14 +408,18 @@ Parameters:
          2) { "decimal": decimal string },
     "selected_utxo": EITHER OF
          1) {
-                "source": "Transaction",
-                "id": hex string,
-                "index": number,
+                "type": "Transaction",
+                "content": {
+                    "id": hex string,
+                    "index": number,
+                },
             }
          2) {
-                "source": "BlockReward",
-                "id": hex string,
-                "index": number,
+                "type": "BlockReward",
+                "content": {
+                    "id": hex string,
+                    "index": number,
+                },
             },
     "change_address": EITHER OF
          1) bech32 string
@@ -877,11 +885,14 @@ Parameters:
              1) string
              2) { "hex": hex string },
         "token_supply": EITHER OF
-             1) { "Fixed": EITHER OF
-                     1) { "atoms": number string }
-                     2) { "decimal": decimal string } }
-             2) "Lockable"
-             3) "Unlimited",
+             1) {
+                    "type": "Fixed",
+                    "content": EITHER OF
+                         1) { "atoms": number string }
+                         2) { "decimal": decimal string },
+                }
+             2) { "type": "Lockable" }
+             3) { "type": "Unlimited" },
         "is_freezable": bool,
     },
     "options": { "in_top_x_mb": EITHER OF
@@ -1501,14 +1512,18 @@ Parameters:
 {
     "inputs": [ EITHER OF
          1) {
-                "source": "Transaction",
-                "id": hex string,
-                "index": number,
+                "type": "Transaction",
+                "content": {
+                    "id": hex string,
+                    "index": number,
+                },
             }
          2) {
-                "source": "BlockReward",
-                "id": hex string,
-                "index": number,
+                "type": "BlockReward",
+                "content": {
+                    "id": hex string,
+                    "index": number,
+                },
             }, .. ],
     "outputs": [ object, .. ],
     "only_transaction": bool,
@@ -1708,13 +1723,15 @@ Parameters:
 Returns:
 ```
 { "mnemonic": EITHER OF
-     1) { "source": "UserProvided" }
+     1) { "type": "UserProvided" }
      2) {
-            "source": "NewlyGenerated",
-            "mnemonic": string,
-            "passphrase": EITHER OF
-                 1) string
-                 2) null,
+            "type": "NewlyGenerated",
+            "content": {
+                "mnemonic": string,
+                "passphrase": EITHER OF
+                     1) string
+                     2) null,
+            },
         } }
 ```
 
@@ -1986,8 +2003,10 @@ Returns:
          2) { "type": "FromPrivateKey" }
          3) {
                 "type": "Multisig",
-                "min_required_signatures": number,
-                "public_keys": [ bech32 string, .. ],
+                "content": {
+                    "min_required_signatures": number,
+                    "public_keys": [ bech32 string, .. ],
+                },
             },
     "balances": {
         "coins": {
