@@ -23,7 +23,7 @@ use super::*;
 #[trace]
 #[tokio::test]
 async fn dissabled_post_route() {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let url = "/api/v2/transaction";
 
@@ -72,7 +72,7 @@ async fn dissabled_post_route() {
 #[trace]
 #[tokio::test]
 async fn invalid_transaction() {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let url = "/api/v2/transaction";
 
@@ -125,7 +125,7 @@ async fn invalid_transaction() {
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn ok(#[case] seed: Seed) {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let url = "/api/v2/transaction";
 

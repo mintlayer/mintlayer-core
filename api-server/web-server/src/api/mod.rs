@@ -23,15 +23,11 @@ use crate::{
 };
 
 use api_server_common::storage::storage_api::ApiServerStorage;
-use axum::{
-    response::IntoResponse,
-    routing::{get, IntoMakeService},
-    Json, Router, Server,
-};
-use hyper::Method;
+use axum::{http::Method, response::IntoResponse, routing::get, Json, Router};
 use serde_json::json;
-use std::{net::TcpListener, sync::Arc};
-use tower_http::cors::{Any, CorsLayer};
+use std::sync::Arc;
+use tokio::net::TcpListener;
+use tower_http_axum::cors::{AllowMethods, Any, CorsLayer};
 
 #[allow(clippy::unused_async)]
 async fn bad_request() -> Result<(), ApiServerWebServerError> {
@@ -54,9 +50,9 @@ pub fn web_server<
     socket: TcpListener,
     state: ApiServerWebServerState<Arc<T>, Arc<R>>,
     enable_post_endpoints: bool,
-) -> Server<hyper::server::conn::AddrIncoming, IntoMakeService<Router>> {
+) -> axum::serve::Serve<Router, Router> {
     let cors_layer = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST])
+        .allow_methods(AllowMethods::list([Method::GET, Method::POST]))
         .allow_headers(Any)
         .allow_origin(Any);
 
@@ -67,7 +63,5 @@ pub fn web_server<
         .with_state(state)
         .layer(cors_layer);
 
-    axum::Server::from_tcp(socket)
-        .expect("API Server Web Server failed to attach to socket")
-        .serve(routes.into_make_service())
+    axum::serve(socket, routes)
 }

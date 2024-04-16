@@ -13,14 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    net::{SocketAddr, TcpListener},
-    ops::Deref,
-};
+use std::{net::SocketAddr, ops::Deref};
 
 use clap::Parser;
 
 use api_server_common::{Network, PostgresConfig};
+use tokio::net::TcpListener;
 use utils::clap_utils;
 use utils_networking::NetworkAddressWithPort;
 
@@ -74,8 +72,8 @@ pub struct ListenAddress {
 
 impl ListenAddress {
     #[allow(dead_code)]
-    pub fn tcp_listener(&self) -> std::net::TcpListener {
-        TcpListener::bind(self.socket).expect("Valid listening address")
+    pub async fn tcp_listener(&self) -> TcpListener {
+        TcpListener::bind(self.socket).await.expect("Valid listening address")
     }
 }
 

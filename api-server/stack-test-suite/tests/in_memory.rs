@@ -23,10 +23,8 @@ use common::{
 };
 use mempool::FeeRate;
 use node_comm::rpc_client::NodeRpcError;
-use std::{
-    net::TcpListener,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
+use tokio::net::TcpListener;
 
 struct DummyRPC {}
 
@@ -42,7 +40,7 @@ impl TxSubmitClient for DummyRPC {
 }
 
 pub async fn spawn_webserver(url: &str) -> (tokio::task::JoinHandle<()>, reqwest::Response) {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
     let task = tokio::spawn(async move {

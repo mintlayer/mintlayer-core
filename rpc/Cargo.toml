@@ -21,14 +21,16 @@ utils-networking = { path = "../utils/networking" }
 anyhow.workspace = true
 async-trait.workspace = true
 base64.workspace = true
-http.workspace = true
-hyper.workspace = true
 jsonrpsee = { workspace = true, features = ["server", "server-core", "http-client", "ws-client", "macros"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tower = { workspace = true, features = ["util"] }
-tower-http = { workspace = true, features = ["auth", "set-header"] }
+
+# This we keep here, and not in the workspace, because it comes from jsonrpsee and requires an older version
+tower-http = { version = "0.4", features = ["auth", "set-header"] }
+http = "0.2"
+hyper = "0.14"
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }

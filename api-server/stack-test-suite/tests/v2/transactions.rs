@@ -73,7 +73,7 @@ async fn invalid_num_items_max(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[tokio::test]
 async fn ok(#[case] seed: Seed) {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
     let (tx, rx) = tokio::sync::oneshot::channel();
