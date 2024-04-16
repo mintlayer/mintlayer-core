@@ -33,8 +33,8 @@ use crate::BlockProductionError;
 
 use super::{job_manager::JobManagerInterface, CustomId};
 
-pub struct BlockProductionJobWrapper {
-    job_id: CustomId,
+pub struct Helper {
+    job_custom_id: CustomId,
     tip_block_index: GenBlockIndex,
     /// The so-called "median time past" timestamp calculated from the current tip.
     /// Note: when validating a block, the lock-time constraints of its transactions
@@ -50,9 +50,9 @@ pub struct BlockProductionJobWrapper {
     job_finished_receiver: Option<oneshot::Receiver<usize>>,
 }
 
-impl BlockProductionJobWrapper {
+impl Helper {
     pub async fn new(
-        job_id: CustomId,
+        job_custom_id: CustomId,
         job_manager_handle: &dyn JobManagerInterface,
         chainstate_handle: &ChainstateHandle,
         chain_config: &ChainConfig,
@@ -83,8 +83,9 @@ impl BlockProductionJobWrapper {
 
         let stop_flag = Arc::new(RelaxedAtomicBool::new(false));
 
-        let (job_key, last_used_block_timestamp, cancel_receiver) =
-            job_manager_handle.add_job(job_id.clone(), tip_block_index.block_id()).await?;
+        let (job_key, last_used_block_timestamp, cancel_receiver) = job_manager_handle
+            .add_job(job_custom_id.clone(), tip_block_index.block_id())
+            .await?;
 
         let (job_stopper_function, job_finished_receiver) =
             job_manager_handle.make_job_stopper_function();
@@ -122,7 +123,7 @@ impl BlockProductionJobWrapper {
 
         Ok((
             Self {
-                job_id,
+                job_custom_id,
                 tip_block_index,
                 tip_median_time_past,
                 stop_flag,
@@ -136,7 +137,7 @@ impl BlockProductionJobWrapper {
     }
 
     pub fn job_custom_id(&self) -> &CustomId {
-        &self.job_id
+        &self.job_custom_id
     }
 
     pub fn tip_block_index(&self) -> &GenBlockIndex {

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_production_job_wrapper;
+mod helper;
 pub mod job_manager;
 
 use std::sync::Arc;
@@ -62,7 +62,7 @@ use crate::{
     BlockProductionError,
 };
 
-use self::block_production_job_wrapper::BlockProductionJobWrapper;
+use self::helper::Helper;
 
 #[derive(Debug, Clone)]
 pub enum TransactionsSource {
@@ -368,7 +368,7 @@ impl BlockProduction {
             CustomId::new_from_value,
         );
 
-        let (job_wrapper, _job_stopper_destructor) = BlockProductionJobWrapper::new(
+        let (helper, _job_stopper_destructor) = Helper::new(
             custom_id,
             &*self.job_manager_handle,
             &self.chainstate_handle,
@@ -377,12 +377,12 @@ impl BlockProduction {
         )
         .await?;
 
-        let required_consensus = job_wrapper.required_consensus_at_next_height(&self.chain_config);
+        let required_consensus = helper.required_consensus_at_next_height(&self.chain_config);
 
         match (required_consensus, input_data) {
             (RequiredConsensus::PoS(pos_status), GenerateBlockInputData::PoS(pos_input_data)) => {
                 self.produce_block_pos(
-                    job_wrapper,
+                    helper,
                     pos_status,
                     *pos_input_data,
                     transactions,
@@ -399,7 +399,7 @@ impl BlockProduction {
             )?,
             (RequiredConsensus::PoW(pow_status), GenerateBlockInputData::PoW(pow_input_data)) => {
                 self.produce_block_pow(
-                    job_wrapper,
+                    helper,
                     pow_status,
                     *pow_input_data,
                     transactions,
@@ -416,7 +416,7 @@ impl BlockProduction {
             )?,
             (RequiredConsensus::IgnoreConsensus, GenerateBlockInputData::None) => {
                 self.produce_block_ignore_consensus(
-                    job_wrapper,
+                    helper,
                     transactions,
                     transaction_ids,
                     packing_strategy,
@@ -432,10 +432,9 @@ impl BlockProduction {
         }
     }
 
-    // FIXME job_wrapper is useless here
     async fn produce_block_pos(
         &self,
-        job_wrapper: BlockProductionJobWrapper,
+        helper: Helper,
         pos_status: PoSStatus,
         input_data: PoSGenerateBlockInputData,
         transactions: Vec<SignedTransaction>,
@@ -448,8 +447,8 @@ impl BlockProduction {
         // previous block's timestamp + 1 second, and ends at the
         // current timestamp + some distance in time defined by the
         // blockchain.
-        let starting_timestamp = job_wrapper.starting_timestamp();
-        let max_timestamp = job_wrapper.max_timestamp();
+        let starting_timestamp = helper.starting_timestamp();
+        let max_timestamp = helper.max_timestamp();
 
         // Note/TODO: the "vrf_data" part of consensus_data is useless here, because it'll be unconditionally
         // overwritten below. Perhaps we could introduce an intermediate "PartialPoSData" struct that wouldn't
@@ -458,7 +457,7 @@ impl BlockProduction {
             .pull_consensus_data_pos(
                 input_data,
                 pos_status.clone(),
-                job_wrapper.tip_block_index(),
+                helper.tip_block_index(),
                 starting_timestamp,
             )
             .await?;
@@ -497,9 +496,9 @@ impl BlockProduction {
             let mut consensus_data = consensus_data;
             consensus_data.update_vrf_data(vrf_data);
 
-            let tip_block_id = job_wrapper.tip_block_index().block_id();
+            let tip_block_id = helper.tip_block_index().block_id();
 
-            let collected_transactions = job_wrapper
+            let collected_transactions = helper
                 .collect_transactions(
                     &self.mempool_handle,
                     &self.chain_config,
@@ -545,36 +544,36 @@ impl BlockProduction {
         };
 
         self.update_last_used_block_timestamp(
-            job_wrapper.job_custom_id().clone(),
+            helper.job_custom_id().clone(),
             last_used_timestamp,
         )
         .await?;
 
-        result.map(|block| job_wrapper.finish(block))
+        result.map(|block| helper.finish(block))
     }
 
     async fn produce_block_pow(
         &self,
-        mut job_wrapper: BlockProductionJobWrapper,
+        mut helper: Helper,
         pow_status: PoWStatus,
         input_data: PoWGenerateBlockInputData,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        let block_timestamp = job_wrapper.starting_timestamp();
-        let tip_block_id = job_wrapper.tip_block_index().block_id();
+        let block_timestamp = helper.starting_timestamp();
+        let tip_block_id = helper.tip_block_index().block_id();
 
         let (consensus_data, block_reward) = self
             .pull_consensus_data_pow(
                 input_data,
                 pow_status,
-                job_wrapper.tip_block_index(),
+                helper.tip_block_index(),
                 block_timestamp,
             )
             .await?;
 
-        let collected_transactions = job_wrapper
+        let collected_transactions = helper
             .collect_transactions(
                 &self.mempool_handle,
                 &self.chain_config,
@@ -588,7 +587,7 @@ impl BlockProduction {
 
         // Note: job manager is subscribed to chainstate events; when the tip changes, it will
         // cancel all jobs whose job key refers to a different (old) tip.
-        let handle = job_wrapper.spawn_block_solver(&self.mining_thread_pool, {
+        let handle = helper.spawn_block_solver(&self.mining_thread_pool, {
             let merkle_proxy =
                 block_body.merkle_tree_proxy().map_err(BlockCreationError::MerkleTreeError)?;
 
@@ -615,27 +614,26 @@ impl BlockProduction {
                 .map_err(BlockProductionError::FailedConsensusInitialization)
             }
         });
-        let signed_block_header = job_wrapper.wait_for_block_solver_result(handle).await?;
+        let signed_block_header = helper.wait_for_block_solver_result(handle).await?;
 
         let block = Block::new_from_header(signed_block_header, block_body)?;
-        Ok(job_wrapper.finish(block))
+        Ok(helper.finish(block))
     }
 
-    // FIXME job_wrapper is useless here
     async fn produce_block_ignore_consensus(
         &self,
-        job_wrapper: BlockProductionJobWrapper,
+        helper: Helper,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        let block_timestamp = job_wrapper.starting_timestamp();
-        let next_block_height = job_wrapper.tip_block_index().block_height().next_height();
-        let tip_block_id = job_wrapper.tip_block_index().block_id();
+        let block_timestamp = helper.starting_timestamp();
+        let next_block_height = helper.tip_block_index().block_height().next_height();
+        let tip_block_id = helper.tip_block_index().block_id();
 
         let block_reward = generate_reward_ignore_consensus(&self.chain_config, next_block_height);
 
-        let collected_transactions = job_wrapper
+        let collected_transactions = helper
             .collect_transactions(
                 &self.mempool_handle,
                 &self.chain_config,
@@ -661,7 +659,7 @@ impl BlockProduction {
         let signed_block_header = block_header.with_no_signature();
 
         let block = Block::new_from_header(signed_block_header, block_body)?;
-        Ok(job_wrapper.finish(block))
+        Ok(helper.finish(block))
     }
 
     pub fn e2e_private_key(&self) -> &ephemeral_e2e::EndToEndPrivateKey {
@@ -673,7 +671,7 @@ async fn collect_transactions(
     mempool_handle: &MempoolHandle,
     chain_config: &ChainConfig,
     current_tip: Id<GenBlock>,
-    median_time_past: BlockTimestamp,
+    current_tip_median_time_past: BlockTimestamp,
     transactions: Vec<SignedTransaction>,
     transaction_ids: Vec<Id<Transaction>>,
     packing_strategy: PackingStrategy,
@@ -681,7 +679,7 @@ async fn collect_transactions(
     let mut accumulator = Box::new(DefaultTxAccumulator::new(
         chain_config.max_block_size_from_std_scripts(),
         current_tip,
-        median_time_past,
+        current_tip_median_time_past,
     ));
 
     for transaction in transactions.into_iter() {
