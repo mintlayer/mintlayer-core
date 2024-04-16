@@ -261,6 +261,7 @@ fn long_chain_reorg(#[case] seed: Seed) {
 
         let mint_amount = Amount::from_atoms(rng.gen_range(100..100_000));
         let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+            &mut rng,
             mint_amount,
             genesis_pool_id,
             stake_pool_data,
@@ -310,6 +311,7 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
         create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk.clone());
 
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        &mut rng,
         amount_to_stake,
         genesis_pool_id,
         stake_pool_data,
@@ -404,6 +406,7 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
         create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk.clone());
 
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        &mut rng,
         amount_to_stake,
         genesis_pool_id,
         stake_pool_data,
@@ -569,6 +572,7 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
         create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk.clone());
 
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        &mut rng,
         amount_to_stake,
         genesis_pool_id,
         stake_pool_data,
@@ -708,6 +712,7 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
         create_stake_pool_data_with_all_reward_to_staker(&mut rng, amount_to_stake, vrf_pk.clone());
 
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        &mut rng,
         (amount_to_stake * 2).unwrap(),
         genesis_pool_id,
         stake_pool_data,

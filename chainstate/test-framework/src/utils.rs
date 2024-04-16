@@ -169,6 +169,7 @@ pub fn create_chain_config_with_default_staking_pool(
     );
 
     let chain_config = create_chain_config_with_staking_pool(
+        rng,
         mint_amount,
         genesis_pool_id,
         genesis_stake_pool_data,
@@ -178,6 +179,7 @@ pub fn create_chain_config_with_default_staking_pool(
 }
 
 pub fn create_chain_config_with_staking_pool(
+    rng: &mut impl Rng,
     mint_amount: Amount,
     pool_id: PoolId,
     pool_data: StakePoolData,
@@ -200,7 +202,7 @@ pub fn create_chain_config_with_staking_pool(
 
     let genesis = Genesis::new(
         String::new(),
-        BlockTimestamp::from_int_seconds(1639975460),
+        BlockTimestamp::from_int_seconds(rng.gen_range(0..1639975460)),
         vec![mint_output, pool],
     );
 

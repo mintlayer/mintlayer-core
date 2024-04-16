@@ -85,6 +85,7 @@ async fn ok(#[case] seed: Seed) {
             let pool_id = PoolId::new(H256::random_using(&mut rng));
 
             let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+                &mut rng,
                 Amount::from_atoms(initial_pledge * 2),
                 pool_id,
                 pool_data,

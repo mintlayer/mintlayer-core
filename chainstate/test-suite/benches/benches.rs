@@ -66,6 +66,7 @@ pub fn pos_reorg(c: &mut Criterion) {
     let mint_amount = Amount::from_atoms(1000);
 
     let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+        &mut rng,
         mint_amount,
         genesis_pool_id,
         stake_pool_data,
