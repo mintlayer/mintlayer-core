@@ -49,11 +49,11 @@ pub enum BlockProductionError {
     #[error("Block creation error: {0}")]
     FailedToConstructBlock(#[from] BlockCreationError),
     #[error("Initialization of consensus failed: {0}")]
-    FailedConsensusInitialization(#[from] ConsensusCreationError),
+    ConsensusCreationError(#[from] ConsensusCreationError),
     #[error("Block production cancelled")]
     Cancelled,
     #[error("Failed to retrieve peer count")]
-    PeerCountRetrievalError,
+    PeerCountRetrievalError(String),
     #[error("Connected peers {0} is below the required peer threshold {0}")]
     PeerCountBelowRequiredThreshold(usize, usize),
     #[error("Block not found in this round")]
@@ -72,6 +72,10 @@ pub enum BlockProductionError {
     RecoverableMempoolError,
     #[error("Chainstate error: `{0}`")]
     ChainstateError(#[from] consensus::ChainstateError),
+    #[error("PoS data provided when consensus is supposed to be ignored")]
+    PoSInputDataProvidedWhenIgnoringConsensus,
+    #[error("PoW data provided when consensus is supposed to be ignored")]
+    PoWInputDataProvidedWhenIgnoringConsensus,
 }
 
 pub type BlockProductionSubsystem = Box<dyn BlockProductionInterface>;

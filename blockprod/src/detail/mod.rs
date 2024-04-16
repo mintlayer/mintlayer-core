@@ -263,7 +263,7 @@ impl BlockProduction {
                 }
             })
             .await?
-            .map_err(BlockProductionError::FailedConsensusInitialization)?;
+            .map_err(BlockProductionError::ConsensusCreationError)?;
 
         Ok(consensus_data)
     }
@@ -298,7 +298,7 @@ impl BlockProduction {
                 }
             })
             .await?
-            .map_err(BlockProductionError::FailedConsensusInitialization)?;
+            .map_err(BlockProductionError::ConsensusCreationError)?;
 
         Ok(consensus_data)
     }
@@ -340,7 +340,7 @@ impl BlockProduction {
             .p2p_handle
             .call_async_mut(move |p2p| p2p.get_peer_count())
             .await?
-            .map_err(|_| BlockProductionError::PeerCountRetrievalError)?;
+            .map_err(|err| BlockProductionError::PeerCountRetrievalError(err.to_string()))?;
 
         if current_peer_count < self.blockprod_config.min_peers_to_produce_blocks {
             return Err(BlockProductionError::PeerCountBelowRequiredThreshold(
@@ -423,10 +423,10 @@ impl BlockProduction {
                 .await
             }
             (RequiredConsensus::IgnoreConsensus, GenerateBlockInputData::PoS(_)) => {
-                Err(ConsensusCreationError::PoSInputDataProvidedWhenIgnoringConsensus)?
+                Err(BlockProductionError::PoSInputDataProvidedWhenIgnoringConsensus)?
             }
             (RequiredConsensus::IgnoreConsensus, GenerateBlockInputData::PoW(_)) => {
-                Err(ConsensusCreationError::PoWInputDataProvidedWhenIgnoringConsensus)?
+                Err(BlockProductionError::PoWInputDataProvidedWhenIgnoringConsensus)?
             }
         }
     }
@@ -533,10 +533,9 @@ impl BlockProduction {
             let block = Block::new_from_header(signed_block_header, block_body)?;
             (timestamp, Ok(block))
         } else {
-            // FIXME FailedConsensusInitialization?
             (
                 max_timestamp,
-                Err(BlockProductionError::FailedConsensusInitialization(
+                Err(BlockProductionError::ConsensusCreationError(
                     ConsensusCreationError::StakingFailed,
                 )),
             )
@@ -606,8 +605,7 @@ impl BlockProduction {
                     MiningResult::Failed => Err(ConsensusCreationError::MiningFailed),
                     MiningResult::Stopped => Err(ConsensusCreationError::MiningStopped),
                 }
-                // FIXME FailedConsensusInitialization?
-                .map_err(BlockProductionError::FailedConsensusInitialization)
+                .map_err(BlockProductionError::ConsensusCreationError)
             }
         });
         let signed_block_header = helper.wait_for_block_solver_result(handle).await?;

@@ -52,8 +52,6 @@ use super::signed_transaction::SignedTransaction;
 pub enum BlockCreationError {
     #[error("Merkle tree calculation error: {0}")]
     MerkleTreeError(#[from] BlockMerkleTreeError),
-    #[error("Error finding current tip")]
-    CurrentTipRetrievalError,
     #[error("Merkle tree mismatch: Provided {0} vs calculated {1}")]
     MerkleTreeMismatch(H256, H256),
     #[error("Witness merkle tree mismatch: Provided {0} vs calculated {1}")]

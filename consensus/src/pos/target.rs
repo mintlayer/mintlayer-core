@@ -243,7 +243,10 @@ mod tests {
     use itertools::Itertools;
     use randomness::{CryptoRng, Rng};
     use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::{
+        assert_matches,
+        random::{make_seedable_rng, Seed},
+    };
 
     use super::*;
 
@@ -662,10 +665,12 @@ mod tests {
 
         let res = calculate_average_block_time(&pos_config, &random_block_index, get_ancestor)
             .unwrap_err();
-        assert_eq!(
+        assert_matches!(
             res,
-            ConsensusPoSError::PropertyQueryError(PropertyQueryError::GetAncestorError(
-                GetAncestorError::PrevBlockIndexNotFound(random_block.get_id().into())
+            ConsensusPoSError::ChainstateError(crate::ChainstateError::FailedToObtainAncestor(
+                _,
+                _,
+                _
             ))
         );
     }

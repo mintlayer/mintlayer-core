@@ -491,7 +491,7 @@ mod produce_block {
                     .await;
 
                 match result {
-                    Err(BlockProductionError::FailedConsensusInitialization(
+                    Err(BlockProductionError::ConsensusCreationError(
                         ConsensusCreationError::TimestampOverflow(_, 1),
                     )) => {}
                     _ => panic!("Expected timestamp overflow"),
@@ -544,7 +544,7 @@ mod produce_block {
                     .await;
 
                 match result {
-                    Err(BlockProductionError::FailedConsensusInitialization(
+                    Err(BlockProductionError::ConsensusCreationError(
                         ConsensusCreationError::TimestampOverflow(_, _),
                     )) => {}
                     _ => panic!("Expected timestamp overflow"),
@@ -619,7 +619,7 @@ mod produce_block {
                     .await;
 
                 match result {
-                    Err(BlockProductionError::FailedConsensusInitialization(
+                    Err(BlockProductionError::ConsensusCreationError(
                         ConsensusCreationError::TimestampOverflow(_, _),
                     )) => {}
                     _ => panic!("Expected timestamp overflow"),
@@ -1589,7 +1589,7 @@ mod produce_block {
                                 .await;
 
                             match input_data_none_result {
-                                Err(BlockProductionError::FailedConsensusInitialization(
+                                Err(BlockProductionError::ConsensusCreationError(
                                     ConsensusCreationError::StakingError(
                                         ConsensusPoSError::NoInputDataProvided,
                                     ),
@@ -1609,7 +1609,7 @@ mod produce_block {
                                 .await;
 
                             match input_data_pow_result {
-                                Err(BlockProductionError::FailedConsensusInitialization(
+                                Err(BlockProductionError::ConsensusCreationError(
                                     ConsensusCreationError::StakingError(
                                         ConsensusPoSError::PoWInputDataProvided,
                                     ),
@@ -1661,7 +1661,7 @@ mod produce_block {
                                 .await;
 
                             match input_data_none_result {
-                                Err(BlockProductionError::FailedConsensusInitialization(
+                                Err(BlockProductionError::ConsensusCreationError(
                                     ConsensusCreationError::MiningError(
                                         ConsensusPoWError::NoInputDataProvided,
                                     ),
@@ -1681,7 +1681,7 @@ mod produce_block {
                                 .await;
 
                             match input_data_pos_result {
-                                Err(BlockProductionError::FailedConsensusInitialization(
+                                Err(BlockProductionError::ConsensusCreationError(
                                     ConsensusCreationError::MiningError(
                                         ConsensusPoWError::PoSInputDataProvided,
                                     ),

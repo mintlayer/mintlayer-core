@@ -72,12 +72,6 @@ pub enum ConsensusCreationError {
     StakingFailed,
     #[error("Overflowed when calculating a block timestamp: {0} + {1}")]
     TimestampOverflow(BlockTimestamp, u64),
-
-    // FIXME better place?
-    #[error("PoS data provided when consensus is supposed to be ignored")]
-    PoSInputDataProvidedWhenIgnoringConsensus,
-    #[error("PoW data provided when consensus is supposed to be ignored")]
-    PoWInputDataProvidedWhenIgnoringConsensus,
 }
 
 // TODO: include the original chainstate::ChainstateError in each error below.

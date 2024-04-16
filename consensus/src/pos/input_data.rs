@@ -13,10 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    pos::{error::ConsensusPoSError, target::calculate_target_required_from_block_index},
-    ConsensusCreationError,
-};
+use crate::pos::{error::ConsensusPoSError, target::calculate_target_required_from_block_index};
 use chainstate_types::{
     pos_randomness::PoSRandomness, vrf_tools::construct_transcript, BlockIndex, GenBlockIndex,
 };
@@ -196,7 +193,7 @@ pub fn generate_pos_consensus_data_and_reward<G>(
     block_timestamp: BlockTimestamp,
     block_height: BlockHeight,
     get_ancestor: G,
-) -> Result<(PoSData, BlockReward), ConsensusCreationError>
+) -> Result<(PoSData, BlockReward), ConsensusPoSError>
 where
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
 {
