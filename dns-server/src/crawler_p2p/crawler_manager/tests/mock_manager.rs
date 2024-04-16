@@ -31,6 +31,7 @@ use tokio::{
 };
 
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
+use networking::test_helpers::TestAddressMaker;
 use p2p::{
     config::{NodeType, P2pConfig},
     disconnection_reason::DisconnectionReason,
@@ -40,14 +41,14 @@ use p2p::{
         types::{ConnectivityEvent, PeerInfo, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
-    testing_utils::{TestAddressMaker, TEST_PROTOCOL_VERSION},
+    test_helpers::TEST_PROTOCOL_VERSION,
     types::{
         bannable_address::BannableAddress, peer_id::PeerId, services::Services,
         socket_address::SocketAddress,
     },
     P2pEventHandler,
 };
-use p2p_test_utils::P2pBasicTestTimeGetter;
+use test_utils::BasicTestTimeGetter;
 use utils::atomics::SeqCstAtomicBool;
 use utils_networking::IpOrSocketAddress;
 
@@ -296,7 +297,7 @@ pub fn test_crawler(
     CrawlerManager<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
     MockStateRef,
     mpsc::UnboundedReceiver<DnsServerCommand>,
-    P2pBasicTestTimeGetter,
+    BasicTestTimeGetter,
 ) {
     let (conn_tx, conn_rx) = mpsc::unbounded_channel();
     let reserved_nodes = reserved_nodes
@@ -319,7 +320,7 @@ pub fn test_crawler(
         connected: Default::default(),
         connection_attempts: Default::default(),
         conn_tx,
-        bind_address: TestAddressMaker::new_random_address(rng),
+        bind_address: TestAddressMaker::new_random_address(rng).into(),
     };
 
     let conn = MockConnectivityHandle {
@@ -334,7 +335,7 @@ pub fn test_crawler(
     let (dns_server_cmd_tx, dns_server_cmd_rx) = mpsc::unbounded_channel();
     let chain_config = Arc::new(common::chain::config::create_mainnet());
 
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
 
     let crawler = CrawlerManager::<MockNetworkingService, _>::new(
         time_getter.get_time_getter(),
@@ -358,7 +359,7 @@ pub async fn advance_time(
         MockNetworkingService,
         DnsServerStorageImpl<storage::inmemory::InMemory>,
     >,
-    time_getter: &P2pBasicTestTimeGetter,
+    time_getter: &BasicTestTimeGetter,
     step: Duration,
     count: u32,
 ) {

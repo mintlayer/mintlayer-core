@@ -16,20 +16,18 @@
 use std::sync::Arc;
 
 use chainstate::ban_score::BanScore;
-use p2p_test_utils::{run_with_timeout, P2pBasicTestTimeGetter};
-use test_utils::assert_matches;
+use networking::test_helpers::{
+    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+};
+use networking::transport::{BufferedTranscoder, TransportSocket};
+use p2p_test_utils::run_with_timeout;
+use test_utils::{assert_matches, BasicTestTimeGetter};
 
 use crate::{
     error::{P2pError, ProtocolError},
-    net::default_backend::{
-        transport::{BufferedTranscoder, TransportSocket},
-        types::{HandshakeMessage, Message, P2pTimestamp},
-    },
+    net::default_backend::types::{HandshakeMessage, Message, P2pTimestamp},
     peer_manager::PeerManagerInterface,
-    testing_utils::{
-        test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
-        TestTransportTcp, TEST_PROTOCOL_VERSION,
-    },
+    test_helpers::{test_p2p_config, TEST_PROTOCOL_VERSION},
     tests::helpers::TestNode,
 };
 
@@ -38,7 +36,7 @@ where
     TTM: TestTransportMaker,
     TTM::Transport: TransportSocket,
 {
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
 
@@ -48,7 +46,7 @@ where
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         TTM::make_transport(),
-        TTM::make_address(),
+        TTM::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         None,
     )
@@ -56,10 +54,10 @@ where
 
     let transport = TTM::make_transport();
 
-    let stream = transport.connect(*test_node.local_address()).await.unwrap();
+    let stream = transport.connect(test_node.local_address().socket_addr()).await.unwrap();
 
     let mut msg_stream =
-        BufferedTranscoder::new(stream, *p2p_config.protocol_config.max_message_size);
+        BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
 
     // Send the normal Hello
     msg_stream

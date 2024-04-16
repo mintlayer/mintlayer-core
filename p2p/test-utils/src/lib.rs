@@ -15,7 +15,12 @@
 
 #![allow(clippy::unwrap_used)]
 
+//! A module for p2p-related utilities that don't depend on the `p2p` crate itself.
+//! Note: utilities that do depend on `p2p` must go into the `p2p::test_utils` module instead.
+
 use std::{future::Future, sync::Arc, time::Duration};
+
+use tokio::sync::mpsc;
 
 use chainstate::{
     make_chainstate, ChainstateConfig, ChainstateHandle, ChainstateSubsystem,
@@ -30,9 +35,6 @@ use common::{
 use logging::log;
 use mempool::{MempoolConfig, MempoolHandle};
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
-use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
-use tokio::sync::mpsc;
-use utils::atomics::SeqCstAtomicU64;
 
 use crate::panic_handling::get_panic_notification;
 
@@ -110,35 +112,6 @@ pub fn create_n_blocks(tf: &mut TestFramework, n: usize) -> Vec<Block> {
     }
 
     blocks
-}
-
-#[derive(Clone)]
-pub struct P2pBasicTestTimeGetter {
-    current_time_millis: Arc<SeqCstAtomicU64>,
-}
-
-impl P2pBasicTestTimeGetter {
-    pub fn new() -> Self {
-        let current_time = std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .unwrap();
-        let current_time_millis = Arc::new(SeqCstAtomicU64::new(current_time.as_millis() as u64));
-        Self {
-            current_time_millis,
-        }
-    }
-
-    pub fn get_time_getter(&self) -> TimeGetter {
-        mocked_time_getter_milliseconds(Arc::clone(&self.current_time_millis))
-    }
-
-    pub fn advance_time(&self, duration: Duration) {
-        self.current_time_millis.fetch_add(duration.as_millis() as u64);
-    }
-
-    pub fn is_same_instance(&self, other: &P2pBasicTestTimeGetter) -> bool {
-        Arc::ptr_eq(&self.current_time_millis, &other.current_time_millis)
-    }
 }
 
 /// A timeout for blocking calls.

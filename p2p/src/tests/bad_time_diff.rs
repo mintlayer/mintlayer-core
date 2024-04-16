@@ -16,21 +16,19 @@
 use std::{sync::Arc, time::Duration};
 
 use common::primitives::{time::Time, user_agent::mintlayer_core_user_agent};
-use p2p_test_utils::{run_with_timeout, P2pBasicTestTimeGetter};
-use test_utils::assert_matches;
+use networking::test_helpers::{
+    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+};
+use networking::transport::{BufferedTranscoder, TransportListener, TransportSocket};
+use p2p_test_utils::run_with_timeout;
+use test_utils::{assert_matches, BasicTestTimeGetter};
 
 use crate::{
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
     message::WillDisconnectMessage,
-    net::default_backend::{
-        transport::{BufferedTranscoder, TransportListener, TransportSocket},
-        types::{HandshakeMessage, Message, P2pTimestamp},
-    },
+    net::default_backend::types::{HandshakeMessage, Message, P2pTimestamp},
     protocol::SupportedProtocolVersion,
-    testing_utils::{
-        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
-    },
     tests::helpers::TestNode,
 };
 
@@ -43,7 +41,7 @@ where
     TTM::Transport: TransportSocket,
 {
     for protocol_version in [SupportedProtocolVersion::V2, SupportedProtocolVersion::V3] {
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let max_clock_diff = Duration::from_secs(1);
         let p2p_config = Arc::new(P2pConfig {
@@ -74,7 +72,7 @@ where
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             TTM::make_transport(),
-            TTM::make_address(),
+            TTM::make_address().into(),
             protocol_version.into(),
             None,
         )
@@ -83,13 +81,13 @@ where
         let transport = TTM::make_transport();
         let mut listener = transport.bind(vec![TTM::make_address()]).await.unwrap();
 
-        let address = listener.local_addresses().unwrap()[0];
+        let address = listener.local_addresses().unwrap()[0].into();
         let connect_result_receiver = test_node.start_connecting(address);
 
         let (stream, _) = listener.accept().await.unwrap();
 
         let mut msg_stream =
-            BufferedTranscoder::new(stream, *p2p_config.protocol_config.max_message_size);
+            BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
 
         let msg = msg_stream.recv().await.unwrap();
         assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
@@ -166,7 +164,7 @@ where
     TTM::Transport: TransportSocket,
 {
     for protocol_version in [SupportedProtocolVersion::V2, SupportedProtocolVersion::V3] {
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let max_clock_diff = Duration::from_secs(1);
         let p2p_config = Arc::new(P2pConfig {
@@ -197,7 +195,7 @@ where
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             TTM::make_transport(),
-            TTM::make_address(),
+            TTM::make_address().into(),
             protocol_version.into(),
             None,
         )
@@ -205,10 +203,10 @@ where
 
         let transport = TTM::make_transport();
 
-        let stream = transport.connect(*test_node.local_address()).await.unwrap();
+        let stream = transport.connect(test_node.local_address().socket_addr()).await.unwrap();
 
         let mut msg_stream =
-            BufferedTranscoder::new(stream, *p2p_config.protocol_config.max_message_size);
+            BufferedTranscoder::new(stream, Some(*p2p_config.protocol_config.max_message_size));
 
         let cur_time = time_getter.get_time_getter().get_time();
         let peer_time =

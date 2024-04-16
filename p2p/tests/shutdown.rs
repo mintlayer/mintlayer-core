@@ -21,7 +21,7 @@ use mempool::MempoolConfig;
 use storage_inmemory::InMemory;
 
 use p2p::{
-    make_p2p, peer_manager::peerdb::storage_impl::PeerDbStorageImpl, testing_utils::test_p2p_config,
+    make_p2p, peer_manager::peerdb::storage_impl::PeerDbStorageImpl, test_helpers::test_p2p_config,
 };
 
 #[ctor::ctor]

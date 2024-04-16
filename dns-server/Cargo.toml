@@ -34,7 +34,8 @@ trust-dns-client.workspace = true
 trust-dns-server.workspace = true
 
 [dev-dependencies]
-p2p-test-utils = { path = "../p2p/p2p-test-utils" }
+networking = { path = "../networking" }
+p2p-test-utils = { path = "../p2p/test-utils" }
 test-utils = { path = "../test-utils" }
 
 rstest.workspace = true

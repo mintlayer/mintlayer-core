@@ -23,9 +23,13 @@ use std::{
 use itertools::Itertools;
 use rstest::rstest;
 
-use ::test_utils::random::{make_seedable_rng, Seed};
+use ::test_utils::{
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 use common::{chain::config::create_unit_test_config, primitives::time::Time};
-use p2p_test_utils::P2pBasicTestTimeGetter;
+use networking::test_helpers::TestAddressMaker;
+use p2p_types::socket_addr_ext::SocketAddrExt;
 use randomness::Rng;
 
 use crate::{
@@ -38,9 +42,9 @@ use crate::{
         },
         peerdb_common::Transactional,
     },
-    testing_utils::{
+    test_helpers::{
         peerdb_inmemory_store, test_p2p_config, test_p2p_config_with_ban_config,
-        test_p2p_config_with_peer_db_config, TestAddressMaker,
+        test_p2p_config_with_peer_db_config,
     },
 };
 
@@ -64,7 +68,7 @@ fn ban_peer(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let db_store = peerdb_inmemory_store();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
     let ban_duration = Duration::from_secs(60);
     let mut peerdb = PeerDb::<_>::new(
@@ -125,7 +129,7 @@ fn ban_peer_twice(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let db_store = peerdb_inmemory_store();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
     let ban_duration1 = Duration::from_secs(60);
     let ban_duration2 = Duration::from_secs(120);
@@ -178,7 +182,7 @@ fn ban_for_max_duration(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let db_store = peerdb_inmemory_store();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
     let mut peerdb = PeerDb::<_>::new(
         &chain_config,
@@ -215,7 +219,7 @@ fn discourage_peer(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let db_store = peerdb_inmemory_store();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
     let discouragement_duration = Duration::from_secs(60);
     let mut peerdb = PeerDb::<_>::new(
@@ -277,7 +281,7 @@ fn discourage_peer_twice(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let db_store = peerdb_inmemory_store();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
     let discouragement_duration = Duration::from_secs(60);
     let mut peerdb = PeerDb::<_>::new(
@@ -346,7 +350,7 @@ fn discourage_for_max_duration(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let db_store = peerdb_inmemory_store();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
     let mut peerdb = PeerDb::<_>::new(
         &chain_config,
@@ -384,7 +388,7 @@ fn connected_unreachable(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let db_store = peerdb_inmemory_store();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let p2p_config = Arc::new(test_p2p_config());
     let chain_config = create_unit_test_config();
     let mut peerdb = PeerDb::new(
@@ -395,7 +399,7 @@ fn connected_unreachable(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let address = TestAddressMaker::new_random_address(&mut rng);
+    let address = TestAddressMaker::new_random_address(&mut rng).into();
     peerdb.peer_discovered(address);
     peerdb.report_outbound_failure(address);
     assert!(peerdb.addresses.get(&address).unwrap().is_unreachable());
@@ -416,7 +420,7 @@ fn connected_unknown(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let db_store = peerdb_inmemory_store();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
     let p2p_config = Arc::new(test_p2p_config());
     let mut peerdb = PeerDb::new(
@@ -427,7 +431,7 @@ fn connected_unknown(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let address = TestAddressMaker::new_random_address(&mut rng);
+    let address = TestAddressMaker::new_random_address(&mut rng).into();
 
     // User requests connection to some unknown node via RPC and connection succeeds.
     // PeerDb should process that normally.
@@ -445,7 +449,7 @@ fn anchor_peers(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let db_store = peerdb_inmemory_store();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
     let p2p_config = Arc::new(test_p2p_config());
 
@@ -458,8 +462,8 @@ fn anchor_peers(#[case] seed: Seed) {
     .unwrap();
 
     let mut anchors = [
-        TestAddressMaker::new_random_address(&mut rng),
-        TestAddressMaker::new_random_address(&mut rng),
+        TestAddressMaker::new_random_address(&mut rng).into(),
+        TestAddressMaker::new_random_address(&mut rng).into(),
     ]
     .into_iter()
     .collect::<BTreeSet<_>>();
@@ -467,7 +471,7 @@ fn anchor_peers(#[case] seed: Seed) {
     peerdb.set_anchors(anchors.clone());
     assert_eq!(*peerdb.anchors(), anchors);
 
-    let new_address = TestAddressMaker::new_random_address(&mut rng);
+    let new_address = TestAddressMaker::new_random_address(&mut rng).into();
     anchors.insert(new_address);
     peerdb.set_anchors(anchors.clone());
     assert_eq!(*peerdb.anchors(), anchors);
@@ -506,7 +510,7 @@ fn remove_addr(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let db_store = peerdb_inmemory_store();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
     let p2p_config = Arc::new(test_p2p_config_with_peer_db_config(PeerDbConfig {
         addr_tables_bucket_size: 10.into(),
@@ -567,7 +571,7 @@ fn remove_unreachable(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let db_store = peerdb_inmemory_store();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
     let p2p_config = Arc::new(test_p2p_config_with_peer_db_config(PeerDbConfig {
         addr_tables_bucket_size: 10.into(),
@@ -659,7 +663,7 @@ fn new_addr_count_limit(#[case] seed: Seed, #[values(true, false)] use_reserved_
     let mut rng = make_seedable_rng(seed);
 
     let db_store = peerdb_inmemory_store();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
 
     let bucket_size = 10;
@@ -718,7 +722,7 @@ fn tried_addr_count_limit(#[case] seed: Seed, #[values(true, false)] use_reserve
     let mut rng = make_seedable_rng(seed);
 
     let db_store = peerdb_inmemory_store();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = create_unit_test_config();
 
     let bucket_size = 10;
@@ -785,7 +789,7 @@ fn new_tried_addr_selection_frequency() {
             [(addr_count1, addr_count2), (addr_count2, addr_count1)]
         {
             let db_store = peerdb_inmemory_store();
-            let time_getter = P2pBasicTestTimeGetter::new();
+            let time_getter = BasicTestTimeGetter::new();
             let chain_config = create_unit_test_config();
 
             let p2p_config = Arc::new(test_p2p_config_with_peer_db_config(PeerDbConfig {

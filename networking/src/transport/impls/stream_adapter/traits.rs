@@ -13,23 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_trait::async_trait;
-use p2p_types::socket_address::SocketAddress;
+use futures::future::BoxFuture;
 
-use crate::Result;
+use crate::{
+    transport::{ConnectedSocketInfo, PeerStream},
+    types::ConnectionDirection,
+};
 
-use super::{ConnectedSocketInfo, PeerStream};
-
-/// An abstraction layer over a potential inbound network connection (acceptor in boost terminology).
-#[async_trait]
-pub trait TransportListener: Send {
+/// Represents a stream that requires a handshake to function (such as encrypted streams)
+pub trait StreamAdapter<T>: Clone + Send + Sync + 'static {
     type Stream: PeerStream + ConnectedSocketInfo;
 
-    /// Accepts a new inbound connection.
-    ///
-    /// The returned address is the same as the one returned by `Stream::remote_address`.
-    async fn accept(&mut self) -> Result<(Self::Stream, SocketAddress)>;
-
-    /// Returns the local address of the listener.
-    fn local_addresses(&self) -> Result<Vec<SocketAddress>>;
+    /// Wraps base async stream into AsyncRead/AsyncWrite stream that may implement encryption.
+    fn handshake(
+        &self,
+        base: T,
+        conn_dir: ConnectionDirection,
+    ) -> BoxFuture<'static, crate::Result<Self::Stream>>;
 }

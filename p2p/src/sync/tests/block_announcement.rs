@@ -27,8 +27,7 @@ use common::{
 };
 use consensus::ConsensusVerificationError;
 use logging::log;
-use p2p_test_utils::P2pBasicTestTimeGetter;
-use test_utils::random::Seed;
+use test_utils::{random::Seed, BasicTestTimeGetter};
 
 use crate::{
     config::P2pConfig,
@@ -36,7 +35,7 @@ use crate::{
     message::{BlockListRequest, BlockResponse, BlockSyncMessage, HeaderList, HeaderListRequest},
     protocol::ProtocolConfig,
     sync::tests::helpers::TestNode,
-    testing_utils::{for_each_protocol_version, test_p2p_config},
+    test_helpers::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
     P2pError,
 };
@@ -278,7 +277,7 @@ async fn best_known_block_is_considered(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let chain_config = Arc::new(create_unit_test_config());
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
 
         // Create some initial blocks.
         let blocks = make_new_blocks(
@@ -511,7 +510,7 @@ async fn send_headers_connected_to_previously_sent_headers(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let chain_config = Arc::new(create_unit_test_config());
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
         let p2p_config = Arc::new(P2pConfig {
             protocol_config: ProtocolConfig {
                 max_request_blocks_count: 1.into(),
@@ -614,7 +613,7 @@ async fn send_headers_connected_to_block_which_is_being_downloaded(#[case] seed:
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let chain_config = Arc::new(create_unit_test_config());
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
         let p2p_config = Arc::new(P2pConfig {
             protocol_config: ProtocolConfig {
                 max_request_blocks_count: 1.into(),
@@ -714,7 +713,7 @@ async fn correct_pending_headers_update(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let chain_config = Arc::new(create_unit_test_config());
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
         let p2p_config = Arc::new(P2pConfig {
             protocol_config: ProtocolConfig {
                 max_request_blocks_count: 2.into(),
@@ -836,7 +835,7 @@ async fn correct_best_sent_block_update(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let chain_config = Arc::new(create_unit_test_config());
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
 
         let initial_blocks = make_new_blocks(
             &chain_config,

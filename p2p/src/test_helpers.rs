@@ -15,36 +15,36 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::{
-    collections::BTreeSet,
-    fmt::Debug,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
-    time::Duration,
-};
+//! A module for test utilities that depend on `p2p` and that are supposed to be used both
+//! in `p2p`'s unit tests and some other crates.
+//! Note that under this scenario it's impossible to put it into a separate crate (such as p2p-test-utils),
+//! because `p2p` would be compiled twice in that case and the two variants would be incompatible
+//! with each other, producing errors like "`XXX` and `XXX` have similar names, but are actually
+//! distinct types ... the crate `YYY` is compiled multiple times, possibly with different configurations".
+
+use std::{fmt::Debug, net::Ipv4Addr, time::Duration};
+
+use futures::Future;
+use tokio::time::timeout;
 
 use common::primitives::user_agent::mintlayer_core_user_agent;
-use futures::Future;
 use logging::log;
-use p2p_types::socket_address::SocketAddress;
-use randomness::Rng;
-use tokio::time::timeout;
+use networking::transport::MpscChannelTransport;
 
 use crate::{
     ban_config::BanConfig,
     config::P2pConfig,
     net::{
-        default_backend::transport::{
-            MpscChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
-            TransportListener, TransportSocket,
-        },
         types::{ConnectivityEvent, PeerInfo},
         ConnectivityService, NetworkingService,
     },
     peer_manager::{
+        self,
         config::PeerManagerConfig,
         peerdb::{config::PeerDbConfig, storage_impl::PeerDbStorageImpl},
     },
     protocol::{ProtocolVersion, SupportedProtocolVersion},
+    types::socket_address::SocketAddress,
 };
 
 /// A protocol version for use in tests that just need some valid value for it.
@@ -52,136 +52,29 @@ use crate::{
 // and thus check all available versions.
 pub const TEST_PROTOCOL_VERSION: SupportedProtocolVersion = SupportedProtocolVersion::V2;
 
-/// An interface for creating transports and addresses used in tests.
+/// Create a new MpscChannelTransport with a local address in the specified "group", which is
+/// represented by an integer.
 ///
-/// This abstraction layer is needed to uniformly create transports and addresses
-/// in the tests for different transport implementations.
-pub trait TestTransportMaker {
-    /// A transport type.
-    type Transport;
+/// Internally, the address group is represented by a specific number of most significant bits
+/// in the ip address; this function basically puts the passed addr_group_idx into that bit range.
+///
+/// The function will also set the resulting address' highest bit to ensure that it doesn't end up
+/// in AddressGroup::Private (to which all 0.x.x.x addresses are mapped).
+pub fn make_transport_with_local_addr_in_group(addr_group_idx: u32) -> MpscChannelTransport {
+    let addr_group_bits = peer_manager::address_groups::IPV4_GROUP_BYTES * 8;
+    let addr_group_bit_offset = 32 - addr_group_bits;
+    // Set the highest bit.
+    let addr_group = addr_group_idx | (1 << (addr_group_bits - 1));
 
-    /// Creates new transport instance, generating new keys if needed.
-    fn make_transport() -> Self::Transport;
+    let next_addr_as_u32 = MpscChannelTransport::next_local_address_as_u32();
+    assert!((next_addr_as_u32 as u64) < (1_u64 << addr_group_bit_offset));
 
-    /// Creates a new unused address.
-    ///
-    /// This should work similar to requesting a port of number 0 when opening a TCP connection.
-    fn make_address() -> SocketAddress;
+    let addr_group = (addr_group as u64) << addr_group_bit_offset;
+    assert!(addr_group <= u32::MAX as u64);
+
+    let local_address: Ipv4Addr = (next_addr_as_u32 + addr_group as u32).into();
+    MpscChannelTransport::new_with_local_address(local_address.into())
 }
-
-pub struct TestTransportTcp {}
-
-impl TestTransportMaker for TestTransportTcp {
-    type Transport = TcpTransportSocket;
-
-    fn make_transport() -> Self::Transport {
-        TcpTransportSocket::new()
-    }
-
-    fn make_address() -> SocketAddress {
-        "127.0.0.1:0".parse().unwrap()
-    }
-}
-
-pub struct TestTransportChannel {}
-
-impl TestTransportMaker for TestTransportChannel {
-    type Transport = MpscChannelTransport;
-
-    fn make_transport() -> Self::Transport {
-        MpscChannelTransport::new()
-    }
-
-    fn make_address() -> SocketAddress {
-        "0.0.0.0:0".parse().unwrap()
-    }
-}
-
-impl TestTransportChannel {
-    pub fn make_transport_with_local_addr_in_group(
-        addr_group_idx: u32,
-        addr_group_bit_offset: u32,
-    ) -> MpscChannelTransport {
-        MpscChannelTransport::new_with_addr_in_group(addr_group_idx, addr_group_bit_offset)
-    }
-}
-
-pub fn make_transport_with_local_addr_in_group(
-    group_idx: u32,
-) -> <TestTransportChannel as TestTransportMaker>::Transport {
-    let group_bits = crate::peer_manager::address_groups::IPV4_GROUP_BYTES * 8;
-
-    TestTransportChannel::make_transport_with_local_addr_in_group(
-        // Make sure that the most significant byte of the address is non-zero
-        // (all 0.x.x.x addresses get into AddressGroup::Private, but we want all
-        // addresses to be in different address groups).
-        group_idx + (1 << (group_bits - 1)),
-        group_bits as u32,
-    )
-}
-
-pub struct TestTransportNoise {}
-
-impl TestTransportMaker for TestTransportNoise {
-    type Transport = NoiseTcpTransport;
-
-    fn make_transport() -> Self::Transport {
-        let base_transport = TcpTransportSocket::new();
-        NoiseTcpTransport::new(NoiseEncryptionAdapter::gen_new, base_transport)
-    }
-
-    fn make_address() -> SocketAddress {
-        TestTransportTcp::make_address()
-    }
-}
-
-pub struct TestAddressMaker {}
-
-impl TestAddressMaker {
-    pub fn new_random_ipv6_addr(rng: &mut impl Rng) -> Ipv6Addr {
-        Ipv6Addr::new(
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-        )
-    }
-
-    pub fn new_distinct_random_ipv6_addrs(count: usize, rng: &mut impl Rng) -> Vec<Ipv6Addr> {
-        let mut addrs = BTreeSet::new();
-
-        while addrs.len() < count {
-            addrs.insert(Self::new_random_ipv6_addr(rng));
-        }
-
-        addrs.iter().copied().collect()
-    }
-
-    pub fn new_random_ipv4_addr(rng: &mut impl Rng) -> Ipv4Addr {
-        Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())
-    }
-
-    pub fn new_distinct_random_ipv4_addrs(count: usize, rng: &mut impl Rng) -> Vec<Ipv4Addr> {
-        let mut addrs = BTreeSet::new();
-
-        while addrs.len() < count {
-            addrs.insert(Self::new_random_ipv4_addr(rng));
-        }
-
-        addrs.iter().copied().collect()
-    }
-
-    pub fn new_random_address(rng: &mut impl Rng) -> SocketAddress {
-        let ip = Self::new_random_ipv6_addr(rng);
-        SocketAddress::new(SocketAddr::new(IpAddr::V6(ip), rng.gen()))
-    }
-}
-
-pub struct TestChannelAddressMaker {}
 
 /// Connect the node represented by conn1 to the first listening address of the node represented
 /// by conn2.
@@ -401,20 +294,6 @@ pub fn test_peer_mgr_config_with_no_auto_outbound_connections() -> PeerManagerCo
         allow_same_ip_connections: Default::default(),
         force_dns_query_if_no_global_addresses_known: Default::default(),
     }
-}
-
-pub async fn get_two_connected_sockets<A, T>() -> (T::Stream, T::Stream)
-where
-    A: TestTransportMaker<Transport = T>,
-    T: TransportSocket,
-{
-    let transport = A::make_transport();
-    let addr = A::make_address();
-    let mut server = transport.bind(vec![addr]).await.unwrap();
-    let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
-
-    let (res1, res2) = tokio::join!(server.accept(), peer_fut);
-    (res1.unwrap().0, res2.unwrap())
 }
 
 pub async fn for_each_protocol_version<Func, Res>(func: Func)

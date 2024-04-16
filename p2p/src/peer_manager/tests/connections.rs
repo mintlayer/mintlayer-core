@@ -19,40 +19,56 @@ use std::{
     time::{Duration, Instant},
 };
 
-use logging::log;
 use rstest::rstest;
-use test_utils::random::make_seedable_rng;
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
 
-use p2p_test_utils::{expect_no_recv, expect_recv, run_with_timeout, P2pBasicTestTimeGetter};
+use common::{
+    chain::config::{self, MagicBytes},
+    primitives::user_agent::mintlayer_core_user_agent,
+    time_getter::TimeGetter,
+};
+use logging::log;
+use networking::test_helpers::{
+    TestAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportNoise,
+    TestTransportTcp,
+};
+use networking::transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket};
+use p2p_test_utils::{expect_no_recv, expect_recv, run_with_timeout};
 use p2p_types::socket_address::SocketAddress;
 use randomness::Rng;
-use test_utils::random::Seed;
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
+use utils::atomics::SeqCstAtomicBool;
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
-    error::ConnectionValidationError,
+    error::{ConnectionValidationError, DialError, P2pError, ProtocolError},
     message::AddrListRequest,
     net::{
+        self,
         default_backend::{
             types::{Command, Message},
-            ConnectivityHandle,
+            ConnectivityHandle, DefaultNetworkingService,
         },
-        types::{services::Service, ConnectivityEvent, PeerRole},
+        types::{services::Service, ConnectivityEvent, PeerInfo, PeerRole},
+        ConnectivityService, NetworkingService,
     },
     peer_manager::{
+        self,
         config::{MaxInboundConnections, PeerManagerConfig},
         peerdb::{
             self, config::PeerDbConfig,
             test_utils::make_non_colliding_addresses_for_peer_db_in_distinct_addr_groups,
         },
         tests::{
-            get_connected_peers, make_standalone_peer_manager, run_peer_manager,
+            get_connected_peers, make_peer_manager, make_standalone_peer_manager, run_peer_manager,
             utils::{
                 expect_cmd_connect_to, expect_cmd_connect_to_one_of,
                 inbound_block_relay_peer_accepted_by_backend, make_full_relay_peer_info,
@@ -62,35 +78,14 @@ use crate::{
         },
         PeerManager,
     },
-    testing_utils::{
+    test_helpers::{
         connect_and_accept_services, connect_services, get_connectivity_event,
         make_transport_with_local_addr_in_group, peerdb_inmemory_store, test_p2p_config,
-        test_p2p_config_with_peer_mgr_config, TestAddressMaker, TestTransportChannel,
-        TestTransportMaker, TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
+        test_p2p_config_with_peer_mgr_config, TEST_PROTOCOL_VERSION,
     },
     tests::helpers::TestPeersInfo,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-};
-use common::{
-    chain::config::{self, MagicBytes},
-    primitives::user_agent::mintlayer_core_user_agent,
-    time_getter::TimeGetter,
-};
-use utils::atomics::SeqCstAtomicBool;
-
-use crate::{
-    error::{DialError, P2pError, ProtocolError},
-    net::{
-        self,
-        default_backend::{
-            transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-            DefaultNetworkingService,
-        },
-        types::PeerInfo,
-        ConnectivityService, NetworkingService,
-    },
-    peer_manager::{self, tests::make_peer_manager},
     PeerManagerEvent,
 };
 
@@ -104,15 +99,18 @@ where
 
     for peer_role in [PeerRole::OutboundFullRelay, PeerRole::Inbound] {
         let config = Arc::new(config::create_unit_test_config());
-        let (mut peer_manager, _shutdown_sender, _subscribers_sender) =
-            make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config))
-                .await;
+        let (mut peer_manager, _shutdown_sender, _subscribers_sender) = make_peer_manager::<S>(
+            A::make_transport(),
+            A::make_address().into(),
+            Arc::clone(&config),
+        )
+        .await;
 
         // invalid magic bytes
         let peer_id = PeerId::new();
         let res = peer_manager.try_accept_connection(
-            TestAddressMaker::new_random_address(&mut rng),
-            TestAddressMaker::new_random_address(&mut rng),
+            TestAddressMaker::new_random_address(&mut rng).into(),
+            TestAddressMaker::new_random_address(&mut rng).into(),
             peer_role,
             net::types::PeerInfo {
                 peer_id,
@@ -174,8 +172,8 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
+    let addr1 = A::make_address().into();
+    let addr2 = A::make_address().into();
 
     let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
@@ -266,7 +264,7 @@ async fn test_peer_manager_connect<T: NetworkingService>(
 #[tokio::test]
 async fn test_peer_manager_connect_tcp() {
     let transport = TestTransportTcp::make_transport();
-    let bind_addr = TestTransportTcp::make_address();
+    let bind_addr = TestTransportTcp::make_address().into();
     let remote_addr: SocketAddress = "[::1]:1".parse().unwrap();
 
     test_peer_manager_connect::<DefaultNetworkingService<TcpTransportSocket>>(
@@ -281,7 +279,7 @@ async fn test_peer_manager_connect_tcp() {
 #[tokio::test]
 async fn test_peer_manager_connect_tcp_noise() {
     let transport = TestTransportNoise::make_transport();
-    let bind_addr = TestTransportTcp::make_address();
+    let bind_addr = TestTransportTcp::make_address().into();
     let remote_addr: SocketAddress = "[::1]:1".parse().unwrap();
 
     test_peer_manager_connect::<DefaultNetworkingService<NoiseTcpTransport>>(
@@ -300,8 +298,8 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
+    let addr1 = A::make_address().into();
+    let addr2 = A::make_address().into();
 
     let config = Arc::new(config::create_unit_test_config());
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
@@ -353,8 +351,8 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
+    let addr1 = A::make_address().into();
+    let addr2 = A::make_address().into();
 
     let config = Arc::new(config::create_unit_test_config());
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
@@ -397,8 +395,8 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
+    let addr1 = A::make_address().into();
+    let addr2 = A::make_address().into();
 
     let config = Arc::new(config::create_unit_test_config());
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
@@ -454,8 +452,8 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
+    let addr1 = A::make_address().into();
+    let addr2 = A::make_address().into();
 
     let config = Arc::new(config::create_unit_test_config());
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
@@ -508,8 +506,8 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
+    let addr1 = A::make_address().into();
+    let addr2 = A::make_address().into();
 
     let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
@@ -583,8 +581,8 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
+    let addr1 = A::make_address().into();
+    let addr2 = A::make_address().into();
 
     let (mut pm1, _shutdown_sender, _subscribers_sender) = make_peer_manager::<T>(
         A::make_transport(),
@@ -641,8 +639,8 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
+    let addr1 = A::make_address().into();
+    let addr2 = A::make_address().into();
 
     let config = Arc::new(config::create_unit_test_config());
     let (mut pm1, _shutdown_sender, _subscribers_sender) =
@@ -800,8 +798,8 @@ where
 async fn connection_timeout_tcp() {
     connection_timeout::<DefaultNetworkingService<TcpTransportSocket>>(
         TestTransportTcp::make_transport(),
-        TestTransportTcp::make_address(),
-        TestTransportTcp::make_address(),
+        TestTransportTcp::make_address().into(),
+        TestTransportTcp::make_address().into(),
     )
     .await;
 }
@@ -811,8 +809,8 @@ async fn connection_timeout_tcp() {
 async fn connection_timeout_channels() {
     connection_timeout::<DefaultNetworkingService<MpscChannelTransport>>(
         TestTransportChannel::make_transport(),
-        TestTransportChannel::make_address(),
-        TestTransportChannel::make_address(),
+        TestTransportChannel::make_address().into(),
+        TestTransportChannel::make_address().into(),
     )
     .await;
 }
@@ -822,8 +820,8 @@ async fn connection_timeout_channels() {
 async fn connection_timeout_noise() {
     connection_timeout::<DefaultNetworkingService<NoiseTcpTransport>>(
         TestTransportNoise::make_transport(),
-        TestTransportNoise::make_address(),
-        TestTransportNoise::make_address(),
+        TestTransportNoise::make_address().into(),
+        TestTransportNoise::make_address().into(),
     )
     .await;
 }
@@ -915,7 +913,7 @@ const GUARANTEED_TIMEOUT_ADDRESS: &str = "198.51.100.2:1";
 async fn connection_timeout_rpc_notified_tcp() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<TcpTransportSocket>>(
         TestTransportTcp::make_transport(),
-        TestTransportTcp::make_address(),
+        TestTransportTcp::make_address().into(),
         GUARANTEED_TIMEOUT_ADDRESS.parse().unwrap(),
     )
     .await;
@@ -926,7 +924,7 @@ async fn connection_timeout_rpc_notified_tcp() {
 async fn connection_timeout_rpc_notified_channels() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<MpscChannelTransport>>(
         TestTransportChannel::make_transport(),
-        TestTransportChannel::make_address(),
+        TestTransportChannel::make_address().into(),
         GUARANTEED_TIMEOUT_ADDRESS.parse().unwrap(),
     )
     .await;
@@ -937,7 +935,7 @@ async fn connection_timeout_rpc_notified_channels() {
 async fn connection_timeout_rpc_notified_noise() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<NoiseTcpTransport>>(
         TestTransportNoise::make_transport(),
-        TestTransportNoise::make_address(),
+        TestTransportNoise::make_address().into(),
         GUARANTEED_TIMEOUT_ADDRESS.parse().unwrap(),
     )
     .await;
@@ -950,7 +948,7 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(config::create_unit_test_config());
 
     // Start first peer manager
@@ -976,7 +974,7 @@ where
     });
     let (peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
-        A::make_address(),
+        A::make_address().into(),
         Arc::clone(&chain_config),
         p2p_config_1,
         time_getter.get_time_getter(),
@@ -1020,7 +1018,7 @@ where
     });
     let (peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
-        A::make_address(),
+        A::make_address().into(),
         Arc::clone(&chain_config),
         p2p_config_2,
         time_getter.get_time_getter(),
@@ -1081,7 +1079,7 @@ where
 {
     let chain_config = Arc::new(config::create_unit_test_config());
 
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
 
     let peer_manager_config = PeerManagerConfig {
         allow_same_ip_connections: true.into(),
@@ -1129,7 +1127,7 @@ where
     });
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
-        A::make_address(),
+        A::make_address().into(),
         Arc::clone(&chain_config),
         p2p_config_1,
         time_getter.get_time_getter(),
@@ -1173,7 +1171,7 @@ where
     });
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
-        A::make_address(),
+        A::make_address().into(),
         Arc::clone(&chain_config),
         p2p_config_2,
         time_getter.get_time_getter(),
@@ -1204,7 +1202,7 @@ where
     });
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) = run_peer_manager::<T>(
         A::make_transport(),
-        A::make_address(),
+        A::make_address().into(),
         Arc::clone(&chain_config),
         p2p_config_3,
         time_getter.get_time_getter(),
@@ -1285,7 +1283,7 @@ async fn discovered_node_channel() {
 #[tokio::test]
 async fn discovered_node_2_groups() {
     let chain_config = Arc::new(config::create_unit_test_config());
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
 
     let peer_manager_config = PeerManagerConfig {
         allow_same_ip_connections: true.into(),
@@ -1334,7 +1332,7 @@ async fn discovered_node_2_groups() {
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
             make_transport_with_local_addr_in_group(1),
-            TestTransportChannel::make_address(),
+            TestTransportChannel::make_address().into(),
             Arc::clone(&chain_config),
             p2p_config_1,
             time_getter.get_time_getter(),
@@ -1379,7 +1377,7 @@ async fn discovered_node_2_groups() {
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
             make_transport_with_local_addr_in_group(2),
-            TestTransportChannel::make_address(),
+            TestTransportChannel::make_address().into(),
             Arc::clone(&chain_config),
             p2p_config_2,
             time_getter.get_time_getter(),
@@ -1411,7 +1409,7 @@ async fn discovered_node_2_groups() {
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
             make_transport_with_local_addr_in_group(2),
-            TestTransportChannel::make_address(),
+            TestTransportChannel::make_address().into(),
             Arc::clone(&chain_config),
             p2p_config_3,
             time_getter.get_time_getter(),
@@ -1452,7 +1450,7 @@ async fn discovered_node_2_groups() {
 #[tokio::test]
 async fn discovered_node_separate_groups() {
     let chain_config = Arc::new(config::create_unit_test_config());
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
 
     let peer_manager_config = PeerManagerConfig {
         allow_same_ip_connections: true.into(),
@@ -1501,7 +1499,7 @@ async fn discovered_node_separate_groups() {
     let (peer_mgr_event_sender1, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
             make_transport_with_local_addr_in_group(1),
-            TestTransportChannel::make_address(),
+            TestTransportChannel::make_address().into(),
             Arc::clone(&chain_config),
             p2p_config_1,
             time_getter.get_time_getter(),
@@ -1546,7 +1544,7 @@ async fn discovered_node_separate_groups() {
     let (peer_mgr_event_sender2, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
             make_transport_with_local_addr_in_group(2),
-            TestTransportChannel::make_address(),
+            TestTransportChannel::make_address().into(),
             Arc::clone(&chain_config),
             p2p_config_2,
             time_getter.get_time_getter(),
@@ -1578,7 +1576,7 @@ async fn discovered_node_separate_groups() {
     let (peer_mgr_event_sender3, _shutdown_sender, _subscribers_sender) =
         run_peer_manager::<DefaultNetworkingService<MpscChannelTransport>>(
             make_transport_with_local_addr_in_group(3),
-            TestTransportChannel::make_address(),
+            TestTransportChannel::make_address().into(),
             Arc::clone(&chain_config),
             p2p_config_3,
             time_getter.get_time_getter(),
@@ -1645,12 +1643,12 @@ async fn feeler_connections_test_impl(seed: Seed) {
     let feeler_connections_interval = Duration::from_secs(1);
     let p2p_config = Arc::new(make_p2p_config(feeler_connections_interval, &mut rng));
 
-    let bind_address = TestTransportTcp::make_address();
+    let bind_address = TestTransportTcp::make_address().into();
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (peer_mgr_event_sender, peer_mgr_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let connectivity_handle =
         ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
@@ -1976,8 +1974,8 @@ async fn reject_connection_to_existing_ip(#[case] seed: Seed) {
         protocol_config: Default::default(),
     });
 
-    let time_getter = P2pBasicTestTimeGetter::new();
-    let bind_addr = TestTransportTcp::make_address();
+    let time_getter = BasicTestTimeGetter::new();
+    let bind_addr = TestTransportTcp::make_address().into();
 
     let (
         peer_mgr,
@@ -2122,8 +2120,8 @@ async fn feeler_connection_to_ip_address_of_inbound_peer(#[case] seed: Seed) {
         peerdb_config: Default::default(),
     }));
 
-    let time_getter = P2pBasicTestTimeGetter::new();
-    let bind_addr = TestTransportTcp::make_address();
+    let time_getter = BasicTestTimeGetter::new();
+    let bind_addr = TestTransportTcp::make_address().into();
 
     let (
         peer_mgr,
@@ -2139,11 +2137,11 @@ async fn feeler_connection_to_ip_address_of_inbound_peer(#[case] seed: Seed) {
     );
 
     let peer_addr = TestAddressMaker::new_random_address(&mut rng);
-    let outbound_peer_addr = peer_addr;
+    let outbound_peer_addr = peer_addr.into();
     let inbound_peer_addr = {
-        let mut socket_addr = peer_addr.socket_addr();
-        socket_addr.set_port(socket_addr.port().wrapping_add(1));
-        SocketAddress::new(socket_addr)
+        let mut peer_addr = peer_addr;
+        peer_addr.set_port(peer_addr.port().wrapping_add(1));
+        SocketAddress::new(peer_addr)
     };
 
     let peer_mgr_join_handle = logging::spawn_in_current_span(async move {

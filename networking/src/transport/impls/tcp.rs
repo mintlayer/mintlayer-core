@@ -13,16 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::net::SocketAddr;
+
 use async_trait::async_trait;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
-use p2p_types::socket_address::SocketAddress;
 use tokio::net::{TcpListener, TcpStream};
 use utils::tap_log::TapLog;
 
 use crate::{
-    net::default_backend::transport::{
-        ConnectedSocketInfo, PeerStream, TransportListener, TransportSocket,
-    },
+    transport::{ConnectedSocketInfo, PeerStream, TransportListener, TransportSocket},
     Result,
 };
 
@@ -40,13 +39,13 @@ impl TransportSocket for TcpTransportSocket {
     type Listener = TcpTransportListener;
     type Stream = TcpTransportStream;
 
-    async fn bind(&self, addresses: Vec<SocketAddress>) -> Result<Self::Listener> {
+    async fn bind(&self, addresses: Vec<SocketAddr>) -> Result<Self::Listener> {
         TcpTransportListener::new(addresses)
     }
 
-    fn connect(&self, address: SocketAddress) -> BoxFuture<'static, Result<Self::Stream>> {
+    fn connect(&self, address: SocketAddr) -> BoxFuture<'static, Result<Self::Stream>> {
         Box::pin(async move {
-            let stream = TcpStream::connect(address.socket_addr()).await?;
+            let stream = TcpStream::connect(address).await?;
 
             let remote_address = stream
                 .remote_address()
@@ -63,12 +62,10 @@ pub struct TcpTransportListener {
 }
 
 impl TcpTransportListener {
-    fn new(addresses: Vec<SocketAddress>) -> Result<Self> {
+    fn new(addresses: Vec<SocketAddr>) -> Result<Self> {
         let listeners = addresses
             .into_iter()
             .map(|address| -> Result<TcpListener> {
-                let address = address.socket_addr();
-
                 // Use socket2 crate because we need consistent behavior between platforms.
                 // See https://github.com/tokio-rs/tokio-core/issues/227
                 let socket = socket2::Socket::new(
@@ -111,7 +108,7 @@ impl TcpTransportListener {
 impl TransportListener for TcpTransportListener {
     type Stream = TcpTransportStream;
 
-    async fn accept(&mut self) -> Result<(TcpTransportStream, SocketAddress)> {
+    async fn accept(&mut self) -> Result<(TcpTransportStream, SocketAddr)> {
         // select_next_some will panic if polled while empty
         if self.listeners.is_empty() {
             return std::future::pending().await;
@@ -119,8 +116,6 @@ impl TransportListener for TcpTransportListener {
         let mut tasks: FuturesUnordered<_> =
             self.listeners.iter().map(|listener| listener.accept()).collect();
         let (stream, address) = tasks.select_next_some().await?;
-
-        let address = SocketAddress::new(address);
 
         let remote_address = stream
             .remote_address()
@@ -130,11 +125,11 @@ impl TransportListener for TcpTransportListener {
         Ok((stream, address))
     }
 
-    fn local_addresses(&self) -> Result<Vec<SocketAddress>> {
+    fn local_addresses(&self) -> Result<Vec<SocketAddr>> {
         let local_addr = self
             .listeners
             .iter()
-            .map(|listener| listener.local_addr().map(SocketAddress::new))
+            .map(|listener| listener.local_addr())
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(local_addr)
     }
@@ -145,31 +140,26 @@ pub type TcpTransportStream = TcpStream;
 impl PeerStream for TcpTransportStream {}
 
 impl ConnectedSocketInfo for TcpTransportStream {
-    fn local_address(&self) -> crate::Result<SocketAddress> {
-        Ok(SocketAddress::new(TcpStream::local_addr(self)?))
+    fn local_address(&self) -> crate::Result<SocketAddr> {
+        Ok(TcpStream::local_addr(self)?)
     }
 
-    fn remote_address(&self) -> crate::Result<SocketAddress> {
-        Ok(SocketAddress::new(TcpStream::peer_addr(self)?))
+    fn remote_address(&self) -> crate::Result<SocketAddr> {
+        Ok(TcpStream::peer_addr(self)?)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use common::{
-        chain::block::Block,
-        primitives::{Id, H256},
-    };
-    use randomness::Rng;
-    use test_utils::random::Seed;
+    use serialization::Encode;
+    use test_utils::random::{gen_random_bytes, Seed};
 
     use crate::{
-        message::BlockListRequest,
-        testing_utils::{TestTransportMaker, TestTransportTcp},
+        test_helpers::{TestTransportMaker, TestTransportTcp},
+        transport::BufferedTranscoder,
     };
 
     use super::*;
-    use crate::net::default_backend::{transport::BufferedTranscoder, types::Message};
 
     #[tracing::instrument(skip(seed))]
     #[rstest::rstest]
@@ -187,11 +177,12 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let message = Message::BlockListRequest(BlockListRequest::new(vec![]));
-        let mut peer_stream = BufferedTranscoder::new(peer_stream, rng.gen_range(128..1024));
+        let message = gen_random_bytes(&mut rng, 0, 1000);
+        let mut peer_stream = BufferedTranscoder::new(peer_stream, Some(message.encoded_size()));
         peer_stream.send(message.clone()).await.unwrap();
 
-        let mut server_stream = BufferedTranscoder::new(server_stream, rng.gen_range(128..1024));
+        let mut server_stream =
+            BufferedTranscoder::<_, Vec<u8>>::new(server_stream, Some(message.encoded_size()));
         assert_eq!(server_stream.recv().await.unwrap(), message);
     }
 
@@ -211,15 +202,14 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let message_1 = Message::BlockListRequest(BlockListRequest::new(vec![]));
-        let id: Id<Block> = H256::random_using(&mut rng).into();
-        let message_2 = Message::BlockListRequest(BlockListRequest::new(vec![id]));
+        let message_1 = gen_random_bytes(&mut rng, 0, 1000);
+        let message_2 = gen_random_bytes(&mut rng, 0, 1000);
 
-        let mut peer_stream = BufferedTranscoder::new(peer_stream, rng.gen_range(512..2048));
+        let mut peer_stream = BufferedTranscoder::new(peer_stream, None);
         peer_stream.send(message_1.clone()).await.unwrap();
         peer_stream.send(message_2.clone()).await.unwrap();
 
-        let mut server_stream = BufferedTranscoder::new(server_stream, rng.gen_range(512..2048));
+        let mut server_stream = BufferedTranscoder::<_, Vec<u8>>::new(server_stream, None);
         assert_eq!(server_stream.recv().await.unwrap(), message_1);
         assert_eq!(server_stream.recv().await.unwrap(), message_2);
     }

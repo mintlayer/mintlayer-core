@@ -25,7 +25,6 @@ use std::{
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use once_cell::sync::Lazy;
-use p2p_types::socket_address::SocketAddress;
 use tokio::{
     io::{AsyncRead, AsyncWrite, DuplexStream},
     sync::{
@@ -33,14 +32,13 @@ use tokio::{
         oneshot::{self, Sender},
     },
 };
+
 use utils::sync::atomic::AtomicU16;
 
 use crate::{
-    error::DialError,
-    net::default_backend::transport::{
-        ConnectedSocketInfo, PeerStream, TransportListener, TransportSocket,
-    },
-    P2pError, Result,
+    error::NetworkingError,
+    transport::{ConnectedSocketInfo, PeerStream, TransportListener, TransportSocket},
+    Result,
 };
 
 // How much bytes is allowed for write (without reading on the other side).
@@ -74,26 +72,20 @@ pub struct MpscChannelTransport {
 
 impl MpscChannelTransport {
     pub fn new() -> Self {
-        Self::new_with_addr_in_group(0, 0)
+        let addr: Ipv4Addr = Self::next_local_address_as_u32().into();
+        Self::new_with_local_address(addr.into())
     }
 
-    /// Create a new transport with a local address in the specified "group", which is represented
-    /// by a certain number of most significant bits in the ip address.
-    ///
-    /// The resulting local address will be:
-    /// (addr_group_idx << (32 - addr_group_bits)) + NEXT_IP_ADDRESS
-    pub fn new_with_addr_in_group(addr_group_idx: u32, addr_group_bits: u32) -> Self {
-        let addr_group_bit_offset = 32 - addr_group_bits;
-        let next_addr = NEXT_IP_ADDRESS.fetch_add(1, Ordering::Relaxed);
-        assert!((next_addr as u64) < (1_u64 << addr_group_bit_offset));
-        let addr_group = (addr_group_idx as u64) << addr_group_bit_offset;
-        assert!(addr_group <= u32::MAX as u64);
-
-        let local_address: Ipv4Addr = (next_addr + addr_group as u32).into();
-        MpscChannelTransport {
-            local_address: local_address.into(),
+    pub fn new_with_local_address(local_address: IpAddr) -> Self {
+        Self {
+            local_address,
             last_port: 1024.into(),
         }
+    }
+
+    /// Return the next u32 value that can be used to construct a unique local address for this kind of transport.
+    pub fn next_local_address_as_u32() -> u32 {
+        NEXT_IP_ADDRESS.fetch_add(1, Ordering::Relaxed)
     }
 
     fn new_port(&self) -> u16 {
@@ -108,10 +100,7 @@ impl TransportSocket for MpscChannelTransport {
     type Listener = ChannelListener;
     type Stream = ChannelStream;
 
-    async fn bind(&self, addresses: Vec<SocketAddress>) -> Result<Self::Listener> {
-        let mut addresses: Vec<SocketAddr> =
-            addresses.iter().map(SocketAddress::socket_addr).collect();
-
+    async fn bind(&self, mut addresses: Vec<SocketAddr>) -> Result<Self::Listener> {
         let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");
 
         for address in addresses.iter_mut() {
@@ -125,16 +114,14 @@ impl TransportSocket for MpscChannelTransport {
 
             // It's not possible to bind to a random address
             if address.ip() != self.local_address {
-                return Err(P2pError::DialError(DialError::IoError(
+                return Err(NetworkingError::IoError(
                     std::io::ErrorKind::AddrNotAvailable,
-                )));
+                ));
             };
 
             // It's not possible to bind to the used address
             if connections.contains_key(address) {
-                return Err(P2pError::DialError(DialError::IoError(
-                    std::io::ErrorKind::AddrInUse,
-                )));
+                return Err(NetworkingError::IoError(std::io::ErrorKind::AddrInUse));
             }
         }
 
@@ -151,8 +138,7 @@ impl TransportSocket for MpscChannelTransport {
         })
     }
 
-    fn connect(&self, address: SocketAddress) -> BoxFuture<'static, Result<Self::Stream>> {
-        let mut address = address.socket_addr();
+    fn connect(&self, mut address: SocketAddr) -> BoxFuture<'static, Result<Self::Stream>> {
         if address.ip().is_unspecified() {
             address.set_ip(self.local_address);
         }
@@ -165,7 +151,7 @@ impl TransportSocket for MpscChannelTransport {
                 .lock()
                 .expect("Connections mutex is poisoned")
                 .get(&address)
-                .ok_or(P2pError::DialError(DialError::NoAddresses))?
+                .ok_or(MpscChannelTransportError::NoListener(address))?
                 .clone();
 
             let (connect_sender, connect_receiver) = oneshot::channel();
@@ -175,14 +161,16 @@ impl TransportSocket for MpscChannelTransport {
                     to: address,
                     stream_sender: connect_sender,
                 })
-                .map_err(|_| P2pError::DialError(DialError::NoAddresses))?;
+                .map_err(|_| MpscChannelTransportError::ListenerDroppedUnexpectedly(address))?;
 
-            let stream = connect_receiver.await.map_err(|_| P2pError::ChannelClosed)?;
+            let stream = connect_receiver
+                .await
+                .map_err(|_| MpscChannelTransportError::ListenerDroppedUnexpectedly(address))?;
 
             Ok(ChannelStream {
                 stream,
-                local_address: SocketAddress::new(local_address),
-                remote_address: SocketAddress::new(address),
+                local_address,
+                remote_address: address,
             })
         })
     }
@@ -197,21 +185,27 @@ pub struct ChannelListener {
 impl TransportListener for ChannelListener {
     type Stream = ChannelStream;
 
-    async fn accept(&mut self) -> Result<(ChannelStream, SocketAddress)> {
+    async fn accept(&mut self) -> Result<(ChannelStream, SocketAddr)> {
         let IncomingConnection {
             from: remote_address,
             to: local_address,
             stream_sender: client_stream_sender,
-        } = self.receiver.recv().await.ok_or(P2pError::ChannelClosed)?;
+        } = self.receiver.recv().await.ok_or_else(|| {
+            MpscChannelTransportError::UnknownConnectorDroppedUnexpectedly {
+                listening_addresses: self.addresses.clone(),
+            }
+        })?;
 
         assert!(self.addresses.contains(&local_address));
 
         let (server_stream, client_stream) = tokio::io::duplex(MAX_BUF_SIZE);
 
-        client_stream_sender.send(client_stream).map_err(|_| P2pError::ChannelClosed)?;
-
-        let remote_address = SocketAddress::new(remote_address);
-        let local_address = SocketAddress::new(local_address);
+        client_stream_sender.send(client_stream).map_err(|_| {
+            MpscChannelTransportError::ConnectorDroppedUnexpectedly {
+                local_address,
+                remote_address,
+            }
+        })?;
 
         Ok((
             ChannelStream {
@@ -223,8 +217,8 @@ impl TransportListener for ChannelListener {
         ))
     }
 
-    fn local_addresses(&self) -> Result<Vec<SocketAddress>> {
-        Ok(self.addresses.iter().cloned().map(SocketAddress::new).collect())
+    fn local_addresses(&self) -> Result<Vec<SocketAddr>> {
+        Ok(self.addresses.clone())
     }
 }
 
@@ -240,8 +234,8 @@ impl Drop for ChannelListener {
 
 pub struct ChannelStream {
     stream: DuplexStream,
-    local_address: SocketAddress,
-    remote_address: SocketAddress,
+    local_address: SocketAddr,
+    remote_address: SocketAddr,
 }
 
 impl AsyncRead for ChannelStream {
@@ -281,13 +275,31 @@ impl AsyncWrite for ChannelStream {
 impl PeerStream for ChannelStream {}
 
 impl ConnectedSocketInfo for ChannelStream {
-    fn local_address(&self) -> crate::Result<SocketAddress> {
+    fn local_address(&self) -> crate::Result<SocketAddr> {
         Ok(self.local_address)
     }
 
-    fn remote_address(&self) -> crate::Result<SocketAddress> {
+    fn remote_address(&self) -> crate::Result<SocketAddr> {
         Ok(self.remote_address)
     }
+}
+
+/// Some errors specific to the channel transport.
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum MpscChannelTransportError {
+    #[error("The address {0} is not being listened on")]
+    NoListener(SocketAddr),
+    #[error("Listener for address {0} dropped unexpectedly")]
+    ListenerDroppedUnexpectedly(SocketAddr),
+    #[error("Unknown connection initiator dropped unexpectedly when listening to addresses {listening_addresses:?}")]
+    UnknownConnectorDroppedUnexpectedly {
+        listening_addresses: Vec<SocketAddr>,
+    },
+    #[error("Connection initiator dropped unexpectedly, local_address = {local_address}, remote_address = {remote_address}")]
+    ConnectorDroppedUnexpectedly {
+        local_address: SocketAddr,
+        remote_address: SocketAddr,
+    },
 }
 
 #[cfg(test)]
@@ -295,13 +307,11 @@ mod tests {
     use std::net::SocketAddrV4;
 
     use randomness::Rng;
-    use test_utils::random::Seed;
+    use test_utils::random::{gen_random_bytes, Seed};
+
+    use crate::transport::BufferedTranscoder;
 
     use super::*;
-    use crate::{
-        message::BlockListRequest,
-        net::default_backend::{transport::BufferedTranscoder, types::Message},
-    };
 
     #[tracing::instrument(skip(seed))]
     #[rstest::rstest]
@@ -309,10 +319,12 @@ mod tests {
     #[case(Seed::from_entropy())]
     #[tokio::test]
     async fn send_recv(#[case] seed: Seed) {
+        use serialization::Encode;
+
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let transport = MpscChannelTransport::new();
-        let address = SocketAddress::new(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into());
+        let address = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into();
         let mut server = transport.bind(vec![address]).await.unwrap();
         let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
 
@@ -320,11 +332,14 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let message = Message::BlockListRequest(BlockListRequest::new(vec![]));
-        let mut peer_stream = BufferedTranscoder::new(peer_stream, rng.gen_range(128..1024));
+        let message_size = rng.gen_range(128..1024);
+
+        let message = gen_random_bytes(&mut rng, 1, message_size);
+        let mut peer_stream = BufferedTranscoder::new(peer_stream, Some(message.encoded_size()));
         peer_stream.send(message.clone()).await.unwrap();
 
-        let mut server_stream = BufferedTranscoder::new(server_stream, rng.gen_range(128..1024));
+        let mut server_stream =
+            BufferedTranscoder::<_, Vec<u8>>::new(server_stream, Some(message.encoded_size()));
         assert_eq!(server_stream.recv().await.unwrap(), message);
     }
 }

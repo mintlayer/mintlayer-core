@@ -56,7 +56,8 @@ pub async fn handle_message_processing_result(
         P2pError::MempoolError(MempoolError::Policy(MempoolPolicyError::MempoolFull)) => Ok(()),
 
         // A protocol error - increase the ban score of a peer if needed.
-        e @ (P2pError::ProtocolError(_)
+        e @ (P2pError::NetworkingError(_)
+        | P2pError::ProtocolError(_)
         | P2pError::MempoolError(_)
         | P2pError::ChainstateError(_)
         | P2pError::SyncError(_)) => {
@@ -93,7 +94,6 @@ pub async fn handle_message_processing_result(
         | P2pError::PeerError(_)
         | P2pError::NoiseHandshakeError(_)
         | P2pError::InvalidConfigurationValue(_)
-        | P2pError::MessageCodecError(_)
         | P2pError::ConnectionValidationFailed(_)) => panic!("Unexpected error {e:?}"),
 
         // Fatal errors, simply propagate them to stop the sync manager.

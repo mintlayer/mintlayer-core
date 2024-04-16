@@ -16,27 +16,34 @@
 use std::{fmt::Debug, sync::Arc, time::Duration};
 
 use enum_iterator::all;
-use tokio::{io::AsyncWriteExt, sync::oneshot, time::timeout};
+use logging::log;
+use tokio::{
+    io::AsyncWriteExt,
+    sync::{mpsc, oneshot},
+    time::timeout,
+};
 
 use common::time_getter::TimeGetter;
 use utils::atomics::SeqCstAtomicBool;
 
-use super::transport::TransportListener;
-use super::{
-    transport::{NoiseTcpTransport, TransportSocket},
-    *,
-};
-use crate::net::default_backend::default_networking_service::get_preferred_protocol_version_for_tests;
 use crate::{
     config::NodeType,
-    error::DialError,
-    net::default_backend::transport::{MpscChannelTransport, TcpTransportSocket},
-    protocol::{ProtocolVersion, SupportedProtocolVersion},
-    testing_utils::{
-        test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
-        TestTransportTcp,
+    error::{DialError, P2pError},
+    net::{
+        default_backend::default_networking_service::get_preferred_protocol_version_for_tests,
+        types::ConnectivityEvent, ConnectivityService, NetworkingService,
     },
+    protocol::{ProtocolVersion, SupportedProtocolVersion},
+    test_helpers::test_p2p_config,
 };
+use networking::test_helpers::{
+    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+};
+use networking::transport::{
+    MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket, TransportListener, TransportSocket,
+};
+
+use super::DefaultNetworkingService;
 
 // The current "preferred" version.
 const CURRENT_PROTOCOL_VERSION: ProtocolVersion =
@@ -62,7 +69,7 @@ async fn connect_to_remote_impl<A, T>(
     let (mut local_srv, _, _, _) = DefaultNetworkingService::<T>::start(
         true,
         A::make_transport(),
-        vec![A::make_address()],
+        vec![A::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter.clone(),
@@ -78,7 +85,7 @@ async fn connect_to_remote_impl<A, T>(
     let (remote_srv, _, _, _) = DefaultNetworkingService::<T>::start_with_version(
         true,
         A::make_transport(),
-        vec![A::make_address()],
+        vec![A::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter,
@@ -157,7 +164,7 @@ async fn accept_incoming_impl<A, T>(
     let (mut local_srv, _, _, _) = DefaultNetworkingService::<T>::start(
         true,
         A::make_transport(),
-        vec![A::make_address()],
+        vec![A::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter.clone(),
@@ -173,7 +180,7 @@ async fn accept_incoming_impl<A, T>(
     let (mut remote_srv, _, _, _) = DefaultNetworkingService::<T>::start_with_version(
         true,
         A::make_transport(),
-        vec![A::make_address()],
+        vec![A::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter,
@@ -248,7 +255,7 @@ where
     let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
         true,
         A::make_transport(),
-        vec![A::make_address()],
+        vec![A::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter.clone(),
@@ -264,7 +271,7 @@ where
     let (mut conn2, _, _, _) = DefaultNetworkingService::<T>::start(
         true,
         A::make_transport(),
-        vec![A::make_address()],
+        vec![A::make_address().into()],
         config,
         p2p_config,
         time_getter,
@@ -324,7 +331,7 @@ where
     let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
         true,
         A::make_transport(),
-        vec![A::make_address()],
+        vec![A::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter.clone(),
@@ -340,7 +347,7 @@ where
     let (conn2, _, _, _) = DefaultNetworkingService::<T>::start(
         true,
         A::make_transport(),
-        vec![A::make_address()],
+        vec![A::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter,
@@ -454,7 +461,7 @@ where
     .unwrap();
 
     // Try to connect to some broken peer
-    conn.connect(addr[0], None).unwrap();
+    conn.connect(addr[0].into(), None).unwrap();
 
     let event = timeout(Duration::from_secs(60), conn.poll_next()).await.unwrap().unwrap();
 
@@ -463,7 +470,7 @@ where
             peer_address,
             error: _,
         } => {
-            assert_eq!(peer_address, addr[0]);
+            assert_eq!(peer_address, addr[0].into());
         }
         event => panic!("invalid event received: {event:?}"),
     }
@@ -509,7 +516,7 @@ async fn general_protocol_version_selection_impl<A, T>(
     let (mut srv1, _, _, _) = DefaultNetworkingService::<T>::start_with_version(
         true,
         A::make_transport(),
-        vec![A::make_address()],
+        vec![A::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter.clone(),
@@ -526,7 +533,7 @@ async fn general_protocol_version_selection_impl<A, T>(
     let (mut srv2, _, _, _) = DefaultNetworkingService::<T>::start_with_version(
         true,
         A::make_transport(),
-        vec![A::make_address()],
+        vec![A::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter,

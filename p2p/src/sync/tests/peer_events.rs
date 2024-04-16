@@ -18,13 +18,12 @@ use std::sync::Arc;
 use chainstate::BlockSource;
 use chainstate_test_framework::TestFramework;
 use common::chain::{block::timestamp::BlockTimestamp, config::create_unit_test_config};
-use p2p_test_utils::P2pBasicTestTimeGetter;
-use test_utils::random::Seed;
+use test_utils::{random::Seed, BasicTestTimeGetter};
 
 use crate::{
     message::{BlockSyncMessage, HeaderList},
     sync::tests::helpers::TestNode,
-    testing_utils::{for_each_protocol_version, test_p2p_config},
+    test_helpers::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
 };
 
@@ -113,7 +112,7 @@ async fn do_not_disconnect_peer_after_receiving_known_header_list(#[case] seed: 
         // t = sync_stalling_timeout | Node checks for peer timeout; should not disconnect
 
         let mut rng = test_utils::random::make_seedable_rng(seed);
-        let time = P2pBasicTestTimeGetter::new();
+        let time = BasicTestTimeGetter::new();
         let chain_config = Arc::new(create_unit_test_config());
         let p2p_config = Arc::new(test_p2p_config());
 

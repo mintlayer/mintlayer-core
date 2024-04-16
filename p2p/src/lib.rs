@@ -24,7 +24,7 @@ pub mod peer_manager;
 pub mod protocol;
 pub mod rpc;
 pub mod sync;
-pub mod testing_utils;
+pub mod test_helpers;
 pub mod utils;
 
 mod peer_manager_event;
@@ -52,8 +52,9 @@ use common::{
 use interface::p2p_interface::P2pInterface;
 use logging::log;
 use mempool::MempoolHandle;
-use net::default_backend::transport::{
-    NoiseSocks5Transport, Socks5TransportSocket, TcpTransportSocket,
+use networking::transport::{
+    NoiseEncryptionAdapter, NoiseSocks5Transport, NoiseTcpTransport, Socks5TransportSocket,
+    TcpTransportSocket,
 };
 use peer_manager::peerdb::storage::PeerDbStorage;
 use types::socket_address::SocketAddress;
@@ -62,11 +63,8 @@ use crate::{
     config::P2pConfig,
     error::P2pError,
     net::{
-        default_backend::{
-            transport::{NoiseEncryptionAdapter, NoiseTcpTransport},
-            DefaultNetworkingService,
-        },
-        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
+        default_backend::DefaultNetworkingService, ConnectivityService, MessagingService,
+        NetworkingService, SyncingEventReceiver,
     },
 };
 

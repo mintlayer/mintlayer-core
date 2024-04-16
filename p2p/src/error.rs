@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p_types::{services::Services, socket_address::SocketAddress, PeerId};
 use thiserror::Error;
 
 use chainstate::{ban_score::BanScore, ChainstateError};
@@ -22,6 +21,8 @@ use common::{
     primitives::{time::Time, Id},
 };
 use mempool::error::{Error as MempoolError, MempoolBanScore};
+use networking::error::NetworkingError;
+use p2p_types::{services::Services, socket_address::SocketAddress, PeerId};
 use utils::try_as::TryAsRef;
 
 use crate::{net::types::PeerRole, peer_manager::peerdb_common, protocol::ProtocolVersion};
@@ -90,27 +91,15 @@ pub enum PeerError {
     PeerWillDisconnect,
 }
 
+// TODO: this error type doesn't make much sense since most of its contents have been moved
+// to `networking`. Need to find a better place for the remaining enum variants.
 /// Errors related to establishing a connection with a remote peer
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum DialError {
     #[error("Tried to dial self")]
     AttemptToDialSelf,
-    #[error("Peer doesn't have any known addresses")]
-    NoAddresses,
     #[error("Connection refused or timed out")]
     ConnectionRefusedOrTimedOut,
-    #[error("I/O error: {0:?}")]
-    IoError(std::io::ErrorKind),
-    #[error("Proxy error: {0}")]
-    ProxyError(String),
-}
-
-#[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum MessageCodecError {
-    #[error("Message size {actual_size} exceeds the maximum size {max_size}")]
-    MessageTooLarge { actual_size: usize, max_size: usize },
-    #[error("Cannot decode data: {0}")]
-    InvalidEncodedData(serialization::Error),
 }
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
@@ -162,6 +151,8 @@ pub enum SyncError {
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum P2pError {
+    #[error("Networking error: {0}")]
+    NetworkingError(#[from] NetworkingError),
     #[error("Protocol violation: {0}")]
     ProtocolError(ProtocolError),
     #[error("Failed to dial peer: {0}")]
@@ -189,8 +180,6 @@ pub enum P2pError {
     },
     #[error("Mempool error: {0}")]
     MempoolError(#[from] MempoolError),
-    #[error("Message codec error: {0}")]
-    MessageCodecError(#[from] MessageCodecError),
     #[error("Connection validation failed: {0}")]
     ConnectionValidationFailed(#[from] ConnectionValidationError),
     #[error("Synchronization error: {0}")]
@@ -200,12 +189,6 @@ pub enum P2pError {
 impl From<DialError> for P2pError {
     fn from(e: DialError) -> P2pError {
         P2pError::DialError(e)
-    }
-}
-
-impl From<std::io::Error> for P2pError {
-    fn from(e: std::io::Error) -> P2pError {
-        P2pError::DialError(DialError::IoError(e.kind()))
     }
 }
 
@@ -236,6 +219,7 @@ impl From<ChainstateError> for P2pError {
 impl BanScore for P2pError {
     fn ban_score(&self) -> u32 {
         match self {
+            P2pError::NetworkingError(_) => 0,
             P2pError::ProtocolError(err) => err.ban_score(),
             P2pError::DialError(_) => 0,
             P2pError::ChannelClosed => 0,
@@ -252,7 +236,6 @@ impl BanScore for P2pError {
                 actual_version: _,
             } => 0,
             P2pError::MempoolError(err) => err.mempool_ban_score(),
-            P2pError::MessageCodecError(_) => 0,
             P2pError::ConnectionValidationFailed(_) => 0,
             P2pError::SyncError(err) => err.ban_score(),
         }
@@ -296,7 +279,8 @@ impl BanScore for SyncError {
 impl TryAsRef<storage::Error> for P2pError {
     fn try_as_ref(&self) -> Option<&storage::Error> {
         match self {
-            P2pError::ProtocolError(_)
+            P2pError::NetworkingError(_)
+            | P2pError::ProtocolError(_)
             | P2pError::DialError(_)
             | P2pError::ChannelClosed
             | P2pError::PeerError(_)
@@ -310,7 +294,6 @@ impl TryAsRef<storage::Error> for P2pError {
                 actual_version: _,
             }
             | P2pError::MempoolError(_)
-            | P2pError::MessageCodecError(_)
             | P2pError::ConnectionValidationFailed(_)
             | P2pError::SyncError(_) => None,
             P2pError::StorageFailure(err) => Some(err),

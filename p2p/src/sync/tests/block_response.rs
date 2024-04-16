@@ -26,9 +26,12 @@ use common::{
     primitives::{user_agent::mintlayer_core_user_agent, Idable},
 };
 use logging::log;
-use p2p_test_utils::{create_n_blocks, P2pBasicTestTimeGetter};
+use p2p_test_utils::create_n_blocks;
 use randomness::Rng;
-use test_utils::random::{shuffle_until_different, Seed};
+use test_utils::{
+    random::{shuffle_until_different, Seed},
+    BasicTestTimeGetter,
+};
 
 use crate::{
     ban_config::BanConfig,
@@ -37,7 +40,7 @@ use crate::{
     sync::tests::helpers::{
         make_new_blocks, make_new_top_blocks_return_headers, PeerManagerEventDesc, TestNode,
     },
-    testing_utils::{for_each_protocol_version, test_p2p_config},
+    test_helpers::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
     P2pConfig, P2pError, PeerManagerEvent,
 };
@@ -342,7 +345,7 @@ async fn disconnect(#[case] seed: Seed) {
 async fn slow_response(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
         let mut rng = test_utils::random::make_seedable_rng(seed);
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
 
         const STALLING_TIMEOUT: Duration = Duration::from_millis(500);
         const DELAY: Duration = Duration::from_millis(400);
@@ -444,7 +447,7 @@ async fn invalidated_block(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
         let chain_config = Arc::new(create_unit_test_config());
         let p2p_config = Arc::new(test_p2p_config());
 

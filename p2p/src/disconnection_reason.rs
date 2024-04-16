@@ -77,7 +77,8 @@ impl DisconnectionReason {
 
     pub fn from_error(err: &P2pError) -> Option<Self> {
         match err {
-            P2pError::ProtocolError(_)
+            P2pError::NetworkingError(_)
+            | P2pError::ProtocolError(_)
             | P2pError::DialError(_)
             | P2pError::ChannelClosed
             | P2pError::PeerError(_)
@@ -89,7 +90,6 @@ impl DisconnectionReason {
             | P2pError::InvalidStorageState(_)
             | P2pError::PeerDbStorageVersionMismatch { .. }
             | P2pError::MempoolError(_)
-            | P2pError::MessageCodecError(_)
             | P2pError::SyncError(_) => None,
             P2pError::ConnectionValidationFailed(err) => match err {
                 ConnectionValidationError::UnsupportedProtocol {

@@ -13,10 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p::{
-    net::default_backend::{transport::TcpTransportSocket, DefaultNetworkingService},
-    testing_utils::TestTransportTcp,
-};
+use networking::test_helpers::TestTransportTcp;
+use networking::transport::TcpTransportSocket;
+use p2p::net::default_backend::DefaultNetworkingService;
 
 fn main() {
     logging::init_logging();

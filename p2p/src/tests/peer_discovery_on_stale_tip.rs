@@ -21,19 +21,17 @@ use common::{
     primitives::{user_agent::mintlayer_core_user_agent, Idable},
 };
 use logging::log;
-use p2p_test_utils::{run_with_timeout, P2pBasicTestTimeGetter, SHORT_TIMEOUT};
+use networking::test_helpers::{TestTransportChannel, TestTransportMaker};
+use p2p_test_utils::{run_with_timeout, SHORT_TIMEOUT};
 use p2p_types::socket_address::SocketAddress;
-use test_utils::random::Seed;
+use test_utils::{random::Seed, BasicTestTimeGetter};
 
 use crate::{
     config::P2pConfig,
     net::types::PeerRole,
     peer_manager::{self, address_groups::AddressGroup, config::PeerManagerConfig},
     sync::test_helpers::make_new_block,
-    testing_utils::{
-        make_transport_with_local_addr_in_group, TestTransportChannel, TestTransportMaker,
-        TEST_PROTOCOL_VERSION,
-    },
+    test_helpers::{make_transport_with_local_addr_in_group, TEST_PROTOCOL_VERSION},
     tests::helpers::{PeerManagerNotification, TestNode, TestNodeGroup},
 };
 
@@ -83,7 +81,7 @@ async fn peer_discovery_on_stale_tip_impl(
     use_extra_block_relay_peers: bool,
 ) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
 
     // The sum of these values plus the "extra_count" values is the number
@@ -277,7 +275,7 @@ async fn new_full_relay_connections_on_stale_tip(#[case] seed: Seed) {
 
 async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let start_time = time_getter.get_time_getter().get_time();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let stale_tip_time_diff = Duration::from_secs(60 * 60);
@@ -502,7 +500,7 @@ pub fn make_p2p_config(peer_manager_config: PeerManagerConfig) -> P2pConfig {
 }
 
 async fn start_node(
-    time_getter: &P2pBasicTestTimeGetter,
+    time_getter: &BasicTestTimeGetter,
     chain_config: &Arc<ChainConfig>,
     p2p_config: &Arc<P2pConfig>,
     node_index: usize,
@@ -515,7 +513,7 @@ async fn start_node(
         Arc::clone(chain_config),
         Arc::clone(p2p_config),
         make_transport_with_local_addr_in_group(node_index as u32),
-        TestTransportChannel::make_address(),
+        TestTransportChannel::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         Some(name),
     )

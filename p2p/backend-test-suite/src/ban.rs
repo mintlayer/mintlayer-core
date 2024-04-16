@@ -23,6 +23,7 @@ use common::{
     primitives::Idable,
     time_getter::TimeGetter,
 };
+use networking::test_helpers::TestTransportMaker;
 use p2p::{
     error::P2pError,
     message::{BlockSyncMessage, HeaderList},
@@ -31,7 +32,7 @@ use p2p::{
         SyncingEventReceiver,
     },
     sync::SyncManager,
-    testing_utils::{connect_and_accept_services, test_p2p_config, TestTransportMaker},
+    test_helpers::{connect_and_accept_services, test_p2p_config},
     PeerManagerEvent,
 };
 use utils::atomics::SeqCstAtomicBool;
@@ -65,7 +66,7 @@ where
     let (mut conn1, messaging_handle, sync_event_receiver, _) = N::start(
         true,
         T::make_transport(),
-        vec![T::make_address()],
+        vec![T::make_address().into()],
         Arc::clone(&chain_config),
         Arc::new(test_p2p_config()),
         time_getter.clone(),
@@ -92,7 +93,7 @@ where
     let (mut conn2, mut messaging_handle_2, mut sync2, _) = N::start(
         true,
         T::make_transport(),
-        vec![T::make_address()],
+        vec![T::make_address().into()],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         time_getter,

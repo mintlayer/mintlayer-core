@@ -16,27 +16,24 @@
 use std::{sync::Arc, time::Duration};
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
-use p2p_test_utils::{expect_recv, P2pBasicTestTimeGetter};
-use test_utils::{assert_matches, assert_matches_return_val};
+use networking::test_helpers::{TestTransportMaker, TestTransportTcp};
+use networking::transport::TcpTransportSocket;
+use p2p_test_utils::expect_recv;
+use test_utils::{assert_matches, assert_matches_return_val, BasicTestTimeGetter};
 
 use crate::{
     config::{NodeType, P2pConfig},
     disconnection_reason::DisconnectionReason,
     message::{PeerManagerMessage, PingRequest, PingResponse},
     net::{
-        default_backend::{
-            transport::TcpTransportSocket, types::Command, ConnectivityHandle,
-            DefaultNetworkingService,
-        },
+        default_backend::{types::Command, ConnectivityHandle, DefaultNetworkingService},
         types::{ConnectivityEvent, PeerInfo},
     },
     peer_manager::{
         tests::{send_and_sync, utils::cmd_to_peer_man_msg},
         PeerManager,
     },
-    testing_utils::{
-        peerdb_inmemory_store, TestTransportMaker, TestTransportTcp, TEST_PROTOCOL_VERSION,
-    },
+    test_helpers::{peerdb_inmemory_store, TEST_PROTOCOL_VERSION},
     types::peer_id::PeerId,
     PeerManagerEvent,
 };
@@ -75,8 +72,8 @@ async fn ping_timeout() {
     let (conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_mgr_event_sender, peer_mgr_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
-    let time_getter = P2pBasicTestTimeGetter::new();
-    let bind_address = TestTransportTcp::make_address();
+    let time_getter = BasicTestTimeGetter::new();
+    let bind_address = TestTransportTcp::make_address().into();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService>::new(
         vec![bind_address],
         cmd_sender,

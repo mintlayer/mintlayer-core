@@ -1588,26 +1588,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "const_format"
-version = "0.2.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3a214c7af3d04997541b18d432afaff4c455e79e2029079647e72fc2bd27673"
-dependencies = [
- "const_format_proc_macros",
-]
-
-[[package]]
-name = "const_format_proc_macros"
-version = "0.2.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7f6ff08fd20f4f299298a28e2dfa8a8ba1036e6cd2460ac1de7b425d76f2500"
-dependencies = [
- "proc-macro2",
- "quote",
- "unicode-xid",
-]
-
-[[package]]
 name = "constraints-value-accumulator"
 version = "0.4.2"
 dependencies = [
@@ -1627,15 +1607,6 @@ name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
-
-[[package]]
-name = "convert_case"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
-dependencies = [
- "unicode-segmentation",
-]
 
 [[package]]
 name = "core-foundation"
@@ -2051,7 +2022,7 @@ version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fb810d30a7c1953f91334de7244731fc3f3c10d7fe163338a35b9f640960321"
 dependencies = [
- "convert_case 0.4.0",
+ "convert_case",
  "proc-macro2",
  "quote",
  "rustc_version",
@@ -2161,6 +2132,7 @@ dependencies = [
  "futures",
  "itertools 0.12.1",
  "logging",
+ "networking",
  "p2p",
  "p2p-test-utils",
  "parity-scale-codec",
@@ -4415,6 +4387,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "networking"
+version = "0.4.2"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "futures",
+ "logging",
+ "once_cell",
+ "parity-scale-codec",
+ "randomness",
+ "rstest",
+ "serde",
+ "serialization",
+ "snowstorm",
+ "socket2",
+ "test-utils",
+ "thiserror",
+ "tokio",
+ "tokio-socks",
+ "tokio-util",
+ "tracing",
+ "utils",
+]
+
+[[package]]
 name = "nibble_vec"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4899,25 +4896,23 @@ name = "p2p"
 version = "0.4.2"
 dependencies = [
  "async-trait",
- "bytes",
  "chainstate",
  "chainstate-storage",
  "chainstate-test-framework",
  "common",
  "consensus",
  "criterion",
- "crypto",
  "ctor",
  "derive_more",
  "dyn-clone",
  "enum-iterator",
  "futures",
- "hex",
  "itertools 0.12.1",
  "jsonrpsee",
  "lazy_static",
  "logging",
  "mempool",
+ "networking",
  "num",
  "num-derive",
  "num-traits",
@@ -4926,7 +4921,6 @@ dependencies = [
  "p2p-test-utils",
  "p2p-types",
  "parity-scale-codec",
- "portpicker",
  "randomness",
  "rpc",
  "rpc-description",
@@ -4934,13 +4928,9 @@ dependencies = [
  "serde",
  "serialization",
  "siphasher 1.0.1",
- "snowstorm",
- "socket2",
- "sscanf",
  "storage",
  "storage-inmemory",
  "subsystem",
- "tap",
  "test-utils",
  "thiserror",
  "tokio",
@@ -4958,15 +4948,15 @@ version = "0.4.2"
 dependencies = [
  "chainstate",
  "common",
- "crypto",
- "futures",
  "libtest-mimic",
  "logging",
+ "networking",
  "p2p",
  "p2p-test-utils",
  "rlimit",
  "serialization",
  "subsystem",
+ "test-utils",
  "tokio",
  "tracing",
  "utils",
@@ -4980,14 +4970,12 @@ dependencies = [
  "chainstate-storage",
  "chainstate-test-framework",
  "common",
- "crypto",
  "ctor",
  "logging",
  "mempool",
  "once_cell",
- "portpicker",
+ "storage",
  "subsystem",
- "test-utils",
  "tokio",
  "tracing",
  "utils",
@@ -5310,15 +5298,6 @@ dependencies = [
  "cpufeatures",
  "opaque-debug",
  "universal-hash",
-]
-
-[[package]]
-name = "portpicker"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
-dependencies = [
- "rand 0.8.5",
 ]
 
 [[package]]
@@ -6992,33 +6971,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eda41003dc44290527a59b13432d4a0379379fa074b70174882adfbdfd917844"
 dependencies = [
  "bitflags 2.5.0",
-]
-
-[[package]]
-name = "sscanf"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c713ebd15ce561dd4a13ed62bc2a0368e16806fc30dcaf66ecf1256b2a3fdde6"
-dependencies = [
- "const_format",
- "lazy_static",
- "regex",
- "sscanf_macro",
-]
-
-[[package]]
-name = "sscanf_macro"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84955aa74a157e5834d58a07be11af7f0ab923f0194a0bb2ea6b3db8b5d1611d"
-dependencies = [
- "convert_case 0.6.0",
- "proc-macro2",
- "quote",
- "regex-syntax 0.6.29",
- "strsim 0.10.0",
- "syn 2.0.60",
- "unicode-width",
 ]
 
 [[package]]

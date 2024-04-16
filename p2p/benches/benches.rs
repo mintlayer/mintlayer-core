@@ -18,10 +18,12 @@ use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use common::chain::config::create_unit_test_config;
 use criterion::{criterion_group, criterion_main, Criterion};
 
+use networking::test_helpers::TestAddressMaker;
 use p2p::{
     peer_manager::{address_groups::AddressGroup, peerdb::PeerDb},
-    testing_utils::{peerdb_inmemory_store, test_p2p_config, TestAddressMaker},
+    test_helpers::{peerdb_inmemory_store, test_p2p_config},
 };
+use p2p_types::socket_addr_ext::SocketAddrExt;
 use randomness::make_pseudo_rng;
 
 pub fn peer_db(c: &mut Criterion) {
@@ -33,7 +35,7 @@ pub fn peer_db(c: &mut Criterion) {
         PeerDb::<_>::new(&chain_config, p2p_config, Default::default(), db_store).unwrap();
 
     for _ in 0..100000 {
-        peerdb.peer_discovered(TestAddressMaker::new_random_address(&mut rng));
+        peerdb.peer_discovered(TestAddressMaker::new_random_address(&mut rng).into());
     }
 
     for _ in 0..1000 {

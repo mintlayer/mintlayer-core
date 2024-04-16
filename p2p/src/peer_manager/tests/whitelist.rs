@@ -15,43 +15,43 @@
 
 use std::{net::IpAddr, sync::Arc, time::Duration};
 
+use p2p_types::socket_address::SocketAddress;
+use rstest::rstest;
+
+use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
+use networking::test_helpers::{
+    TestAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportNoise,
+    TestTransportTcp,
+};
+use networking::{
+    transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
+    types::ConnectionDirection,
+};
+use p2p_types::bannable_address::BannableAddress;
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
+use utils::atomics::SeqCstAtomicBool;
+
 use crate::{
     config::{NodeType, P2pConfig},
     disconnection_reason::DisconnectionReason,
     net::{
-        default_backend::{types::Command, ConnectivityHandle},
-        types::{ConnectionDirection, PeerInfo, PeerRole},
+        default_backend::{types::Command, ConnectivityHandle, DefaultNetworkingService},
+        types::{PeerInfo, PeerRole},
+        ConnectivityService, NetworkingService,
     },
     peer_manager::{
         peerdb::{salt::Salt, storage::PeerDbStorageWrite, CURRENT_STORAGE_VERSION},
         peerdb_common::storage::{TransactionRw, Transactional},
-        tests::make_peer_manager_custom,
+        tests::{make_peer_manager, make_peer_manager_custom},
         PeerManager,
     },
-    testing_utils::{
-        connect_services, peerdb_inmemory_store, TestAddressMaker, TestTransportChannel,
-        TestTransportMaker, TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
-    },
+    test_helpers::{connect_services, peerdb_inmemory_store, TEST_PROTOCOL_VERSION},
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     PeerManagerEvent,
-};
-use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
-use p2p_test_utils::P2pBasicTestTimeGetter;
-use p2p_types::bannable_address::BannableAddress;
-use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
-use utils::atomics::SeqCstAtomicBool;
-
-use crate::{
-    net::{
-        default_backend::{
-            transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
-            DefaultNetworkingService,
-        },
-        ConnectivityService, NetworkingService,
-    },
-    peer_manager::tests::make_peer_manager,
 };
 
 fn p2p_config_with_whitelisted(whitelisted_addresses: Vec<IpAddr>) -> P2pConfig {
@@ -83,8 +83,8 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
+    let addr1: SocketAddress = A::make_address().into();
+    let addr2 = A::make_address().into();
 
     let chain_config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(p2p_config_with_whitelisted(vec![addr1.ip_addr()]));
@@ -165,8 +165,8 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let addr1 = A::make_address();
-    let addr2 = A::make_address();
+    let addr1 = A::make_address().into();
+    let addr2: SocketAddress = A::make_address().into();
 
     let chain_config = Arc::new(config::create_unit_test_config());
 
@@ -178,7 +178,7 @@ where
         addr2.ip_addr(),
     ]));
     let (_peer_sender, peer_receiver) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let shutdown = Arc::new(SeqCstAtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -278,15 +278,15 @@ async fn no_automatic_unban_for_whitelisted_noise() {
 fn manual_ban_overrides_whitelisting(#[case] seed: Seed) {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
     let mut rng = make_seedable_rng(seed);
-    let address_1 = TestAddressMaker::new_random_address(&mut rng);
-    let address_2 = TestAddressMaker::new_random_address(&mut rng);
+    let address_1: SocketAddress = TestAddressMaker::new_random_address(&mut rng).into();
+    let address_2 = TestAddressMaker::new_random_address(&mut rng).into();
 
     let chain_config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(p2p_config_with_whitelisted(vec![address_1.ip_addr()]));
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_sender, conn_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_sender, peer_receiver) = tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService>::new(
         vec![address_2],
         cmd_sender,

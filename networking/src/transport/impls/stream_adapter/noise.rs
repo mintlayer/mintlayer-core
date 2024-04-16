@@ -13,19 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use futures::future::BoxFuture;
-use p2p_types::socket_address::SocketAddress;
 use snowstorm::NoiseStream;
 use tokio::time::timeout;
 
 use crate::{
-    error::P2pError,
-    net::{
-        default_backend::transport::{ConnectedSocketInfo, PeerStream},
-        types::ConnectionDirection,
-    },
+    error::NetworkingError,
+    transport::{ConnectedSocketInfo, PeerStream},
+    types::ConnectionDirection,
 };
 
 use super::StreamAdapter;
@@ -95,8 +92,10 @@ impl<T: PeerStream + ConnectedSocketInfo + 'static> StreamAdapter<T> for NoiseEn
 
             let stream = timeout(handshake_timeout, NoiseStream::handshake(base, state))
                 .await
-                .map_err(|_err| P2pError::NoiseHandshakeError("Handshake timeout".to_owned()))?
-                .map_err(|err| P2pError::NoiseHandshakeError(err.to_string()))?;
+                .map_err(|_err| {
+                    NetworkingError::NoiseHandshakeError("Handshake timeout".to_owned())
+                })?
+                .map_err(|err| NetworkingError::NoiseHandshakeError(err.to_string()))?;
 
             // Remote peer public key is available after handshake
             assert!(stream.get_state().get_remote_static().is_some());
@@ -109,11 +108,11 @@ impl<T: PeerStream + ConnectedSocketInfo + 'static> StreamAdapter<T> for NoiseEn
 impl<T: PeerStream> PeerStream for NoiseStream<T> {}
 
 impl<T: ConnectedSocketInfo> ConnectedSocketInfo for NoiseStream<T> {
-    fn local_address(&self) -> crate::Result<SocketAddress> {
+    fn local_address(&self) -> crate::Result<SocketAddr> {
         self.get_inner().local_address()
     }
 
-    fn remote_address(&self) -> crate::Result<SocketAddress> {
+    fn remote_address(&self) -> crate::Result<SocketAddr> {
         self.get_inner().remote_address()
     }
 }

@@ -329,3 +329,140 @@ impl Message {
 pub fn can_send_will_disconnect(peer_protocol_version: ProtocolVersion) -> bool {
     peer_protocol_version >= SupportedProtocolVersion::V3.into()
 }
+
+#[cfg(test)]
+mod tests {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    use chainstate::Locator;
+    use chainstate_test_framework::TestFramework;
+    use common::{
+        chain::config::MagicBytes,
+        primitives::{semver::SemVer, Id},
+    };
+    use networking::test_helpers::{get_two_connected_sockets, TestTransportChannel};
+    use networking::transport::{BufferedTranscoder, MpscChannelTransport};
+    use p2p_types::services::Service;
+    use randomness::Rng;
+    use test_utils::random::Seed;
+
+    use crate::{
+        message::{
+            AddrListRequest, AddrListResponse, AnnounceAddrRequest, BlockListRequest,
+            BlockResponse, HeaderList, HeaderListRequest, PingRequest, PingResponse,
+            TransactionResponse,
+        },
+        net::default_backend::types::{HandshakeMessage, P2pTimestamp},
+        protocol::ProtocolVersion,
+        test_helpers::test_p2p_config,
+    };
+
+    use super::*;
+
+    // Send and receive each variant of Message once and assert that its value hasn't changed.
+    #[tracing::instrument(skip(seed))]
+    #[rstest::rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test]
+    async fn message_roundtrip(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let p2p_config = test_p2p_config();
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let block = tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
+
+        let messages = [
+            Message::Handshake(HandshakeMessage::Hello {
+                protocol_version: ProtocolVersion::new(rng.gen()),
+                network: MagicBytes::new([rng.gen(), rng.gen(), rng.gen(), rng.gen()]),
+                services: [Service::Blocks].as_slice().into(),
+                user_agent: p2p_config.user_agent.clone(),
+                software_version: SemVer {
+                    major: rng.gen(),
+                    minor: rng.gen(),
+                    patch: rng.gen(),
+                },
+                receiver_address: Some(
+                    SocketAddr::new(
+                        IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),
+                        rng.gen(),
+                    )
+                    .into(),
+                ),
+                current_time: P2pTimestamp::from_int_seconds(rng.gen()),
+                handshake_nonce: rng.gen(),
+            }),
+            Message::Handshake(HandshakeMessage::HelloAck {
+                protocol_version: ProtocolVersion::new(rng.gen()),
+                network: MagicBytes::new([rng.gen(), rng.gen(), rng.gen(), rng.gen()]),
+                services: [Service::Blocks].as_slice().into(),
+                user_agent: p2p_config.user_agent.clone(),
+                software_version: SemVer {
+                    major: rng.gen(),
+                    minor: rng.gen(),
+                    patch: rng.gen(),
+                },
+                receiver_address: Some(
+                    SocketAddr::new(
+                        IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),
+                        rng.gen(),
+                    )
+                    .into(),
+                ),
+                current_time: P2pTimestamp::from_int_seconds(rng.gen()),
+            }),
+            Message::PingRequest(PingRequest { nonce: rng.gen() }),
+            Message::PingResponse(PingResponse { nonce: rng.gen() }),
+            Message::NewTransaction(Id::new(rng.gen())),
+            Message::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![
+                Id::new(rng.gen()),
+                Id::new(rng.gen()),
+            ]))),
+            Message::HeaderList(HeaderList::new(vec![block.header().clone()])),
+            Message::BlockListRequest(BlockListRequest::new(vec![
+                Id::new(rng.gen()),
+                Id::new(rng.gen()),
+            ])),
+            Message::BlockResponse(BlockResponse::new(block.clone())),
+            Message::TransactionRequest(Id::new(rng.gen())),
+            Message::TransactionResponse(TransactionResponse::NotFound(Id::new(rng.gen()))),
+            Message::TransactionResponse(TransactionResponse::Found(
+                block.transactions()[0].clone(),
+            )),
+            Message::AnnounceAddrRequest(AnnounceAddrRequest {
+                address: SocketAddr::new(
+                    IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),
+                    rng.gen(),
+                )
+                .into(),
+            }),
+            Message::AddrListRequest(AddrListRequest {}),
+            Message::AddrListResponse(AddrListResponse {
+                addresses: vec![SocketAddr::new(
+                    IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),
+                    rng.gen(),
+                )
+                .into()],
+            }),
+        ];
+
+        let (socket1, socket2) =
+            get_two_connected_sockets::<TestTransportChannel, MpscChannelTransport>().await;
+        let mut sender =
+            BufferedTranscoder::new(socket1, Some(*p2p_config.protocol_config.max_message_size));
+        let mut receiver = BufferedTranscoder::<_, Message>::new(
+            socket2,
+            Some(*p2p_config.protocol_config.max_message_size),
+        );
+
+        for message in messages {
+            sender.send(message.clone()).await.unwrap();
+            let received_message = receiver.recv().await.unwrap();
+            assert_eq!(received_message, message);
+        }
+
+        assert!(sender.is_empty());
+        assert!(receiver.is_empty());
+    }
+}

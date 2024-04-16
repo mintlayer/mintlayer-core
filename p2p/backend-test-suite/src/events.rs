@@ -24,12 +24,13 @@ use tokio::{
     time::timeout,
 };
 
-use p2p::testing_utils::{connect_and_accept_services, test_p2p_config, TestTransportMaker};
+use networking::test_helpers::TestTransportMaker;
 use p2p::{
     net::{
         types::services::Service, ConnectivityService, MessagingService, NetworkingService,
         SyncingEventReceiver,
     },
+    test_helpers::{connect_and_accept_services, test_p2p_config},
     P2pEvent,
 };
 use utils::atomics::SeqCstAtomicBool;
@@ -55,7 +56,7 @@ where
     let (mut service1, _, _sync, _) = N::start(
         true,
         T::make_transport(),
-        vec![T::make_address()],
+        vec![T::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter.clone(),
@@ -77,7 +78,7 @@ where
     let (mut service2, _, _sync, _) = N::start(
         true,
         T::make_transport(),
-        vec![T::make_address()],
+        vec![T::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter,

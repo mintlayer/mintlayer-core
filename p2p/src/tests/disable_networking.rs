@@ -16,14 +16,15 @@
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
 use logging::log;
-use p2p_test_utils::{run_with_timeout, P2pBasicTestTimeGetter};
+use networking::test_helpers::{TestTransportChannel, TestTransportMaker};
+use p2p_test_utils::run_with_timeout;
+use test_utils::BasicTestTimeGetter;
 
 use crate::{
     error::{DialError, P2pError},
     peer_manager,
-    testing_utils::{
-        make_transport_with_local_addr_in_group, test_p2p_config, TestTransportChannel,
-        TestTransportMaker, TEST_PROTOCOL_VERSION,
+    test_helpers::{
+        make_transport_with_local_addr_in_group, test_p2p_config, TEST_PROTOCOL_VERSION,
     },
     tests::helpers::{
         node_wait_for_connection_to_ip_addr, node_wait_for_connection_to_sock_addr,
@@ -40,7 +41,7 @@ async fn disable_networking() {
 async fn disable_networking_impl() {
     type Transport = <TestTransportChannel as TestTransportMaker>::Transport;
 
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
 
@@ -51,7 +52,7 @@ async fn disable_networking_impl() {
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         make_transport_with_local_addr_in_group(0),
-        TestTransportChannel::make_address(),
+        TestTransportChannel::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         Some("test_node"),
     )
@@ -63,7 +64,7 @@ async fn disable_networking_impl() {
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         make_transport_with_local_addr_in_group(1),
-        TestTransportChannel::make_address(),
+        TestTransportChannel::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         Some("other_node1"),
     )
@@ -75,7 +76,7 @@ async fn disable_networking_impl() {
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         make_transport_with_local_addr_in_group(2),
-        TestTransportChannel::make_address(),
+        TestTransportChannel::make_address().into(),
         TEST_PROTOCOL_VERSION.into(),
         Some("other_node2"),
     )

@@ -30,7 +30,7 @@ use p2p::{
     config::NodeType,
     error::{DialError, P2pError, ProtocolError},
     net::types::PeerInfo,
-    testing_utils::TEST_PROTOCOL_VERSION,
+    test_helpers::TEST_PROTOCOL_VERSION,
     types::{peer_id::PeerId, socket_address::SocketAddress},
 };
 use rstest::rstest;

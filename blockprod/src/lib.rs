@@ -147,7 +147,7 @@ mod tests {
     };
     use mempool::{MempoolConfig, MempoolHandle};
     use p2p::{
-        peer_manager::peerdb::storage_impl::PeerDbStorageImpl, testing_utils::test_p2p_config,
+        peer_manager::peerdb::storage_impl::PeerDbStorageImpl, test_helpers::test_p2p_config,
     };
     use randomness::{CryptoRng, Rng};
     use storage_inmemory::InMemory;

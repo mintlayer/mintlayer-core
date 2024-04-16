@@ -17,14 +17,16 @@
 
 use std::{fmt::Debug, sync::Arc};
 
-use common::time_getter::TimeGetter;
 use tokio::sync::{mpsc, oneshot};
 
-use p2p::testing_utils::{test_p2p_config, TestTransportMaker};
+use common::time_getter::TimeGetter;
+use networking::{error::NetworkingError, test_helpers::TestTransportMaker};
 use p2p::{
-    error::{DialError, P2pError},
+    error::P2pError,
     net::{ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver},
+    test_helpers::test_p2p_config,
 };
+use test_utils::assert_matches;
 use utils::atomics::SeqCstAtomicBool;
 
 tests![connect, connect_address_in_use, connect_accept,];
@@ -48,7 +50,7 @@ where
     N::start(
         true,
         T::make_transport(),
-        vec![T::make_address()],
+        vec![T::make_address().into()],
         config,
         p2p_config,
         time_getter,
@@ -83,7 +85,7 @@ where
     let (connectivity, _messaging_handle, _sync, _) = N::start(
         true,
         T::make_transport(),
-        vec![T::make_address()],
+        vec![T::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter.clone(),
@@ -110,12 +112,12 @@ where
     )
     .await
     .expect_err("address is not in use");
-    assert!(matches!(
+    assert_matches!(
         res,
-        P2pError::DialError(DialError::IoError(
+        P2pError::NetworkingError(NetworkingError::IoError(
             std::io::ErrorKind::AddrInUse | std::io::ErrorKind::AddrNotAvailable
         ))
-    ));
+    );
 
     shutdown.store(true);
     let _ = shutdown_sender_2.send(());
@@ -143,7 +145,7 @@ where
     let (mut service1, _, _, _) = N::start(
         true,
         T::make_transport(),
-        vec![T::make_address()],
+        vec![T::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter.clone(),
@@ -159,7 +161,7 @@ where
     let (mut service2, _, _, _) = N::start(
         true,
         T::make_transport(),
-        vec![T::make_address()],
+        vec![T::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter,

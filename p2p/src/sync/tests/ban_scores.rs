@@ -34,7 +34,7 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     message::{BlockSyncMessage, HeaderList},
     sync::{peer_common, tests::helpers::TestNode},
-    testing_utils::for_each_protocol_version,
+    test_helpers::for_each_protocol_version,
     types::peer_id::PeerId,
 };
 

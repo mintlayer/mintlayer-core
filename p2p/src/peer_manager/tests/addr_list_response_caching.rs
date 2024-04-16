@@ -13,33 +13,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use rstest::rstest;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use common::{
     chain::{self, ChainConfig},
     primitives::user_agent::mintlayer_core_user_agent,
 };
-use p2p_test_utils::{expect_recv, P2pBasicTestTimeGetter};
+use networking::test_helpers::TestAddressMaker;
+use networking::{transport::TcpTransportSocket, types::ConnectionDirection};
+use p2p_test_utils::expect_recv;
 use p2p_types::{peer_address::PeerAddress, socket_address::SocketAddress};
 use randomness::Rng;
 use test_utils::{
     assert_matches_return_val,
     random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
 };
-use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
     config::{NodeType, P2pConfig},
     message::AddrListResponse,
     net::{
         default_backend::{
-            transport::TcpTransportSocket,
             types::{Command, Message},
             DefaultNetworkingService,
         },
-        types::{ConnectionDirection, PeerInfo},
+        types::PeerInfo,
         ConnectivityService, NetworkingService,
     },
     peer_manager::{
@@ -50,7 +52,7 @@ use crate::{
         PeerManager,
     },
     protocol::ProtocolConfig,
-    testing_utils::{TestAddressMaker, TEST_PROTOCOL_VERSION},
+    test_helpers::TEST_PROTOCOL_VERSION,
     types::peer_id::PeerId,
 };
 
@@ -73,7 +75,7 @@ async fn basic_test(#[case] seed: Seed) {
 
     let chain_config = Arc::new(chain::config::create_unit_test_config());
     let p2p_config = Arc::new(make_p2p_config());
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
 
     let (mut peer_mgr, mut cmd_receiver) =
         setup_peer_mgr(&chain_config, &p2p_config, &time_getter, &mut rng);
@@ -266,7 +268,7 @@ fn make_p2p_config() -> P2pConfig {
 fn setup_peer_mgr(
     chain_config: &Arc<ChainConfig>,
     p2p_config: &Arc<P2pConfig>,
-    time_getter: &P2pBasicTestTimeGetter,
+    time_getter: &BasicTestTimeGetter,
     rng: &mut impl Rng,
 ) -> (
     PeerManager<TestNetworkingService, impl PeerDbStorage>,
@@ -322,8 +324,8 @@ fn expect_addresses_from(cmd: Command, expected_peer_id: PeerId) -> Vec<PeerAddr
 async fn accept_conn<T, S>(
     peer_mgr: &mut PeerManager<T, S>,
     cmd_receiver: &mut UnboundedReceiver<Command>,
-    peer_addr: SocketAddress,
-    bind_addr: SocketAddress,
+    peer_addr: SocketAddr,
+    bind_addr: SocketAddr,
     peer_info: &PeerInfo,
 ) where
     T: NetworkingService + 'static,
@@ -331,8 +333,8 @@ async fn accept_conn<T, S>(
     S: PeerDbStorage,
 {
     peer_mgr.accept_connection(
-        peer_addr,
-        bind_addr,
+        peer_addr.into(),
+        bind_addr.into(),
         ConnectionDirection::Inbound,
         peer_info.clone(),
         None,

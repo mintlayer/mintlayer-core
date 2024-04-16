@@ -21,10 +21,12 @@ use common::{
     primitives::{user_agent::mintlayer_core_user_agent, Idable},
 };
 use logging::log;
-use p2p_test_utils::P2pBasicTestTimeGetter;
 use p2p_types::PeerId;
 use randomness::Rng;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 
 use crate::{
     config::P2pConfig,
@@ -35,7 +37,7 @@ use crate::{
         test_node_group::{MsgAction, TestNodeGroup},
         TestNode,
     },
-    testing_utils::for_each_protocol_version,
+    test_helpers::for_each_protocol_version,
 };
 
 #[tracing::instrument(skip(seed))]
@@ -47,7 +49,7 @@ async fn basic(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
 
         let p2p_config = Arc::new(P2pConfig {
             protocol_config: ProtocolConfig {
@@ -146,7 +148,7 @@ async fn no_unexpected_disconnects_in_ibd(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
 
         let mut blocks = Vec::new();
         for _ in 0..1000 {
@@ -200,7 +202,7 @@ async fn reorg(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
 
         let mut blocks = Vec::new();
         for _ in 0..10 {
@@ -283,7 +285,7 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
 
         const MAX_REQUEST_BLOCKS_COUNT: usize = 5;
 
@@ -409,7 +411,7 @@ async fn block_announcement_disconnected_headers(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn send_block_from_the_future_again(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
         let start_time = time_getter.get_time_getter().get_time();
 
         let p2p_config = Arc::new(P2pConfig {
