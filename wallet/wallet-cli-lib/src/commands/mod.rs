@@ -26,7 +26,7 @@ use common::{
     chain::{Block, SignedTransaction, Transaction},
     primitives::{BlockHeight, DecimalAmount, Id},
 };
-use crypto::key::{hdkd::u31::U31, PublicKey};
+use crypto::key::{hdkd::u31::U31, PrivateKey, PublicKey};
 use p2p_types::{bannable_address::BannableAddress, PeerId};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
@@ -136,6 +136,14 @@ pub enum ColdWalletCommand {
 
     #[clap(name = "address-show")]
     ShowReceiveAddresses,
+
+    #[clap(name = "standalone-address-show")]
+    ShowStandaloneAddresses,
+
+    #[clap(name = "standalone-address-details")]
+    ShowStandaloneAddressDetails {
+        address: String,
+    },
 
     #[clap(name = "staking-new-vrf-public-key")]
     NewVrfPublicKey,
@@ -247,6 +255,74 @@ pub enum WalletCommand {
         #[arg(value_enum, default_value_t = CliWithLocked::Unlocked)]
         with_locked: CliWithLocked,
         /// The state of utxos to be included (confirmed, unconfirmed, etc)
+        #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
+        utxo_states: Vec<CliUtxoState>,
+    },
+
+    #[clap(name = "standalone-address-label-rename")]
+    StandaloneAddressLabelRename {
+        /// The existing standalone address
+        address: String,
+
+        /// Optionally specify a new label, not specifying a label will remove the existing one
+        #[arg(long = "label")]
+        label: Option<String>,
+    },
+
+    #[clap(name = "standalone-add-watch-only-address")]
+    AddStandaloneKey {
+        /// The new standalone watch only address to be added to the selected account
+        address: String,
+
+        /// Optionally specify a label to the new address
+        #[arg(long = "label")]
+        label: Option<String>,
+
+        /// Skip the rescanning of the blockchain
+        #[arg(long = "no-rescan")]
+        no_rescan: Option<bool>,
+    },
+
+    #[clap(name = "standalone-add-private-key-from-hex")]
+    AddStandalonePrivateKey {
+        /// The new hex encoded standalone private key to be added to the selected account
+        hex_private_key: HexEncoded<PrivateKey>,
+
+        /// Optionally specify a label to the new address
+        #[arg(long = "label")]
+        label: Option<String>,
+
+        /// Skip the rescanning of the blockchain
+        #[arg(long = "no-rescan")]
+        no_rescan: Option<bool>,
+    },
+
+    #[clap(name = "standalone-add-multisig")]
+    AddStandaloneMultisig {
+        /// The minimum required signatures out of the specified public keys
+        min_required_signatures: u8,
+
+        /// Public keys from which to create the multisig challenge
+        public_keys: Vec<String>,
+
+        /// Optionally specify a label to the new address
+        #[arg(long = "label")]
+        label: Option<String>,
+
+        /// Skip the rescanning of the blockchain
+        #[arg(long = "no-rescan")]
+        no_rescan: Option<bool>,
+    },
+
+    #[clap(name = "standalone-multisig-utxos")]
+    ListMultisigUtxo {
+        /// The type of utxo to be listed. Default is "all".
+        #[arg(value_enum, default_value_t = CliUtxoTypes::All)]
+        utxo_type: CliUtxoTypes,
+        /// Whether to include locked outputs. Default is "unlocked"
+        #[arg(value_enum, default_value_t = CliWithLocked::Unlocked)]
+        with_locked: CliWithLocked,
+        /// The state of the utxos; e.g., confirmed, unconfirmed, etc.
         #[arg(default_values_t = vec![CliUtxoState::Confirmed])]
         utxo_states: Vec<CliUtxoState>,
     },

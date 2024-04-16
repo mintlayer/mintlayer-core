@@ -101,6 +101,137 @@ Returns:
 }
 ```
 
+### Method `standalone_address_label_rename`
+
+Add, rename or delete a label to an already added standalone address.
+Specifying a label will add or replace the existing one,
+and not specifying a label will remove the existing one.
+
+
+Parameters:
+```
+{
+    "account": number,
+    "address": bech32 string,
+    "label": EITHER OF
+         1) string
+         2) null,
+}
+```
+
+Returns:
+```
+nothing
+```
+
+### Method `standalone_add_watch_only_address`
+
+Add a new standalone watch only address not derived from the selected account's key chain
+
+
+Parameters:
+```
+{
+    "account": number,
+    "address": bech32 string,
+    "label": EITHER OF
+         1) string
+         2) null,
+    "no_rescan": EITHER OF
+         1) bool
+         2) null,
+}
+```
+
+Returns:
+```
+nothing
+```
+
+### Method `standalone_add_private_key_from_hex`
+
+Add a new standalone private key not derived from the selected account's key chain to be watched
+
+
+Parameters:
+```
+{
+    "account": number,
+    "hex_private_key": hex string,
+    "label": EITHER OF
+         1) string
+         2) null,
+    "no_rescan": EITHER OF
+         1) bool
+         2) null,
+}
+```
+
+Returns:
+```
+nothing
+```
+
+### Method `standalone_add_multisig`
+
+Add a new standalone multi signature address
+Use the `transaction_compose` command to use the new multisig address as input or output
+
+
+Parameters:
+```
+{
+    "account": number,
+    "min_required_signatures": number,
+    "public_keys": [ bech32 string, .. ],
+    "label": EITHER OF
+         1) string
+         2) null,
+    "no_rescan": EITHER OF
+         1) bool
+         2) null,
+}
+```
+
+Returns:
+```
+string
+```
+
+### Method `standalone_multisig_utxos`
+
+Lists all the utxos owned by a multisig watched by this account
+
+
+Parameters:
+```
+{
+    "account": number,
+    "utxo_types": [ EITHER OF
+         1) "Transfer"
+         2) "LockThenTransfer"
+         3) "IssueNft"
+         4) "CreateStakePool"
+         5) "ProduceBlockFromStake", .. ],
+    "utxo_states": [ EITHER OF
+         1) "Confirmed"
+         2) "Conflicted"
+         3) "Inactive"
+         4) "Abandoned"
+         5) "InMempool", .. ],
+    "with_locked": EITHER OF
+         1) "Any"
+         2) "Unlocked"
+         3) "Locked"
+         4) null,
+}
+```
+
+Returns:
+```
+[ json, .. ]
+```
+
 ### Method `account_balance`
 
 Get the total balance in the selected account in this wallet. See available options to include more categories, like locked coins.
@@ -1777,6 +1908,82 @@ Returns:
     "index": string,
     "used": bool,
 }, .. ]
+```
+
+### Method `standalone_address_show`
+
+Show standalone added addresses with their labels.
+
+
+Parameters:
+```
+{ "account": number }
+```
+
+Returns:
+```
+{
+    "watch_only_addresses": [ {
+        "address": bech32 string,
+        "label": EITHER OF
+             1) string
+             2) null,
+    }, .. ],
+    "multisig_addresses": [ {
+        "address": bech32 string,
+        "label": EITHER OF
+             1) string
+             2) null,
+    }, .. ],
+    "private_key_addresses": [ {
+        "public_key": bech32 string,
+        "public_key_hash": bech32 string,
+        "label": EITHER OF
+             1) string
+             2) null,
+    }, .. ],
+}
+```
+
+### Method `standalone_address_details`
+
+Show standalone addresses details.
+
+
+Parameters:
+```
+{
+    "account": number,
+    "address": bech32 string,
+}
+```
+
+Returns:
+```
+{
+    "address": string,
+    "label": EITHER OF
+         1) string
+         2) null,
+    "details": EITHER OF
+         1) { "type": "WatchOnly" }
+         2) { "type": "FromPrivateKey" }
+         3) {
+                "type": "Multisig",
+                "min_required_signatures": number,
+                "public_keys": [ bech32 string, .. ],
+            },
+    "balances": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { hex string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+}
 ```
 
 ### Method `address_new`

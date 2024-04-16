@@ -20,25 +20,23 @@ use common::{
     chain::{Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
     primitives::{BlockHeight, DecimalAmount, Id},
 };
-use crypto::key::hdkd::u31::U31;
+use crypto::key::{hdkd::u31::U31, PrivateKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
     types::{CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
-    ConnectedPeer, ControllerConfig,
+    ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::types::{
     AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
     DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance, StakingStatus,
-    TokenMetadata, TxOptionsOverrides, VrfPublicKeyInfo,
+    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcStandaloneAddresses, RpcTokenId,
+    StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
+    TxOptionsOverrides, VrfPublicKeyInfo,
 };
-use wallet_types::{
-    utxo_types::{UtxoStates, UtxoTypes},
-    with_locked::WithLocked,
-};
+use wallet_types::with_locked::WithLocked;
 
 pub enum PartialOrSignedTx {
     Partial(PartiallySignedTransaction),
@@ -108,10 +106,53 @@ pub trait WalletInterface {
         name: Option<String>,
     ) -> Result<NewAccountInfo, Self::Error>;
 
+    async fn standalone_address_label_rename(
+        &self,
+        account_index: U31,
+        address: String,
+        label: Option<String>,
+    ) -> Result<(), Self::Error>;
+
+    async fn add_standalone_address(
+        &self,
+        account_index: U31,
+        address: String,
+        label: Option<String>,
+        no_rescan: bool,
+    ) -> Result<(), Self::Error>;
+
+    async fn add_standalone_private_key(
+        &self,
+        account_index: U31,
+        private_key: HexEncoded<PrivateKey>,
+        label: Option<String>,
+        no_rescan: bool,
+    ) -> Result<(), Self::Error>;
+
+    async fn add_standalone_multisig(
+        &self,
+        account_index: U31,
+        min_required_signatures: u8,
+        public_keys: Vec<String>,
+        label: Option<String>,
+        no_rescan: bool,
+    ) -> Result<String, Self::Error>;
+
     async fn get_issued_addresses(
         &self,
         options: U31,
     ) -> Result<Vec<AddressWithUsageInfo>, Self::Error>;
+
+    async fn get_standalone_addresses(
+        &self,
+        account_index: U31,
+    ) -> Result<RpcStandaloneAddresses, Self::Error>;
+
+    async fn get_standalone_address_details(
+        &self,
+        account_index: U31,
+        address: String,
+    ) -> Result<StandaloneAddressWithDetails, Self::Error>;
 
     async fn issue_address(&self, account_index: U31) -> Result<AddressInfo, Self::Error>;
 
@@ -124,15 +165,23 @@ pub trait WalletInterface {
     async fn get_balance(
         &self,
         account_index: U31,
-        utxo_states: UtxoStates,
+        utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
     ) -> Result<Balances, Self::Error>;
+
+    async fn get_multisig_utxos(
+        &self,
+        account_index: U31,
+        utxo_types: Vec<UtxoType>,
+        utxo_states: Vec<UtxoState>,
+        with_locked: WithLocked,
+    ) -> Result<Vec<serde_json::Value>, Self::Error>;
 
     async fn get_utxos(
         &self,
         account_index: U31,
-        utxo_types: UtxoTypes,
-        utxo_states: UtxoStates,
+        utxo_types: Vec<UtxoType>,
+        utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
     ) -> Result<Vec<serde_json::Value>, Self::Error>;
 

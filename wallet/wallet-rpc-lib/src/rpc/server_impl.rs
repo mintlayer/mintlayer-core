@@ -17,7 +17,7 @@ use std::{fmt::Debug, num::NonZeroUsize, str::FromStr, time::Duration};
 
 use chainstate::ChainInfo;
 use common::{
-    address::dehexify::{dehexify_all_addresses, to_dehexified_json},
+    address::dehexify::dehexify_all_addresses,
     chain::{
         tokens::{IsTokenUnfreezable, TokenId},
         Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
@@ -25,6 +25,7 @@ use common::{
     },
     primitives::{time::Time, BlockHeight, Id, Idable},
 };
+use crypto::key::PrivateKey;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use utils_networking::IpOrSocketAddress;
@@ -34,7 +35,7 @@ use wallet::{
 };
 use wallet_controller::{
     types::{BlockInfo, CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
-    ConnectedPeer, ControllerConfig, NodeInterface, UtxoStates, UtxoTypes,
+    ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 
@@ -44,9 +45,10 @@ use crate::{
         AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction,
         CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
         MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-        NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcTokenId,
-        StakePoolBalance, StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-        UtxoInfo, VrfPublicKeyInfo,
+        NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
+        RpcStandaloneAddresses, RpcTokenId, RpcUtxoState, RpcUtxoType, StakePoolBalance,
+        StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TransactionOptions,
+        TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError,
 };
@@ -173,6 +175,23 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
         rpc::handle_result(self.find_public_key(account_arg.index::<N>()?, address).await)
     }
 
+    async fn get_standalone_addresses(
+        &self,
+        account_arg: AccountArg,
+    ) -> rpc::RpcResult<RpcStandaloneAddresses> {
+        rpc::handle_result(self.get_standalone_addresses(account_arg.index::<N>()?).await)
+    }
+
+    async fn get_standalone_address_details(
+        &self,
+        account_arg: AccountArg,
+        address: RpcAddress<Destination>,
+    ) -> rpc::RpcResult<StandaloneAddressWithDetails> {
+        rpc::handle_result(
+            self.get_standalone_address_details(account_arg.index::<N>()?, address).await,
+        )
+    }
+
     async fn get_issued_addresses(
         &self,
         account_arg: AccountArg,
@@ -215,9 +234,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
             self.sign_raw_transaction(account_arg.index::<N>()?, raw_tx, config)
                 .await
                 .map(|tx| {
-                    let is_complete = tx.is_fully_signed();
+                    let is_complete = tx.is_fully_signed(&self.chain_config);
                     let hex = if is_complete {
-                        let tx = tx.into_signed_tx().expect("already checked");
+                        let tx = tx.into_signed_tx(&self.chain_config).expect("already checked");
                         tx.hex_encode()
                     } else {
                         tx.hex_encode()
@@ -301,6 +320,74 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         rpc::handle_result(self.update_account_name(account_arg.index::<N>()?, name).await)
     }
 
+    async fn standalone_address_label_rename(
+        &self,
+        account_arg: AccountArg,
+        address: RpcAddress<Destination>,
+        label: Option<String>,
+    ) -> rpc::RpcResult<()> {
+        rpc::handle_result(
+            self.standalone_address_label_rename(account_arg.index::<N>()?, address, label)
+                .await,
+        )
+    }
+
+    async fn add_standalone_address(
+        &self,
+        account_arg: AccountArg,
+        address: RpcAddress<Destination>,
+        label: Option<String>,
+        no_rescan: Option<bool>,
+    ) -> rpc::RpcResult<()> {
+        rpc::handle_result(
+            self.add_standalone_watch_only_address(
+                account_arg.index::<N>()?,
+                address,
+                label,
+                no_rescan.unwrap_or(false),
+            )
+            .await,
+        )
+    }
+
+    async fn add_standalone_private_key(
+        &self,
+        account_arg: AccountArg,
+        private_key: HexEncoded<PrivateKey>,
+        label: Option<String>,
+        no_rescan: Option<bool>,
+    ) -> rpc::RpcResult<()> {
+        rpc::handle_result(
+            self.add_standalone_private_key(
+                account_arg.index::<N>()?,
+                private_key.take(),
+                label,
+                no_rescan.unwrap_or(false),
+            )
+            .await,
+        )
+    }
+
+    async fn add_standalone_multisig(
+        &self,
+        account_arg: AccountArg,
+        min_required_signatures: u8,
+        public_keys: Vec<RpcAddress<Destination>>,
+        label: Option<String>,
+        no_rescan: Option<bool>,
+    ) -> rpc::RpcResult<String> {
+        rpc::handle_result(
+            self.add_standalone_multisig(
+                account_arg.index::<N>()?,
+                min_required_signatures,
+                public_keys,
+                label,
+                no_rescan.unwrap_or(false),
+            )
+            .await,
+        )
+    }
+
     async fn get_balance(
         &self,
         account_arg: AccountArg,
@@ -316,6 +403,46 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         )
     }
 
+    async fn get_multisig_utxos(
+        &self,
+        account_arg: AccountArg,
+        utxo_types: Vec<RpcUtxoType>,
+        utxo_states: Vec<RpcUtxoState>,
+        with_locked: Option<WithLocked>,
+    ) -> rpc::RpcResult<Vec<JsonValue>> {
+        let utxo_types = if utxo_types.is_empty() {
+            UtxoTypes::ALL
+        } else {
+            utxo_types.iter().map(UtxoType::from).fold(UtxoTypes::NONE, |x, y| x | y)
+        };
+
+        let utxo_states = if utxo_states.is_empty() {
+            UtxoState::Confirmed.into()
+        } else {
+            utxo_states.iter().map(UtxoState::from).fold(UtxoStates::NONE, |x, y| x | y)
+        };
+
+        let utxos = self
+            .get_multisig_utxos(
+                account_arg.index::<N>()?,
+                utxo_types,
+                utxo_states,
+                with_locked.unwrap_or(WithLocked::Unlocked),
+            )
+            .await?;
+
+        let result = utxos
+            .into_iter()
+            .map(|(utxo_outpoint, tx_ouput)| {
+                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config)
+                    .map(serde_json::to_value);
+                rpc::handle_result(result)
+            })
+            .collect::<Result<Vec<_>, _>>();
+
+        rpc::handle_result(result)
+    }
+
     async fn get_utxos(&self, account_arg: AccountArg) -> rpc::RpcResult<Vec<JsonValue>> {
         let utxos = self
             .get_utxos(
@@ -328,7 +455,11 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
 
         let result = utxos
             .into_iter()
-            .map(|utxo| to_dehexified_json(&self.chain_config, UtxoInfo::from_tuple(utxo)))
+            .map(|(utxo_outpoint, tx_ouput)| {
+                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config)
+                    .map(serde_json::to_value);
+                rpc::handle_result(result)
+            })
             .collect::<Result<Vec<_>, _>>();
 
         rpc::handle_result(result)

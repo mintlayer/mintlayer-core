@@ -15,10 +15,12 @@
 
 //! Types supporting the RPC interface
 
+use chainstate::rpc::{RpcTxOutput, RpcUtxoOutpoint};
 use common::{
-    address::Address,
+    address::{pubkeyhash::PublicKeyHash, Address, AddressError},
     chain::{
         block::timestamp::BlockTimestamp,
+        classic_multisig::ClassicMultisigChallengeError,
         signature::DestinationSigError,
         tokens::{self, IsTokenFreezable, Metadata, TokenCreator, TokenId},
         ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
@@ -33,7 +35,7 @@ use crypto::{
     },
     vrf::VRFPublicKey,
 };
-use rpc::description::{HasValueHint, ValueHint as VH};
+use rpc::description::HasValueHint;
 use wallet::account::PoolData;
 
 pub use common::{
@@ -48,6 +50,7 @@ pub use wallet_controller::types::{
     Balances, BlockInfo, InspectTransaction, SignatureStats, ValidatedSignatures,
 };
 pub use wallet_controller::{ControllerConfig, NodeInterface};
+use wallet_controller::{UtxoState, UtxoType};
 
 use crate::service::SubmitError;
 
@@ -109,6 +112,15 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Can't compose a transaction without any inputs")]
     ComposeTransactionEmptyInputs,
+
+    #[error("Provided address to create a Multisig address at index {0} is not a valid public key. Only public keys can be used.")]
+    MultisigNotPublicKey(usize),
+
+    #[error("Invalid multisig: {0}")]
+    InvalidMultisigChallenge(#[from] ClassicMultisigChallengeError),
+
+    #[error("Minimum number of signatures can't be 0")]
+    InvalidMultisigMinSignature,
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
@@ -143,6 +155,76 @@ impl AddressInfo {
         Self {
             address: address.to_string(),
             index: child_number.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type")]
+pub enum RpcStandaloneAddressDetails {
+    WatchOnly,
+    FromPrivateKey,
+    Multisig {
+        min_required_signatures: u8,
+        public_keys: Vec<RpcAddress<Destination>>,
+    },
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct StandaloneAddressWithDetails {
+    pub address: String,
+    pub label: Option<String>,
+    pub details: RpcStandaloneAddressDetails,
+    pub balances: Balances,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct RpcStandaloneAddresses {
+    pub watch_only_addresses: Vec<RpcStandaloneAddress>,
+    pub multisig_addresses: Vec<RpcStandaloneAddress>,
+    pub private_key_addresses: Vec<RpcStandalonePrivateKeyAddress>,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct RpcStandaloneAddress {
+    pub address: RpcAddress<Destination>,
+    pub label: Option<String>,
+}
+
+impl RpcStandaloneAddress {
+    pub fn new(dest: Destination, label: Option<String>, chain_config: &ChainConfig) -> Self {
+        Self {
+            address: Address::new(chain_config, dest).expect("addressable").into(),
+            label,
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct RpcStandalonePrivateKeyAddress {
+    pub public_key: RpcAddress<Destination>,
+    pub public_key_hash: RpcAddress<Destination>,
+    pub label: Option<String>,
+}
+
+impl RpcStandalonePrivateKeyAddress {
+    pub fn new(
+        public_key: PublicKey,
+        public_key_hash: PublicKeyHash,
+        label: Option<String>,
+        chain_config: &ChainConfig,
+    ) -> Self {
+        Self {
+            public_key: Address::new(chain_config, Destination::PublicKey(public_key))
+                .expect("addressable")
+                .into(),
+            public_key_hash: Address::new(
+                chain_config,
+                Destination::PublicKeyHash(public_key_hash),
+            )
+            .expect("addressable")
+            .into(),
+            label,
         }
     }
 }
@@ -206,18 +288,20 @@ impl VrfPublicKeyInfo {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct UtxoInfo {
-    pub outpoint: UtxoOutPoint,
-    pub output: TxOutput,
-}
-
-impl rpc::description::HasValueHint for UtxoInfo {
-    const HINT_SER: VH =
-        VH::object(&[("outpoint", &UtxoOutPoint::HINT_SER), ("output", &VH::GENERIC_OBJECT)]);
+    pub outpoint: RpcUtxoOutpoint,
+    pub output: RpcTxOutput,
 }
 
 impl UtxoInfo {
-    pub fn from_tuple((outpoint, output): (UtxoOutPoint, TxOutput)) -> Self {
-        Self { outpoint, output }
+    pub fn new(
+        outpoint: UtxoOutPoint,
+        output: TxOutput,
+        chain_config: &ChainConfig,
+    ) -> Result<Self, AddressError> {
+        Ok(Self {
+            output: RpcTxOutput::new(chain_config, output)?,
+            outpoint: RpcUtxoOutpoint::new(outpoint),
+        })
     }
 }
 
@@ -341,6 +425,72 @@ impl NftMetadata {
             additional_metadata_uri: self.additional_metadata_uri.map(|x| x.into_bytes()).into(),
             media_uri: self.media_uri.map(|x| x.into_bytes()).into(),
             media_hash: self.media_hash.into_bytes(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub enum RpcUtxoType {
+    Transfer,
+    LockThenTransfer,
+    IssueNft,
+    CreateStakePool,
+    ProduceBlockFromStake,
+}
+
+impl From<&RpcUtxoType> for UtxoType {
+    fn from(value: &RpcUtxoType) -> Self {
+        match value {
+            RpcUtxoType::Transfer => UtxoType::Transfer,
+            RpcUtxoType::LockThenTransfer => UtxoType::LockThenTransfer,
+            RpcUtxoType::IssueNft => UtxoType::IssueNft,
+            RpcUtxoType::CreateStakePool => UtxoType::CreateStakePool,
+            RpcUtxoType::ProduceBlockFromStake => UtxoType::ProduceBlockFromStake,
+        }
+    }
+}
+
+impl From<&UtxoType> for RpcUtxoType {
+    fn from(value: &UtxoType) -> Self {
+        match value {
+            UtxoType::Transfer => RpcUtxoType::Transfer,
+            UtxoType::LockThenTransfer => RpcUtxoType::LockThenTransfer,
+            UtxoType::IssueNft => RpcUtxoType::IssueNft,
+            UtxoType::CreateStakePool => RpcUtxoType::CreateStakePool,
+            UtxoType::ProduceBlockFromStake => RpcUtxoType::ProduceBlockFromStake,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub enum RpcUtxoState {
+    Confirmed,
+    Conflicted,
+    Inactive,
+    Abandoned,
+    InMempool,
+}
+
+impl From<&RpcUtxoState> for UtxoState {
+    fn from(value: &RpcUtxoState) -> Self {
+        match value {
+            RpcUtxoState::Confirmed => UtxoState::Confirmed,
+            RpcUtxoState::Inactive => UtxoState::Inactive,
+            RpcUtxoState::Abandoned => UtxoState::Abandoned,
+            RpcUtxoState::Conflicted => UtxoState::Conflicted,
+            RpcUtxoState::InMempool => UtxoState::InMempool,
+        }
+    }
+}
+
+impl From<&UtxoState> for RpcUtxoState {
+    fn from(value: &UtxoState) -> Self {
+        match value {
+            UtxoState::Confirmed => RpcUtxoState::Confirmed,
+            UtxoState::Inactive => RpcUtxoState::Inactive,
+            UtxoState::Abandoned => RpcUtxoState::Abandoned,
+            UtxoState::Conflicted => RpcUtxoState::Conflicted,
+            UtxoState::InMempool => RpcUtxoState::InMempool,
         }
     }
 }

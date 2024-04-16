@@ -23,15 +23,23 @@ use common::{
     address::{Address, AddressError},
     chain::{block::timestamp::BlockTimestamp, Destination, SignedTransaction},
 };
-use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
+use crypto::{
+    kdf::KdfChallenge,
+    key::{extended::ExtendedPublicKey, PrivateKey},
+    symkey::SymmetricKey,
+};
 pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use std::collections::BTreeMap;
 
 use wallet_types::{
-    account_info::AccountVrfKeys, chain_info::ChainInfo, keys::RootKeys,
-    seed_phrase::SerializableSeedPhrase, wallet_type::WalletType, AccountDerivationPathId,
-    AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId, AccountWalletTxId,
-    KeychainUsageState, WalletTx,
+    account_id::{AccountAddress, AccountPublicKey},
+    account_info::{AccountVrfKeys, StandaloneMultisig, StandaloneWatchOnlyKey},
+    chain_info::ChainInfo,
+    keys::RootKeys,
+    seed_phrase::SerializableSeedPhrase,
+    wallet_type::WalletType,
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
+    AccountWalletTxId, KeychainUsageState, WalletTx,
 };
 
 /// Wallet Errors
@@ -75,6 +83,18 @@ pub trait WalletStorageReadLocked {
     fn get_account_unconfirmed_tx_counter(&self, account_id: &AccountId) -> Result<Option<u64>>;
     fn get_account_vrf_public_keys(&self, account_id: &AccountId)
         -> Result<Option<AccountVrfKeys>>;
+    fn get_account_standalone_watch_only_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<BTreeMap<Destination, StandaloneWatchOnlyKey>>;
+    fn get_account_standalone_multisig_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<BTreeMap<Destination, StandaloneMultisig>>;
+    fn get_account_standalone_private_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<Vec<(AccountPublicKey, Option<String>)>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<String>>;
     fn get_addresses(
@@ -104,6 +124,10 @@ pub trait WalletStorageReadLocked {
 pub trait WalletStorageReadUnlocked: WalletStorageReadLocked {
     fn get_root_key(&self) -> Result<Option<RootKeys>>;
     fn get_seed_phrase(&self) -> Result<Option<SerializableSeedPhrase>>;
+    fn get_account_standalone_private_key(
+        &self,
+        account_pubkey: &AccountPublicKey,
+    ) -> Result<Option<PrivateKey>>;
 }
 
 /// Queries on persistent wallet data for encryption
@@ -133,6 +157,16 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
         tx: &SignedTransaction,
     ) -> Result<()>;
     fn del_user_transaction(&mut self, id: &AccountWalletCreatedTxId) -> crate::Result<()>;
+    fn set_standalone_watch_only_key(
+        &mut self,
+        id: &AccountAddress,
+        key: &StandaloneWatchOnlyKey,
+    ) -> Result<()>;
+    fn set_standalone_multisig_key(
+        &mut self,
+        id: &AccountAddress,
+        key: &StandaloneMultisig,
+    ) -> Result<()>;
     fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> Result<()>;
     fn del_account(&mut self, id: &AccountId) -> Result<()>;
     fn set_address(
@@ -171,6 +205,12 @@ pub trait WalletStorageWriteUnlocked: WalletStorageReadUnlocked + WalletStorageW
     fn del_root_key(&mut self) -> Result<()>;
     fn set_seed_phrase(&mut self, seed_phrase: SerializableSeedPhrase) -> Result<()>;
     fn del_seed_phrase(&mut self) -> Result<Option<SerializableSeedPhrase>>;
+    fn set_standalone_private_key(
+        &mut self,
+        id: &AccountPublicKey,
+        key: &PrivateKey,
+        label: Option<String>,
+    ) -> Result<()>;
 }
 
 /// Modifying operations on persistent wallet data for encryption

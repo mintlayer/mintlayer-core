@@ -19,7 +19,10 @@ use common::chain::SignedTransaction;
 use crypto::key::extended::ExtendedPublicKey;
 use utils::maybe_encrypted::MaybeEncrypted;
 use wallet_types::{
-    account_info::AccountVrfKeys,
+    account_id::{AccountAddress, AccountPublicKey},
+    account_info::{
+        AccountVrfKeys, StandaloneMultisig, StandalonePrivateKey, StandaloneWatchOnlyKey,
+    },
     keys::{RootKeyConstant, RootKeys},
     seed_phrase::{SeedPhraseConstant, SerializableSeedPhrase},
     AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletCreatedTxId,
@@ -53,5 +56,11 @@ storage::decl_schema! {
         pub DBUnconfirmedTxCounters: Map<AccountId, u64>,
         /// Store for each account's legacy VRF public key
         pub DBVRFPublicKeys: Map<AccountId, AccountVrfKeys>,
+        /// Store for standalone watch only keys added to accounts
+        pub DBStandaloneWatchOnlyKeys: Map<AccountAddress, StandaloneWatchOnlyKey>,
+        /// Store for standalone multisig keys added to accounts
+        pub DBStandaloneMultisigKeys: Map<AccountAddress, StandaloneMultisig>,
+        /// Store for standalone private keys added to accounts
+        pub DBStandalonePrivateKeys: Map<AccountPublicKey, StandalonePrivateKey>,
     }
 }

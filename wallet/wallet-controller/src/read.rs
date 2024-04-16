@@ -38,6 +38,7 @@ use wallet::{
     DefaultWallet,
 };
 use wallet_types::{
+    account_info::StandaloneAddresses,
     utxo_types::{UtxoStates, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
@@ -45,7 +46,7 @@ use wallet_types::{
 };
 
 use crate::{
-    types::{Balances, CreatedBlockInfo},
+    types::{AccountStandaloneKeyDetails, Balances, CreatedBlockInfo},
     ControllerError,
 };
 
@@ -95,6 +96,20 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     ) -> Result<Balances, ControllerError<T>> {
         let balances = self.get_balance(utxo_states, with_locked)?;
         super::into_balances(&self.rpc_client, self.chain_config, balances).await
+    }
+
+    pub fn get_multisig_utxos(
+        &self,
+        utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ControllerError<T>> {
+        self.wallet
+            .get_multisig_utxos(self.account_index, utxo_types, utxo_states, with_locked)
+            .map(|utxos| {
+                utxos.into_iter().map(|(outpoint, output, _)| (outpoint, output)).collect()
+            })
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn get_utxos(
@@ -192,6 +207,32 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
                 (child_number, (address, used))
             })
             .collect())
+    }
+
+    /// Get all standalone addresses with their labels
+    pub fn get_standalone_addresses(&self) -> Result<StandaloneAddresses, ControllerError<T>> {
+        self.wallet
+            .get_all_standalone_addresses(self.account_index)
+            .map_err(ControllerError::WalletError)
+    }
+
+    /// Get all standalone addresses with their labels and balances
+    pub async fn get_standalone_address_details(
+        &self,
+        address: Destination,
+    ) -> Result<AccountStandaloneKeyDetails, ControllerError<T>> {
+        let (address, balances, details) = self
+            .wallet
+            .get_all_standalone_address_details(self.account_index, address)
+            .map_err(ControllerError::WalletError)?;
+
+        let balances = super::into_balances(&self.rpc_client, self.chain_config, balances).await?;
+
+        Ok(AccountStandaloneKeyDetails {
+            address,
+            balances,
+            details,
+        })
     }
 
     /// Get all addresses with usage information

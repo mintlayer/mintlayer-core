@@ -8503,6 +8503,7 @@ dependencies = [
  "storage",
  "test-utils",
  "thiserror",
+ "utils",
  "zeroize",
 ]
 

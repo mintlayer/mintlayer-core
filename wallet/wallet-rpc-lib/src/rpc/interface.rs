@@ -17,13 +17,16 @@ use std::num::NonZeroUsize;
 
 use chainstate::ChainInfo;
 use common::{
+    address::RpcAddress,
     chain::{
         tokens::TokenId, Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
         Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, Id},
 };
+use crypto::key::PrivateKey;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use rpc::types::RpcHexString;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
     types::{BlockInfo, CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
@@ -35,8 +38,9 @@ use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction, CreatedWallet,
     DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
     NewAccountInfo, NewDelegation, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
-    PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcTokenId, StakePoolBalance,
-    StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
+    PublicKeyInfo, RpcAmountIn, RpcStandaloneAddresses, RpcTokenId, RpcUtxoState, RpcUtxoType,
+    StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
+    TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -130,6 +134,21 @@ trait ColdWalletRpc {
         &self,
         account: AccountArg,
     ) -> rpc::RpcResult<Vec<AddressWithUsageInfo>>;
+
+    /// Show standalone added addresses with their labels.
+    #[method(name = "standalone_address_show")]
+    async fn get_standalone_addresses(
+        &self,
+        account: AccountArg,
+    ) -> rpc::RpcResult<RpcStandaloneAddresses>;
+
+    /// Show standalone addresses details.
+    #[method(name = "standalone_address_details")]
+    async fn get_standalone_address_details(
+        &self,
+        account: AccountArg,
+        address: RpcAddress<Destination>,
+    ) -> rpc::RpcResult<StandaloneAddressWithDetails>;
 
     /// Generate a new unused address
     #[method(name = "address_new")]
@@ -248,6 +267,59 @@ trait WalletRpc {
         account: AccountArg,
         name: Option<String>,
     ) -> rpc::RpcResult<NewAccountInfo>;
+
+    /// Add, rename or delete a label to an already added standalone address.
+    /// Specifying a label will add or replace the existing one,
+    /// and not specifying a label will remove the existing one.
+    #[method(name = "standalone_address_label_rename")]
+    async fn standalone_address_label_rename(
+        &self,
+        account: AccountArg,
+        address: RpcAddress<Destination>,
+        label: Option<String>,
+    ) -> rpc::RpcResult<()>;
+
+    /// Add a new standalone watch only address not derived from the selected account's key chain
+    #[method(name = "standalone_add_watch_only_address")]
+    async fn add_standalone_address(
+        &self,
+        account: AccountArg,
+        address: RpcAddress<Destination>,
+        label: Option<String>,
+        no_rescan: Option<bool>,
+    ) -> rpc::RpcResult<()>;
+
+    /// Add a new standalone private key not derived from the selected account's key chain to be watched
+    #[method(name = "standalone_add_private_key_from_hex")]
+    async fn add_standalone_private_key(
+        &self,
+        account: AccountArg,
+        hex_private_key: HexEncoded<PrivateKey>,
+        label: Option<String>,
+        no_rescan: Option<bool>,
+    ) -> rpc::RpcResult<()>;
+
+    /// Add a new standalone multi signature address
+    /// Use the `transaction_compose` command to use the new multisig address as input or output
+    #[method(name = "standalone_add_multisig")]
+    async fn add_standalone_multisig(
+        &self,
+        account: AccountArg,
+        min_required_signatures: u8,
+        public_keys: Vec<RpcAddress<Destination>>,
+        label: Option<String>,
+        no_rescan: Option<bool>,
+    ) -> rpc::RpcResult<String>;
+
+    /// Lists all the utxos owned by a multisig watched by this account
+    #[method(name = "standalone_multisig_utxos")]
+    async fn get_multisig_utxos(
+        &self,
+        account: AccountArg,
+        utxo_types: Vec<RpcUtxoType>,
+        utxo_states: Vec<RpcUtxoState>,
+        with_locked: Option<WithLocked>,
+    ) -> rpc::RpcResult<Vec<JsonValue>>;
 
     /// Get the total balance in the selected account in this wallet. See available options to include more categories, like locked coins.
     #[method(name = "account_balance")]

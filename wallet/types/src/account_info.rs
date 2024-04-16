@@ -14,14 +14,15 @@
 // limitations under the License.
 
 use common::{
-    chain::{ChainConfig, GenBlock},
+    chain::{classic_multisig::ClassicMultisigChallenge, ChainConfig, Destination, GenBlock},
     primitives::{BlockHeight, Id},
 };
 use crypto::{
-    key::{extended::ExtendedPublicKey, hdkd::u31::U31},
+    key::{extended::ExtendedPublicKey, hdkd::u31::U31, PrivateKey, PublicKey},
     vrf::ExtendedVRFPublicKey,
 };
 use serialization::{Decode, Encode};
+use utils::maybe_encrypted::MaybeEncrypted;
 
 pub const DEFAULT_ACCOUNT_INDEX: U31 = match U31::from_u32(0) {
     Some(v) => v,
@@ -105,4 +106,49 @@ impl AccountInfo {
 pub struct AccountVrfKeys {
     pub account_vrf_key: ExtendedVRFPublicKey,
     pub legacy_vrf_key: ExtendedVRFPublicKey,
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct StandaloneWatchOnlyKey {
+    pub label: Option<String>,
+}
+
+impl StandaloneWatchOnlyKey {
+    pub fn with_new_label(&self, label: Option<String>) -> Self {
+        Self { label }
+    }
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct StandaloneMultisig {
+    pub label: Option<String>,
+    pub challenge: ClassicMultisigChallenge,
+}
+
+impl StandaloneMultisig {
+    pub fn with_new_label(&self, label: Option<String>) -> Self {
+        Self {
+            label,
+            challenge: self.challenge.clone(),
+        }
+    }
+}
+
+#[derive(Encode, Decode)]
+pub struct StandalonePrivateKey {
+    pub label: Option<String>,
+    pub private_key: MaybeEncrypted<PrivateKey>,
+}
+
+#[derive(Debug, Clone)]
+pub enum StandaloneAddressDetails {
+    WatchOnly(StandaloneWatchOnlyKey),
+    Multisig(StandaloneMultisig),
+    PrivateKey(Option<String>),
+}
+
+pub struct StandaloneAddresses {
+    pub watch_only_addresses: Vec<(Destination, StandaloneWatchOnlyKey)>,
+    pub multisig_addresses: Vec<(Destination, StandaloneMultisig)>,
+    pub private_keys: Vec<(PublicKey, Option<String>)>,
 }

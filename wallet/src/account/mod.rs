@@ -20,7 +20,14 @@ mod utxo_selector;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
+use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::signature::inputsig::arbitrary_message::ArbitraryMessageSignature;
+use common::chain::signature::inputsig::classical_multisig::authorize_classical_multisig::{
+    sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
+    ClassicalMultisigCompletionStatus,
+};
+use common::chain::signature::sighash::signature_hash;
+use common::chain::signature::DestinationSigError;
 use common::chain::{AccountCommand, AccountOutPoint, AccountSpending, TransactionCreationError};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
@@ -34,6 +41,7 @@ use serialization::hex_encoded::HexEncoded;
 use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
 use wallet_types::account_id::AccountPrefixedId;
+use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
@@ -46,7 +54,7 @@ use crate::send_request::{
 use crate::wallet::WalletPoolsFilter;
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{get_tx_output_destination, SendRequest, WalletError, WalletResult};
-use common::address::Address;
+use common::address::{Address, RpcAddress};
 use common::chain::output_value::OutputValue;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use common::chain::signature::inputsig::InputWitness;
@@ -61,7 +69,7 @@ use common::chain::{
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
-use crypto::key::PublicKey;
+use crypto::key::{PrivateKey, PublicKey};
 use crypto::vrf::VRFPublicKey;
 use itertools::{izip, Itertools};
 use serialization::{Decode, Encode};
@@ -180,12 +188,27 @@ impl PartiallySignedTransaction {
         self.witnesses.iter().filter(|w| w.is_some()).count()
     }
 
-    pub fn is_fully_signed(&self) -> bool {
-        self.witnesses.iter().all(|w| w.is_some())
+    pub fn is_fully_signed(&self, chain_config: &ChainConfig) -> bool {
+        let inputs_utxos_refs: Vec<_> = self.input_utxos.iter().map(|out| out.as_ref()).collect();
+        self.witnesses
+            .iter()
+            .enumerate()
+            .zip(&self.destinations)
+            .all(|((input_num, w), d)| match (w, d) {
+                (Some(InputWitness::NoSignature(_)), None) => true,
+                (Some(InputWitness::NoSignature(_)), Some(_)) => false,
+                (Some(InputWitness::Standard(_)), None) => false,
+                (Some(InputWitness::Standard(sig)), Some(dest)) => {
+                    signature_hash(sig.sighash_type(), &self.tx, &inputs_utxos_refs, input_num)
+                        .and_then(|sighash| sig.verify_signature(chain_config, dest, &sighash))
+                        .is_ok()
+                }
+                (None, _) => false,
+            })
     }
 
-    pub fn into_signed_tx(self) -> WalletResult<SignedTransaction> {
-        if self.is_fully_signed() {
+    pub fn into_signed_tx(self, chain_config: &ChainConfig) -> WalletResult<SignedTransaction> {
+        if self.is_fully_signed(chain_config) {
             let witnesses = self.witnesses.into_iter().map(|w| w.expect("cannot fail")).collect();
             Ok(SignedTransaction::new(self.tx, witnesses)?)
         } else {
@@ -670,7 +693,7 @@ impl Account {
         let tx = Transaction::new(0, vec![tx_input], vec![output])?;
 
         self.sign_transaction(tx, &[&delegation_data.destination], &[None], db_tx)?
-            .into_signed_tx()
+            .into_signed_tx(&self.chain_config)
     }
 
     pub fn process_send_request(
@@ -794,7 +817,7 @@ impl Account {
             current_fee_rate,
         )?;
         result
-            .into_signed_tx()
+            .into_signed_tx(&self.chain_config)
             .map_err(|_| WalletError::PartiallySignedTransactionInDecommissionCommand)
     }
 
@@ -813,7 +836,7 @@ impl Account {
             output_address,
             current_fee_rate,
         )?;
-        if result.is_fully_signed() {
+        if result.is_fully_signed(&self.chain_config) {
             return Err(WalletError::FullySignedTransactionInDecommissionReq);
         }
         Ok(result)
@@ -884,7 +907,7 @@ impl Account {
         let tx = Transaction::new(0, vec![tx_input], outputs)?;
 
         self.sign_transaction(tx, &[&delegation_data.destination], &[None], db_tx)?
-            .into_signed_tx()
+            .into_signed_tx(&self.chain_config)
     }
 
     fn get_vrf_public_key(
@@ -919,20 +942,20 @@ impl Account {
     pub fn get_delegations(&self) -> impl Iterator<Item = (&DelegationId, &DelegationData)> {
         self.output_cache
             .delegation_ids()
-            .filter(|(_, data)| self.is_mine_or_watched_destination(&data.destination))
+            .filter(|(_, data)| self.is_destination_mine(&data.destination))
     }
 
     pub fn find_delegation(&self, delegation_id: &DelegationId) -> WalletResult<&DelegationData> {
         self.output_cache
             .delegation_data(delegation_id)
-            .filter(|data| self.is_mine_or_watched_destination(&data.destination))
+            .filter(|data| self.is_destination_mine(&data.destination))
             .ok_or(WalletError::DelegationNotFound(*delegation_id))
     }
 
     pub fn find_token(&self, token_id: &TokenId) -> WalletResult<&TokenIssuanceData> {
         self.output_cache
             .token_data(token_id)
-            .filter(|data| self.is_mine_or_watched_destination(&data.authority))
+            .filter(|data| self.is_destination_mine(&data.authority))
             .ok_or(WalletError::UnknownTokenId(*token_id))
     }
 
@@ -942,7 +965,7 @@ impl Account {
     ) -> WalletResult<UnconfirmedTokenInfo> {
         self.output_cache
             .get_token_unconfirmed_info(token_info, |destination: &Destination| {
-                self.is_mine_or_watched_destination(destination)
+                self.is_destination_mine(destination)
             })
     }
 
@@ -1263,8 +1286,7 @@ impl Account {
         let stake_private_key = self
             .key_chain
             .get_private_key_for_destination(stake_destination, db_tx)?
-            .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
-            .private_key();
+            .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?;
 
         let vrf_private_key = self
             .key_chain
@@ -1295,7 +1317,7 @@ impl Account {
         let input_utxos = input_utxos.iter().map(Option::as_ref).collect_vec();
 
         self.sign_transaction(tx, destinations.as_slice(), input_utxos.as_slice(), db_tx)?
-            .into_signed_tx()
+            .into_signed_tx(&self.chain_config)
     }
 
     fn sign_input(
@@ -1306,13 +1328,12 @@ impl Account {
         input_utxos: &[Option<&TxOutput>],
         db_tx: &impl WalletStorageReadUnlocked,
     ) -> WalletResult<Option<InputWitness>> {
-        if *destination == Destination::AnyoneCanSpend {
-            Ok(Some(InputWitness::NoSignature(None)))
-        } else {
-            self.key_chain
+        match destination {
+            Destination::AnyoneCanSpend => Ok(Some(InputWitness::NoSignature(None))),
+            Destination::PublicKey(_) | Destination::PublicKeyHash(_) => self
+                .key_chain
                 .get_private_key_for_destination(destination, db_tx)?
-                .map(|pk_from_keychain| {
-                    let private_key = pk_from_keychain.private_key();
+                .map(|private_key| {
                     let sighash_type =
                         SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
 
@@ -1327,8 +1348,78 @@ impl Account {
                     .map(InputWitness::Standard)
                     .map_err(WalletError::TransactionSig)
                 })
-                .transpose()
+                .transpose(),
+            Destination::ClassicMultisig(_) => {
+                if let Some(challenge) = self.key_chain.get_multisig_challenge(destination) {
+                    let current_signatures =
+                        AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
+
+                    return self.sign_multisig_input(
+                        tx,
+                        destination,
+                        input_index,
+                        input_utxos,
+                        current_signatures,
+                        db_tx,
+                    );
+                }
+
+                Ok(None)
+            }
+            Destination::ScriptHash(_) => Ok(None),
         }
+    }
+
+    fn sign_multisig_input(
+        &self,
+        tx: &Transaction,
+        destination: &Destination,
+        input_index: usize,
+        input_utxos: &[Option<&TxOutput>],
+        mut current_signatures: AuthorizedClassicalMultisigSpend,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> WalletResult<Option<InputWitness>> {
+        let sighash_type = SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
+
+        if let Some(challenge) = self.key_chain.get_multisig_challenge(destination) {
+            let sighash = signature_hash(sighash_type, tx, input_utxos, input_index)?;
+
+            for (key_index, public_key) in challenge.public_keys().iter().enumerate() {
+                if current_signatures.signatures().contains_key(&(key_index as u8)) {
+                    continue;
+                }
+
+                if let Some(private_key) = self.key_chain.get_private_key_for_destination(
+                    &Destination::PublicKey(public_key.clone()),
+                    db_tx,
+                )? {
+                    let res = sign_classical_multisig_spending(
+                        &self.chain_config,
+                        key_index as u8,
+                        &private_key,
+                        challenge,
+                        &sighash,
+                        current_signatures,
+                    )
+                    .map_err(DestinationSigError::ClassicalMultisigSigningFailed)?;
+
+                    match res {
+                        ClassicalMultisigCompletionStatus::Complete(signatures) => {
+                            current_signatures = signatures;
+                            break;
+                        }
+                        ClassicalMultisigCompletionStatus::Incomplete(signatures) => {
+                            current_signatures = signatures;
+                        }
+                    };
+                }
+            }
+        }
+
+        Ok(Some(InputWitness::Standard(StandardInputSignature::new(
+            sighash_type,
+            current_signatures.encode(),
+        ))))
     }
 
     fn sign_transaction(
@@ -1427,8 +1518,7 @@ impl Account {
         let private_key = self
             .key_chain
             .get_private_key_for_destination(&destination, db_tx)?
-            .ok_or(WalletError::DestinationNotFromThisWallet)?
-            .private_key();
+            .ok_or(WalletError::DestinationNotFromThisWallet)?;
 
         let sig = ArbitraryMessageSignature::produce_uniparty_signature(
             &private_key,
@@ -1456,14 +1546,43 @@ impl Account {
             .witnesses()
             .iter()
             .enumerate()
-            .map(|(i, witness)| match witness {
-                Some(w) => Ok(Some(w.clone())),
-                None => match ptx.destinations().get(i).expect("cannot fail") {
+            .zip(ptx.destinations())
+            .map(|((i, witness), destination)| match witness {
+                Some(w) => match w {
+                    InputWitness::NoSignature(_) => Ok(Some(w.clone())),
+                    InputWitness::Standard(sig) => match destination {
+                        Some(destination) => {
+                            let sighash =
+                                signature_hash(sig.sighash_type(), ptx.tx(), &inputs_utxo_refs, i)?;
+
+                            if sig
+                                .verify_signature(&self.chain_config, destination, &sighash)
+                                .is_ok()
+                            {
+                                Ok(Some(w.clone()))
+                            } else if let Destination::ClassicMultisig(_) = destination {
+                                let sig_components = AuthorizedClassicalMultisigSpend::from_data(
+                                    sig.raw_signature(),
+                                )?;
+
+                                self.sign_multisig_input(
+                                    ptx.tx(),
+                                    destination,
+                                    i,
+                                    &inputs_utxo_refs,
+                                    sig_components,
+                                    db_tx,
+                                )
+                            } else {
+                                Ok(None)
+                            }
+                        }
+                        None => Ok(None),
+                    },
+                },
+                None => match destination {
                     Some(destination) => {
-                        let s = self
-                            .sign_input(ptx.tx(), destination, i, &inputs_utxo_refs, db_tx)?
-                            .ok_or(WalletError::InputCannotBeSigned)?;
-                        Ok(Some(s.clone()))
+                        self.sign_input(ptx.tx(), destination, i, &inputs_utxo_refs, db_tx)
                     }
                     None => Ok(None),
                 },
@@ -1487,6 +1606,46 @@ impl Account {
     pub fn reload_keys(&mut self, db_tx: &impl WalletStorageReadLocked) -> WalletResult<()> {
         self.key_chain.reload_keys(db_tx)?;
         Ok(())
+    }
+
+    /// Add, rename or delete a label for a standalone address
+    pub fn standalone_address_label_rename(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        address: Destination,
+        label: Option<String>,
+    ) -> WalletResult<()> {
+        Ok(self.key_chain.standalone_address_label_rename(db_tx, address, label)?)
+    }
+
+    /// Add a standalone address not derived from this account's key chain to be watched
+    pub fn add_standalone_address(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        address: PublicKeyHash,
+        label: Option<String>,
+    ) -> WalletResult<()> {
+        Ok(self.key_chain.add_standalone_watch_only_address(db_tx, address, label)?)
+    }
+
+    /// Add a standalone private key not derived from this account's key chain to be watched
+    pub fn add_standalone_private_key(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        private_key: PrivateKey,
+        label: Option<String>,
+    ) -> WalletResult<()> {
+        Ok(self.key_chain.add_standalone_private_key(db_tx, private_key, label)?)
+    }
+
+    /// Add a standalone multisig address to be watched
+    pub fn add_standalone_multisig(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        challenge: ClassicMultisigChallenge,
+        label: Option<String>,
+    ) -> WalletResult<PublicKeyHash> {
+        Ok(self.key_chain.add_standalone_multisig(db_tx, challenge, label)?)
     }
 
     /// Get a new address that hasn't been used before
@@ -1528,6 +1687,51 @@ impl Account {
         self.key_chain.get_all_issued_addresses()
     }
 
+    pub fn get_all_standalone_addresses(&self) -> StandaloneAddresses {
+        self.key_chain.get_all_standalone_addresses()
+    }
+
+    pub fn get_all_standalone_address_details(
+        &self,
+        address: Destination,
+        median_time: BlockTimestamp,
+    ) -> WalletResult<(
+        Destination,
+        BTreeMap<Currency, Amount>,
+        StandaloneAddressDetails,
+    )> {
+        let (address, standalone_key) = self
+            .key_chain
+            .get_all_standalone_address_details(address.clone())
+            .ok_or_else(|| {
+                let addr = RpcAddress::new(&self.chain_config, address).expect("addressable");
+                WalletError::StandaloneAddressNotFound(addr)
+            })?;
+
+        let current_block_info = BlockInfo {
+            height: self.account_info.best_block_height(),
+            timestamp: median_time,
+        };
+        let amounts_by_currency = currency_grouper::group_utxos_for_input(
+            self.output_cache
+                .utxos_with_token_ids(
+                    current_block_info,
+                    UtxoState::Confirmed.into(),
+                    WithLocked::Unlocked,
+                    |txo| get_utxo_type(txo).is_some() && self.is_watched_by(txo, &address),
+                )
+                .into_iter(),
+            |(_, (tx_output, _))| tx_output,
+            |total: &mut Amount, _, amount| -> WalletResult<()> {
+                *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
+                Ok(())
+            },
+            Amount::ZERO,
+        )?;
+
+        Ok((address, amounts_by_currency, standalone_key))
+    }
+
     pub fn get_all_issued_vrf_public_keys(
         &self,
     ) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)> {
@@ -1565,21 +1769,63 @@ impl Account {
         }
     }
 
+    /// Return true if this transaction output can be spent by this account
+    fn is_mine(&self, txo: &TxOutput) -> bool {
+        self.collect_output_destinations(txo)
+            .iter()
+            .any(|d| self.is_destination_mine(d))
+    }
+
     /// Return true if this transaction output can be spent by this account or if it is being
     /// watched.
     fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
         self.collect_output_destinations(txo)
             .iter()
-            .any(|d| self.is_mine_or_watched_destination(d))
+            .any(|d| self.is_destination_mine_or_watched(d))
     }
 
-    /// Return true if this destination can be spent by this account or if it is being watched.
-    fn is_mine_or_watched_destination(&self, destination: &Destination) -> bool {
+    /// Return true if this transaction output is a multisig that is being watched
+    fn is_watched_multisig_output(&self, txo: &TxOutput) -> bool {
+        self.collect_output_destinations(txo)
+            .iter()
+            .any(|destination| match destination {
+                Destination::PublicKeyHash(_)
+                | Destination::PublicKey(_)
+                | Destination::AnyoneCanSpend
+                | Destination::ScriptHash(_) => false,
+                Destination::ClassicMultisig(_) => {
+                    self.key_chain.get_multisig_challenge(destination).is_some()
+                }
+            })
+    }
+
+    /// Return true if this transaction output can be spent by this account
+    fn is_watched_by(&self, txo: &TxOutput, watched_by: &Destination) -> bool {
+        self.collect_output_destinations(txo).contains(watched_by)
+    }
+
+    /// Return true if this destination can be spent by this account
+    fn is_destination_mine(&self, destination: &Destination) -> bool {
         match destination {
             Destination::PublicKeyHash(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
             Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
             Destination::AnyoneCanSpend => false,
             Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => false,
+        }
+    }
+
+    /// Return true if this destination can be spent by this account or if it is being watched.
+    fn is_destination_mine_or_watched(&self, destination: &Destination) -> bool {
+        match destination {
+            Destination::PublicKeyHash(pkh) => {
+                self.key_chain.is_public_key_hash_mine_or_watched(*pkh)
+            }
+            Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
+            Destination::AnyoneCanSpend => false,
+            Destination::ScriptHash(_) => false,
+            Destination::ClassicMultisig(_) => {
+                self.key_chain.get_multisig_challenge(destination).is_some()
+            }
         }
     }
 
@@ -1607,7 +1853,7 @@ impl Account {
             match destination {
                 Destination::PublicKeyHash(pkh) => {
                     let found = self.key_chain.mark_public_key_hash_as_used(db_tx, &pkh)?;
-                    if found {
+                    if found || self.key_chain.is_public_key_hash_watched(pkh) {
                         return Ok(true);
                     }
                 }
@@ -1618,7 +1864,12 @@ impl Account {
                     }
                 }
                 Destination::AnyoneCanSpend => return Ok(false),
-                Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
+                Destination::ClassicMultisig(_) => {
+                    if self.key_chain.get_multisig_challenge(&destination).is_some() {
+                        return Ok(true);
+                    }
+                }
+                Destination::ScriptHash(_) => {}
             }
         }
 
@@ -1673,7 +1924,7 @@ impl Account {
         Ok(amounts_by_currency)
     }
 
-    pub fn get_utxos(
+    pub fn get_multisig_utxos(
         &self,
         utxo_types: UtxoTypes,
         median_time: BlockTimestamp,
@@ -1689,9 +1940,28 @@ impl Account {
             utxo_states,
             with_locked,
             |txo| {
-                self.is_mine_or_watched(txo)
+                self.is_watched_multisig_output(txo)
                     && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
             },
+        )
+    }
+
+    pub fn get_utxos(
+        &self,
+        utxo_types: UtxoTypes,
+        median_time: BlockTimestamp,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))> {
+        let current_block_info = BlockInfo {
+            height: self.account_info.best_block_height(),
+            timestamp: median_time,
+        };
+        self.output_cache.utxos_with_token_ids(
+            current_block_info,
+            utxo_states,
+            with_locked,
+            |txo| self.is_mine(txo) && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v)),
         )
     }
 
@@ -1770,7 +2040,7 @@ impl Account {
                 | AccountCommand::UnfreezeToken(token_id) => self.find_token(token_id).is_ok(),
                 AccountCommand::ChangeTokenAuthority(token_id, address) => {
                     self.find_token(token_id).is_ok()
-                        || self.is_mine_or_watched_destination(address)
+                        || self.is_destination_mine_or_watched(address)
                 }
             },
         });
@@ -2052,7 +2322,7 @@ impl Account {
 
     pub fn get_created_blocks(&self) -> Vec<(BlockHeight, Id<GenBlock>, PoolId)> {
         self.output_cache
-            .get_created_blocks(|destination| self.is_mine_or_watched_destination(destination))
+            .get_created_blocks(|destination| self.is_destination_mine(destination))
     }
 
     pub fn top_up_addresses(

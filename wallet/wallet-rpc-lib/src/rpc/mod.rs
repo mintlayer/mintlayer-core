@@ -20,14 +20,14 @@ pub mod types;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
-    num::NonZeroUsize,
+    num::{NonZeroU8, NonZeroUsize},
     path::PathBuf,
     sync::Arc,
     time::Duration,
 };
 
 use chainstate::{tx_verifier::check_transaction, ChainInfo, TokenIssuanceError};
-use crypto::key::hdkd::u31::U31;
+use crypto::key::{hdkd::u31::U31, PrivateKey, PublicKey};
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
@@ -40,7 +40,9 @@ use wallet::{
 };
 
 use common::{
+    address::Address,
     chain::{
+        classic_multisig::ClassicMultisigChallenge,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
@@ -65,7 +67,10 @@ use wallet_controller::{
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes,
     DEFAULT_ACCOUNT_INDEX,
 };
-use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_tx::TxData, with_locked::WithLocked};
+use wallet_types::{
+    account_info::StandaloneAddressDetails, seed_phrase::StoreSeedPhrase, wallet_tx::TxData,
+    with_locked::WithLocked,
+};
 
 use crate::{service::CreatedWallet, WalletHandle, WalletRpcConfig};
 
@@ -73,7 +78,9 @@ pub use self::types::RpcError;
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo,
     NewDelegation, NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
-    RpcTokenId, StakingStatus, VrfPublicKeyInfo,
+    RpcStandaloneAddress, RpcStandaloneAddressDetails, RpcStandaloneAddresses,
+    RpcStandalonePrivateKeyAddress, RpcTokenId, StakingStatus, StandaloneAddressWithDetails,
+    VrfPublicKeyInfo,
 };
 
 #[derive(Clone)]
@@ -225,6 +232,167 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         Ok(NewAccountInfo::new(num, name))
     }
 
+    pub async fn standalone_address_label_rename(
+        &self,
+        account_index: U31,
+        address: RpcAddress<Destination>,
+        label: Option<String>,
+    ) -> WRpcResult<(), N> {
+        let dest = address
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidAddress)?;
+        let config = ControllerConfig {
+            in_top_x_mb: 5,
+            broadcast_to_mempool: true,
+        }; // irrelevant for issuing addresses
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    w.synced_controller(account_index, config)
+                        .await?
+                        .standalone_address_label_rename(dest, label)
+                })
+            })
+            .await??;
+        Ok(())
+    }
+
+    pub async fn add_standalone_watch_only_address(
+        &self,
+        account_index: U31,
+        address: RpcAddress<Destination>,
+        label: Option<String>,
+        no_rescan: bool,
+    ) -> WRpcResult<(), N> {
+        let dest = address
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidAddress)?;
+        let pkh = match dest {
+            Destination::PublicKeyHash(pkh) => pkh,
+            Destination::PublicKey(pk) => (&pk).into(),
+            Destination::ScriptHash(_)
+            | Destination::ClassicMultisig(_)
+            | Destination::AnyoneCanSpend => return Err(RpcError::InvalidAddress),
+        };
+
+        let config = ControllerConfig {
+            in_top_x_mb: 5,
+            broadcast_to_mempool: true,
+        }; // irrelevant for issuing addresses
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    let res = w
+                        .synced_controller(account_index, config)
+                        .await?
+                        .add_standalone_address(pkh, label);
+
+                    if !no_rescan {
+                        w.reset_wallet_to_genesis()?;
+                    }
+
+                    res
+                })
+            })
+            .await??;
+        Ok(())
+    }
+
+    pub async fn add_standalone_private_key(
+        &self,
+        account_index: U31,
+        private_key: PrivateKey,
+        label: Option<String>,
+        no_rescan: bool,
+    ) -> WRpcResult<(), N> {
+        let config = ControllerConfig {
+            in_top_x_mb: 5,
+            broadcast_to_mempool: true,
+        }; // irrelevant for issuing addresses
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    let res = w
+                        .synced_controller(account_index, config)
+                        .await?
+                        .add_standalone_private_key(private_key, label);
+
+                    if !no_rescan {
+                        w.reset_wallet_to_genesis()?;
+                    }
+
+                    res
+                })
+            })
+            .await??;
+        Ok(())
+    }
+
+    pub async fn add_standalone_multisig(
+        &self,
+        account_index: U31,
+        min_required_signatures: u8,
+        public_keys: Vec<RpcAddress<Destination>>,
+        label: Option<String>,
+        no_rescan: bool,
+    ) -> WRpcResult<String, N> {
+        let config = ControllerConfig {
+            in_top_x_mb: 5,
+            broadcast_to_mempool: true,
+        }; // irrelevant for issuing addresses
+        let min_required_signatures =
+            NonZeroU8::new(min_required_signatures).ok_or(RpcError::InvalidMultisigMinSignature)?;
+
+        let public_keys = public_keys
+            .into_iter()
+            .enumerate()
+            .map(|(idx, addr)| {
+                addr.decode_object(&self.chain_config)
+                    .map_err(|_| RpcError::MultisigNotPublicKey(idx))
+                    .and_then(|dest| match dest {
+                        Destination::PublicKey(pk) => Ok(pk),
+                        Destination::PublicKeyHash(_)
+                        | Destination::AnyoneCanSpend
+                        | Destination::ScriptHash(_)
+                        | Destination::ClassicMultisig(_) => {
+                            Err(RpcError::MultisigNotPublicKey(idx))
+                        }
+                    })
+            })
+            .collect::<WRpcResult<Vec<PublicKey>, N>>()?;
+
+        let challenge = ClassicMultisigChallenge::new(
+            &self.chain_config,
+            min_required_signatures,
+            public_keys,
+        )?;
+
+        let multisig_address = self
+            .wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    let res = w
+                        .synced_controller(account_index, config)
+                        .await?
+                        .add_standalone_multisig(challenge, label);
+
+                    if !no_rescan {
+                        w.reset_wallet_to_genesis()?;
+                    }
+
+                    res
+                })
+            })
+            .await??;
+        let address = Address::new(
+            &self.chain_config,
+            Destination::ClassicMultisig(multisig_address),
+        )
+        .expect("addressable");
+
+        Ok(address.to_string())
+    }
+
     pub async fn issue_address(&self, account_index: U31) -> WRpcResult<AddressInfo, N> {
         let config = ControllerConfig {
             in_top_x_mb: 5,
@@ -333,6 +501,110 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         Ok(result)
     }
 
+    pub async fn get_standalone_addresses(
+        &self,
+        account_index: U31,
+    ) -> WRpcResult<RpcStandaloneAddresses, N> {
+        let addresses = self
+            .wallet
+            .call(move |controller| {
+                controller.readonly_controller(account_index).get_standalone_addresses()
+            })
+            .await??;
+        let result = RpcStandaloneAddresses {
+            watch_only_addresses: addresses
+                .watch_only_addresses
+                .into_iter()
+                .map(|(dest, info)| RpcStandaloneAddress::new(dest, info.label, &self.chain_config))
+                .collect(),
+            multisig_addresses: addresses
+                .multisig_addresses
+                .into_iter()
+                .map(|(dest, info)| RpcStandaloneAddress::new(dest, info.label, &self.chain_config))
+                .collect(),
+            private_key_addresses: addresses
+                .private_keys
+                .into_iter()
+                .map(|(pk, label)| {
+                    let pkh = (&pk).into();
+                    RpcStandalonePrivateKeyAddress::new(pk, pkh, label, &self.chain_config)
+                })
+                .collect(),
+        };
+        Ok(result)
+    }
+
+    pub async fn get_standalone_address_details(
+        &self,
+        account_index: U31,
+        address: RpcAddress<Destination>,
+    ) -> WRpcResult<StandaloneAddressWithDetails, N> {
+        let address = address
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidAddress)?;
+
+        let chain_config = self.chain_config.clone();
+        let result = self
+            .wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    w.readonly_controller(account_index)
+                        .get_standalone_address_details(address)
+                        .await
+                        .map(|info| {
+                            let address = Address::new(&chain_config, info.address)
+                                .expect("Addressable")
+                                .into_string();
+                            match info.details {
+                                StandaloneAddressDetails::WatchOnly(watch_only) => {
+                                    StandaloneAddressWithDetails {
+                                        address,
+                                        label: watch_only.label.clone(),
+                                        balances: info.balances,
+                                        details: RpcStandaloneAddressDetails::WatchOnly,
+                                    }
+                                }
+                                StandaloneAddressDetails::PrivateKey(label) => {
+                                    StandaloneAddressWithDetails {
+                                        address,
+                                        label: label.clone(),
+                                        balances: info.balances,
+                                        details: RpcStandaloneAddressDetails::FromPrivateKey,
+                                    }
+                                }
+                                StandaloneAddressDetails::Multisig(multisig) => {
+                                    StandaloneAddressWithDetails {
+                                        address,
+                                        label: multisig.label.clone(),
+                                        balances: info.balances,
+                                        details: RpcStandaloneAddressDetails::Multisig {
+                                            min_required_signatures: multisig
+                                                .challenge
+                                                .min_required_signatures(),
+                                            public_keys: multisig
+                                                .challenge
+                                                .public_keys()
+                                                .iter()
+                                                .map(|pk| {
+                                                    Address::new(
+                                                        &chain_config,
+                                                        Destination::PublicKey(pk.clone()),
+                                                    )
+                                                    .expect("Addressable")
+                                                    .into()
+                                                })
+                                                .collect(),
+                                        },
+                                    }
+                                }
+                            }
+                        })
+                })
+            })
+            .await??;
+        Ok(result)
+    }
+
     pub async fn get_balance(
         &self,
         account_index: U31,
@@ -349,6 +621,24 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             })
             .await??;
         Ok(balances)
+    }
+
+    pub async fn get_multisig_utxos(
+        &self,
+        account_index: U31,
+        utxo_types: UtxoTypes,
+        utxo_states: UtxoStates,
+        with_locked: WithLocked,
+    ) -> WRpcResult<Vec<(UtxoOutPoint, TxOutput)>, N> {
+        self.wallet
+            .call(move |w| {
+                w.readonly_controller(account_index).get_multisig_utxos(
+                    utxo_types,
+                    utxo_states,
+                    with_locked,
+                )
+            })
+            .await?
     }
 
     pub async fn get_utxos(

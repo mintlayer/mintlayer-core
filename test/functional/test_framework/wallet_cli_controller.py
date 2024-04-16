@@ -224,6 +224,18 @@ class WalletCliController:
     async def rename_account(self, name: Optional[str] = '') -> str:
         return await self._write_command(f"account-rename {name}\n")
 
+    async def standalone_address_label_rename(self, address: str, label: Optional[str] = None) -> str:
+        label_str = f'--label {label}' if label else ''
+        return await self._write_command(f"standalone-address-label-rename {address} {label_str}\n")
+
+    async def add_standalone_address(self, address: str, label: Optional[str] = None) -> str:
+        label_str = f'--label {label}' if label else ''
+        return await self._write_command(f"standalone-add-watch-only-address {address} {label_str}\n")
+
+    async def add_standalone_multisig_address(self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = None) -> str:
+        label_str = f'--label {label}' if label else ''
+        return await self._write_command(f"standalone-add-multisig {min_required_signatures} {' '.join(pub_keys)} {label_str}\n")
+
     async def select_account(self, account_index: int) -> str:
         return await self._write_command(f"account-select {account_index}\n")
 
@@ -254,7 +266,14 @@ class WalletCliController:
 
         j = json.loads(output)
 
-        return [UtxoOutpoint(id=match["outpoint"]["id"]["Transaction"], index=int(match["outpoint"]["index"])) for match in j]
+        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]["tx_id"], index=int(match["outpoint"]["index"])) for match in j]
+
+    async def list_multisig_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
+        output = await self._write_command(f"standalone-multisig-utxos {utxo_types} {with_locked} {''.join(utxo_states)}\n")
+
+        j = json.loads(output)
+
+        return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]["tx_id"], index=int(match["outpoint"]["index"])) for match in j]
 
     async def get_transaction(self, tx_id: str):
         out = await self._write_command(f"transaction-get {tx_id}\n")
@@ -279,7 +298,7 @@ class WalletCliController:
     async def sweep_delegation(self, destination_address: str, delegation_id: str) -> str:
         return await self._write_command(f"staking-sweep-delegation {destination_address} {delegation_id}\n")
 
-    async def send_to_address(self, address: str, amount: int, selected_utxos: List[UtxoOutpoint] = []) -> str:
+    async def send_to_address(self, address: str, amount: Union[int, float, str], selected_utxos: List[UtxoOutpoint] = []) -> str:
         return await self._write_command(f"address-send {address} {amount} {' '.join(map(str, selected_utxos))}\n")
 
     async def compose_transaction(self, outputs: List[TxOutput], selected_utxos: List[UtxoOutpoint], only_transaction: bool = False) -> str:
@@ -433,6 +452,12 @@ class WalletCliController:
 
     async def generate_block(self, transactions: [str]) -> str:
         return await self._write_command(f"generate-block {transactions}\n")
+
+    async def get_standalone_addresses(self) -> str:
+        return await self._write_command("standalone-address-show\n")
+
+    async def get_standalone_address_details(self, address: str) -> str:
+        return await self._write_command(f"standalone-address-details {address}\n")
 
     async def get_addresses_usage(self) -> str:
         return await self._write_command("address-show\n")

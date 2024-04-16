@@ -24,7 +24,7 @@ use common::{
     chain::{Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
     primitives::{BlockHeight, DecimalAmount, Id},
 };
-use crypto::key::hdkd::u31::U31;
+use crypto::key::{hdkd::u31::U31, PrivateKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::hex_encoded::HexEncoded;
 use serialization::DecodeAll;
@@ -32,14 +32,15 @@ use utils_networking::IpOrSocketAddress;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
     types::{Balances, CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
-    ConnectedPeer, ControllerConfig, UtxoStates, UtxoTypes,
+    ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcTokenId, StakePoolBalance,
-        StakingStatus, TokenMetadata, TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
+        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcStandaloneAddresses, RpcTokenId,
+        StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
+        TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
     },
     ColdWalletRpcClient, WalletRpcClient,
 };
@@ -199,6 +200,78 @@ impl WalletInterface for ClientWalletRpc {
             .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn standalone_address_label_rename(
+        &self,
+        account_index: U31,
+        address: String,
+        label: Option<String>,
+    ) -> Result<(), Self::Error> {
+        WalletRpcClient::standalone_address_label_rename(
+            &self.http_client,
+            account_index.into(),
+            address.into(),
+            label,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn add_standalone_address(
+        &self,
+        account_index: U31,
+        address: String,
+        label: Option<String>,
+        no_rescan: bool,
+    ) -> Result<(), Self::Error> {
+        WalletRpcClient::add_standalone_address(
+            &self.http_client,
+            account_index.into(),
+            address.into(),
+            label,
+            Some(no_rescan),
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn add_standalone_private_key(
+        &self,
+        account_index: U31,
+        private_key: HexEncoded<PrivateKey>,
+        label: Option<String>,
+        no_rescan: bool,
+    ) -> Result<(), Self::Error> {
+        WalletRpcClient::add_standalone_private_key(
+            &self.http_client,
+            account_index.into(),
+            private_key,
+            label,
+            Some(no_rescan),
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn add_standalone_multisig(
+        &self,
+        account_index: U31,
+        min_required_signatures: u8,
+        public_keys: Vec<String>,
+        label: Option<String>,
+        no_rescan: bool,
+    ) -> Result<String, Self::Error> {
+        WalletRpcClient::add_standalone_multisig(
+            &self.http_client,
+            account_index.into(),
+            min_required_signatures,
+            public_keys.into_iter().map(Into::into).collect(),
+            label,
+            Some(no_rescan),
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn get_issued_addresses(
         &self,
         account_index: U31,
@@ -206,6 +279,29 @@ impl WalletInterface for ClientWalletRpc {
         ColdWalletRpcClient::get_issued_addresses(&self.http_client, account_index.into())
             .await
             .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn get_standalone_addresses(
+        &self,
+        account_index: U31,
+    ) -> Result<RpcStandaloneAddresses, Self::Error> {
+        ColdWalletRpcClient::get_standalone_addresses(&self.http_client, account_index.into())
+            .await
+            .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn get_standalone_address_details(
+        &self,
+        account_index: U31,
+        address: String,
+    ) -> Result<StandaloneAddressWithDetails, Self::Error> {
+        ColdWalletRpcClient::get_standalone_address_details(
+            &self.http_client,
+            account_index.into(),
+            address.into(),
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn issue_address(&self, account_index: U31) -> Result<AddressInfo, Self::Error> {
@@ -231,7 +327,7 @@ impl WalletInterface for ClientWalletRpc {
     async fn get_balance(
         &self,
         account_index: U31,
-        _utxo_states: UtxoStates,
+        _utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
     ) -> Result<Balances, Self::Error> {
         WalletRpcClient::get_balance(&self.http_client, account_index.into(), Some(with_locked))
@@ -239,11 +335,29 @@ impl WalletInterface for ClientWalletRpc {
             .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn get_multisig_utxos(
+        &self,
+        account_index: U31,
+        utxo_types: Vec<UtxoType>,
+        utxo_states: Vec<UtxoState>,
+        with_locked: WithLocked,
+    ) -> Result<Vec<serde_json::Value>, Self::Error> {
+        WalletRpcClient::get_multisig_utxos(
+            &self.http_client,
+            account_index.into(),
+            utxo_types.iter().map(Into::into).collect(),
+            utxo_states.iter().map(Into::into).collect(),
+            Some(with_locked),
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn get_utxos(
         &self,
         account_index: U31,
-        _utxo_types: UtxoTypes,
-        _utxo_states: UtxoStates,
+        _utxo_types: Vec<UtxoType>,
+        _utxo_states: Vec<UtxoState>,
         _with_locked: WithLocked,
     ) -> Result<Vec<serde_json::Value>, Self::Error> {
         WalletRpcClient::get_utxos(&self.http_client, account_index.into())

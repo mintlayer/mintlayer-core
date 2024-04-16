@@ -17,20 +17,26 @@ use crate::key_chain::leaf_key_chain::LeafKeySoftChain;
 use crate::key_chain::with_purpose::WithPurpose;
 use crate::key_chain::{make_account_path, KeyChainError, KeyChainResult};
 use common::address::pubkeyhash::PublicKeyHash;
-use common::address::Address;
+use common::address::{Address, RpcAddress};
+use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::derivation_path::DerivationPath;
 use crypto::key::hdkd::u31::U31;
-use crypto::key::PublicKey;
+use crypto::key::{PrivateKey, PublicKey};
 use crypto::vrf::{ExtendedVRFPrivateKey, ExtendedVRFPublicKey, VRFPublicKey};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use utils::const_value::ConstValue;
 use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
+    WalletStorageWriteUnlocked,
+};
+use wallet_types::account_id::{AccountPrefixedId, AccountPublicKey};
+use wallet_types::account_info::{
+    StandaloneAddressDetails, StandaloneAddresses, StandaloneMultisig, StandaloneWatchOnlyKey,
 };
 use wallet_types::keys::KeyPurpose;
 use wallet_types::{AccountId, AccountInfo, KeychainUsageState};
@@ -55,6 +61,15 @@ pub struct AccountKeyChain {
 
     /// VRF key chain
     vrf_chain: VrfKeySoftChain,
+
+    /// Standalone watch only keys added by the user not derived from this account's chain
+    standalone_watch_only_keys: BTreeMap<Destination, StandaloneWatchOnlyKey>,
+
+    /// Standalone multisig keys added by the user not derived from this account's chain
+    standalone_multisig_keys: BTreeMap<Destination, StandaloneMultisig>,
+
+    /// Standalone private keys added by the user not derived from this account's chain
+    standalone_private_keys: BTreeMap<Destination, (Option<String>, AccountPublicKey)>,
 
     /// The number of unused addresses that need to be checked after the last used address
     lookahead_size: ConstValue<u32>,
@@ -130,6 +145,9 @@ impl AccountKeyChain {
             account_vrf_public_key: account_vrf_pub_key.into(),
             sub_chains,
             vrf_chain,
+            standalone_watch_only_keys: BTreeMap::new(),
+            standalone_multisig_keys: BTreeMap::new(),
+            standalone_private_keys: BTreeMap::new(),
             lookahead_size: lookahead_size.into(),
         };
 
@@ -182,6 +200,36 @@ impl AccountKeyChain {
             account_info.lookahead_size(),
         )?;
 
+        let standalone_watch_only_keys = db_tx.get_account_standalone_watch_only_keys(
+            &AccountId::new_from_xpub(account_info.account_key()),
+        )?;
+
+        let standalone_multisig_keys = db_tx.get_account_standalone_multisig_keys(
+            &AccountId::new_from_xpub(account_info.account_key()),
+        )?;
+
+        let standalone_private_keys = db_tx.get_account_standalone_private_keys(
+            &AccountId::new_from_xpub(account_info.account_key()),
+        )?;
+
+        let standalone_private_keys = standalone_private_keys
+            .into_iter()
+            .flat_map(|(acc_public_key, label)| {
+                let public_key = acc_public_key.clone().into_item_id();
+                let public_key_hash = (&public_key).into();
+                [
+                    (
+                        Destination::PublicKey(public_key),
+                        (label.clone(), acc_public_key.clone()),
+                    ),
+                    (
+                        Destination::PublicKeyHash(public_key_hash),
+                        (label, acc_public_key),
+                    ),
+                ]
+            })
+            .collect();
+
         Ok(AccountKeyChain {
             chain_config,
             account_index: account_info.account_index(),
@@ -189,6 +237,9 @@ impl AccountKeyChain {
             account_vrf_public_key: vrf_chain.get_account_vrf_public_key().clone().into(),
             sub_chains,
             vrf_chain,
+            standalone_watch_only_keys,
+            standalone_multisig_keys,
+            standalone_private_keys,
             lookahead_size: account_info.lookahead_size().into(),
         })
     }
@@ -313,7 +364,7 @@ impl AccountKeyChain {
         &self,
         destination: &Destination,
         db_tx: &impl WalletStorageReadUnlocked,
-    ) -> KeyChainResult<Option<ExtendedPrivateKey>> {
+    ) -> KeyChainResult<Option<PrivateKey>> {
         let xpriv = self.derive_account_private_key(db_tx)?;
         for purpose in KeyPurpose::ALL {
             let leaf_key = self.get_leaf_key_chain(purpose);
@@ -321,10 +372,27 @@ impl AccountKeyChain {
                 .get_child_num_from_destination(destination)
                 .and_then(|child_num| leaf_key.get_derived_xpub(child_num))
             {
-                return Self::get_private_key(&xpriv, xpub).map(Option::Some);
+                return Self::get_private_key(&xpriv, xpub).map(|pk| Some(pk.private_key()));
             }
         }
-        Ok(None)
+
+        let standalone_pk = self
+            .standalone_private_keys
+            .get(destination)
+            .map(|(_, acc_public_key)| db_tx.get_account_standalone_private_key(acc_public_key))
+            .transpose()?
+            .flatten();
+
+        Ok(standalone_pk)
+    }
+
+    pub fn get_multisig_challenge(
+        &self,
+        destination: &Destination,
+    ) -> Option<&ClassicMultisigChallenge> {
+        self.standalone_multisig_keys
+            .get(destination)
+            .map(|multisig| &multisig.challenge)
     }
 
     pub fn get_private_key_for_path(
@@ -393,6 +461,116 @@ impl AccountKeyChain {
         KeyPurpose::ALL
             .iter()
             .any(|purpose| self.get_leaf_key_chain(*purpose).is_public_key_hash_mine(pubkey_hash))
+    }
+
+    // Return true if the provided public key hash is one the standalone added keys
+    pub fn is_public_key_hash_watched(&self, pubkey_hash: PublicKeyHash) -> bool {
+        let dest = Destination::PublicKeyHash(pubkey_hash);
+        self.standalone_watch_only_keys.contains_key(&dest)
+            || self.standalone_private_keys.contains_key(&dest)
+    }
+
+    // Return true if the provided public key hash belongs to this key chain
+    // or is one the standalone added keys
+    pub fn is_public_key_hash_mine_or_watched(&self, pubkey_hash: PublicKeyHash) -> bool {
+        self.is_public_key_hash_mine(&pubkey_hash) || self.is_public_key_hash_watched(pubkey_hash)
+    }
+
+    /// Add, rename or delete a label for a standalone address not from the keys derived from this account
+    pub fn standalone_address_label_rename(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        new_address: Destination,
+        new_label: Option<String>,
+    ) -> KeyChainResult<()> {
+        if let Some(watch_only) = self.standalone_watch_only_keys.get(&new_address) {
+            let key = watch_only.with_new_label(new_label);
+
+            let id = AccountPrefixedId::new(self.get_account_id(), new_address);
+            db_tx.set_standalone_watch_only_key(&id, &key)?;
+            self.standalone_watch_only_keys.insert(id.into_item_id(), key);
+            Ok(())
+        } else if let Some(multisig) = self.standalone_multisig_keys.get(&new_address) {
+            let key = multisig.with_new_label(new_label);
+
+            let id = AccountPrefixedId::new(self.get_account_id(), new_address);
+            db_tx.set_standalone_multisig_key(&id, &key)?;
+            self.standalone_multisig_keys.insert(id.into_item_id(), key);
+            Ok(())
+        } else {
+            let addr = RpcAddress::new(&self.chain_config, new_address)?;
+            Err(KeyChainError::NoStandaloneAddressFound(addr))
+        }
+    }
+
+    /// Adds a new public key hash to be watched, standalone from the keys derived from this account
+    pub fn add_standalone_watch_only_address(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        new_address: PublicKeyHash,
+        label: Option<String>,
+    ) -> KeyChainResult<()> {
+        let destination = Destination::PublicKeyHash(new_address);
+        if self.standalone_watch_only_keys.contains_key(&destination) {
+            let addr = RpcAddress::new(&self.chain_config, destination)?;
+            return Err(KeyChainError::StandaloneAddressAlreadyExists(addr));
+        }
+
+        let id = AccountPrefixedId::new(self.get_account_id(), destination);
+        let key = StandaloneWatchOnlyKey { label };
+
+        db_tx.set_standalone_watch_only_key(&id, &key)?;
+        self.standalone_watch_only_keys.insert(id.into_item_id(), key);
+
+        Ok(())
+    }
+
+    ///  Adds a new private key to be watched, standalone from the keys derived from this account
+    pub fn add_standalone_private_key(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        new_private_key: PrivateKey,
+        label: Option<String>,
+    ) -> KeyChainResult<()> {
+        let public_key = PublicKey::from_private_key(&new_private_key);
+        let destination = Destination::PublicKey(public_key.clone());
+        if self.standalone_private_keys.contains_key(&destination) {
+            let addr = RpcAddress::new(&self.chain_config, destination)?;
+            return Err(KeyChainError::StandaloneAddressAlreadyExists(addr));
+        }
+
+        let public_key_hash = PublicKeyHash::from(&public_key);
+        let id = AccountPrefixedId::new(self.get_account_id(), public_key);
+
+        db_tx.set_standalone_private_key(&id, &new_private_key, label.clone())?;
+        self.standalone_private_keys.insert(destination, (label.clone(), id.clone()));
+        self.standalone_private_keys
+            .insert(Destination::PublicKeyHash(public_key_hash), (label, id));
+
+        Ok(())
+    }
+
+    /// Adds a multisig to be watched
+    pub fn add_standalone_multisig(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        challenge: ClassicMultisigChallenge,
+        label: Option<String>,
+    ) -> KeyChainResult<PublicKeyHash> {
+        let multisig_pkh: PublicKeyHash = (&challenge).into();
+        let destination = Destination::ClassicMultisig(multisig_pkh);
+        if self.standalone_multisig_keys.contains_key(&destination) {
+            let addr = RpcAddress::new(&self.chain_config, destination)?;
+            return Err(KeyChainError::StandaloneAddressAlreadyExists(addr));
+        }
+
+        let id = AccountPrefixedId::new(self.get_account_id(), destination);
+        let key = StandaloneMultisig { label, challenge };
+
+        db_tx.set_standalone_multisig_key(&id, &key)?;
+        self.standalone_multisig_keys.insert(id.into_item_id(), key);
+
+        Ok(multisig_pkh)
     }
 
     /// Find the corresponding public key for a given public key hash
@@ -465,6 +643,40 @@ impl AccountKeyChain {
 
     pub fn get_all_issued_addresses(&self) -> BTreeMap<ChildNumber, Address<Destination>> {
         self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).get_all_issued_addresses()
+    }
+
+    pub fn get_all_standalone_addresses(&self) -> StandaloneAddresses {
+        StandaloneAddresses {
+            watch_only_addresses: self.standalone_watch_only_keys.clone().into_iter().collect(),
+            multisig_addresses: self.standalone_multisig_keys.clone().into_iter().collect(),
+            private_keys: self
+                .standalone_private_keys
+                .iter()
+                .filter_map(|(dest, (label, _))| match dest {
+                    Destination::PublicKey(pk) => Some((pk.clone(), label.clone())),
+                    Destination::PublicKeyHash(_)
+                    | Destination::AnyoneCanSpend
+                    | Destination::ScriptHash(_)
+                    | Destination::ClassicMultisig(_) => None,
+                })
+                .collect(),
+        }
+    }
+
+    pub fn get_all_standalone_address_details(
+        &self,
+        address: Destination,
+    ) -> Option<(Destination, StandaloneAddressDetails)> {
+        if let Some(details) = self.standalone_multisig_keys.get(&address).cloned() {
+            Some((address, StandaloneAddressDetails::Multisig(details)))
+        } else if let Some((label, _)) = self.standalone_private_keys.get(&address) {
+            Some((address, StandaloneAddressDetails::PrivateKey(label.clone())))
+        } else {
+            self.standalone_watch_only_keys
+                .get(&address)
+                .cloned()
+                .map(|details| (address, StandaloneAddressDetails::WatchOnly(details)))
+        }
     }
 
     pub fn get_all_issued_vrf_public_keys(

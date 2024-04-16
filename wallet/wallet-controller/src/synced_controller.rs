@@ -16,8 +16,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use common::{
-    address::Address,
+    address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
+        classic_multisig::ClassicMultisigChallenge,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCTokenInfo, TokenId, TokenIssuance,
@@ -31,7 +32,7 @@ use common::{
 use crypto::{
     key::{
         hdkd::{child_number::ChildNumber, u31::U31},
-        PublicKey,
+        PrivateKey, PublicKey,
     },
     vrf::VRFPublicKey,
 };
@@ -172,6 +173,46 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ) -> Result<(), ControllerError<T>> {
         self.wallet
             .abandon_transaction(self.account_index, tx_id)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn standalone_address_label_rename(
+        &mut self,
+        address: Destination,
+        label: Option<String>,
+    ) -> Result<(), ControllerError<T>> {
+        self.wallet
+            .standalone_address_label_rename(self.account_index, address, label)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn add_standalone_address(
+        &mut self,
+        address: PublicKeyHash,
+        label: Option<String>,
+    ) -> Result<(), ControllerError<T>> {
+        self.wallet
+            .add_standalone_address(self.account_index, address, label)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn add_standalone_private_key(
+        &mut self,
+        private_key: PrivateKey,
+        label: Option<String>,
+    ) -> Result<(), ControllerError<T>> {
+        self.wallet
+            .add_standalone_private_key(self.account_index, private_key, label)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn add_standalone_multisig(
+        &mut self,
+        challenge: ClassicMultisigChallenge,
+        label: Option<String>,
+    ) -> Result<PublicKeyHash, ControllerError<T>> {
+        self.wallet
+            .add_standalone_multisig(self.account_index, challenge, label)
             .map_err(ControllerError::WalletError)
     }
 

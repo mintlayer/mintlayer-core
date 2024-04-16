@@ -38,9 +38,9 @@ use crypto::vrf::VRFKeyKind;
 pub use master_key_chain::MasterKeyChain;
 
 use common::address::pubkeyhash::PublicKeyHashError;
-use common::address::AddressError;
+use common::address::{AddressError, RpcAddress};
 use common::chain::config::BIP44_PATH;
-use common::chain::ChainConfig;
+use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::ExtendedKeyKind;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::DerivationError;
@@ -99,6 +99,10 @@ pub enum KeyChainError {
     NoPrivateKeyFound,
     #[error("No VRF private key found")]
     NoVRFPrivateKeyFound,
+    #[error("No standalone address found for: {0}")]
+    NoStandaloneAddressFound(RpcAddress<Destination>),
+    #[error("Standalone address already exists: {0}")]
+    StandaloneAddressAlreadyExists(RpcAddress<Destination>),
 }
 
 /// Result type used for the key chain
