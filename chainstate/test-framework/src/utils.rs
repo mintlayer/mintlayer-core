@@ -198,10 +198,9 @@ pub fn create_chain_config_with_staking_pool(
 
     let pool = TxOutput::CreateStakePool(pool_id, Box::new(pool_data));
 
-    let genesis_time = common::time_getter::TimeGetter::default().get_time();
     let genesis = Genesis::new(
         String::new(),
-        BlockTimestamp::from_time(genesis_time),
+        BlockTimestamp::from_int_seconds(1639975460),
         vec![mint_output, pool],
     );
 
