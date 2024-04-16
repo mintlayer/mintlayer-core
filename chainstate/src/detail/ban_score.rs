@@ -303,6 +303,7 @@ impl BanScore for ConsensusVerificationError {
 impl BanScore for ConsensusPoWError {
     fn ban_score(&self) -> u32 {
         match self {
+            ConsensusPoWError::ChainstateError(_) => 0,
             ConsensusPoWError::InvalidPoW(_) => 100,
             ConsensusPoWError::NoInputDataProvided => 100,
             ConsensusPoWError::PoSInputDataProvided => 100,

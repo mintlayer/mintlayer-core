@@ -20,6 +20,7 @@ mod pos;
 mod pow;
 mod validator;
 
+use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex};
 pub use pos::calculate_effective_pool_balance;
 
 use common::{
@@ -27,9 +28,9 @@ use common::{
         block::{timestamp::BlockTimestamp, BlockReward},
         output_value::OutputValue,
         timelock::OutputTimeLock,
-        ChainConfig, Destination, TxOutput,
+        Block, ChainConfig, Destination, GenBlock, PoolId, TxOutput,
     },
-    primitives::BlockHeight,
+    primitives::{BlockHeight, Id},
 };
 use serialization::{Decode, Encode};
 
@@ -37,7 +38,7 @@ pub use crate::{
     error::ConsensusVerificationError,
     pos::{
         block_sig::BlockSignatureError,
-        error::{ChainstateError, ConsensusPoSError},
+        error::ConsensusPoSError,
         find_timestamp_for_staking, find_timestamp_for_staking_impl,
         hash_check::{check_pos_hash, check_pos_hash_for_pos_data},
         input_data::{
@@ -79,6 +80,23 @@ pub enum ConsensusCreationError {
     PoWInputDataProvidedWhenIgnoringConsensus,
 }
 
+// TODO: include the original chainstate::ChainstateError in each error below.
+#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
+pub enum ChainstateError {
+    #[error("Failed to obtain epoch for block height {0}: {1}")]
+    FailedToObtainEpochData(BlockHeight, String),
+    #[error("Failed to calculate median time past starting from block {0}: {1}")]
+    FailedToCalculateMedianTimePast(Id<GenBlock>, String),
+    #[error("Failed to obtain best block index: {0}")]
+    FailedToObtainBestBlockIndex(String),
+    #[error("Failed to obtain ancestor of block {0} at height {1}")]
+    FailedToObtainAncestor(Id<Block>, BlockHeight, String),
+    #[error("Failed to read data of pool {0}: {1}")]
+    StakePoolDataReadError(PoolId, String),
+    #[error("Failed to read balance of pool {0}: {1}")]
+    PoolBalanceReadError(PoolId, String),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum GenerateBlockInputData {
     #[codec(index = 0)]
@@ -103,4 +121,18 @@ pub fn generate_reward_ignore_consensus(
         Destination::AnyoneCanSpend,
         time_lock,
     )])
+}
+
+fn get_ancestor_from_block_index_handle(
+    block_handle: &impl BlockIndexHandle,
+    block_index: &BlockIndex,
+    ancestor_height: BlockHeight,
+) -> Result<GenBlockIndex, crate::ChainstateError> {
+    block_handle.get_ancestor(block_index, ancestor_height).map_err(|err| {
+        crate::ChainstateError::FailedToObtainAncestor(
+            *block_index.block_id(),
+            ancestor_height,
+            err.to_string(),
+        )
+    })
 }

@@ -19,7 +19,6 @@ use crate::{
 };
 use chainstate_types::{
     pos_randomness::PoSRandomness, vrf_tools::construct_transcript, BlockIndex, GenBlockIndex,
-    PropertyQueryError,
 };
 use common::{
     chain::block::{
@@ -199,7 +198,7 @@ pub fn generate_pos_consensus_data_and_reward<G>(
     get_ancestor: G,
 ) -> Result<(PoSData, BlockReward), ConsensusCreationError>
 where
-    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
 {
     let reward_destination = Destination::PublicKey(pos_input_data.stake_public_key());
 

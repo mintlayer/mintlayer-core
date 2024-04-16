@@ -15,7 +15,7 @@
 
 use std::num::NonZeroU64;
 
-use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex};
 use common::{
     chain::{
         block::ConsensusData, ChainConfig, GenBlock, GenBlockId, PoSChainConfig, PoSStatus,
@@ -26,7 +26,7 @@ use common::{
 };
 use utils::ensure;
 
-use crate::pos::error::ConsensusPoSError;
+use crate::{get_ancestor_from_block_index_handle, pos::error::ConsensusPoSError};
 
 fn calculate_average_block_time<F>(
     pos_config: &PoSChainConfig,
@@ -34,7 +34,7 @@ fn calculate_average_block_time<F>(
     get_ancestor: F,
 ) -> Result<u64, ConsensusPoSError>
 where
-    F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+    F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
 {
     // Average is calculated based on 2 timestamps and then is divided by number of blocks in between.
     // Choose a block from the history that would be the start of a timespan.
@@ -114,7 +114,7 @@ pub fn calculate_target_required_from_block_index<F>(
     get_ancestor: F,
 ) -> Result<Compact, ConsensusPoSError>
 where
-    F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+    F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
 {
     let pos_config = match pos_status {
         PoSStatus::Threshold {
@@ -162,7 +162,7 @@ pub fn calculate_target_required(
         .ok_or(ConsensusPoSError::PrevBlockIndexNotFound(prev_block_id))?;
 
     let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
-        block_index_handle.get_ancestor(block_index, ancestor_height)
+        get_ancestor_from_block_index_handle(block_index_handle, block_index, ancestor_height)
     };
 
     calculate_target_required_internal(chain_config, pos_config, &prev_block_index, get_ancestor)
@@ -175,7 +175,7 @@ fn calculate_target_required_internal<F>(
     get_ancestor: F,
 ) -> Result<Compact, ConsensusPoSError>
 where
-    F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+    F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
 {
     // check if prev block is a net upgrade threshold
     match chain_config
@@ -513,7 +513,7 @@ mod tests {
         );
 
         let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
-            block_index_handle.get_ancestor(block_index, ancestor_height)
+            get_ancestor_from_block_index_handle(&block_index_handle, block_index, ancestor_height)
         };
 
         let average_block_time = calculate_average_block_time(
@@ -579,7 +579,7 @@ mod tests {
             TestBlockIndexHandle::new_with_blocks(&mut rng, &chain_config, &[10, 30]);
 
         let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
-            block_index_handle.get_ancestor(block_index, ancestor_height)
+            get_ancestor_from_block_index_handle(&block_index_handle, block_index, ancestor_height)
         };
 
         // calculating average between 2 blocks with timestamps 10 and 30 should give 20
@@ -621,7 +621,7 @@ mod tests {
             TestBlockIndexHandle::new_with_blocks(&mut rng, &chain_config, &[10, 20, 40]);
 
         let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
-            block_index_handle.get_ancestor(block_index, ancestor_height)
+            get_ancestor_from_block_index_handle(&block_index_handle, block_index, ancestor_height)
         };
 
         let average_block_time = calculate_average_block_time(
@@ -657,7 +657,7 @@ mod tests {
         );
 
         let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
-            block_index_handle.get_ancestor(block_index, ancestor_height)
+            get_ancestor_from_block_index_handle(&block_index_handle, block_index, ancestor_height)
         };
 
         let res = calculate_average_block_time(&pos_config, &random_block_index, get_ancestor)
@@ -815,7 +815,7 @@ mod tests {
             TestBlockIndexHandle::new_with_blocks(&mut rng, &chain_config, &[30, 20, 10]);
 
         let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
-            block_index_handle.get_ancestor(block_index, ancestor_height)
+            get_ancestor_from_block_index_handle(&block_index_handle, block_index, ancestor_height)
         };
 
         for i in 1..4 {

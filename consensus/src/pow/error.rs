@@ -24,6 +24,8 @@ use common::{
 /// A proof of work consensus error.
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusPoWError {
+    #[error("Chainstate error: `{0}`")]
+    ChainstateError(#[from] crate::ChainstateError),
     #[error("Invalid Proof of Work for block {0}")]
     InvalidPoW(Id<Block>),
     #[error("Error while loading previous block with id {0} with error {1}")]

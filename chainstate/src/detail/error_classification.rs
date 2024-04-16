@@ -501,6 +501,7 @@ impl BlockProcessingErrorClassification for ConsensusPoWError {
             | ConsensusPoWError::PoSInputDataProvided
             | ConsensusPoWError::NoInputDataProvided => BlockProcessingErrorClass::BadBlock,
 
+            ConsensusPoWError::ChainstateError(err) => err.classify(),
             ConsensusPoWError::PrevBlockLoadError(_, err) => err.classify(),
             ConsensusPoWError::AncestorAtHeightNotFound(_, _, err) => err.classify(),
         }
@@ -568,6 +569,7 @@ impl BlockProcessingErrorClassification for consensus::ChainstateError {
             ChainstateError::FailedToObtainEpochData(_, _)
             | ChainstateError::FailedToCalculateMedianTimePast(_, _)
             | ChainstateError::FailedToObtainBestBlockIndex(_)
+            | ChainstateError::FailedToObtainAncestor(_, _, _)
             | ChainstateError::StakePoolDataReadError(_, _)
             | ChainstateError::PoolBalanceReadError(_, _) => BlockProcessingErrorClass::General,
         }

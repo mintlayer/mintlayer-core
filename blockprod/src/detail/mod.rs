@@ -19,9 +19,7 @@ pub mod job_manager;
 use std::sync::Arc;
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle, PropertyQueryError};
-use chainstate_types::{
-    pos_randomness::PoSRandomness, BlockIndex, GenBlockIndex, GetAncestorError,
-};
+use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex, GenBlockIndex};
 use common::{
     address::Address,
     chain::{
@@ -193,17 +191,18 @@ impl BlockProduction {
         Ok(())
     }
 
-    // FIXME: don't return PropertyQueryError
     fn ancestor_getter(
         cs: &dyn ChainstateInterface,
-    ) -> impl Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError> + '_ {
+    ) -> impl Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, consensus::ChainstateError> + '_
+    {
         |block_index: &BlockIndex, ancestor_height: BlockHeight| {
             cs.get_ancestor(&block_index.clone().into_gen_block_index(), ancestor_height)
-                .map_err(|_| {
-                    PropertyQueryError::GetAncestorError(GetAncestorError::InvalidAncestorHeight {
-                        block_height: block_index.block_height(),
+                .map_err(|err| {
+                    consensus::ChainstateError::FailedToObtainAncestor(
+                        *block_index.block_id(),
                         ancestor_height,
-                    })
+                        err.to_string(),
+                    )
                 })
         }
     }
@@ -543,11 +542,8 @@ impl BlockProduction {
             )
         };
 
-        self.update_last_used_block_timestamp(
-            helper.job_custom_id().clone(),
-            last_used_timestamp,
-        )
-        .await?;
+        self.update_last_used_block_timestamp(helper.job_custom_id().clone(), last_used_timestamp)
+            .await?;
 
         result.map(|block| helper.finish(block))
     }

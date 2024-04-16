@@ -17,8 +17,8 @@ use thiserror::Error;
 
 use chainstate_types::pos_randomness::PoSRandomnessError;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, GenBlock, PoolId},
-    primitives::{BlockHeight, Compact, Id},
+    chain::{block::timestamp::BlockTimestamp, Block, PoolId},
+    primitives::{Compact, Id},
     UintConversionError,
 };
 
@@ -31,7 +31,7 @@ pub enum ConsensusPoSError {
     #[error("Property query error: `{0}`")]
     PropertyQueryError(#[from] chainstate_types::PropertyQueryError),
     #[error("Chainstate error: `{0}`")]
-    ChainstateError(#[from] ChainstateError),
+    ChainstateError(#[from] crate::ChainstateError),
 
     #[error("Stake kernel hash failed to meet the target requirement")]
     StakeKernelHashTooHigh,
@@ -106,19 +106,4 @@ pub enum ConsensusPoSError {
     EffectivePoolBalanceError(#[from] EffectivePoolBalanceError),
     #[error("Failed to calculate capped balance")]
     FailedToCalculateCappedBalance,
-}
-
-// TODO: include the original chainstate::ChainstateError in each error below.
-#[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum ChainstateError {
-    #[error("Failed to obtain epoch for block height {0}: {1}")]
-    FailedToObtainEpochData(BlockHeight, String),
-    #[error("Failed to calculate median time past starting from block {0}: {1}")]
-    FailedToCalculateMedianTimePast(Id<GenBlock>, String),
-    #[error("Failed to obtain best block index: {0}")]
-    FailedToObtainBestBlockIndex(String),
-    #[error("Failed to read data of pool {0}: {1}")]
-    StakePoolDataReadError(PoolId, String),
-    #[error("Failed to read balance of pool {0}: {1}")]
-    PoolBalanceReadError(PoolId, String),
 }
