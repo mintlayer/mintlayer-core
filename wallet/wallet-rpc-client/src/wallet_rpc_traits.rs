@@ -32,8 +32,8 @@ use wallet_controller::{
 use wallet_rpc_lib::types::{
     AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
     DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcStandaloneAddresses, RpcTokenId,
-    StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
+    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcSignatureStatus, RpcStandaloneAddresses,
+    RpcTokenId, StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
     TxOptionsOverrides, VrfPublicKeyInfo,
 };
 use wallet_types::with_locked::WithLocked;
@@ -41,6 +41,12 @@ use wallet_types::with_locked::WithLocked;
 pub enum PartialOrSignedTx {
     Partial(PartiallySignedTransaction),
     Signed(SignedTransaction),
+}
+
+pub struct SignRawTransactionResult {
+    pub transaction: PartialOrSignedTx,
+    pub previous_signatures: Vec<RpcSignatureStatus>,
+    pub current_signatures: Vec<RpcSignatureStatus>,
 }
 
 #[async_trait::async_trait]
@@ -516,7 +522,7 @@ pub trait WalletInterface {
         account_index: U31,
         raw_tx: String,
         config: ControllerConfig,
-    ) -> Result<PartialOrSignedTx, Self::Error>;
+    ) -> Result<SignRawTransactionResult, Self::Error>;
 
     async fn node_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error>;
 

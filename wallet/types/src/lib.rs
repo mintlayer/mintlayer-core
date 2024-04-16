@@ -18,6 +18,7 @@ pub mod account_info;
 pub mod chain_info;
 pub mod keys;
 pub mod seed_phrase;
+pub mod signature_status;
 pub mod utxo_types;
 pub mod wallet_tx;
 pub mod wallet_type;

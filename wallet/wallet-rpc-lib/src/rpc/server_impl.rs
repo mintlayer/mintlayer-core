@@ -225,9 +225,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
             broadcast_to_mempool: true,
         };
         rpc::handle_result(
-            self.sign_raw_transaction(account_arg.index::<N>()?, raw_tx, config)
-                .await
-                .map(|tx| {
+            self.sign_raw_transaction(account_arg.index::<N>()?, raw_tx, config).await.map(
+                |(tx, prev_signatures, cur_signatures)| {
                     let is_complete = tx.is_fully_signed(&self.chain_config);
                     let hex = if is_complete {
                         let tx = tx.into_signed_tx(&self.chain_config).expect("already checked");
@@ -236,8 +235,17 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
                         tx.hex_encode()
                     };
 
-                    MaybeSignedTransaction { hex, is_complete }
-                }),
+                    let previous_signatures = prev_signatures.into_iter().map(Into::into).collect();
+                    let current_signatures = cur_signatures.into_iter().map(Into::into).collect();
+
+                    MaybeSignedTransaction {
+                        hex,
+                        is_complete,
+                        previous_signatures,
+                        current_signatures,
+                    }
+                },
+            ),
         )
     }
 

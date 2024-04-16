@@ -15,7 +15,7 @@
 
 use std::{future::pending, num::NonZeroUsize, path::PathBuf};
 
-use crate::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
+use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, WalletInterface};
 
 use super::{ClientWalletRpc, WalletRpcError};
 
@@ -1048,7 +1048,7 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         raw_tx: String,
         config: ControllerConfig,
-    ) -> Result<PartialOrSignedTx, Self::Error> {
+    ) -> Result<SignRawTransactionResult, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
         ColdWalletRpcClient::sign_raw_transaction(
             &self.http_client,
@@ -1059,7 +1059,7 @@ impl WalletInterface for ClientWalletRpc {
         .await
         .map(|result| {
             let bytes = hex::decode(result.hex).expect("valid hex");
-            if result.is_complete {
+            let tx = if result.is_complete {
                 PartialOrSignedTx::Signed(
                     SignedTransaction::decode_all(&mut bytes.as_slice()).expect("valid singed tx"),
                 )
@@ -1068,6 +1068,12 @@ impl WalletInterface for ClientWalletRpc {
                     PartiallySignedTransaction::decode_all(&mut bytes.as_slice())
                         .expect("valid partially signed tx"),
                 )
+            };
+
+            SignRawTransactionResult {
+                transaction: tx,
+                current_signatures: result.current_signatures,
+                previous_signatures: result.previous_signatures,
             }
         })
         .map_err(WalletRpcError::ResponseError)

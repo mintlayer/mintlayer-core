@@ -35,9 +35,9 @@ use utils::qrcode::{QrCode, QrCodeError};
 use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
-    Balances, ComposedTransaction, ControllerConfig, InspectTransaction, MnemonicInfo,
-    NewTransaction, NftMetadata, RpcStandaloneAddressDetails, SignatureStats, TokenMetadata,
-    ValidatedSignatures,
+    Balances, ComposedTransaction, ControllerConfig, CreatedWallet, InspectTransaction,
+    MnemonicInfo, NewTransaction, NftMetadata, RpcSignatureStatus, RpcStandaloneAddressDetails,
+    SignatureStats, TokenMetadata, ValidatedSignatures,
 };
 
 use crate::errors::WalletCliError;
@@ -509,7 +509,7 @@ where
                 let result =
                     wallet.sign_raw_transaction(selected_account, transaction, self.config).await?;
 
-                let output_str = match result {
+                let output_str = match result.transaction {
                     PartialOrSignedTx::Signed(signed_tx) => {
                         let summary = signed_tx.transaction().text_summary(chain_config);
                         let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
@@ -528,8 +528,21 @@ where
 
                         let qr_code_string = qrcode_or_error_string(&result_hex.to_string());
 
+                        let prev_sigs = result
+                            .previous_signatures
+                            .iter()
+                            .map(format_signature_status)
+                            .join(", ");
+                        let current_sigs = result
+                            .current_signatures
+                            .iter()
+                            .map(format_signature_status)
+                            .join(", ");
+
                         format!(
-                            "Not all transaction inputs have been signed. This wallet does not have all the keys for that. \
+                            "Not all transaction inputs have been signed. This wallet does not have all the keys for that.\n\
+                             The signatures states before signing were: {prev_sigs}\n\
+                             and the current signature states are: {current_sigs}\n\
                              Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n{result_hex}\n\n\
                              Or scan the Qr code with it:\n\n{qr_code_string}"
                         )
@@ -1570,6 +1583,15 @@ where
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
         }
+    }
+}
+
+fn format_signature_status(status: &RpcSignatureStatus) -> String {
+    match status {
+        RpcSignatureStatus::FullySigned => "FullySigned".to_owned(),
+        RpcSignatureStatus::NotSigned => "NotSigned".to_owned(),
+        RpcSignatureStatus::InvalidSignature => "InvalidSignature".to_owned(),
+        RpcSignatureStatus::PartialMultisig { required_signatures, num_signatures } => format!("PartialMultisig having {num_signatures} out of {required_signatures} required signatures"),
     }
 }
 

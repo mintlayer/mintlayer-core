@@ -203,14 +203,15 @@ class WalletSubmitTransaction(BitcoinTestFramework):
 
             # sign the transaction from N random wallets
             random_wallets = random.sample(range(0, num_wallets), min_required_signatures)
-            for wallet_id in random_wallets[:-1]:
+            for i, wallet_id in enumerate(random_wallets[:-1]):
                 await wallet.close_wallet()
                 await wallet.open_wallet(f'wallet{wallet_id}')
                 assert_in("Success", await wallet.sync())
 
                 output = await wallet.sign_raw_transaction(encoded_tx)
                 assert_in("Not all transaction inputs have been signed.", output)
-                encoded_tx = output.split('\n')[2]
+                assert_in(f"PartialMultisig having {i+1} out of {min_required_signatures} required signatures", output)
+                encoded_tx = output.split('\n')[5]
 
             # signing it with the last one should fully sign it
             wallet_id = random_wallets[-1]

@@ -54,6 +54,7 @@ pub use wallet_controller::types::{
 };
 pub use wallet_controller::{ControllerConfig, NodeInterface};
 use wallet_controller::{UtxoState, UtxoType};
+use wallet_types::signature_status::SignatureStatus;
 
 use crate::service::SubmitError;
 
@@ -625,9 +626,40 @@ pub struct ComposedTransaction {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type")]
+pub enum RpcSignatureStatus {
+    NotSigned,
+    InvalidSignature,
+    FullySigned,
+    PartialMultisig {
+        required_signatures: u8,
+        num_signatures: u8,
+    },
+}
+
+impl From<SignatureStatus> for RpcSignatureStatus {
+    fn from(value: SignatureStatus) -> Self {
+        match value {
+            SignatureStatus::NotSigned => Self::NotSigned,
+            SignatureStatus::InvalidSignature => Self::InvalidSignature,
+            SignatureStatus::FullySigned => Self::FullySigned,
+            SignatureStatus::PartialMultisig {
+                required_signatures,
+                num_signatures,
+            } => Self::PartialMultisig {
+                required_signatures,
+                num_signatures,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct MaybeSignedTransaction {
     pub hex: String,
     pub is_complete: bool,
+    pub previous_signatures: Vec<RpcSignatureStatus>,
+    pub current_signatures: Vec<RpcSignatureStatus>,
 }
 
 #[cfg(test)]

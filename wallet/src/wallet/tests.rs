@@ -4066,6 +4066,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     let stake_pool_transaction = wallet
         .sign_raw_transaction(acc_0_index, TransactionToSign::Tx(tx))
         .unwrap()
+        .0
         .into_signed_tx(&chain_config)
         .unwrap();
 
@@ -4099,7 +4100,8 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
             acc_0_index,
             TransactionToSign::Partial(decommission_partial_tx.clone()),
         )
-        .unwrap();
+        .unwrap()
+        .0;
     // the tx is still not fully signed
     assert!(!sign_from_acc0_res.is_fully_signed(&chain_config));
 
@@ -4109,6 +4111,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
             TransactionToSign::Partial(decommission_partial_tx),
         )
         .unwrap()
+        .0
         .into_signed_tx(&chain_config)
         .unwrap();
 
@@ -4194,6 +4197,7 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
             TransactionToSign::Partial(decommission_partial_tx),
         )
         .unwrap()
+        .0
         .into_signed_tx(&chain_config)
         .unwrap();
 
@@ -4353,7 +4357,8 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             TransactionToSign::Partial(send_req.clone()),
         )
-        .unwrap();
+        .unwrap()
+        .0;
     // the tx is not fully signed
     assert!(!tx.is_fully_signed(&chain_config));
 
@@ -4361,6 +4366,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
     let signed_tx = cold_wallet
         .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, TransactionToSign::Partial(send_req))
         .unwrap()
+        .0
         .into_signed_tx(&chain_config)
         .unwrap();
 
@@ -4587,7 +4593,8 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
             DEFAULT_ACCOUNT_INDEX,
             TransactionToSign::Tx(spend_multisig_tx),
         )
-        .unwrap();
+        .unwrap()
+        .0;
 
     // check it is still not fully signed
     assert!(!ptx.is_fully_signed(&chain_config));
@@ -4595,7 +4602,8 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
     // try to sign it with wallet1 again
     let ptx = wallet1
         .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, TransactionToSign::Partial(ptx))
-        .unwrap();
+        .unwrap()
+        .0;
 
     // check it is still not fully signed
     assert!(!ptx.is_fully_signed(&chain_config));
@@ -4603,7 +4611,8 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
     // try to sign it with wallet2 but wallet2 does not have the multisig added as standalone
     let ptx = wallet2
         .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, TransactionToSign::Partial(ptx))
-        .unwrap();
+        .unwrap()
+        .0;
 
     // add it to wallet2 as well
     wallet2.add_standalone_multisig(DEFAULT_ACCOUNT_INDEX, challenge, None).unwrap();
@@ -4611,7 +4620,8 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
     // now we can sign it
     let ptx = wallet2
         .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, TransactionToSign::Partial(ptx))
-        .unwrap();
+        .unwrap()
+        .0;
 
     // now it is fully signed
     assert!(ptx.is_fully_signed(&chain_config));
