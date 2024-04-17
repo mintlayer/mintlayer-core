@@ -68,10 +68,9 @@ mod storage_configs {
 // /----a0----a1----a2
 // G----m0----m1----m2----m3
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), storage_configs::reliable())]
-#[trace]
 #[case(Seed::from_entropy(), storage_configs::failing())]
+#[trace]
 fn test_stale_chain_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -120,10 +119,9 @@ fn test_stale_chain_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder)
 // Invalidate m1 in:
 // G----m0----m1
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), storage_configs::reliable())]
-#[trace]
 #[case(Seed::from_entropy(), storage_configs::failing())]
+#[trace]
 fn test_basic_tip_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -155,10 +153,9 @@ fn test_basic_tip_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder) {
 // Invalidate m0 in:
 // G----m0----m1
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), storage_configs::reliable())]
-#[trace]
 #[case(Seed::from_entropy(), storage_configs::failing())]
+#[trace]
 fn test_basic_parent_invalidation(#[case] seed: Seed, #[case] sb: StorageBuilder) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -628,10 +625,9 @@ fn complex_test_after_reload(#[case] seed: Seed) {
 // G----m0----m1
 // where a0 and m0 have the same chain trust. The reorg should not occur.
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), storage_configs::reliable())]
-#[trace]
 #[case(Seed::from_entropy(), storage_configs::failing())]
+#[trace]
 fn test_tip_invalidation_with_no_better_candidates(#[case] seed: Seed, #[case] sb: StorageBuilder) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -899,10 +895,9 @@ fn test_invalidation_with_reorg_to_chain_with_tip_far_in_the_future(#[case] seed
 // where a1 has been determined to be invalid but still remains in the db, reset
 // its status to ok and add 2 more blocks on top of it.
 #[rstest]
-#[trace]
 #[case(Seed::from_entropy(), storage_configs::reliable())]
-#[trace]
 #[case(Seed::from_entropy(), storage_configs::failing_add_only())]
+#[trace]
 fn test_reset_bad_stale_tip_status_and_add_blocks(#[case] seed: Seed, #[case] sb: StorageBuilder) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);

@@ -271,12 +271,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     }
 
     /// Create a read-write transaction, call `main_action` on it and commit.
-    /// If committing fails, repeat the whole process again until it succeeds or
-    /// the maximum number of commit attempts is reached.
-    /// If the maximum number of attempts is reached, use `on_db_err` to create
-    /// a BlockError and return it.
-    /// On each iteration, before doing anything else, call `on_new_attempt`
-    /// (this can be used for logging).
+    ///
+    /// If a storage failure occurs during execution or committing fails, repeat the whole process
+    /// again until it succeeds or the maximum number of commit attempts is reached. If the maximum
+    /// number of attempts is reached, use `on_db_err` to create a BlockError and return it. On each
+    /// iteration, before doing anything else, call `on_new_attempt` (this can be used for logging).
     #[log_error]
     fn with_rw_tx<MainAction, OnNewAttempt, OnDbCommitErr, Res, Err>(
         &mut self,

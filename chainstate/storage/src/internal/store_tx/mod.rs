@@ -185,7 +185,7 @@ impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
         self.write::<db::DBValue, _, _, _>(E::KEY, val.encode())
     }
 
-    // Encode a value and write it to the database
+    // Delete a value from the database
     fn del<DbMap, I, K>(&mut self, key: K) -> crate::Result<()>
     where
         DbMap: schema::DbMap,
