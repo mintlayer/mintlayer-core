@@ -16,6 +16,7 @@
 use common::chain::{SignedTransaction, Transaction};
 use serialization::hex_encoded::HexEncoded;
 use wallet::account::PartiallySignedTransaction;
+use wallet_types::signature_status::SignatureStatus;
 
 use super::Balances;
 
@@ -25,20 +26,42 @@ pub enum TransactionToInspect {
     Signed(SignedTransaction),
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
+#[derive(Debug, Clone)]
 pub struct ValidatedSignatures {
     pub num_valid_signatures: usize,
     pub num_invalid_signatures: usize,
+    pub signature_statuses: Vec<SignatureStatus>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
+impl ValidatedSignatures {
+    pub fn new(signature_statuses: Vec<SignatureStatus>) -> Self {
+        let num_valid_signatures = signature_statuses
+            .iter()
+            .copied()
+            .filter(|x| *x == SignatureStatus::FullySigned)
+            .count();
+        let num_invalid_signatures = signature_statuses
+            .iter()
+            .copied()
+            .filter(|x| *x == SignatureStatus::InvalidSignature)
+            .count();
+
+        Self {
+            num_valid_signatures,
+            num_invalid_signatures,
+            signature_statuses,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SignatureStats {
     pub num_inputs: usize,
     pub total_signatures: usize,
     pub validated_signatures: Option<ValidatedSignatures>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
+#[derive(Debug, Clone)]
 pub struct InspectTransaction {
     pub tx: HexEncoded<Transaction>,
     pub fees: Option<Balances>,

@@ -33,7 +33,7 @@ use wallet::{
     version::get_version,
 };
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
+    types::{BlockInfo, CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
@@ -45,8 +45,8 @@ use crate::{
         CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
         MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
         NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
-        RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
-        StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
+        RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
+        RpcUtxoType, StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
         TransactionOptions, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError,
@@ -577,8 +577,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     async fn transaction_inspect(
         &self,
         transaction: RpcHexString,
-    ) -> rpc::RpcResult<InspectTransaction> {
-        rpc::handle_result(self.transaction_inspect(transaction).await)
+    ) -> rpc::RpcResult<RpcInspectTransaction> {
+        rpc::handle_result(
+            self.transaction_inspect(transaction).await.map(RpcInspectTransaction::from),
+        )
     }
 
     async fn create_stake_pool(

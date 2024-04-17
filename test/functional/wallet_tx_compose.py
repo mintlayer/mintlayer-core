@@ -188,6 +188,7 @@ class WalletComposeTransaction(BitcoinTestFramework):
             assert_in(f"{len(utxos)} have valid signatures", output)
             assert_in(f"0 with invalid signatures", output)
             assert_in(f"0 missing signatures", output)
+            assert_in(f"All signature statuses: {', '.join(['FullySigned'] * len(utxos))}", output)
 
             assert_in("The transaction was submitted successfully", await wallet.submit_transaction(signed_tx))
 

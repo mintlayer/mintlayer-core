@@ -35,16 +35,17 @@ use wallet::{
     version::get_version,
 };
 use wallet_controller::{
-    types::{CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
+    types::{CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcStandaloneAddresses, RpcTokenId,
-        StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
-        TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
+        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcInspectTransaction,
+        RpcStandaloneAddresses, RpcTokenId, StakePoolBalance, StakingStatus,
+        StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
+        VrfPublicKeyInfo,
     },
     RpcError, WalletRpc,
 };
@@ -481,11 +482,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
     async fn transaction_inspect(
         &self,
         transaction: String,
-    ) -> Result<InspectTransaction, Self::Error> {
+    ) -> Result<RpcInspectTransaction, Self::Error> {
         self.wallet_rpc
             .transaction_inspect(RpcHexString::from_str(&transaction)?)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
+            .map(Into::into)
     }
 
     async fn sign_challenge_hex(

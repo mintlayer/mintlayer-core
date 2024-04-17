@@ -13,10 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignatureStatus {
     NotSigned,
     InvalidSignature,
+    UnknownSignature,
     FullySigned,
     PartialMultisig {
         required_signatures: u8,

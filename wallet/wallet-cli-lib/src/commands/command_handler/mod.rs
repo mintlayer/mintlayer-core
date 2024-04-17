@@ -35,9 +35,9 @@ use utils::qrcode::{QrCode, QrCodeError};
 use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
-    Balances, ComposedTransaction, ControllerConfig, CreatedWallet, InspectTransaction,
-    MnemonicInfo, NewTransaction, NftMetadata, RpcSignatureStatus, RpcStandaloneAddressDetails,
-    SignatureStats, TokenMetadata, ValidatedSignatures,
+    Balances, ComposedTransaction, ControllerConfig, MnemonicInfo, NewTransaction, NftMetadata,
+    RpcInspectTransaction, RpcSignatureStats, RpcSignatureStatus, RpcStandaloneAddressDetails,
+    RpcValidatedSignatures, TokenMetadata,
 };
 
 use crate::errors::WalletCliError;
@@ -1276,10 +1276,10 @@ where
             }
 
             WalletCommand::InspectTransaction { transaction } => {
-                let InspectTransaction {
+                let RpcInspectTransaction {
                     tx,
                     stats:
-                        SignatureStats {
+                        RpcSignatureStats {
                             num_inputs,
                             total_signatures,
                             validated_signatures,
@@ -1289,9 +1289,10 @@ where
 
                 let summary = tx.take().text_summary(chain_config);
                 let mut output_str = format!("{summary}\n");
-                if let Some(ValidatedSignatures {
+                if let Some(RpcValidatedSignatures {
                     num_valid_signatures,
                     num_invalid_signatures,
+                    signature_statuses,
                 }) = validated_signatures
                 {
                     let missing_signatures = num_inputs - total_signatures;
@@ -1300,6 +1301,10 @@ where
                         "number of inputs: {num_inputs} and total signatures {total_signatures}, of which {num_valid_signatures} have valid signatures, {num_invalid_signatures} with invalid signatures and {missing_signatures} missing signatures\n"
                     )
                     .expect("Writing to a memory buffer should not fail");
+                    let sig_statuses =
+                        signature_statuses.iter().map(format_signature_status).join(", ");
+                    writeln!(output_str, "All signature statuses: {sig_statuses}")
+                        .expect("Writing to a memory buffer should not fail");
                 } else {
                     let missing_signatures = num_inputs - total_signatures;
                     writeln!(
@@ -1591,6 +1596,7 @@ fn format_signature_status(status: &RpcSignatureStatus) -> String {
         RpcSignatureStatus::FullySigned => "FullySigned".to_owned(),
         RpcSignatureStatus::NotSigned => "NotSigned".to_owned(),
         RpcSignatureStatus::InvalidSignature => "InvalidSignature".to_owned(),
+        RpcSignatureStatus::UnknownSignature => "UnknownSignature".to_owned(),
         RpcSignatureStatus::PartialMultisig { required_signatures, num_signatures } => format!("PartialMultisig having {num_signatures} out of {required_signatures} required signatures"),
     }
 }

@@ -135,7 +135,12 @@ pub fn verify_classical_multisig_spending(
     match verifier.verify_signatures(chain_config)? {
         super::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => Ok(()),
         super::multisig_partial_signature::SigsVerifyResult::Incomplete => {
-            Err(DestinationSigError::IncompleteClassicalMultisigSignature)
+            let min_required_signatures = verifier.challenge().min_required_signatures();
+            let current_signatures = verifier.signatures().available_signatures_count() as u8;
+            Err(DestinationSigError::IncompleteClassicalMultisigSignature(
+                min_required_signatures,
+                current_signatures,
+            ))
         }
         super::multisig_partial_signature::SigsVerifyResult::Invalid => {
             Err(DestinationSigError::InvalidClassicalMultisigSignature)
@@ -319,7 +324,8 @@ mod tests {
             // 2. We add a signature and the result is complete
             // 3. We add a signature, but we can't because the required signatures are already reached
             // In each case, we test the verification of signatures and the expected outcome
-            current_signatures = match (total_parties as usize - indices_to_sign.len())
+            let current_number_of_signatures = total_parties as usize - indices_to_sign.len();
+            current_signatures = match current_number_of_signatures
                 .cmp(&(min_required_signatures.get() as usize))
             {
                 Ordering::Less => match res {
@@ -336,7 +342,7 @@ mod tests {
                                 &sigs,
                                 &sighash,
                             )
-                            .unwrap_err(), DestinationSigError::IncompleteClassicalMultisigSignature);
+                            .unwrap_err(), DestinationSigError::IncompleteClassicalMultisigSignature(min_required_signatures.get(), current_number_of_signatures as u8));
                         }
                         sigs
                     },
@@ -608,7 +614,10 @@ mod tests {
                                 &sighash,
                             )
                             .unwrap_err(),
-                            DestinationSigError::IncompleteClassicalMultisigSignature
+                            DestinationSigError::IncompleteClassicalMultisigSignature(
+                                min_required_signatures.get(),
+                                current_signatures.available_signatures_count() as u8
+                            )
                         );
                     }
                 }

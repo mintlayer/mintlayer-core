@@ -26,15 +26,15 @@ use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
-    types::{CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
+    types::{CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::types::{
     AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
     DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcSignatureStatus, RpcStandaloneAddresses,
-    RpcTokenId, StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
-    TxOptionsOverrides, VrfPublicKeyInfo,
+    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcInspectTransaction, RpcSignatureStatus,
+    RpcStandaloneAddresses, RpcTokenId, StakePoolBalance, StakingStatus,
+    StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 use wallet_types::with_locked::WithLocked;
 
@@ -271,7 +271,7 @@ pub trait WalletInterface {
     async fn transaction_inspect(
         &self,
         transaction: String,
-    ) -> Result<InspectTransaction, Self::Error>;
+    ) -> Result<RpcInspectTransaction, Self::Error>;
 
     async fn create_stake_pool(
         &self,
