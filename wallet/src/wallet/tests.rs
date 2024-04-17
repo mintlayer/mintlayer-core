@@ -4191,15 +4191,27 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
         .unwrap();
 
     // sign the tx with cold wallet
-    let signed_tx = cold_wallet
+    let partially_signed_transaction = cold_wallet
         .sign_raw_transaction(
             DEFAULT_ACCOUNT_INDEX,
             TransactionToSign::Partial(decommission_partial_tx),
         )
         .unwrap()
-        .0
-        .into_signed_tx(&chain_config)
-        .unwrap();
+        .0;
+    assert!(partially_signed_transaction.is_fully_signed(&chain_config));
+
+    // sign it with the hot wallet should leave the signatures in place even if it can't find the
+    // destinations for the inputs
+    let partially_signed_transaction = hot_wallet
+        .sign_raw_transaction(
+            DEFAULT_ACCOUNT_INDEX,
+            TransactionToSign::Partial(partially_signed_transaction),
+        )
+        .unwrap()
+        .0;
+    assert!(partially_signed_transaction.is_fully_signed(&chain_config));
+
+    let signed_tx = partially_signed_transaction.into_signed_tx(&chain_config).unwrap();
 
     let _ = create_block(
         &chain_config,

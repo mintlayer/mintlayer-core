@@ -1336,7 +1336,6 @@ impl Account {
                 SignatureStatus::FullySigned,
             )),
             Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
-                //
                 let sig = self
                     .key_chain
                     .get_private_key_for_destination(destination, db_tx)?
@@ -1627,9 +1626,9 @@ impl Account {
                             }
                         }
                         None => Ok((
-                            None,
-                            SignatureStatus::InvalidSignature,
-                            SignatureStatus::NotSigned,
+                            Some(w.clone()),
+                            SignatureStatus::UnknownSignature,
+                            SignatureStatus::UnknownSignature,
                         )),
                     },
                 },
