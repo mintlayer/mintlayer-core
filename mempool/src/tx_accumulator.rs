@@ -48,8 +48,12 @@ pub trait TransactionAccumulator: Send {
     /// and to prevent having transactions pulled for a different state than the one the block producer is working on.
     fn expected_tip(&self) -> Id<GenBlock>;
 
-    /// Candidate block timestamp to verify time locks against
-    fn block_timestamp(&self) -> BlockTimestamp;
+    /// The timestamp to verify time locks against.
+    ///
+    /// Note: when collecting transactions for a new block on top of "expected_tip", this value
+    /// must be the so-called "median time past" calculated from "expected_tip".
+    /// If a later timestamp is specified, the produced block may not be correct.
+    fn unlock_timestamp(&self) -> BlockTimestamp;
 }
 
 pub struct DefaultTxAccumulator {
@@ -59,11 +63,15 @@ pub struct DefaultTxAccumulator {
     done: bool,
     total_fees: Fee,
     expected_tip: Id<GenBlock>,
-    timestamp: BlockTimestamp,
+    unlock_timestamp: BlockTimestamp,
 }
 
 impl DefaultTxAccumulator {
-    pub fn new(target_size: usize, expected_tip: Id<GenBlock>, timestamp: BlockTimestamp) -> Self {
+    pub fn new(
+        target_size: usize,
+        expected_tip: Id<GenBlock>,
+        unlock_timestamp: BlockTimestamp,
+    ) -> Self {
         Self {
             txs: Vec::new(),
             txs_size: 0,
@@ -71,7 +79,7 @@ impl DefaultTxAccumulator {
             done: false,
             total_fees: Amount::ZERO.into(),
             expected_tip,
-            timestamp,
+            unlock_timestamp,
         }
     }
 
@@ -126,7 +134,7 @@ impl TransactionAccumulator for DefaultTxAccumulator {
         self.expected_tip
     }
 
-    fn block_timestamp(&self) -> BlockTimestamp {
-        self.timestamp
+    fn unlock_timestamp(&self) -> BlockTimestamp {
+        self.unlock_timestamp
     }
 }

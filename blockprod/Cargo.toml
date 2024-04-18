@@ -34,9 +34,11 @@ tokio = { workspace = true, default-features = false, features = ["io-util", "ma
 
 [dev-dependencies]
 chainstate-storage = { path = "../chainstate/storage/" }
+chainstate-test-framework = { path = '../chainstate/test-framework' }
 chainstate-types = {path = '../chainstate/types'}
 mocks = { path = "../mocks/" }
 storage-inmemory = { path = "../storage/inmemory" }
 test-utils = {path = '../test-utils'}
 
 rstest.workspace = true
+static_assertions.workspace = true

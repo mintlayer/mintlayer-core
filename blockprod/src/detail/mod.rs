@@ -189,7 +189,7 @@ impl BlockProduction {
     pub async fn collect_transactions(
         &self,
         current_tip: Id<GenBlock>,
-        min_block_timestamp: BlockTimestamp,
+        current_tip_median_time_past: BlockTimestamp,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
@@ -197,7 +197,7 @@ impl BlockProduction {
         let mut accumulator = Box::new(DefaultTxAccumulator::new(
             self.chain_config.max_block_size_from_std_scripts(),
             current_tip,
-            min_block_timestamp,
+            current_tip_median_time_past,
         ));
 
         for transaction in transactions.into_iter() {
@@ -226,7 +226,8 @@ impl BlockProduction {
         (
             ConsensusData,
             BlockReward,
-            GenBlockIndex,
+            /*best_block_index:*/ GenBlockIndex,
+            /*current_tip_median_time_past:*/ BlockTimestamp,
             FinalizeBlockInputData,
         ),
         BlockProductionError,
@@ -258,6 +259,16 @@ impl BlockProduction {
                         })
                     };
 
+                    let best_block_id = best_block_index.block_id();
+                    let current_tip_median_time_past =
+                        this.calculate_median_time_past(&best_block_id).map_err(|err| {
+                            ConsensusPoSError::ChainstateError(
+                                consensus::ChainstateError::FailedToCalculateMedianTimePast(
+                                    best_block_id,
+                                    err.to_string(),
+                                ),
+                            )
+                        })?;
                     let block_height = best_block_index.block_height().next_height();
                     let sealed_epoch_index = chain_config.sealed_epoch_index(&block_height);
 
@@ -300,6 +311,7 @@ impl BlockProduction {
                         consensus_data,
                         block_reward,
                         best_block_index,
+                        current_tip_median_time_past,
                         finalize_block_data,
                     ))
                 }
@@ -452,8 +464,19 @@ impl BlockProduction {
                     .await?;
             }
 
-            let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
-                self.pull_consensus_data(input_data.clone(), self.time_getter.clone()).await?;
+            let (
+                consensus_data,
+                block_reward,
+                current_tip_index,
+                // The so-called "median time past" timestamp calculated from the current tip.
+                // Note: when validating a block, the lock-time constraints of its transactions
+                // are validated against the "median time past" of the block's parent, rather than
+                // the timestamp of the block itself.
+                // So when constructing a new block we must make sure that transactions with locks
+                // after this point are not included, otherwise the block will be incorrect.
+                current_tip_median_time_past,
+                finalize_block_data,
+            ) = self.pull_consensus_data(input_data.clone(), self.time_getter.clone()).await?;
 
             if current_tip_index.block_id() != tip_at_start.block_id() {
                 log::info!(
@@ -471,16 +494,10 @@ impl BlockProduction {
                 ));
             }
 
-            // We conservatively use the minimum timestamp here in order to figure out
-            // which transactions are valid for the block.
-            // TODO: Alternatively, we can construct the transaction sequence from
-            // scratch every time a different timestamp is attempted. That is more costly
-            // in terms of computational resources but will allow the node to include more
-            // transactions since the passing time may release some time locks.
             let accumulator = self
                 .collect_transactions(
                     current_tip_index.block_id(),
-                    min_constructed_block_timestamp,
+                    current_tip_median_time_past,
                     transactions.clone(),
                     transaction_ids.clone(),
                     packing_strategy,

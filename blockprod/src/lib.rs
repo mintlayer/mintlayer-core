@@ -138,10 +138,12 @@ mod tests {
         },
         primitives::{per_thousand::PerThousand, Amount, BlockHeight, Idable, H256},
         time_getter::TimeGetter,
+        Uint256, Uint512,
     };
+    use consensus::calculate_effective_pool_balance;
     use crypto::{
         key::{KeyKind, PrivateKey},
-        random::Rng,
+        random::{CryptoRng, Rng},
         vrf::{VRFKeyKind, VRFPrivateKey},
     };
     use mempool::{MempoolConfig, MempoolHandle};
@@ -150,11 +152,6 @@ mod tests {
     };
     use storage_inmemory::InMemory;
     use subsystem::Manager;
-    use test_utils::{
-        mock_time_getter::mocked_time_getter_seconds,
-        random::{make_seedable_rng, Seed},
-    };
-    use utils::atomics::SeqCstAtomicU64;
 
     use super::*;
 
@@ -220,7 +217,7 @@ mod tests {
 
     pub fn setup_blockprod_test(
         chain_config: Option<ChainConfig>,
-        initial_mock_time: Option<Arc<SeqCstAtomicU64>>,
+        time_getter: TimeGetter,
     ) -> (
         Manager,
         Arc<ChainConfig>,
@@ -240,11 +237,6 @@ mod tests {
             chainstate_config
         };
         let mempool_config = Arc::new(MempoolConfig::new());
-
-        let time_getter = match initial_mock_time {
-            Some(mock_time) => mocked_time_getter_seconds(mock_time),
-            None => TimeGetter::default(),
-        };
 
         let chainstate = chainstate::make_chainstate(
             Arc::clone(&chain_config),
@@ -284,16 +276,61 @@ mod tests {
         (manager, chain_config, chainstate, mempool, p2p)
     }
 
-    pub fn setup_pos(seed: Seed) -> (ChainConfig, PrivateKey, VRFPrivateKey, TxOutput) {
-        let mut rng = make_seedable_rng(seed);
+    pub fn make_genesis_timestamp(time_getter: &TimeGetter, rng: &mut impl Rng) -> BlockTimestamp {
+        BlockTimestamp::from_int_seconds(
+            (time_getter.get_time()
+                - Duration::new(
+                    // Genesis must be in the past: now - (1 day..2 weeks)
+                    rng.gen_range(60 * 60 * 24..60 * 60 * 24 * 14),
+                    0,
+                ))
+            .expect("No time underflow")
+            .as_secs_since_epoch(),
+        )
+    }
 
-        let (genesis_stake_private_key, genesis_stake_public_key) =
-            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    // Sanity check - ensure that the initial target is not too big, so that staking on top
+    // of the genesis will actually need to advance the timestamp to succeed.
+    pub fn ensure_reasonable_initial_target_for_pos_tests(
+        chain_config: &ChainConfig,
+        initial_target: &Uint256,
+    ) {
+        let min_stake_pool_pledge = chain_config.min_stake_pool_pledge();
+        let final_suppply = chain_config.final_supply().unwrap().to_amount_atoms();
 
-        let (genesis_vrf_private_key, genesis_vrf_public_key) =
-            VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let typical_test_pool_effective_balance: Uint512 = calculate_effective_pool_balance(
+            min_stake_pool_pledge,
+            min_stake_pool_pledge,
+            final_suppply,
+        )
+        .unwrap()
+        .into();
 
-        let create_genesis_pool_txoutput = {
+        let effective_target =
+            (typical_test_pool_effective_balance * (*initial_target).into()).unwrap();
+        assert!(
+            effective_target <= (Uint256::MAX / Uint256::from_u64(2)).unwrap().into(),
+            "Initial target is too big"
+        );
+    }
+
+    pub fn create_genesis_for_pos_tests(
+        timestamp: BlockTimestamp,
+        extra_txs: &[TxOutput],
+        rng: &mut (impl Rng + CryptoRng),
+    ) -> (
+        Genesis,
+        /*stake_private_key:*/ PrivateKey,
+        /*vrf_private_key:*/ VRFPrivateKey,
+        /*create_pool_txoutput:*/ TxOutput,
+    ) {
+        let (stake_private_key, stake_public_key) =
+            PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+
+        let (vrf_private_key, vrf_public_key) =
+            VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
+
+        let create_pool_txoutput = {
             let min_stake_pool_pledge = {
                 // throw away just to get value
                 let chain_config = create_unit_test_config();
@@ -304,37 +341,51 @@ mod tests {
                 H256::zero().into(),
                 Box::new(StakePoolData::new(
                     min_stake_pool_pledge,
-                    Destination::PublicKey(genesis_stake_public_key.clone()),
-                    genesis_vrf_public_key,
-                    Destination::PublicKey(genesis_stake_public_key),
+                    Destination::PublicKey(stake_public_key.clone()),
+                    vrf_public_key,
+                    Destination::PublicKey(stake_public_key),
                     PerThousand::new(1000).expect("Valid per thousand"),
                     Amount::ZERO,
                 )),
             )
         };
 
-        let pos_chain_config = {
-            let genesis_block = Genesis::new(
-                "blockprod-testing".into(),
-                BlockTimestamp::from_int_seconds(
-                    (TimeGetter::default().get_time()
-                        - Duration::new(
-                            // Genesis must be in the past: now - (1 day..2 weeks)
-                            rng.gen_range(60 * 60 * 24..60 * 60 * 24 * 14),
-                            0,
-                        ))
-                    .expect("No time underflow")
-                    .as_secs_since_epoch(),
-                ),
-                vec![create_genesis_pool_txoutput.clone()],
-            );
+        let mut txs = vec![create_pool_txoutput.clone()];
+        txs.extend_from_slice(extra_txs);
 
+        let genesis = Genesis::new("blockprod-testing".into(), timestamp, txs);
+
+        (
+            genesis,
+            stake_private_key,
+            vrf_private_key,
+            create_pool_txoutput,
+        )
+    }
+
+    pub fn setup_pos(
+        time_getter: &TimeGetter,
+        switch_to_pos_at: BlockHeight,
+        extra_genesis_txs: &[TxOutput],
+        rng: &mut (impl Rng + CryptoRng),
+    ) -> (ChainConfig, PrivateKey, VRFPrivateKey, TxOutput) {
+        let initial_target = pos_initial_difficulty(ChainType::Regtest);
+
+        let genesis_timestamp = make_genesis_timestamp(time_getter, rng);
+        let (
+            genesis,
+            genesis_stake_private_key,
+            genesis_vrf_private_key,
+            create_genesis_pool_txoutput,
+        ) = create_genesis_for_pos_tests(genesis_timestamp, extra_genesis_txs, rng);
+
+        let chain_config = {
             let net_upgrades = NetUpgrades::initialize(vec![
                 (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
                 (
-                    BlockHeight::new(1),
+                    switch_to_pos_at,
                     ConsensusUpgrade::PoS {
-                        initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
+                        initial_difficulty: Some(initial_target.into()),
                         config: PoSChainConfigBuilder::new_for_unit_test().build(),
                     },
                 ),
@@ -342,13 +393,15 @@ mod tests {
             .expect("Net upgrades are valid");
 
             Builder::new(ChainType::Regtest)
-                .genesis_custom(genesis_block)
+                .genesis_custom(genesis)
                 .consensus_upgrades(net_upgrades)
                 .build()
         };
 
+        ensure_reasonable_initial_target_for_pos_tests(&chain_config, &initial_target);
+
         (
-            pos_chain_config,
+            chain_config,
             genesis_stake_private_key,
             genesis_vrf_private_key,
             create_genesis_pool_txoutput,
@@ -357,8 +410,9 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_make_blockproduction() {
+        let time_getter = TimeGetter::default();
         let (mut manager, chain_config, chainstate, mempool, p2p) =
-            setup_blockprod_test(None, None);
+            setup_blockprod_test(None, time_getter.clone());
 
         let blockprod = make_blockproduction(
             Arc::clone(&chain_config),
@@ -366,7 +420,7 @@ mod tests {
             chainstate.clone(),
             mempool.clone(),
             p2p.clone(),
-            Default::default(),
+            time_getter,
         )
         .expect("Error initializing blockprod");
 

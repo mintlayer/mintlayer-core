@@ -567,6 +567,7 @@ impl BlockProcessingErrorClassification for consensus::ChainstateError {
             // These all represent a general chainstate failure.
             // TODO: it's better to delegate to the inner error anyway.
             ChainstateError::FailedToObtainEpochData(_, _err)
+            | ChainstateError::FailedToCalculateMedianTimePast(_, _err)
             | ChainstateError::StakePoolDataReadError(_, _err)
             | ChainstateError::PoolBalanceReadError(_, _err) => BlockProcessingErrorClass::General,
         }

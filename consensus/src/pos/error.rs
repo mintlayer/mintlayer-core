@@ -17,7 +17,7 @@ use thiserror::Error;
 
 use chainstate_types::pos_randomness::PoSRandomnessError;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, PoolId},
+    chain::{block::timestamp::BlockTimestamp, Block, GenBlock, PoolId},
     primitives::{BlockHeight, Compact, Id},
     UintConversionError,
 };
@@ -113,6 +113,8 @@ pub enum ConsensusPoSError {
 pub enum ChainstateError {
     #[error("Failed to obtain epoch for block height {0}: {1}")]
     FailedToObtainEpochData(BlockHeight, String),
+    #[error("Failed to calculate median time past starting from block {0}: {1}")]
+    FailedToCalculateMedianTimePast(Id<GenBlock>, String),
     #[error("Failed to read data of pool {0}: {1}")]
     StakePoolDataReadError(PoolId, String),
     #[error("Failed to read balance of pool {0}: {1}")]
