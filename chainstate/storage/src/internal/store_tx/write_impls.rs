@@ -312,10 +312,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for S
 
     #[log_error]
     fn del_pool_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
-        self.db_tx
-            .get_mut::<db::DBAccountingPoolBalancesSealed, _>()
-            .del(pool_id)
-            .map_err(Into::into)
+        self.del::<db::DBAccountingPoolBalancesSealed, _, _>(pool_id)
     }
 
     #[log_error]
