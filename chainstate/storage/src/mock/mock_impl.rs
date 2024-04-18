@@ -691,7 +691,8 @@ mockall::mock! {
     }
 
     impl crate::TransactionRw for StoreTxRw {
-        fn abort(self) -> crate::Result<()>;
+        fn abort(self);
         fn commit(self) -> crate::Result<()>;
+        fn check_error(&self) -> crate::Result<()>;
     }
 }

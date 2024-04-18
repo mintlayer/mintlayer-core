@@ -301,8 +301,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             let result = match main_action_result {
                 Ok(result) => result,
                 err @ Err(_) => {
-                    let abort_result = chainstate_ref.abort_db_tx();
-                    match abort_result {
+                    match chainstate_ref.check_storage_error() {
                         // There is an error but not related to storage, no point retrying.
                         Ok(()) => (),
 

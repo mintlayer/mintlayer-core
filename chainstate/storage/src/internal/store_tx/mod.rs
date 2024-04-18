@@ -208,9 +208,11 @@ impl<'st, B: storage::Backend> crate::TransactionRw for StoreTxRw<'st, B> {
         self.db_tx.commit().map_err(Into::into)
     }
 
-    fn abort(self) -> crate::Result<()> {
-        self.check_error()?;
+    fn abort(self) {
         self.db_tx.abort();
-        Ok(())
+    }
+
+    fn check_error(&self) -> crate::Result<()> {
+        self.check_error()
     }
 }

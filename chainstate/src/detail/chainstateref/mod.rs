@@ -119,9 +119,8 @@ impl<'a, S: TransactionRw, V> ChainstateRef<'a, S, V> {
         self.db_tx.commit()
     }
 
-    #[log_error]
-    pub fn abort_db_tx(self) -> chainstate_storage::Result<()> {
-        self.db_tx.abort()
+    pub fn check_storage_error(&self) -> chainstate_storage::Result<()> {
+        self.db_tx.check_error()
     }
 }
 

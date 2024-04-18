@@ -266,10 +266,13 @@ pub trait TransactionRo: BlockchainStorageRead {
 /// Operations on read-write transactions
 pub trait TransactionRw: BlockchainStorageWrite {
     /// Abort the transaction
-    fn abort(self) -> crate::Result<()>;
+    fn abort(self);
 
     /// Commit the transaction
     fn commit(self) -> crate::Result<()>;
+
+    /// Check if an error has occurred during the transaction execution so far
+    fn check_error(&self) -> crate::Result<()>;
 }
 
 /// Support for transactions over blockchain storage
