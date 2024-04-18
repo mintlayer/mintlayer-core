@@ -60,8 +60,7 @@ pub enum BlockCreationError {
     WitnessMerkleTreeMismatch(H256, H256),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode, TypeName, serde::Serialize)]
-#[serde(tag = "version", content = "content")]
+#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode, TypeName)]
 #[must_use]
 pub enum Block {
     V1(BlockV1),

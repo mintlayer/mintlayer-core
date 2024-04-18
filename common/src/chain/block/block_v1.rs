@@ -28,7 +28,7 @@ use super::{
 };
 
 #[must_use]
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serialization::Tagged, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serialization::Tagged)]
 pub struct BlockV1 {
     pub(super) header: SignedBlockHeader,
     pub(super) body: BlockBody,

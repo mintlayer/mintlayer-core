@@ -27,7 +27,7 @@ pub enum SignedHeaderError {
     AttemptedMutatingSignedHeader,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName)]
 pub struct BlockHeaderSignatureData {
     signature: Signature,
 }
@@ -43,7 +43,7 @@ impl BlockHeaderSignatureData {
 }
 
 #[must_use]
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName)]
 pub enum BlockHeaderSignature {
     #[codec(index = 0)]
     None,
@@ -51,9 +51,7 @@ pub enum BlockHeaderSignature {
     HeaderSignature(BlockHeaderSignatureData),
 }
 
-#[derive(
-    Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName, serialization::Tagged, serde::Serialize,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName, serialization::Tagged)]
 pub struct SignedBlockHeader {
     block_header: BlockHeader,
     signature_data: BlockHeaderSignature,

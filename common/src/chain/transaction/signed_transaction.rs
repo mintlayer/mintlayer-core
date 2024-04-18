@@ -21,7 +21,7 @@ use crate::{
 use serialization::{Decode, Encode};
 use utils::ensure;
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode)]
 pub struct SignedTransaction {
     transaction: Transaction,
     signatures: Vec<InputWitness>,
