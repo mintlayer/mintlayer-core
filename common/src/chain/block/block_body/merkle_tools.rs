@@ -116,7 +116,7 @@ mod tests {
         #[case] leaf_count: usize,
         #[case] expected_root_hex: &str,
     ) {
-        let leaves = (0..leaf_count).map(|v| default_hash(v.to_string())).collect::<Vec<_>>();
+        let leaves = (0..leaf_count).map(|v| default_hash(v.to_string()));
 
         // The tree is defined from a vector of leaves, from left to right
         let tree = MerkleTree::<H256, MerkleHasher>::from_leaves(leaves).unwrap();
