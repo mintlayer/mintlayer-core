@@ -28,7 +28,6 @@ members = [
   "logging",                            # Logging engine and its interfaces.
   "mempool",                            # Mempool interface and implementation.
   "mempool/types",                      # Common mempool types.
-  "merkletree",                         # Merkle tree implementation with merkle proofs.
   "mocks",                              # Mock implementations of our traits (used for testing)
   "node-daemon",                        # Node terminal binary.
   "node-gui",                           # Node GUI binary.
@@ -170,6 +169,7 @@ lazy_static = "1.4"
 libtest-mimic = "0.7"
 log = "0.4"
 loom = "0.7"
+merkletree-mintlayer = "0.1"
 mockall = "0.12"
 num = "0.4"
 num-derive = "0.4"

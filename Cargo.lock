@@ -1521,7 +1521,7 @@ dependencies = [
  "itertools 0.12.1",
  "lazy_static",
  "logging",
- "merkletree",
+ "merkletree-mintlayer",
  "num",
  "once_cell",
  "parity-scale-codec",
@@ -4184,16 +4184,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "merkletree"
-version = "0.4.2"
+name = "merkletree-mintlayer"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1e9c510d29f615e24988790cc62f3e24589ca4c2e5a434dc213a21531816afc"
 dependencies = [
- "blake2",
- "fixed-hash",
  "itertools 0.12.1",
  "parity-scale-codec",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "rstest",
  "thiserror",
 ]
 

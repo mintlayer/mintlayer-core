@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use merkletree::{
+use merkletree_mintlayer::{
     proof::single::{SingleProofHashes, SingleProofNodes},
     tree::MerkleTree,
 };

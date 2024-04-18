@@ -18,7 +18,7 @@ mod merkle_tools;
 
 pub mod merkle_proxy;
 
-use merkletree::{MerkleTreeFormError, MerkleTreeProofExtractionError};
+use merkletree_mintlayer::{MerkleTreeFormError, MerkleTreeProofExtractionError};
 use serialization::{Decode, Encode};
 
 use crate::chain::SignedTransaction;
