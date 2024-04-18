@@ -61,6 +61,7 @@ pub enum BlockCreationError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode, TypeName, serde::Serialize)]
+#[serde(tag = "version", content = "content")]
 #[must_use]
 pub enum Block {
     V1(BlockV1),

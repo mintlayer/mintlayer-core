@@ -17,6 +17,9 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::spanned::Spanned;
 
+const ALLOWED_TAG_KEYS: &[&str] = &["type", "version"];
+const ALLOWED_CONTENT_KEYS: &[&str] = &["content"];
+
 enum EnumTag {
     External,
     Adjacent(String, String, Span, Span),
@@ -113,11 +116,13 @@ impl SerdeAttributes {
         match &enum_tag {
             EnumTag::External => (),
             EnumTag::Adjacent(tag, content, tag_s, ck_s) => {
-                if tag != "type" {
-                    return Err(syn::Error::new(*tag_s, "Tag must be \"type\""));
+                if !ALLOWED_TAG_KEYS.contains(&tag.as_str()) {
+                    let msg = format!("Tag must be one of {ALLOWED_TAG_KEYS:?}");
+                    return Err(syn::Error::new(*tag_s, msg));
                 }
-                if content != "content" {
-                    return Err(syn::Error::new(*ck_s, "Content must be \"content\""));
+                if !ALLOWED_CONTENT_KEYS.contains(&content.as_str()) {
+                    let msg = format!("Content must be one of {ALLOWED_CONTENT_KEYS:?}");
+                    return Err(syn::Error::new(*ck_s, msg));
                 }
             }
             EnumTag::None(_) => (),

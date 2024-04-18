@@ -25,6 +25,7 @@ use serialization::{Decode, Encode};
 use super::timestamp::BlockTimestamp;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
+#[serde(tag = "type", content = "content")]
 pub enum ConsensusData {
     #[codec(index = 0)]
     None,
