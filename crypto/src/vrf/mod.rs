@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use hmac::{Hmac, Mac};
-use merlin::Transcript;
 use serialization::{hex_encoded::HexEncoded, Decode, Encode};
 use sha2::Sha512;
 
@@ -30,6 +29,7 @@ use crate::{
 };
 
 pub use self::primitives::VRFReturn;
+use self::transcript::VRFTranscript;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum VRFError {
@@ -146,7 +146,7 @@ impl VRFPrivateKey {
         &self.key
     }
 
-    pub fn produce_vrf_data(&self, message: Transcript) -> VRFReturn {
+    pub fn produce_vrf_data(&self, message: VRFTranscript) -> VRFReturn {
         match &self.key {
             VRFPrivateKeyHolder::Schnorrkel(k) => k.produce_vrf_data(message).into(),
         }
@@ -170,7 +170,7 @@ impl VRFPublicKey {
 
     pub fn verify_vrf_data(
         &self,
-        message: Transcript,
+        message: VRFTranscript,
         vrf_data: &VRFReturn,
     ) -> Result<(), VRFError> {
         match &self.pub_key {
@@ -328,7 +328,7 @@ mod tests {
 
     use crate::vrf::transcript::{TranscriptAssembler, TranscriptComponent};
 
-    use super::{transcript::WrappedTranscript, *};
+    use super::{transcript::VRFTranscript, *};
 
     #[rstest]
     #[trace]
@@ -366,7 +366,7 @@ mod tests {
         assert_eq!(decoded_pk, VRFPublicKey::from_private_key(&decoded_sk))
     }
 
-    fn make_arbitrary_transcript() -> WrappedTranscript {
+    fn make_arbitrary_transcript() -> VRFTranscript {
         TranscriptAssembler::new(b"some context")
             .attach(
                 b"some label",
@@ -405,8 +405,7 @@ mod tests {
             }
         }
 
-        pk.verify_vrf_data(transcript.into(), &vrf_data)
-            .expect("Valid VRF check failed");
+        pk.verify_vrf_data(transcript, &vrf_data).expect("Valid VRF check failed");
     }
 
     #[rstest]
@@ -434,7 +433,7 @@ mod tests {
             }
         }
 
-        let mut mutated_transcript: Transcript = transcript.into();
+        let mut mutated_transcript = transcript;
         mutated_transcript.append_u64(b"Forgery", 1337);
 
         pk.verify_vrf_data(mutated_transcript, &vrf_data)

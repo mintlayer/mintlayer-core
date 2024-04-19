@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use merlin::Transcript;
+use schnorrkel::context::SigningTranscript;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TranscriptComponent {
@@ -30,17 +30,38 @@ pub struct TranscriptAssembler {
 // A wrapper that makes it unnecessary to directly use the merlin dependency
 #[must_use]
 #[derive(Clone)]
-pub struct WrappedTranscript(Transcript);
+pub struct VRFTranscript(merlin::Transcript);
 
-impl From<Transcript> for WrappedTranscript {
-    fn from(t: Transcript) -> Self {
-        WrappedTranscript(t)
+impl VRFTranscript {
+    #[cfg(test)]
+    pub(crate) fn append_u64(&mut self, label: &'static [u8], x: u64) {
+        self.0.append_u64(label, x)
     }
 }
 
-impl From<WrappedTranscript> for Transcript {
-    fn from(t: WrappedTranscript) -> Self {
-        t.0
+impl SigningTranscript for VRFTranscript {
+    fn commit_bytes(&mut self, label: &'static [u8], bytes: &[u8]) {
+        self.0.append_message(label, bytes)
+    }
+
+    fn challenge_bytes(&mut self, label: &'static [u8], dest: &mut [u8]) {
+        self.0.challenge_bytes(label, dest)
+    }
+
+    fn witness_bytes_rng<R>(
+        &self,
+        label: &'static [u8],
+        dest: &mut [u8],
+        nonce_seeds: &[&[u8]],
+        rng: R,
+    ) where
+        R: rand::prelude::RngCore + rand::prelude::CryptoRng,
+    {
+        self.0.witness_bytes_rng(label, dest, nonce_seeds, rng)
+    }
+
+    fn witness_bytes(&self, label: &'static [u8], dest: &mut [u8], nonce_seeds: &[&[u8]]) {
+        self.witness_bytes_rng(label, dest, nonce_seeds, crate::random::make_true_rng())
     }
 }
 
@@ -58,8 +79,8 @@ impl TranscriptAssembler {
         result
     }
 
-    pub fn finalize(self) -> WrappedTranscript {
-        let mut transcript = Transcript::new(self.label);
+    pub fn finalize(self) -> VRFTranscript {
+        let mut transcript = merlin::Transcript::new(self.label);
         for component in &self.components {
             match &component.1 {
                 TranscriptComponent::RawData(d) => transcript.append_message(component.0, d),
@@ -67,7 +88,7 @@ impl TranscriptAssembler {
             }
         }
 
-        transcript.into()
+        VRFTranscript(transcript)
     }
 }
 
@@ -83,7 +104,7 @@ mod tests {
     #[test]
     fn manual_vs_assembled() {
         // build first transcript by manually filling values
-        let mut manual_transcript = Transcript::new(b"initial");
+        let mut manual_transcript = merlin::Transcript::new(b"initial");
         manual_transcript.append_message(b"abc", b"xyz");
         manual_transcript.append_u64(b"rx42", 424242);
 

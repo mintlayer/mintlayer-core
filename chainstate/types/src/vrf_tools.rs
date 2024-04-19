@@ -18,7 +18,7 @@ use common::{
     primitives::H256,
 };
 use crypto::vrf::{
-    transcript::{TranscriptAssembler, TranscriptComponent, WrappedTranscript},
+    transcript::{TranscriptAssembler, TranscriptComponent, VRFTranscript},
     VRFError, VRFPublicKey, VRFReturn,
 };
 use thiserror::Error;
@@ -38,7 +38,7 @@ pub fn construct_transcript(
     epoch_index: EpochIndex,
     random_seed: &H256,
     block_timestamp: BlockTimestamp,
-) -> WrappedTranscript {
+) -> VRFTranscript {
     TranscriptAssembler::new(TRANSCRIPT_MAIN_LABEL)
         .attach(
             RANDOMNESS_COMPONENT_LABEL,
@@ -58,7 +58,7 @@ pub fn construct_transcript(
 fn extract_vrf_output(
     vrf_data: &VRFReturn,
     vrf_public_key: VRFPublicKey,
-    transcript: WrappedTranscript,
+    transcript: VRFTranscript,
 ) -> Result<[u8; 32], VRFError> {
     match &vrf_data {
         VRFReturn::Schnorrkel(d) => d

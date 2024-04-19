@@ -14,14 +14,13 @@
 // limitations under the License.
 
 use generic_array::{ArrayLength, GenericArray};
-use merlin::Transcript;
 use schnorrkel::{
     vrf::{VRFInOut, VRFPreOut, VRFProof},
     PublicKey,
 };
 use serialization::{hex_encoded::HexEncoded, Decode, Encode};
 
-use crate::vrf::{VRFError, VRFPublicKey};
+use crate::vrf::{transcript::VRFTranscript, VRFError, VRFPublicKey};
 
 const VRF_OUTPUT_LABEL: &[u8] = b"MintlayerVRFOutput!";
 
@@ -113,7 +112,7 @@ impl SchnorrkelVRFReturn {
     fn attach_input_to_output(
         &self,
         public_key: PublicKey,
-        transcript: Transcript,
+        transcript: VRFTranscript,
     ) -> Result<VRFInOut, VRFError> {
         self.preout
             .attach_input_hash(&public_key, transcript)
@@ -123,7 +122,7 @@ impl SchnorrkelVRFReturn {
     pub fn calculate_vrf_output<OutputSize: ArrayLength<u8>>(
         &self,
         public_key: PublicKey,
-        transcript: Transcript,
+        transcript: VRFTranscript,
     ) -> Result<GenericArray<u8, OutputSize>, VRFError> {
         let input_and_output = self.attach_input_to_output(public_key, transcript)?;
         let result = input_and_output.make_bytes::<GenericArray<u8, OutputSize>>(VRF_OUTPUT_LABEL);
@@ -133,7 +132,7 @@ impl SchnorrkelVRFReturn {
     pub fn calculate_vrf_output_with_generic_key<OutputSize: ArrayLength<u8>>(
         &self,
         public_key: VRFPublicKey,
-        transcript: Transcript,
+        transcript: VRFTranscript,
     ) -> Result<GenericArray<u8, OutputSize>, VRFError> {
         match public_key.pub_key {
             crate::vrf::VRFPublicKeyHolder::Schnorrkel(pub_key) => {
