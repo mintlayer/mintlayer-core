@@ -64,7 +64,7 @@ fn extract_vrf_output(
         VRFReturn::Schnorrkel(d) => d
             .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
                 vrf_public_key,
-                transcript.into(),
+                transcript,
             )
             .map(|a| a.into()),
     }
@@ -79,7 +79,7 @@ pub fn verify_vrf_and_get_vrf_output(
 ) -> Result<H256, ProofOfStakeVRFError> {
     let transcript = construct_transcript(epoch_index, random_seed, block_timestamp);
 
-    vrf_public_key.verify_vrf_data(transcript.clone().into(), vrf_data)?;
+    vrf_public_key.verify_vrf_data(transcript.clone(), vrf_data)?;
 
     let vrf_raw_output = extract_vrf_output(vrf_data, vrf_public_key.clone(), transcript)?;
 

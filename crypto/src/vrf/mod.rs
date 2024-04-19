@@ -398,7 +398,7 @@ mod tests {
                 let _output_value_to_use_in_application: [u8; 32] = d
                     .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
                         pk.clone(),
-                        transcript.clone().into(),
+                        transcript.clone(),
                     )
                     .unwrap()
                     .into();
@@ -426,7 +426,7 @@ mod tests {
                 let _output_value_to_use_in_application: [u8; 32] = d
                     .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
                         pk.clone(),
-                        transcript.clone().into(),
+                        transcript.clone(),
                     )
                     .unwrap()
                     .into();
@@ -458,7 +458,7 @@ mod tests {
                 let _output_value_to_use_in_application: [u8; 32] = d
                     .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
                         pk,
-                        transcript.clone().into(),
+                        transcript.clone(),
                     )
                     .unwrap()
                     .into();
@@ -467,7 +467,7 @@ mod tests {
 
         let (_sk2, pk2) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-        pk2.verify_vrf_data(transcript.into(), &vrf_data)
+        pk2.verify_vrf_data(transcript, &vrf_data)
             .expect_err("Invalid VRF check succeeded");
     }
 
@@ -495,14 +495,13 @@ mod tests {
                 let _output_value_to_use_in_application: [u8; 32] = d
                     .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
                         pk.clone(),
-                        transcript.clone().into(),
+                        transcript.clone(),
                     )
                     .unwrap()
                     .into();
             }
         }
 
-        pk.verify_vrf_data(transcript.into(), &vrf_data)
-            .expect("Valid VRF check failed");
+        pk.verify_vrf_data(transcript, &vrf_data).expect("Valid VRF check failed");
     }
 }
