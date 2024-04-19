@@ -1,0 +1,15 @@
+[package]
+name = "storage-failing"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+storage = { path = ".." }
+storage-core = { path = "../core" }
+test-utils = { path = "../../test-utils" }
+utils = { path = "../../utils" }
+
+enumflags2.workspace = true
+thiserror.workspace = true

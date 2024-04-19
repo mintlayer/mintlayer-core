@@ -62,7 +62,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     #[log_error]
     fn del_block(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0.get_mut::<db::DBBlock, _>().del(id).map_err(Into::into)
+        self.del::<db::DBBlock, _, _>(id)
     }
 
     #[log_error]
@@ -72,7 +72,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     #[log_error]
     fn del_block_index(&mut self, block_id: Id<Block>) -> crate::Result<()> {
-        self.0.get_mut::<db::DBBlockIndex, _>().del(block_id).map_err(Into::into)
+        self.del::<db::DBBlockIndex, _, _>(block_id)
     }
 
     #[log_error]
@@ -91,7 +91,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     #[log_error]
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()> {
-        self.0.get_mut::<db::DBBlockByHeight, _>().del(height).map_err(Into::into)
+        self.del::<db::DBBlockByHeight, _, _>(height)
     }
 
     #[log_error]
@@ -101,7 +101,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     #[log_error]
     fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0.get_mut::<db::DBUtxosBlockUndo, _>().del(id).map_err(Into::into)
+        self.del::<db::DBUtxosBlockUndo, _, _>(id)
     }
 
     #[log_error]
@@ -115,7 +115,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     #[log_error]
     fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBTokensAuxData, _>().del(&token_id).map_err(Into::into)
+        self.del::<db::DBTokensAuxData, _, _>(token_id)
     }
 
     #[log_error]
@@ -129,10 +129,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     #[log_error]
     fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBIssuanceTxVsTokenId, _>()
-            .del(&issuance_tx_id)
-            .map_err(Into::into)
+        self.del::<db::DBIssuanceTxVsTokenId, _, _>(issuance_tx_id)
     }
 
     #[log_error]
@@ -146,10 +143,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     #[log_error]
     fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBTokensAccountingBlockUndo, _>()
-            .del(id)
-            .map_err(Into::into)
+        self.del::<db::DBTokensAccountingBlockUndo, _, _>(id)
     }
 
     #[log_error]
@@ -163,7 +157,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     #[log_error]
     fn del_pos_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0.get_mut::<db::DBAccountingBlockUndo, _>().del(id).map_err(Into::into)
+        self.del::<db::DBAccountingBlockUndo, _, _>(id)
     }
 
     #[log_error]
@@ -177,10 +171,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     #[log_error]
     fn del_accounting_epoch_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingEpochDelta, _>()
-            .del(epoch_index)
-            .map_err(Into::into)
+        self.del::<db::DBAccountingEpochDelta, _, _>(epoch_index)
     }
 
     #[log_error]
@@ -194,10 +185,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     #[log_error]
     fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingEpochDeltaUndo, _>()
-            .del(epoch_index)
-            .map_err(Into::into)
+        self.del::<db::DBAccountingEpochDeltaUndo, _, _>(epoch_index)
     }
 
     #[log_error]
@@ -211,7 +199,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     #[log_error]
     fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()> {
-        self.0.get_mut::<db::DBAccountNonceCount, _>().del(account).map_err(Into::into)
+        self.del::<db::DBAccountNonceCount, _, _>(account)
     }
 }
 
@@ -223,7 +211,7 @@ impl<'st, B: storage::Backend> EpochStorageWrite for StoreTxRw<'st, B> {
 
     #[log_error]
     fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()> {
-        self.0.get_mut::<db::DBEpochData, _>().del(epoch_index).map_err(Into::into)
+        self.del::<db::DBEpochData, _, _>(epoch_index)
     }
 }
 
@@ -235,7 +223,7 @@ impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {
 
     #[log_error]
     fn del_utxo(&mut self, outpoint: &UtxoOutPoint) -> crate::Result<()> {
-        self.0.get_mut::<db::DBUtxo, _>().del(outpoint).map_err(Into::into)
+        self.del::<db::DBUtxo, _, _>(outpoint)
     }
 
     #[log_error]
@@ -252,10 +240,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Stor
 
     #[log_error]
     fn del_pool_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingPoolBalancesTip, _>()
-            .del(pool_id)
-            .map_err(Into::into)
+        self.del::<db::DBAccountingPoolBalancesTip, _, _>(pool_id)
     }
 
     #[log_error]
@@ -265,10 +250,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Stor
 
     #[log_error]
     fn del_pool_data(&mut self, pool_id: PoolId) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingPoolDataTip, _>()
-            .del(pool_id)
-            .map_err(Into::into)
+        self.del::<db::DBAccountingPoolDataTip, _, _>(pool_id)
     }
 
     #[log_error]
@@ -282,10 +264,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Stor
 
     #[log_error]
     fn del_delegation_balance(&mut self, delegation_target: DelegationId) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingDelegationBalancesTip, _>()
-            .del(delegation_target)
-            .map_err(Into::into)
+        self.del::<db::DBAccountingDelegationBalancesTip, _, _>(delegation_target)
     }
 
     #[log_error]
@@ -299,10 +278,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Stor
 
     #[log_error]
     fn del_delegation_data(&mut self, delegation_id: DelegationId) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingDelegationDataTip, _>()
-            .del(delegation_id)
-            .map_err(Into::into)
+        self.del::<db::DBAccountingDelegationDataTip, _, _>(delegation_id)
     }
 
     #[log_error]
@@ -324,10 +300,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Stor
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingPoolDelegationSharesTip, _>()
-            .del((pool_id, delegation_id))
-            .map_err(Into::into)
+        self.del::<db::DBAccountingPoolDelegationSharesTip, _, _>((pool_id, delegation_id))
     }
 }
 
@@ -339,10 +312,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for S
 
     #[log_error]
     fn del_pool_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingPoolBalancesSealed, _>()
-            .del(pool_id)
-            .map_err(Into::into)
+        self.del::<db::DBAccountingPoolBalancesSealed, _, _>(pool_id)
     }
 
     #[log_error]
@@ -352,10 +322,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for S
 
     #[log_error]
     fn del_pool_data(&mut self, pool_id: PoolId) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingPoolDataSealed, _>()
-            .del(pool_id)
-            .map_err(Into::into)
+        self.del::<db::DBAccountingPoolDataSealed, _, _>(pool_id)
     }
 
     #[log_error]
@@ -369,10 +336,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for S
 
     #[log_error]
     fn del_delegation_balance(&mut self, delegation_target: DelegationId) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingDelegationBalancesSealed, _>()
-            .del(delegation_target)
-            .map_err(Into::into)
+        self.del::<db::DBAccountingDelegationBalancesSealed, _, _>(delegation_target)
     }
 
     #[log_error]
@@ -386,10 +350,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for S
 
     #[log_error]
     fn del_delegation_data(&mut self, delegation_id: DelegationId) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingDelegationDataSealed, _>()
-            .del(delegation_id)
-            .map_err(Into::into)
+        self.del::<db::DBAccountingDelegationDataSealed, _, _>(delegation_id)
     }
 
     #[log_error]
@@ -411,10 +372,7 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for S
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBAccountingPoolDelegationSharesSealed, _>()
-            .del((pool_id, delegation_id))
-            .map_err(Into::into)
+        self.del::<db::DBAccountingPoolDelegationSharesSealed, _, _>((pool_id, delegation_id))
     }
 }
 
@@ -430,7 +388,7 @@ impl<'st, B: storage::Backend> TokensAccountingStorageWrite for StoreTxRw<'st, B
 
     #[log_error]
     fn del_token_data(&mut self, id: &TokenId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBTokensData, _>().del(id).map_err(Into::into)
+        self.del::<db::DBTokensData, _, _>(id)
     }
 
     #[log_error]
@@ -440,6 +398,6 @@ impl<'st, B: storage::Backend> TokensAccountingStorageWrite for StoreTxRw<'st, B
 
     #[log_error]
     fn del_circulating_supply(&mut self, id: &TokenId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBTokensCirculatingSupply, _>().del(id).map_err(Into::into)
+        self.del::<db::DBTokensCirculatingSupply, _, _>(id)
     }
 }

@@ -21,9 +21,9 @@ use super::helpers::{
 
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use chainstate::BlockSource;
-use chainstate_storage::{inmemory::Store, BlockchainStorageWrite, TransactionRw, Transactional};
+use chainstate_storage::{BlockchainStorageWrite, TransactionRw, Transactional};
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+    anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
 };
 use common::{
     chain::{
@@ -65,7 +65,7 @@ fn stake_pool_reorg(
     #[case] sealed_epoch_distance_from_tip: usize,
 ) {
     utils::concurrency::model(move || {
-        let storage = Store::new_empty().unwrap();
+        let storage = TestStore::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let chain_config = ConfigBuilder::test_chain()
             .epoch_length(epoch_length)
@@ -178,7 +178,7 @@ fn stake_pool_reorg(
         //
         // Construct fresh `genesis -> b -> c` chain as a reference
         let expected_storage = {
-            let storage = Store::new_empty().unwrap();
+            let storage = TestStore::new_empty().unwrap();
             let block_a_epoch = chain_config.epoch_index_from_height(&block_a_index.block_height());
             let mut tf = TestFramework::builder(&mut rng)
                 .with_storage(storage.clone())

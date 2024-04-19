@@ -1227,6 +1227,8 @@ dependencies = [
  "pos-accounting",
  "rstest",
  "serialization",
+ "storage-failing",
+ "storage-inmemory",
  "test-utils",
  "tokens-accounting",
  "tx-verifier",
@@ -7022,6 +7024,18 @@ version = "0.4.2"
 dependencies = [
  "itertools 0.12.1",
  "logging",
+ "thiserror",
+ "utils",
+]
+
+[[package]]
+name = "storage-failing"
+version = "0.4.2"
+dependencies = [
+ "enumflags2",
+ "storage",
+ "storage-core",
+ "test-utils",
  "thiserror",
  "utils",
 ]

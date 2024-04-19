@@ -32,6 +32,10 @@ pub enum Recoverable {
     #[error("The database file failed to initialize")]
     DbInit,
 
+    /// The memory map is full, needs a resize.
+    #[error("Memory map full")]
+    MemMapFull,
+
     /// Recoverable I/O error
     #[error("I/O error: {1}")]
     Io(std::io::ErrorKind, String),

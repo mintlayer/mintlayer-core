@@ -118,6 +118,10 @@ impl<'a, S: TransactionRw, V> ChainstateRef<'a, S, V> {
     pub fn commit_db_tx(self) -> chainstate_storage::Result<()> {
         self.db_tx.commit()
     }
+
+    pub fn check_storage_error(&self) -> chainstate_storage::Result<()> {
+        self.db_tx.check_error()
+    }
 }
 
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> ChainstateRef<'a, S, V> {

@@ -22,12 +22,13 @@ mod key_manager;
 mod pos_block_builder;
 mod random_tx_maker;
 mod staking_pools;
+pub mod storage;
 mod transaction_builder;
 mod tx_verification_strategy;
 mod utils;
 
-/// Storage backend used for testing (the in-memory backend)
-pub type TestStore = chainstate_storage::inmemory::Store;
+/// Storage backend used for testing (the in-memory backend with simulated failures)
+pub use storage::TestStore;
 
 /// Chainstate instantiation for testing, using the in-memory storage backend
 pub type TestChainstate = Box<dyn chainstate::chainstate_interface::ChainstateInterface>;

@@ -64,8 +64,7 @@ impl Checkpoints {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
-    use test_utils::random::inner_random::Rng;
-    use test_utils::random::{make_seedable_rng, Seed};
+    use test_utils::random::{make_seedable_rng, Rng, Seed};
 
     use crate::primitives::H256;
 
