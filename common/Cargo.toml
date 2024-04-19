@@ -10,7 +10,6 @@ rust-version.workspace = true
 [dependencies]
 crypto = { path = '../crypto'}
 logging = { path = "../logging/" }
-merkletree = { path = "../merkletree", features = ["scale-codec"] }
 rpc-description = { path = "../rpc/description" }
 rpc-types = { path = "../rpc/types" }
 script = { path = '../script'}
@@ -27,6 +26,7 @@ generic-array.workspace = true
 hex.workspace = true
 itertools.workspace = true
 lazy_static.workspace = true
+merkletree-mintlayer = { workspace = true, features = ["scale-codec"] }
 num.workspace = true
 once_cell.workspace = true
 parity-scale-codec.workspace = true
