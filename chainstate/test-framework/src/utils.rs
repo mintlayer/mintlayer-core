@@ -276,7 +276,7 @@ pub fn pos_mine(
             &sealed_epoch_randomness.value(),
             timestamp,
         );
-        let vrf_data = vrf_sk.produce_vrf_data(transcript.into());
+        let vrf_data = vrf_sk.produce_vrf_data(transcript);
 
         let pos_data = PoSData::new(
             vec![kernel_outpoint.clone().into()],

@@ -68,7 +68,7 @@ fn get_random_outputs_combination(
 
 fn make_block(kernels: Vec<TxInput>, reward_outputs: Vec<TxOutput>) -> Block {
     let (sk, _) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
-    let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+    let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize());
     Block::new(
         vec![],
         Id::<GenBlock>::new(H256::zero()),

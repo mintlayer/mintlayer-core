@@ -256,7 +256,7 @@ mod tests {
         target: Uint256,
     ) -> Block {
         let (sk, _) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
-        let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+        let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize());
         Block::new(
             vec![],
             prev_block,

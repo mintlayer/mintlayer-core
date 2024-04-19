@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use schnorrkel::context::SigningTranscript;
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TranscriptComponent {
     RawData(Vec<u8>),
@@ -26,6 +24,9 @@ pub struct TranscriptAssembler {
     label: &'static [u8],
     components: Vec<(&'static [u8], TranscriptComponent)>,
 }
+
+/// A wrapper trait for a transcript that can be signed
+pub trait SignableTranscript: schnorrkel::context::SigningTranscript {}
 
 // A wrapper that makes it unnecessary to directly use the merlin dependency
 #[must_use]
@@ -39,7 +40,9 @@ impl VRFTranscript {
     }
 }
 
-impl SigningTranscript for VRFTranscript {
+impl SignableTranscript for VRFTranscript {}
+
+impl schnorrkel::context::SigningTranscript for VRFTranscript {
     fn commit_bytes(&mut self, label: &'static [u8], bytes: &[u8]) {
         self.0.append_message(label, bytes)
     }

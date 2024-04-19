@@ -292,7 +292,7 @@ mod tests {
 
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
         let vrf_transcript = construct_transcript(epoch_index, &randomness, timestamp);
-        let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript.into());
+        let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript);
 
         let stake_pool_data = StakePoolData::new(
             Amount::from_atoms(1),

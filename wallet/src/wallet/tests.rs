@@ -1571,7 +1571,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
             *pool_id,
             pos_data
                 .vrf_private_key()
-                .produce_vrf_data(TranscriptAssembler::new(&[]).finalize().into()),
+                .produce_vrf_data(TranscriptAssembler::new(&[]).finalize()),
             common::primitives::Compact(0),
         ))),
         BlockReward::new(vec![TxOutput::ProduceBlockFromStake(

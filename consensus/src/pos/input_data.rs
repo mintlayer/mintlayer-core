@@ -248,7 +248,7 @@ where
             block_timestamp,
         );
 
-        pos_input_data.vrf_private_key().produce_vrf_data(transcript.into())
+        pos_input_data.vrf_private_key().produce_vrf_data(transcript)
     };
 
     let target_required = calculate_target_required_from_block_index(

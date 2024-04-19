@@ -260,7 +260,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         let private_key: crypto::vrf::VRFPrivateKey =
             rpc::handle_result(crypto::vrf::VRFPrivateKey::hex_decode_all(private_key_hex))?;
 
-        let signature = private_key.produce_vrf_data(transcript.into());
+        let signature = private_key.produce_vrf_data(transcript);
 
         Ok(signature.hex_encode())
     }

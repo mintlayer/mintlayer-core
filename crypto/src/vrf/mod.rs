@@ -29,7 +29,7 @@ use crate::{
 };
 
 pub use self::primitives::VRFReturn;
-use self::transcript::VRFTranscript;
+use self::transcript::{SignableTranscript, VRFTranscript};
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum VRFError {
@@ -146,7 +146,7 @@ impl VRFPrivateKey {
         &self.key
     }
 
-    pub fn produce_vrf_data(&self, message: VRFTranscript) -> VRFReturn {
+    pub fn produce_vrf_data<T: SignableTranscript>(&self, message: T) -> VRFReturn {
         match &self.key {
             VRFPrivateKeyHolder::Schnorrkel(k) => k.produce_vrf_data(message).into(),
         }
@@ -388,7 +388,7 @@ mod tests {
 
         let mut rng = make_seedable_rng(seed);
         let (sk, pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let vrf_data = sk.produce_vrf_data(transcript.clone().into());
+        let vrf_data = sk.produce_vrf_data(transcript.clone());
 
         match &vrf_data {
             VRFReturn::Schnorrkel(d) => {
@@ -416,7 +416,7 @@ mod tests {
 
         let mut rng = make_seedable_rng(seed);
         let (sk, pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let vrf_data = sk.produce_vrf_data(transcript.clone().into());
+        let vrf_data = sk.produce_vrf_data(transcript.clone());
 
         match &vrf_data {
             VRFReturn::Schnorrkel(d) => {
@@ -448,7 +448,7 @@ mod tests {
 
         let mut rng = make_seedable_rng(seed);
         let (sk, pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let vrf_data = sk.produce_vrf_data(transcript.clone().into());
+        let vrf_data = sk.produce_vrf_data(transcript.clone());
 
         match &vrf_data {
             VRFReturn::Schnorrkel(d) => {

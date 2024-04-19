@@ -22,7 +22,7 @@ use serialization::{Decode, Encode};
 
 use self::data::SchnorrkelVRFReturn;
 
-use super::{primitives::VRFReturn, transcript::VRFTranscript, VRFError};
+use super::{primitives::VRFReturn, transcript::{SignableTranscript, VRFTranscript}, VRFError};
 
 const PUBKEY_LEN: usize = 32;
 const PRIVKEY_LEN: usize = 64; // scalar + nonce
@@ -141,7 +141,7 @@ impl SchnorrkelPrivateKey {
         ))
     }
 
-    pub fn produce_vrf_data(&self, message: VRFTranscript) -> SchnorrkelVRFReturn {
+    pub fn produce_vrf_data<T: SignableTranscript>(&self, message: T) -> SchnorrkelVRFReturn {
         let (io, proof, _batchable_proof) = Keypair {
             secret: self.key.clone(),
             public: self.key.to_public(),
