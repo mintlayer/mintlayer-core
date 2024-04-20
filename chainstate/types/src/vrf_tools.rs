@@ -18,7 +18,7 @@ use common::{
     primitives::H256,
 };
 use crypto::vrf::{
-    transcript::{SignableTranscript, TranscriptComponent, VRFTranscript},
+    transcript::{SignableTranscript, VRFTranscript},
     VRFError, VRFPublicKey, VRFReturn,
 };
 use thiserror::Error;
@@ -40,18 +40,9 @@ pub fn construct_transcript(
     block_timestamp: BlockTimestamp,
 ) -> VRFTranscript {
     VRFTranscript::new(TRANSCRIPT_MAIN_LABEL)
-        .attach(
-            RANDOMNESS_COMPONENT_LABEL,
-            TranscriptComponent::RawData(random_seed.as_bytes().to_vec()),
-        )
-        .attach(
-            SLOT_COMPONENT_LABEL,
-            TranscriptComponent::U64(block_timestamp.as_int_seconds()),
-        )
-        .attach(
-            EPOCH_INDEX_COMPONENT_LABEL,
-            TranscriptComponent::U64(epoch_index),
-        )
+        .attach_raw_data(RANDOMNESS_COMPONENT_LABEL, random_seed.as_bytes())
+        .attach_u64(SLOT_COMPONENT_LABEL, block_timestamp.as_int_seconds())
+        .attach_u64(EPOCH_INDEX_COMPONENT_LABEL, epoch_index)
 }
 
 fn extract_vrf_output(

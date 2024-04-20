@@ -326,8 +326,6 @@ mod tests {
     use test_utils::random::make_seedable_rng;
     use test_utils::random::Seed;
 
-    use crate::vrf::transcript::TranscriptComponent;
-
     use super::{transcript::VRFTranscript, *};
 
     #[rstest]
@@ -368,15 +366,9 @@ mod tests {
 
     fn make_arbitrary_transcript() -> VRFTranscript {
         VRFTranscript::new(b"some context")
-            .attach(
-                b"some label",
-                TranscriptComponent::RawData(b"Data to commit".to_vec()),
-            )
-            .attach(b"some other label", TranscriptComponent::U64(42))
-            .attach(
-                b"some third label",
-                TranscriptComponent::RawData(b"More data to commit".to_vec()),
-            )
+            .attach_raw_data(b"some label", b"Data to commit")
+            .attach_u64(b"some other label", 42)
+            .attach_raw_data(b"some third label", b"More data to commit")
     }
 
     #[rstest]

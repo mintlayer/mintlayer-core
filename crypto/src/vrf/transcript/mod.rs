@@ -13,15 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum TranscriptComponent {
-    RawData(Vec<u8>),
-    U64(u64),
-}
-
 /// A wrapper trait for a transcript that can be signed
 pub trait SignableTranscript: schnorrkel::context::SigningTranscript {
-    fn attach(self, label: &'static [u8], value: TranscriptComponent) -> Self;
+    fn attach_u64(self, label: &'static [u8], value: u64) -> Self;
+    fn attach_raw_data(self, label: &'static [u8], value: &[u8]) -> Self;
 }
 
 #[must_use]
@@ -40,11 +35,13 @@ impl VRFTranscript {
 }
 
 impl SignableTranscript for VRFTranscript {
-    fn attach(mut self, label: &'static [u8], value: TranscriptComponent) -> Self {
-        match value {
-            TranscriptComponent::RawData(message) => self.0.append_message(label, &message),
-            TranscriptComponent::U64(v) => self.0.append_u64(label, v),
-        }
+    fn attach_u64(mut self, label: &'static [u8], value: u64) -> Self {
+        self.0.append_u64(label, value);
+        self
+    }
+
+    fn attach_raw_data(mut self, label: &'static [u8], message: &[u8]) -> Self {
+        self.0.append_message(label, message);
         self
     }
 }
@@ -93,8 +90,8 @@ mod tests {
 
         // build the second transcript using the assembler
         let assembled_transcript = VRFTranscript::new(b"initial")
-            .attach(b"abc", TranscriptComponent::RawData(b"xyz".to_vec()))
-            .attach(b"rx42", TranscriptComponent::U64(424242));
+            .attach_raw_data(b"abc", b"xyz")
+            .attach_u64(b"rx42", 424242);
 
         // build a random number generator using each transcript and ensure they both arrive to the same values
         let mut g1 = manual_transcript.build_rng().finalize(&mut ChaChaRng::from_seed([0u8; 32]));
