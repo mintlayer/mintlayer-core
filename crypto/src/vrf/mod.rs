@@ -326,7 +326,9 @@ mod tests {
     use test_utils::random::make_seedable_rng;
     use test_utils::random::Seed;
 
-    use super::{transcript::VRFTranscript, *};
+    use self::transcript::no_rng::VRFTranscript;
+
+    use super::*;
 
     #[rstest]
     #[trace]

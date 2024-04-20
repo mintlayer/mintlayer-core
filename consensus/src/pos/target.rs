@@ -239,7 +239,7 @@ mod tests {
         },
         primitives::{per_thousand::PerThousand, Idable, H256},
     };
-    use crypto::vrf::{transcript::VRFTranscript, VRFKeyKind, VRFPrivateKey};
+    use crypto::vrf::{transcript::no_rng::VRFTranscript, VRFKeyKind, VRFPrivateKey};
     use itertools::Itertools;
     use randomness::{CryptoRng, Rng};
     use rstest::rstest;

@@ -43,7 +43,7 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
 };
-use crypto::vrf::{transcript::VRFTranscript, VRFKeyKind};
+use crypto::vrf::VRFKeyKind;
 use itertools::Itertools;
 use randomness::{seq, CryptoRng, Rng};
 use rstest::rstest;
@@ -662,6 +662,8 @@ fn check_burn_spend_undo_spend(#[case] seed: Seed, #[case] output: TxOutput) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
+    use crypto::vrf::transcript::no_rng::VRFTranscript;
+
     let mut rng = make_seedable_rng(seed);
     let test_view = empty_test_utxos_view(H256::zero().into());
     let mut cache = UtxosCache::new(&test_view).unwrap_infallible();
@@ -760,6 +762,8 @@ fn check_pow_reward_spend_undo_spend(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn check_missing_reward_undo(#[case] seed: Seed) {
+    use crypto::vrf::transcript::no_rng::VRFTranscript;
+
     let mut rng = make_seedable_rng(seed);
     let test_view = empty_test_utxos_view(H256::zero().into());
     let mut cache = UtxosCache::new(&test_view).unwrap_infallible();
@@ -811,6 +815,8 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn check_burn_output_in_block_reward(#[case] seed: Seed) {
+    use crypto::vrf::transcript::no_rng::VRFTranscript;
+
     let mut rng = make_seedable_rng(seed);
     let test_view = empty_test_utxos_view(H256::zero().into());
     let mut cache = UtxosCache::new(&test_view).unwrap_infallible();
