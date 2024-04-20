@@ -39,6 +39,12 @@ impl Seed {
         self.0
     }
 
+    /// In tests where multiple seeds are needed, this can be used to deterministically create a new, different seed
+    pub fn derive_seed(&self) -> Self {
+        let new_seed = ChaChaRng::seed_from_u64(self.as_u64()).next_u64();
+        Self(new_seed)
+    }
+
     pub fn print_with_decoration(&self, test_name: &str) {
         println!("{test_name} seed: {}", self.0);
     }
