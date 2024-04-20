@@ -16,3 +16,47 @@
 pub mod no_rng;
 pub mod traits;
 pub mod with_rng;
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
+
+    use super::{no_rng::VRFTranscript, traits::SignableTranscript};
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn ensure_both_with_and_without_rng_are_equivalent(#[case] seed: Seed) {
+        use randomness::Rng;
+
+        use crate::vrf::transcript::with_rng::VRFTranscriptWithRng;
+
+        let no_rng_value = {
+            let mut rng = make_seedable_rng(seed);
+
+            let assembled_transcript = VRFTranscript::new(b"initial")
+                .attach_raw_data(b"abc", b"xyz")
+                .attach_u64(b"rx42", 424242);
+
+            let mut generator = assembled_transcript.take().build_rng().finalize(&mut rng);
+
+            (0..100).map(|_| generator.gen::<u64>()).collect::<Vec<_>>()
+        };
+
+        let with_rng_value = {
+            let rng1 = make_seedable_rng(seed);
+            let mut rng2 = make_seedable_rng(seed);
+
+            let assembled_transcript = VRFTranscriptWithRng::new(b"initial", rng1)
+                .attach_raw_data(b"abc", b"xyz")
+                .attach_u64(b"rx42", 424242);
+
+            let mut generator = assembled_transcript.take().build_rng().finalize(&mut rng2);
+
+            (0..100).map(|_| generator.gen::<u64>()).collect::<Vec<_>>()
+        };
+
+        assert_eq!(with_rng_value, no_rng_value);
+    }
+}

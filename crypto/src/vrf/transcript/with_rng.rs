@@ -31,6 +31,11 @@ impl<R: RngCore + CryptoRng> VRFTranscriptWithRng<R> {
     pub(crate) fn from_no_rng(transcript: VRFTranscript, rng: R) -> Self {
         VRFTranscriptWithRng(transcript.take(), RefCell::new(rng))
     }
+
+    #[allow(unused)]
+    pub(crate) fn take(self) -> merlin::Transcript {
+        self.0
+    }
 }
 
 impl<R: RngCore + CryptoRng> SignableTranscript for VRFTranscriptWithRng<R> {
