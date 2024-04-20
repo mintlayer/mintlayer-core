@@ -44,7 +44,7 @@ use common::{
 use crypto::{
     key::hdkd::{child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath},
     random::{CryptoRng, Rng, SliceRandom},
-    vrf::transcript::TranscriptAssembler,
+    vrf::transcript::VRFTranscript,
 };
 use itertools::Itertools;
 use rstest::rstest;
@@ -1569,9 +1569,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
             ))],
             vec![],
             *pool_id,
-            pos_data
-                .vrf_private_key()
-                .produce_vrf_data(TranscriptAssembler::new(&[]).finalize()),
+            pos_data.vrf_private_key().produce_vrf_data(VRFTranscript::new(&[])),
             common::primitives::Compact(0),
         ))),
         BlockReward::new(vec![TxOutput::ProduceBlockFromStake(

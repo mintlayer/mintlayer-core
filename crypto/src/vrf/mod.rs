@@ -326,7 +326,7 @@ mod tests {
     use test_utils::random::make_seedable_rng;
     use test_utils::random::Seed;
 
-    use crate::vrf::transcript::{TranscriptAssembler, TranscriptComponent};
+    use crate::vrf::transcript::TranscriptComponent;
 
     use super::{transcript::VRFTranscript, *};
 
@@ -367,7 +367,7 @@ mod tests {
     }
 
     fn make_arbitrary_transcript() -> VRFTranscript {
-        TranscriptAssembler::new(b"some context")
+        VRFTranscript::new(b"some context")
             .attach(
                 b"some label",
                 TranscriptComponent::RawData(b"Data to commit".to_vec()),
@@ -377,7 +377,6 @@ mod tests {
                 b"some third label",
                 TranscriptComponent::RawData(b"More data to commit".to_vec()),
             )
-            .finalize()
     }
 
     #[rstest]

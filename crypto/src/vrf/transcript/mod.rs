@@ -19,28 +19,35 @@ pub enum TranscriptComponent {
     U64(u64),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TranscriptAssembler {
-    label: &'static [u8],
-    components: Vec<(&'static [u8], TranscriptComponent)>,
+/// A wrapper trait for a transcript that can be signed
+pub trait SignableTranscript: schnorrkel::context::SigningTranscript {
+    fn attach(self, label: &'static [u8], value: TranscriptComponent) -> Self;
 }
 
-/// A wrapper trait for a transcript that can be signed
-pub trait SignableTranscript: schnorrkel::context::SigningTranscript {}
-
-// A wrapper that makes it unnecessary to directly use the merlin dependency
 #[must_use]
 #[derive(Clone)]
 pub struct VRFTranscript(merlin::Transcript);
 
 impl VRFTranscript {
+    pub fn new(label: &'static [u8]) -> Self {
+        Self(merlin::Transcript::new(label))
+    }
+
     #[cfg(test)]
     pub(crate) fn append_u64(&mut self, label: &'static [u8], x: u64) {
         self.0.append_u64(label, x)
     }
 }
 
-impl SignableTranscript for VRFTranscript {}
+impl SignableTranscript for VRFTranscript {
+    fn attach(mut self, label: &'static [u8], value: TranscriptComponent) -> Self {
+        match value {
+            TranscriptComponent::RawData(message) => self.0.append_message(label, &message),
+            TranscriptComponent::U64(v) => self.0.append_u64(label, v),
+        }
+        self
+    }
+}
 
 impl schnorrkel::context::SigningTranscript for VRFTranscript {
     fn commit_bytes(&mut self, label: &'static [u8], bytes: &[u8]) {
@@ -68,33 +75,6 @@ impl schnorrkel::context::SigningTranscript for VRFTranscript {
     }
 }
 
-impl TranscriptAssembler {
-    pub fn new(label: &'static [u8]) -> Self {
-        Self {
-            label,
-            components: Vec::new(),
-        }
-    }
-
-    pub fn attach(self, label: &'static [u8], value: TranscriptComponent) -> Self {
-        let mut result = self;
-        result.components.push((label, value));
-        result
-    }
-
-    pub fn finalize(self) -> VRFTranscript {
-        let mut transcript = merlin::Transcript::new(self.label);
-        for component in &self.components {
-            match &component.1 {
-                TranscriptComponent::RawData(d) => transcript.append_message(component.0, d),
-                TranscriptComponent::U64(d) => transcript.append_u64(component.0, *d),
-            }
-        }
-
-        VRFTranscript(transcript)
-    }
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -112,10 +92,9 @@ mod tests {
         manual_transcript.append_u64(b"rx42", 424242);
 
         // build the second transcript using the assembler
-        let assembled_transcript = TranscriptAssembler::new(b"initial")
+        let assembled_transcript = VRFTranscript::new(b"initial")
             .attach(b"abc", TranscriptComponent::RawData(b"xyz".to_vec()))
-            .attach(b"rx42", TranscriptComponent::U64(424242))
-            .finalize();
+            .attach(b"rx42", TranscriptComponent::U64(424242));
 
         // build a random number generator using each transcript and ensure they both arrive to the same values
         let mut g1 = manual_transcript.build_rng().finalize(&mut ChaChaRng::from_seed([0u8; 32]));
