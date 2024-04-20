@@ -29,7 +29,7 @@ use crate::{
 };
 
 pub use self::primitives::VRFReturn;
-use self::transcript::SignableTranscript;
+use self::transcript::traits::SignableTranscript;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum VRFError {

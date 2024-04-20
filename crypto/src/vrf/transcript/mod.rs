@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2021-2024 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,11 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// A wrapper trait for a transcript that can be signed
-pub trait SignableTranscript: schnorrkel::context::SigningTranscript {
-    fn attach_u64(self, label: &'static [u8], value: u64) -> Self;
-    fn attach_raw_data<T: AsRef<[u8]>>(self, label: &'static [u8], value: T) -> Self;
-}
+use self::traits::SignableTranscript;
+
+pub mod traits;
 
 #[must_use]
 #[derive(Clone)]

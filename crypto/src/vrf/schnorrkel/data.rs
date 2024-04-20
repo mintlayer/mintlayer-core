@@ -20,7 +20,7 @@ use schnorrkel::{
 };
 use serialization::{hex_encoded::HexEncoded, Decode, Encode};
 
-use crate::vrf::{transcript::SignableTranscript, VRFError, VRFPublicKey};
+use crate::vrf::{transcript::traits::SignableTranscript, VRFError, VRFPublicKey};
 
 const VRF_OUTPUT_LABEL: &[u8] = b"MintlayerVRFOutput!";
 
