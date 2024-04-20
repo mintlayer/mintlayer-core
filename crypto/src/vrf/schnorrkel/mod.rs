@@ -22,11 +22,7 @@ use serialization::{Decode, Encode};
 
 use self::data::SchnorrkelVRFReturn;
 
-use super::{
-    primitives::VRFReturn,
-    transcript::{SignableTranscript, VRFTranscript},
-    VRFError,
-};
+use super::{primitives::VRFReturn, transcript::SignableTranscript, VRFError};
 const PUBKEY_LEN: usize = 32;
 const PRIVKEY_LEN: usize = 64; // scalar + nonce
 
@@ -45,9 +41,9 @@ impl SchnorrkelPublicKey {
         }
     }
 
-    pub fn verify_generic_vrf_data(
+    pub fn verify_generic_vrf_data<T: SignableTranscript>(
         &self,
-        message: VRFTranscript,
+        message: T,
         vrf_data: &VRFReturn,
     ) -> Result<(), VRFError> {
         match vrf_data {
@@ -55,9 +51,9 @@ impl SchnorrkelPublicKey {
         }
     }
 
-    pub fn verify_vrf_data(
+    pub fn verify_vrf_data<T: SignableTranscript>(
         &self,
-        message: VRFTranscript,
+        message: T,
         vrf_data: &SchnorrkelVRFReturn,
     ) -> Result<(), VRFError> {
         self.key

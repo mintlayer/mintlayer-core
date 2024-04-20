@@ -45,14 +45,14 @@ pub fn construct_transcript(
         .attach_u64(EPOCH_INDEX_COMPONENT_LABEL, epoch_index)
 }
 
-fn extract_vrf_output(
+fn extract_vrf_output<T: SignableTranscript>(
     vrf_data: &VRFReturn,
     vrf_public_key: VRFPublicKey,
-    transcript: VRFTranscript,
+    transcript: T,
 ) -> Result<[u8; 32], VRFError> {
     match &vrf_data {
         VRFReturn::Schnorrkel(d) => d
-            .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+            .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32, _>(
                 vrf_public_key,
                 transcript,
             )

@@ -29,7 +29,7 @@ use crate::{
 };
 
 pub use self::primitives::VRFReturn;
-use self::transcript::{SignableTranscript, VRFTranscript};
+use self::transcript::SignableTranscript;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum VRFError {
@@ -168,9 +168,9 @@ impl VRFPublicKey {
         }
     }
 
-    pub fn verify_vrf_data(
+    pub fn verify_vrf_data<T: SignableTranscript>(
         &self,
-        message: VRFTranscript,
+        message: T,
         vrf_data: &VRFReturn,
     ) -> Result<(), VRFError> {
         match &self.pub_key {
@@ -387,7 +387,7 @@ mod tests {
                 assert_eq!(d.vrf_proof().len(), 64);
 
                 let _output_value_to_use_in_application: [u8; 32] = d
-                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32, _>(
                         pk.clone(),
                         transcript.clone(),
                     )
@@ -415,7 +415,7 @@ mod tests {
                 assert_eq!(d.vrf_proof().len(), 64);
 
                 let _output_value_to_use_in_application: [u8; 32] = d
-                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32, _>(
                         pk.clone(),
                         transcript.clone(),
                     )
@@ -447,7 +447,7 @@ mod tests {
                 assert_eq!(d.vrf_proof().len(), 64);
 
                 let _output_value_to_use_in_application: [u8; 32] = d
-                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32, _>(
                         pk,
                         transcript.clone(),
                     )
@@ -484,7 +484,7 @@ mod tests {
                 assert_eq!(d.vrf_proof().len(), 64);
 
                 let _output_value_to_use_in_application: [u8; 32] = d
-                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32, _>(
                         pk.clone(),
                         transcript.clone(),
                     )

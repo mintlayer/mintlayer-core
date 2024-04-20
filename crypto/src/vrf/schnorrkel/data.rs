@@ -20,7 +20,7 @@ use schnorrkel::{
 };
 use serialization::{hex_encoded::HexEncoded, Decode, Encode};
 
-use crate::vrf::{transcript::VRFTranscript, VRFError, VRFPublicKey};
+use crate::vrf::{transcript::SignableTranscript, VRFError, VRFPublicKey};
 
 const VRF_OUTPUT_LABEL: &[u8] = b"MintlayerVRFOutput!";
 
@@ -109,30 +109,33 @@ impl SchnorrkelVRFReturn {
     /// construction from Theorem 2 on page 32 in appendix C of
     /// ["Ouroboros Praos: An adaptively-secure, semi-synchronous proof-of-stake blockchain"](https://eprint.iacr.org/2017/573.pdf)
     /// by Bernardo David, Peter Gazi, Aggelos Kiayias, and Alexander Russell.
-    fn attach_input_to_output(
+    fn attach_input_to_output<T: SignableTranscript>(
         &self,
         public_key: PublicKey,
-        transcript: VRFTranscript,
+        transcript: T,
     ) -> Result<VRFInOut, VRFError> {
         self.preout
             .attach_input_hash(&public_key, transcript)
             .map_err(|e| VRFError::InputAttachError(e.to_string()))
     }
 
-    pub fn calculate_vrf_output<OutputSize: ArrayLength<u8>>(
+    pub fn calculate_vrf_output<OutputSize: ArrayLength<u8>, T: SignableTranscript>(
         &self,
         public_key: PublicKey,
-        transcript: VRFTranscript,
+        transcript: T,
     ) -> Result<GenericArray<u8, OutputSize>, VRFError> {
         let input_and_output = self.attach_input_to_output(public_key, transcript)?;
         let result = input_and_output.make_bytes::<GenericArray<u8, OutputSize>>(VRF_OUTPUT_LABEL);
         Ok(result)
     }
 
-    pub fn calculate_vrf_output_with_generic_key<OutputSize: ArrayLength<u8>>(
+    pub fn calculate_vrf_output_with_generic_key<
+        OutputSize: ArrayLength<u8>,
+        T: SignableTranscript,
+    >(
         &self,
         public_key: VRFPublicKey,
-        transcript: VRFTranscript,
+        transcript: T,
     ) -> Result<GenericArray<u8, OutputSize>, VRFError> {
         match public_key.pub_key {
             crate::vrf::VRFPublicKeyHolder::Schnorrkel(pub_key) => {
