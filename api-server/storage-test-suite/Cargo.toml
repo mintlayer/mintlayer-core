@@ -7,13 +7,14 @@ rust-version.workspace = true
 
 [dependencies]
 api-server-common = { path = "../api-server-common" }
-chainstate-test-framework = { path = '../../chainstate/test-framework' }
-common = { path = '../../common' }
-crypto = { path = '../../crypto/' }
+chainstate-test-framework = { path = "../../chainstate/test-framework" }
+common = { path = "../../common" }
+crypto = { path = "../../crypto/" }
 logging = { path = "../../logging" }
-test-utils = {path = '../../test-utils'}
+test-utils = {path = "../../test-utils"}
 utils = { path = "../../utils" }
-pos-accounting = {path = '../../pos-accounting'}
+pos-accounting = {path = "../../pos-accounting"}
+randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
 
 async-trait.workspace = true

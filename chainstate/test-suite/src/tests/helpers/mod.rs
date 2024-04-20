@@ -22,10 +22,8 @@ use common::{
     },
     primitives::{Amount, BlockDistance, Id, Idable},
 };
-use crypto::{
-    key::{KeyKind, PrivateKey},
-    random::{CryptoRng, Rng},
-};
+use crypto::key::{KeyKind, PrivateKey};
+use randomness::{CryptoRng, Rng};
 
 pub mod block_creation_helpers;
 pub mod block_index_handle_impl;

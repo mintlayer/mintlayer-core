@@ -705,7 +705,7 @@ mod tests {
 
     use super::*;
     use crate::uint::BitArray;
-    use crypto::random::Rng;
+    use randomness::Rng;
     use test_utils::random::{make_seedable_rng, Seed};
 
     #[test]

@@ -127,7 +127,7 @@ mod test {
     use crate::key::hdkd::child_number::ChildNumber;
     use crate::key::hdkd::u31;
     use crate::key::hdkd::u31::U31;
-    use rand::RngCore;
+    use randomness::RngCore;
     use rstest::rstest;
     use std::str::FromStr;
     use test_utils::random::make_seedable_rng;

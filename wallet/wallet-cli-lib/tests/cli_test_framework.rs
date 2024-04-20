@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::chain::ChainConfig;
-use crypto::random::Rng;
+use randomness::Rng;
 use tokio::task::JoinHandle;
 use wallet_rpc_lib::types::NodeInterface;
 

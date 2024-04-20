@@ -152,7 +152,7 @@ mod tests {
     use std::num::NonZeroU8;
 
     use crypto::key::{KeyKind, PrivateKey, Signature};
-    use crypto::random::{CryptoRng, Rng, SliceRandom};
+    use randomness::{CryptoRng, Rng, SliceRandom};
     use rstest::rstest;
 
     use crate::chain::config::create_mainnet;

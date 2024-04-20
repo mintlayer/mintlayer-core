@@ -20,7 +20,7 @@ use std::{
 };
 
 use common::primitives::time::Time;
-use crypto::random::{make_pseudo_rng, Rng};
+use randomness::{make_pseudo_rng, Rng};
 
 use super::{peer_context::PeerContext, peerdb::salt::Salt};
 

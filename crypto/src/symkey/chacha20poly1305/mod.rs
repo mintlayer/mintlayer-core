@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::random::{CryptoRng, Rng};
 use crate::symkey::Error;
 use chacha20poly1305::aead::{AeadInPlace, KeyInit};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
+use randomness::{CryptoRng, Rng};
 use serialization::{Decode, Encode};
 use zeroize::ZeroizeOnDrop;
 
@@ -145,7 +145,7 @@ mod test {
     use hex::FromHex;
     use serialization::DecodeAll;
 
-    use crate::random::make_true_rng;
+    use randomness::make_true_rng;
 
     use super::*;
 
@@ -163,7 +163,7 @@ mod test {
         let mut rng = make_true_rng();
         let key = Chacha20poly1305Key::new_from_rng(&mut rng);
         let message_len = 1 + rng.gen::<u32>() % 10000;
-        let message = (0..message_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
+        let message = (0..message_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
         let encrypted = key.encrypt(&message, &mut rng, b"").unwrap();
         let decrypted = key.decrypt(encrypted, None).unwrap();
         assert_eq!(message, decrypted);
@@ -175,8 +175,8 @@ mod test {
         let key = Chacha20poly1305Key::new_from_rng(&mut rng);
         let message_len = 1 + rng.gen::<u32>() % 10000;
         let aead_len = 1 + rng.gen::<u32>() % 10000;
-        let message = (0..message_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
-        let aead = (0..aead_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
+        let message = (0..message_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let aead = (0..aead_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
         let encrypted = key.encrypt(&message, &mut rng, &aead).unwrap();
         let decrypted = key.decrypt(encrypted, Some(&aead)).unwrap();
         assert_eq!(message, decrypted);
@@ -187,7 +187,7 @@ mod test {
         let mut rng = make_true_rng();
         let key = Chacha20poly1305Key::new_from_rng(&mut rng);
         let cipher_text_len = rng.gen::<usize>() % Chacha20poly1305Key::NONCE_LEN;
-        let cipher_text = (0..cipher_text_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
+        let cipher_text = (0..cipher_text_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
         let decrypt_err = key.decrypt(cipher_text, None).unwrap_err();
         assert_eq!(
             decrypt_err,

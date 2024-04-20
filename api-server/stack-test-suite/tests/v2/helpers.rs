@@ -25,9 +25,9 @@ use common::{
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
-    random::{CryptoRng, Rng},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
+use randomness::{CryptoRng, Rng};
 
 pub fn prepare_stake_pool(
     stake_pool_outpoint: UtxoOutPoint,

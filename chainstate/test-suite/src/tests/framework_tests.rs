@@ -28,7 +28,7 @@ use common::{
     },
     primitives::Idable,
 };
-use crypto::random::Rng;
+use randomness::Rng;
 
 use chainstate_test_framework::TestFramework;
 use chainstate_types::{BlockStatus, BlockValidationStage};

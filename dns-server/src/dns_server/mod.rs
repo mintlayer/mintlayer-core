@@ -22,10 +22,10 @@ use std::{
 };
 
 use common::{chain::ChainConfig, primitives::per_thousand::PerThousand};
-use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use futures::never::Never;
 use itertools::Itertools;
 use logging::log;
+use randomness::{make_pseudo_rng, Rng, SliceRandom};
 use tokio::{net::UdpSocket, sync::mpsc};
 use trust_dns_client::{
     proto::rr::{LowerName, RrKey},

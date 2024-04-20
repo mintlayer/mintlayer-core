@@ -22,8 +22,8 @@ use common::{
     primitives::{id::WithId, Idable},
 };
 use constraints_value_accumulator::AccumulatedFee;
-use crypto::random::{Rng, RngCore};
 use pos_accounting::PoSAccountingView;
+use randomness::{Rng, RngCore};
 use test_utils::random::{make_seedable_rng, Seed};
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::{

@@ -23,10 +23,10 @@ use std::{
 };
 
 use common::primitives::user_agent::mintlayer_core_user_agent;
-use crypto::random::Rng;
 use futures::Future;
 use logging::log;
 use p2p_types::socket_address::SocketAddress;
+use randomness::Rng;
 use tokio::time::timeout;
 
 use crate::{

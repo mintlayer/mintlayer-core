@@ -36,7 +36,7 @@ use p2p::{
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
-use crypto::random::{
+use randomness::{
     seq::{IteratorRandom, SliceRandom},
     Rng,
 };

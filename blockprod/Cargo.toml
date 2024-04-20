@@ -13,13 +13,14 @@ chainstate-types = { path = "../chainstate/types" }
 common = { path = "../common/" }
 consensus = { path = "../consensus" }
 crypto = { path = "../crypto/" }
-logging = {path = '../logging'}
+logging = {path = "../logging"}
 mempool = { path = "../mempool/" }
 p2p = { path = "../p2p/" }
+randomness = { path = "../randomness" }
 rpc = { path = "../rpc/" }
 serialization = { path = "../serialization" }
 subsystem = { path = "../subsystem/" }
-utils = {path = '../utils'}
+utils = {path = "../utils"}
 
 async-trait.workspace = true
 hex.workspace = true
@@ -34,11 +35,11 @@ tokio = { workspace = true, default-features = false, features = ["io-util", "ma
 
 [dev-dependencies]
 chainstate-storage = { path = "../chainstate/storage/" }
-chainstate-test-framework = { path = '../chainstate/test-framework' }
-chainstate-types = {path = '../chainstate/types'}
+chainstate-test-framework = { path = "../chainstate/test-framework" }
+chainstate-types = {path = "../chainstate/types"}
 mocks = { path = "../mocks/" }
 storage-inmemory = { path = "../storage/inmemory" }
-test-utils = {path = '../test-utils'}
+test-utils = {path = "../test-utils"}
 
 rstest.workspace = true
 static_assertions.workspace = true

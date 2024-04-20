@@ -24,7 +24,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use crypto::random::Rng;
+use randomness::Rng;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,

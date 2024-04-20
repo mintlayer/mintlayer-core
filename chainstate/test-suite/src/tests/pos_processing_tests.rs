@@ -57,10 +57,10 @@ use common::{
 use consensus::{BlockSignatureError, ConsensusPoSError, ConsensusVerificationError};
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
-    random::{CryptoRng, Rng},
     vrf::{VRFError, VRFKeyKind, VRFPrivateKey, VRFPublicKey},
 };
 use pos_accounting::{make_pool_id, PoSAccountingStorageRead};
+use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use utils::const_nz_u64;

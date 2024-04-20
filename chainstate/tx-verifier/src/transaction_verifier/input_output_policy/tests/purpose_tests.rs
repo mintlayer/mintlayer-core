@@ -19,7 +19,7 @@ use common::{
     chain::{GenBlock, OutPointSourceId, TxInput, UtxoOutPoint},
     primitives::{Id, H256},
 };
-use crypto::random::{Rng, SliceRandom};
+use randomness::{Rng, SliceRandom};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use utxo::{Utxo, UtxosDBInMemoryImpl};

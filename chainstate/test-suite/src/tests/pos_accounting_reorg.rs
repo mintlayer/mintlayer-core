@@ -38,10 +38,10 @@ use common::{
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
-    random::Rng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use pos_accounting::{make_delegation_id, PoSAccountingDeltaData};
+use randomness::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 

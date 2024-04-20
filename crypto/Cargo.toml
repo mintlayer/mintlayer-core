@@ -11,6 +11,7 @@ authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh
 [dependencies]
 
 rpc-description = { path = "../rpc/description" }
+randomness = { path = "../randomness" }
 serialization = { path = "../serialization" }
 
 # The following crates don't work well with "workspace.dependencies"
@@ -27,7 +28,6 @@ num-derive.workspace = true
 num-traits.workspace = true
 num.workspace = true
 parity-scale-codec.workspace = true
-rand.workspace = true
 ripemd.workspace = true
 schnorrkel.workspace = true
 serde = { workspace = true, features = ["derive"] }

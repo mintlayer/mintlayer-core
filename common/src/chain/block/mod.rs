@@ -243,7 +243,7 @@ mod tests {
     };
 
     use super::*;
-    use crypto::random::{make_pseudo_rng, Rng};
+    use randomness::{make_pseudo_rng, Rng};
     use rstest::rstest;
     use serialization::Encode;
     use test_utils::random::Seed;

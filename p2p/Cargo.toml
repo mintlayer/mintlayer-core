@@ -16,6 +16,7 @@ common = { path = "../common/" }
 crypto = { path = "../crypto/" }
 logging = { path = "../logging/" }
 mempool = { path = "../mempool/" }
+randomness = { path = "../randomness/" }
 rpc = { path = "../rpc/" }
 rpc-description = { path = "../rpc/description" }
 serialization = { path = "../serialization/" }

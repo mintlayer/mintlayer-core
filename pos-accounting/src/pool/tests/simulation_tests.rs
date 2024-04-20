@@ -17,7 +17,7 @@ use common::{
     chain::{DelegationId, Destination, OutPointSourceId, PoolId, UtxoOutPoint},
     primitives::{Amount, Id, H256},
 };
-use crypto::random::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 

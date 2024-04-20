@@ -31,8 +31,8 @@ use tokio::sync::{mpsc, oneshot};
 
 use ::utils::atomics::SeqCstAtomicBool;
 use common::{chain::ChainConfig, time_getter::TimeGetter};
-use crypto::random::Rng;
 use p2p_types::socket_address::SocketAddress;
+use randomness::Rng;
 use test_utils::assert_matches_return_val;
 use tokio::{
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
@@ -232,7 +232,7 @@ async fn send_and_sync(
 ) {
     conn_event_sender.send(ConnectivityEvent::Message { peer_id, message }).unwrap();
 
-    let sent_nonce = crypto::random::make_pseudo_rng().gen();
+    let sent_nonce = randomness::make_pseudo_rng().gen();
     conn_event_sender
         .send(ConnectivityEvent::Message {
             peer_id,

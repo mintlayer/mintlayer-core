@@ -25,7 +25,7 @@ use chainstate::OrphanCheckError;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::primitives::id::Idable;
 use common::primitives::BlockHeight;
-use crypto::random::Rng;
+use randomness::Rng;
 use rstest::rstest;
 use test_utils::random::make_seedable_rng;
 use test_utils::random::Seed;

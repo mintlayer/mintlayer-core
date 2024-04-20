@@ -21,7 +21,7 @@ use common::{
     chain::{block::BlockReward, OutPointSourceId, Transaction, TxInput, UtxoOutPoint},
     primitives::{BlockHeight, Id, Idable, H256},
 };
-use crypto::random::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use std::{collections::BTreeMap, convert::Infallible};
 use test_utils::random::{make_seedable_rng, Seed};

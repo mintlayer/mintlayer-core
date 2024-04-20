@@ -41,8 +41,8 @@ use common::{
     primitives::time::{duration_to_int, Time},
     time_getter::TimeGetter,
 };
-use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
 use logging::log;
+use randomness::{make_pseudo_rng, seq::IteratorRandom, Rng};
 use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, set_flag::SetFlag};
 use utils_networking::IpOrSocketAddress;
 

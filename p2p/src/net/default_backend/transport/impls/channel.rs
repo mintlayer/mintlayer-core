@@ -294,7 +294,7 @@ impl ConnectedSocketInfo for ChannelStream {
 mod tests {
     use std::net::SocketAddrV4;
 
-    use crypto::random::Rng;
+    use randomness::Rng;
     use test_utils::random::Seed;
 
     use super::*;

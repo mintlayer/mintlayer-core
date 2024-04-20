@@ -15,7 +15,7 @@
 
 mod cli_test_framework;
 
-use crypto::random::Rng;
+use randomness::Rng;
 
 use common::{address::Address, chain::PoolId, primitives::H256};
 use rstest::rstest;

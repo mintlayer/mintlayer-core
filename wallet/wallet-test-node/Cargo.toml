@@ -17,6 +17,7 @@ mempool = { path = "../../mempool" }
 node-lib = { path = "../../node-lib" }
 p2p = { path = "../../p2p" }
 rpc = { path = "../../rpc" }
+randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
 subsystem = { path = "../../subsystem" }
 

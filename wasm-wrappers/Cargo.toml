@@ -11,8 +11,9 @@ rust-version.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-consensus = { path = '../consensus' }
-crypto = { path = '../crypto' }
+consensus = { path = "../consensus" }
+crypto = { path = "../crypto" }
+randomness = { path = "../randomness" }
 serialization = { path = "../serialization" }
 common = { path = "../common" }
 tx-verifier = { path = "../chainstate/tx-verifier" }
@@ -27,4 +28,4 @@ thiserror.workspace = true
 [dev-dependencies]
 hex.workspace = true
 rstest.workspace = true
-test-utils = {path = '../test-utils'}
+test-utils = {path = "../test-utils"}

@@ -15,7 +15,7 @@
 
 use std::time::Duration;
 
-use crypto::random::make_pseudo_rng;
+use randomness::make_pseudo_rng;
 use tokio::{
     sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender},
     time::{Instant, MissedTickBehavior},

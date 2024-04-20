@@ -35,7 +35,6 @@ use common::{
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
-    random::{seq::IteratorRandom, CryptoRng, Rng, SliceRandom},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use pos_accounting::{
@@ -43,6 +42,7 @@ use pos_accounting::{
     PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
     PoolData,
 };
+use randomness::{seq::IteratorRandom, CryptoRng, Rng, SliceRandom};
 use test_utils::nft_utils::*;
 use tokens_accounting::{
     InMemoryTokensAccounting, TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,

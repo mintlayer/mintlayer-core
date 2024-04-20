@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    key::hdkd::{chain_code::ChainCode, child_number::ChildNumber, derivable::DerivationError},
-    random::{CryptoRng, Rng},
+use crate::key::hdkd::{
+    chain_code::ChainCode, child_number::ChildNumber, derivable::DerivationError,
 };
+use randomness::{CryptoRng, Rng};
 use schnorrkel::{derive::Derivation, Keypair};
 use serialization::{Decode, Encode};
 
@@ -207,8 +207,8 @@ impl Decode for SchnorrkelPrivateKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::random::{make_true_rng, RngCore};
     use hex::FromHex;
+    use randomness::{make_true_rng, RngCore};
     use schnorrkel::{signing_context, Keypair};
     use serialization::{DecodeAll, Encode};
     use test_utils::random::{make_seedable_rng, Seed};

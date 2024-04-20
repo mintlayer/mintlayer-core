@@ -15,7 +15,8 @@
 
 use std::marker::PhantomData;
 
-use crypto::{random::make_true_rng, symkey::SymmetricKey};
+use crypto::symkey::SymmetricKey;
+use randomness::make_true_rng;
 use serialization::{Decode, DecodeAll, Encode};
 use zeroize::Zeroizing;
 
@@ -105,8 +106,8 @@ impl<T: Encode + DecodeAll> MaybeEncrypted<T> {
 
 #[cfg(test)]
 mod tests {
-    use crypto::random::Rng;
     use crypto::symkey::SymmetricKeyKind;
+    use randomness::Rng;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 

@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 
 use common::{chain::Destination, primitives::Amount};
-use crypto::random::{CryptoRng, Rng, RngCore};
+use randomness::{CryptoRng, Rng, RngCore};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 

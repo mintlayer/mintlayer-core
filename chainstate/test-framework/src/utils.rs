@@ -36,14 +36,14 @@ use common::{
 };
 use crypto::{
     key::{PrivateKey, PublicKey},
-    random::Rng,
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
 use itertools::Itertools;
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
+use randomness::Rng;
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
-    use crypto::random::SliceRandom;
+    use randomness::SliceRandom;
     let mut msg: Vec<u8> = (1..100).collect();
     msg.shuffle(rng);
     InputWitness::NoSignature(Some(msg))

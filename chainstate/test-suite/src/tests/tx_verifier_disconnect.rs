@@ -27,7 +27,7 @@ use common::{
     },
     primitives::{Amount, Idable},
 };
-use crypto::random::CryptoRng;
+use randomness::CryptoRng;
 
 use tx_verifier::{
     flush_to_storage,

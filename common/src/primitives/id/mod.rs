@@ -336,7 +336,7 @@ mod tests {
 
     #[test]
     fn hashes_stream_and_msg_identical() {
-        use crypto::random::{make_pseudo_rng, Rng};
+        use randomness::{make_pseudo_rng, Rng};
         let random_bytes = make_pseudo_rng().gen::<[u8; H256::len_bytes()]>();
 
         let h1 = default_hash(random_bytes);

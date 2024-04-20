@@ -16,11 +16,11 @@
 use base64::Engine;
 use crypto::{
     kdf::{argon2::Argon2Config, hash_password, verify_password, KdfConfig, KdfResult},
-    random::make_true_rng,
     util::eq::SliceEqualityCheckMethod,
 };
 use hyper::{Body, Request, Response};
 use logging::log;
+use randomness::make_true_rng;
 use tower_http::validate_request::ValidateRequest;
 use utils::const_nz_usize;
 

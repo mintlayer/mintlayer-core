@@ -29,10 +29,7 @@ use common::{
     primitives::{time::Time, Amount},
 };
 use consensus::GenerateBlockInputData;
-use crypto::{
-    ephemeral_e2e::EndToEndPublicKey,
-    random::{seq::IteratorRandom, CryptoRng, Rng},
-};
+use crypto::ephemeral_e2e::EndToEndPublicKey;
 use futures::executor::block_on;
 use logging::log;
 use mempool::{tx_accumulator::PackingStrategy, FeeRate};
@@ -42,6 +39,7 @@ use node_comm::{
     rpc_client::NodeRpcError,
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use randomness::{seq::IteratorRandom, CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tokio::sync::mpsc;

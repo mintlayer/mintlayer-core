@@ -18,9 +18,9 @@ use crypto::{
         argon2::Argon2Config, hash_from_challenge, hash_password, KdfChallenge, KdfConfig,
         KdfResult,
     },
-    random::make_true_rng,
     symkey::{key_size, SymmetricKey, SymmetricKeyKind},
 };
+use randomness::make_true_rng;
 use utils::const_nz_usize;
 
 /// Converts a password into a symmetric encryption key and generates a KDF challenge.
@@ -103,7 +103,7 @@ pub fn challenge_to_sym_key(
 
 #[cfg(test)]
 mod test {
-    use crypto::random::Rng;
+    use randomness::Rng;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 

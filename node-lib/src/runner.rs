@@ -393,7 +393,7 @@ async fn start(
 mod test {
     use std::io::{Read, Write};
 
-    use crypto::random::{make_pseudo_rng, Rng};
+    use randomness::{make_pseudo_rng, Rng};
     use tempfile::TempDir;
 
     use super::*;

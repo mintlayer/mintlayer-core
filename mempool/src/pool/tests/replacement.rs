@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::chain::output_value::OutputValue;
-use crypto::random::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng};
 
 use super::*;
 

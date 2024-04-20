@@ -10,6 +10,7 @@ rust-version.workspace = true
 [dependencies]
 common = { path = '../../common' }
 crypto = { path = "../../crypto" }
+randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
 storage = { path = '../../storage', features = ['inmemory'] }
 storage-sqlite = { path = "../../storage/sqlite" }

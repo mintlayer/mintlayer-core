@@ -29,8 +29,8 @@ use common::{
     chain::{self, ChainConfig},
     primitives::{per_thousand::PerThousand, semver::SemVer},
 };
-use crypto::random::{Rng, SliceRandom};
 use p2p::testing_utils::TestAddressMaker;
+use randomness::{Rng, SliceRandom};
 use test_utils::{assert_matches_return_val, merge_btree_maps, random::Seed};
 
 use crate::{

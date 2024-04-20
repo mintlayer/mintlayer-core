@@ -15,7 +15,7 @@
 
 use std::fmt::Display;
 
-use crypto::random::Rng;
+use randomness::Rng;
 use serialization::{Decode, Encode, Error, Input};
 use thiserror::Error;
 
@@ -159,7 +159,7 @@ impl serde::Serialize for PerThousand {
 mod tests {
     use super::*;
 
-    use crypto::random::Rng;
+    use randomness::Rng;
     use rstest::rstest;
     use test_utils::random::Seed;
 

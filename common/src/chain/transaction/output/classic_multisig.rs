@@ -97,7 +97,7 @@ impl ClassicMultisigChallenge {
 #[cfg(test)]
 mod tests {
     use crypto::key::{KeyKind, PrivateKey};
-    use crypto::random::Rng;
+    use randomness::Rng;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 

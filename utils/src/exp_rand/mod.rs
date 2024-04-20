@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::random::Rng;
+use randomness::Rng;
 
 /// Returns a value sampled from an exponential distribution with a mean of 1.0
 pub fn exponential_rand(rng: &mut impl Rng) -> f64 {

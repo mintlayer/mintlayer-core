@@ -15,10 +15,8 @@
 
 use itertools::Itertools;
 
-use crypto::{
-    key::{KeyKind, PrivateKey, PublicKey},
-    random::{CryptoRng, Rng},
-};
+use crypto::key::{KeyKind, PrivateKey, PublicKey};
+use randomness::{CryptoRng, Rng};
 use script::Script;
 
 use crate::{

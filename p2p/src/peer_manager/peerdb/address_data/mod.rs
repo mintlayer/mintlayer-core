@@ -16,7 +16,7 @@
 use std::time::Duration;
 
 use common::primitives::time::Time;
-use crypto::random::Rng;
+use randomness::Rng;
 
 /// Maximum delay between reconnection attempts to reserved nodes
 const MAX_DELAY_RESERVED: Duration = Duration::from_secs(360);

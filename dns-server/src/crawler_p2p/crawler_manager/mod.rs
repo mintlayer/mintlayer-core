@@ -25,7 +25,6 @@ use std::{
 
 use chainstate::ban_score::BanScore;
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
-use crypto::random::make_pseudo_rng;
 use futures::never::Never;
 use logging::log;
 use p2p::{
@@ -47,6 +46,7 @@ use p2p::{
         socket_address::SocketAddress, IsGlobalIp,
     },
 };
+use randomness::make_pseudo_rng;
 use tokio::sync::mpsc;
 use utils::{ensure, tap_log::TapLog};
 use utils_networking::IpOrSocketAddress;

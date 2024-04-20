@@ -39,9 +39,9 @@ use std::{
 };
 
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
-use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng, SliceRandom};
 use logging::log;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use randomness::{make_pseudo_rng, seq::IteratorRandom, Rng, SliceRandom};
 
 use crate::config::P2pConfig;
 

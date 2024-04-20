@@ -24,8 +24,7 @@ use serialization::{Decode, Encode};
 
 use crate::key::secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey};
 use crate::key::Signature::Secp256k1Schnorr;
-use crate::random::make_true_rng;
-use crate::random::{CryptoRng, Rng};
+use randomness::{make_true_rng, CryptoRng, Rng};
 pub use signature::Signature;
 
 use self::key_holder::{PrivateKeyHolder, PublicKeyHolder};
@@ -172,8 +171,8 @@ mod test {
         let mut rng = make_seedable_rng(seed);
         let (sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         assert_eq!(sk.kind(), KeyKind::Secp256k1Schnorr);
-        let msg_size = 1 + rand::random::<usize>() % 10000;
-        let msg: Vec<u8> = (0..msg_size).map(|_| rand::random::<u8>()).collect();
+        let msg_size = 1 + rng.gen::<usize>() % 10000;
+        let msg: Vec<u8> = (0..msg_size).map(|_| rng.gen::<u8>()).collect();
         let sig = sk.sign_message(&msg).unwrap();
         assert!(pk.verify_message(&sig, &msg));
     }

@@ -16,7 +16,7 @@
 use std::{collections::BTreeMap, hash::Hasher, time::Duration};
 
 use common::primitives::time::Time;
-use crypto::random::{seq::IteratorRandom, Rng};
+use randomness::{seq::IteratorRandom, Rng};
 use utils::make_config_setting;
 
 use crate::{net::types::PeerRole, types::peer_id::PeerId};

@@ -33,11 +33,9 @@ use crate::{
     },
     primitives::{Amount, Id, H256},
 };
-use crypto::random::Rng;
-use crypto::{
-    key::{KeyKind, PrivateKey},
-    random::CryptoRng,
-};
+use crypto::key::{KeyKind, PrivateKey};
+use randomness::CryptoRng;
+use randomness::Rng;
 use test_utils::random::Seed;
 
 mod mixed_sighash_types;

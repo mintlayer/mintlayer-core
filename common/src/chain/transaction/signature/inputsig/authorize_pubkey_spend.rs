@@ -78,7 +78,7 @@ mod test {
         },
     };
     use crypto::key::{KeyKind, PrivateKey};
-    use crypto::random::Rng;
+    use randomness::Rng;
     use rstest::rstest;
     use test_utils::random::Seed;
 

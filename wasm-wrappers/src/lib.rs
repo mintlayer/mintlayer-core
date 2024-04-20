@@ -935,7 +935,7 @@ pub fn effective_pool_balance(
 
 #[cfg(test)]
 mod tests {
-    use crypto::random::Rng;
+    use randomness::Rng;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 

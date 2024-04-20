@@ -21,9 +21,9 @@ use common::{
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
-    random::{CryptoRng, Rng},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
+use randomness::{CryptoRng, Rng};
 
 use crate::{
     error::Error, make_pool_id, storage::in_memory::InMemoryPoSAccounting, DelegationData,

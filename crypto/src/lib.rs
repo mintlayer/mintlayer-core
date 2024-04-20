@@ -17,7 +17,6 @@ pub mod ephemeral_e2e;
 pub mod hash;
 pub mod kdf;
 pub mod key;
-pub mod random;
 pub mod symkey;
 pub mod util;
 pub mod vrf;

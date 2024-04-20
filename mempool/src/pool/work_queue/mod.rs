@@ -17,8 +17,8 @@
 
 use std::collections::{btree_map, BTreeMap, BTreeSet};
 
-use crypto::random::{self, Rng, SliceRandom};
 use p2p_types::PeerId;
+use randomness::{self, Rng, SliceRandom};
 
 /// Per-peer work schedule queue
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -86,7 +86,7 @@ impl<W: Ord> PeerQueue<W> {
 /// * `Done`: Peer is done for this round and does NOT have more work to do.
 ///   * Transitions to `Absent` on new round
 ///   * Transitions to `Waiting` on `insert`
-/// * `Dsconnected`: A peer disconnected but is still hanging around in the scheduled set.
+/// * `Disconnected`: A peer disconnected but is still hanging around in the scheduled set.
 ///   * This is a temporary state when peer has disconnected and it's queue has been removed but is
 ///     still hanging around in the scheduled set. Removing it from the scheduled set immediately
 ///     requires a linear scan, so for efficiency reasons, it's done lazily when we pick the next
@@ -150,7 +150,7 @@ impl<W: Ord> WorkQueue<W> {
                 // mutability issues, it's slightly awkward. We first push it at the end and then
                 // swap it with a random other element in the vec.
                 self.scheduled.push(peer);
-                let pos = random::make_pseudo_rng().gen_range(0..self.scheduled.len());
+                let pos = randomness::make_pseudo_rng().gen_range(0..self.scheduled.len());
                 let last = self.scheduled.len() - 1;
                 self.scheduled.swap(pos, last);
 
@@ -218,7 +218,7 @@ impl<W: Ord> WorkQueue<W> {
             });
 
             // Place the scheduled set in random order
-            self.scheduled.shuffle(&mut random::make_pseudo_rng());
+            self.scheduled.shuffle(&mut randomness::make_pseudo_rng());
         }
     }
 

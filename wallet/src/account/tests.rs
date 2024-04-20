@@ -24,7 +24,7 @@ use common::primitives::amount::UnsignedIntType;
 use common::primitives::{Amount, Id, H256};
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::{KeyKind, PrivateKey};
-use crypto::random::{Rng, RngCore};
+use randomness::{Rng, RngCore};
 use rstest::rstest;
 use std::ops::{Div, Mul, Sub};
 use test_utils::random::{make_seedable_rng, Seed};

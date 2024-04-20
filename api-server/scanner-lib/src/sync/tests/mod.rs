@@ -57,11 +57,11 @@ use common::{
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
-    random::{seq::IteratorRandom, CryptoRng, Rng},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use logging::log;
 use pos_accounting::{make_delegation_id, make_pool_id};
+use randomness::{seq::IteratorRandom, CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tokio::sync::mpsc;

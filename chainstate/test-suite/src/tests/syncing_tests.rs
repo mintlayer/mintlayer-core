@@ -29,7 +29,7 @@ use common::{
     primitives::{BlockDistance, BlockHeight, Id, Idable, H256},
     Uint256,
 };
-use crypto::random::Rng;
+use randomness::Rng;
 use test_utils::random::{make_seedable_rng, Seed};
 
 #[rstest]

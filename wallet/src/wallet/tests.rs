@@ -43,10 +43,10 @@ use common::{
 };
 use crypto::{
     key::hdkd::{child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath},
-    random::{CryptoRng, Rng, SliceRandom},
     vrf::transcript::VRFTranscript,
 };
 use itertools::Itertools;
+use randomness::{CryptoRng, Rng, SliceRandom};
 use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use storage::raw::DbMapId;

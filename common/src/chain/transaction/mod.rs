@@ -179,7 +179,7 @@ mod test {
     #[test]
     #[allow(clippy::eq_op)]
     fn version_byte() {
-        let mut rng = crypto::random::make_pseudo_rng();
+        let mut rng = randomness::make_pseudo_rng();
         let flags = rng.gen::<u128>();
 
         let flags_compact = TestCompactU128 { value: flags };

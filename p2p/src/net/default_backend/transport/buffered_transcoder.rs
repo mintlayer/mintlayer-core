@@ -89,8 +89,8 @@ mod tests {
         chain::config::MagicBytes,
         primitives::{semver::SemVer, Id},
     };
-    use crypto::random::Rng;
     use p2p_types::services::Service;
+    use randomness::Rng;
     use test_utils::random::Seed;
 
     use crate::{

@@ -36,10 +36,8 @@ use common::{
     },
     primitives::{Amount, Fee, Idable},
 };
-use crypto::{
-    random::CryptoRng,
-    vrf::{VRFKeyKind, VRFPrivateKey},
-};
+use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
+use randomness::CryptoRng;
 use test_utils::random_ascii_alphanumeric_string;
 use tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifier};
 

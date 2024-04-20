@@ -24,8 +24,8 @@ use chain::signature::{
 use crypto::{
     hash::StreamHasher,
     key::{KeyKind, PrivateKey, PublicKey},
-    random::Rng,
 };
+use randomness::Rng;
 use serialization::DecodeAll;
 use test_utils::{
     assert_matches,

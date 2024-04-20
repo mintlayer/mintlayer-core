@@ -26,9 +26,9 @@ use tokio::{
     time,
 };
 
-use crypto::random::Rng;
 use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use randomness::Rng;
 use test_utils::random::Seed;
 
 use chainstate::{

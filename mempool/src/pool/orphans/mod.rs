@@ -16,9 +16,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use common::{chain::Transaction, primitives::Id};
-use crypto::random::{make_pseudo_rng, Rng};
 use logging::log;
 use mempool_types::TxStatus;
+use randomness::{make_pseudo_rng, Rng};
 use utils::{const_value::ConstValue, ensure};
 
 use super::{OrphanPoolError, Time, TxDependency};

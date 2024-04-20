@@ -31,11 +31,9 @@ use common::{
     },
     primitives::{per_thousand::PerThousand, Amount, Idable},
 };
-use crypto::{
-    random::{CryptoRng, Rng},
-    vrf::{VRFKeyKind, VRFPrivateKey},
-};
+use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use pos_accounting::PoolData;
+use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use utxo::UtxosStorageRead;

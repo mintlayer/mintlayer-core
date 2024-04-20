@@ -21,7 +21,7 @@ use common::{
     },
     primitives::{Amount, H256},
 };
-use crypto::random::Rng;
+use randomness::Rng;
 use serialization::{Decode, Encode};
 use variant_count::VariantCount;
 

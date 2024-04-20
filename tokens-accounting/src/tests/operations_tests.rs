@@ -25,7 +25,7 @@ use common::{
     },
     primitives::{Amount, Id, H256},
 };
-use crypto::random::Rng;
+use randomness::Rng;
 use rstest::rstest;
 use test_utils::{
     random::{make_seedable_rng, Seed},

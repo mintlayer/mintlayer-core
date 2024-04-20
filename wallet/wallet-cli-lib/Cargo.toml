@@ -17,6 +17,7 @@ mempool = { path = "../../mempool" }
 p2p-types = { path = "../../p2p/types" }
 node-comm = { path = "../wallet-node-client" }
 rpc = { path = "../../rpc" }
+randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }

@@ -16,11 +16,11 @@
 use std::collections::BTreeMap;
 
 use common::{chain::GenBlock, primitives::Id};
-use crypto::random::Rng;
 use futures::{future::select_all, FutureExt};
 use logging::log;
 use p2p_test_utils::LONG_TIMEOUT;
 use p2p_types::PeerId;
+use randomness::Rng;
 use tokio::time;
 
 use crate::{message::BlockSyncMessage, PeerManagerEvent};

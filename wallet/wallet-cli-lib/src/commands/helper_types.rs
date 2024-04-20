@@ -300,7 +300,7 @@ mod tests {
     use test_utils::random::{make_seedable_rng, Seed};
 
     use super::*;
-    use crypto::random::Rng;
+    use randomness::Rng;
 
     #[rstest]
     #[trace]

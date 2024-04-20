@@ -19,7 +19,7 @@ use std::rc::Rc;
 use common::chain::{Block, GenBlock};
 use common::primitives::id::WithId;
 use common::primitives::{Id, Idable};
-use crypto::random::SliceRandom;
+use randomness::SliceRandom;
 
 pub struct OrphanBlocksPool {
     orphan_ids: Vec<Id<Block>>,
@@ -88,7 +88,7 @@ impl OrphanBlocksPool {
         if self.len() < self.max_orphans {
             return;
         }
-        let id = self.orphan_ids.choose(&mut crypto::random::make_pseudo_rng());
+        let id = self.orphan_ids.choose(&mut randomness::make_pseudo_rng());
         let id = *id.expect("As orphans can never be empty, this should always return");
 
         self.del_one_deepest_child(&id);
@@ -168,7 +168,7 @@ mod tests {
         use common::chain::signed_transaction::SignedTransaction;
         use common::chain::transaction::Transaction;
         use common::primitives::H256;
-        use crypto::random::Rng;
+        use randomness::Rng;
 
         pub fn gen_random_blocks(rng: &mut impl Rng, count: u32) -> Vec<Block> {
             (0..count).map(|_| gen_random_block(rng)).collect::<Vec<_>>()

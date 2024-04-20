@@ -6,9 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-crypto = { path = "../crypto/" }
-logging = {path = '../logging'}
+crypto = { path = "../crypto" }
+logging = { path = "../logging" }
 log_error = { path = "log_error" }
+randomness = { path = "../randomness" }
 serialization = { path = "../serialization" }
 
 anyhow.workspace = true

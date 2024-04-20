@@ -26,11 +26,9 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id, H256},
 };
-use crypto::{
-    key::{KeyKind, PrivateKey},
-    random::{seq, CryptoRng, Rng},
-};
+use crypto::key::{KeyKind, PrivateKey};
 use itertools::Itertools;
+use randomness::{seq, CryptoRng, Rng};
 
 pub trait UnwrapInfallible {
     type Output;

@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use crypto::random::{self, seq::IteratorRandom, CryptoRng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
+pub use randomness::{self, seq::IteratorRandom, CryptoRng, Rng, RngCore, SeedableRng};
 use std::{num::ParseIntError, str::FromStr};
 
 #[derive(Debug, Copy, Clone)]
@@ -22,11 +22,11 @@ pub struct Seed(pub u64);
 
 impl Seed {
     pub fn from_entropy() -> Self {
-        Seed(crypto::random::make_true_rng().gen::<u64>())
+        Seed(randomness::make_true_rng().gen::<u64>())
     }
 
     pub fn from_entropy_and_print(test_name: &str) -> Self {
-        let result = Seed(crypto::random::make_true_rng().gen::<u64>());
+        let result = Seed(randomness::make_true_rng().gen::<u64>());
         result.print_with_decoration(test_name);
         result
     }

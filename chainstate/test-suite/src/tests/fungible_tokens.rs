@@ -33,9 +33,9 @@ use common::{
     },
     primitives::{Amount, Idable},
 };
-use crypto::random::CryptoRng;
-use crypto::{hash::StreamHasher, random::Rng};
+use crypto::hash::StreamHasher;
 use expect_test::expect;
+use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::nft_utils::random_token_issuance;
