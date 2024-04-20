@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::traits::SignableTranscript;
+use super::{traits::SignableTranscript, with_rng::VRFTranscriptWithRng};
 
 #[must_use]
 #[derive(Clone)]
@@ -24,9 +24,15 @@ impl VRFTranscript {
         Self(merlin::Transcript::new(label))
     }
 
-    #[cfg(test)]
-    pub(crate) fn append_u64(&mut self, label: &'static [u8], x: u64) {
-        self.0.append_u64(label, x)
+    pub(crate) fn take(self) -> merlin::Transcript {
+        self.0
+    }
+
+    pub fn with_rng<R: randomness::RngCore + randomness::CryptoRng>(
+        self,
+        rng: R,
+    ) -> VRFTranscriptWithRng<R> {
+        VRFTranscriptWithRng::from_no_rng(self, rng)
     }
 }
 

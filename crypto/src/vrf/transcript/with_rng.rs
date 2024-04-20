@@ -17,7 +17,7 @@ use std::cell::RefCell;
 
 use randomness::{CryptoRng, RngCore};
 
-use super::traits::SignableTranscript;
+use super::{no_rng::VRFTranscript, traits::SignableTranscript};
 
 #[must_use]
 #[derive(Clone)]
@@ -26,6 +26,10 @@ pub struct VRFTranscriptWithRng<R>(merlin::Transcript, RefCell<R>);
 impl<R: RngCore + CryptoRng> VRFTranscriptWithRng<R> {
     pub fn new(label: &'static [u8], rng: R) -> Self {
         Self(merlin::Transcript::new(label), RefCell::new(rng))
+    }
+
+    pub(crate) fn from_no_rng(transcript: VRFTranscript, rng: R) -> Self {
+        VRFTranscriptWithRng(transcript.take(), RefCell::new(rng))
     }
 }
 

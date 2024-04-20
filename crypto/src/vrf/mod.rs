@@ -426,8 +426,8 @@ mod tests {
             }
         }
 
-        let mut mutated_transcript = transcript;
-        mutated_transcript.append_u64(b"Forgery", 1337);
+        let mutated_transcript = transcript;
+        let mutated_transcript = mutated_transcript.attach_u64(b"Forgery", 1337);
 
         pk.verify_vrf_data(mutated_transcript, &vrf_data)
             .expect_err("Invalid VRF check succeeded");
