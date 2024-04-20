@@ -16,7 +16,7 @@
 /// A wrapper trait for a transcript that can be signed
 pub trait SignableTranscript: schnorrkel::context::SigningTranscript {
     fn attach_u64(self, label: &'static [u8], value: u64) -> Self;
-    fn attach_raw_data(self, label: &'static [u8], value: &[u8]) -> Self;
+    fn attach_raw_data<T: AsRef<[u8]>>(self, label: &'static [u8], value: T) -> Self;
 }
 
 #[must_use]
@@ -40,8 +40,8 @@ impl SignableTranscript for VRFTranscript {
         self
     }
 
-    fn attach_raw_data(mut self, label: &'static [u8], message: &[u8]) -> Self {
-        self.0.append_message(label, message);
+    fn attach_raw_data<T: AsRef<[u8]>>(mut self, label: &'static [u8], message: T) -> Self {
+        self.0.append_message(label, message.as_ref());
         self
     }
 }
