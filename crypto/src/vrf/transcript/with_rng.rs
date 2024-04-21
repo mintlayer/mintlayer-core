@@ -13,23 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 
 use randomness::{CryptoRng, RngCore};
 
 use super::{no_rng::VRFTranscript, traits::SignableTranscript};
 
+pub trait AllRandom: RngCore + CryptoRng {}
+
+impl<T> AllRandom for T where T: RngCore + CryptoRng {}
+
 #[must_use]
 #[derive(Clone)]
-pub struct VRFTranscriptWithRng<R>(merlin::Transcript, RefCell<R>);
+pub struct VRFTranscriptWithRng<'a>(merlin::Transcript, Arc<Mutex<dyn AllRandom + 'a>>);
 
-impl<R: RngCore + CryptoRng> VRFTranscriptWithRng<R> {
-    pub fn new(label: &'static [u8], rng: R) -> Self {
-        Self(merlin::Transcript::new(label), RefCell::new(rng))
+impl<'a> VRFTranscriptWithRng<'a> {
+    pub fn new<R: AllRandom + 'a>(label: &'static [u8], rng: R) -> Self {
+        Self(merlin::Transcript::new(label), Arc::new(Mutex::new(rng)))
     }
 
-    pub(crate) fn from_no_rng(transcript: VRFTranscript, rng: R) -> Self {
-        VRFTranscriptWithRng(transcript.take(), RefCell::new(rng))
+    pub(crate) fn from_no_rng<R: AllRandom + 'a>(transcript: VRFTranscript, rng: R) -> Self {
+        VRFTranscriptWithRng(transcript.take(), Arc::new(Mutex::new(rng)))
     }
 
     #[allow(unused)]
@@ -38,7 +42,7 @@ impl<R: RngCore + CryptoRng> VRFTranscriptWithRng<R> {
     }
 }
 
-impl<R: RngCore + CryptoRng> SignableTranscript for VRFTranscriptWithRng<R> {
+impl SignableTranscript for VRFTranscriptWithRng<'_> {
     fn attach_u64(mut self, label: &'static [u8], value: u64) -> Self {
         self.0.append_u64(label, value);
         self
@@ -50,7 +54,7 @@ impl<R: RngCore + CryptoRng> SignableTranscript for VRFTranscriptWithRng<R> {
     }
 }
 
-impl<U: RngCore + CryptoRng> schnorrkel::context::SigningTranscript for VRFTranscriptWithRng<U> {
+impl schnorrkel::context::SigningTranscript for VRFTranscriptWithRng<'_> {
     fn commit_bytes(&mut self, label: &'static [u8], bytes: &[u8]) {
         self.0.append_message(label, bytes)
     }
@@ -72,7 +76,8 @@ impl<U: RngCore + CryptoRng> schnorrkel::context::SigningTranscript for VRFTrans
     }
 
     fn witness_bytes(&self, label: &'static [u8], dest: &mut [u8], nonce_seeds: &[&[u8]]) {
-        self.witness_bytes_rng(label, dest, nonce_seeds, &mut *self.1.borrow_mut())
+        let mut r = self.1.lock().expect("Poisoned mutex");
+        self.witness_bytes_rng(label, dest, nonce_seeds, &mut *r)
     }
 }
 

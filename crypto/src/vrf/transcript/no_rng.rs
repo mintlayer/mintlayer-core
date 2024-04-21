@@ -28,10 +28,10 @@ impl VRFTranscript {
         self.0
     }
 
-    pub fn with_rng<R: randomness::RngCore + randomness::CryptoRng>(
+    pub fn with_rng<'a, R: randomness::RngCore + randomness::CryptoRng + 'a>(
         self,
         rng: R,
-    ) -> VRFTranscriptWithRng<R> {
+    ) -> VRFTranscriptWithRng<'a> {
         VRFTranscriptWithRng::from_no_rng(self, rng)
     }
 }
