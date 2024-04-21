@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use randomness::{CryptoRng, RngCore};
 
@@ -24,16 +24,15 @@ pub trait AllRandom: RngCore + CryptoRng {}
 impl<T> AllRandom for T where T: RngCore + CryptoRng {}
 
 #[must_use]
-#[derive(Clone)]
-pub struct VRFTranscriptWithRng<'a>(merlin::Transcript, Arc<Mutex<dyn AllRandom + 'a>>);
+pub struct VRFTranscriptWithRng<'a>(merlin::Transcript, Box<Mutex<dyn AllRandom + 'a>>);
 
 impl<'a> VRFTranscriptWithRng<'a> {
     pub fn new<R: AllRandom + 'a>(label: &'static [u8], rng: R) -> Self {
-        Self(merlin::Transcript::new(label), Arc::new(Mutex::new(rng)))
+        Self(merlin::Transcript::new(label), Box::new(Mutex::new(rng)))
     }
 
     pub(crate) fn from_no_rng<R: AllRandom + 'a>(transcript: VRFTranscript, rng: R) -> Self {
-        VRFTranscriptWithRng(transcript.take(), Arc::new(Mutex::new(rng)))
+        VRFTranscriptWithRng(transcript.take(), Box::new(Mutex::new(rng)))
     }
 
     #[allow(unused)]
