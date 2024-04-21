@@ -19,19 +19,19 @@ use randomness::{CryptoRng, RngCore};
 
 use super::{no_rng::VRFTranscript, traits::SignableTranscript};
 
-pub trait AllRandom: RngCore + CryptoRng {}
+pub trait RngCoreAndCrypto: RngCore + CryptoRng {}
 
-impl<T> AllRandom for T where T: RngCore + CryptoRng {}
+impl<R> RngCoreAndCrypto for R where R: RngCore + CryptoRng {}
 
 #[must_use]
-pub struct VRFTranscriptWithRng<'a>(merlin::Transcript, Box<Mutex<dyn AllRandom + 'a>>);
+pub struct VRFTranscriptWithRng<'a>(merlin::Transcript, Box<Mutex<dyn RngCoreAndCrypto + 'a>>);
 
 impl<'a> VRFTranscriptWithRng<'a> {
-    pub fn new<R: AllRandom + 'a>(label: &'static [u8], rng: R) -> Self {
+    pub fn new<R: RngCoreAndCrypto + 'a>(label: &'static [u8], rng: R) -> Self {
         Self(merlin::Transcript::new(label), Box::new(Mutex::new(rng)))
     }
 
-    pub(crate) fn from_no_rng<R: AllRandom + 'a>(transcript: VRFTranscript, rng: R) -> Self {
+    pub(crate) fn from_no_rng<R: RngCoreAndCrypto + 'a>(transcript: VRFTranscript, rng: R) -> Self {
         VRFTranscriptWithRng(transcript.take(), Box::new(Mutex::new(rng)))
     }
 
