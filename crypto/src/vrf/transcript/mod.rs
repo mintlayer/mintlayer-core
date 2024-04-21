@@ -45,10 +45,10 @@ mod tests {
         };
 
         let with_rng_value = {
-            let rng1 = make_seedable_rng(seed);
+            let mut rng1 = make_seedable_rng(seed);
             let mut rng2 = make_seedable_rng(seed);
 
-            let assembled_transcript = VRFTranscriptWithRng::new(b"initial", rng1)
+            let assembled_transcript = VRFTranscriptWithRng::new(b"initial", &mut rng1)
                 .attach_raw_data(b"abc", b"xyz")
                 .attach_u64(b"rx42", 424242);
 

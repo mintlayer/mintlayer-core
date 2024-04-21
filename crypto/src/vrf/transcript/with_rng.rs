@@ -95,7 +95,7 @@ mod tests {
     #[trace]
     #[case(Seed::from_entropy())]
     fn manual_vs_assembled(#[case] seed: Seed) {
-        let rng = make_seedable_rng(seed);
+        let mut rng = make_seedable_rng(seed);
 
         // build first transcript by manually filling values
         let mut manual_transcript = merlin::Transcript::new(b"initial");
@@ -103,7 +103,7 @@ mod tests {
         manual_transcript.append_u64(b"rx42", 424242);
 
         // build the second transcript using the assembler
-        let assembled_transcript = VRFTranscriptWithRng::new(b"initial", rng)
+        let assembled_transcript = VRFTranscriptWithRng::new(b"initial", &mut rng)
             .attach_raw_data(b"abc", b"xyz")
             .attach_u64(b"rx42", 424242);
 
