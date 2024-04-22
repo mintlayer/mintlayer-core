@@ -22,7 +22,7 @@ use serialization::hex_encoded::HexEncoded;
 
 use super::{input::RpcTxInput, output::RpcTxOutput};
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 pub struct RpcSignedTransaction {
     id: Id<Transaction>,
     flags: u128,
@@ -60,5 +60,9 @@ impl RpcSignedTransaction {
         };
 
         Ok(rpc_tx)
+    }
+
+    pub fn into_signed_transaction(self) -> SignedTransaction {
+        self.tx_hex.take()
     }
 }

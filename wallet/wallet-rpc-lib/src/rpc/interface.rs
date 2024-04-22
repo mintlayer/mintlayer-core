@@ -15,12 +15,11 @@
 
 use std::num::NonZeroUsize;
 
-use chainstate::ChainInfo;
 use common::{
     address::RpcAddress,
     chain::{
         tokens::TokenId, Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -35,12 +34,13 @@ use wallet_controller::{
 use wallet_types::with_locked::WithLocked;
 
 use crate::types::{
-    AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction, CreatedWallet,
-    DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
-    NewAccountInfo, NewDelegation, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
-    PublicKeyInfo, RpcAmountIn, RpcStandaloneAddresses, RpcTokenId, RpcUtxoState, RpcUtxoType,
-    StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
-    TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
+    AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
+    CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
+    MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
+    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcStandaloneAddresses, RpcTokenId,
+    RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType, StakePoolBalance, StakingStatus,
+    StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
+    VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -350,7 +350,7 @@ trait WalletRpc {
         account: AccountArg,
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
-        selected_utxos: Vec<UtxoOutPoint>,
+        selected_utxos: Vec<RpcUtxoOutpoint>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
@@ -391,7 +391,7 @@ trait WalletRpc {
         account: AccountArg,
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
-        selected_utxo: UtxoOutPoint,
+        selected_utxo: RpcUtxoOutpoint,
         change_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<ComposedTransaction>;
@@ -762,7 +762,7 @@ trait WalletRpc {
     #[method(name = "transaction_compose")]
     async fn compose_transaction(
         &self,
-        inputs: Vec<UtxoOutPoint>,
+        inputs: Vec<RpcUtxoOutpoint>,
         outputs: Vec<TxOutput>,
         only_transaction: bool,
     ) -> rpc::RpcResult<ComposedTransaction>;

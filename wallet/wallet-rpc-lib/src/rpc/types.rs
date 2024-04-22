@@ -15,7 +15,6 @@
 
 //! Types supporting the RPC interface
 
-use chainstate::rpc::{RpcTxOutput, RpcUtxoOutpoint};
 use common::{
     address::{pubkeyhash::PublicKeyHash, Address, AddressError},
     chain::{
@@ -38,6 +37,10 @@ use crypto::{
 use rpc::description::HasValueHint;
 use wallet::account::PoolData;
 
+pub use chainstate::{
+    rpc::{RpcSignedTransaction, RpcTxOutput, RpcUtxoOutpoint},
+    ChainInfo,
+};
 pub use common::{
     address::RpcAddress,
     primitives::amount::{RpcAmountIn, RpcAmountOut},
@@ -121,6 +124,9 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Minimum number of signatures can't be 0")]
     InvalidMultisigMinSignature,
+
+    #[error(transparent)]
+    Address(#[from] AddressError),
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {

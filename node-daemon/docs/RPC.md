@@ -179,21 +179,18 @@ Returns `None` (null) if the UtxoOutPoint is not found or is already spent.
 
 Parameters:
 ```
-{ "outpoint": EITHER OF
-     1) {
-            "type": "Transaction",
-            "content": {
-                "id": hex string,
-                "index": number,
+{ "outpoint": {
+    "source_id": EITHER OF
+         1) {
+                "type": "Transaction",
+                "content": { "tx_id": hex string },
+            }
+         2) {
+                "type": "BlockReward",
+                "content": { "block_id": hex string },
             },
-        }
-     2) {
-            "type": "BlockReward",
-            "content": {
-                "id": hex string,
-                "index": number,
-            },
-        } }
+    "index": number,
+} }
 ```
 
 Returns:

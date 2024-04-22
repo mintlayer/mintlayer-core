@@ -422,7 +422,8 @@ class WalletRpcController:
             return result['error']['message']
 
     async def create_from_cold_address(self, address: str, amount: int, selected_utxo: UtxoOutpoint, change_address: Optional[str] = None) -> str:
-        utxo = { "type": "Transaction", "content": { "id": selected_utxo.id, "index": selected_utxo.index } }
+        #utxo = { "type": "Transaction", "content": { "id": selected_utxo.id, "index": selected_utxo.index } }
+        utxo = { "source_id": { "type": "Transaction", "content": { "tx_id": selected_utxo.id } }, "index": selected_utxo.index }
         result = self._write_command("transaction_create_from_cold_input", [self.account, address, {'decimal': str(amount)}, utxo, change_address, {'in_top_x_mb': 5}])
         if 'result' in result:
             return f"Send transaction created\n\n{result['result']['hex']}"

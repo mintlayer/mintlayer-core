@@ -15,13 +15,12 @@
 
 use std::{fmt::Debug, num::NonZeroUsize, str::FromStr, time::Duration};
 
-use chainstate::ChainInfo;
 use common::{
     address::dehexify::dehexify_all_addresses,
     chain::{
         tokens::{IsTokenUnfreezable, TokenId},
         Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
-        TxOutput, UtxoOutPoint,
+        TxOutput,
     },
     primitives::{time::Time, BlockHeight, Id, Idable},
 };
@@ -42,13 +41,13 @@ use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
 use crate::{
     rpc::{ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc, WalletRpcServer},
     types::{
-        AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ComposedTransaction,
+        AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
         CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
         MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
         NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
-        RpcStandaloneAddresses, RpcTokenId, RpcUtxoState, RpcUtxoType, StakePoolBalance,
-        StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TransactionOptions,
-        TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
+        RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
+        StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
+        TransactionOptions, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError,
 };
@@ -474,7 +473,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         account_arg: AccountArg,
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
-        selected_utxos: Vec<UtxoOutPoint>,
+        selected_utxos: Vec<RpcUtxoOutpoint>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
         let config = ControllerConfig {
@@ -486,7 +485,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
                 account_arg.index::<N>()?,
                 address,
                 amount,
-                selected_utxos,
+                selected_utxos.into_iter().map(|o| o.into_outpoint()).collect(),
                 config,
             )
             .await,
@@ -542,7 +541,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         account_arg: AccountArg,
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
-        selected_utxo: UtxoOutPoint,
+        selected_utxo: RpcUtxoOutpoint,
         change_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<ComposedTransaction> {
@@ -555,7 +554,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
                 account_arg.index::<N>()?,
                 address,
                 amount,
-                selected_utxo,
+                selected_utxo.into_outpoint(),
                 change_address,
                 config,
             )
@@ -1092,7 +1091,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
 
     async fn compose_transaction(
         &self,
-        inputs: Vec<UtxoOutPoint>,
+        inputs: Vec<RpcUtxoOutpoint>,
         outputs: Vec<TxOutput>,
         only_transaction: bool,
     ) -> rpc::RpcResult<ComposedTransaction> {

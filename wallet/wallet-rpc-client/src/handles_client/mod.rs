@@ -535,6 +535,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         outputs: Vec<TxOutput>,
         only_transaction: bool,
     ) -> Result<ComposedTransaction, Self::Error> {
+        let inputs = inputs.into_iter().map(Into::into).collect();
         self.wallet_rpc
             .compose_transaction(inputs, outputs, only_transaction)
             .await

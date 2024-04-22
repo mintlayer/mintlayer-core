@@ -22,7 +22,7 @@ use common::{
     primitives::amount::RpcAmountOut,
 };
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RpcAccountSpending {
     DelegationBalance {
@@ -48,7 +48,7 @@ impl RpcAccountSpending {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RpcAccountCommand {
     MintTokens {

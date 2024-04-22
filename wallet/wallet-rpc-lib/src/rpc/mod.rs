@@ -79,8 +79,8 @@ use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo,
     NewDelegation, NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
     RpcStandaloneAddress, RpcStandaloneAddressDetails, RpcStandaloneAddresses,
-    RpcStandalonePrivateKeyAddress, RpcTokenId, StakingStatus, StandaloneAddressWithDetails,
-    VrfPublicKeyInfo,
+    RpcStandalonePrivateKeyAddress, RpcTokenId, RpcUtxoOutpoint, StakingStatus,
+    StandaloneAddressWithDetails, VrfPublicKeyInfo,
 };
 
 #[derive(Clone)]
@@ -1227,11 +1227,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
 
     pub async fn compose_transaction(
         &self,
-        inputs: Vec<UtxoOutPoint>,
+        inputs: Vec<RpcUtxoOutpoint>,
         outputs: Vec<TxOutput>,
         only_transaction: bool,
     ) -> WRpcResult<(TransactionToSign, Balances), N> {
         ensure!(!inputs.is_empty(), RpcError::ComposeTransactionEmptyInputs);
+        let inputs = inputs.into_iter().map(|o| o.into_outpoint()).collect();
         self.wallet
             .call_async(move |w| {
                 Box::pin(

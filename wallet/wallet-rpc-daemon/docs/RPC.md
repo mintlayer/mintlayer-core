@@ -313,21 +313,18 @@ Parameters:
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
-    "selected_utxos": [ EITHER OF
-         1) {
-                "type": "Transaction",
-                "content": {
-                    "id": hex string,
-                    "index": number,
+    "selected_utxos": [ {
+        "source_id": EITHER OF
+             1) {
+                    "type": "Transaction",
+                    "content": { "tx_id": hex string },
+                }
+             2) {
+                    "type": "BlockReward",
+                    "content": { "block_id": hex string },
                 },
-            }
-         2) {
-                "type": "BlockReward",
-                "content": {
-                    "id": hex string,
-                    "index": number,
-                },
-            }, .. ],
+        "index": number,
+    }, .. ],
     "options": { "in_top_x_mb": EITHER OF
          1) number
          2) null },
@@ -406,21 +403,18 @@ Parameters:
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
-    "selected_utxo": EITHER OF
-         1) {
-                "type": "Transaction",
-                "content": {
-                    "id": hex string,
-                    "index": number,
+    "selected_utxo": {
+        "source_id": EITHER OF
+             1) {
+                    "type": "Transaction",
+                    "content": { "tx_id": hex string },
+                }
+             2) {
+                    "type": "BlockReward",
+                    "content": { "block_id": hex string },
                 },
-            }
-         2) {
-                "type": "BlockReward",
-                "content": {
-                    "id": hex string,
-                    "index": number,
-                },
-            },
+        "index": number,
+    },
     "change_address": EITHER OF
          1) bech32 string
          2) null,
@@ -1510,21 +1504,18 @@ and also prints the fees that will be paid by the transaction
 Parameters:
 ```
 {
-    "inputs": [ EITHER OF
-         1) {
-                "type": "Transaction",
-                "content": {
-                    "id": hex string,
-                    "index": number,
+    "inputs": [ {
+        "source_id": EITHER OF
+             1) {
+                    "type": "Transaction",
+                    "content": { "tx_id": hex string },
+                }
+             2) {
+                    "type": "BlockReward",
+                    "content": { "block_id": hex string },
                 },
-            }
-         2) {
-                "type": "BlockReward",
-                "content": {
-                    "id": hex string,
-                    "index": number,
-                },
-            }, .. ],
+        "index": number,
+    }, .. ],
     "outputs": [ object, .. ],
     "only_transaction": bool,
 }

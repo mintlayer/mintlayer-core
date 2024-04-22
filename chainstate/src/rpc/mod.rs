@@ -31,13 +31,15 @@ use common::{
     address::{dehexify::to_dehexified_json, Address},
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        ChainConfig, DelegationId, PoolId, TxOutput, UtxoOutPoint,
+        ChainConfig, DelegationId, PoolId, TxOutput,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use rpc::{subscription, RpcResult};
 use serialization::hex_encoded::HexEncoded;
-pub use types::{input::RpcUtxoOutpoint, output::RpcTxOutput};
+pub use types::{
+    input::RpcUtxoOutpoint, output::RpcTxOutput, signed_transaction::RpcSignedTransaction,
+};
 
 #[rpc::describe]
 #[rpc::rpc(server, client, namespace = "chainstate")]
@@ -86,7 +88,7 @@ trait ChainstateRpc {
     /// Returns the TxOutput for a specified UtxoOutPoint.
     /// Returns `None` (null) if the UtxoOutPoint is not found or is already spent.
     #[method(name = "get_utxo")]
-    async fn get_utxo(&self, outpoint: UtxoOutPoint) -> RpcResult<Option<TxOutput>>;
+    async fn get_utxo(&self, outpoint: RpcUtxoOutpoint) -> RpcResult<Option<TxOutput>>;
 
     /// Submit a block to be included in the blockchain.
     ///
@@ -250,7 +252,8 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         )
     }
 
-    async fn get_utxo(&self, outpoint: UtxoOutPoint) -> RpcResult<Option<TxOutput>> {
+    async fn get_utxo(&self, outpoint: RpcUtxoOutpoint) -> RpcResult<Option<TxOutput>> {
+        let outpoint = outpoint.into_outpoint();
         rpc::handle_result(
             self.call_mut(move |this| {
                 this.utxo(&outpoint).map(|utxo| utxo.map(|utxo| utxo.take_output()))

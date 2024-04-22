@@ -21,7 +21,7 @@ use common::{
 
 use super::account::{RpcAccountCommand, RpcAccountSpending};
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RpcTxInput {
     Utxo {
@@ -64,14 +64,14 @@ impl RpcTxInput {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RpcOutPointSourceId {
     Transaction { tx_id: Id<Transaction> },
     BlockReward { block_id: Id<GenBlock> },
 }
 
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 pub struct RpcUtxoOutpoint {
     source_id: RpcOutPointSourceId,
     index: u32,
@@ -89,5 +89,19 @@ impl RpcUtxoOutpoint {
             source_id,
             index: outpoint.output_index(),
         }
+    }
+
+    pub fn into_outpoint(self) -> UtxoOutPoint {
+        let source_id = match self.source_id {
+            RpcOutPointSourceId::Transaction { tx_id } => tx_id.into(),
+            RpcOutPointSourceId::BlockReward { block_id } => block_id.into(),
+        };
+        UtxoOutPoint::new(source_id, self.index)
+    }
+}
+
+impl From<UtxoOutPoint> for RpcUtxoOutpoint {
+    fn from(outpoint: UtxoOutPoint) -> Self {
+        Self::new(outpoint)
     }
 }

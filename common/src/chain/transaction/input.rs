@@ -31,7 +31,6 @@ use super::{AccountCommand, AccountOutPoint, AccountSpending, OutPointSourceId, 
     serde::Serialize,
     serde::Deserialize,
 )]
-#[serde(tag = "type", content = "content")]
 pub enum TxInput {
     #[codec(index = 0)]
     Utxo(UtxoOutPoint),

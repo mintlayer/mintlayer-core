@@ -17,7 +17,18 @@ use crate::chain::{transaction::Transaction, Block, GenBlock, Genesis};
 use crate::primitives::Id;
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Ord, PartialOrd)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Encode,
+    Decode,
+    Ord,
+    PartialOrd,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub enum OutPointSourceId {
     #[codec(index = 0)]
     Transaction(Id<Transaction>),
@@ -70,7 +81,6 @@ impl OutPointSourceId {
     serde::Serialize,
     serde::Deserialize,
 )]
-#[serde(from = "RpcUtxoOutPoint", into = "RpcUtxoOutPoint")]
 pub struct UtxoOutPoint {
     id: OutPointSourceId,
     index: u32,
@@ -90,38 +100,6 @@ impl UtxoOutPoint {
 
     pub fn output_index(&self) -> u32 {
         self.index
-    }
-}
-
-impl rpc_description::HasValueHint for UtxoOutPoint {
-    const HINT_SER: rpc_description::ValueHint = RpcUtxoOutPoint::HINT_SER;
-    const HINT_DE: rpc_description::ValueHint = RpcUtxoOutPoint::HINT_DE;
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
-#[serde(tag = "type", content = "content")]
-enum RpcUtxoOutPoint {
-    Transaction { id: Id<Transaction>, index: u32 },
-    BlockReward { id: Id<GenBlock>, index: u32 },
-}
-
-impl From<UtxoOutPoint> for RpcUtxoOutPoint {
-    fn from(outpoint: UtxoOutPoint) -> Self {
-        let index = outpoint.index;
-        match outpoint.id {
-            OutPointSourceId::Transaction(id) => Self::Transaction { id, index },
-            OutPointSourceId::BlockReward(id) => Self::BlockReward { id, index },
-        }
-    }
-}
-
-impl From<RpcUtxoOutPoint> for UtxoOutPoint {
-    fn from(outpoint: RpcUtxoOutPoint) -> Self {
-        let (source, index) = match outpoint {
-            RpcUtxoOutPoint::Transaction { id, index } => (id.into(), index),
-            RpcUtxoOutPoint::BlockReward { id, index } => (id.into(), index),
-        };
-        Self::new(source, index)
     }
 }
 

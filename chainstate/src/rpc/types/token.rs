@@ -23,7 +23,7 @@ use common::{
 };
 use rpc::types::{RpcHexString, RpcString};
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RpcTokenTotalSupply {
     Fixed { amount: RpcAmountOut },
@@ -44,7 +44,7 @@ impl RpcTokenTotalSupply {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 pub struct RpcTokenIssuance {
     pub token_ticker: RpcString,
     pub number_of_decimals: u8,
@@ -74,7 +74,7 @@ impl RpcTokenIssuance {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 pub struct RpcNftIssuance {
     pub metadata: RpcNftMetadata,
 }
@@ -90,7 +90,7 @@ impl RpcNftIssuance {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 pub struct RpcNftMetadata {
     pub creator: Option<RpcAddress<Destination>>,
     pub name: RpcString,

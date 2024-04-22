@@ -57,7 +57,6 @@ pub enum TransactionSize {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode, TypeName, serde::Serialize)]
-#[serde(tag = "version", content = "content")]
 pub enum Transaction {
     V1(TransactionV1),
 }
