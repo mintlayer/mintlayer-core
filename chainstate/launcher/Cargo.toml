@@ -9,9 +9,9 @@ rust-version.workspace = true
 chainstate = { path = ".." }
 chainstate-storage = { path = "../storage" }
 common = { path = "../../common" }
-logging = {path = '../../logging'}
+logging = { path = "../../logging" }
 storage = { path = "../../storage" }
 storage-inmemory = { path = "../../storage/inmemory" }
 storage-lmdb = { path = "../../storage/lmdb" }
 subsystem = { path = "../../subsystem" }
-utils = { path = '../../utils' }
+utils = { path = "../../utils" }

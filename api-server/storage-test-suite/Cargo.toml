@@ -11,9 +11,9 @@ chainstate-test-framework = { path = "../../chainstate/test-framework" }
 common = { path = "../../common" }
 crypto = { path = "../../crypto/" }
 logging = { path = "../../logging" }
-test-utils = {path = "../../test-utils"}
+test-utils = { path = "../../test-utils" }
 utils = { path = "../../utils" }
-pos-accounting = {path = "../../pos-accounting"}
+pos-accounting = { path = "../../pos-accounting" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
 

@@ -19,7 +19,7 @@ thiserror.workspace = true
 
 [dev-dependencies]
 crypto = { path = "../crypto" }
-test-utils = {path = "../test-utils"}
+test-utils = { path = "../test-utils" }
 
 itertools.workspace = true
 rstest.workspace = true

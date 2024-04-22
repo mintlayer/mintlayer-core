@@ -43,7 +43,7 @@ tracing.workspace = true
 chainstate-storage = { path = "../chainstate/storage" }
 chainstate-test-framework = { path = "../chainstate/test-framework" }
 crypto = { path = "../crypto" }
-test-utils = {path = "../test-utils"}
+test-utils = { path = "../test-utils" }
 
 mockall.workspace = true
 rstest.workspace = true

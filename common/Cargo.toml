@@ -8,15 +8,15 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-crypto = { path = "../crypto"}
+crypto = { path = "../crypto" }
 logging = { path = "../logging/" }
-randomness = { path = "../randomness"}
+randomness = { path = "../randomness" }
 rpc-description = { path = "../rpc/description" }
 rpc-types = { path = "../rpc/types" }
-script = { path = "../script"}
+script = { path = "../script" }
 serialization = { path = "../serialization" }
 typename = { path = "../utils/typename" }
-utils = {path = "../utils"}
+utils = { path = "../utils" }
 
 anyhow.workspace = true
 bech32.workspace = true

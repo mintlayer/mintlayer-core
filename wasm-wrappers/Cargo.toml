@@ -28,4 +28,4 @@ thiserror.workspace = true
 [dev-dependencies]
 hex.workspace = true
 rstest.workspace = true
-test-utils = {path = "../test-utils"}
+test-utils = { path = "../test-utils" }

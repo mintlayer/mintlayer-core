@@ -36,6 +36,7 @@ members = [
   "p2p/backend-test-suite",             # P2p backend agnostic tests.
   "p2p/types",                          # P2p support types with minimal dependencies.
   "pos-accounting",                     # PoS accounting and balances abstractions.
+  "randomness",                         # A wrapper around all randomness functionality to make audits easier
   "rpc",                                # Rpc abstraction and implementation.
   "rpc/description",                    # Data types describing an RPC interface.
   "rpc/description-macro",              # Macro to generate rpc interface description.
@@ -72,7 +73,7 @@ members = [
   "wallet/wallet-rpc-lib",              # Wallet RPC definitions library.
   "wallet/wallet-test-node",            # Node for wallet testing as a library.
   "wasm-wrappers",                      # WASM wrappers for various components.
-  "wasm-wrappers/wasm-doc-gen", "randomness",         # WASM wrappers documentation generator.
+  "wasm-wrappers/wasm-doc-gen",         # WASM wrappers documentation generator.
 ]
 
 default-members = [
@@ -102,19 +103,19 @@ default-members = [
 ]
 
 [dependencies]
-chainstate = { path = "chainstate"}
-chainstate-storage = { path = "chainstate/storage"}
-chainstate-types = { path = "chainstate/types"}
-common = { path = "common"}
-crypto = { path = "crypto"}
-logging = { path = "logging"}
-mempool = { path = "mempool"}
-p2p = { path = "p2p"}
-rpc = { path = "rpc"}
-script = { path = "script"}
-serialization = { path = "serialization"}
-storage = { path = "storage"}
-utxo = { path = "utxo"}
+chainstate = { path = "chainstate" }
+chainstate-storage = { path = "chainstate/storage" }
+chainstate-types = { path = "chainstate/types" }
+common = { path = "common" }
+crypto = { path = "crypto" }
+logging = { path = "logging" }
+mempool = { path = "mempool" }
+p2p = { path = "p2p" }
+rpc = { path = "rpc" }
+script = { path = "script" }
+serialization = { path = "serialization" }
+storage = { path = "storage" }
+utxo = { path = "utxo" }
 
 [workspace.package]
 edition = "2021"

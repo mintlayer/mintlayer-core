@@ -17,5 +17,5 @@ tokio = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
 serde_test.workspace = true
-test-utils = {path = '../../test-utils'}
+test-utils = { path = "../../test-utils" }
 tokio = { workspace = true, features = ["macros", "net", "sync", "test-util"] }

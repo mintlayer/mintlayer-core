@@ -21,7 +21,7 @@ logging = { path = "../../logging" }
 pos-accounting = { path = "../../pos-accounting" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
-test-utils = { path = "../../test-utils"}
+test-utils = { path = "../../test-utils" }
 tokens-accounting = { path = "../../tokens-accounting" }
 tx-verifier = { path = "../tx-verifier" }
 utils = { path = "../../utils" }

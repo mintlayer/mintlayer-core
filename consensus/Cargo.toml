@@ -22,6 +22,6 @@ parity-scale-codec.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-test-utils = {path = "../test-utils"}
+test-utils = { path = "../test-utils" }
 
 rstest.workspace = true
