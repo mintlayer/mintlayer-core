@@ -48,9 +48,9 @@ use common::{
 use consensus::{ConsensusPoWError, ConsensusVerificationError};
 use crypto::{
     key::{KeyKind, PrivateKey},
-    random::Rng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
+use randomness::Rng;
 use rstest::rstest;
 use test_utils::{
     assert_matches,

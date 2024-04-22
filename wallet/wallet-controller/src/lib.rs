@@ -64,11 +64,7 @@ use common::{
     },
 };
 use consensus::GenerateBlockInputData;
-use crypto::{
-    ephemeral_e2e::EndToEndPrivateKey,
-    key::hdkd::u31::U31,
-    random::{make_pseudo_rng, make_true_rng, Rng},
-};
+use crypto::{ephemeral_e2e::EndToEndPrivateKey, key::hdkd::u31::U31};
 use logging::log;
 use mempool::tx_accumulator::PackingStrategy;
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
@@ -76,6 +72,7 @@ pub use node_comm::{
     handles_client::WalletHandlesClient, make_cold_wallet_rpc_client, make_rpc_client,
     rpc_client::NodeRpcClient,
 };
+use randomness::{make_pseudo_rng, make_true_rng, Rng};
 use wallet::{
     account::{
         currency_grouper::{self, Currency},

@@ -11,13 +11,14 @@ license.workspace = true
 api-server-common = { path = "../api-server-common" }
 chainstate = { path = "../../chainstate" }
 common = { path = "../../common" }
+constraints-value-accumulator = { path = "../../chainstate/constraints-value-accumulator" }
 logging = { path = "../../logging" }
+mempool = { path = "../../mempool" }
 node-comm = { path = "../../wallet/wallet-node-client" }
 pos-accounting = { path = "../../pos-accounting" }
+randomness = { path = "../../randomness" }
 utils = { path = "../../utils" }
 tx-verifier = { path = "../../chainstate/tx-verifier" }
-constraints-value-accumulator = { path = "../../chainstate/constraints-value-accumulator" }
-mempool = { path = "../../mempool" }
 
 futures = { workspace = true, default-features = false }
 async-trait.workspace = true

@@ -35,9 +35,9 @@ use common::{
     primitives::{Id, H256},
 };
 use crypto::key::PrivateKey;
-use crypto::random::{CryptoRng, Rng};
 use itertools::Itertools;
 use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
+use randomness::{CryptoRng, Rng};
 use serialization::Encode;
 use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
 

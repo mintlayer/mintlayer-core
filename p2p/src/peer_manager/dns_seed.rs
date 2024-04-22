@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common::chain::ChainConfig;
-use crypto::random::{make_pseudo_rng, seq::IteratorRandom};
 use logging::log;
 use p2p_types::socket_address::SocketAddress;
+use randomness::{make_pseudo_rng, seq::IteratorRandom};
 
 use crate::config::P2pConfig;
 

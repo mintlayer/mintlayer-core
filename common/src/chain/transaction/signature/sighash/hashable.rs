@@ -132,10 +132,8 @@ impl SignatureHashableElement for SignatureHashableInputs<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crypto::{
-        key::{KeyKind, PrivateKey},
-        random::{CryptoRng, Rng},
-    };
+    use crypto::key::{KeyKind, PrivateKey};
+    use randomness::{CryptoRng, Rng};
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 

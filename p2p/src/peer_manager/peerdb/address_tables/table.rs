@@ -263,7 +263,7 @@ pub mod test_utils {
         net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     };
 
-    use crypto::random::Rng;
+    use randomness::Rng;
 
     use super::*;
 

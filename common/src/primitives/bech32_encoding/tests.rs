@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use bitcoin_bech32::WitnessProgram;
-use crypto::random::{distributions::Alphanumeric, make_pseudo_rng, Rng};
 use hex::FromHex;
+use randomness::{distributions::Alphanumeric, make_pseudo_rng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 

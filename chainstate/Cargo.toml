@@ -6,24 +6,25 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-accounting = {path = '../accounting'}
-chainstate-storage = {path = './storage', features = ["mock"]}
-chainstate-types = {path = './types'}
-common = {path = '../common'}
-consensus = {path = "../consensus"}
-constraints-value-accumulator = {path = './constraints-value-accumulator'}
-crypto = {path = '../crypto'}
-logging = {path = '../logging'}
-pos-accounting = {path = '../pos-accounting'}
-rpc = {path = '../rpc'}
-rpc-description = {path = '../rpc/description'}
-serialization = {path = "../serialization"}
-subsystem = {path = '../subsystem'}
-tx-verifier = {path = './tx-verifier'}
-tokens-accounting = {path = '../tokens-accounting'}
-utils = {path = '../utils'}
-utils-networking = {path = '../utils/networking'}
-utxo = {path = '../utxo'}
+accounting = { path = "../accounting" }
+chainstate-storage = { path = "./storage", features = ["mock"] }
+chainstate-types = { path = "./types" }
+common = { path = "../common" }
+consensus = { path = "../consensus" }
+constraints-value-accumulator = { path = "./constraints-value-accumulator" }
+crypto = { path = "../crypto" }
+logging = { path = "../logging" }
+pos-accounting = { path = "../pos-accounting" }
+randomness = { path = "../randomness" }
+rpc = { path = "../rpc" }
+rpc-description = { path = "../rpc/description" }
+serialization = { path = "../serialization" }
+subsystem = { path = "../subsystem" }
+tx-verifier = { path = "./tx-verifier" }
+tokens-accounting = { path = "../tokens-accounting" }
+utils = { path = "../utils" }
+utils-networking = { path = "../utils/networking" }
+utxo = { path = "../utxo" }
 
 async-trait.workspace = true
 derive_more.workspace = true

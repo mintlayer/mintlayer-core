@@ -20,7 +20,8 @@ use common::{
         Amount, H256,
     },
 };
-use crypto::{hash::StreamHasher, random::Rng};
+use crypto::hash::StreamHasher;
+use randomness::Rng;
 
 use crate::{pool::operations::DelegateStakingUndo, PoSAccountingUndo};
 

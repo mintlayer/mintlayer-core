@@ -143,13 +143,13 @@ mod tests {
     use consensus::calculate_effective_pool_balance;
     use crypto::{
         key::{KeyKind, PrivateKey},
-        random::{CryptoRng, Rng},
         vrf::{VRFKeyKind, VRFPrivateKey},
     };
     use mempool::{MempoolConfig, MempoolHandle};
     use p2p::{
         peer_manager::peerdb::storage_impl::PeerDbStorageImpl, testing_utils::test_p2p_config,
     };
+    use randomness::{CryptoRng, Rng};
     use storage_inmemory::InMemory;
     use subsystem::Manager;
 

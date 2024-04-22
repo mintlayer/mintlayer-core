@@ -61,7 +61,7 @@ impl std::fmt::Display for AccountNonce {
 mod tests {
     use super::*;
 
-    use crypto::random::Rng;
+    use randomness::Rng;
     use rstest::rstest;
     use test_utils::random::Seed;
 

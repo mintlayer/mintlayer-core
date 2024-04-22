@@ -15,7 +15,7 @@
 
 use super::*;
 
-use crypto::random::rngs::StepRng;
+use randomness::rngs::StepRng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 

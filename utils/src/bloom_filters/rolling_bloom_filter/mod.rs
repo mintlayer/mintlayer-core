@@ -19,7 +19,7 @@ mod cyclic_array;
 
 use std::hash::Hash;
 
-use crypto::random::Rng;
+use randomness::Rng;
 
 use self::cyclic_array::CyclicArray;
 

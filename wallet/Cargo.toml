@@ -13,6 +13,7 @@ consensus = { path = "../consensus" }
 crypto = { path = "../crypto/" }
 logging = { path = "../logging" }
 pos-accounting = { path = "../pos-accounting" }
+randomness = { path = "../randomness" }
 serialization = { path = "../serialization" }
 mempool = { path = "../mempool" }
 rpc-description = { path = "../rpc/description" }

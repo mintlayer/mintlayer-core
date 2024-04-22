@@ -41,10 +41,10 @@ use common::{
 };
 use crypto::{
     key::{PrivateKey, PublicKey},
-    random::{seq::IteratorRandom, CryptoRng, Rng},
     vrf::VRFPrivateKey,
 };
 use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
+use randomness::{seq::IteratorRandom, CryptoRng, Rng};
 use serialization::Encode;
 use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
 

@@ -32,8 +32,8 @@ use common::{
     primitives::{semver::SemVer, user_agent::UserAgent},
     time_getter::TimeGetter,
 };
-use crypto::random::{make_pseudo_rng, Rng};
 use logging::log;
+use randomness::{make_pseudo_rng, Rng};
 use utils::{
     atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag,
     shallow_clone::ShallowClone,

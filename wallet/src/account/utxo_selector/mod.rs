@@ -22,7 +22,7 @@ use common::{
     chain::{TxInput, TxOutput},
     primitives::{amount::SignedAmount, Amount},
 };
-use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
+use randomness::{make_pseudo_rng, Rng, SliceRandom};
 use utils::ensure;
 
 const TOTAL_TRIES: u32 = 100_000;

@@ -21,9 +21,9 @@ use common::{
     chain::{self, ChainConfig},
     primitives::user_agent::mintlayer_core_user_agent,
 };
-use crypto::random::Rng;
 use p2p_test_utils::{expect_recv, P2pBasicTestTimeGetter};
 use p2p_types::{peer_address::PeerAddress, socket_address::SocketAddress};
+use randomness::Rng;
 use test_utils::{
     assert_matches_return_val,
     random::{make_seedable_rng, Seed},

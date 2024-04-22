@@ -24,9 +24,9 @@ use crate::{
         derivable::{Derivable, DerivationError},
         derivation_path::DerivationPath,
     },
-    random::{make_true_rng, CryptoRng, Rng},
     util::{self, new_hmac_sha_512},
 };
+use randomness::{make_true_rng, CryptoRng, Rng};
 
 pub use self::primitives::VRFReturn;
 use self::transcript::traits::SignableTranscript;

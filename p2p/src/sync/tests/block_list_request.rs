@@ -21,9 +21,9 @@ use common::{
     chain::{config::create_unit_test_config, Block},
     primitives::{Id, Idable},
 };
-use crypto::random::Rng;
 use logging::log;
 use p2p_test_utils::{create_n_blocks, P2pBasicTestTimeGetter};
+use randomness::Rng;
 use test_utils::random::Seed;
 
 use crate::{

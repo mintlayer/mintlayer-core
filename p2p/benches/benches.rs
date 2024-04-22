@@ -18,11 +18,11 @@ use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use common::chain::config::create_unit_test_config;
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use crypto::random::make_pseudo_rng;
 use p2p::{
     peer_manager::{address_groups::AddressGroup, peerdb::PeerDb},
     testing_utils::{peerdb_inmemory_store, test_p2p_config, TestAddressMaker},
 };
+use randomness::make_pseudo_rng;
 
 pub fn peer_db(c: &mut Criterion) {
     let mut rng = make_pseudo_rng();

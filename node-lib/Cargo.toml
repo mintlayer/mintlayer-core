@@ -34,5 +34,6 @@ fs4.workspace = true
 
 [dev-dependencies]
 crypto = { path = "../crypto" }
+randomness = { path = "../randomness" }
 
 tempfile.workspace = true

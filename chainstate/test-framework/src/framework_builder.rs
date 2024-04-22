@@ -28,11 +28,8 @@ use common::{
     chain::{ChainConfig, PoolId, UtxoOutPoint},
     time_getter::TimeGetter,
 };
-use crypto::{
-    key::PrivateKey,
-    random::{CryptoRng, Rng},
-    vrf::VRFPrivateKey,
-};
+use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
+use randomness::{CryptoRng, Rng};
 use test_utils::{mock_time_getter::mocked_time_getter_seconds, random::Seed};
 use utils::atomics::SeqCstAtomicU64;
 use variant_count::VariantCount;

@@ -43,11 +43,9 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
 };
-use crypto::{
-    random::{seq, CryptoRng, Rng},
-    vrf::{transcript::VRFTranscript, VRFKeyKind},
-};
+use crypto::vrf::{transcript::VRFTranscript, VRFKeyKind};
 use itertools::Itertools;
+use randomness::{seq, CryptoRng, Rng};
 use rstest::rstest;
 use std::{collections::BTreeMap, convert::Infallible};
 use test_utils::random::{make_seedable_rng, Seed};

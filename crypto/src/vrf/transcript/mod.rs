@@ -60,13 +60,13 @@ impl schnorrkel::context::SigningTranscript for VRFTranscript {
         nonce_seeds: &[&[u8]],
         rng: R,
     ) where
-        R: rand::prelude::RngCore + rand::prelude::CryptoRng,
+        R: randomness::RngCore + randomness::CryptoRng,
     {
         self.0.witness_bytes_rng(label, dest, nonce_seeds, rng)
     }
 
     fn witness_bytes(&self, label: &'static [u8], dest: &mut [u8], nonce_seeds: &[&[u8]]) {
-        self.witness_bytes_rng(label, dest, nonce_seeds, crate::random::make_true_rng())
+        self.witness_bytes_rng(label, dest, nonce_seeds, randomness::make_true_rng())
     }
 }
 
@@ -75,7 +75,7 @@ mod tests {
 
     use rand_chacha::ChaChaRng;
 
-    use crate::random::{Rng, SeedableRng};
+    use randomness::{Rng, SeedableRng};
 
     use super::*;
 

@@ -26,7 +26,7 @@ use common::{
     primitives::Amount,
 };
 use crypto::key::{KeyKind, PrivateKey};
-use crypto::random::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 
 pub fn random_creator(rng: &mut (impl Rng + CryptoRng)) -> TokenCreator {

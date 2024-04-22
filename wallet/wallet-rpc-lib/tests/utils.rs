@@ -29,7 +29,7 @@ use wallet_controller::NodeRpcClient;
 use wallet_rpc_lib::{config::WalletServiceConfig, types::AccountArg, WalletHandle, WalletService};
 use wallet_test_node::{RPC_PASSWORD, RPC_USERNAME};
 
-pub use crypto::random::Rng;
+pub use randomness::Rng;
 pub use rpc::test_support::{ClientT, Subscription, SubscriptionClientT};
 pub use serde_json::Value as JsonValue;
 pub use test_utils::random::{make_seedable_rng, Seed};

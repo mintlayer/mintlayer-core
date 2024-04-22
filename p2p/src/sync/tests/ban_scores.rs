@@ -25,9 +25,9 @@ use common::{
     Uint256,
 };
 use consensus::{ConsensusPoSError, ConsensusVerificationError};
-use crypto::random::Rng;
 use mempool::error::{MempoolPolicyError, TxValidationError};
 use p2p_test_utils::create_n_blocks;
+use randomness::Rng;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{

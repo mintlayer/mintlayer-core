@@ -34,10 +34,8 @@ use common::{
         ChainConfig, Destination, Transaction, TxOutput,
     },
 };
-use crypto::{
-    key::{KeyKind, PrivateKey, PublicKey},
-    random::{CryptoRng, Rng},
-};
+use crypto::key::{KeyKind, PrivateKey, PublicKey};
+use randomness::{CryptoRng, Rng};
 
 struct Multisig {
     keys: Vec<(PrivateKey, PublicKey)>,

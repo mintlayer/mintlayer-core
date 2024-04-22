@@ -20,10 +20,10 @@ use common::{
     chain::block::timestamp::BlockTimestamp,
     primitives::{user_agent::mintlayer_core_user_agent, Idable},
 };
-use crypto::random::Rng;
 use logging::log;
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use p2p_types::PeerId;
+use randomness::Rng;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{

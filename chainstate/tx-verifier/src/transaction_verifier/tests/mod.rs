@@ -27,9 +27,9 @@ use common::{
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
-    random::{CryptoRng, Rng},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
+use randomness::{CryptoRng, Rng};
 use utxo::Utxo;
 
 pub fn create_utxo(

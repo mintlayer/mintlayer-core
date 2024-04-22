@@ -36,7 +36,7 @@ use chainstate_test_framework::TransactionBuilder;
 use chainstate_test_framework::{anyonecanspend_address, empty_witness, TestFramework};
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use common::chain::signature::sighash::signature_hash;
-use crypto::random::{Rng, SliceRandom};
+use randomness::{Rng, SliceRandom};
 use rstest::rstest;
 use serialization::Encode;
 use std::num::NonZeroU8;

@@ -37,7 +37,7 @@ use crate::{
     primitives::{Amount, Id, H256},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use crypto::random::Rng;
+use randomness::Rng;
 
 const INPUTS: usize = 15;
 const OUTPUTS: usize = 15;

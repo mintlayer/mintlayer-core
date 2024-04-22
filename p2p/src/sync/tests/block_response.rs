@@ -25,9 +25,9 @@ use common::{
     chain::config::create_unit_test_config,
     primitives::{user_agent::mintlayer_core_user_agent, Idable},
 };
-use crypto::random::Rng;
 use logging::log;
 use p2p_test_utils::{create_n_blocks, P2pBasicTestTimeGetter};
+use randomness::Rng;
 use test_utils::random::{shuffle_until_different, Seed};
 
 use crate::{

@@ -39,16 +39,14 @@ use consensus::{
     generate_consensus_data_and_reward, ConsensusCreationError, ConsensusPoSError,
     FinalizeBlockInputData, GenerateBlockInputData, PoSFinalizeBlockInputData,
 };
-use crypto::{
-    ephemeral_e2e::{self, EndToEndPrivateKey},
-    random::{make_true_rng, Rng},
-};
+use crypto::ephemeral_e2e::{self, EndToEndPrivateKey};
 use logging::log;
 use mempool::{
     tx_accumulator::{DefaultTxAccumulator, PackingStrategy, TransactionAccumulator},
     MempoolHandle,
 };
 use p2p::P2pHandle;
+use randomness::{make_true_rng, Rng};
 use serialization::{Decode, Encode};
 use tokio::sync::oneshot;
 use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};

@@ -19,8 +19,8 @@ use std::{
     time::Duration,
 };
 
-use crypto::random::Rng;
 use logging::log;
+use randomness::Rng;
 use rstest::rstest;
 use tokio::sync::mpsc::{error::TryRecvError, UnboundedReceiver, UnboundedSender};
 

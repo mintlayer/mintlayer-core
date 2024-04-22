@@ -235,7 +235,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
 mod tests {
     use std::io::Write;
 
-    use crypto::random::{distributions::Alphanumeric, make_pseudo_rng, Rng};
+    use randomness::{distributions::Alphanumeric, make_pseudo_rng, Rng};
 
     use super::*;
 

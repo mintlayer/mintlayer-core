@@ -80,11 +80,9 @@ mod tests {
         },
         primitives::{Amount, Id, H256},
     };
-    use crypto::{
-        key::{KeyKind, PrivateKey},
-        random::CryptoRng,
-    };
+    use crypto::key::{KeyKind, PrivateKey};
     use proptest::prelude::Rng;
+    use randomness::CryptoRng;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 

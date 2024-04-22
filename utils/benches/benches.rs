@@ -15,7 +15,7 @@
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use crypto::random::make_pseudo_rng;
+use randomness::make_pseudo_rng;
 use utils::bloom_filters::rolling_bloom_filter::RollingBloomFilter;
 
 pub fn rolling_bloom_bench(c: &mut Criterion) {

@@ -20,10 +20,10 @@ use std::{
 };
 
 use common::{chain::ChainConfig, primitives::time::Time};
-use crypto::random::Rng;
 use p2p::types::{
     bannable_address::BannableAddress, peer_id::PeerId, socket_address::SocketAddress,
 };
+use randomness::Rng;
 
 use crate::crawler_p2p::{
     crawler::{address_data::AddressState, Crawler, CrawlerCommand, CrawlerConfig, CrawlerEvent},

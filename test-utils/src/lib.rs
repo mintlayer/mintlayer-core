@@ -20,10 +20,10 @@ pub mod test_dir;
 
 use std::collections::BTreeMap;
 
-use crypto::random::distributions::uniform::SampleRange;
-use crypto::random::Rng;
 use hex::ToHex;
 use itertools::Itertools;
+use randomness::distributions::uniform::SampleRange;
+use randomness::Rng;
 
 /// Assert that the encoded object matches the expected hex string.
 pub fn assert_encoded_eq<E: serialization::Encode>(to_encode: &E, expected_hex: &str) {
@@ -56,7 +56,7 @@ pub fn random_ascii_alphanumeric_string<R: SampleRange<usize>>(
     rng: &mut impl Rng,
     range_len: R,
 ) -> String {
-    use crypto::random::distributions::{Alphanumeric, DistString};
+    use randomness::distributions::{Alphanumeric, DistString};
     if range_len.is_empty() {
         return String::new();
     }
@@ -71,7 +71,7 @@ pub fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec
     let token_ticker: Vec<u8> = (0..text_len)
         .map(|idx| {
             if idx != random_index_to_replace {
-                rng.sample(crypto::random::distributions::Alphanumeric)
+                rng.sample(randomness::distributions::Alphanumeric)
             } else {
                 c
             }

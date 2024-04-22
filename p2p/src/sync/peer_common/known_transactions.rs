@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{chain::Transaction, primitives::Id};
-use crypto::random::make_pseudo_rng;
+use randomness::make_pseudo_rng;
 use utils::bloom_filters::rolling_bloom_filter::RollingBloomFilter;
 
 /// Use the same parameters as Bitcoin Core (see `m_tx_inventory_known_filter`)

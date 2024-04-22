@@ -39,10 +39,10 @@ use common::{
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
-    random::Rng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use pos_accounting::PoSAccountingStorageRead;
+use randomness::Rng;
 use rstest::rstest;
 use test_utils::{
     nft_utils::random_token_issuance_v1,

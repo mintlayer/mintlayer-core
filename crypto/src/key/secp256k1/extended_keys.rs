@@ -20,9 +20,9 @@ use crate::key::hdkd::{
     derivable::{Derivable, DerivationError},
 };
 use crate::key::secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey};
-use crate::random::{CryptoRng, Rng};
 use crate::util::{self, new_hmac_sha_512};
 use hmac::{Hmac, Mac};
+use randomness::{CryptoRng, Rng};
 use secp256k1;
 use secp256k1::SECP256K1;
 use serialization::{Decode, Encode};

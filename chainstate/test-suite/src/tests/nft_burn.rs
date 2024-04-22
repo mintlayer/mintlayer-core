@@ -22,7 +22,7 @@ use common::chain::{
 };
 use common::chain::{OutPointSourceId, UtxoOutPoint};
 use common::primitives::{Amount, BlockHeight, CoinOrTokenId, Idable};
-use crypto::random::Rng;
+use randomness::Rng;
 use rstest::rstest;
 use test_utils::{
     nft_utils::random_nft_issuance,

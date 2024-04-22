@@ -34,10 +34,10 @@ use common::{
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
-    random::{CryptoRng, Rng},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use pos_accounting::{DelegationData, PoSAccountingStorageRead};
+use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 

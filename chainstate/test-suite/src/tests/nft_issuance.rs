@@ -26,7 +26,7 @@ use common::chain::{
     TokenIssuanceVersion, TokensFeeVersion, TxInput, TxOutput,
 };
 use common::primitives::{BlockHeight, Idable};
-use crypto::random::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use test_utils::{

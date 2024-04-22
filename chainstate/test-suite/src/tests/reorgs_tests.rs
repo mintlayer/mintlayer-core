@@ -30,7 +30,7 @@ use common::chain::UtxoOutPoint;
 use common::primitives::BlockHeight;
 use common::primitives::Id;
 use common::primitives::Idable;
-use crypto::random::Rng;
+use randomness::Rng;
 use rstest::rstest;
 use test_utils::random::make_seedable_rng;
 use test_utils::random::Seed;

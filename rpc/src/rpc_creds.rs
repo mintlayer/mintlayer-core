@@ -18,8 +18,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crypto::random::{distributions::DistString, make_true_rng, CryptoRng, Rng};
 use logging::log;
+use randomness::{distributions::DistString, make_true_rng, CryptoRng, Rng};
 use utils::cookie::COOKIE_FILENAME;
 
 const COOKIE_PASSWORD_LEN: usize = 32;
@@ -34,7 +34,7 @@ pub struct RpcCreds {
 }
 
 fn gen_password(rng: &mut (impl Rng + CryptoRng), len: usize) -> String {
-    crypto::random::distributions::Alphanumeric.sample_string(rng, len)
+    randomness::distributions::Alphanumeric.sample_string(rng, len)
 }
 
 fn write_file_atomically(path: &Path, data: &str) -> Result<(), std::io::Error> {

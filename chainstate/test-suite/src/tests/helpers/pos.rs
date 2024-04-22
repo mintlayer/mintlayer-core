@@ -25,9 +25,9 @@ use common::{
 use consensus::ConsensusPoSError;
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
-    random::{CryptoRng, Rng},
     vrf::VRFPublicKey,
 };
+use randomness::{CryptoRng, Rng};
 
 use super::block_index_handle_impl::TestBlockIndexHandle;
 

@@ -13,9 +13,10 @@ chainstate = { path = "../../chainstate" }
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
 common = { path = "../../common" }
 crypto = { path = "../../crypto" }
+randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
-pos-accounting = {path = '../../pos-accounting'}
+pos-accounting = { path = "../../pos-accounting" }
 node-comm = { path = "../../wallet/wallet-node-client" }
 mempool = { path = "../../mempool" }
 
@@ -28,4 +29,4 @@ serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["full"] }
 rstest.workspace = true
-test-utils = {path = '../../test-utils'}
+test-utils = { path = "../../test-utils" }

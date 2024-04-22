@@ -19,7 +19,7 @@ use common::{
     chain::{OutPointSourceId, UtxoOutPoint},
     primitives::{Amount, Id, H256},
 };
-use crypto::random::RngCore;
+use randomness::RngCore;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 

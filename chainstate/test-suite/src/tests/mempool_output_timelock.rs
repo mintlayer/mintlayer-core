@@ -25,7 +25,7 @@ use common::{
     },
     primitives::{time, BlockHeight},
 };
-use crypto::random::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifier};

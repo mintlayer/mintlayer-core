@@ -15,7 +15,7 @@
 
 use std::collections::BTreeSet;
 
-use crypto::random::SliceRandom;
+use randomness::SliceRandom;
 use rstest::rstest;
 use test_utils::random::Seed;
 

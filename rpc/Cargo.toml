@@ -11,6 +11,7 @@ test-support = []
 [dependencies]
 crypto = { path = "../crypto/" }
 logging = { path = "../logging" }
+randomness = { path = "../randomness" }
 rpc-description = { path = "description" }
 rpc-description-macro = { path = "description-macro" }
 rpc-types = { path = "types" }

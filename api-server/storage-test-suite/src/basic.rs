@@ -31,9 +31,9 @@ use api_server_common::storage::{
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
-    random::Rng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
+use randomness::Rng;
 
 use chainstate_test_framework::{empty_witness, TestFramework, TransactionBuilder};
 use common::{

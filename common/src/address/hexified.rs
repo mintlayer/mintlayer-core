@@ -209,7 +209,6 @@ impl<'a, A: Addressable + DecodeAll> regex::Replacer for AddressableReplacer<'a,
 mod tests {
     use crypto::{
         key::{KeyKind, PrivateKey},
-        random,
         vrf::VRFPublicKey,
     };
     use rstest::rstest;
@@ -227,7 +226,7 @@ mod tests {
     };
 
     fn random_string(length: usize, rng: &mut impl Rng) -> String {
-        rng.sample_iter(&random::distributions::Alphanumeric)
+        rng.sample_iter(&randomness::distributions::Alphanumeric)
             .take(length)
             .map(char::from)
             .collect()

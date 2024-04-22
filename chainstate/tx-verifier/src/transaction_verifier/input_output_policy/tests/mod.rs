@@ -22,11 +22,9 @@ use common::{
     },
     primitives::{Compact, Id, H256},
 };
-use crypto::{
-    random::{seq::IteratorRandom, Rng},
-    vrf::{transcript::VRFTranscript, VRFKeyKind, VRFPrivateKey},
-};
+use crypto::vrf::{transcript::VRFTranscript, VRFKeyKind, VRFPrivateKey};
 use itertools::Itertools;
+use randomness::{seq::IteratorRandom, Rng};
 use utxo::{Utxo, UtxosDBInMemoryImpl};
 
 use super::*;

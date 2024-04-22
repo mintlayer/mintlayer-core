@@ -23,10 +23,8 @@ use common::{
     },
     primitives::{per_thousand::PerThousand, Amount, CoinOrTokenId, H256},
 };
-use crypto::{
-    random::{CryptoRng, Rng, SliceRandom},
-    vrf::{VRFKeyKind, VRFPrivateKey},
-};
+use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
+use randomness::{CryptoRng, Rng, SliceRandom};
 use rstest::rstest;
 use test_utils::{
     random::{make_seedable_rng, Seed},

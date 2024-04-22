@@ -15,10 +15,8 @@
 
 use std::num::NonZeroUsize;
 
-use crate::{
-    random::{CryptoRng, Rng},
-    util::eq::SliceEqualityCheckMethod,
-};
+use crate::util::eq::SliceEqualityCheckMethod;
+use randomness::{CryptoRng, Rng};
 use serialization::{Decode, Encode};
 
 use self::argon2::Argon2Config;

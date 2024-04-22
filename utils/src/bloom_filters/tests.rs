@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::random::Rng;
+use randomness::Rng;
 use test_utils::random::Seed;
 
 use super::rolling_bloom_filter::RollingBloomFilter;

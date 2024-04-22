@@ -22,7 +22,7 @@ use common::{
     chain::{signature::inputsig::InputWitness, Block, GenBlock, Genesis},
     primitives::{BlockHeight, Id},
 };
-use crypto::random::Rng;
+use randomness::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 

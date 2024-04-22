@@ -14,10 +14,11 @@ common = { path = "../common" }
 crypto = { path = "../crypto" }
 logging = { path = "../logging" }
 p2p = { path = "../p2p" }
+randomness = { path = "../randomness" }
 serialization = { path = "../serialization" }
 storage = { path = "../storage" }
 storage-lmdb = { path = "../storage/lmdb" }
-utils = { path = '../utils' }
+utils = { path = "../utils" }
 utils-networking = { path = "../utils/networking" }
 
 anyhow.workspace = true

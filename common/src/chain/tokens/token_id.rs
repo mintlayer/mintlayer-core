@@ -18,7 +18,7 @@ use crate::{
     chain::ChainConfig,
     primitives::{Id, H256},
 };
-use crypto::random::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng};
 use serialization::{DecodeAll, Encode};
 use typename::TypeName;
 

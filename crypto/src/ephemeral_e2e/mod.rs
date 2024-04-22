@@ -19,10 +19,8 @@ use serialization::DecodeAll;
 use serialization::{Decode, Encode};
 use zeroize::Zeroize;
 
-use crate::{
-    random::{CryptoRng, Rng},
-    symkey,
-};
+use crate::symkey;
+use randomness::{CryptoRng, Rng};
 
 use self::error::Error;
 
@@ -216,7 +214,7 @@ mod tests {
         {
             {
                 let obj: String = (&mut rng)
-                    .sample_iter(&crate::random::distributions::Alphanumeric)
+                    .sample_iter(&randomness::distributions::Alphanumeric)
                     .take(100)
                     .map(char::from)
                     .collect();
@@ -229,7 +227,7 @@ mod tests {
 
             {
                 let obj: String = (&mut rng)
-                    .sample_iter(&crate::random::distributions::Alphanumeric)
+                    .sample_iter(&randomness::distributions::Alphanumeric)
                     .take(100)
                     .map(char::from)
                     .collect();
@@ -279,7 +277,7 @@ mod tests {
         {
             {
                 let obj: String = (&mut rng)
-                    .sample_iter(&crate::random::distributions::Alphanumeric)
+                    .sample_iter(&randomness::distributions::Alphanumeric)
                     .take(100)
                     .map(char::from)
                     .collect();
@@ -292,7 +290,7 @@ mod tests {
 
             {
                 let obj: String = (&mut rng)
-                    .sample_iter(&crate::random::distributions::Alphanumeric)
+                    .sample_iter(&randomness::distributions::Alphanumeric)
                     .take(100)
                     .map(char::from)
                     .collect();

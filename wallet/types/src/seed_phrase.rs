@@ -143,8 +143,8 @@ impl Decode for SeedPhrase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crypto::random::Rng;
     use hex::FromHex;
+    use randomness::Rng;
     use rstest::rstest;
     use serialization::DecodeAll;
 

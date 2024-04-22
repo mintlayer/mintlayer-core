@@ -25,8 +25,8 @@ use rstest::rstest;
 
 use ::test_utils::random::{make_seedable_rng, Seed};
 use common::{chain::config::create_unit_test_config, primitives::time::Time};
-use crypto::random::Rng;
 use p2p_test_utils::P2pBasicTestTimeGetter;
+use randomness::Rng;
 
 use crate::{
     ban_config::BanConfig,

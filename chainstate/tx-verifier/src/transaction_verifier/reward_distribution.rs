@@ -330,14 +330,12 @@ mod tests {
         chain::{DelegationId, Destination, PoolId},
         primitives::{per_thousand::PerThousand, Amount, H256},
     };
-    use crypto::{
-        random::Rng,
-        vrf::{VRFKeyKind, VRFPrivateKey},
-    };
+    use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
     use pos_accounting::{
         DelegationData, FlushablePoSAccountingView, InMemoryPoSAccounting, PoSAccountingDB,
         PoolData,
     };
+    use randomness::Rng;
     use rstest::rstest;
     use std::collections::BTreeMap;
     use test_utils::random::{make_seedable_rng, Seed};

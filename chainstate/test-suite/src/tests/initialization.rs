@@ -23,7 +23,7 @@ use common::{
     },
     primitives::Id,
 };
-use crypto::random::CryptoRng;
+use randomness::CryptoRng;
 
 #[cfg(not(loom))]
 fn genesis_check_ok(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {

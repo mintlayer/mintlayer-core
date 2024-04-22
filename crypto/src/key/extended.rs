@@ -23,8 +23,7 @@ use crate::key::secp256k1::extended_keys::{
     Secp256k1ExtendedPrivateKey, Secp256k1ExtendedPublicKey,
 };
 use crate::key::{PrivateKey, PublicKey};
-use crate::random::make_true_rng;
-use crate::random::{CryptoRng, Rng};
+use randomness::{make_true_rng, CryptoRng, Rng};
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub enum ExtendedKeyKind {
@@ -187,8 +186,8 @@ mod test {
         let (sk, pk) =
             ExtendedPrivateKey::new_from_rng(&mut rng, ExtendedKeyKind::Secp256k1Schnorr);
         assert_eq!(sk.kind(), ExtendedKeyKind::Secp256k1Schnorr);
-        let msg_size = 1 + rand::random::<usize>() % 10000;
-        let msg: Vec<u8> = (0..msg_size).map(|_| rand::random::<u8>()).collect();
+        let msg_size = 1 + rng.gen::<usize>() % 10000;
+        let msg: Vec<u8> = (0..msg_size).map(|_| rng.gen::<u8>()).collect();
         let sig = sk.private_key().sign_message(&msg).unwrap();
         assert!(pk.into_public_key().verify_message(&sig, &msg));
     }

@@ -11,9 +11,10 @@ rust-version.workspace = true
 common = { path = "../../common/" }
 crypto = { path = "../../crypto/" }
 rpc-description = { path = "../../rpc/description" }
+randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
-storage = { path = '../../storage', features = ['inmemory'] }
-utils = { path = '../../utils' }
+storage = { path = "../../storage", features = ["inmemory"] }
+utils = { path = "../../utils" }
 
 bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
 hex.workspace = true

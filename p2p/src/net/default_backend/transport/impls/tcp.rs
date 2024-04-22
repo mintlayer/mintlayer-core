@@ -160,7 +160,7 @@ mod tests {
         chain::block::Block,
         primitives::{Id, H256},
     };
-    use crypto::random::Rng;
+    use randomness::Rng;
     use test_utils::random::Seed;
 
     use crate::{

@@ -18,7 +18,7 @@ use std::convert::Infallible;
 use super::test_helper::{create_utxo, empty_test_utxos_view, UnwrapInfallible};
 use crate::{ConsumedUtxoCache, FlushableUtxoView, UtxosCache, UtxosView};
 use common::chain::UtxoOutPoint;
-use crypto::random::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 

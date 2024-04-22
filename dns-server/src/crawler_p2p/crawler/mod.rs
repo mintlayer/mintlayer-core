@@ -36,7 +36,6 @@ use std::{
 
 use chainstate::ban_score::BanScore;
 use common::{chain::ChainConfig, primitives::time::Time};
-use crypto::random::{seq::IteratorRandom, Rng};
 use logging::log;
 use p2p::{
     error::P2pError,
@@ -45,6 +44,7 @@ use p2p::{
     types::{bannable_address::BannableAddress, peer_id::PeerId, socket_address::SocketAddress},
     utils::rate_limiter::RateLimiter,
 };
+use randomness::{seq::IteratorRandom, Rng};
 use utils::make_config_setting;
 
 use crate::crawler_p2p::crawler::address_data::{AddressStateTransitionTo, SoftwareInfo};

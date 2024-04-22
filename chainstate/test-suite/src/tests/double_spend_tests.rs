@@ -28,7 +28,7 @@ use common::{
     },
     primitives::{Amount, CoinOrTokenId, Id, Idable},
 };
-use crypto::random::SliceRandom;
+use randomness::SliceRandom;
 use tx_verifier::CheckTransactionError;
 
 // Process a block where the second transaction uses the first one as input.

@@ -8,10 +8,10 @@ license.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-common = { path = '../../common' }
-crypto = { path = '../../crypto/' }
-logging = { path = '../../logging'}
-pos-accounting = { path = '../../pos-accounting' }
+common = { path = "../../common" }
+crypto = { path = "../../crypto/" }
+logging = { path = "../../logging" }
+pos-accounting = { path = "../../pos-accounting" }
 serialization = { path = "../../serialization" }
 mempool = { path = "../../mempool" }
 chainstate = { path = "../../chainstate" }
@@ -27,7 +27,7 @@ tokio-postgres = "0.7"
 
 
 [dev-dependencies]
-chainstate-test-framework = { path = '../../chainstate/test-framework' }
-test-utils = {path = '../../test-utils'}
+chainstate-test-framework = { path = "../../chainstate/test-framework" }
+test-utils = { path = "../../test-utils" }
 
 rstest.workspace = true

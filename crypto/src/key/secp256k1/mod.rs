@@ -16,7 +16,7 @@
 pub mod extended_keys;
 
 use crate::hash::{Blake2b32Stream, StreamHasher};
-use crate::random::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng};
 use secp256k1;
 use serialization::{Decode, Encode};
 use zeroize::Zeroize;
@@ -179,8 +179,8 @@ impl Secp256k1PublicKey {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::random::make_true_rng;
     use hex::ToHex;
+    use randomness::make_true_rng;
     use rstest::rstest;
     use secp256k1::SECP256K1;
     use serialization::DecodeAll;
@@ -278,8 +278,8 @@ mod test {
     #[test]
     fn sign_and_verify() {
         let mut rng = make_true_rng();
-        let msg_size = 1 + rand::random::<usize>() % 10000;
-        let msg: Vec<u8> = (0..msg_size).map(|_| rand::random::<u8>()).collect();
+        let msg_size = 1 + rng.gen::<usize>() % 10000;
+        let msg: Vec<u8> = (0..msg_size).map(|_| rng.gen::<u8>()).collect();
         let (sk, pk) = Secp256k1PrivateKey::new(&mut rng);
         let sig = sk.sign_message(&msg);
         assert!(pk.verify_message(&sig, &msg));

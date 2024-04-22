@@ -8,22 +8,23 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-accounting = { path = '../accounting' }
-chainstate = { path = '../chainstate' }
-chainstate-types = { path = '../chainstate/types' }
-common = { path = '../common' }
-crypto = { path = '../crypto' }
-logging = { path = '../logging' }
-mempool-types = { path = 'types' }
-p2p-types = { path = '../p2p/types' }
-pos-accounting = { path = '../pos-accounting' }
-rpc = { path = '../rpc' }
-rpc-description = { path = '../rpc/description' }
-serialization = { path = '../serialization' }
-subsystem = { path = '../subsystem' }
-tokens-accounting = { path = '../tokens-accounting' }
-utils = { path = '../utils' }
-utxo = { path = '../utxo' }
+accounting = { path = "../accounting" }
+chainstate = { path = "../chainstate" }
+chainstate-types = { path = "../chainstate/types" }
+common = { path = "../common" }
+crypto = { path = "../crypto" }
+logging = { path = "../logging" }
+mempool-types = { path = "types" }
+p2p-types = { path = "../p2p/types" }
+pos-accounting = { path = "../pos-accounting" }
+rpc = { path = "../rpc" }
+randomness = { path = "../randomness" }
+rpc-description = { path = "../rpc/description" }
+serialization = { path = "../serialization" }
+subsystem = { path = "../subsystem" }
+tokens-accounting = { path = "../tokens-accounting" }
+utils = { path = "../utils" }
+utxo = { path = "../utxo" }
 
 anyhow.workspace = true
 async-trait.workspace = true
@@ -39,10 +40,10 @@ num-traits.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-chainstate-storage = { path = '../chainstate/storage' }
-chainstate-test-framework = { path = '../chainstate/test-framework' }
-crypto = { path = '../crypto' }
-test-utils = {path = '../test-utils'}
+chainstate-storage = { path = "../chainstate/storage" }
+chainstate-test-framework = { path = "../chainstate/test-framework" }
+crypto = { path = "../crypto" }
+test-utils = { path = "../test-utils" }
 
 mockall.workspace = true
 rstest.workspace = true

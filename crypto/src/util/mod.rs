@@ -58,7 +58,7 @@ pub fn to_key_and_chain_code<SecretKey>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::random::Rng;
+    use randomness::Rng;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 

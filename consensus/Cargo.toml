@@ -6,14 +6,15 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-chainstate-types = { path = '../chainstate/types' }
-common = { path = '../common' }
-crypto = { path = '../crypto' }
+chainstate-types = { path = "../chainstate/types" }
+common = { path = "../common" }
+crypto = { path = "../crypto" }
 logging = { path = "../logging" }
-pos-accounting = { path = '../pos-accounting' }
+pos-accounting = { path = "../pos-accounting" }
+randomness = { path = "../randomness" }
 serialization = { path = "../serialization" }
 utils = { path = "../utils" }
-utxo = { path = '../utxo' }
+utxo = { path = "../utxo" }
 
 itertools.workspace = true
 num.workspace = true
@@ -21,6 +22,6 @@ parity-scale-codec.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-test-utils = {path = '../test-utils'}
+test-utils = { path = "../test-utils" }
 
 rstest.workspace = true

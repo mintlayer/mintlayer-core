@@ -8,23 +8,24 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-accounting = {path = '../../accounting'}
-chainstate = { path = '../' }
-chainstate-storage = {path = '../storage', features = ['expensive-reads']}
-chainstate-test-framework = { path = '../test-framework' }
-chainstate-types = { path = '../types' }
-common = { path = '../../common' }
-consensus = { path = '../../consensus' }
-constraints-value-accumulator = {path = '../constraints-value-accumulator'}
-crypto = { path = '../../crypto' }
-logging = { path = '../../logging' }
-pos-accounting = {path = '../../pos-accounting'}
-serialization = { path = '../../serialization' }
-test-utils = {path = '../../test-utils'}
-tokens-accounting = {path = '../../tokens-accounting'}
-tx-verifier = { path = '../tx-verifier' }
-utils = { path = '../../utils' }
-utxo = { path = '../../utxo' }
+accounting = { path = "../../accounting" }
+chainstate = { path = "../" }
+chainstate-storage = { path = "../storage", features = ["expensive-reads"] }
+chainstate-test-framework = { path = "../test-framework" }
+chainstate-types = { path = "../types" }
+common = { path = "../../common" }
+consensus = { path = "../../consensus" }
+constraints-value-accumulator = { path = "../constraints-value-accumulator" }
+crypto = { path = "../../crypto" }
+logging = { path = "../../logging" }
+pos-accounting = { path = "../../pos-accounting" }
+randomness = { path = "../../randomness" }
+serialization = { path = "../../serialization" }
+test-utils = { path = "../../test-utils" }
+tokens-accounting = { path = "../../tokens-accounting" }
+tx-verifier = { path = "../tx-verifier" }
+utils = { path = "../../utils" }
+utxo = { path = "../../utxo" }
 
 ctor.workspace = true
 hex.workspace = true
@@ -34,7 +35,7 @@ itertools.workspace = true
 criterion.workspace = true
 expect-test.workspace = true
 rstest.workspace = true
-tokio = { workspace = true, features = ['rt', 'time'] }
+tokio = { workspace = true, features = ["rt", "time"] }
 
 [[bench]]
 name = "benches"

@@ -39,11 +39,8 @@ use common::{
     primitives::{id::WithId, time::Time, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
-use crypto::{
-    key::PrivateKey,
-    random::{CryptoRng, Rng},
-    vrf::VRFPrivateKey,
-};
+use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
+use randomness::{CryptoRng, Rng};
 use utils::atomics::SeqCstAtomicU64;
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.

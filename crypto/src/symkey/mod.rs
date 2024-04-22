@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::random::{CryptoRng, Rng};
+use randomness::{CryptoRng, Rng};
 
 mod chacha20poly1305;
 
@@ -107,7 +107,7 @@ mod test {
     use hex::FromHex;
     use serialization::DecodeAll;
 
-    use crate::random::make_true_rng;
+    use randomness::make_true_rng;
 
     use super::*;
 
@@ -154,7 +154,7 @@ mod test {
         let mut rng = make_true_rng();
         let key = SymmetricKey::new(SymmetricKeyKind::XChacha20Poly1305, &mut rng);
         let message_len = 1 + rng.gen::<u32>() % 10000;
-        let message = (0..message_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
+        let message = (0..message_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
         let encrypted = key.encrypt(&message, &mut rng, None).unwrap();
         let decrypted = key.decrypt(&encrypted, None).unwrap();
         assert_eq!(message, decrypted);
@@ -166,8 +166,8 @@ mod test {
         let key = SymmetricKey::new(SymmetricKeyKind::XChacha20Poly1305, &mut rng);
         let message_len = 1 + rng.gen::<u32>() % 10000;
         let aead_len = 1 + rng.gen::<u32>() % 10000;
-        let message = (0..message_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
-        let aead = (0..aead_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
+        let message = (0..message_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+        let aead = (0..aead_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
         let encrypted = key.encrypt(&message, &mut rng, Some(&aead)).unwrap();
         let decrypted = key.decrypt(&encrypted, Some(&aead)).unwrap();
         assert_eq!(message, decrypted);

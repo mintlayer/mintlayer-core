@@ -35,10 +35,8 @@ use common::{
     },
     primitives::{amount::SignedAmount, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
-use crypto::{
-    key::{KeyKind, PrivateKey},
-    random::Rng,
-};
+use crypto::key::{KeyKind, PrivateKey};
+use randomness::Rng;
 use rstest::rstest;
 use test_utils::{
     gen_text_with_non_ascii,
