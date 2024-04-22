@@ -29,6 +29,7 @@ use futures::{
     stream::{FuturesOrdered, FuturesUnordered},
     TryStreamExt,
 };
+use node_comm::rpc_client::ColdWalletClient;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -159,6 +160,7 @@ impl<T, WalletEvents> std::fmt::Debug for Controller<T, WalletEvents> {
 
 pub type RpcController<N, WalletEvents> = Controller<N, WalletEvents>;
 pub type HandlesController<WalletEvents> = Controller<WalletHandlesClient, WalletEvents>;
+pub type ColdController<WalletEvents> = Controller<ColdWalletClient, WalletEvents>;
 
 impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controller<T, W> {
     pub async fn new(

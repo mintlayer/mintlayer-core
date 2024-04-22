@@ -28,6 +28,7 @@ use common::{
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use p2p::P2pEvent;
 use wallet::account::{currency_grouper::Currency, transaction_list::TransactionList, PoolData};
+use wallet_types::wallet_type::WalletType;
 
 use crate::main_window::ImportOrCreate;
 
@@ -64,6 +65,7 @@ pub struct WalletInfo {
     pub encryption: EncryptionState,
     pub accounts: BTreeMap<AccountId, AccountInfo>,
     pub best_block: (Id<GenBlock>, BlockHeight),
+    pub wallet_type: WalletType,
 }
 
 #[derive(Debug, Clone)]
@@ -161,6 +163,7 @@ pub enum EncryptionState {
 pub enum BackendRequest {
     OpenWallet {
         file_path: PathBuf,
+        wallet_type: WalletType,
     },
     // This will remove the old file if it already exists.
     // The frontend should check if this is what the user really wants.
@@ -168,6 +171,7 @@ pub enum BackendRequest {
         mnemonic: wallet_controller::mnemonic::Mnemonic,
         file_path: PathBuf,
         import: ImportOrCreate,
+        wallet_type: WalletType,
     },
     CloseWallet(WalletId),
 
