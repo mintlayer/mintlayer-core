@@ -234,7 +234,7 @@ pub fn stake(
                 block_timestamp,
             );
 
-            finalize_pos_data.vrf_private_key().produce_vrf_data(transcript.into())
+            finalize_pos_data.vrf_private_key().produce_vrf_data(transcript)
         };
 
         pos_data.update_vrf_data(vrf_data);

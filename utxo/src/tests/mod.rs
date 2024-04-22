@@ -45,7 +45,7 @@ use common::{
 };
 use crypto::{
     random::{seq, CryptoRng, Rng},
-    vrf::{transcript::TranscriptAssembler, VRFKeyKind},
+    vrf::{transcript::VRFTranscript, VRFKeyKind},
 };
 use itertools::Itertools;
 use rstest::rstest;
@@ -676,7 +676,7 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
     let outputs = create_tx_outputs(&mut rng, 1);
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+    let vrf_data = sk.produce_vrf_data(VRFTranscript::new(b"abc"));
     let pool_id = make_pool_id(&mut rng);
 
     let block = Block::new(
@@ -774,7 +774,7 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
     let outputs = create_tx_outputs(&mut rng, 1);
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+    let vrf_data = sk.produce_vrf_data(VRFTranscript::new(b"abc"));
     let pool_id = make_pool_id(&mut rng);
 
     let block = Block::new(
@@ -825,7 +825,7 @@ fn check_burn_output_in_block_reward(#[case] seed: Seed) {
     let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(10)))];
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+    let vrf_data = sk.produce_vrf_data(VRFTranscript::new(b"abc"));
     let pool_id = make_pool_id(&mut rng);
 
     let block = Block::new(

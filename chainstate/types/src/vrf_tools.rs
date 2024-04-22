@@ -18,7 +18,7 @@ use common::{
     primitives::H256,
 };
 use crypto::vrf::{
-    transcript::{TranscriptAssembler, TranscriptComponent, WrappedTranscript},
+    transcript::{traits::SignableTranscript, VRFTranscript},
     VRFError, VRFPublicKey, VRFReturn,
 };
 use thiserror::Error;
@@ -38,33 +38,23 @@ pub fn construct_transcript(
     epoch_index: EpochIndex,
     random_seed: &H256,
     block_timestamp: BlockTimestamp,
-) -> WrappedTranscript {
-    TranscriptAssembler::new(TRANSCRIPT_MAIN_LABEL)
-        .attach(
-            RANDOMNESS_COMPONENT_LABEL,
-            TranscriptComponent::RawData(random_seed.as_bytes().to_vec()),
-        )
-        .attach(
-            SLOT_COMPONENT_LABEL,
-            TranscriptComponent::U64(block_timestamp.as_int_seconds()),
-        )
-        .attach(
-            EPOCH_INDEX_COMPONENT_LABEL,
-            TranscriptComponent::U64(epoch_index),
-        )
-        .finalize()
+) -> VRFTranscript {
+    VRFTranscript::new(TRANSCRIPT_MAIN_LABEL)
+        .attach_raw_data(RANDOMNESS_COMPONENT_LABEL, random_seed.as_bytes())
+        .attach_u64(SLOT_COMPONENT_LABEL, block_timestamp.as_int_seconds())
+        .attach_u64(EPOCH_INDEX_COMPONENT_LABEL, epoch_index)
 }
 
-fn extract_vrf_output(
+fn extract_vrf_output<T: SignableTranscript>(
     vrf_data: &VRFReturn,
     vrf_public_key: VRFPublicKey,
-    transcript: WrappedTranscript,
+    transcript: T,
 ) -> Result<[u8; 32], VRFError> {
     match &vrf_data {
         VRFReturn::Schnorrkel(d) => d
-            .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+            .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32, _>(
                 vrf_public_key,
-                transcript.into(),
+                transcript,
             )
             .map(|a| a.into()),
     }
@@ -79,7 +69,7 @@ pub fn verify_vrf_and_get_vrf_output(
 ) -> Result<H256, ProofOfStakeVRFError> {
     let transcript = construct_transcript(epoch_index, random_seed, block_timestamp);
 
-    vrf_public_key.verify_vrf_data(transcript.clone().into(), vrf_data)?;
+    vrf_public_key.verify_vrf_data(transcript.clone(), vrf_data)?;
 
     let vrf_raw_output = extract_vrf_output(vrf_data, vrf_public_key.clone(), transcript)?;
 

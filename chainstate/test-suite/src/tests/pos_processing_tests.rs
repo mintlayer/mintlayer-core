@@ -313,7 +313,7 @@ fn pos_enforce_strict_time_ordering(#[case] seed: Seed) {
     {
         // We don't need to "mine" (search for timestamp that leads to hash <= target) because timestamp is checked first
         let transcript = construct_transcript(1, &initial_randomness, block_timestamp);
-        let vrf_data = vrf_sk.produce_vrf_data(transcript.into());
+        let vrf_data = vrf_sk.produce_vrf_data(transcript);
         let pos_data = PoSData::new(vec![], vec![], pool_id, vrf_data, current_difficulty);
 
         let block = tf
@@ -386,7 +386,7 @@ fn pos_basic(#[case] seed: Seed) {
     // skip kernel inputs
     {
         let transcript = construct_transcript(1, &initial_randomness, block_timestamp);
-        let vrf_data = vrf_sk.produce_vrf_data(transcript.into());
+        let vrf_data = vrf_sk.produce_vrf_data(transcript);
         let pos_data = PoSData::new(vec![], vec![], pool_id, vrf_data, current_difficulty);
 
         let res = tf
@@ -707,7 +707,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
         let invalid_randomness = H256::random_using(&mut rng);
         let vrf_transcript =
             construct_transcript(valid_epoch, &invalid_randomness, valid_block_timestamp);
-        let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript.into());
+        let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript);
         let pos_data = PoSData::new(
             valid_pos_data.kernel_inputs().to_owned(),
             valid_pos_data.kernel_witness().to_owned(),
@@ -731,7 +731,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
         let block_timestamp = valid_block_timestamp.add_int_seconds(1).unwrap();
         let vrf_transcript =
             construct_transcript(valid_epoch, &valid_prev_randomness, block_timestamp);
-        let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript.into());
+        let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript);
         let pos_data = PoSData::new(
             valid_pos_data.kernel_inputs().to_owned(),
             valid_pos_data.kernel_witness().to_owned(),
@@ -757,7 +757,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             &valid_prev_randomness,
             valid_block_timestamp,
         );
-        let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript.into());
+        let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript);
         let pos_data = PoSData::new(
             valid_pos_data.kernel_inputs().to_owned(),
             valid_pos_data.kernel_witness().to_owned(),
@@ -779,7 +779,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
     {
         // invalid vrf private key
         let (vrf_sk_2, _) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let vrf_data = vrf_sk_2.produce_vrf_data(valid_vrf_transcript.into());
+        let vrf_data = vrf_sk_2.produce_vrf_data(valid_vrf_transcript);
         let pos_data = PoSData::new(
             valid_pos_data.kernel_inputs().to_owned(),
             valid_pos_data.kernel_witness().to_owned(),

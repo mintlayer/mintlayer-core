@@ -27,7 +27,7 @@ use common::{
 };
 use crypto::{
     random::Rng,
-    vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey},
+    vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -119,7 +119,7 @@ fn check_block_reward_pos(#[case] seed: Seed) {
     let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
     let pledge_amount = Amount::from_atoms(rng.gen_range(0..100_000));
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let vrf_data = vrf_sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+    let vrf_data = vrf_sk.produce_vrf_data(VRFTranscript::new(b"abc"));
     let stake_pool_data = StakePoolData::new(
         pledge_amount,
         Destination::AnyoneCanSpend,
@@ -173,7 +173,7 @@ fn check_block_reward_pos_amount_mismatch(#[case] seed: Seed) {
     let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
     let pledge_amount_1 = Amount::from_atoms(rng.gen_range(0..100_000));
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let vrf_data = vrf_sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+    let vrf_data = vrf_sk.produce_vrf_data(VRFTranscript::new(b"abc"));
     let stake_pool_data_1 = StakePoolData::new(
         pledge_amount_1,
         Destination::AnyoneCanSpend,

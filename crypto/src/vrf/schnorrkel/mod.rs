@@ -17,14 +17,12 @@ use crate::{
     key::hdkd::{chain_code::ChainCode, child_number::ChildNumber, derivable::DerivationError},
     random::{CryptoRng, Rng},
 };
-use merlin::Transcript;
 use schnorrkel::{derive::Derivation, Keypair};
 use serialization::{Decode, Encode};
 
 use self::data::SchnorrkelVRFReturn;
 
-use super::{primitives::VRFReturn, VRFError};
-
+use super::{primitives::VRFReturn, transcript::traits::SignableTranscript, VRFError};
 const PUBKEY_LEN: usize = 32;
 const PRIVKEY_LEN: usize = 64; // scalar + nonce
 
@@ -43,9 +41,9 @@ impl SchnorrkelPublicKey {
         }
     }
 
-    pub fn verify_generic_vrf_data(
+    pub fn verify_generic_vrf_data<T: SignableTranscript>(
         &self,
-        message: Transcript,
+        message: T,
         vrf_data: &VRFReturn,
     ) -> Result<(), VRFError> {
         match vrf_data {
@@ -53,9 +51,9 @@ impl SchnorrkelPublicKey {
         }
     }
 
-    pub fn verify_vrf_data(
+    pub fn verify_vrf_data<T: SignableTranscript>(
         &self,
-        message: Transcript,
+        message: T,
         vrf_data: &SchnorrkelVRFReturn,
     ) -> Result<(), VRFError> {
         self.key
@@ -142,7 +140,7 @@ impl SchnorrkelPrivateKey {
         ))
     }
 
-    pub fn produce_vrf_data(&self, message: Transcript) -> SchnorrkelVRFReturn {
+    pub fn produce_vrf_data<T: SignableTranscript>(&self, message: T) -> SchnorrkelVRFReturn {
         let (io, proof, _batchable_proof) = Keypair {
             secret: self.key.clone(),
             public: self.key.to_public(),

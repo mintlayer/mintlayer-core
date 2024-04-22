@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use hmac::{Hmac, Mac};
-use merlin::Transcript;
 use serialization::{hex_encoded::HexEncoded, Decode, Encode};
 use sha2::Sha512;
 
@@ -30,6 +29,7 @@ use crate::{
 };
 
 pub use self::primitives::VRFReturn;
+use self::transcript::traits::SignableTranscript;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum VRFError {
@@ -146,7 +146,7 @@ impl VRFPrivateKey {
         &self.key
     }
 
-    pub fn produce_vrf_data(&self, message: Transcript) -> VRFReturn {
+    pub fn produce_vrf_data<T: SignableTranscript>(&self, message: T) -> VRFReturn {
         match &self.key {
             VRFPrivateKeyHolder::Schnorrkel(k) => k.produce_vrf_data(message).into(),
         }
@@ -168,9 +168,9 @@ impl VRFPublicKey {
         }
     }
 
-    pub fn verify_vrf_data(
+    pub fn verify_vrf_data<T: SignableTranscript>(
         &self,
-        message: Transcript,
+        message: T,
         vrf_data: &VRFReturn,
     ) -> Result<(), VRFError> {
         match &self.pub_key {
@@ -326,9 +326,7 @@ mod tests {
     use test_utils::random::make_seedable_rng;
     use test_utils::random::Seed;
 
-    use crate::vrf::transcript::{TranscriptAssembler, TranscriptComponent};
-
-    use super::{transcript::WrappedTranscript, *};
+    use super::{transcript::VRFTranscript, *};
 
     #[rstest]
     #[trace]
@@ -366,18 +364,11 @@ mod tests {
         assert_eq!(decoded_pk, VRFPublicKey::from_private_key(&decoded_sk))
     }
 
-    fn make_arbitrary_transcript() -> WrappedTranscript {
-        TranscriptAssembler::new(b"some context")
-            .attach(
-                b"some label",
-                TranscriptComponent::RawData(b"Data to commit".to_vec()),
-            )
-            .attach(b"some other label", TranscriptComponent::U64(42))
-            .attach(
-                b"some third label",
-                TranscriptComponent::RawData(b"More data to commit".to_vec()),
-            )
-            .finalize()
+    fn make_arbitrary_transcript() -> VRFTranscript {
+        VRFTranscript::new(b"some context")
+            .attach_raw_data(b"some label", b"Data to commit")
+            .attach_u64(b"some other label", 42)
+            .attach_raw_data(b"some third label", b"More data to commit")
     }
 
     #[rstest]
@@ -388,7 +379,7 @@ mod tests {
 
         let mut rng = make_seedable_rng(seed);
         let (sk, pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let vrf_data = sk.produce_vrf_data(transcript.clone().into());
+        let vrf_data = sk.produce_vrf_data(transcript.clone());
 
         match &vrf_data {
             VRFReturn::Schnorrkel(d) => {
@@ -396,17 +387,16 @@ mod tests {
                 assert_eq!(d.vrf_proof().len(), 64);
 
                 let _output_value_to_use_in_application: [u8; 32] = d
-                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32, _>(
                         pk.clone(),
-                        transcript.clone().into(),
+                        transcript.clone(),
                     )
                     .unwrap()
                     .into();
             }
         }
 
-        pk.verify_vrf_data(transcript.into(), &vrf_data)
-            .expect("Valid VRF check failed");
+        pk.verify_vrf_data(transcript, &vrf_data).expect("Valid VRF check failed");
     }
 
     #[rstest]
@@ -417,7 +407,7 @@ mod tests {
 
         let mut rng = make_seedable_rng(seed);
         let (sk, pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let vrf_data = sk.produce_vrf_data(transcript.clone().into());
+        let vrf_data = sk.produce_vrf_data(transcript.clone());
 
         match &vrf_data {
             VRFReturn::Schnorrkel(d) => {
@@ -425,16 +415,16 @@ mod tests {
                 assert_eq!(d.vrf_proof().len(), 64);
 
                 let _output_value_to_use_in_application: [u8; 32] = d
-                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32, _>(
                         pk.clone(),
-                        transcript.clone().into(),
+                        transcript.clone(),
                     )
                     .unwrap()
                     .into();
             }
         }
 
-        let mut mutated_transcript: Transcript = transcript.into();
+        let mut mutated_transcript = transcript;
         mutated_transcript.append_u64(b"Forgery", 1337);
 
         pk.verify_vrf_data(mutated_transcript, &vrf_data)
@@ -449,7 +439,7 @@ mod tests {
 
         let mut rng = make_seedable_rng(seed);
         let (sk, pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let vrf_data = sk.produce_vrf_data(transcript.clone().into());
+        let vrf_data = sk.produce_vrf_data(transcript.clone());
 
         match &vrf_data {
             VRFReturn::Schnorrkel(d) => {
@@ -457,9 +447,9 @@ mod tests {
                 assert_eq!(d.vrf_proof().len(), 64);
 
                 let _output_value_to_use_in_application: [u8; 32] = d
-                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32, _>(
                         pk,
-                        transcript.clone().into(),
+                        transcript.clone(),
                     )
                     .unwrap()
                     .into();
@@ -468,7 +458,7 @@ mod tests {
 
         let (_sk2, pk2) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-        pk2.verify_vrf_data(transcript.into(), &vrf_data)
+        pk2.verify_vrf_data(transcript, &vrf_data)
             .expect_err("Invalid VRF check succeeded");
     }
 
@@ -494,16 +484,15 @@ mod tests {
                 assert_eq!(d.vrf_proof().len(), 64);
 
                 let _output_value_to_use_in_application: [u8; 32] = d
-                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32, _>(
                         pk.clone(),
-                        transcript.clone().into(),
+                        transcript.clone(),
                     )
                     .unwrap()
                     .into();
             }
         }
 
-        pk.verify_vrf_data(transcript.into(), &vrf_data)
-            .expect("Valid VRF check failed");
+        pk.verify_vrf_data(transcript, &vrf_data).expect("Valid VRF check failed");
     }
 }

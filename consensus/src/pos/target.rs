@@ -241,7 +241,7 @@ mod tests {
     };
     use crypto::{
         random::{CryptoRng, Rng},
-        vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey},
+        vrf::{transcript::VRFTranscript, VRFKeyKind, VRFPrivateKey},
     };
     use itertools::Itertools;
     use rstest::rstest;
@@ -256,7 +256,7 @@ mod tests {
         target: Uint256,
     ) -> Block {
         let (sk, _) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
-        let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+        let vrf_data = sk.produce_vrf_data(VRFTranscript::new(b"abc"));
         Block::new(
             vec![],
             prev_block,
