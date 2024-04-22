@@ -16,6 +16,7 @@
 use iced::{Command, Element, Length};
 use iced_aw::{TabLabel, Tabs};
 use variant_count::VariantCount;
+use wallet_types::wallet_type::WalletType;
 
 use crate::{
     backend::{messages::WalletId, BackendSender},
@@ -37,7 +38,10 @@ pub mod wallet;
 #[derive(Debug, Clone)]
 pub enum TabsMessage {
     TabSelected(usize),
-    WalletAdded(WalletId),
+    WalletAdded {
+        wallet_id: WalletId,
+        wallet_type: WalletType,
+    },
     WalletRemoved(WalletId),
     Summary(SummaryMessage),
     Networking(NetworkingMessage),
@@ -135,8 +139,11 @@ impl TabsWidget {
                 self.active_tab = n;
                 Command::none()
             }
-            TabsMessage::WalletAdded(waller_id) => {
-                let wallet_tab = WalletTab::new(waller_id);
+            TabsMessage::WalletAdded {
+                wallet_id,
+                wallet_type,
+            } => {
+                let wallet_tab = WalletTab::new(wallet_id, wallet_type);
                 self.wallets.push(wallet_tab);
                 self.active_tab = self.last_wallet_tab_index();
                 Command::none()

@@ -33,6 +33,7 @@ use iced::{
 };
 use iced_aw::tab_bar::TabLabel;
 use wallet_controller::DEFAULT_ACCOUNT_INDEX;
+use wallet_types::wallet_type::WalletType;
 
 use crate::{
     backend::{
@@ -149,7 +150,7 @@ enum WalletPane {
 }
 
 impl WalletTab {
-    pub fn new(wallet_id: WalletId) -> Self {
+    pub fn new(wallet_id: WalletId, wallet_type: WalletType) -> Self {
         let (mut panes, pane) = pane_grid::State::new(WalletPane::Left);
 
         let (_pane, split) = panes
@@ -157,10 +158,15 @@ impl WalletTab {
             .expect("split should not fail");
         panes.resize(split, 0.2);
 
+        let selected_panel = match wallet_type {
+            WalletType::Hot => SelectedPanel::Transactions,
+            WalletType::Cold => SelectedPanel::Addresses,
+        };
+
         WalletTab {
             wallet_id,
             selected_account: AccountId::new(DEFAULT_ACCOUNT_INDEX),
-            selected_panel: SelectedPanel::Transactions,
+            selected_panel,
             account_state: AccountState::default(),
             panes,
         }
@@ -420,9 +426,14 @@ impl Tab for WalletTab {
             .get(&self.selected_account)
             .expect("selected account must be known");
 
-        let still_syncing =
-            wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height;
-        let still_syncing = still_syncing.then_some(WalletMessage::StillSyncing);
+        let still_syncing = match wallet_info.wallet_type {
+            WalletType::Cold => false,
+            WalletType::Hot => {
+                wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height
+            }
+        }
+        .then_some(WalletMessage::StillSyncing);
+
         // PaneGrid is used to make the left panel resizable
         let pane_grid: Element<WalletMessage> =
             PaneGrid::new(&self.panes, move |_id, pane, _is_maximized| match pane {

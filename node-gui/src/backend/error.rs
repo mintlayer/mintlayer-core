@@ -35,4 +35,8 @@ pub enum BackendError {
     InvalidCostPerBlockAmount(String),
     #[error("Failed to parse margin per thousand: {0}. The decimal must be in the range [0.001,1.000] or [0.1%,100%]")]
     InvalidMarginPerThousand(String),
+    #[error("Unsupported operation by a cold wallet")]
+    ColdWallet,
+    #[error("Cannot interact with a hot wallet when in Cold wallet mode")]
+    HotNotSupported,
 }
