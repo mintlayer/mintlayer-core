@@ -43,7 +43,7 @@ impl<'a> VRFTranscriptWithRng<'a> {
     }
 }
 
-impl<'a> SignableTranscript for VRFTranscriptWithRng<'a> {
+impl SignableTranscript for VRFTranscriptWithRng<'_> {
     fn make_extra_transcript(&self) -> Self {
         Self(merlin::Transcript::new(b"VRF"), self.1.clone())
     }
