@@ -191,23 +191,26 @@ impl Secp256k1PublicKey {
 mod test {
     use super::*;
     use hex::ToHex;
-    use randomness::make_true_rng;
     use rstest::rstest;
     use serialization::DecodeAll;
     use serialization::Encode;
     use test_utils::random::{make_seedable_rng, Seed};
 
-    #[test]
-    fn basic() {
-        let mut rng = make_true_rng();
+    #[rstest]
+    #[trace]
+    #[case(test_utils::random::Seed::from_entropy())]
+    fn basic(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
         let (sk, pk) = Secp256k1PrivateKey::new(&mut rng);
         let pk2 = Secp256k1PublicKey::from_private_key(&sk);
         assert_eq!(pk, pk2);
     }
 
-    #[test]
-    fn import_from_short_key() {
-        let mut rng = make_true_rng();
+    #[rstest]
+    #[trace]
+    #[case(test_utils::random::Seed::from_entropy())]
+    fn import_from_short_key(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
         let (sk, pk) = Secp256k1PrivateKey::new(&mut rng);
         {
             let sk_bytes = sk.as_bytes();
@@ -225,9 +228,11 @@ mod test {
         }
     }
 
-    #[test]
-    fn serialize() {
-        let mut rng = make_true_rng();
+    #[rstest]
+    #[trace]
+    #[case(test_utils::random::Seed::from_entropy())]
+    fn serialize(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
         let (sk, pk) = Secp256k1PrivateKey::new(&mut rng);
         let sk_encoded = sk.encode();
         let pk_encoded = pk.encode();
@@ -291,9 +296,11 @@ mod test {
         }
     }
 
-    #[test]
-    fn sign_and_verify() {
-        let mut rng = make_true_rng();
+    #[rstest]
+    #[trace]
+    #[case(test_utils::random::Seed::from_entropy())]
+    fn sign_and_verify(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
         let msg_size = 1 + rng.gen::<usize>() % 10000;
         let msg: Vec<u8> = (0..msg_size).map(|_| rng.gen::<u8>()).collect();
         let (sk, pk) = Secp256k1PrivateKey::new(&mut rng);
@@ -301,19 +308,23 @@ mod test {
         assert!(pk.verify_message(&sig, &msg));
     }
 
-    #[test]
-    fn sign_empty() {
-        let mut rng = make_true_rng();
+    #[rstest]
+    #[trace]
+    #[case(test_utils::random::Seed::from_entropy())]
+    fn sign_empty(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
         let msg: Vec<u8> = Vec::new();
         let (sk, pk) = Secp256k1PrivateKey::new(&mut rng);
         let sig = sk.sign_message(&msg, &mut rng);
         assert!(pk.verify_message(&sig, &msg));
     }
 
-    #[test]
+    #[rstest]
+    #[trace]
+    #[case(test_utils::random::Seed::from_entropy())]
     #[ignore]
-    fn sk_zeroed() {
-        let mut rng = make_true_rng();
+    fn sk_zeroed(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
         let (mut sk, _) = Secp256k1PrivateKey::new(&mut rng);
         unsafe { core::ptr::drop_in_place(&mut sk) };
         let zero_sk = &vec![0u8; secp256k1::constants::SECRET_KEY_SIZE];
