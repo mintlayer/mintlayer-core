@@ -127,7 +127,7 @@ mod tests {
 
     #[rstest]
     #[trace]
-    #[case(1.into())]
+    #[case(Seed::from_entropy())]
     fn is_deterministic(#[case] seed: Seed) {
         use crate::vrf::{VRFKeyKind, VRFPrivateKey};
 
