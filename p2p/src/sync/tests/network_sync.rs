@@ -15,6 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
+use chainstate::ChainstateConfig;
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::block::timestamp::BlockTimestamp,
@@ -148,6 +149,7 @@ async fn no_unexpected_disconnects_in_ibd(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+        let chainstate_config = ChainstateConfig::new().with_heavy_checks_enabled(false);
         let time_getter = BasicTestTimeGetter::new();
 
         let mut blocks = Vec::new();
@@ -166,6 +168,7 @@ async fn no_unexpected_disconnects_in_ibd(#[case] seed: Seed) {
         // Start `node1` with up-to-date blockchain
         let node1 = TestNode::builder(protocol_version)
             .with_chain_config(Arc::clone(&chain_config))
+            .with_chainstate_config(chainstate_config.clone())
             .with_time_getter(time_getter.get_time_getter())
             .with_blocks(blocks)
             .build()
@@ -174,6 +177,7 @@ async fn no_unexpected_disconnects_in_ibd(#[case] seed: Seed) {
         // A new node is joining the network
         let node2 = TestNode::builder(protocol_version)
             .with_chain_config(Arc::clone(&chain_config))
+            .with_chainstate_config(chainstate_config)
             .with_time_getter(time_getter.get_time_getter())
             .build()
             .await;

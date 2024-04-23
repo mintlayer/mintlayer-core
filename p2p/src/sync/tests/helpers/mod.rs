@@ -492,6 +492,7 @@ pub struct TestNodeBuilder {
     chain_config: Arc<ChainConfig>,
     mempool_config: Arc<MempoolConfig>,
     p2p_config: Arc<P2pConfig>,
+    chainstate_config: Option<ChainstateConfig>,
     chainstate: Option<Box<dyn ChainstateInterface>>,
     time_getter: TimeGetter,
     blocks: Vec<Block>,
@@ -504,6 +505,7 @@ impl TestNodeBuilder {
             chain_config: Arc::new(create_unit_test_config()),
             mempool_config: Arc::new(MempoolConfig::new()),
             p2p_config: Arc::new(test_p2p_config()),
+            chainstate_config: None,
             chainstate: None,
             time_getter: TimeGetter::default(),
             blocks: Vec::new(),
@@ -513,6 +515,11 @@ impl TestNodeBuilder {
 
     pub fn with_chain_config(mut self, chain_config: Arc<ChainConfig>) -> Self {
         self.chain_config = chain_config;
+        self
+    }
+
+    pub fn with_chainstate_config(mut self, chainstate_config: ChainstateConfig) -> Self {
+        self.chainstate_config = Some(chainstate_config);
         self
     }
 
@@ -546,6 +553,7 @@ impl TestNodeBuilder {
             chain_config,
             mempool_config,
             p2p_config,
+            chainstate_config,
             chainstate,
             time_getter,
             blocks,
@@ -555,10 +563,13 @@ impl TestNodeBuilder {
         let mut manager = subsystem::Manager::new("p2p-sync-test-manager");
         let shutdown_trigger = manager.make_shutdown_trigger();
 
+        assert!(chainstate_config.is_none() || chainstate.is_none());
+
         let mut chainstate = chainstate.unwrap_or_else(|| {
+            let chainstate_config = chainstate_config.unwrap_or_else(|| ChainstateConfig::new());
             make_chainstate(
                 Arc::clone(&chain_config),
-                ChainstateConfig::new(),
+                chainstate_config,
                 chainstate_storage::inmemory::Store::new_empty().unwrap(),
                 DefaultTransactionVerificationStrategy::new(),
                 None,

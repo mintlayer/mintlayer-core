@@ -92,7 +92,10 @@ fn get_locator(#[case] seed: Seed) {
 fn get_locator_from_height(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut btf = TestFramework::builder(&mut rng).build();
+        let mut btf = TestFramework::builder(&mut rng)
+            // With the heavy checks enabled, this test takes over a minute to complete in debug builds.
+            .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
+            .build();
 
         let blocks = rng.gen_range(1001..2000);
         btf.create_chain(&btf.genesis().get_id().into(), blocks, &mut rng).unwrap();
@@ -188,7 +191,10 @@ fn get_headers_genesis(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
-        let mut btf = TestFramework::builder(&mut rng).build();
+        let mut btf = TestFramework::builder(&mut rng)
+            // With the heavy checks enabled, this test takes over a minute to complete in debug builds.
+            .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
+            .build();
         let genesis_id: Id<GenBlock> = btf.genesis().get_id().into();
 
         btf.create_chain(&genesis_id, rng.gen_range(64..128), &mut rng).unwrap();
@@ -227,6 +233,9 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
                     .max_depth_for_reorg(BlockDistance::new(5000))
                     .build(),
             )
+            // The heavy checks don't make much sense for this test and it's relatively lengthy,
+            // so we disable them.
+            .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
             .build();
         let common_block_id =
             tf.create_chain(&tf.genesis().get_id().into(), common_height, &mut rng).unwrap();

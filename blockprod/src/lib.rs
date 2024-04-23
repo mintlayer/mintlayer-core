@@ -231,11 +231,18 @@ mod tests {
 
         let chain_config = Arc::new(chain_config.unwrap_or_else(create_unit_test_config));
 
-        let chainstate_config = {
-            let mut chainstate_config = ChainstateConfig::new();
-            chainstate_config.max_tip_age = Duration::from_secs(60 * 60 * 24 * 365 * 100).into();
-            chainstate_config
+        let chainstate_config = ChainstateConfig {
+            max_tip_age: Duration::from_secs(60 * 60 * 24 * 365 * 100).into(),
+            // There is at least one long test in blockprod that gets significantly slowed down
+            // by the heavy checks in chainstate. But since the checks are not very useful in blockprod
+            // tests in general, we disable them globally.
+            enable_heavy_checks: Some(false),
+
+            max_db_commit_attempts: Default::default(),
+            max_orphan_blocks: Default::default(),
+            min_max_bootstrap_import_buffer_sizes: Default::default(),
         };
+
         let mempool_config = Arc::new(MempoolConfig::new());
 
         let chainstate = chainstate::make_chainstate(

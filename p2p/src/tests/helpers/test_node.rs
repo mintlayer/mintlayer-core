@@ -105,6 +105,7 @@ where
         networking_enabled: bool,
         time_getter: BasicTestTimeGetter,
         chain_config: Arc<ChainConfig>,
+        chainstate_config: ChainstateConfig,
         p2p_config: Arc<P2pConfig>,
         transport: Transport,
         bind_address: SocketAddress,
