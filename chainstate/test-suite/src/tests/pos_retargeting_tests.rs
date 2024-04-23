@@ -57,7 +57,7 @@ fn stable_block_time(#[case] seed: Seed) {
             .with_stake_pool(genesis_pool_id)
             .with_stake_spending_key(staking_sk.clone())
             .with_vrf_key(vrf_sk.clone())
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     }
 }
@@ -101,7 +101,7 @@ fn invalid_target(#[case] seed: Seed) {
         .make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap_err();
 
     assert_eq!(

@@ -56,8 +56,8 @@ async fn single_header_with_unknown_prev_block(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.as_ref().clone())
             .build();
-        let block_1 = tf.make_block_builder().build();
-        let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build();
+        let block_1 = tf.make_block_builder().build(&mut rng);
+        let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build(&mut rng);
 
         let p2p_config = Arc::new(test_p2p_config());
 
@@ -194,10 +194,13 @@ async fn multiple_headers_with_unknown_prev_block(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.as_ref().clone())
             .build();
-        let block = tf.make_block_builder().build();
-        let orphan_block1 = tf.make_block_builder().with_parent(block.get_id().into()).build();
-        let orphan_block2 =
-            tf.make_block_builder().with_parent(orphan_block1.get_id().into()).build();
+        let block = tf.make_block_builder().build(&mut rng);
+        let orphan_block1 =
+            tf.make_block_builder().with_parent(block.get_id().into()).build(&mut rng);
+        let orphan_block2 = tf
+            .make_block_builder()
+            .with_parent(orphan_block1.get_id().into())
+            .build(&mut rng);
 
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(Arc::clone(&chain_config))
@@ -238,7 +241,7 @@ async fn valid_block(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.as_ref().clone())
             .build();
-        let block = tf.make_block_builder().build();
+        let block = tf.make_block_builder().build(&mut rng);
 
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(chain_config)

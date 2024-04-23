@@ -36,7 +36,7 @@ use common::{
     primitives::{amount::SignedAmount, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
-use randomness::Rng;
+use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::{
     gen_text_with_non_ascii,
@@ -67,6 +67,7 @@ fn make_issuance(
 }
 
 fn issue_token_from_block(
+    rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
     parent_block_id: Id<GenBlock>,
     utxo_to_pay_fee: UtxoOutPoint,
@@ -91,7 +92,11 @@ fn issue_token_from_block(
         .build();
     let token_id = make_token_id(tx.transaction().inputs()).unwrap();
     let tx_id = tx.transaction().get_id();
-    let block = tf.make_block_builder().add_transaction(tx).with_parent(parent_block_id).build();
+    let block = tf
+        .make_block_builder()
+        .add_transaction(tx)
+        .with_parent(parent_block_id)
+        .build(rng);
     let block_id = block.get_id();
     tf.process_block(block, BlockSource::Local).unwrap();
 
@@ -100,7 +105,7 @@ fn issue_token_from_block(
 
 // Returns created token id and outpoint with change
 fn issue_token_from_genesis(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
     supply: TokenTotalSupply,
     freezable: IsTokenFreezable,
@@ -108,6 +113,7 @@ fn issue_token_from_genesis(
     let utxo_input_outpoint = UtxoOutPoint::new(tf.best_block_id().into(), 0);
     let issuance = make_issuance(rng, supply, freezable);
     issue_token_from_block(
+        rng,
         tf,
         tf.genesis().get_id().into(),
         utxo_input_outpoint,
@@ -116,6 +122,7 @@ fn issue_token_from_genesis(
 }
 
 fn mint_tokens_in_block(
+    rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
     parent_block_id: Id<GenBlock>,
     utxo_to_pay_fee: UtxoOutPoint,
@@ -166,7 +173,11 @@ fn mint_tokens_in_block(
     let tx = tx_builder.build();
     let tx_id = tx.transaction().get_id();
 
-    let block = tf.make_block_builder().add_transaction(tx).with_parent(parent_block_id).build();
+    let block = tf
+        .make_block_builder()
+        .add_transaction(tx)
+        .with_parent(parent_block_id)
+        .build(rng);
     let block_id = block.get_id();
     tf.process_block(block, BlockSource::Local).unwrap();
 
@@ -174,6 +185,7 @@ fn mint_tokens_in_block(
 }
 
 fn unmint_tokens_in_block(
+    rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
     parent_block_id: Id<GenBlock>,
     token_id: TokenId,
@@ -239,7 +251,11 @@ fn unmint_tokens_in_block(
     let tx = tx_builder.build();
     let tx_id = tx.transaction().get_id();
 
-    let block = tf.make_block_builder().add_transaction(tx).with_parent(parent_block_id).build();
+    let block = tf
+        .make_block_builder()
+        .add_transaction(tx)
+        .with_parent(parent_block_id)
+        .build(rng);
     let block_id = block.get_id();
     tf.process_block(block, BlockSource::Local).unwrap();
 
@@ -252,6 +268,7 @@ fn unmint_tokens_in_block(
 fn token_issue_test(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
+        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_source_id: OutPointSourceId = tf.genesis().get_id().into();
 
@@ -268,7 +285,7 @@ fn token_issue_test(#[case] seed: Seed) {
                 .add_output(TxOutput::IssueFungibleToken(Box::new(issuance)))
                 .build();
             let tx_id = tx.transaction().get_id();
-            let block = tf.make_block_builder().add_transaction(tx).build();
+            let block = tf.make_block_builder().add_transaction(tx).build(&mut rng2);
             let block_id = block.get_id();
             let result = tf.process_block(block, BlockSource::Local);
             (result, tx_id, block_id)
@@ -460,7 +477,7 @@ fn token_issue_test(#[case] seed: Seed) {
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
             .build();
         let token_id = make_token_id(tx.transaction().inputs()).unwrap();
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let actual_token_data = TokensAccountingStorageRead::get_token_data(
             &tf.storage.transaction_ro().unwrap(),
@@ -508,7 +525,7 @@ fn token_issue_not_enough_fee(#[case] seed: Seed) {
         let tx_with_fee_id = tx_with_fee.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(tx_with_fee)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let issuance = make_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No);
@@ -520,7 +537,7 @@ fn token_issue_not_enough_fee(#[case] seed: Seed) {
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -544,7 +561,7 @@ fn token_issue_not_enough_fee(#[case] seed: Seed) {
                     .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     });
 }
@@ -567,7 +584,7 @@ fn token_issuance_output_cannot_be_spent(#[case] seed: Seed) {
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
             .build();
         let tx_id = tx.transaction().get_id();
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let result = tf
             .make_block_builder()
@@ -583,7 +600,7 @@ fn token_issuance_output_cannot_be_spent(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -650,7 +667,7 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -685,7 +702,10 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
             ))
             .build();
         let mint_tx_id = mint_tx.transaction().get_id();
-        tf.make_block_builder().add_transaction(mint_tx).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(mint_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
         nonce = nonce.increment().unwrap();
 
         // Check result
@@ -716,7 +736,7 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
             )))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -752,7 +772,7 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
                     )))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
@@ -813,7 +833,7 @@ fn mint_twice_in_same_tx(#[case] seed: Seed) {
             ))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         // Check result
         assert_eq!(
@@ -849,6 +869,7 @@ fn try_unmint_twice_in_same_tx(#[case] seed: Seed) {
         let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             utxo_with_change,
@@ -888,7 +909,7 @@ fn try_unmint_twice_in_same_tx(#[case] seed: Seed) {
             )))
             .build();
         let unmint_tx_id = unmint_tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(unmint_tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(unmint_tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -911,6 +932,7 @@ fn try_unmint_twice_in_same_tx(#[case] seed: Seed) {
 fn unmint_two_tokens_in_same_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
+        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (token_id_1, _, utxo_with_change) = issue_token_from_genesis(
@@ -922,15 +944,17 @@ fn unmint_two_tokens_in_same_tx(#[case] seed: Seed) {
 
         let best_block_id = tf.best_block_id();
         let (token_id_2, _, utxo_with_change) = issue_token_from_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             utxo_with_change,
-            make_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No),
+            make_issuance(&mut rng2, TokenTotalSupply::Unlimited, IsTokenFreezable::No),
         );
 
         let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000));
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_1_id) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             utxo_with_change,
@@ -941,6 +965,7 @@ fn unmint_two_tokens_in_same_tx(#[case] seed: Seed) {
 
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_2_id) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             UtxoOutPoint::new(mint_tx_1_id.into(), 1),
@@ -1004,7 +1029,7 @@ fn unmint_two_tokens_in_same_tx(#[case] seed: Seed) {
             )))
             .build();
         let unmint_tx_id = unmint_tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(unmint_tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(unmint_tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -1045,6 +1070,7 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
         // Mint all the tokens up to the total supply
         let best_block_id = tf.best_block_id();
         let (_, mint_total_supply_tx_id) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             utxo_with_change,
@@ -1075,7 +1101,7 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -1093,6 +1119,7 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
         // Unmint 1 token
         let best_block_id = tf.best_block_id();
         let (_, unmint_1_token_tx_id) = unmint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             token_id,
@@ -1123,7 +1150,7 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -1143,6 +1170,7 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
         let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..total_supply.into_atoms() - 1));
         let best_block_id = tf.best_block_id();
         let (_, unmint_n_tokens_tx_id) = unmint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             token_id,
@@ -1175,7 +1203,7 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -1212,7 +1240,7 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         assert_eq!(
@@ -1269,7 +1297,7 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        let result = tf.make_block_builder().add_transaction(mint_tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -1300,7 +1328,10 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        tf.make_block_builder().add_transaction(mint_tx).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(mint_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
 
         let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
             &tf.storage.transaction_ro().unwrap(),
@@ -1356,7 +1387,10 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
             ))
             .build();
         let mint_tx_id = mint_tx.transaction().get_id();
-        tf.make_block_builder().add_transaction(mint_tx).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(mint_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
 
         let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
             &tf.storage.transaction_ro().unwrap(),
@@ -1383,7 +1417,7 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        let result = tf.make_block_builder().add_transaction(mint_tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -1413,7 +1447,7 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        let result = tf.make_block_builder().add_transaction(mint_tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -1465,7 +1499,7 @@ fn mint_from_wrong_account(#[case] seed: Seed) {
                         ))
                         .build(),
                 )
-                .build_and_process()
+                .build_and_process(&mut rng)
         };
 
         let result = mint_from_account(AccountCommand::UnmintTokens(token_id));
@@ -1530,7 +1564,7 @@ fn try_to_print_money_on_mint(#[case] seed: Seed) {
             ))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -1564,7 +1598,7 @@ fn try_to_print_money_on_mint(#[case] seed: Seed) {
             ))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -1603,6 +1637,7 @@ fn burn_from_total_supply_account(#[case] seed: Seed) {
 
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             utxo_with_change,
@@ -1638,7 +1673,7 @@ fn burn_from_total_supply_account(#[case] seed: Seed) {
                     )))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let circulating_supply = TokensAccountingStorageRead::get_circulating_supply(
@@ -1677,6 +1712,7 @@ fn burn_from_lock_supply_account(#[case] seed: Seed) {
 
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             utxo_with_change,
@@ -1710,7 +1746,7 @@ fn burn_from_lock_supply_account(#[case] seed: Seed) {
                     )))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let circulating_supply = TokensAccountingStorageRead::get_circulating_supply(
@@ -1754,6 +1790,7 @@ fn burn_zero_tokens_on_unmint(#[case] seed: Seed) {
 
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             utxo_with_change,
@@ -1788,7 +1825,7 @@ fn burn_zero_tokens_on_unmint(#[case] seed: Seed) {
                     )
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
@@ -1824,6 +1861,7 @@ fn burn_less_than_input_on_unmint(#[case] seed: Seed) {
 
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             utxo_with_change,
@@ -1861,7 +1899,7 @@ fn burn_less_than_input_on_unmint(#[case] seed: Seed) {
                     )))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
@@ -1900,6 +1938,7 @@ fn burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
 
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             utxo_with_change,
@@ -1929,7 +1968,7 @@ fn burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
         let tx_transfer_tokens_id = tx_transfer_tokens.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(tx_transfer_tokens)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let nonce = BlockchainStorageRead::get_account_nonce_count(
@@ -1960,7 +1999,7 @@ fn burn_less_by_providing_smaller_input_utxo(#[case] seed: Seed) {
             )))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -1999,6 +2038,7 @@ fn unmint_using_multiple_burn_utxos(#[case] seed: Seed) {
 
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             utxo_with_change,
@@ -2029,7 +2069,7 @@ fn unmint_using_multiple_burn_utxos(#[case] seed: Seed) {
         let tx_split_tokens_id = tx_split_tokens.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(tx_split_tokens)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let nonce = BlockchainStorageRead::get_account_nonce_count(
@@ -2065,7 +2105,7 @@ fn unmint_using_multiple_burn_utxos(#[case] seed: Seed) {
                     .with_outputs(burn_outputs)
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
@@ -2125,7 +2165,10 @@ fn check_lockable_supply(#[case] seed: Seed) {
             ))
             .build();
         let mint_tx_id = mint_tx.transaction().get_id();
-        tf.make_block_builder().add_transaction(mint_tx).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(mint_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
         nonce = nonce.increment().unwrap();
 
         // Check result
@@ -2161,7 +2204,10 @@ fn check_lockable_supply(#[case] seed: Seed) {
             ))
             .build();
         let lock_tx_id = lock_tx.transaction().get_id();
-        tf.make_block_builder().add_transaction(lock_tx).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(lock_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
         nonce = nonce.increment().unwrap();
 
         // Check result
@@ -2203,7 +2249,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -2237,7 +2283,7 @@ fn check_lockable_supply(#[case] seed: Seed) {
                     )))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -2279,7 +2325,7 @@ fn try_lock_not_lockable_supply(#[case] seed: Seed, #[case] supply: TokenTotalSu
                     .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -2326,7 +2372,10 @@ fn try_lock_twice(#[case] seed: Seed) {
             ))
             .build();
         let lock_tx_id = lock_tx.transaction().get_id();
-        tf.make_block_builder().add_transaction(lock_tx).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(lock_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
         nonce = nonce.increment().unwrap();
 
         // Check result
@@ -2354,7 +2403,7 @@ fn try_lock_twice(#[case] seed: Seed) {
                     )
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -2406,7 +2455,7 @@ fn try_lock_twice_in_same_tx(#[case] seed: Seed) {
             )
             .build();
         let lock_tx_id = lock_tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(lock_tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(lock_tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -2429,6 +2478,7 @@ fn try_lock_twice_in_same_tx(#[case] seed: Seed) {
 fn lock_two_tokens_in_same_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
+        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (token_id_1, _, utxo_with_change) = issue_token_from_genesis(
@@ -2440,10 +2490,11 @@ fn lock_two_tokens_in_same_tx(#[case] seed: Seed) {
 
         let best_block_id = tf.best_block_id();
         let (token_id_2, _, utxo_with_change) = issue_token_from_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             utxo_with_change,
-            make_issuance(&mut rng, TokenTotalSupply::Lockable, IsTokenFreezable::No),
+            make_issuance(&mut rng2, TokenTotalSupply::Lockable, IsTokenFreezable::No),
         );
 
         // Lock both tokens tokens same tx
@@ -2465,7 +2516,7 @@ fn lock_two_tokens_in_same_tx(#[case] seed: Seed) {
             .add_input(utxo_with_change.into(), InputWitness::NoSignature(None))
             .build();
         let lock_tx_id = lock_tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(lock_tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(lock_tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -2519,7 +2570,7 @@ fn mint_fee(#[case] seed: Seed) {
         let tx_with_fee_id = tx_with_fee.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(tx_with_fee)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         // Try mint with insufficient fee
@@ -2541,7 +2592,7 @@ fn mint_fee(#[case] seed: Seed) {
             ))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -2573,7 +2624,7 @@ fn mint_fee(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     });
 }
@@ -2600,6 +2651,7 @@ fn unmint_fee(#[case] seed: Seed) {
         // Mint some tokens
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             utxo_with_change,
@@ -2625,7 +2677,7 @@ fn unmint_fee(#[case] seed: Seed) {
         let tx_with_fee_id = tx_with_fee.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(tx_with_fee)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         // Try unmint with insufficient fee
@@ -2644,7 +2696,7 @@ fn unmint_fee(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::TokenV1(token_id, some_amount)))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -2673,7 +2725,7 @@ fn unmint_fee(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::TokenV1(token_id, some_amount)))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     });
 }
@@ -2713,7 +2765,7 @@ fn lock_supply_fee(#[case] seed: Seed) {
         let tx_with_fee_id = tx_with_fee.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(tx_with_fee)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         // Try lock with insufficient fee
@@ -2731,8 +2783,10 @@ fn lock_supply_fee(#[case] seed: Seed) {
             )
             .build();
         let tx_insufficient_fee_id = tx_insufficient_fee.transaction().get_id();
-        let result =
-            tf.make_block_builder().add_transaction(tx_insufficient_fee).build_and_process();
+        let result = tf
+            .make_block_builder()
+            .add_transaction(tx_insufficient_fee)
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -2760,7 +2814,7 @@ fn lock_supply_fee(#[case] seed: Seed) {
                     )
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     });
 }
@@ -2804,7 +2858,10 @@ fn spend_mint_tokens_output(#[case] seed: Seed) {
             ))
             .build();
         let mint_tx_id = mint_tx.transaction().get_id();
-        tf.make_block_builder().add_transaction(mint_tx).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(mint_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
 
         // Check result
         let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
@@ -2826,7 +2883,7 @@ fn spend_mint_tokens_output(#[case] seed: Seed) {
             ))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -2854,7 +2911,7 @@ fn spend_mint_tokens_output(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     });
 }
@@ -2892,7 +2949,7 @@ fn issue_and_mint_same_tx(#[case] seed: Seed) {
             ))
             .build();
         let token_id = make_token_id(tx.transaction().inputs()).unwrap();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -2954,7 +3011,7 @@ fn issue_and_mint_same_block(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .with_transactions(vec![tx_issuance, tx_minting])
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let actual_token_data = TokensAccountingStorageRead::get_token_data(
@@ -2998,6 +3055,7 @@ fn mint_unmint_same_tx(#[case] seed: Seed) {
         // Mint some tokens
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             utxo_with_change,
@@ -3033,7 +3091,7 @@ fn mint_unmint_same_tx(#[case] seed: Seed) {
             )))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         // Check the storage
         assert_eq!(
@@ -3066,6 +3124,7 @@ fn reorg_test_simple(#[case] seed: Seed) {
         let token_issuance =
             make_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No);
         let (token_id, block_a_id, block_a_change_utxo) = issue_token_from_block(
+            &mut rng,
             &mut tf,
             genesis_block_id,
             UtxoOutPoint::new(genesis_block_id.into(), 0),
@@ -3076,6 +3135,7 @@ fn reorg_test_simple(#[case] seed: Seed) {
         // Create block `b` with token minting
         let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
         let (block_b_id, _) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             block_a_id.into(),
             block_a_change_utxo,
@@ -3125,6 +3185,7 @@ fn reorg_test_simple(#[case] seed: Seed) {
 fn reorg_test_2_tokens(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
+        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_block_id = tf.best_block_id();
 
@@ -3149,20 +3210,25 @@ fn reorg_test_2_tokens(#[case] seed: Seed) {
             ))
             .build();
         let tx_a_id = tx_a.transaction().get_id();
-        tf.make_block_builder().add_transaction(tx_a).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(tx_a)
+            .build_and_process(&mut rng)
+            .unwrap();
         let block_a_id = tf.best_block_id();
 
         // Create block `b` with token1 issuance
         let (token_id_1, block_b_id, block_b_change_utxo) = issue_token_from_block(
+            &mut rng,
             &mut tf,
             block_a_id,
             UtxoOutPoint::new(tx_a_id.into(), 0),
-            make_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No),
+            make_issuance(&mut rng2, TokenTotalSupply::Unlimited, IsTokenFreezable::No),
         );
         assert_eq!(tf.best_block_id(), block_b_id);
 
         // Create block `c` with token1 minting
         let (block_c_id, _) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             block_b_id.into(),
             block_b_change_utxo,
@@ -3176,6 +3242,7 @@ fn reorg_test_2_tokens(#[case] seed: Seed) {
         let issuance_token_2 =
             make_issuance(&mut rng, TokenTotalSupply::Lockable, IsTokenFreezable::No);
         let (token_id_2, block_d_id, block_d_change_utxo) = issue_token_from_block(
+            &mut rng,
             &mut tf,
             block_a_id,
             UtxoOutPoint::new(tx_a_id.into(), 1),
@@ -3186,6 +3253,7 @@ fn reorg_test_2_tokens(#[case] seed: Seed) {
 
         // Mint some tokens
         let (block_e_id, _) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             block_d_id.into(),
             block_d_change_utxo,
@@ -3197,7 +3265,7 @@ fn reorg_test_2_tokens(#[case] seed: Seed) {
         assert_eq!(tf.best_block_id(), block_c_id);
 
         // Add empty block to trigger the reorg
-        let block_f = tf.make_block_builder().with_parent(block_e_id.into()).build();
+        let block_f = tf.make_block_builder().with_parent(block_e_id.into()).build(&mut rng);
         let block_f_id = block_f.get_id();
         tf.process_block(block_f, BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), block_f_id);
@@ -3242,6 +3310,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
         });
 
         let (token_id, _, utxo_with_change) = issue_token_from_block(
+            &mut rng,
             &mut tf,
             genesis_block_id.into(),
             UtxoOutPoint::new(genesis_block_id.into(), 0),
@@ -3272,7 +3341,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
         let result = tf
             .make_block_builder()
             .add_transaction(tx_no_signatures.clone())
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -3301,6 +3370,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
                 &tx,
                 &inputs_utxos_refs,
                 0,
+                &mut rng,
             )
             .unwrap();
 
@@ -3311,7 +3381,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
             .unwrap()
         };
 
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -3333,6 +3403,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
                 &tx,
                 &inputs_utxos_refs,
                 0,
+                &mut rng,
             )
             .unwrap();
 
@@ -3343,7 +3414,7 @@ fn check_signature_on_mint(#[case] seed: Seed) {
             .unwrap()
         };
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
     });
 }
 
@@ -3375,6 +3446,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
         });
 
         let (token_id, _, utxo_with_change) = issue_token_from_block(
+            &mut rng,
             &mut tf,
             genesis_block_id.into(),
             UtxoOutPoint::new(genesis_block_id.into(), 0),
@@ -3422,6 +3494,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
                 &tx,
                 &inputs_utxos_refs,
                 0,
+                &mut rng,
             )
             .unwrap();
 
@@ -3432,7 +3505,10 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
             .unwrap()
         };
         let mint_tx_id = mint_tx.transaction().get_id();
-        tf.make_block_builder().add_transaction(mint_tx).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(mint_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
 
         // Try to unmint without signature
         let tx_no_signatures = TransactionBuilder::new()
@@ -3457,7 +3533,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
         let result = tf
             .make_block_builder()
             .add_transaction(tx_no_signatures.clone())
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -3493,6 +3569,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
                 &tx,
                 &inputs_utxos_refs,
                 0,
+                &mut rng,
             )
             .unwrap();
 
@@ -3507,7 +3584,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
             .unwrap()
         };
 
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -3529,6 +3606,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
                 &tx,
                 &inputs_utxos_refs,
                 0,
+                &mut rng,
             )
             .unwrap();
 
@@ -3543,7 +3621,7 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
             .unwrap()
         };
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
     });
 }
 
@@ -3573,6 +3651,7 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
         });
 
         let (token_id, _, utxo_with_change) = issue_token_from_block(
+            &mut rng,
             &mut tf,
             genesis_block_id.into(),
             UtxoOutPoint::new(genesis_block_id.into(), 0),
@@ -3597,7 +3676,7 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
         let result = tf
             .make_block_builder()
             .add_transaction(tx_no_signatures.clone())
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -3626,6 +3705,7 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
                 &tx,
                 &inputs_utxos_refs,
                 0,
+                &mut rng,
             )
             .unwrap();
 
@@ -3636,7 +3716,7 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
             .unwrap()
         };
 
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -3658,6 +3738,7 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
                 &tx,
                 &inputs_utxos_refs,
                 0,
+                &mut rng,
             )
             .unwrap();
 
@@ -3668,7 +3749,7 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
             .unwrap()
         };
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
     });
 }
 
@@ -3720,7 +3801,10 @@ fn mint_with_timelock(#[case] seed: Seed) {
             ))
             .build();
         let mint_tx_id = mint_tx.transaction().get_id();
-        tf.make_block_builder().add_transaction(mint_tx).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(mint_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
 
         let actual_supply = TokensAccountingStorageRead::get_circulating_supply(
             &tf.storage.transaction_ro().unwrap(),
@@ -3745,7 +3829,7 @@ fn mint_with_timelock(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -3768,7 +3852,7 @@ fn mint_with_timelock(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         // Spend again, now timelock should pass
@@ -3785,7 +3869,7 @@ fn mint_with_timelock(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     });
 }
@@ -3821,7 +3905,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance)))
             .build();
         let tx_id = tx.transaction().get_id();
-        let block = tf.make_block_builder().add_transaction(tx).build();
+        let block = tf.make_block_builder().add_transaction(tx).build(&mut rng);
         let res = tf.process_block(block, chainstate::BlockSource::Local);
 
         assert_eq!(
@@ -3857,7 +3941,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             )
             .add_output(TxOutput::IssueFungibleToken(Box::new(issuance)))
             .build();
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
     })
 }
 
@@ -3908,7 +3992,7 @@ fn token_issue_mint_and_data_deposit_not_enough_fee(#[case] seed: Seed) {
         let tx_with_fee_id = tx_with_fee.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(tx_with_fee)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
@@ -3930,7 +4014,7 @@ fn token_issue_mint_and_data_deposit_not_enough_fee(#[case] seed: Seed) {
             .add_output(TxOutput::DataDeposit(Vec::new()))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -3962,7 +4046,7 @@ fn token_issue_mint_and_data_deposit_not_enough_fee(#[case] seed: Seed) {
                     .add_output(TxOutput::DataDeposit(Vec::new()))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     });
 }
@@ -3989,6 +4073,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
         let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000_000));
         let best_block_id = tf.best_block_id();
         let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut rng,
             &mut tf,
             best_block_id,
             utxo_with_change,
@@ -4026,7 +4111,10 @@ fn check_freezable_supply(#[case] seed: Seed) {
             ))
             .build();
         let freeze_tx_id = freeze_tx.transaction().get_id();
-        tf.make_block_builder().add_transaction(freeze_tx).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(freeze_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
 
         // Check result
         let actual_token_data = TokensAccountingStorageRead::get_token_data(
@@ -4056,7 +4144,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
                     )
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -4085,7 +4173,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
                     )
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -4111,7 +4199,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -4136,7 +4224,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -4160,7 +4248,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
                     )))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -4190,7 +4278,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
         let unfreeze_tx_id = unfreeze_tx.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(unfreeze_tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         // Check result
@@ -4224,7 +4312,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     });
 }
@@ -4264,7 +4352,7 @@ fn token_freeze_fee(#[case] seed: Seed) {
         let tx_with_fee_id = tx_with_fee.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(tx_with_fee)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         // Try freeze with insufficient fee
@@ -4282,7 +4370,7 @@ fn token_freeze_fee(#[case] seed: Seed) {
             )
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -4311,7 +4399,7 @@ fn token_freeze_fee(#[case] seed: Seed) {
                     )
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     });
 }
@@ -4352,7 +4440,10 @@ fn token_unfreeze_fee(#[case] seed: Seed) {
             ))
             .build();
         let freeze_tx_id = freeze_tx.transaction().get_id();
-        tf.make_block_builder().add_transaction(freeze_tx).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(freeze_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
 
         let tx_with_fee = TransactionBuilder::new()
             .add_input(
@@ -4372,7 +4463,7 @@ fn token_unfreeze_fee(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .add_transaction(tx_with_fee)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         // Try unfreeze with insufficient fee
@@ -4390,7 +4481,7 @@ fn token_unfreeze_fee(#[case] seed: Seed) {
             )
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -4419,7 +4510,7 @@ fn token_unfreeze_fee(#[case] seed: Seed) {
                     )
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     });
 }
@@ -4437,6 +4528,8 @@ fn token_unfreeze_fee(#[case] seed: Seed) {
 fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
+        let mut rng2 = make_seedable_rng(rng.gen::<Seed>());
+        let mut rng3 = make_seedable_rng(rng.gen::<Seed>());
         let mut tf = TestFramework::builder(&mut rng).build();
         let token_freeze_fee =
             tf.chainstate.get_chain_config().token_freeze_fee(BlockHeight::zero());
@@ -4455,6 +4548,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
         });
 
         let (token_id, _, utxo_with_change) = issue_token_from_block(
+            &mut rng,
             &mut tf,
             genesis_block_id.into(),
             UtxoOutPoint::new(genesis_block_id.into(), 0),
@@ -4484,7 +4578,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
         let result = tf
             .make_block_builder()
             .add_transaction(freeze_tx_no_signatures.clone())
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -4501,7 +4595,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
         ];
         let inputs_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
-        let replace_signature_for_tx = |tx, sk, pk, inputs_utxos_refs| {
+        let mut replace_signature_for_tx = |tx, sk, pk, inputs_utxos_refs| {
             let account_sig = StandardInputSignature::produce_uniparty_signature_for_input(
                 &sk,
                 Default::default(),
@@ -4509,6 +4603,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
                 &tx,
                 inputs_utxos_refs,
                 0,
+                &mut rng3,
             )
             .unwrap();
 
@@ -4520,7 +4615,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
         };
 
         // Try to freeze with wrong signature
-        let (random_sk, random_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let (random_sk, random_pk) = PrivateKey::new_from_rng(&mut rng2, KeyKind::Secp256k1Schnorr);
         let signed_tx = replace_signature_for_tx(
             freeze_tx_no_signatures.transaction().clone(),
             random_sk,
@@ -4528,7 +4623,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             &inputs_utxos_refs,
         );
 
-        let result = tf.make_block_builder().add_transaction(signed_tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(signed_tx).build_and_process(&mut rng);
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
@@ -4545,7 +4640,10 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             controller_pk.clone(),
             &inputs_utxos_refs,
         );
-        tf.make_block_builder().add_transaction(signed_tx).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(signed_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
 
         // Try to unfreeze without signature
         let unfreeze_tx_no_signatures = TransactionBuilder::new()
@@ -4565,7 +4663,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
         let result = tf
             .make_block_builder()
             .add_transaction(unfreeze_tx_no_signatures.clone())
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -4594,7 +4692,7 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             &inputs_utxos_refs,
         );
 
-        let result = tf.make_block_builder().add_transaction(signed_tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(signed_tx).build_and_process(&mut rng);
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
@@ -4611,7 +4709,10 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
             controller_pk,
             &inputs_utxos_refs,
         );
-        tf.make_block_builder().add_transaction(signed_tx).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(signed_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
     });
 }
 
@@ -4641,6 +4742,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
         });
 
         let (token_id, _, utxo_with_change) = issue_token_from_block(
+            &mut rng,
             &mut tf,
             genesis_block_id.into(),
             UtxoOutPoint::new(genesis_block_id.into(), 0),
@@ -4674,7 +4776,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
         let result = tf
             .make_block_builder()
             .add_transaction(tx_1_no_signatures.clone())
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -4703,6 +4805,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
                 &tx,
                 &inputs_utxos_refs,
                 0,
+                &mut rng,
             )
             .unwrap();
 
@@ -4713,7 +4816,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
             .unwrap()
         };
 
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -4735,6 +4838,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
                 &tx,
                 &inputs_utxos_refs,
                 0,
+                &mut rng,
             )
             .unwrap();
 
@@ -4746,7 +4850,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
         };
         let tx_1_id = tx.transaction().get_id();
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Now try to change authority once more with original key
         let inputs_utxos = vec![
@@ -4782,6 +4886,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
                 &tx,
                 &inputs_utxos_refs,
                 0,
+                &mut rng,
             )
             .unwrap();
 
@@ -4791,7 +4896,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
             )
             .unwrap()
         };
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -4813,6 +4918,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
                 &tx,
                 &inputs_utxos_refs,
                 0,
+                &mut rng,
             )
             .unwrap();
 
@@ -4823,7 +4929,7 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
             .unwrap()
         };
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
     });
 }
 
@@ -4872,7 +4978,7 @@ fn check_change_authority(#[case] seed: Seed) {
                     )
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         // Check result
@@ -4940,7 +5046,7 @@ fn check_change_authority_twice(#[case] seed: Seed) {
             )
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         // Check result
         assert_eq!(
@@ -4995,7 +5101,7 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
         let freeze_token_tx_id = freeze_token_tx.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(freeze_token_tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         // Try change authority when the token is frozen
@@ -5019,7 +5125,7 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
                     )
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -5051,7 +5157,7 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
         let unfreeze_token_tx_id = unfreeze_token_tx.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(unfreeze_token_tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         // Change authority after unfreeze
@@ -5071,7 +5177,7 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
                     )
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         // Check result
@@ -5121,7 +5227,7 @@ fn change_authority_fee(#[case] seed: Seed) {
         let tx_with_fee_id = tx_with_fee.transaction().get_id();
         tf.make_block_builder()
             .add_transaction(tx_with_fee)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let (_, some_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
@@ -5142,7 +5248,7 @@ fn change_authority_fee(#[case] seed: Seed) {
             )
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -5170,7 +5276,7 @@ fn change_authority_fee(#[case] seed: Seed) {
                     )
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     });
 }
@@ -5216,7 +5322,7 @@ fn reorg_tokens_tx_with_simple_tx(#[case] seed: Seed) {
 
     tf.make_block_builder()
         .with_transactions(vec![transfer_tx, issue_token_tx])
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     // produce block at height 2 that should trigger in memory reorg for block `b`

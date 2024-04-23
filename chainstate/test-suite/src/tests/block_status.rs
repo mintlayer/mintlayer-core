@@ -107,7 +107,8 @@ fn test_process_block_failure(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_id = tf.genesis().get_id();
 
-        let (bad_block_id, result) = process_block_with_empty_tx(&mut tf, &genesis_id.into());
+        let (bad_block_id, result) =
+            process_block_with_empty_tx(&mut rng, &mut tf, &genesis_id.into());
         // processing should have failed, but we don't care about the exact error.
         result.unwrap_err();
 
@@ -126,7 +127,8 @@ fn test_process_block_with_bad_parent(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_id = tf.genesis().get_id();
 
-        let (bad_block_id, result) = process_block_with_empty_tx(&mut tf, &genesis_id.into());
+        let (bad_block_id, result) =
+            process_block_with_empty_tx(&mut rng, &mut tf, &genesis_id.into());
         // processing should have failed, but we don't care about the exact error.
         result.unwrap_err();
 
@@ -162,7 +164,8 @@ fn test_preliminary_headers_check_with_bad_parent(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_id = tf.genesis().get_id();
 
-        let (bad_block_id, result) = process_block_with_empty_tx(&mut tf, &genesis_id.into());
+        let (bad_block_id, result) =
+            process_block_with_empty_tx(&mut rng, &mut tf, &genesis_id.into());
         // processing should have failed, but we don't care about the exact error.
         result.unwrap_err();
 
@@ -411,7 +414,7 @@ fn test_bad_block_processed_again(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_id = tf.genesis().get_id();
 
-        let bad_block = build_block_with_empty_tx(&mut tf, &genesis_id.into());
+        let bad_block = build_block_with_empty_tx(&mut rng, &mut tf, &genesis_id.into());
         let bad_block_id = bad_block.get_id();
         // processing should fail, but we don't care about the exact error.
         tf.process_block(bad_block.clone(), BlockSource::Local).unwrap_err();

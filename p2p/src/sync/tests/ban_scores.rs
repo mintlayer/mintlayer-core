@@ -105,7 +105,7 @@ async fn receive_header_with_invalid_parent_block(#[case] seed: Seed) {
         // have any inputs and outputs. We deliberately ignore the processing error.
         let invalid_tx = TransactionBuilder::new().build();
         let invalid_parent_block =
-            tf.make_block_builder().with_transactions(vec![invalid_tx]).build();
+            tf.make_block_builder().with_transactions(vec![invalid_tx]).build(&mut rng);
         let invalid_parent_block_id = invalid_parent_block.get_id();
         tf.process_block(invalid_parent_block, BlockSource::Local).unwrap_err();
 
@@ -127,7 +127,7 @@ async fn receive_header_with_invalid_parent_block(#[case] seed: Seed) {
             .make_block_builder()
             .with_transactions(vec![valid_tx])
             .with_parent(invalid_parent_block_id.into())
-            .build();
+            .build(&mut rng);
 
         // Connect a peer and have it send the child header. Ensure the peer's ban score is increased.
         let mut node = TestNode::builder(protocol_version)
@@ -168,7 +168,7 @@ async fn receive_headers_1st_violates_checkpoint(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
         tf.create_chain(&tf.genesis().get_id().into(), 2, &mut rng).unwrap();
 
-        let blocks = create_n_blocks(&mut tf, 10);
+        let blocks = create_n_blocks(&mut rng, &mut tf, 10);
         let headers = blocks.iter().map(|block| block.header().clone()).collect::<Vec<_>>();
 
         let mut node = TestNode::builder(protocol_version)
@@ -206,7 +206,7 @@ async fn receive_headers_nth_violates_checkpoint(#[case] seed: Seed) {
 
         let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-        let blocks = create_n_blocks(&mut tf, 10);
+        let blocks = create_n_blocks(&mut rng, &mut tf, 10);
         let headers = blocks.iter().map(|block| block.header().clone()).collect::<Vec<_>>();
 
         let mut node = TestNode::builder(protocol_version)

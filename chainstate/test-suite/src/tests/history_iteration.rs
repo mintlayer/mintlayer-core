@@ -32,13 +32,13 @@ fn history_iteration(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         // put three blocks in a chain after genesis
-        let block1 = tf.make_block_builder().build();
+        let block1 = tf.make_block_builder().build(&mut rng);
         tf.process_block(block1.clone(), BlockSource::Local).unwrap();
 
-        let block2 = tf.make_block_builder().build();
+        let block2 = tf.make_block_builder().build(&mut rng);
         tf.process_block(block2.clone(), BlockSource::Local).unwrap();
 
-        let block3 = tf.make_block_builder().build();
+        let block3 = tf.make_block_builder().build(&mut rng);
         tf.process_block(block3.clone(), BlockSource::Local).unwrap();
 
         ///// test history iterator - start from tip

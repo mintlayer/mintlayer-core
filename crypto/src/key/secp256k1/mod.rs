@@ -83,7 +83,11 @@ impl Secp256k1PrivateKey {
         Self { data: native }
     }
 
-    pub(crate) fn sign_message(&self, msg: &[u8]) -> secp256k1::schnorr::Signature {
+    pub(crate) fn sign_message<R: Rng + CryptoRng>(
+        &self,
+        msg: &[u8],
+        mut rng: R,
+    ) -> secp256k1::schnorr::Signature {
         let secp = secp256k1::Secp256k1::new();
         // Hash the message
         let e = Blake2b32Stream::new().write(msg).finalize();
@@ -92,8 +96,11 @@ impl Secp256k1PrivateKey {
         // Sign the hash
         // TODO(SECURITY) erase keypair after signing
         let keypair = self.data.keypair(&secp);
-        // TODO(SECURITY) examine the usage of sign_schnorr_with_rng or a RFC6979 scheme
-        secp.sign_schnorr_with_rng(&msg_hash, &keypair, &mut randomness::make_true_rng())
+
+        let rng = &mut rng;
+
+        // TODO(SECURITY) examine the usage of a RFC6979 scheme
+        secp.sign_schnorr_with_rng(&msg_hash, &keypair, rng)
     }
 }
 
@@ -289,7 +296,7 @@ mod test {
         let msg_size = 1 + rng.gen::<usize>() % 10000;
         let msg: Vec<u8> = (0..msg_size).map(|_| rng.gen::<u8>()).collect();
         let (sk, pk) = Secp256k1PrivateKey::new(&mut rng);
-        let sig = sk.sign_message(&msg);
+        let sig = sk.sign_message(&msg, &mut rng);
         assert!(pk.verify_message(&sig, &msg));
     }
 
@@ -298,7 +305,7 @@ mod test {
         let mut rng = make_true_rng();
         let msg: Vec<u8> = Vec::new();
         let (sk, pk) = Secp256k1PrivateKey::new(&mut rng);
-        let sig = sk.sign_message(&msg);
+        let sig = sk.sign_message(&msg, &mut rng);
         assert!(pk.verify_message(&sig, &msg));
     }
 

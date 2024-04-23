@@ -213,7 +213,7 @@ impl TestFramework {
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
-        rng: &mut impl Rng,
+        rng: &mut (impl Rng + CryptoRng),
     ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
         let mut prev_block_id = *parent_block;
         let result = || -> Result<Vec<Id<GenBlock>>, ChainstateError> {
@@ -223,7 +223,7 @@ impl TestFramework {
                     .make_block_builder()
                     .add_test_transaction_with_parent(prev_block_id, rng)
                     .with_parent(prev_block_id)
-                    .build();
+                    .build(&mut *rng);
                 prev_block_id = block.get_id().into();
                 ids.push(prev_block_id);
                 self.do_process_block(block, BlockSource::Local)?;
@@ -244,7 +244,7 @@ impl TestFramework {
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
-        rng: &mut impl Rng,
+        rng: &mut (impl Rng + CryptoRng),
     ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
         let mut prev_block_id = *parent_block;
         let result = || -> Result<Vec<Id<GenBlock>>, ChainstateError> {
@@ -256,7 +256,7 @@ impl TestFramework {
                     .make_block_builder()
                     .add_test_transaction_with_parent(prev_block_id, rng)
                     .with_parent(prev_block_id)
-                    .build();
+                    .build(rng);
                 prev_block_id = block.get_id().into();
                 ids.push(prev_block_id);
                 self.do_process_block(block, BlockSource::Local)?;
@@ -274,13 +274,14 @@ impl TestFramework {
         &mut self,
         parent_block: &Id<GenBlock>,
         blocks_count: usize,
-        rng: &mut impl Rng,
+        rng: &mut (impl Rng + CryptoRng),
     ) -> Result<Id<GenBlock>, ChainstateError> {
         Ok(*self.create_chain_return_ids(parent_block, blocks_count, rng)?.last().unwrap())
     }
 
     pub fn create_chain_pos(
         &mut self,
+        rng: &mut (impl Rng + CryptoRng),
         parent_block: &Id<GenBlock>,
         blocks: usize,
         staking_pool: PoolId,
@@ -296,7 +297,7 @@ impl TestFramework {
                     .with_stake_pool(staking_pool)
                     .with_stake_spending_key(staking_sk.clone())
                     .with_vrf_key(staking_vrf_sk.clone())
-                    .build();
+                    .build(&mut *rng);
                 prev_block_id = block.get_id().into();
                 self.do_process_block(block, BlockSource::Local)?;
             }
@@ -575,6 +576,6 @@ fn process_block(#[case] seed: test_utils::random::Seed) {
                 ))
                 .build(),
         )
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 }

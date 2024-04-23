@@ -101,7 +101,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
                 block_builder = block_builder.add_test_transaction(&mut rng);
             }
 
-            let block = block_builder.build();
+            let block = block_builder.build(&mut rng);
             let block_index = tf.process_block(block.clone(), BlockSource::Local).unwrap();
             tf.progress_time_seconds_since_epoch(target_time.as_secs());
 
@@ -143,7 +143,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
                 .with_stake_pool(genesis_pool_id)
                 .with_stake_spending_key(staking_sk.clone())
                 .with_vrf_key(vrf_sk.clone())
-                .build();
+                .build(&mut rng);
             prev_block_id = block.get_id().into();
             tf2.process_block(block.clone(), BlockSource::Local).unwrap();
             tf2.progress_time_seconds_since_epoch(target_time.as_secs());

@@ -179,6 +179,7 @@ impl<'f> BlockBuilder<'f> {
             });
 
             let witnesses = sign_witnesses(
+                rng,
                 &self.framework.key_manager,
                 self.framework.chainstate.get_chain_config(),
                 &tx,
@@ -296,7 +297,7 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
-    fn build_impl(self) -> (Block, &'f mut TestFramework) {
+    fn build_impl(self, rng: &mut (impl Rng + CryptoRng)) -> (Block, &'f mut TestFramework) {
         let block_body = BlockBody::new(self.reward, self.transactions);
         let merkle_proxy = block_body.merkle_tree_proxy().unwrap();
         let unsigned_header = BlockHeader::new(
@@ -308,7 +309,7 @@ impl<'f> BlockBuilder<'f> {
         );
 
         let signed_header = if let Some(key) = self.block_signing_key {
-            let signature = key.sign_message(&unsigned_header.encode()).unwrap();
+            let signature = key.sign_message(&unsigned_header.encode(), &mut *rng).unwrap();
             let sig_data = BlockHeaderSignatureData::new(signature);
             let done_signature = BlockHeaderSignature::HeaderSignature(sig_data);
             unsigned_header.with_signature(done_signature)
@@ -323,14 +324,17 @@ impl<'f> BlockBuilder<'f> {
     }
 
     /// Builds a block without processing it.
-    pub fn build(self) -> Block {
-        self.build_impl().0
+    pub fn build(self, rng: &mut (impl Rng + CryptoRng)) -> Block {
+        self.build_impl(rng).0
     }
 
     /// Constructs a block and processes it by the chainstate.
-    pub fn build_and_process(self) -> Result<Option<BlockIndex>, ChainstateError> {
+    pub fn build_and_process(
+        self,
+        rng: &mut (impl Rng + CryptoRng),
+    ) -> Result<Option<BlockIndex>, ChainstateError> {
         let block_source = self.block_source;
-        let (block, framework) = self.build_impl();
+        let (block, framework) = self.build_impl(rng);
         framework.process_block(block, block_source)
     }
 

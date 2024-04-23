@@ -205,7 +205,7 @@ fn locked_outputs_can_go_to_fee(#[case] seed: Seed) {
             .with_outputs(locked_outputs)
             .build();
         let tx_id = tx.transaction().get_id();
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let not_locked_atoms = rng.gen_range(1..=locked_atoms);
         let expected_fee = Fee(Amount::from_atoms(locked_atoms - not_locked_atoms));
@@ -350,7 +350,7 @@ fn delegate_staking(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .with_transactions(vec![stake_pool_tx, create_delegation_tx])
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let mut delegation_atoms = test_utils::split_value(&mut rng, delegated_atoms);
@@ -414,7 +414,7 @@ fn fee_from_decommissioning_stake_pool(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .add_transaction(stake_pool_tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         // use regtest with pos for new tx
@@ -500,7 +500,7 @@ fn fee_from_spending_delegation_share(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .add_transaction(delegate_staking_tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         // use regtest with pos for new tx
@@ -734,7 +734,7 @@ fn tokens_cannot_be_used_in_fee(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .with_transactions(vec![token_issuance_tx, token_mint_tx])
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let tx = TransactionBuilder::new()

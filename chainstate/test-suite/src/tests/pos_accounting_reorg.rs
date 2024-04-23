@@ -137,7 +137,7 @@ fn stake_pool_reorg(
             .build();
 
         // create block a
-        let block_a = tf.make_block_builder().add_transaction(tx_a).build();
+        let block_a = tf.make_block_builder().add_transaction(tx_a).build(&mut rng);
         let block_a_index = tf.process_block(block_a.clone(), BlockSource::Local).unwrap().unwrap();
         assert_eq!(
             tf.best_block_id(),
@@ -149,7 +149,7 @@ fn stake_pool_reorg(
             .make_block_builder()
             .with_parent(genesis_id.into())
             .add_transaction(tx_b.clone())
-            .build();
+            .build(&mut rng);
         let block_b_id = block_b.get_id();
         tf.process_block(block_b, BlockSource::Local).unwrap();
 
@@ -164,7 +164,7 @@ fn stake_pool_reorg(
             .make_block_builder()
             .with_parent(block_b_id.into())
             .add_transaction(tx_c.clone())
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -218,14 +218,14 @@ fn stake_pool_reorg(
                 .make_block_builder()
                 .with_parent(genesis_id.into())
                 .add_transaction(tx_b)
-                .build_and_process()
+                .build_and_process(&mut rng)
                 .unwrap()
                 .unwrap();
 
             tf.make_block_builder()
                 .with_parent((*block_b.block_id()).into())
                 .add_transaction(tx_c)
-                .build_and_process()
+                .build_and_process(&mut rng)
                 .unwrap();
 
             storage
@@ -273,6 +273,7 @@ fn long_chain_reorg(#[case] seed: Seed) {
 
         let common_block_id = tf
             .create_chain_pos(
+                &mut rng,
                 &tf.genesis().get_id().into(),
                 5,
                 genesis_pool_id,
@@ -282,11 +283,25 @@ fn long_chain_reorg(#[case] seed: Seed) {
             .unwrap();
 
         let old_tip = tf
-            .create_chain_pos(&common_block_id, 100, genesis_pool_id, &staking_sk, &vrf_sk)
+            .create_chain_pos(
+                &mut rng,
+                &common_block_id,
+                100,
+                genesis_pool_id,
+                &staking_sk,
+                &vrf_sk,
+            )
             .unwrap();
 
         let new_tip = tf
-            .create_chain_pos(&common_block_id, 101, genesis_pool_id, &staking_sk, &vrf_sk)
+            .create_chain_pos(
+                &mut rng,
+                &common_block_id,
+                101,
+                genesis_pool_id,
+                &staking_sk,
+                &vrf_sk,
+            )
             .unwrap();
 
         assert_ne!(old_tip, new_tip);
@@ -342,7 +357,7 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     let block_a_id = tf.best_block_id();
 
@@ -365,7 +380,7 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
         .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
         .with_stake_spending_key(staking_sk_2.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -380,7 +395,7 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
         .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
         .with_stake_spending_key(staking_sk_2)
         .with_vrf_key(vrf_sk)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     // block_b is still the tip
     assert_eq!(
@@ -437,7 +452,7 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     let block_a_id = tf.best_block_id();
 
@@ -459,7 +474,7 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -473,7 +488,7 @@ fn in_memory_reorg_disconnect_create_pool(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     // block_b is still the tip
     assert_eq!(
@@ -514,7 +529,7 @@ fn pos_reorg_simple(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staker_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     // Block B
@@ -523,7 +538,7 @@ fn pos_reorg_simple(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staker_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build();
+        .build(&mut rng);
     tf2.process_block(block_b.clone(), BlockSource::Local).unwrap();
 
     // Block C
@@ -532,7 +547,7 @@ fn pos_reorg_simple(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staker_sk)
         .with_vrf_key(vrf_sk)
-        .build();
+        .build(&mut rng);
     let block_c_id = block_c.get_id();
     tf2.process_block(block_c.clone(), BlockSource::Local).unwrap();
 
@@ -621,7 +636,7 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     let block_a_id = tf.best_block_id();
 
@@ -644,7 +659,7 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -671,7 +686,7 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -685,7 +700,7 @@ fn in_memory_reorg_disconnect_spend_delegation(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     // block_c is still the tip
     assert_eq!(
@@ -747,7 +762,7 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     let block_a_id = tf.best_block_id();
 
@@ -783,7 +798,7 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     // produce block `c` at height 3: decommission pool_2
@@ -804,7 +819,7 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -831,7 +846,7 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap()
         .unwrap();
     assert_eq!(
@@ -845,7 +860,7 @@ fn in_memory_reorg_disconnect_spend_delegation_from_decommissioned(#[case] seed:
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     // block_d is still the tip
     assert_eq!(
@@ -906,7 +921,7 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staker_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     let block_a_id = tf.best_block_id();
 
@@ -916,7 +931,7 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staker_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap()
         .unwrap();
     let block_b_id: Id<GenBlock> = (*block_b_index.block_id()).into();
@@ -930,7 +945,7 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
         .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
         .with_stake_spending_key(staker_sk_2.clone())
         .with_vrf_key(vrf_sk_2.clone())
-        .build();
+        .build(&mut rng);
     let block_c_id = block_c.get_id();
 
     // Produce block_d from block_a as an alternative chain with second pool
@@ -941,7 +956,7 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
         .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
         .with_stake_spending_key(staker_sk_2.clone())
         .with_vrf_key(vrf_sk_2.clone())
-        .build();
+        .build(&mut rng);
     let block_d_id = block_d.get_id().into();
     assert_eq!(block_a_id, block_d.prev_block_id());
     tf.process_block(block_d.clone(), BlockSource::Local).unwrap();
@@ -956,7 +971,7 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
         .with_kernel_input(UtxoOutPoint::new(block_d_id.into(), 0))
         .with_stake_spending_key(staker_sk_2)
         .with_vrf_key(vrf_sk_2)
-        .build();
+        .build(&mut rng);
     let block_e_id = block_e.get_id();
     tf.process_block(block_e.clone(), BlockSource::Local).unwrap();
 
@@ -1022,7 +1037,7 @@ fn reorg_pos_tx_with_simple_tx(#[case] seed: Seed) {
 
     tf.make_block_builder()
         .with_transactions(vec![transfer_tx, stake_pool_tx])
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     // produce block at height 2 that should trigger in memory reorg for block `b`

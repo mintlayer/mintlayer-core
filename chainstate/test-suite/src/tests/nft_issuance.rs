@@ -91,7 +91,7 @@ fn nft_name_too_long(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert!(matches!(
             result,
@@ -158,7 +158,7 @@ fn nft_empty_name(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert!(matches!(
             result,
@@ -236,7 +236,7 @@ fn nft_invalid_name(#[case] seed: Seed) {
                         ))
                         .build(),
                 )
-                .build_and_process();
+                .build_and_process(&mut rng);
 
             assert!(matches!(
                 result,
@@ -310,7 +310,7 @@ fn nft_ticker_too_long(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert!(matches!(
             result,
@@ -378,7 +378,7 @@ fn nft_empty_ticker(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert!(matches!(
             result,
@@ -456,7 +456,7 @@ fn nft_invalid_ticker(#[case] seed: Seed) {
                         ))
                         .build(),
                 )
-                .build_and_process();
+                .build_and_process(&mut rng);
 
             assert!(matches!(
                 result,
@@ -530,7 +530,7 @@ fn nft_description_too_long(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert!(matches!(
             result,
@@ -598,7 +598,7 @@ fn nft_empty_description(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert!(matches!(
             result,
@@ -676,7 +676,7 @@ fn nft_invalid_description(#[case] seed: Seed) {
                         ))
                         .build(),
                 )
-                .build_and_process();
+                .build_and_process(&mut rng);
 
             assert!(matches!(
                 result,
@@ -756,7 +756,7 @@ fn nft_icon_uri_too_long(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert!(matches!(
             result,
@@ -822,7 +822,7 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -910,7 +910,7 @@ fn nft_icon_uri_invalid(#[case] seed: Seed) {
                         ))
                         .build(),
                 )
-                .build_and_process();
+                .build_and_process(&mut rng);
 
             assert!(matches!(
                 result,
@@ -991,7 +991,7 @@ fn nft_metadata_uri_too_long(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert!(matches!(
             result,
@@ -1056,7 +1056,7 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -1144,7 +1144,7 @@ fn nft_metadata_uri_invalid(#[case] seed: Seed) {
                         ))
                         .build(),
                 )
-                .build_and_process();
+                .build_and_process(&mut rng);
 
             assert!(matches!(
                 result,
@@ -1225,7 +1225,7 @@ fn nft_media_uri_too_long(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert!(matches!(
             result,
@@ -1292,7 +1292,7 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -1380,7 +1380,7 @@ fn nft_media_uri_invalid(#[case] seed: Seed) {
                         ))
                         .build(),
                 )
-                .build_and_process();
+                .build_and_process(&mut rng);
 
             assert!(matches!(
                 result,
@@ -1443,7 +1443,7 @@ fn new_block_with_media_hash(
                 .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                 .build(),
         )
-        .build()
+        .build(rng)
 }
 
 #[rstest]
@@ -1613,7 +1613,7 @@ fn nft_valid_case(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -1679,7 +1679,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
 
-        let res = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             res.unwrap_err(),
@@ -1756,7 +1756,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let tx_id = tx.transaction().get_id();
-        let block = tf.make_block_builder().add_transaction(tx).build();
+        let block = tf.make_block_builder().add_transaction(tx).build(&mut rng);
         let res = tf.process_block(block, chainstate::BlockSource::Local);
 
         assert_eq!(
@@ -1803,7 +1803,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let tx_id = tx.transaction().get_id();
-        let block = tf.make_block_builder().add_transaction(tx).build();
+        let block = tf.make_block_builder().add_transaction(tx).build(&mut rng);
         let res = tf.process_block(block, chainstate::BlockSource::Local);
 
         assert_eq!(
@@ -1851,7 +1851,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let tx_id = tx.transaction().get_id();
-        let block = tf.make_block_builder().add_transaction(tx).build();
+        let block = tf.make_block_builder().add_transaction(tx).build(&mut rng);
         let res = tf.process_block(block, chainstate::BlockSource::Local);
 
         assert_eq!(
@@ -1896,7 +1896,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
             ))
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
     })
 }
 
@@ -1932,7 +1932,7 @@ fn nft_token_id_mismatch(#[case] seed: Seed) {
             .build();
         let invalid_tx_id = invalid_tx.transaction().get_id();
 
-        let res = tf.make_block_builder().add_transaction(invalid_tx).build_and_process();
+        let res = tf.make_block_builder().add_transaction(invalid_tx).build_and_process(&mut rng);
 
         assert_eq!(
             res.unwrap_err(),
@@ -1959,7 +1959,7 @@ fn nft_token_id_mismatch(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     })
 }

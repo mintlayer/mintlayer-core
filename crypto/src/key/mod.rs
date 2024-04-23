@@ -102,9 +102,13 @@ impl PrivateKey {
         &self.key
     }
 
-    pub fn sign_message(&self, msg: &[u8]) -> Result<Signature, SignatureError> {
+    pub fn sign_message<R: Rng + CryptoRng>(
+        &self,
+        msg: &[u8],
+        rng: R,
+    ) -> Result<Signature, SignatureError> {
         let signature = match &self.key {
-            PrivateKeyHolder::Secp256k1Schnorr(ref k) => Secp256k1Schnorr(k.sign_message(msg)),
+            PrivateKeyHolder::Secp256k1Schnorr(ref k) => Secp256k1Schnorr(k.sign_message(msg, rng)),
         };
         Ok(signature)
     }
@@ -173,7 +177,7 @@ mod test {
         assert_eq!(sk.kind(), KeyKind::Secp256k1Schnorr);
         let msg_size = 1 + rng.gen::<usize>() % 10000;
         let msg: Vec<u8> = (0..msg_size).map(|_| rng.gen::<u8>()).collect();
-        let sig = sk.sign_message(&msg).unwrap();
+        let sig = sk.sign_message(&msg, &mut rng).unwrap();
         assert!(pk.verify_message(&sig, &msg));
     }
 }

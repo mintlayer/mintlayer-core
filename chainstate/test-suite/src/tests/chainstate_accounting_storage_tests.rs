@@ -139,7 +139,7 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
             Amount::from_atoms(1),
         );
 
-        let block = tf.make_block_builder().add_transaction(tx).build();
+        let block = tf.make_block_builder().add_transaction(tx).build(&mut rng);
         let block_id = block.get_id();
         tf.process_block(block, BlockSource::Local).unwrap();
 
@@ -216,7 +216,7 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
         let block1_index = tf
             .make_block_builder()
             .add_transaction(tx1)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .expect("ok")
             .expect("some");
         assert_eq!(
@@ -228,7 +228,7 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
         let block2_index = tf
             .make_block_builder()
             .add_transaction(tx2)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .expect("ok")
             .expect("some");
         assert_eq!(
@@ -345,7 +345,7 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
         let block1_index = tf
             .make_block_builder()
             .add_transaction(tx1)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .expect("ok")
             .expect("some");
         assert_eq!(
@@ -357,7 +357,7 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
         let block2_index = tf
             .make_block_builder()
             .add_transaction(tx2)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .expect("ok")
             .expect("some");
         assert_eq!(
@@ -475,7 +475,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
         let block1_index = tf
             .make_block_builder()
             .add_transaction(tx1)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .expect("ok")
             .expect("some");
         assert_eq!(
@@ -487,7 +487,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
         let block2_index = tf
             .make_block_builder()
             .add_transaction(tx2)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .expect("ok")
             .expect("some");
         assert_eq!(
@@ -625,7 +625,7 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
         let block1_index = tf
             .make_block_builder()
             .add_transaction(tx1)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .expect("ok")
             .expect("some");
         assert_eq!(
@@ -728,7 +728,7 @@ fn accounting_storage_no_accounting_data(#[case] seed: Seed) {
         let block1_index = tf
             .make_block_builder()
             .add_transaction(tx1)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .expect("ok")
             .expect("some");
         assert_eq!(

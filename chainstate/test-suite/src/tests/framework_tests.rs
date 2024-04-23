@@ -28,7 +28,7 @@ use common::{
     },
     primitives::Idable,
 };
-use randomness::Rng;
+use randomness::{CryptoRng, Rng};
 
 use chainstate_test_framework::TestFramework;
 use chainstate_types::{BlockStatus, BlockValidationStage};
@@ -127,7 +127,7 @@ fn test_consistency_check_explicitly_enabled_for_testnet(#[case] seed: Seed) {
 }
 
 // Store a block index with the persistence flag set, but without storing the corresponding block.
-fn make_chainstate_inconsistent(tf: &mut TestFramework, rng: &mut impl Rng) {
+fn make_chainstate_inconsistent(tf: &mut TestFramework, rng: &mut (impl Rng + CryptoRng)) {
     let genesis_id = tf.chain_config().genesis_block_id();
     let block = build_block(tf, &genesis_id, rng);
 

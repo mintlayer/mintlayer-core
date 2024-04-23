@@ -77,7 +77,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -112,7 +112,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
         let block_b1 = tf.block(*block_index.block_id());
@@ -142,7 +142,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -170,7 +170,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
         let block_c1 = tf.block(*block_index.block_id());
@@ -195,7 +195,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
         let block_d1 = tf.block(*block_index.block_id());
@@ -226,7 +226,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .make_block_builder()
             .with_parent(issuance_block.get_id().into())
             .add_transaction(tx_2)
-            .build();
+            .build(&mut rng);
         assert!(
             tf.process_block(block_b2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
@@ -256,7 +256,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .make_block_builder()
             .with_parent(issuance_block.get_id().into())
             .add_transaction(tx_2)
-            .build();
+            .build(&mut rng);
         assert!(
             tf.process_block(block_c2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
@@ -286,7 +286,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .make_block_builder()
             .with_parent(issuance_block.get_id().into())
             .add_transaction(tx_2)
-            .build();
+            .build(&mut rng);
         assert!(
             tf.process_block(block_d2, BlockSource::Local).unwrap().is_none(),
             "Reorg shouldn't have happened yet"
@@ -311,7 +311,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert!(matches!(
             result,
@@ -354,7 +354,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 

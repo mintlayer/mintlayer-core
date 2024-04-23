@@ -57,6 +57,7 @@ fn sign_and_verify_all_and_none(#[case] seed: Seed) {
 
         let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, outputs).unwrap();
         let signed_tx = sign_whole_tx(
+            &mut rng,
             tx,
             &inputs_utxos_refs,
             &private_key,
@@ -250,6 +251,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
 
         let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, outputs).unwrap();
         match sign_whole_tx(
+            &mut rng,
             tx,
             &inputs_utxos_refs,
             &private_key,

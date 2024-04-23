@@ -107,6 +107,7 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
                         &signed_tx1,
                         &[Some(&previous_tx_out)],
                         0,
+                        &mut rng,
                     )
                     .unwrap(),
                 );
@@ -153,6 +154,7 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
                         &transaction2,
                         &[Some(&previous_tx_out)],
                         0,
+                        &mut rng,
                     )
                     .unwrap(),
                 );
@@ -167,7 +169,7 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
                     .make_block_builder()
                     .add_transaction(signed_tx1.clone())
                     .add_transaction(signed_tx2.clone())
-                    .build_and_process()
+                    .build_and_process(&mut rng)
                     .unwrap()
                     .unwrap()
                     .block_id();

@@ -189,11 +189,11 @@ impl<'f> PoSBlockBuilder<'f> {
             .with_kernel_input(kernel_input_outpoint)
     }
 
-    fn build_impl(self) -> (Block, &'f mut TestFramework) {
+    fn build_impl(self, rng: &mut (impl Rng + CryptoRng)) -> (Block, &'f mut TestFramework) {
         let (consensus_data, block_timestamp) = match self.consensus_data {
             Some(data) => (data, self.timestamp),
             None => {
-                let (pos_data, block_timestamp) = self.mine_pos_block();
+                let (pos_data, block_timestamp) = self.mine_pos_block(rng);
                 (ConsensusData::PoS(Box::new(pos_data)), block_timestamp)
             }
         };
@@ -221,7 +221,7 @@ impl<'f> PoSBlockBuilder<'f> {
                 .staker_sk
                 .as_ref()
                 .unwrap()
-                .sign_message(&unsigned_header.encode())
+                .sign_message(&unsigned_header.encode(), &mut *rng)
                 .unwrap();
             let sig_data = BlockHeaderSignatureData::new(signature);
             let done_signature = BlockHeaderSignature::HeaderSignature(sig_data);
@@ -242,18 +242,21 @@ impl<'f> PoSBlockBuilder<'f> {
     }
 
     /// Builds a block without processing it.
-    pub fn build(self) -> Block {
-        self.build_impl().0
+    pub fn build(self, rng: &mut (impl Rng + CryptoRng)) -> Block {
+        self.build_impl(&mut *rng).0
     }
 
     /// Constructs a block and processes it by the chainstate.
-    pub fn build_and_process(self) -> Result<Option<BlockIndex>, ChainstateError> {
-        let (block, framework) = self.build_impl();
+    pub fn build_and_process(
+        self,
+        rng: &mut (impl Rng + CryptoRng),
+    ) -> Result<Option<BlockIndex>, ChainstateError> {
+        let (block, framework) = self.build_impl(&mut *rng);
         let res = framework.process_block(block, BlockSource::Local)?;
         Ok(res)
     }
 
-    fn mine_pos_block(&self) -> (PoSData, BlockTimestamp) {
+    fn mine_pos_block(&self, rng: &mut (impl Rng + CryptoRng)) -> (PoSData, BlockTimestamp) {
         let parent_block_index = self.framework.gen_block_index(&self.prev_block_hash);
 
         let kernel_input_outpoint = self.kernel_input_outpoint.clone().unwrap_or_else(|| {
@@ -303,6 +306,7 @@ impl<'f> PoSBlockBuilder<'f> {
 
         let kernel_sig = produce_kernel_signature(
             self.framework,
+            rng,
             self.staker_sk.as_ref().unwrap(),
             kernel_outputs.as_slice(),
             staking_destination,
@@ -419,6 +423,7 @@ impl<'f> PoSBlockBuilder<'f> {
             });
 
             let witnesses = sign_witnesses(
+                rng,
                 &self.framework.key_manager,
                 self.framework.chainstate.get_chain_config(),
                 &tx,

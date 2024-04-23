@@ -49,7 +49,7 @@ async fn max_block_count_in_request_exceeded(#[case] seed: Seed) {
             .with_chain_config(chain_config.as_ref().clone())
             .build();
         // Process a block to finish the initial block download.
-        let block = tf.make_block_builder().build();
+        let block = tf.make_block_builder().build(&mut rng);
         tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
 
         let p2p_config = Arc::new(test_p2p_config());
@@ -97,9 +97,9 @@ async fn unknown_blocks(#[case] seed: Seed) {
             .with_chain_config(chain_config.as_ref().clone())
             .build();
         // Process a block to finish the initial block download.
-        tf.make_block_builder().build_and_process().unwrap().unwrap();
+        tf.make_block_builder().build_and_process(&mut rng).unwrap().unwrap();
         let unknown_blocks: Vec<Id<Block>> =
-            create_n_blocks(&mut tf, 2).into_iter().map(|b| b.get_id()).collect();
+            create_n_blocks(&mut rng, &mut tf, 2).into_iter().map(|b| b.get_id()).collect();
 
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(chain_config)
@@ -142,7 +142,7 @@ async fn valid_request(#[case] seed: Seed) {
             .build();
         // Import several blocks.
         let num_blocks = rng.gen_range(2..10);
-        let blocks = create_n_blocks(&mut tf, num_blocks);
+        let blocks = create_n_blocks(&mut rng, &mut tf, num_blocks);
         for block in blocks.clone() {
             tf.process_block(block, BlockSource::Local).unwrap().unwrap();
         }
@@ -195,7 +195,7 @@ async fn request_same_block_after_downloading(#[case] seed: Seed) {
             .with_chain_config(chain_config.as_ref().clone())
             .build();
         // Process a block to finish the initial block download.
-        let block = tf.make_block_builder().build();
+        let block = tf.make_block_builder().build(&mut rng);
         tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
 
         let p2p_config = Arc::new(test_p2p_config());

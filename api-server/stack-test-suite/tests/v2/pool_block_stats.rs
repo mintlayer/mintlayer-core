@@ -124,7 +124,7 @@ async fn ok(#[case] seed: Seed) {
                             .with_stake_spending_key(staking_sk.clone())
                             .with_vrf_key(vrf_sk.clone())
                             .with_stake_pool(pool_id)
-                            .build();
+                            .build(&mut rng);
                         tf.process_block(block.clone(), BlockSource::Local).unwrap();
 
                         let prev_block_hash = block.get_id().into();

@@ -34,7 +34,7 @@ fn genesis_check_ok(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
         for _ in 0..num_blocks {
             let _index = tf
                 .make_block_builder()
-                .build_and_process()
+                .build_and_process(rng)
                 .expect("block processing to succeed")
                 .expect("block index to be returned");
         }
@@ -78,7 +78,7 @@ fn genesis_check_err(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
         for _ in 0..num_blocks {
             let _index = tf
                 .make_block_builder()
-                .build_and_process()
+                .build_and_process(rng)
                 .expect("block processing to succeed")
                 .expect("block index to be returned");
         }

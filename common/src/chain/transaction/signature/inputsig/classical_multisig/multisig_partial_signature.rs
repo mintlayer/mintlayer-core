@@ -192,7 +192,7 @@ mod tests {
                 .iter()
                 .enumerate()
                 .map(|(index, priv_key)| {
-                    let signature = priv_key.sign_message(&message.encode()).unwrap();
+                    let signature = priv_key.sign_message(&message.encode(), &mut *rng).unwrap();
                     (index as u8, signature)
                 })
                 .collect::<BTreeMap<_, _>>();
@@ -311,7 +311,10 @@ mod tests {
             let tampered_pair_ref = signatures_map.choose_mut(rng).unwrap();
             let tampered_index = tampered_pair_ref.0;
             let tampered_signature = priv_keys[tampered_index as usize]
-                .sign_message(&H256::random_using(rng).encode())
+                .sign_message(
+                    &H256::random_using(rng).encode(),
+                    randomness::make_true_rng(),
+                )
                 .unwrap();
             // replace the signatures with a tampered one
             tampered_pair_ref.1 = tampered_signature;
@@ -363,7 +366,10 @@ mod tests {
             let tampered_pair_ref = signatures_map.choose_mut(rng).unwrap();
             let wrong_signature = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr)
                 .0
-                .sign_message(&H256::random_using(rng).encode())
+                .sign_message(
+                    &H256::random_using(rng).encode(),
+                    randomness::make_true_rng(),
+                )
                 .unwrap();
             // replace the signatures with a tampered one
             tampered_pair_ref.1 = wrong_signature;

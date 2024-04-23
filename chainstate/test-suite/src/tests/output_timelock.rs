@@ -53,6 +53,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
         // create the first block, with a locked output
         let current_time = tf.current_time();
         let (input_witness, locked_input, _) = add_block_with_locked_output(
+            &mut rng,
             &mut tf,
             OutputTimeLock::UntilHeight(BlockHeight::new(block_height_that_unlocks)),
             BlockTimestamp::from_time(current_time),
@@ -67,7 +68,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
                         .add_anyone_can_spend_output(5000)
                         .build()
                 )
-                .build_and_process()
+                .build_and_process(&mut rng)
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::TimeLockViolation(
@@ -89,7 +90,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
                     .add_anyone_can_spend_output(10000)
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(2));
 
@@ -110,7 +111,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
                             .add_anyone_can_spend_output(5000)
                             .build()
                     )
-                    .build_and_process()
+                    .build_and_process(&mut rng)
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                     ConnectTransactionError::TimeLockViolation(
@@ -124,7 +125,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
             );
 
             // create another block, with no transactions, and get the blockchain to progress
-            tf.make_block_builder().build_and_process().unwrap();
+            tf.make_block_builder().build_and_process(&mut rng).unwrap();
             assert_eq!(
                 tf.best_block_index().block_height(),
                 BlockHeight::new(height)
@@ -143,7 +144,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
                     .add_anyone_can_spend_output(5000)
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
         assert_eq!(
             tf.best_block_index().block_height(),
@@ -192,7 +193,7 @@ fn output_lock_until_height_but_spend_at_same_block(#[case] seed: Seed) {
         assert_eq!(
             tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
-                .build_and_process()
+                .build_and_process(&mut rng)
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::TimeLockViolation(locked_outpoint)
@@ -216,6 +217,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
         // create the first block, with a locked output
         let current_time = tf.current_time();
         let (input_witness, input, _) = add_block_with_locked_output(
+            &mut rng,
             &mut tf,
             OutputTimeLock::ForBlockCount(block_count_that_unlocks),
             BlockTimestamp::from_time(current_time),
@@ -230,7 +232,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                         .add_anyone_can_spend_output(5000)
                         .build()
                 )
-                .build_and_process()
+                .build_and_process(&mut rng)
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::TimeLockViolation(input.utxo_outpoint().unwrap().clone())
@@ -250,7 +252,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                     .add_anyone_can_spend_output(10000)
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(2));
 
@@ -271,7 +273,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                             .add_anyone_can_spend_output(5000)
                             .build()
                     )
-                    .build_and_process()
+                    .build_and_process(&mut rng)
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                     ConnectTransactionError::TimeLockViolation(
@@ -285,7 +287,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
             );
 
             // create another block, with no transactions, and get the blockchain to progress
-            tf.make_block_builder().build_and_process().unwrap();
+            tf.make_block_builder().build_and_process(&mut rng).unwrap();
             assert_eq!(
                 tf.best_block_index().block_height(),
                 BlockHeight::new(height)
@@ -300,7 +302,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                     .add_anyone_can_spend_output(5000)
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
         assert_eq!(
             tf.best_block_index().block_height(),
@@ -347,7 +349,7 @@ fn output_lock_for_block_count_but_spend_at_same_block(#[case] seed: Seed) {
         assert_eq!(
             tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
-                .build_and_process()
+                .build_and_process(&mut rng)
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::TimeLockViolation(locked_outpoint)
@@ -385,7 +387,7 @@ fn output_lock_for_block_count_attempted_overflow(#[case] seed: Seed) {
             ))
             .build();
         let tx_id = tx.transaction().get_id();
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // try to spend locked output
         let result = tf
@@ -398,7 +400,7 @@ fn output_lock_for_block_count_attempted_overflow(#[case] seed: Seed) {
                     )
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -436,6 +438,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
 
         let expected_height = 1;
         let (input_witness, input, _) = add_block_with_locked_output(
+            &mut rng,
             &mut tf,
             OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(lock_time)),
             BlockTimestamp::from_int_seconds(block_times[expected_height]),
@@ -463,7 +466,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
                             .build()
                     )
                     .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
-                    .build_and_process()
+                    .build_and_process(&mut rng)
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                     ConnectTransactionError::TimeLockViolation(
@@ -478,7 +481,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
             // Create another block, with no transactions, and get the blockchain to progress.
             tf.make_block_builder()
                 .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
-                .build_and_process()
+                .build_and_process(&mut rng)
                 .unwrap();
             assert_eq!(
                 tf.best_block_index().block_height(),
@@ -499,7 +502,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
             .with_timestamp(BlockTimestamp::from_int_seconds(
                 *block_times.last().unwrap(),
             ))
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
         assert_eq!(
             tf.best_block_index().block_height(),
@@ -548,7 +551,7 @@ fn output_lock_until_time_but_spend_at_same_block(#[case] seed: Seed) {
         assert_eq!(
             tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
-                .build_and_process()
+                .build_and_process(&mut rng)
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::TimeLockViolation(locked_outpoint)
@@ -586,6 +589,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
 
         let expected_height = 1;
         let (input_witness, input, _) = add_block_with_locked_output(
+            &mut rng,
             &mut tf,
             OutputTimeLock::ForSeconds(lock_seconds),
             BlockTimestamp::from_int_seconds(block_times[expected_height]),
@@ -613,7 +617,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                             .build()
                     )
                     .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
-                    .build_and_process()
+                    .build_and_process(&mut rng)
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                     ConnectTransactionError::TimeLockViolation(
@@ -629,7 +633,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
             // Create another block, with no transactions, and get the blockchain to progress.
             tf.make_block_builder()
                 .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
-                .build_and_process()
+                .build_and_process(&mut rng)
                 .unwrap();
             assert_eq!(
                 tf.best_block_index().block_height(),
@@ -650,7 +654,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
             .with_timestamp(BlockTimestamp::from_int_seconds(
                 *block_times.last().unwrap(),
             ))
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
         assert_eq!(
             tf.best_block_index().block_height(),
@@ -696,7 +700,7 @@ fn output_lock_for_seconds_but_spend_at_same_block(#[case] seed: Seed) {
         assert_eq!(
             tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
-                .build_and_process()
+                .build_and_process(&mut rng)
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::TimeLockViolation(locked_outpoint)
@@ -717,6 +721,7 @@ fn output_lock_for_seconds_attempted_overflow(#[case] seed: Seed) {
         // create the first block, with a locked output
         let current_time = tf.current_time();
         let locked_output = add_block_with_locked_output(
+            &mut rng,
             &mut tf,
             OutputTimeLock::ForSeconds(u64::MAX),
             BlockTimestamp::from_time(current_time),
@@ -731,7 +736,7 @@ fn output_lock_for_seconds_attempted_overflow(#[case] seed: Seed) {
                         .add_anyone_can_spend_output(5000)
                         .build()
                 )
-                .build_and_process()
+                .build_and_process(&mut rng)
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::BlockTimestampArithmeticError

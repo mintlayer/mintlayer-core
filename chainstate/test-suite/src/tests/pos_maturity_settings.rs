@@ -109,7 +109,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     //
@@ -134,7 +134,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap_err();
     assert_eq!(
         result,
@@ -155,7 +155,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     //
@@ -166,7 +166,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 }
 
@@ -250,7 +250,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     //
@@ -277,7 +277,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap_err();
     assert_eq!(
         result,
@@ -298,7 +298,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     //
@@ -309,6 +309,6 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 }

@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crypto::key::Signature;
+use randomness::{CryptoRng, Rng};
 use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{chain::signature::DestinationSigError, primitives::H256};
@@ -47,10 +48,11 @@ pub fn verify_public_key_spending(
     Ok(())
 }
 
-pub fn sign_pubkey_spending(
+pub fn sign_pubkey_spending<R: Rng + CryptoRng>(
     private_key: &crypto::key::PrivateKey,
     spendee_pubkey: &crypto::key::PublicKey,
     sighash: &H256,
+    rng: R,
 ) -> Result<AuthorizedPublicKeySpend, DestinationSigError> {
     let calculated_public_key = crypto::key::PublicKey::from_private_key(private_key);
     if *spendee_pubkey != calculated_public_key {
@@ -58,7 +60,7 @@ pub fn sign_pubkey_spending(
     }
     let msg = sighash.encode();
     let signature = private_key
-        .sign_message(&msg)
+        .sign_message(&msg, rng)
         .map_err(DestinationSigError::ProducingSignatureFailed)?;
 
     Ok(AuthorizedPublicKeySpend::new(signature))
@@ -109,6 +111,7 @@ mod test {
                 &tx,
                 &inputs_utxos_refs,
                 1,
+                &mut rng,
             );
             assert_eq!(res, Err(DestinationSigError::InvalidInputIndex(1, 1)));
         }
@@ -138,6 +141,7 @@ mod test {
                 &tx,
                 &inputs_utxos_refs,
                 rng.gen_range(0..inputs_utxos.len()),
+                &mut rng,
             )
             .unwrap();
 
@@ -172,6 +176,7 @@ mod test {
                 &tx,
                 &inputs_utxos_refs,
                 rng.gen_range(0..INPUTS),
+                &mut rng,
             )
             .unwrap();
 
@@ -213,6 +218,7 @@ mod test {
                 &tx,
                 &inputs_utxos_refs,
                 input,
+                &mut rng,
             )
             .unwrap();
             let spender_signature =
@@ -248,11 +254,12 @@ mod test {
                 &tx,
                 &inputs_utxos_refs,
                 input,
+                &mut rng,
             )
             .unwrap();
             let sighash =
                 signature_hash(witness.sighash_type(), &tx, &inputs_utxos_refs, input).unwrap();
-            sign_pubkey_spending(&private_key, &public_key, &sighash)
+            sign_pubkey_spending(&private_key, &public_key, &sighash, &mut rng)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }
     }

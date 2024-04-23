@@ -33,6 +33,7 @@ pub mod pos;
 
 /// Adds a block with the locked output and returns input corresponding to this output.
 pub fn add_block_with_locked_output(
+    rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
     output_time_lock: OutputTimeLock,
     timestamp: BlockTimestamp,
@@ -57,7 +58,7 @@ pub fn add_block_with_locked_output(
     tf.make_block_builder()
         .add_transaction(tx)
         .with_timestamp(timestamp)
-        .build_and_process()
+        .build_and_process(rng)
         .unwrap();
 
     let new_height = (current_height + BlockDistance::new(1)).unwrap();

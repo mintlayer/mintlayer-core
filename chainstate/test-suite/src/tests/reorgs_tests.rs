@@ -30,6 +30,7 @@ use common::chain::UtxoOutPoint;
 use common::primitives::BlockHeight;
 use common::primitives::Id;
 use common::primitives::Idable;
+use randomness::CryptoRng;
 use randomness::Rng;
 use rstest::rstest;
 use test_utils::random::make_seedable_rng;
@@ -46,8 +47,10 @@ fn reorg_simple(#[case] seed: Seed) {
         let genesis_id = tf.genesis().get_id();
         assert_eq!(tf.best_block_id(), genesis_id);
 
-        let block_a =
-            tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
+        let block_a = tf
+            .make_block_builder()
+            .add_test_transaction_from_best_block(&mut rng)
+            .build(&mut rng);
         tf.process_block(block_a.clone(), BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), block_a.get_id());
 
@@ -56,7 +59,7 @@ fn reorg_simple(#[case] seed: Seed) {
             .make_block_builder()
             .add_test_transaction_with_parent(genesis_id.into(), &mut rng)
             .with_parent(genesis_id.into())
-            .build();
+            .build(&mut rng);
         assert_ne!(block_a.get_id(), block_b.get_id());
         tf.process_block(block_b.clone(), BlockSource::Local).unwrap();
         assert_ne!(tf.best_block_id(), genesis_id);
@@ -67,7 +70,7 @@ fn reorg_simple(#[case] seed: Seed) {
             .make_block_builder()
             .add_test_transaction_with_parent(block_b.get_id().into(), &mut rng)
             .with_parent(block_b.get_id().into())
-            .build();
+            .build(&mut rng);
         tf.process_block(block_c.clone(), BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), block_c.get_id());
     });
@@ -107,7 +110,11 @@ fn test_very_long_reorgs(#[case] seed: Seed) {
     });
 }
 
-fn check_spend_tx_in_failed_block(tf: &mut TestFramework, events: &EventList, rng: &mut impl Rng) {
+fn check_spend_tx_in_failed_block(
+    tf: &mut TestFramework,
+    events: &EventList,
+    rng: &mut (impl Rng + CryptoRng),
+) {
     // Check spending of a transaction in a block which failed to connect
     //
     //+-- 0x07e3…6fe4 (H:8,M,B:10)
@@ -130,7 +137,7 @@ fn check_spend_tx_in_failed_block(tf: &mut TestFramework, events: &EventList, rn
     tf.make_block_builder()
         .with_parent(block.get_id().into())
         .add_double_spend_transaction(block.get_id().into(), spend_from, rng)
-        .build_and_process()
+        .build_and_process(rng)
         .unwrap();
     // Cause reorg on a failed block
     assert!(matches!(
@@ -141,7 +148,7 @@ fn check_spend_tx_in_failed_block(tf: &mut TestFramework, events: &EventList, rn
     ));
 }
 
-fn check_spend_tx_in_other_fork(tf: &mut TestFramework, rng: &mut impl Rng) {
+fn check_spend_tx_in_other_fork(tf: &mut TestFramework, rng: &mut (impl Rng + CryptoRng)) {
     // # Attempt to spend a transaction created on a different fork
     //
     // +-- 0x4273…c93c (H:7,M,B:9)
@@ -162,7 +169,7 @@ fn check_spend_tx_in_other_fork(tf: &mut TestFramework, rng: &mut impl Rng) {
         .make_block_builder()
         .with_parent(block.get_id().into())
         .add_double_spend_transaction(block.get_id().into(), spend_from, rng)
-        .build();
+        .build(rng);
     let block_id = double_spend_block.get_id();
     tf.process_block(double_spend_block, BlockSource::Local).unwrap();
     // Cause reorg on a failed block
@@ -174,7 +181,7 @@ fn check_spend_tx_in_other_fork(tf: &mut TestFramework, rng: &mut impl Rng) {
     ));
 }
 
-fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut impl Rng) {
+fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut (impl Rng + CryptoRng)) {
     // # Try to create a fork that double-spends
     // This is similar to check_spend_tx_in_other_fork, but double spending happens in the
     // same branch.
@@ -198,7 +205,7 @@ fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut impl Rng) {
         .make_block_builder()
         .with_parent((*parent_id).into())
         .add_double_spend_transaction((*parent_id).into(), spend_from, rng)
-        .build();
+        .build(rng);
     let block_id = double_spend_block.get_id();
     tf.process_block(double_spend_block, BlockSource::Local).unwrap();
 
@@ -211,7 +218,11 @@ fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut impl Rng) {
     ));
 }
 
-fn check_reorg_to_first_chain(tf: &mut TestFramework, events: &EventList, rng: &mut impl Rng) {
+fn check_reorg_to_first_chain(
+    tf: &mut TestFramework,
+    events: &EventList,
+    rng: &mut (impl Rng + CryptoRng),
+) {
     //  ... and back to the first chain.
     //
     // +-- 0x6e45…e8e8 (H:0,B:0)
@@ -272,7 +283,7 @@ fn check_reorg_to_first_chain(tf: &mut TestFramework, events: &EventList, rng: &
 fn check_make_alternative_chain_longer(
     tf: &mut TestFramework,
     events: &EventList,
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
 ) {
     //  Now we add another block to make the alternative chain longer.
     //
@@ -289,7 +300,7 @@ fn check_make_alternative_chain_longer(
     tf.make_block_builder()
         .with_parent(block.get_id().into())
         .add_test_transaction_from_block(&block, rng)
-        .build_and_process()
+        .build_and_process(rng)
         .unwrap();
     check_last_event(tf, events);
     // b3
@@ -314,7 +325,7 @@ fn check_make_alternative_chain_longer(
     assert!(tf.is_block_in_main_chain(tf.index_at(4).block_id()));
 }
 
-fn check_simple_fork(tf: &mut TestFramework, events: &EventList, rng: &mut impl Rng) {
+fn check_simple_fork(tf: &mut TestFramework, events: &EventList, rng: &mut (impl Rng + CryptoRng)) {
     //  Fork like this:
     //
     //  +-- 0x6e45…e8e8 (H:0,B:0) = genesis

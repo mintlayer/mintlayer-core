@@ -80,6 +80,7 @@ pub fn pos_reorg(c: &mut Criterion) {
 
     let common_block_id = tf
         .create_chain_pos(
+            &mut rng,
             &tf.genesis().get_id().into(),
             5,
             genesis_pool_id,
@@ -88,13 +89,27 @@ pub fn pos_reorg(c: &mut Criterion) {
         )
         .unwrap();
 
-    tf.create_chain_pos(&common_block_id, 100, genesis_pool_id, &staking_sk, &vrf_sk)
-        .unwrap();
+    tf.create_chain_pos(
+        &mut rng,
+        &common_block_id,
+        100,
+        genesis_pool_id,
+        &staking_sk,
+        &vrf_sk,
+    )
+    .unwrap();
 
     c.bench_function("PoS reorg", |b| {
         b.iter(|| {
-            tf.create_chain_pos(&common_block_id, 101, genesis_pool_id, &staking_sk, &vrf_sk)
-                .unwrap();
+            tf.create_chain_pos(
+                &mut rng,
+                &common_block_id,
+                101,
+                genesis_pool_id,
+                &staking_sk,
+                &vrf_sk,
+            )
+            .unwrap();
         })
     });
 }

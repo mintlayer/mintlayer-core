@@ -1256,7 +1256,7 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
         ))
     }
     let initial_tx = tx_builder.build();
-    let block = tf.make_block_builder().add_transaction(initial_tx.clone()).build();
+    let block = tf.make_block_builder().add_transaction(initial_tx.clone()).build(&mut rng);
     tf.process_block(block, BlockSource::Local).expect("process_block");
     let chainstate = tf.chainstate();
     let mut mempool = setup_with_chainstate(chainstate);

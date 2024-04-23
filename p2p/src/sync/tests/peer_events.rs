@@ -123,7 +123,7 @@ async fn do_not_disconnect_peer_after_receiving_known_header_list(#[case] seed: 
         let block = tf
             .make_block_builder()
             .with_timestamp(BlockTimestamp::from_time(time.get_time_getter().get_time()))
-            .build();
+            .build(&mut rng);
         tf.process_block(block.clone(), BlockSource::Local).unwrap();
 
         let mut node = TestNode::builder(protocol_version)

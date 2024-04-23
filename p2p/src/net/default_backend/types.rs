@@ -370,7 +370,10 @@ mod tests {
 
         let p2p_config = test_p2p_config();
         let mut tf = TestFramework::builder(&mut rng).build();
-        let block = tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
+        let block = tf
+            .make_block_builder()
+            .add_test_transaction_from_best_block(&mut rng)
+            .build(&mut rng);
 
         let messages = [
             Message::Handshake(HandshakeMessage::Hello {

@@ -43,7 +43,7 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.as_ref().clone())
             .build();
-        let block = tf.make_block_builder().build();
+        let block = tf.make_block_builder().build(&mut rng);
 
         let p2p_config = Arc::new(test_p2p_config());
         let mut node = TestNode::builder(protocol_version)
@@ -88,7 +88,7 @@ async fn unordered_headers(#[case] seed: Seed) {
             .with_chain_config(chain_config.as_ref().clone())
             .build();
         // Skip the header in the middle.
-        let headers = create_n_blocks(&mut tf, 3)
+        let headers = create_n_blocks(&mut rng, &mut tf, 3)
             .into_iter()
             .enumerate()
             .filter(|(i, _)| *i != 1)
@@ -132,7 +132,7 @@ async fn disconnected_headers(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.as_ref().clone())
             .build();
-        let headers = create_n_blocks(&mut tf, 3)
+        let headers = create_n_blocks(&mut rng, &mut tf, 3)
             .into_iter()
             .skip(1)
             .map(|b| b.header().clone())
@@ -175,7 +175,7 @@ async fn valid_headers(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.as_ref().clone())
             .build();
-        let blocks = create_n_blocks(&mut tf, 3);
+        let blocks = create_n_blocks(&mut rng, &mut tf, 3);
 
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(chain_config)

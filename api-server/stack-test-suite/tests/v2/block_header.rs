@@ -103,7 +103,7 @@ async fn ok(#[case] seed: Seed) {
                 .with_stake_spending_key(staking_sk)
                 .with_vrf_key(vrf_sk.clone())
                 .with_stake_pool(pool_id)
-                .build();
+                .build(&mut rng);
             tf.process_block(block.clone(), BlockSource::Local).unwrap();
 
             let block_id = block.get_id();

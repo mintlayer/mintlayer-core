@@ -208,7 +208,7 @@ async fn simulation(
                 block_builder = block_builder.add_test_transaction(&mut rng);
             }
 
-            let block = block_builder.build();
+            let block = block_builder.build(&mut rng);
             for tx in block.transactions() {
                 let new_utxos = (0..tx.inputs().len()).map(|output_index| {
                     UtxoOutPoint::new(

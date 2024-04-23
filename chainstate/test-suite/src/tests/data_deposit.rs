@@ -55,7 +55,7 @@ fn data_deposited_too_large(#[case] seed: Seed, #[case] expect_success: bool) {
             .add_output(TxOutput::DataDeposit(deposited_data))
             .build();
 
-        let block = tf.make_block_builder().add_transaction(tx.clone()).build();
+        let block = tf.make_block_builder().add_transaction(tx.clone()).build(&mut rng);
 
         if expect_success {
             let _new_connected_block_index = tf
@@ -130,7 +130,7 @@ fn data_deposit_insufficient_fee(
         let _block_index = tf
             .make_block_builder()
             .add_transaction(tx_with_fee_as_output)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -146,7 +146,7 @@ fn data_deposit_insufficient_fee(
             .build();
         let tx_id = tx.transaction().get_id();
 
-        let block = tf.make_block_builder().add_transaction(tx).build();
+        let block = tf.make_block_builder().add_transaction(tx).build(&mut rng);
 
         if expect_success {
             let _new_connected_block_index = tf
@@ -200,7 +200,7 @@ fn data_deposit_output_attempt_spend(#[case] seed: Seed) {
         let _block_index = tf
             .make_block_builder()
             .add_transaction(tx_with_data_as_output.clone())
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -219,7 +219,7 @@ fn data_deposit_output_attempt_spend(#[case] seed: Seed) {
             ))
             .build();
 
-        let block = tf.make_block_builder().add_transaction(tx.clone()).build();
+        let block = tf.make_block_builder().add_transaction(tx.clone()).build(&mut rng);
 
         let err = tf.process_block(block.clone(), chainstate::BlockSource::Local).unwrap_err();
 

@@ -117,6 +117,7 @@ impl KeyManager {
 
     pub fn get_signature(
         &self,
+        rng: &mut (impl Rng + CryptoRng),
         destination: &Destination,
         chain_config: &ChainConfig,
         tx: &Transaction,
@@ -137,6 +138,7 @@ impl KeyManager {
                     tx,
                     inputs_utxos,
                     input_num,
+                    rng,
                 )
                 .map(InputWitness::Standard)
                 .unwrap();
@@ -154,6 +156,7 @@ impl KeyManager {
                     tx,
                     inputs_utxos,
                     input_num,
+                    rng,
                 )
                 .map(InputWitness::Standard)
                 .unwrap();

@@ -15,6 +15,7 @@
 
 use std::io::BufWriter;
 
+use randomness::{CryptoRng, Rng};
 use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
@@ -98,13 +99,14 @@ impl StandardInputSignature {
         Ok(())
     }
 
-    pub fn produce_uniparty_signature_for_input<T: Signable>(
+    pub fn produce_uniparty_signature_for_input<T: Signable, R: Rng + CryptoRng>(
         private_key: &crypto::key::PrivateKey,
         sighash_type: SigHashType,
         outpoint_destination: Destination,
         tx: &T,
         inputs_utxos: &[Option<&TxOutput>],
         input_num: usize,
+        rng: R,
     ) -> Result<Self, DestinationSigError> {
         let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num)?;
         let serialized_sig = match outpoint_destination {
@@ -113,7 +115,7 @@ impl StandardInputSignature {
                 sig.encode()
             }
             Destination::PublicKey(ref pubkey) => {
-                let sig = sign_pubkey_spending(private_key, pubkey, &sighash)?;
+                let sig = sign_pubkey_spending(private_key, pubkey, &sighash, rng)?;
                 sig.encode()
             }
             Destination::ScriptHash(_) => return Err(DestinationSigError::Unsupported),
@@ -250,6 +252,7 @@ mod test {
                     &tx,
                     &inputs_utxos_refs,
                     INPUT_NUM,
+                    &mut rng,
                 ),
                 "{sighash_type:X?}"
             );
@@ -281,6 +284,7 @@ mod test {
                     &tx,
                     &inputs_utxos_refs,
                     INPUT_NUM,
+                    &mut rng
                 ),
                 "{sighash_type:X?}"
             );
@@ -316,6 +320,7 @@ mod test {
                 &tx,
                 &inputs_utxos_refs,
                 INPUT_NUM,
+                &mut rng,
             )
             .unwrap();
 

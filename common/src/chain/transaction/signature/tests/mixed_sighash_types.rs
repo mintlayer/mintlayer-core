@@ -63,6 +63,7 @@ fn mixed_sighash_types(#[case] seed: Seed) {
         .map(|(input, sighash_type)| {
             InputWitness::Standard(
                 make_signature(
+                    &mut rng,
                     &tx,
                     &inputs_utxos_refs,
                     input,

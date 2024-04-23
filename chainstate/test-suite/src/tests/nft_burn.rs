@@ -60,7 +60,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
         let block_index = tf
             .make_block_builder()
             .add_transaction(tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -79,7 +79,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
             )))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -105,7 +105,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::TokenV1(token_id, Amount::ZERO)))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     })
 }
@@ -141,7 +141,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
         let block_index = tf
             .make_block_builder()
             .add_transaction(tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -163,7 +163,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
         let block_index = tf
             .make_block_builder()
             .add_transaction(tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
@@ -186,7 +186,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
@@ -242,7 +242,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
 
-        let res = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             res.unwrap_err(),
