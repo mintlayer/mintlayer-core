@@ -130,7 +130,7 @@ where
 
         let chainstate = make_chainstate(
             Arc::clone(&chain_config),
-            ChainstateConfig::new(),
+            chainstate_config,
             chainstate_storage::inmemory::Store::new_empty().unwrap(),
             DefaultTransactionVerificationStrategy::new(),
             None,

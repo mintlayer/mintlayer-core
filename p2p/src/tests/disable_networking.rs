@@ -15,6 +15,7 @@
 
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
+use chainstate::ChainstateConfig;
 use logging::log;
 use networking::test_helpers::{TestTransportChannel, TestTransportMaker};
 use p2p_test_utils::run_with_timeout;
@@ -43,6 +44,7 @@ async fn disable_networking_impl() {
 
     let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+    let chainstate_config = ChainstateConfig::new();
     let p2p_config = Arc::new(test_p2p_config());
 
     // Start test_node with networking disabled.
@@ -50,6 +52,7 @@ async fn disable_networking_impl() {
         false,
         time_getter.clone(),
         Arc::clone(&chain_config),
+        chainstate_config.clone(),
         Arc::clone(&p2p_config),
         make_transport_with_local_addr_in_group(0),
         TestTransportChannel::make_address().into(),
@@ -62,6 +65,7 @@ async fn disable_networking_impl() {
         true,
         time_getter.clone(),
         Arc::clone(&chain_config),
+        chainstate_config.clone(),
         Arc::clone(&p2p_config),
         make_transport_with_local_addr_in_group(1),
         TestTransportChannel::make_address().into(),
@@ -74,6 +78,7 @@ async fn disable_networking_impl() {
         true,
         time_getter.clone(),
         Arc::clone(&chain_config),
+        chainstate_config,
         Arc::clone(&p2p_config),
         make_transport_with_local_addr_in_group(2),
         TestTransportChannel::make_address().into(),

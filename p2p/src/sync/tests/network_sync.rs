@@ -149,6 +149,7 @@ async fn no_unexpected_disconnects_in_ibd(#[case] seed: Seed) {
     for_each_protocol_version(|protocol_version| async move {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+        // With the heavy checks enabled, this test takes over a minute to complete in debug builds.
         let chainstate_config = ChainstateConfig::new().with_heavy_checks_enabled(false);
         let time_getter = BasicTestTimeGetter::new();
 

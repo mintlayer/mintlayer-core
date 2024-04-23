@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use chainstate::ban_score::BanScore;
+use chainstate::{ban_score::BanScore, ChainstateConfig};
 use networking::test_helpers::{
     TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
 };
@@ -44,6 +44,7 @@ where
         true,
         time_getter.clone(),
         Arc::clone(&chain_config),
+        ChainstateConfig::new(),
         Arc::clone(&p2p_config),
         TTM::make_transport(),
         TTM::make_address().into(),

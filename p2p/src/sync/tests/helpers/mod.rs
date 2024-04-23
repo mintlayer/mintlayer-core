@@ -566,7 +566,7 @@ impl TestNodeBuilder {
         assert!(chainstate_config.is_none() || chainstate.is_none());
 
         let mut chainstate = chainstate.unwrap_or_else(|| {
-            let chainstate_config = chainstate_config.unwrap_or_else(|| ChainstateConfig::new());
+            let chainstate_config = chainstate_config.unwrap_or_else(ChainstateConfig::new);
             make_chainstate(
                 Arc::clone(&chain_config),
                 chainstate_config,

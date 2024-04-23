@@ -15,7 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use chainstate::Locator;
+use chainstate::{ChainstateConfig, Locator};
 use networking::test_helpers::{
     TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
 };
@@ -48,6 +48,7 @@ where
         true,
         time_getter.clone(),
         Arc::clone(&chain_config),
+        ChainstateConfig::new(),
         Arc::clone(&p2p_config),
         TTM::make_transport(),
         TTM::make_address().into(),
