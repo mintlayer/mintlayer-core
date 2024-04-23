@@ -19,8 +19,7 @@ use common::{
         block::{Block, GenBlock},
         signature::DestinationSigError,
         tokens::TokenId,
-        AccountNonce, AccountType, OutPointSourceId, PoolId, TokenIssuanceVersion, Transaction,
-        UtxoOutPoint,
+        AccountNonce, AccountType, OutPointSourceId, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -214,8 +213,6 @@ pub enum TokensError {
     InvariantBrokenUndoIssuanceOnNonexistentToken(TokenId),
     #[error("Invariant broken - attempt register issuance on non-existent token {0}")]
     InvariantBrokenRegisterIssuanceWithDuplicateId(TokenId),
-    #[error("Token version {0:?} from tx {1} is deprecated")]
-    DeprecatedTokenOperationVersion(TokenIssuanceVersion, Id<Transaction>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

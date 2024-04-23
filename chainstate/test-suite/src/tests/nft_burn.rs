@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::{BlockError, ChainstateError, ConnectTransactionError, TokensError};
+use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
     output_value::OutputValue, signature::inputsig::InputWitness, tokens::make_token_id,
@@ -246,11 +246,15 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
 
         assert_eq!(
             res.unwrap_err(),
-            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::DeprecatedTokenOperationVersion(
-                    TokenIssuanceVersion::V0,
-                    tx_id,
-                ))
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                chainstate::CheckBlockError::CheckTransactionFailed(
+                    chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                        tx_verifier::CheckTransactionError::DeprecatedTokenOperationVersion(
+                            TokenIssuanceVersion::V0,
+                            tx_id,
+                        )
+                    )
+                )
             ))
         );
     })

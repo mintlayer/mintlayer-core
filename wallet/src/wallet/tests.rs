@@ -2231,34 +2231,31 @@ fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
     assert_eq!(coin_balance, block1_amount);
 
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
-    let token_issuance_transaction = wallet
-        .create_transaction_to_addresses(
-            DEFAULT_ACCOUNT_INDEX,
-            [TxOutput::Transfer(
-                OutputValue::TokenV0(Box::new(TokenData::TokenIssuance(Box::new(
-                    TokenIssuanceV0 {
-                        token_ticker: "XXXX".as_bytes().to_vec(),
-                        number_of_decimals: rng.gen_range(1..18),
-                        metadata_uri: "http://uri".as_bytes().to_vec(),
-                        amount_to_issue: Amount::from_atoms(rng.gen_range(1..10000)),
-                    },
-                )))),
-                address2.into_object(),
-            )],
-            SelectedInputs::Utxos(vec![]),
-            BTreeMap::new(),
-            FeeRate::from_amount_per_kb(Amount::ZERO),
-            FeeRate::from_amount_per_kb(Amount::ZERO),
-        )
-        .unwrap();
+    let result = wallet.create_transaction_to_addresses(
+        DEFAULT_ACCOUNT_INDEX,
+        [TxOutput::Transfer(
+            OutputValue::TokenV0(Box::new(TokenData::TokenIssuance(Box::new(
+                TokenIssuanceV0 {
+                    token_ticker: "XXXX".as_bytes().to_vec(),
+                    number_of_decimals: rng.gen_range(1..18),
+                    metadata_uri: "http://uri".as_bytes().to_vec(),
+                    amount_to_issue: Amount::from_atoms(rng.gen_range(1..10000)),
+                },
+            )))),
+            address2.into_object(),
+        )],
+        SelectedInputs::Utxos(vec![]),
+        BTreeMap::new(),
+        FeeRate::from_amount_per_kb(Amount::ZERO),
+        FeeRate::from_amount_per_kb(Amount::ZERO),
+    );
 
-    let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
-    let _ = create_block(
-        &chain_config,
-        &mut wallet,
-        vec![token_issuance_transaction],
-        block2_amount,
-        1,
+    matches!(
+        result.unwrap_err(),
+        WalletError::InvalidTransaction(CheckTransactionError::DeprecatedTokenOperationVersion(
+            common::chain::TokenIssuanceVersion::V0,
+            _
+        ))
     );
 
     let (_, token_balances) = get_currency_balances(&wallet);

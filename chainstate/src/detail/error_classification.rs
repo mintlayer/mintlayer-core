@@ -374,8 +374,7 @@ impl BlockProcessingErrorClassification for TokensError {
             | TokensError::TokenIdCantBeCalculated
             | TokensError::TokensInBlockReward
             | TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_)
-            | TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_)
-            | TokensError::DeprecatedTokenOperationVersion(_, _) => {
+            | TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => {
                 BlockProcessingErrorClass::BadBlock
             }
         }
@@ -696,7 +695,10 @@ impl BlockProcessingErrorClassification for CheckTransactionError {
             | CheckTransactionError::NoSignatureDataSizeTooLarge(_, _, _)
             | CheckTransactionError::NoSignatureDataNotAllowed(_)
             | CheckTransactionError::DataDepositMaxSizeExceeded(_, _, _)
-            | CheckTransactionError::TxSizeTooLarge(_, _, _) => BlockProcessingErrorClass::BadBlock,
+            | CheckTransactionError::TxSizeTooLarge(_, _, _)
+            | CheckTransactionError::DeprecatedTokenOperationVersion(_, _) => {
+                BlockProcessingErrorClass::BadBlock
+            }
 
             CheckTransactionError::PropertyQueryError(err) => err.classify(),
             CheckTransactionError::TokensError(err) => err.classify(),

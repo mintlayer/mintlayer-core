@@ -18,9 +18,11 @@ use std::collections::BTreeSet;
 use chainstate_types::PropertyQueryError;
 use common::{
     chain::{
+        output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{get_tokens_issuance_count, NftIssuance},
-        ChainConfig, SignedTransaction, Transaction, TransactionSize, TxOutput,
+        ChainConfig, SignedTransaction, TokenIssuanceVersion, Transaction, TransactionSize,
+        TxOutput,
     },
     primitives::{BlockHeight, Id, Idable},
 };
@@ -52,6 +54,8 @@ pub enum CheckTransactionError {
     DataDepositMaxSizeExceeded(usize, usize, Id<Transaction>),
     #[error("The size if tx {0} is too large: {1} > {2}")]
     TxSizeTooLarge(Id<Transaction>, usize, usize),
+    #[error("Token version {0:?} from tx {1} is deprecated")]
+    DeprecatedTokenOperationVersion(TokenIssuanceVersion, Id<Transaction>),
 }
 
 pub fn check_transaction(
@@ -128,9 +132,44 @@ fn check_witness_count(tx: &SignedTransaction) -> Result<(), CheckTransactionErr
 
 fn check_tokens_tx(
     chain_config: &ChainConfig,
-    _block_height: BlockHeight,
+    block_height: BlockHeight,
     tx: &SignedTransaction,
 ) -> Result<(), CheckTransactionError> {
+    // Check if v0 tokens are allowed to be used at this height
+    let latest_token_version = chain_config
+        .chainstate_upgrades()
+        .version_at_height(block_height)
+        .1
+        .token_issuance_version();
+
+    match latest_token_version {
+        TokenIssuanceVersion::V0 => { /* do nothing */ }
+        TokenIssuanceVersion::V1 => {
+            let has_tokens_v0_op = tx.outputs().iter().any(|output| match output {
+                TxOutput::Transfer(output_value, _)
+                | TxOutput::Burn(output_value)
+                | TxOutput::LockThenTransfer(output_value, _, _) => match output_value {
+                    OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
+                    OutputValue::TokenV0(_) => true,
+                },
+                TxOutput::CreateStakePool(_, _)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_) => false,
+            });
+            ensure!(
+                !has_tokens_v0_op,
+                CheckTransactionError::DeprecatedTokenOperationVersion(
+                    TokenIssuanceVersion::V0,
+                    tx.transaction().get_id(),
+                )
+            );
+        }
+    };
+
     // We can't issue multiple tokens in a single tx
     let issuance_count = get_tokens_issuance_count(tx.outputs());
     ensure!(
