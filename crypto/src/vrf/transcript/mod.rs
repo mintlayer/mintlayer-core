@@ -13,93 +13,50 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use self::traits::SignableTranscript;
-
+pub mod no_rng;
 pub mod traits;
-
-#[must_use]
-#[derive(Clone)]
-pub struct VRFTranscript(merlin::Transcript);
-
-impl VRFTranscript {
-    pub fn new(label: &'static [u8]) -> Self {
-        Self(merlin::Transcript::new(label))
-    }
-
-    #[cfg(test)]
-    pub(crate) fn append_u64(&mut self, label: &'static [u8], x: u64) {
-        self.0.append_u64(label, x)
-    }
-}
-
-impl SignableTranscript for VRFTranscript {
-    fn attach_u64(mut self, label: &'static [u8], value: u64) -> Self {
-        self.0.append_u64(label, value);
-        self
-    }
-
-    fn attach_raw_data<T: AsRef<[u8]>>(mut self, label: &'static [u8], message: T) -> Self {
-        self.0.append_message(label, message.as_ref());
-        self
-    }
-}
-
-impl schnorrkel::context::SigningTranscript for VRFTranscript {
-    fn commit_bytes(&mut self, label: &'static [u8], bytes: &[u8]) {
-        self.0.append_message(label, bytes)
-    }
-
-    fn challenge_bytes(&mut self, label: &'static [u8], dest: &mut [u8]) {
-        self.0.challenge_bytes(label, dest)
-    }
-
-    fn witness_bytes_rng<R>(
-        &self,
-        label: &'static [u8],
-        dest: &mut [u8],
-        nonce_seeds: &[&[u8]],
-        rng: R,
-    ) where
-        R: randomness::RngCore + randomness::CryptoRng,
-    {
-        self.0.witness_bytes_rng(label, dest, nonce_seeds, rng)
-    }
-
-    fn witness_bytes(&self, label: &'static [u8], dest: &mut [u8], nonce_seeds: &[&[u8]]) {
-        self.witness_bytes_rng(label, dest, nonce_seeds, randomness::make_true_rng())
-    }
-}
+pub mod with_rng;
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
 
-    use rand_chacha::ChaChaRng;
+    use super::{no_rng::VRFTranscript, traits::SignableTranscript};
 
-    use randomness::{Rng, SeedableRng};
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn ensure_both_with_and_without_rng_are_equivalent(#[case] seed: Seed) {
+        use randomness::Rng;
 
-    use super::*;
+        use crate::vrf::transcript::with_rng::VRFTranscriptWithRng;
 
-    #[test]
-    fn manual_vs_assembled() {
-        // build first transcript by manually filling values
-        let mut manual_transcript = merlin::Transcript::new(b"initial");
-        manual_transcript.append_message(b"abc", b"xyz");
-        manual_transcript.append_u64(b"rx42", 424242);
+        let no_rng_value = {
+            let mut rng = make_seedable_rng(seed);
 
-        // build the second transcript using the assembler
-        let assembled_transcript = VRFTranscript::new(b"initial")
-            .attach_raw_data(b"abc", b"xyz")
-            .attach_u64(b"rx42", 424242);
+            let assembled_transcript = VRFTranscript::new(b"initial")
+                .attach_raw_data(b"abc", b"xyz")
+                .attach_u64(b"rx42", 424242);
 
-        // build a random number generator using each transcript and ensure they both arrive to the same values
-        let mut g1 = manual_transcript.build_rng().finalize(&mut ChaChaRng::from_seed([0u8; 32]));
-        let mut g2 = assembled_transcript
-            .0
-            .build_rng()
-            .finalize(&mut ChaChaRng::from_seed([0u8; 32]));
+            let mut generator = assembled_transcript.take().build_rng().finalize(&mut rng);
 
-        for _ in 0..100 {
-            assert_eq!(g1.gen::<u64>(), g2.gen::<u64>());
-        }
+            (0..100).map(|_| generator.gen::<u64>()).collect::<Vec<_>>()
+        };
+
+        let with_rng_value = {
+            let mut rng1 = make_seedable_rng(seed);
+            let mut rng2 = make_seedable_rng(seed);
+
+            let assembled_transcript = VRFTranscriptWithRng::new(b"initial", &mut rng1)
+                .attach_raw_data(b"abc", b"xyz")
+                .attach_u64(b"rx42", 424242);
+
+            let mut generator = assembled_transcript.take().build_rng().finalize(&mut rng2);
+
+            (0..100).map(|_| generator.gen::<u64>()).collect::<Vec<_>>()
+        };
+
+        assert_eq!(with_rng_value, no_rng_value);
     }
 }

@@ -22,7 +22,7 @@ use common::{
     },
     primitives::{Compact, Id, H256},
 };
-use crypto::vrf::{transcript::VRFTranscript, VRFKeyKind, VRFPrivateKey};
+use crypto::vrf::{transcript::no_rng::VRFTranscript, VRFKeyKind, VRFPrivateKey};
 use itertools::Itertools;
 use randomness::{seq::IteratorRandom, Rng};
 use utxo::{Utxo, UtxosDBInMemoryImpl};

@@ -41,9 +41,8 @@ use common::{
     },
     primitives::{per_thousand::PerThousand, Idable, H256},
 };
-use crypto::{
-    key::hdkd::{child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath},
-    vrf::transcript::VRFTranscript,
+use crypto::key::hdkd::{
+    child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath,
 };
 use itertools::Itertools;
 use randomness::{CryptoRng, Rng, SliceRandom};
@@ -1481,6 +1480,8 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
+    use crypto::vrf::transcript::no_rng::VRFTranscript;
+
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_regtest());
 

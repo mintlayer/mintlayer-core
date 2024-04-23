@@ -59,6 +59,13 @@ impl From<u64> for Seed {
     }
 }
 
+impl randomness::distributions::Distribution<Seed> for randomness::distributions::Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Seed {
+        let new_seed = rng.gen::<u64>();
+        Seed::from_u64(new_seed)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TestRng(rand_chacha::ChaChaRng);
 

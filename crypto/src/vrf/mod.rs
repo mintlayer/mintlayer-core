@@ -326,7 +326,9 @@ mod tests {
     use test_utils::random::make_seedable_rng;
     use test_utils::random::Seed;
 
-    use super::{transcript::VRFTranscript, *};
+    use self::transcript::no_rng::VRFTranscript;
+
+    use super::*;
 
     #[rstest]
     #[trace]
@@ -424,8 +426,8 @@ mod tests {
             }
         }
 
-        let mut mutated_transcript = transcript;
-        mutated_transcript.append_u64(b"Forgery", 1337);
+        let mutated_transcript = transcript;
+        let mutated_transcript = mutated_transcript.attach_u64(b"Forgery", 1337);
 
         pk.verify_vrf_data(mutated_transcript, &vrf_data)
             .expect_err("Invalid VRF check succeeded");
@@ -494,5 +496,30 @@ mod tests {
         }
 
         pk.verify_vrf_data(transcript, &vrf_data).expect("Valid VRF check failed");
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn transcript_types_work_interchangeably(#[case] seed: Seed) {
+        let transcript = make_arbitrary_transcript();
+        let transcript_with_rng = transcript.clone().with_rng(make_seedable_rng(seed));
+
+        let mut rng = make_seedable_rng(seed);
+        let (sk, pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let vrf_data_no_rng = sk.produce_vrf_data(transcript.clone());
+        let vrf_data_with_rng = sk.produce_vrf_data(transcript_with_rng.clone());
+
+        pk.verify_vrf_data(transcript.clone(), &vrf_data_no_rng)
+            .expect("Valid VRF check failed");
+
+        pk.verify_vrf_data(transcript, &vrf_data_with_rng)
+            .expect("Valid VRF check failed");
+
+        pk.verify_vrf_data(transcript_with_rng.clone(), &vrf_data_no_rng)
+            .expect("Valid VRF check failed");
+
+        pk.verify_vrf_data(transcript_with_rng, &vrf_data_with_rng)
+            .expect("Valid VRF check failed");
     }
 }
