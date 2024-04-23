@@ -37,6 +37,10 @@ impl VRFTranscript {
 }
 
 impl SignableTranscript for VRFTranscript {
+    fn make_extra_transcript(&self) -> Self {
+        VRFTranscript::new(b"VRF")
+    }
+
     fn attach_u64(mut self, label: &'static [u8], value: u64) -> Self {
         self.0.append_u64(label, value);
         self

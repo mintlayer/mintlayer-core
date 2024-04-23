@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use randomness::{CryptoRng, RngCore};
 
@@ -23,16 +23,18 @@ pub trait RngCoreAndCrypto: RngCore + CryptoRng {}
 
 impl<R> RngCoreAndCrypto for R where R: RngCore + CryptoRng {}
 
+/// A transcript that produces deterministic vrf signatures based on the provided rng
 #[must_use]
-pub struct VRFTranscriptWithRng<'a>(merlin::Transcript, Box<Mutex<dyn RngCoreAndCrypto + 'a>>);
+#[derive(Clone)]
+pub struct VRFTranscriptWithRng<'a>(merlin::Transcript, Arc<Mutex<dyn RngCoreAndCrypto + 'a>>);
 
 impl<'a> VRFTranscriptWithRng<'a> {
     pub fn new<R: RngCoreAndCrypto + 'a>(label: &'static [u8], rng: R) -> Self {
-        Self(merlin::Transcript::new(label), Box::new(Mutex::new(rng)))
+        Self(merlin::Transcript::new(label), Arc::new(Mutex::new(rng)))
     }
 
     pub(crate) fn from_no_rng<R: RngCoreAndCrypto + 'a>(transcript: VRFTranscript, rng: R) -> Self {
-        VRFTranscriptWithRng(transcript.take(), Box::new(Mutex::new(rng)))
+        VRFTranscriptWithRng(transcript.take(), Arc::new(Mutex::new(rng)))
     }
 
     #[allow(unused)]
@@ -41,7 +43,11 @@ impl<'a> VRFTranscriptWithRng<'a> {
     }
 }
 
-impl SignableTranscript for VRFTranscriptWithRng<'_> {
+impl<'a> SignableTranscript for VRFTranscriptWithRng<'a> {
+    fn make_extra_transcript(&self) -> Self {
+        Self(merlin::Transcript::new(b"VRF"), self.1.clone())
+    }
+
     fn attach_u64(mut self, label: &'static [u8], value: u64) -> Self {
         self.0.append_u64(label, value);
         self
@@ -117,5 +123,29 @@ mod tests {
         for _ in 0..100 {
             assert_eq!(g1.gen::<u64>(), g2.gen::<u64>());
         }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(1.into())]
+    fn is_deterministic(#[case] seed: Seed) {
+        use crate::vrf::{VRFKeyKind, VRFPrivateKey};
+
+        let mut rng = make_seedable_rng(seed);
+        let (vrf_sk, _) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+        let transcript = VRFTranscript::new(b"initial")
+            .attach_raw_data(b"abc", b"xyz")
+            .attach_u64(b"rx42", 424242);
+
+        let rng1 = make_seedable_rng(seed);
+        let transcript_rng1 = transcript.clone().with_rng(rng1);
+        let rng2 = make_seedable_rng(seed);
+        let transcript_rng2 = transcript.clone().with_rng(rng2);
+
+        let vrf_data_1 = vrf_sk.produce_vrf_data(transcript_rng1);
+        let vrf_data_2 = vrf_sk.produce_vrf_data(transcript_rng2);
+
+        assert_eq!(vrf_data_1, vrf_data_2);
     }
 }

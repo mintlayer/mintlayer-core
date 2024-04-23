@@ -15,6 +15,9 @@
 
 /// A wrapper trait for a transcript that can be signed
 pub trait SignableTranscript: schnorrkel::context::SigningTranscript {
+    /// The extra transcript is built during signature as per the specs in Schnorrkel.
+    /// This function is necessary to customize the rng object that will be used.
+    fn make_extra_transcript(&self) -> Self;
     fn attach_u64(self, label: &'static [u8], value: u64) -> Self;
     fn attach_raw_data<T: AsRef<[u8]>>(self, label: &'static [u8], value: T) -> Self;
 }

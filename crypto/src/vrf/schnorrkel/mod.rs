@@ -141,11 +141,12 @@ impl SchnorrkelPrivateKey {
     }
 
     pub fn produce_vrf_data<T: SignableTranscript>(&self, message: T) -> SchnorrkelVRFReturn {
+        let extra = message.make_extra_transcript();
         let (io, proof, _batchable_proof) = Keypair {
             secret: self.key.clone(),
             public: self.key.to_public(),
         }
-        .vrf_sign(message);
+        .vrf_sign_extra(message, extra);
 
         SchnorrkelVRFReturn::new(io.to_preout(), proof)
     }
