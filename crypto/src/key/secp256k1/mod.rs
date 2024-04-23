@@ -57,8 +57,8 @@ impl From<secp256k1::SecretKey> for Secp256k1PrivateKey {
 
 impl Secp256k1PrivateKey {
     pub fn new<R: Rng + CryptoRng>(rng: &mut R) -> (Secp256k1PrivateKey, Secp256k1PublicKey) {
-        let secret = secp256k1::SecretKey::new(rng);
-        let public = secret.public_key(secp256k1::SECP256K1);
+        let secp = secp256k1::Secp256k1::new();
+        let (secret, public) = secp.generate_keypair(rng);
         (
             Secp256k1PrivateKey::from_native(secret),
             Secp256k1PublicKey::from_native(public),
@@ -93,7 +93,7 @@ impl Secp256k1PrivateKey {
         // TODO(SECURITY) erase keypair after signing
         let keypair = self.data.keypair(&secp);
         // TODO(SECURITY) examine the usage of sign_schnorr_with_rng or a RFC6979 scheme
-        secp.sign_schnorr(&msg_hash, &keypair)
+        secp.sign_schnorr_with_rng(&msg_hash, &keypair, &mut randomness::make_true_rng())
     }
 }
 
@@ -145,7 +145,11 @@ impl Secp256k1PublicKey {
     }
 
     pub fn from_private_key(private_key: &Secp256k1PrivateKey) -> Self {
-        Self::from_native(private_key.data.public_key(secp256k1::SECP256K1))
+        let secp = secp256k1::Secp256k1::new();
+        Self::from_native(secp256k1::PublicKey::from_secret_key(
+            &secp,
+            &private_key.data,
+        ))
     }
 
     pub(crate) fn verify_message(
@@ -166,13 +170,13 @@ impl Secp256k1PublicKey {
         signature: &secp256k1::schnorr::Signature,
         msg_hashed: &secp256k1::Message,
     ) -> bool {
-        secp256k1::SECP256K1
-            .verify_schnorr(
-                signature,
-                msg_hashed,
-                &self.pubkey_data.x_only_public_key().0,
-            )
-            .is_ok()
+        let secp = secp256k1::Secp256k1::new();
+        secp.verify_schnorr(
+            signature,
+            msg_hashed,
+            &self.pubkey_data.x_only_public_key().0,
+        )
+        .is_ok()
     }
 }
 
@@ -182,7 +186,6 @@ mod test {
     use hex::ToHex;
     use randomness::make_true_rng;
     use rstest::rstest;
-    use secp256k1::SECP256K1;
     use serialization::DecodeAll;
     use serialization::Encode;
 
@@ -244,10 +247,15 @@ mod test {
         "0325d1dff95105f5253c4022f628a996ad3a0d95fbf21d468a1b33f8c160d8f517"
     )]
     fn serialize_chosen_data(#[case] sk_hex: &str, #[case] pk_hex: &str) {
+        let secp: secp256k1::Secp256k1<secp256k1::All> = secp256k1::Secp256k1::new();
+
         let sk = Secp256k1PrivateKey::from_bytes(&hex::decode(sk_hex).unwrap()).unwrap();
         let pk = Secp256k1PublicKey::from_bytes(&hex::decode(pk_hex).unwrap()).unwrap();
 
-        assert_eq!(pk.as_native(), &sk.as_native().public_key(SECP256K1));
+        assert_eq!(
+            pk.as_native(),
+            &secp256k1::PublicKey::from_secret_key(&secp, sk.as_native())
+        );
 
         let sk_encoded = sk.encode();
         let pk_encoded = pk.encode();

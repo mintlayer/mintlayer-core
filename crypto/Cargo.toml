@@ -17,7 +17,7 @@ serialization = { path = "../serialization" }
 # The following crates don't work well with "workspace.dependencies"
 argon2 = { version = "0.5", features = ["std"] }
 merlin = { version = "3.0", default-features = false }
-secp256k1 = { version = "0.28", default-features = false, features = ["global-context", "rand-std"] }
+secp256k1 = { version = "0.29", default-features = false, features = ["rand-std", "std", "rand"] }
 
 bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
 blake2.workspace = true

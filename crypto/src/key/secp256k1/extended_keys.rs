@@ -24,7 +24,6 @@ use crate::util::{self, new_hmac_sha_512};
 use hmac::{Hmac, Mac};
 use randomness::{CryptoRng, Rng};
 use secp256k1;
-use secp256k1::SECP256K1;
 use serialization::{Decode, Encode};
 use sha2::Sha512;
 use std::cmp::Ordering;
@@ -121,7 +120,8 @@ impl Derivable for Secp256k1ExtendedPrivateKey {
             mac.update(&secp_key[..]);
         } else {
             // For normal derivations add the serialized public key
-            mac.update(&secp_key.public_key(SECP256K1).serialize());
+            let secp: secp256k1::Secp256k1<secp256k1::All> = secp256k1::Secp256k1::new();
+            mac.update(&secp256k1::PublicKey::from_secret_key(&secp, &secp_key).serialize());
         }
 
         // Add the child number
@@ -192,10 +192,12 @@ impl Secp256k1ExtendedPublicKey {
     }
 
     pub fn from_private_key(private_key: &Secp256k1ExtendedPrivateKey) -> Self {
+        let secp: secp256k1::Secp256k1<secp256k1::All> = secp256k1::Secp256k1::new();
         Secp256k1ExtendedPublicKey {
             derivation_path: private_key.derivation_path.clone(),
             chain_code: private_key.chain_code,
-            public_key: private_key.private_key.data.public_key(SECP256K1).into(),
+            public_key: secp256k1::PublicKey::from_secret_key(&secp, &private_key.private_key.data)
+                .into(),
         }
     }
 }
@@ -217,11 +219,13 @@ impl Derivable for Secp256k1ExtendedPublicKey {
         // Finalize and get the new un-tweaked key and the new chain code
         let (key_part, chain_code) = to_key_and_chain_code(mac)?;
 
+        let secp: secp256k1::Secp256k1<secp256k1::All> = secp256k1::Secp256k1::new();
+
         // Create the derived public key
         let public_key = self
             .public_key
             .pubkey_data
-            .add_exp_tweak(SECP256K1, &key_part.into())
+            .add_exp_tweak(&secp, &key_part.into())
             .map_err(|_| DerivationError::KeyDerivationError)?
             .into();
 
