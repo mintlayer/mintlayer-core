@@ -180,9 +180,15 @@ Returns `None` (null) if the UtxoOutPoint is not found or is already spent.
 Parameters:
 ```
 { "outpoint": {
-    "id": EITHER OF
-         1) { "Transaction": hex string }
-         2) { "BlockReward": hex string },
+    "source_id": EITHER OF
+         1) {
+                "type": "Transaction",
+                "content": { "tx_id": hex string },
+            }
+         2) {
+                "type": "BlockReward",
+                "content": { "block_id": hex string },
+            },
     "index": number,
 } }
 ```
@@ -375,94 +381,100 @@ Parameters:
 Returns:
 ```
 EITHER OF
-     1) { "FungibleToken": {
-            "token_id": hex string,
-            "token_ticker": {
-                "text": EITHER OF
-                     1) string
-                     2) null,
-                "hex": hex string,
-            },
-            "number_of_decimals": number,
-            "metadata_uri": {
-                "text": EITHER OF
-                     1) string
-                     2) null,
-                "hex": hex string,
-            },
-            "circulating_supply": { "atoms": number string },
-            "total_supply": EITHER OF
-                 1) { "Fixed": { "atoms": number string } }
-                 2) "Lockable"
-                 3) "Unlimited",
-            "is_locked": bool,
-            "frozen": EITHER OF
-                 1) { "No": EITHER OF
-                         1) "No"
-                         2) "Yes" }
-                 2) { "Yes": EITHER OF
-                         1) "No"
-                         2) "Yes" },
-            "authority": EITHER OF
-                 1) "AnyoneCanSpend"
-                 2) { "PublicKeyHash": hex string }
-                 3) { "PublicKey": hex string }
-                 4) { "ScriptHash": hex string }
-                 5) { "ClassicMultisig": hex string },
-        } }
-     2) { "NonFungibleToken": {
-            "token_id": hex string,
-            "creation_tx_id": hex string,
-            "creation_block_id": hex string,
-            "metadata": {
-                "creator": EITHER OF
-                     1) [ number, .. ]
-                     2) null,
-                "name": {
+     1) {
+            "type": "FungibleToken",
+            "content": {
+                "token_id": hex string,
+                "token_ticker": {
                     "text": EITHER OF
                          1) string
                          2) null,
                     "hex": hex string,
                 },
-                "description": {
+                "number_of_decimals": number,
+                "metadata_uri": {
                     "text": EITHER OF
                          1) string
                          2) null,
                     "hex": hex string,
                 },
-                "ticker": {
-                    "text": EITHER OF
-                         1) string
-                         2) null,
-                    "hex": hex string,
-                },
-                "icon_uri": EITHER OF
+                "circulating_supply": { "atoms": number string },
+                "total_supply": EITHER OF
                      1) {
-                            "text": EITHER OF
-                                 1) string
-                                 2) null,
-                            "hex": hex string,
+                            "type": "Fixed",
+                            "content": { "amount": { "atoms": number string } },
                         }
-                     2) null,
-                "additional_metadata_uri": EITHER OF
+                     2) { "type": "Lockable" }
+                     3) { "type": "Unlimited" },
+                "is_locked": bool,
+                "frozen": EITHER OF
                      1) {
-                            "text": EITHER OF
-                                 1) string
-                                 2) null,
-                            "hex": hex string,
+                            "type": "NotFrozen",
+                            "content": { "freezable": bool },
                         }
-                     2) null,
-                "media_uri": EITHER OF
-                     1) {
-                            "text": EITHER OF
-                                 1) string
-                                 2) null,
-                            "hex": hex string,
-                        }
-                     2) null,
-                "media_hash": hex string,
+                     2) {
+                            "type": "Frozen",
+                            "content": { "unfreezable": bool },
+                        },
+                "authority": bech32 string,
             },
-        } }
+        }
+     2) {
+            "type": "NonFungibleToken",
+            "content": {
+                "token_id": hex string,
+                "creation_tx_id": hex string,
+                "creation_block_id": hex string,
+                "metadata": {
+                    "creator": EITHER OF
+                         1) hex string
+                         2) null,
+                    "name": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "description": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "ticker": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "icon_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
+                         2) null,
+                    "additional_metadata_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
+                         2) null,
+                    "media_uri": EITHER OF
+                         1) {
+                                "text": EITHER OF
+                                     1) string
+                                     2) null,
+                                "hex": hex string,
+                            }
+                         2) null,
+                    "media_hash": hex string,
+                },
+            },
+        }
      3) null
 ```
 
@@ -534,10 +546,13 @@ Parameters:
 
 Produces:
 ```
-{ "NewTip": {
-    "id": hex string,
-    "height": number,
-} }
+{
+    "type": "NewTip",
+    "content": {
+        "id": hex string,
+        "height": number,
+    },
+}
 ```
 
 Unsubscribe using `chainstate_unsubscribe_events`.

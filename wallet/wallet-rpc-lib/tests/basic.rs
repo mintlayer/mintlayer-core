@@ -138,10 +138,8 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
     let (utxo_amount, _outpoint0) = {
         let utxo0 = utxos[0].as_object().unwrap();
         let outpt = utxo0["outpoint"].as_object().unwrap();
-        let id = outpt["source_id"].as_object().unwrap()["content"].as_object().unwrap()
-            ["block_id"]
-            .as_str()
-            .unwrap();
+        let id_obj = outpt["source_id"].as_object().unwrap()["content"].as_object().unwrap();
+        let id = id_obj["block_id"].as_str().unwrap();
         let index = outpt["index"].as_u64().unwrap();
         assert_eq!(index, 0);
 

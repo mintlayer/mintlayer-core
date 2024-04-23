@@ -60,6 +60,15 @@ pub enum IsTokenFreezable {
     Yes,
 }
 
+impl IsTokenFreezable {
+    pub fn as_bool(&self) -> bool {
+        match self {
+            Self::No => false,
+            Self::Yes => true,
+        }
+    }
+}
+
 // Indicates whether a token an be unfrozen after being frozen
 #[derive(
     Debug,
@@ -79,6 +88,15 @@ pub enum IsTokenUnfreezable {
     No,
     #[codec(index = 1)]
     Yes,
+}
+
+impl IsTokenUnfreezable {
+    pub fn as_bool(&self) -> bool {
+        match self {
+            Self::No => false,
+            Self::Yes => true,
+        }
+    }
 }
 
 // Indicates whether a token is frozen at the moment or not. If it is then no operations wish this token can be performed.

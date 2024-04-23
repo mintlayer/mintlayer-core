@@ -35,7 +35,7 @@ use utils::qrcode::{QrCode, QrCodeError};
 use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
-    Balances, ComposedTransaction, ControllerConfig, CreatedWallet, InspectTransaction,
+    Balances, ComposedTransaction, ControllerConfig, InspectTransaction, MnemonicInfo,
     NewTransaction, NftMetadata, RpcStandaloneAddressDetails, SignatureStats, TokenMetadata,
     ValidatedSignatures,
 };
@@ -155,8 +155,11 @@ where
 
                 self.wallet.update_wallet::<N>().await;
 
-                let msg = match newly_generated_mnemonic {
-                    CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase) => {
+                let msg = match newly_generated_mnemonic.mnemonic {
+                    MnemonicInfo::NewlyGenerated {
+                        mnemonic,
+                        passphrase,
+                    } => {
                         let passphrase = if let Some(passphrase) = passphrase {
                             format!("passphrase: {passphrase}\n")
                         } else {
@@ -172,9 +175,7 @@ where
                             mnemonic
                         )
                     }
-                    CreatedWallet::UserProvidedMnemonic => {
-                        "New wallet created successfully".to_owned()
-                    }
+                    MnemonicInfo::UserProvided => "New wallet created successfully".to_owned(),
                 };
 
                 Ok(ConsoleCommand::SetStatus {

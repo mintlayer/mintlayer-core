@@ -385,6 +385,7 @@ impl WalletInterface for ClientWalletRpc {
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
+        let selected_utxos = selected_utxos.into_iter().map(Into::into).collect();
         WalletRpcClient::send_coins(
             &self.http_client,
             account_index.into(),
@@ -450,7 +451,7 @@ impl WalletInterface for ClientWalletRpc {
             account_index.into(),
             address.into(),
             amount.into(),
-            selected_utxo,
+            selected_utxo.into(),
             change_address.map(Into::into),
             options,
         )
@@ -1144,6 +1145,7 @@ impl WalletInterface for ClientWalletRpc {
         outputs: Vec<TxOutput>,
         only_transaction: bool,
     ) -> Result<ComposedTransaction, Self::Error> {
+        let inputs = inputs.into_iter().map(Into::into).collect();
         WalletRpcClient::compose_transaction(&self.http_client, inputs, outputs, only_transaction)
             .await
             .map_err(WalletRpcError::ResponseError)

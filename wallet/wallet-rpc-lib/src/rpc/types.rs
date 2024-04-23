@@ -15,7 +15,6 @@
 
 //! Types supporting the RPC interface
 
-use chainstate::rpc::{RpcTxOutput, RpcUtxoOutpoint};
 use common::{
     address::{pubkeyhash::PublicKeyHash, Address, AddressError},
     chain::{
@@ -38,6 +37,10 @@ use crypto::{
 use rpc::description::HasValueHint;
 use wallet::account::PoolData;
 
+pub use chainstate::{
+    rpc::{RpcSignedTransaction, RpcTxOutput, RpcUtxoOutpoint},
+    ChainInfo,
+};
 pub use common::{
     address::RpcAddress,
     primitives::amount::{RpcAmountIn, RpcAmountOut},
@@ -121,6 +124,9 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Minimum number of signatures can't be 0")]
     InvalidMultisigMinSignature,
+
+    #[error(transparent)]
+    Address(#[from] AddressError),
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
@@ -160,7 +166,7 @@ impl AddressInfo {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-#[serde(tag = "type")]
+#[serde(tag = "type", content = "content")]
 pub enum RpcStandaloneAddressDetails {
     WatchOnly,
     FromPrivateKey,
@@ -496,6 +502,7 @@ impl From<&UtxoState> for RpcUtxoState {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type", content = "content")]
 pub enum TokenTotalSupply {
     Fixed(RpcAmountIn),
     Lockable,
@@ -581,11 +588,34 @@ impl StakingStatus {
         }
     }
 }
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type", content = "content")]
+pub enum MnemonicInfo {
+    UserProvided,
+    NewlyGenerated {
+        mnemonic: String,
+        passphrase: Option<String>,
+    },
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-pub enum CreatedWallet {
-    UserProvidedMnemonic,
-    NewlyGeneratedMnemonic(String, Option<String>),
+pub struct CreatedWallet {
+    pub mnemonic: MnemonicInfo,
+}
+
+impl From<crate::CreatedWallet> for CreatedWallet {
+    fn from(value: crate::CreatedWallet) -> Self {
+        let mnemonic = match value {
+            crate::CreatedWallet::UserProvidedMnemonic => MnemonicInfo::UserProvided,
+            crate::CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase) => {
+                MnemonicInfo::NewlyGenerated {
+                    mnemonic: mnemonic.to_string(),
+                    passphrase,
+                }
+            }
+        };
+        Self { mnemonic }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]

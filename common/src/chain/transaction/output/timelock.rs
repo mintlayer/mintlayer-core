@@ -29,7 +29,9 @@ use crate::{chain::block::timestamp::BlockTimestamp, primitives::BlockHeight};
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    rpc_description::HasValueHint,
 )]
+#[serde(tag = "type", content = "content")]
 pub enum OutputTimeLock {
     #[codec(index = 0)]
     UntilHeight(BlockHeight),

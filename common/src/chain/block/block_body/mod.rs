@@ -36,7 +36,7 @@ pub enum BlockMerkleTreeError {
 }
 
 #[must_use]
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct BlockBody {
     pub(super) reward: BlockReward,
     pub(super) transactions: Vec<SignedTransaction>,

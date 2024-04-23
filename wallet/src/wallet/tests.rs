@@ -2035,6 +2035,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             )
             .unwrap();
 
+        let freezable = token_issuance.is_freezable.as_bool();
         let token_info = RPCFungibleTokenInfo::new(
             issued_token_id,
             token_issuance.token_ticker,
@@ -2043,7 +2044,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             Amount::ZERO,
             token_issuance.total_supply.into(),
             false,
-            RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
+            RPCIsTokenFrozen::NotFrozen { freezable },
             token_issuance.authority,
         );
 
@@ -2318,6 +2319,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         1,
     );
 
+    let freezable = token_issuance.is_freezable.as_bool();
     let token_info = RPCFungibleTokenInfo::new(
         issued_token_id,
         token_issuance.token_ticker,
@@ -2326,7 +2328,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         Amount::ZERO,
         token_issuance.total_supply.into(),
         false,
-        RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
+        RPCIsTokenFrozen::NotFrozen { freezable },
         token_issuance.authority,
     );
 
@@ -2600,6 +2602,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         1,
     );
 
+    let freezable = token_issuance.is_freezable.as_bool();
     let mut token_info = RPCFungibleTokenInfo::new(
         issued_token_id,
         token_issuance.token_ticker,
@@ -2608,7 +2611,7 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         Amount::ZERO,
         token_issuance.total_supply.into(),
         false,
-        RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
+        RPCIsTokenFrozen::NotFrozen { freezable },
         token_issuance.authority,
     );
 
@@ -2847,6 +2850,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         1,
     );
 
+    let freezable = token_issuance.is_freezable.as_bool();
     let mut token_info = RPCFungibleTokenInfo::new(
         issued_token_id,
         token_issuance.token_ticker,
@@ -2855,7 +2859,7 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         Amount::ZERO,
         token_issuance.total_supply.into(),
         false,
-        RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
+        RPCIsTokenFrozen::NotFrozen { freezable },
         token_issuance.authority,
     );
 
@@ -3035,6 +3039,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         1,
     );
 
+    let freezable = token_issuance.is_freezable.as_bool();
     let mut token_info = RPCFungibleTokenInfo::new(
         issued_token_id,
         token_issuance.token_ticker,
@@ -3043,7 +3048,7 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         Amount::ZERO,
         token_issuance.total_supply.into(),
         false,
-        RPCIsTokenFrozen::No(token_issuance.is_freezable.into()),
+        RPCIsTokenFrozen::NotFrozen { freezable },
         token_issuance.authority,
     );
 

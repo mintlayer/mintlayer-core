@@ -314,9 +314,15 @@ Parameters:
          1) { "atoms": number string }
          2) { "decimal": decimal string },
     "selected_utxos": [ {
-        "id": EITHER OF
-             1) { "Transaction": hex string }
-             2) { "BlockReward": hex string },
+        "source_id": EITHER OF
+             1) {
+                    "type": "Transaction",
+                    "content": { "tx_id": hex string },
+                }
+             2) {
+                    "type": "BlockReward",
+                    "content": { "block_id": hex string },
+                },
         "index": number,
     }, .. ],
     "options": { "in_top_x_mb": EITHER OF
@@ -398,9 +404,15 @@ Parameters:
          1) { "atoms": number string }
          2) { "decimal": decimal string },
     "selected_utxo": {
-        "id": EITHER OF
-             1) { "Transaction": hex string }
-             2) { "BlockReward": hex string },
+        "source_id": EITHER OF
+             1) {
+                    "type": "Transaction",
+                    "content": { "tx_id": hex string },
+                }
+             2) {
+                    "type": "BlockReward",
+                    "content": { "block_id": hex string },
+                },
         "index": number,
     },
     "change_address": EITHER OF
@@ -867,11 +879,14 @@ Parameters:
              1) string
              2) { "hex": hex string },
         "token_supply": EITHER OF
-             1) { "Fixed": EITHER OF
-                     1) { "atoms": number string }
-                     2) { "decimal": decimal string } }
-             2) "Lockable"
-             3) "Unlimited",
+             1) {
+                    "type": "Fixed",
+                    "content": EITHER OF
+                         1) { "atoms": number string }
+                         2) { "decimal": decimal string },
+                }
+             2) { "type": "Lockable" }
+             3) { "type": "Unlimited" },
         "is_freezable": bool,
     },
     "options": { "in_top_x_mb": EITHER OF
@@ -1490,9 +1505,15 @@ Parameters:
 ```
 {
     "inputs": [ {
-        "id": EITHER OF
-             1) { "Transaction": hex string }
-             2) { "BlockReward": hex string },
+        "source_id": EITHER OF
+             1) {
+                    "type": "Transaction",
+                    "content": { "tx_id": hex string },
+                }
+             2) {
+                    "type": "BlockReward",
+                    "content": { "block_id": hex string },
+                },
         "index": number,
     }, .. ],
     "outputs": [ object, .. ],
@@ -1692,14 +1713,17 @@ Parameters:
 
 Returns:
 ```
-EITHER OF
-     1) "UserProvidedMnemonic"
-     2) { "NewlyGeneratedMnemonic": [
-            string,
-            EITHER OF
-                 1) string
-                 2) null,
-        ] }
+{ "mnemonic": EITHER OF
+     1) { "type": "UserProvided" }
+     2) {
+            "type": "NewlyGenerated",
+            "content": {
+                "mnemonic": string,
+                "passphrase": EITHER OF
+                     1) string
+                     2) null,
+            },
+        } }
 ```
 
 ### Method `wallet_open`
@@ -1970,8 +1994,10 @@ Returns:
          2) { "type": "FromPrivateKey" }
          3) {
                 "type": "Multisig",
-                "min_required_signatures": number,
-                "public_keys": [ bech32 string, .. ],
+                "content": {
+                    "min_required_signatures": number,
+                    "public_keys": [ bech32 string, .. ],
+                },
             },
     "balances": {
         "coins": {

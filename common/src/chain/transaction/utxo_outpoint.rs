@@ -28,7 +28,6 @@ use serialization::{Decode, Encode};
     PartialOrd,
     serde::Serialize,
     serde::Deserialize,
-    rpc_description::HasValueHint,
 )]
 pub enum OutPointSourceId {
     #[codec(index = 0)]
@@ -81,7 +80,6 @@ impl OutPointSourceId {
     PartialOrd,
     serde::Serialize,
     serde::Deserialize,
-    rpc_description::HasValueHint,
 )]
 pub struct UtxoOutPoint {
     id: OutPointSourceId,

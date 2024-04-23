@@ -27,7 +27,6 @@ use crate::{
     text_summary::TextSummary,
 };
 use crypto::vrf::VRFPublicKey;
-use rpc_description::HasValueHint;
 use script::Script;
 use serialization::{Decode, DecodeAll, Encode};
 use variant_count::VariantCount;
@@ -39,9 +38,7 @@ pub mod output_value;
 pub mod stakelock;
 pub mod timelock;
 
-#[derive(
-    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, VariantCount, HasValueHint,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, VariantCount)]
 pub enum Destination {
     #[codec(index = 0)]
     AnyoneCanSpend, // zero verification; used primarily for testing. Never use this for real money
@@ -65,6 +62,10 @@ impl<'de> serde::Deserialize<'de> for Destination {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }
+}
+
+impl rpc_description::HasValueHint for Destination {
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::BECH32_STRING;
 }
 
 impl Addressable for Destination {

@@ -124,14 +124,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         self.wallet_rpc
             .create_wallet(path, whether_to_store_seed_phrase, mnemonic, passphrase)
             .await
-            .map(|res| match res {
-                wallet_rpc_lib::CreatedWallet::UserProvidedMnemonic => {
-                    CreatedWallet::UserProvidedMnemonic
-                }
-                wallet_rpc_lib::CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase) => {
-                    CreatedWallet::NewlyGeneratedMnemonic(mnemonic.to_string(), passphrase)
-                }
-            })
+            .map(Into::into)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
@@ -542,6 +535,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         outputs: Vec<TxOutput>,
         only_transaction: bool,
     ) -> Result<ComposedTransaction, Self::Error> {
+        let inputs = inputs.into_iter().map(Into::into).collect();
         self.wallet_rpc
             .compose_transaction(inputs, outputs, only_transaction)
             .await

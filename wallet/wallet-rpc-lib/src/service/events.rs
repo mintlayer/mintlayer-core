@@ -57,7 +57,10 @@ pub enum Event {
 }
 
 /// Transaction state
-#[derive(Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(
+    Eq, PartialEq, Clone, Debug, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint,
+)]
+#[serde(tag = "type", content = "content")]
 pub enum TxState {
     /// Transaction was confirmed at given block height
     Confirmed {

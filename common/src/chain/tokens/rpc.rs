@@ -13,19 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{
-    IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, Metadata, TokenCreator, TokenId,
-    TokenTotalSupply,
-};
+use super::{IsTokenFrozen, Metadata, TokenCreator, TokenId, TokenTotalSupply};
 use crate::{
     chain::{Block, Destination, Transaction},
     primitives::{Amount, Id},
 };
 use rpc_description::HasValueHint;
 use rpc_types::{RpcHexString, RpcString};
-use serialization::{Decode, Encode};
+use serialization::Encode;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type", content = "content")]
 pub enum RPCTokenInfo {
     FungibleToken(RPCFungibleTokenInfo),
     NonFungibleToken(Box<RPCNonFungibleTokenInfo>),
@@ -55,20 +53,10 @@ impl RPCTokenInfo {
     }
 }
 
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Encode,
-    Decode,
-    serde::Serialize,
-    serde::Deserialize,
-    HasValueHint,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type", content = "content")]
 pub enum RPCTokenTotalSupply {
-    Fixed(Amount),
+    Fixed { amount: Amount },
     Lockable,
     Unlimited,
 }
@@ -76,67 +64,9 @@ pub enum RPCTokenTotalSupply {
 impl From<TokenTotalSupply> for RPCTokenTotalSupply {
     fn from(value: TokenTotalSupply) -> Self {
         match value {
-            TokenTotalSupply::Fixed(v) => RPCTokenTotalSupply::Fixed(v),
+            TokenTotalSupply::Fixed(amount) => RPCTokenTotalSupply::Fixed { amount },
             TokenTotalSupply::Lockable => RPCTokenTotalSupply::Lockable,
             TokenTotalSupply::Unlimited => RPCTokenTotalSupply::Unlimited,
-        }
-    }
-}
-
-// Indicates whether a token an be frozen
-#[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Encode,
-    Decode,
-    serde::Serialize,
-    serde::Deserialize,
-    HasValueHint,
-)]
-pub enum RPCIsTokenFreezable {
-    #[codec(index = 0)]
-    No,
-    #[codec(index = 1)]
-    Yes,
-}
-
-impl From<IsTokenFreezable> for RPCIsTokenFreezable {
-    fn from(value: IsTokenFreezable) -> Self {
-        match value {
-            IsTokenFreezable::No => RPCIsTokenFreezable::No,
-            IsTokenFreezable::Yes => RPCIsTokenFreezable::Yes,
-        }
-    }
-}
-
-// Indicates whether a token an be unfrozen after being frozen
-#[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Encode,
-    Decode,
-    serde::Serialize,
-    serde::Deserialize,
-    HasValueHint,
-)]
-pub enum RPCIsTokenUnfreezable {
-    #[codec(index = 0)]
-    No,
-    #[codec(index = 1)]
-    Yes,
-}
-
-impl From<IsTokenUnfreezable> for RPCIsTokenUnfreezable {
-    fn from(value: IsTokenUnfreezable) -> Self {
-        match value {
-            IsTokenUnfreezable::No => RPCIsTokenUnfreezable::No,
-            IsTokenUnfreezable::Yes => RPCIsTokenUnfreezable::Yes,
         }
     }
 }
@@ -144,23 +74,11 @@ impl From<IsTokenUnfreezable> for RPCIsTokenUnfreezable {
 // Indicates whether a token is frozen at the moment or not. If it is then no operations wish this token can be performed.
 // Meaning transfers, burns, minting, unminting, supply locks etc. Frozen token can only be unfrozen
 // is such an option was provided while freezing.
-#[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Encode,
-    Decode,
-    serde::Serialize,
-    serde::Deserialize,
-    HasValueHint,
-)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type", content = "content")]
 pub enum RPCIsTokenFrozen {
-    #[codec(index = 0)]
-    No(RPCIsTokenFreezable),
-    #[codec(index = 1)]
-    Yes(RPCIsTokenUnfreezable),
+    NotFrozen { freezable: bool },
+    Frozen { unfreezable: bool },
 }
 
 impl From<IsTokenFrozen> for RPCIsTokenFrozen {
@@ -172,8 +90,14 @@ impl From<IsTokenFrozen> for RPCIsTokenFrozen {
 impl RPCIsTokenFrozen {
     pub fn new(frozen: IsTokenFrozen) -> Self {
         match frozen {
-            IsTokenFrozen::No(is_freezable) => Self::No(is_freezable.into()),
-            IsTokenFrozen::Yes(is_unfreezable) => Self::Yes(is_unfreezable.into()),
+            IsTokenFrozen::No(freezable) => {
+                let freezable = freezable.as_bool();
+                Self::NotFrozen { freezable }
+            }
+            IsTokenFrozen::Yes(unfreezable) => {
+                let unfreezable = unfreezable.as_bool();
+                Self::Frozen { unfreezable }
+            }
         }
     }
 }
@@ -243,9 +167,7 @@ impl RPCNonFungibleTokenInfo {
     }
 }
 
-#[derive(
-    Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize, HasValueHint,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RPCTokenCreator(Vec<u8>);
 
 impl RPCTokenCreator {
@@ -263,7 +185,7 @@ impl From<&TokenCreator> for RPCTokenCreator {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RPCNonFungibleTokenMetadata {
-    pub creator: Option<RPCTokenCreator>,
+    pub creator: Option<RpcHexString>,
     pub name: RpcString,
     pub description: RpcString,
     pub ticker: RpcString,
@@ -276,7 +198,7 @@ pub struct RPCNonFungibleTokenMetadata {
 impl From<&Metadata> for RPCNonFungibleTokenMetadata {
     fn from(metadata: &Metadata) -> Self {
         Self {
-            creator: metadata.creator().as_ref().map(RPCTokenCreator::from),
+            creator: metadata.creator().as_ref().map(|c| RpcHexString::from_bytes(c.encode())),
             name: metadata.name().clone().into(),
             description: metadata.description().clone().into(),
             ticker: metadata.ticker().clone().into(),

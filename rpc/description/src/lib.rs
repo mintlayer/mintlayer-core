@@ -16,7 +16,7 @@
 mod display;
 mod value_hint;
 
-pub use value_hint::{Fields, HasValueHint, ValueHint};
+pub use value_hint::{HasValueHint, ValueHint};
 
 /// Type that has RPC interface description associated with it
 pub trait Described {

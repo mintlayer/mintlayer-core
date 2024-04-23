@@ -26,7 +26,7 @@ use rpc::types::RpcHexString;
 
 use super::token::{RpcNftIssuance, RpcTokenIssuance};
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RpcOutputValue {
     Coin {
@@ -54,7 +54,7 @@ impl RpcOutputValue {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 pub struct RpcStakePoolData {
     pledge: RpcAmountOut,
     staker: RpcAddress<Destination>,
@@ -81,7 +81,7 @@ impl RpcStakePoolData {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RpcTxOutput {
     Transfer {

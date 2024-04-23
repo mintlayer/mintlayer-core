@@ -26,8 +26,8 @@ use common::{
         stakelock::StakePoolData,
         tokens::{
             is_token_or_nft_issuance, make_token_id, IsTokenFreezable, IsTokenUnfreezable,
-            RPCFungibleTokenInfo, RPCIsTokenFreezable, RPCIsTokenFrozen, RPCIsTokenUnfreezable,
-            RPCTokenTotalSupply, TokenId, TokenIssuance, TokenTotalSupply,
+            RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCTokenTotalSupply, TokenId, TokenIssuance,
+            TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
         OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -137,7 +137,7 @@ impl From<TokenTotalSupply> for TokenCurrentSupplyState {
 impl From<RPCTokenTotalSupply> for TokenCurrentSupplyState {
     fn from(value: RPCTokenTotalSupply) -> Self {
         match value {
-            RPCTokenTotalSupply::Fixed(amount) => {
+            RPCTokenTotalSupply::Fixed { amount } => {
                 TokenCurrentSupplyState::Fixed(amount, Amount::ZERO)
             }
             RPCTokenTotalSupply::Lockable => TokenCurrentSupplyState::Lockable(Amount::ZERO),
@@ -393,13 +393,13 @@ pub enum TokenFreezableState {
 impl From<RPCIsTokenFrozen> for TokenFreezableState {
     fn from(value: RPCIsTokenFrozen) -> Self {
         match value {
-            RPCIsTokenFrozen::No(is_freezable) => match is_freezable {
-                RPCIsTokenFreezable::No => Self::NotFrozen(IsTokenFreezable::No),
-                RPCIsTokenFreezable::Yes => Self::NotFrozen(IsTokenFreezable::Yes),
+            RPCIsTokenFrozen::NotFrozen { freezable } => match freezable {
+                false => Self::NotFrozen(IsTokenFreezable::No),
+                true => Self::NotFrozen(IsTokenFreezable::Yes),
             },
-            RPCIsTokenFrozen::Yes(is_unfreezable) => match is_unfreezable {
-                RPCIsTokenUnfreezable::No => Self::Frozen(IsTokenUnfreezable::No),
-                RPCIsTokenUnfreezable::Yes => Self::Frozen(IsTokenUnfreezable::Yes),
+            RPCIsTokenFrozen::Frozen { unfreezable } => match unfreezable {
+                false => Self::Frozen(IsTokenUnfreezable::No),
+                true => Self::Frozen(IsTokenUnfreezable::Yes),
             },
         }
     }
