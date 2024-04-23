@@ -208,6 +208,12 @@ pub enum BackendRequest {
         skip: usize,
     },
 
+    ConsoleCommand {
+        wallet_id: WalletId,
+        account_id: AccountId,
+        command: String,
+    },
+
     Shutdown,
 }
 

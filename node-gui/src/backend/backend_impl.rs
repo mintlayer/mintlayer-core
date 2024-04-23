@@ -866,6 +866,11 @@ impl Backend {
                     BackendEvent::TransactionList(wallet_id, account_id, transaction_list_res),
                 );
             }
+            BackendRequest::ConsoleCommand {
+                wallet_id: _,
+                account_id: _,
+                command: _,
+            } => {}
             BackendRequest::Shutdown => unreachable!(),
         }
     }

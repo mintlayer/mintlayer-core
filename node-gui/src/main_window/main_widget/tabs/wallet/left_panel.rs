@@ -176,12 +176,20 @@ pub fn view_left_panel(
         .padding(10),
         match wallet_info.wallet_type {
             WalletType::Cold => {
-                column![panel_button(
-                    "Addresses",
-                    SelectedPanel::Addresses,
-                    selected_panel,
-                    ADDRESSES_TOOLTIP_TEXT
-                )]
+                column![
+                    panel_button(
+                        "Addresses",
+                        SelectedPanel::Addresses,
+                        selected_panel,
+                        ADDRESSES_TOOLTIP_TEXT
+                    ),
+                    panel_button(
+                        "Console",
+                        SelectedPanel::Console,
+                        selected_panel,
+                        ADDRESSES_TOOLTIP_TEXT
+                    )
+                ]
             }
             WalletType::Hot => column![
                 panel_button(
@@ -214,6 +222,12 @@ pub fn view_left_panel(
                     selected_panel,
                     DELEGATION_TOOLTIP_TEXT
                 ),
+                column![panel_button(
+                    "Console",
+                    SelectedPanel::Console,
+                    selected_panel,
+                    ADDRESSES_TOOLTIP_TEXT
+                )]
             ],
         },
         Column::new().height(Length::Fill),

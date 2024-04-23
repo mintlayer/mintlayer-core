@@ -14,6 +14,7 @@
 // limitations under the License.
 
 mod addresses;
+mod console;
 mod delegation;
 mod left_panel;
 mod send;
@@ -56,6 +57,7 @@ pub enum SelectedPanel {
     Send,
     Staking,
     Delegation,
+    Console,
 }
 
 #[derive(Debug, Clone)]
@@ -109,9 +111,18 @@ pub enum WalletMessage {
 
     TransactionList { skip: usize },
 
+    ConsoleInputChange(String),
+    ConsoleInputSubmit,
+
     StillSyncing,
     Close,
     NoOp,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ConsoleState {
+    pub console_output: String,
+    pub console_input: String,
 }
 
 /// State that should be reset after changing the selected account
@@ -134,6 +145,8 @@ pub struct AccountState {
     send_delegation_address: String,
     send_delegation_amount: String,
     send_delegation_id: String,
+
+    console_state: ConsoleState,
 }
 
 pub struct WalletTab {
@@ -319,6 +332,18 @@ impl WalletTab {
                 });
                 Command::none()
             }
+            WalletMessage::ConsoleInputChange(new_state) => {
+                self.account_state.console_state.console_input = new_state;
+                Command::none()
+            }
+            WalletMessage::ConsoleInputSubmit => {
+                backend_sender.send(BackendRequest::ConsoleCommand {
+                    wallet_id: self.wallet_id,
+                    account_id: self.selected_account,
+                    command: self.account_state.console_state.console_input.clone(),
+                });
+                Command::none()
+            }
             WalletMessage::StillSyncing => Command::none(),
             WalletMessage::Close => {
                 backend_sender.send(BackendRequest::CloseWallet(self.wallet_id));
@@ -480,6 +505,10 @@ impl Tab for WalletTab {
                             &self.account_state.send_delegation_amount,
                             &self.account_state.send_delegation_id,
                             &self.account_state.delegate_staking_amounts,
+                            still_syncing.clone(),
+                        ),
+                        SelectedPanel::Console => console::view_console(
+                            &self.account_state.console_state,
                             still_syncing.clone(),
                         ),
                     };
