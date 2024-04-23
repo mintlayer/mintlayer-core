@@ -195,6 +195,7 @@ mod test {
     use rstest::rstest;
     use serialization::DecodeAll;
     use serialization::Encode;
+    use test_utils::random::{make_seedable_rng, Seed};
 
     #[test]
     fn basic() {
@@ -344,5 +345,24 @@ mod test {
         let msg_hash =
             secp256k1::Message::from_digest_slice(&hex::decode(msg_hash).unwrap()).unwrap();
         assert_eq!(pk.verify_message_hashed(&sig, &msg_hash), is_valid);
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(test_utils::random::Seed::from_entropy())]
+    fn deterministic(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let msg_size = 1 + rng.gen::<usize>() % 10000;
+        let msg: Vec<u8> = (0..msg_size).map(|_| rng.gen::<u8>()).collect();
+        let (sk, pk) = Secp256k1PrivateKey::new(&mut rng);
+
+        let mut rng1 = make_seedable_rng(seed);
+        let mut rng2 = make_seedable_rng(seed);
+        let sig1 = sk.sign_message(&msg, &mut rng1);
+        let sig2 = sk.sign_message(&msg, &mut rng2);
+        assert!(pk.verify_message(&sig1, &msg));
+        assert!(pk.verify_message(&sig2, &msg));
+        assert_eq!(sig1, sig2);
+        assert_eq!(sig1.serialize(), sig2.serialize());
     }
 }
