@@ -1402,6 +1402,7 @@ impl Account {
                         challenge,
                         &sighash,
                         current_signatures,
+                        &mut make_true_rng(),
                     )
                     .map_err(DestinationSigError::ClassicalMultisigSigningFailed)?;
 

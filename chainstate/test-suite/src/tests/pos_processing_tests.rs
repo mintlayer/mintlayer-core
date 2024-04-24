@@ -371,6 +371,7 @@ fn pos_basic(#[case] seed: Seed) {
     let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
 
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -460,6 +461,7 @@ fn pos_block_signature(#[case] seed: Seed) {
     let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
 
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -547,6 +549,7 @@ fn pos_block_signature(#[case] seed: Seed) {
     let new_block_height = tf.best_block_index().block_height().next_height();
 
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -612,6 +615,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
     let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
 
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time((tf.current_time() + Duration::from_secs(1)).unwrap()),
@@ -693,6 +697,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
     let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
 
     let (valid_pos_data, valid_block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -849,6 +854,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
     let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
 
     let (valid_pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -940,6 +946,7 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
     let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
 
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -1015,6 +1022,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
 
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -1059,6 +1067,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let new_block_height = tf.best_block_index().block_height().next_height();
     let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -1110,6 +1119,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
 
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -1165,6 +1175,7 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
     let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
 
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -1413,6 +1424,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
     let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
 
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -1458,6 +1470,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
     let new_block_height = tf.best_block_index().block_height().next_height();
     let current_difficulty = calculate_new_target(&tf, new_block_height).unwrap();
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -1567,6 +1580,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
     let new_block_height = tf.best_block_index().block_height().next_height();
 
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -1694,6 +1708,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
     let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
 
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -1747,6 +1762,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
     let final_supply = tf.chainstate.get_chain_config().final_supply().unwrap();
 
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -2004,6 +2020,7 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
 
     // create a block with new pool
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),
@@ -2076,6 +2093,7 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
 
     // create a block with new pool
     let (pos_data, block_timestamp) = chainstate_test_framework::pos_mine(
+        &mut rng,
         &tf.storage.transaction_ro().unwrap(),
         &get_pos_chain_config(tf.chainstate.get_chain_config(), new_block_height),
         BlockTimestamp::from_time(tf.current_time()),

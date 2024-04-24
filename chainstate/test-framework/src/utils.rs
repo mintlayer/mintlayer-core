@@ -41,6 +41,7 @@ use crypto::{
 use itertools::Itertools;
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
 use randomness::{CryptoRng, Rng};
+use test_utils::random::{make_seedable_rng, Seed};
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
     use randomness::SliceRandom;
@@ -254,6 +255,7 @@ pub fn produce_kernel_signature(
 // TODO: consider replacing this function with consensus::pos::stake
 #[allow(clippy::too_many_arguments)]
 pub fn pos_mine(
+    rng: &mut (impl Rng + CryptoRng),
     storage: &impl BlockchainStorageRead,
     pos_config: &PoSChainConfig,
     initial_timestamp: BlockTimestamp,
@@ -271,13 +273,16 @@ pub fn pos_mine(
     let pool_balance = pos_db.get_pool_balance(pool_id).unwrap().unwrap();
     let pledge_amount = pos_db.get_pool_data(pool_id).unwrap().unwrap().staker_balance().unwrap();
 
+    let seed = rng.gen::<Seed>();
     let mut timestamp = initial_timestamp;
     for _ in 0..1000 {
+        let rng = make_seedable_rng(seed);
         let transcript = chainstate_types::vrf_tools::construct_transcript(
             epoch_index,
             &sealed_epoch_randomness.value(),
             timestamp,
-        );
+        )
+        .with_rng(rng);
         let vrf_data = vrf_sk.produce_vrf_data(transcript);
 
         let pos_data = PoSData::new(

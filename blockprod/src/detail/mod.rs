@@ -294,7 +294,6 @@ impl BlockProduction {
                         BlockTimestamp::from_time(time_getter.get_time()),
                         block_height,
                         get_ancestor,
-                        randomness::make_true_rng(),
                     )?;
 
                     let finalize_block_data = generate_finalize_block_data(

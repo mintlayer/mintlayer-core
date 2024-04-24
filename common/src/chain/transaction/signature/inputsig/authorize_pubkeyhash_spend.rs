@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crypto::key::{PublicKey, Signature};
+use randomness::{CryptoRng, Rng};
 use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
@@ -57,10 +58,11 @@ pub fn verify_address_spending(
     Ok(())
 }
 
-pub fn sign_address_spending(
+pub fn sign_address_spending<R: Rng + CryptoRng>(
     private_key: &crypto::key::PrivateKey,
     spendee_addr: &PublicKeyHash,
     sighash: &H256,
+    rng: R,
 ) -> Result<AuthorizedPublicKeyHashSpend, DestinationSigError> {
     let public_key = PublicKey::from_private_key(private_key);
     let calculated_addr = PublicKeyHash::from(&public_key);
@@ -69,7 +71,7 @@ pub fn sign_address_spending(
     }
     let msg = sighash.encode();
     let signature = private_key
-        .sign_message(&msg, randomness::make_true_rng())
+        .sign_message(&msg, rng)
         .map_err(DestinationSigError::ProducingSignatureFailed)?;
 
     Ok(AuthorizedPublicKeyHashSpend::new(public_key, signature))
@@ -273,7 +275,7 @@ mod test {
             let sighash =
                 signature_hash(witness.sighash_type(), &tx, &inputs_utxos_refs, input).unwrap();
 
-            sign_address_spending(&private_key, &pubkey_hash, &sighash)
+            sign_address_spending(&private_key, &pubkey_hash, &sighash, &mut rng)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }
     }

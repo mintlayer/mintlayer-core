@@ -16,6 +16,7 @@
 use std::collections::BTreeMap;
 
 use crypto::key::Signature;
+use randomness::{CryptoRng, Rng};
 use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
@@ -177,6 +178,7 @@ pub fn sign_classical_multisig_spending(
     challenge: &ClassicMultisigChallenge,
     sighash: &H256,
     current_signatures: AuthorizedClassicalMultisigSpend,
+    rng: &mut (impl Rng + CryptoRng),
 ) -> Result<ClassicalMultisigCompletionStatus, ClassicalMultisigSigningError> {
     // ensure the challenge is valid before signing it
     if let Err(ch_err) = challenge.is_valid(chain_config) {
@@ -233,7 +235,7 @@ pub fn sign_classical_multisig_spending(
         return Err(ClassicalMultisigSigningError::SpendeePrivateChallengePublicKeyMismatch);
     }
     let signature = private_key
-        .sign_message(&msg, randomness::make_true_rng())
+        .sign_message(&msg, rng)
         .map_err(ClassicalMultisigSigningError::ProducingSignatureFailed)?;
 
     let mut current_signatures = current_signatures;
@@ -309,6 +311,7 @@ mod tests {
                 &challenge,
                 &sighash,
                 current_signatures.clone(),
+                &mut rng,
             );
 
             // When testing valid cases, depending on the number of already-done signatures, we have 3 possible results:
@@ -451,6 +454,7 @@ mod tests {
                 &challenge,
                 &sighash,
                 current_signatures.clone(),
+                &mut rng,
             );
 
             current_signatures = match res {
@@ -472,6 +476,7 @@ mod tests {
                 &challenge,
                 &sighash,
                 current_signatures.clone(),
+                &mut rng,
             )
             .unwrap_err();
             assert_eq!(
@@ -490,6 +495,7 @@ mod tests {
                 &challenge,
                 &sighash,
                 current_signatures,
+                &mut rng,
             )
             .unwrap();
             assert!(proper_signing_result.is_complete());
@@ -578,6 +584,7 @@ mod tests {
                 &challenge,
                 &sighash,
                 current_signatures.clone(),
+                &mut rng,
             )
             .unwrap();
 
@@ -746,6 +753,7 @@ mod tests {
                 &invalid_challenge,
                 &sighash,
                 current_signatures.clone(),
+                &mut rng,
             )
             .unwrap_err();
 
@@ -769,6 +777,7 @@ mod tests {
                 &challenge,
                 &sighash,
                 current_signatures.clone(),
+                &mut rng,
             )
             .unwrap();
 
@@ -783,6 +792,7 @@ mod tests {
                 &challenge,
                 &sighash,
                 sign_result.take(),
+                &mut rng,
             )
             .unwrap_err();
 
@@ -804,6 +814,7 @@ mod tests {
                 &challenge,
                 &sighash,
                 current_signatures.clone(),
+                &mut rng,
             )
             .unwrap();
 
@@ -828,6 +839,7 @@ mod tests {
                 &challenge,
                 &sighash,
                 tampered_with_signatures,
+                &mut rng,
             )
             .unwrap_err();
 
@@ -853,6 +865,7 @@ mod tests {
                 &challenge,
                 &sighash,
                 current_signatures.clone(),
+                &mut rng,
             )
             .unwrap_err();
             assert_eq!(
@@ -884,6 +897,7 @@ mod tests {
                 &challenge,
                 &sighash,
                 current_signatures,
+                &mut rng,
             )
             .unwrap();
 
@@ -923,6 +937,7 @@ mod tests {
                 &challenge,
                 &sighash,
                 tampered_with_signatures,
+                &mut rng,
             )
             .unwrap_err();
 
