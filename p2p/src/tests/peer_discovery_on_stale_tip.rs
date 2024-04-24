@@ -15,7 +15,7 @@
 
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
-use chainstate::BlockSource;
+use chainstate::{BlockSource, ChainstateConfig};
 use common::{
     chain::{Block, ChainConfig},
     primitives::{user_agent::mintlayer_core_user_agent, Idable},
@@ -83,6 +83,9 @@ async fn peer_discovery_on_stale_tip_impl(
     let mut rng = test_utils::random::make_seedable_rng(seed);
     let time_getter = BasicTestTimeGetter::new();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+    // The heavy checks don't make much sense for this test and it's relatively lengthy,
+    // so we disable them.
+    let chainstate_config = ChainstateConfig::new().with_heavy_checks_enabled(false);
 
     // The sum of these values plus the "extra_count" values is the number
     // of nodes that the tests will create.
@@ -146,6 +149,7 @@ async fn peer_discovery_on_stale_tip_impl(
             start_node(
                 &time_getter,
                 &chain_config,
+                chainstate_config.clone(),
                 &p2p_config,
                 i + 1,
                 initial_block.clone(),
@@ -208,6 +212,7 @@ async fn peer_discovery_on_stale_tip_impl(
     let new_node = start_node(
         &time_getter,
         &chain_config,
+        chainstate_config,
         &p2p_config,
         new_node_idx,
         initial_block.clone(),
@@ -278,6 +283,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
     let time_getter = BasicTestTimeGetter::new();
     let start_time = time_getter.get_time_getter().get_time();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+    let chainstate_config = ChainstateConfig::new();
     let stale_tip_time_diff = Duration::from_secs(60 * 60);
     let outbound_conn_min_age = Duration::from_secs(30);
     let peer_mgr_main_loop_tick_interval = Duration::from_millis(1);
@@ -350,6 +356,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
     let mut main_node = start_node(
         &time_getter,
         &chain_config,
+        chainstate_config.clone(),
         &main_node_p2p_config,
         0,
         Some(initial_block.clone()),
@@ -364,6 +371,7 @@ async fn new_full_relay_connections_on_stale_tip_impl(seed: Seed) {
             start_node(
                 &time_getter,
                 &chain_config,
+                chainstate_config.clone(),
                 &extra_nodes_p2p_config,
                 i + 1,
                 Some(initial_block.clone()),
@@ -502,6 +510,7 @@ pub fn make_p2p_config(peer_manager_config: PeerManagerConfig) -> P2pConfig {
 async fn start_node(
     time_getter: &BasicTestTimeGetter,
     chain_config: &Arc<ChainConfig>,
+    chainstate_config: ChainstateConfig,
     p2p_config: &Arc<P2pConfig>,
     node_index: usize,
     initial_block: Option<Block>,
@@ -511,6 +520,7 @@ async fn start_node(
         true,
         time_getter.clone(),
         Arc::clone(chain_config),
+        chainstate_config,
         Arc::clone(p2p_config),
         make_transport_with_local_addr_in_group(node_index as u32),
         TestTransportChannel::make_address().into(),

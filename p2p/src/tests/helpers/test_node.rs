@@ -105,6 +105,7 @@ where
         networking_enabled: bool,
         time_getter: BasicTestTimeGetter,
         chain_config: Arc<ChainConfig>,
+        chainstate_config: ChainstateConfig,
         p2p_config: Arc<P2pConfig>,
         transport: Transport,
         bind_address: SocketAddress,
@@ -129,7 +130,7 @@ where
 
         let chainstate = make_chainstate(
             Arc::clone(&chain_config),
-            ChainstateConfig::new(),
+            chainstate_config,
             chainstate_storage::inmemory::Store::new_empty().unwrap(),
             DefaultTransactionVerificationStrategy::new(),
             None,

@@ -31,7 +31,7 @@ use api_server_common::storage::{
     },
 };
 
-use chainstate::BlockSource;
+use chainstate::{BlockSource, ChainstateConfig};
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
@@ -95,6 +95,7 @@ async fn simulation(
     // Initialize original TestFramework
     let mut tf = TestFramework::builder(&mut rng)
         .with_chain_config(chain_config.clone())
+        .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
         .with_initial_time_since_genesis(target_time.as_secs())
         .with_staking_pools(BTreeMap::from_iter([(
             genesis_pool_id,
