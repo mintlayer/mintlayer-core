@@ -46,7 +46,7 @@ async fn max_locator_size_exceeded(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.as_ref().clone())
             .build();
-        let block = tf.make_block_builder().build();
+        let block = tf.make_block_builder().build(&mut rng);
 
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(chain_config)
@@ -89,7 +89,7 @@ async fn valid_request(#[case] seed: Seed) {
             .with_chain_config(chain_config.as_ref().clone())
             .build();
         // Process a block to finish the initial block download.
-        let block_index = tf.make_block_builder().build_and_process().unwrap().unwrap();
+        let block_index = tf.make_block_builder().build_and_process(&mut rng).unwrap().unwrap();
         let locator = tf
             .chainstate
             .get_locator_from_height(block_index.block_height().prev_height().unwrap())

@@ -58,7 +58,7 @@ async fn unrequested_block(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.as_ref().clone())
             .build();
-        let block = tf.make_block_builder().build();
+        let block = tf.make_block_builder().build(&mut rng);
         let block_id = block.get_id();
 
         let mut node = TestNode::builder(protocol_version)
@@ -99,7 +99,7 @@ async fn valid_response(#[case] seed: Seed) {
             .with_chain_config(chain_config.as_ref().clone())
             .build();
         let num_blocks = rng.gen_range(2..10);
-        let blocks = create_n_blocks(&mut tf, num_blocks);
+        let blocks = create_n_blocks(&mut rng, &mut tf, num_blocks);
 
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(chain_config)
@@ -183,7 +183,7 @@ async fn block_responses_in_wrong_order(#[case] seed: Seed) {
             .build();
         let num_blocks = rng.gen_range(2..10);
         log::debug!("Generating {num_blocks} blocks");
-        let blocks = create_n_blocks(&mut tf, num_blocks);
+        let blocks = create_n_blocks(&mut rng, &mut tf, num_blocks);
 
         let normal_indices: Vec<_> = (0..num_blocks).collect();
         let shuffled_indices = {
@@ -282,7 +282,7 @@ async fn disconnect(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.as_ref().clone())
             .build();
-        let block = tf.make_block_builder().build();
+        let block = tf.make_block_builder().build(&mut rng);
 
         let p2p_config = Arc::new(P2pConfig {
             sync_stalling_timeout: Duration::from_millis(100).into(),
@@ -376,7 +376,10 @@ async fn slow_response(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.as_ref().clone())
             .build();
-        let block = tf.make_block_builder().with_parent(chain_config.genesis_block_id()).build();
+        let block = tf
+            .make_block_builder()
+            .with_parent(chain_config.genesis_block_id())
+            .build(&mut rng);
 
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(chain_config)

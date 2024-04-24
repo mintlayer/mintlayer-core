@@ -72,7 +72,7 @@ pub fn prepare_stake_pool(
         1,
     );
 
-    let block = tf.make_block_builder().add_transaction(stake_pool_transaction).build();
+    let block = tf.make_block_builder().add_transaction(stake_pool_transaction).build(rng);
 
     (transfer_outpoint, stake_pool_data, pool_id, block)
 }
@@ -102,13 +102,13 @@ pub fn prepare_delegation(
         1,
     );
 
-    let block = tf.make_block_builder().add_transaction(create_delegation_tx).build();
+    let block = tf.make_block_builder().add_transaction(create_delegation_tx).build(rng);
 
     (delegation_id, destination, transfer_outpoint, block)
 }
 
 pub fn stake_delegation(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     available_amount: Amount,
     transfer_outpoint: UtxoOutPoint,
     delegation_id: DelegationId,
@@ -130,7 +130,7 @@ pub fn stake_delegation(
         1,
     );
 
-    let block = tf.make_block_builder().add_transaction(stake_tx).build();
+    let block = tf.make_block_builder().add_transaction(stake_tx).build(rng);
 
     (amount_to_delegate, transfer_outpoint, block)
 }

@@ -110,7 +110,7 @@ fn coins_homomorphism(#[case] seed: Seed) {
             .add_transaction(tx_1.clone())
             .add_transaction(tx_2.clone())
             .add_transaction(tx_3.clone())
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -123,7 +123,7 @@ fn coins_homomorphism(#[case] seed: Seed) {
             .add_transaction(tx_1)
             .add_transaction(tx_2)
             .add_transaction(tx_3)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -133,21 +133,21 @@ fn coins_homomorphism(#[case] seed: Seed) {
         );
 
         // create alternative chains that triggers reorg
-        let block_1 = tf.make_block_builder().with_parent(genesis_id).build();
+        let block_1 = tf.make_block_builder().with_parent(genesis_id).build(&mut rng);
         let block_1_id = block_1.get_id();
         tf.process_block(block_1, BlockSource::Local).unwrap();
         tf.make_block_builder()
             .with_parent(block_1_id.into())
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
-        let block_2 = tf2.make_block_builder().with_parent(genesis_id).build();
+        let block_2 = tf2.make_block_builder().with_parent(genesis_id).build(&mut rng);
         let block_2_id = block_2.get_id();
         tf2.process_block(block_2, BlockSource::Local).unwrap();
         tf2.make_block_builder()
             .with_parent(block_2_id.into())
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -226,14 +226,14 @@ fn tokens_homomorphism(#[case] seed: Seed) {
         tf.make_block_builder()
             .add_transaction(tx_1.clone())
             .add_transaction(tx_2.clone())
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
         tf2.make_block_builder()
             .add_transaction(tx_1)
             .add_transaction(tx_2)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -243,21 +243,21 @@ fn tokens_homomorphism(#[case] seed: Seed) {
         );
 
         // create alternative chains that triggers reorg
-        let block_1 = tf.make_block_builder().with_parent(genesis_id).build();
+        let block_1 = tf.make_block_builder().with_parent(genesis_id).build(&mut rng);
         let block_1_id = block_1.get_id();
         tf.process_block(block_1, BlockSource::Local).unwrap();
         tf.make_block_builder()
             .with_parent(block_1_id.into())
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
-        let block_2 = tf2.make_block_builder().with_parent(genesis_id).build();
+        let block_2 = tf2.make_block_builder().with_parent(genesis_id).build(&mut rng);
         let block_2_id = block_2.get_id();
         tf2.process_block(block_2, BlockSource::Local).unwrap();
         tf2.make_block_builder()
             .with_parent(block_2_id.into())
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -353,7 +353,7 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
             .add_transaction(tx_1.clone())
             .add_transaction(tx_2.clone())
             .add_transaction(tx_3.clone())
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -361,7 +361,7 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
             .add_transaction(tx_1)
             .add_transaction(tx_2)
             .add_transaction(tx_3)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -371,21 +371,21 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
         );
 
         // create alternative chains that triggers reorg
-        let block_1 = tf.make_block_builder().with_parent(genesis_id).build();
+        let block_1 = tf.make_block_builder().with_parent(genesis_id).build(&mut rng);
         let block_1_id = block_1.get_id();
         tf.process_block(block_1, BlockSource::Local).unwrap();
         tf.make_block_builder()
             .with_parent(block_1_id.into())
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
-        let block_2 = tf2.make_block_builder().with_parent(genesis_id).build();
+        let block_2 = tf2.make_block_builder().with_parent(genesis_id).build(&mut rng);
         let block_2_id = block_2.get_id();
         tf2.process_block(block_2, BlockSource::Local).unwrap();
         tf2.make_block_builder()
             .with_parent(block_2_id.into())
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 

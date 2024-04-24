@@ -364,6 +364,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let prev_tx_id = transaction.transaction().get_id();
     let target_block_time = chain_config.target_block_spacing();
     let block = create_block(
+        &mut rng,
         &mut tf,
         target_block_time,
         prev_block_hash,
@@ -392,6 +393,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     let prev_tx_id = transaction.transaction().get_id();
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
     let block = create_block(
+        &mut rng,
         &mut tf,
         target_block_time,
         prev_block_hash.into(),
@@ -448,6 +450,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
 
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
     let block = create_block(
+        &mut rng,
         &mut tf,
         target_block_time,
         prev_block_hash.into(),
@@ -476,6 +479,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
 
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
     let block = create_block(
+        &mut rng,
         &mut tf,
         target_block_time,
         prev_block_hash.into(),
@@ -527,6 +531,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
 
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
     let block = create_block(
+        &mut rng,
         &mut tf,
         target_block_time,
         prev_block_hash.into(),
@@ -564,7 +569,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let signature = sign_pubkey_spending(&staking_sk, &pk, &sighash).unwrap();
+    let signature = sign_pubkey_spending(&staking_sk, &pk, &sighash, &mut rng).unwrap();
 
     let input_witness = InputWitness::Standard(StandardInputSignature::new(
         SigHashType::default(),
@@ -589,7 +594,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
             1,
         ))
         .with_transactions(vec![transaction])
-        .build();
+        .build(&mut rng);
 
     sync_and_compare(&mut tf, block, &mut local_state, new_pool_id).await;
     let decommissioned_pool = local_state
@@ -699,7 +704,7 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
         .make_block_builder()
         .with_parent(prev_block_hash)
         .with_transactions(vec![transaction])
-        .build();
+        .build(&mut rng);
 
     let prev_block_hash = block.get_id();
     tf.process_block(block.clone(), BlockSource::Local).unwrap();
@@ -733,7 +738,7 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
 
     // create an empty block
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
-    let block = tf.make_block_builder().with_parent(prev_block_hash.into()).build();
+    let block = tf.make_block_builder().with_parent(prev_block_hash.into()).build(&mut rng);
 
     let prev_block_hash = block.get_id();
     tf.process_block(block.clone(), BlockSource::Local).unwrap();
@@ -785,7 +790,7 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
                 idx,
             )
             .unwrap();
-            let signature = sign_pubkey_spending(&priv_key, &pub_key, &sighash).unwrap();
+            let signature = sign_pubkey_spending(&priv_key, &pub_key, &sighash, &mut rng).unwrap();
             InputWitness::Standard(StandardInputSignature::new(
                 SigHashType::default(),
                 signature.encode(),
@@ -801,7 +806,7 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
         .make_block_builder()
         .with_parent(prev_block_hash.into())
         .with_transactions(vec![spend_transaction])
-        .build();
+        .build(&mut rng);
 
     let _prev_block_hash = block.get_id();
     tf.process_block(block.clone(), BlockSource::Local).unwrap();
@@ -862,7 +867,7 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
                 idx,
             )
             .unwrap();
-            let signature = sign_pubkey_spending(&priv_key, &pub_key, &sighash).unwrap();
+            let signature = sign_pubkey_spending(&priv_key, &pub_key, &sighash, &mut rng).unwrap();
             InputWitness::Standard(StandardInputSignature::new(
                 SigHashType::default(),
                 signature.encode(),
@@ -878,7 +883,7 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
         .make_block_builder()
         .with_parent(prev_block_hash.into())
         .with_transactions(vec![spend_time_locked_signed])
-        .build();
+        .build(&mut rng);
 
     let _prev_block_hash = block.get_id();
     tf.process_block(block.clone(), BlockSource::Local).unwrap();
@@ -987,7 +992,9 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
     drop(db_tx);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_block(
+    rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
     target_block_time: Duration,
     prev_block_hash: Id<GenBlock>,
@@ -1004,7 +1011,7 @@ fn create_block(
         .with_vrf_key(vrf_sk.clone())
         .with_stake_pool(pool_id)
         .with_transactions(transactions)
-        .build();
+        .build(&mut *rng);
     block
 }
 
@@ -1175,7 +1182,7 @@ async fn check_all_destinations_are_tracked(#[case] seed: Seed) {
         .make_block_builder()
         .with_parent(prev_block_hash)
         .with_transactions(vec![transaction])
-        .build();
+        .build(&mut rng);
 
     tf.process_block(block.clone(), BlockSource::Local).unwrap();
     let block_height = local_state

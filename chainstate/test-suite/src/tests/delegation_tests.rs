@@ -75,7 +75,10 @@ fn prepare_stake_pool(
     let transfer_outpoint =
         UtxoOutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 1);
 
-    tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+    tf.make_block_builder()
+        .add_transaction(tx)
+        .build_and_process(&mut *rng)
+        .unwrap();
 
     (pool_id, stake_outpoint, transfer_outpoint)
 }
@@ -111,7 +114,10 @@ fn prepare_delegation(
     let transfer_outpoint =
         UtxoOutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 1);
 
-    tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+    tf.make_block_builder()
+        .add_transaction(tx)
+        .build_and_process(&mut *rng)
+        .unwrap();
 
     (
         pool_id,
@@ -158,7 +164,7 @@ fn create_delegation(#[case] seed: Seed) {
             ))
             .build();
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
             &tf.storage,
@@ -197,7 +203,11 @@ fn create_delegation_unknown_pool(#[case] seed: Seed) {
             ))
             .build();
 
-        let res = tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err();
+        let res = tf
+            .make_block_builder()
+            .add_transaction(tx)
+            .build_and_process(&mut rng)
+            .unwrap_err();
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
@@ -251,7 +261,7 @@ fn create_delegation_twice(#[case] seed: Seed) {
         let transfer_outpoint =
             UtxoOutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 1);
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Try to create 2 delegations in 1 transaction
         let tx = TransactionBuilder::new()
@@ -267,7 +277,11 @@ fn create_delegation_twice(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
 
-        let res = tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err();
+        let res = tf
+            .make_block_builder()
+            .add_transaction(tx)
+            .build_and_process(&mut rng)
+            .unwrap_err();
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
@@ -299,7 +313,11 @@ fn spend_create_delegation_output(#[case] seed: Seed) {
             ))
             .build();
 
-        let res = tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err();
+        let res = tf
+            .make_block_builder()
+            .add_transaction(tx)
+            .build_and_process(&mut rng)
+            .unwrap_err();
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
@@ -332,7 +350,7 @@ fn delegate_staking(#[case] seed: Seed) {
             .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
             .build();
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
             &tf.storage,
@@ -368,7 +386,7 @@ fn delegate_staking(#[case] seed: Seed) {
             ))
             .build();
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
             &tf.storage,
@@ -395,7 +413,10 @@ fn delegate_staking(#[case] seed: Seed) {
                 .build();
 
             assert_eq!(
-                tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err(),
+                tf.make_block_builder()
+                    .add_transaction(tx)
+                    .build_and_process(&mut rng)
+                    .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                     ConnectTransactionError::NonceIsNotIncremental(
                         AccountType::Delegation(delegation_id),
@@ -424,7 +445,10 @@ fn delegate_staking(#[case] seed: Seed) {
                 .build();
 
             assert_eq!(
-                tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err(),
+                tf.make_block_builder()
+                    .add_transaction(tx)
+                    .build_and_process(&mut rng)
+                    .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                     ConnectTransactionError::NonceIsNotIncremental(
                         AccountType::Delegation(delegation_id),
@@ -451,7 +475,7 @@ fn delegate_staking(#[case] seed: Seed) {
             ))
             .build();
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
             &tf.storage,
@@ -496,7 +520,7 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
             .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
             .build();
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
             &tf.storage,
@@ -520,7 +544,7 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
                 OutputTimeLock::ForBlockCount(1),
             ))
             .build();
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
             &tf.storage,
@@ -566,7 +590,7 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
             ))
             .build();
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
             &tf.storage,
@@ -591,7 +615,7 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
             ))
             .build();
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
             &tf.storage,
@@ -636,7 +660,7 @@ fn spend_share_then_decommission_then_cleanup_delegations(#[case] seed: Seed) {
 
         let delegate_staking_outpoint =
             UtxoOutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
             &tf.storage,
@@ -655,7 +679,7 @@ fn spend_share_then_decommission_then_cleanup_delegations(#[case] seed: Seed) {
             ))
             .build();
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
             &tf.storage,
@@ -683,7 +707,7 @@ fn spend_share_then_decommission_then_cleanup_delegations(#[case] seed: Seed) {
                 OutputTimeLock::ForBlockCount(1),
             ))
             .build();
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
             &tf.storage,
@@ -762,7 +786,7 @@ fn create_pool_and_delegation_and_delegate_same_block(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .with_transactions(vec![tx1, tx2, tx3])
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -811,7 +835,7 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .with_transactions(vec![create_delegation_tx, delegate_staking_tx])
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let spend_share_tx_no_signature = TransactionBuilder::new()
@@ -833,7 +857,7 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
         let result = tf
             .make_block_builder()
             .add_transaction(spend_share_tx_no_signature.clone())
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -859,13 +883,14 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
                 &tx,
                 &inputs_utxos_refs,
                 0,
+                &mut rng,
             )
             .unwrap();
 
             SignedTransaction::new(tx, vec![InputWitness::Standard(account_sig)]).unwrap()
         };
 
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -887,13 +912,14 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
                 &tx,
                 &inputs_utxos_refs,
                 0,
+                &mut rng,
             )
             .unwrap();
 
             SignedTransaction::new(tx, vec![InputWitness::Standard(account_sig)]).unwrap()
         };
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
     });
 }
 
@@ -928,7 +954,7 @@ fn delegate_and_spend_share_same_tx(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .add_transaction(delegate_staking_tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let original_delegation_balance =
@@ -966,7 +992,7 @@ fn delegate_and_spend_share_same_tx(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
 
-        let res = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
         assert_eq!(
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
@@ -1012,7 +1038,7 @@ fn delegate_and_spend_share_same_tx_no_overspend_per_input(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .add_transaction(delegate_staking_tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let original_delegation_balance =
@@ -1060,7 +1086,7 @@ fn delegate_and_spend_share_same_tx_no_overspend_per_input(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
 
-        let res = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             res.unwrap_err(),
@@ -1105,7 +1131,7 @@ fn delegate_and_spend_share_same_block(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .add_transaction(delegate_staking_tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let original_delegation_balance =
@@ -1147,7 +1173,10 @@ fn delegate_and_spend_share_same_block(#[case] seed: Seed) {
             .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
             .build();
 
-        let res = tf.make_block_builder().with_transactions(vec![tx1, tx2]).build_and_process();
+        let res = tf
+            .make_block_builder()
+            .with_transactions(vec![tx1, tx2])
+            .build_and_process(&mut rng);
         assert_eq!(
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
@@ -1185,7 +1214,7 @@ fn try_overspend_delegation(#[case] seed: Seed) {
             .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
             .build();
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
             &tf.storage,
@@ -1235,7 +1264,7 @@ fn try_overspend_delegation(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
 
-        let res = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             res.unwrap_err(),
@@ -1304,7 +1333,7 @@ fn delegate_and_spend_share_same_block_multiple_delegations(#[case] seed: Seed) 
 
         tf.make_block_builder()
             .with_transactions(vec![delegate_staking_tx, delegate_staking_tx_2])
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let original_delegation_balance_1 =
@@ -1373,7 +1402,10 @@ fn delegate_and_spend_share_same_block_multiple_delegations(#[case] seed: Seed) 
             .add_output(TxOutput::DelegateStaking(change, delegation_id_1))
             .build();
 
-        let res = tf.make_block_builder().with_transactions(vec![tx1, tx2]).build_and_process();
+        let res = tf
+            .make_block_builder()
+            .with_transactions(vec![tx1, tx2])
+            .build_and_process(&mut rng);
         assert_eq!(
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
@@ -1415,7 +1447,7 @@ fn decommission_pool_then_delegate_staking_and_reorg(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .add_transaction(delegate_staking_tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
@@ -1442,7 +1474,7 @@ fn decommission_pool_then_delegate_staking_and_reorg(#[case] seed: Seed) {
             .build();
         tf.make_block_builder()
             .add_transaction(decommission_pool_tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
@@ -1474,7 +1506,7 @@ fn decommission_pool_then_delegate_staking_and_reorg(#[case] seed: Seed) {
             ))
             .build();
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
             &tf.storage,
@@ -1566,11 +1598,12 @@ fn delegate_same_pool_as_staking(#[case] seed: Seed) {
         .with_stake_spending_key(staker_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .with_transactions(vec![create_delegation_tx, delegate_staking_tx])
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     // Create alternative chain to trigger reorg
     tf.create_chain_pos(
+        &mut rng,
         &tf.chain_config().genesis_block_id(),
         2,
         genesis_pool_id,

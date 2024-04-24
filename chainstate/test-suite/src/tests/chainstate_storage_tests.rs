@@ -62,7 +62,7 @@ fn store_coin(#[case] seed: Seed) {
 
         let tx_utxo_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), 0);
 
-        let block = tf.make_block_builder().add_transaction(tx).build();
+        let block = tf.make_block_builder().add_transaction(tx).build(&mut rng);
         let block_id = block.get_id();
         tf.process_block(block, BlockSource::Local).unwrap();
 
@@ -153,7 +153,7 @@ fn store_fungible_token_v0(#[case] seed: Seed) {
         let tx_id = tx.transaction().get_id();
         let token_id = make_token_id(tx.transaction().inputs()).unwrap();
 
-        let block = tf.make_block_builder().add_transaction(tx.clone()).build();
+        let block = tf.make_block_builder().add_transaction(tx.clone()).build(&mut rng);
         let block_id = block.get_id();
         tf.process_block(block, BlockSource::Local).unwrap();
 
@@ -225,7 +225,7 @@ fn store_nft_v0(#[case] seed: Seed) {
         let tx_id = tx.transaction().get_id();
         let token_id = make_token_id(tx.transaction().inputs()).unwrap();
 
-        let block = tf.make_block_builder().add_transaction(tx.clone()).build();
+        let block = tf.make_block_builder().add_transaction(tx.clone()).build(&mut rng);
         let block_id = block.get_id();
         tf.process_block(block, BlockSource::Local).unwrap();
 
@@ -280,7 +280,7 @@ fn reorg_store_coin(#[case] seed: Seed) {
             0,
         );
 
-        let block_1 = tf.make_block_builder().add_transaction(tx_1).build();
+        let block_1 = tf.make_block_builder().add_transaction(tx_1).build(&mut rng);
         let block_1_id = block_1.get_id();
         tf.process_block(block_1, BlockSource::Local).unwrap();
 
@@ -303,7 +303,7 @@ fn reorg_store_coin(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(tx_2)
             .with_parent(genesis_id.into())
-            .build();
+            .build(&mut rng);
         let block_2_id = block_2.get_id();
         tf.process_block(block_2, BlockSource::Local).unwrap();
 
@@ -326,7 +326,7 @@ fn reorg_store_coin(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(tx_3)
             .with_parent(block_2_id.into())
-            .build();
+            .build(&mut rng);
         let block_3_id = block_3.get_id();
         tf.process_block(block_3, BlockSource::Local).unwrap();
 
@@ -406,7 +406,7 @@ fn reorg_store_coin_disposable(#[case] seed: Seed) {
             ))
             .build();
 
-        let block_1 = tf.make_block_builder().with_transactions(vec![tx_1, tx_1_2]).build();
+        let block_1 = tf.make_block_builder().with_transactions(vec![tx_1, tx_1_2]).build(&mut rng);
         let block_1_id = block_1.get_id();
         tf.process_block(block_1, BlockSource::Local).unwrap();
 
@@ -429,7 +429,7 @@ fn reorg_store_coin_disposable(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(tx_2)
             .with_parent(genesis_id.into())
-            .build();
+            .build(&mut rng);
         let block_2_id = block_2.get_id();
         tf.process_block(block_2, BlockSource::Local).unwrap();
 
@@ -452,7 +452,7 @@ fn reorg_store_coin_disposable(#[case] seed: Seed) {
             .make_block_builder()
             .add_transaction(tx_3)
             .with_parent(block_2_id.into())
-            .build();
+            .build(&mut rng);
         let block_3_id = block_3.get_id();
         tf.process_block(block_3, BlockSource::Local).unwrap();
 
@@ -537,7 +537,7 @@ fn store_aux_data_from_issue_nft(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
 
-        let block = tf.make_block_builder().add_transaction(tx.clone()).build();
+        let block = tf.make_block_builder().add_transaction(tx.clone()).build(&mut rng);
         let block_id = block.get_id();
         tf.process_block(block, BlockSource::Local).unwrap();
 

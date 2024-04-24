@@ -201,7 +201,9 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
 
         let message: Vec<u8> = rpc::handle_result(Vec::<u8>::hex_decode_all(message_hex))?;
 
-        let signature = private_key.sign_message(&message).map_err(RpcTestFunctionsError::from);
+        let signature = private_key
+            .sign_message(&message, randomness::make_true_rng())
+            .map_err(RpcTestFunctionsError::from);
         let signature: Signature = rpc::handle_result(signature)?;
 
         Ok(signature.hex_encode())

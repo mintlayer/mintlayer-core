@@ -38,7 +38,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 fn process_a_trivial_block(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut btf = TestFramework::builder(&mut rng).build();
-    btf.make_block_builder().build_and_process().unwrap();
+    btf.make_block_builder().build_and_process(&mut rng).unwrap();
 }
 
 // Generate some blocks and check that a locator is of expected length.
@@ -157,7 +157,7 @@ fn get_mainchain_headers_by_locator(#[case] seed: Seed) {
                 .make_block_builder()
                 .with_parent(last_block_id)
                 .add_test_transaction_from_best_block(&mut rng)
-                .build();
+                .build(&mut rng);
             last_block_id = block.get_id().into();
             let header = block.header().clone();
             tf.process_block(block, BlockSource::Peer).unwrap().unwrap();
@@ -516,7 +516,7 @@ fn get_headers_different_chains(#[case] seed: Seed) {
                 .make_block_builder()
                 .with_parent(prev_id)
                 .add_test_transaction_from_best_block(&mut rng)
-                .build();
+                .build(&mut rng);
             prev_id = block.get_id().into();
             tf1.process_block(block.clone(), BlockSource::Local).unwrap();
             tf2.process_block(block.clone(), BlockSource::Local).unwrap();
@@ -564,7 +564,7 @@ fn split_off_leading_known_headers(#[case] seed: Seed) {
                     .make_block_builder()
                     .with_parent(prev1_id)
                     .add_test_transaction_from_best_block(&mut rng)
-                    .build();
+                    .build(&mut rng);
                 prev1_id = block.get_id().into();
                 tf1.process_block(block.clone(), BlockSource::Local).unwrap();
                 tf2.process_block(block.clone(), BlockSource::Local).unwrap();
@@ -652,22 +652,25 @@ fn initial_block_download(#[case] seed: Seed) {
         tf.progress_time_seconds_since_epoch(3);
         tf.make_block_builder()
             .with_timestamp(BlockTimestamp::from_time(now))
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
         assert!(tf.chainstate.is_initial_block_download());
 
         // Create a block with fresh timestamp.
-        tf.make_block_builder().build_and_process().unwrap();
+        tf.make_block_builder().build_and_process(&mut rng).unwrap();
         assert!(!tf.chainstate.is_initial_block_download());
 
         // Add one more block.
-        tf.make_block_builder().build_and_process().unwrap();
+        tf.make_block_builder().build_and_process(&mut rng).unwrap();
         assert!(!tf.chainstate.is_initial_block_download());
 
         // Check that receiving an "old" block does not revert `is_initial_block_download` back
         tf.progress_time_seconds_since_epoch(5);
         let now = tf.current_time();
-        let block = tf.make_block_builder().with_timestamp(BlockTimestamp::from_time(now)).build();
+        let block = tf
+            .make_block_builder()
+            .with_timestamp(BlockTimestamp::from_time(now))
+            .build(&mut rng);
         tf.progress_time_seconds_since_epoch(10);
         tf.process_block(block, BlockSource::Local).unwrap();
         assert!(!tf.chainstate.is_initial_block_download());
@@ -683,7 +686,7 @@ fn header_check_for_orphan(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         tf.progress_time_seconds_since_epoch(3);
-        let block = tf.make_block_builder().make_orphan(&mut rng).build();
+        let block = tf.make_block_builder().make_orphan(&mut rng).build(&mut rng);
         let block_id = block.get_id();
 
         let err = tf

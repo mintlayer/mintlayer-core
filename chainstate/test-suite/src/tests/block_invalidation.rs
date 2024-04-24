@@ -235,16 +235,16 @@ fn make_complex_chain(rng: &mut (impl Rng + CryptoRng)) -> (TestFramework, TestC
 
     let (b0_id, result) = process_block(&mut tf, &m1_id.into(), rng);
     assert!(result.is_ok());
-    let (b1_id, result) = process_block_with_empty_tx(&mut tf, &b0_id.into());
+    let (b1_id, result) = process_block_with_empty_tx(rng, &mut tf, &b0_id.into());
     assert!(result.is_err());
-    let (b2_id, result) = process_block_with_empty_tx(&mut tf, &b1_id.into());
+    let (b2_id, result) = process_block_with_empty_tx(rng, &mut tf, &b1_id.into());
     assert!(result.is_err());
 
     let (c0_id, result) = process_block(&mut tf, &m1_id.into(), rng);
     assert!(result.is_ok());
     let (c1_id, result) = process_block(&mut tf, &c0_id.into(), rng);
     assert!(result.is_ok());
-    let (c2_id, result) = process_block_with_empty_tx(&mut tf, &c1_id.into());
+    let (c2_id, result) = process_block_with_empty_tx(rng, &mut tf, &c1_id.into());
     assert!(result.is_err());
 
     let (m5_id, result) = process_block(&mut tf, &m4_id.into(), rng);
@@ -691,7 +691,7 @@ fn test_invalidation_with_reorg_to_chain_with_bad_tip1(#[case] seed: Seed) {
 
         let (a0_id, result) = process_block(&mut tf, &genesis_id.into(), &mut rng);
         assert!(result.is_ok());
-        let (a1_id, result) = process_block_with_empty_tx(&mut tf, &a0_id.into());
+        let (a1_id, result) = process_block_with_empty_tx(&mut rng, &mut tf, &a0_id.into());
         assert!(result.is_err());
 
         // Reset the fail flags of a1.
@@ -800,7 +800,7 @@ fn test_invalidation_with_reorg_attempt_to_chain_with_lower_chain_trust(#[case] 
                 Uint256::from_u64(123).into(),
                 0,
             ))))
-            .build();
+            .build(&mut rng);
         let a1_id = a1.get_id();
         let result = tf.process_block(a1, BlockSource::Local);
 

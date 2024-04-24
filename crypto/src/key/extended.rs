@@ -188,7 +188,7 @@ mod test {
         assert_eq!(sk.kind(), ExtendedKeyKind::Secp256k1Schnorr);
         let msg_size = 1 + rng.gen::<usize>() % 10000;
         let msg: Vec<u8> = (0..msg_size).map(|_| rng.gen::<u8>()).collect();
-        let sig = sk.private_key().sign_message(&msg).unwrap();
+        let sig = sk.private_key().sign_message(&msg, &mut rng).unwrap();
         assert!(pk.into_public_key().verify_message(&sig, &msg));
     }
 

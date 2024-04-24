@@ -61,7 +61,7 @@ async fn invalid_transaction(#[case] seed: Seed) {
             .with_chain_config(chain_config.as_ref().clone())
             .build();
         // Process a block to finish the initial block download.
-        tf.make_block_builder().build_and_process().unwrap().unwrap();
+        tf.make_block_builder().build_and_process(&mut rng).unwrap().unwrap();
 
         let p2p_config = Arc::new(test_p2p_config());
         let mut node = TestNode::builder(protocol_version)
@@ -148,7 +148,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
             .with_chain_config(chain_config.as_ref().clone())
             .build();
         // Process a block to finish the initial block download.
-        tf.make_block_builder().build_and_process().unwrap().unwrap();
+        tf.make_block_builder().build_and_process(&mut rng).unwrap().unwrap();
 
         let p2p_config = Arc::new(P2pConfig {
             node_type: NodeType::BlocksOnly.into(),
@@ -215,7 +215,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
             .with_time_getter(time_getter.get_time_getter())
             .build();
         // Process a block to finish the initial block download.
-        tf.make_block_builder().build_and_process().unwrap().unwrap();
+        tf.make_block_builder().build_and_process(&mut rng).unwrap().unwrap();
 
         let p2p_config = Arc::new(P2pConfig {
             protocol_config: ProtocolConfig {
@@ -321,7 +321,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
             .with_chain_config(chain_config.as_ref().clone())
             .build();
         // Process a block to finish the initial block download.
-        tf.make_block_builder().build_and_process().unwrap().unwrap();
+        tf.make_block_builder().build_and_process(&mut rng).unwrap().unwrap();
 
         let p2p_config = Arc::new(test_p2p_config());
         let mut node = TestNode::builder(protocol_version)
@@ -375,7 +375,7 @@ async fn valid_transaction(#[case] seed: Seed) {
             .with_chain_config(chain_config.as_ref().clone())
             .build();
         // Process a block to finish the initial block download.
-        tf.make_block_builder().build_and_process().unwrap().unwrap();
+        tf.make_block_builder().build_and_process(&mut rng).unwrap().unwrap();
 
         let p2p_config = Arc::new(test_p2p_config());
         let mut node = TestNode::builder(protocol_version)
@@ -434,10 +434,10 @@ async fn valid_transaction_with_fee_below_minimum(#[case] seed: Seed) {
             anyonecanspend_address(),
             OutputTimeLock::ForBlockCount(0),
         )];
-        let block1 = tf.make_block_builder().with_reward(new_block_reward.clone()).build();
+        let block1 = tf.make_block_builder().with_reward(new_block_reward.clone()).build(&mut rng);
         let block1_id = block1.get_id();
         tf.process_block(block1, BlockSource::Local).unwrap();
-        let block2 = tf.make_block_builder().with_reward(new_block_reward.clone()).build();
+        let block2 = tf.make_block_builder().with_reward(new_block_reward.clone()).build(&mut rng);
         let block2_id = block2.get_id();
         tf.process_block(block2, BlockSource::Local).unwrap();
 
@@ -534,7 +534,7 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
             .with_chain_config(chain_config.as_ref().clone())
             .build();
         // Process a block to finish the initial block download.
-        tf.make_block_builder().build_and_process().unwrap().unwrap();
+        tf.make_block_builder().build_and_process(&mut rng).unwrap().unwrap();
 
         let p2p_config = Arc::new(test_p2p_config());
         let mut node = TestNode::builder(protocol_version)

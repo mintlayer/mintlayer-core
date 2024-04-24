@@ -30,13 +30,13 @@ use randomness::{CryptoRng, Rng};
 pub fn build_block(
     tf: &mut TestFramework,
     parent_block: &Id<GenBlock>,
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
 ) -> Block {
     tf.make_block_builder()
         .add_test_transaction_with_parent(*parent_block, rng)
         .with_parent(*parent_block)
         .with_reward(make_block_reward())
-        .build()
+        .build(rng)
 }
 
 pub fn make_block_reward() -> Vec<TxOutput> {
@@ -51,7 +51,7 @@ pub fn make_block_reward() -> Vec<TxOutput> {
 pub fn process_block(
     tf: &mut TestFramework,
     parent_block: &Id<GenBlock>,
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
 ) -> (Id<Block>, Result<Option<BlockIndex>, ChainstateError>) {
     let block = build_block(tf, parent_block, rng);
     let block_id = block.get_id();
@@ -60,20 +60,25 @@ pub fn process_block(
 }
 
 // Build a block with an invalid tx that has no inputs and outputs.
-pub fn build_block_with_empty_tx(tf: &mut TestFramework, parent_block: &Id<GenBlock>) -> Block {
+pub fn build_block_with_empty_tx(
+    rng: &mut (impl Rng + CryptoRng),
+    tf: &mut TestFramework,
+    parent_block: &Id<GenBlock>,
+) -> Block {
     let bad_tx = TransactionBuilder::new().build();
     tf.make_block_builder()
         .with_parent(*parent_block)
         .with_transactions(vec![bad_tx])
-        .build()
+        .build(rng)
 }
 
 // Process a block with an invalid tx that has no inputs and outputs.
 pub fn process_block_with_empty_tx(
+    rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
     parent_block: &Id<GenBlock>,
 ) -> (Id<Block>, Result<Option<BlockIndex>, ChainstateError>) {
-    let bad_block = build_block_with_empty_tx(tf, parent_block);
+    let bad_block = build_block_with_empty_tx(rng, tf, parent_block);
     let bad_block_id = bad_block.get_id();
     let result = tf.process_block(bad_block, BlockSource::Local);
 
@@ -102,7 +107,7 @@ pub fn build_block_burn_or_spend_parent_reward(
         .with_transactions(vec![tx.clone()])
         .with_parent(*parent_block)
         .with_reward(make_block_reward())
-        .build();
+        .build(rng);
 
     (block, tx)
 }
@@ -166,7 +171,7 @@ pub fn build_block_split_parent_reward(
         .with_transactions(vec![tx.clone()])
         .with_parent(*parent_block)
         .with_reward(make_block_reward())
-        .build();
+        .build(rng);
 
     (block, tx)
 }
@@ -209,7 +214,7 @@ pub fn build_block_spend_tx(
         .with_transactions(vec![tx])
         .with_parent(*parent_block)
         .with_reward(make_block_reward())
-        .build()
+        .build(rng)
 }
 
 // Process a block that spends the specified tx.

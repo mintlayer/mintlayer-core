@@ -99,7 +99,7 @@ fn token_issue_test(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_issuance_fee)))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -147,7 +147,7 @@ fn token_transfer_test(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_issuance_fee)))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
@@ -177,7 +177,7 @@ fn token_transfer_test(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
     })
@@ -221,7 +221,7 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
         assert!(matches!(
             result,
             Err(ChainstateError::ProcessBlockError(
@@ -251,7 +251,7 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_issuance_fee)))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -308,7 +308,7 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
             .make_block_builder()
             // All coins in inputs added to outputs, fee = 0 coins
             .add_transaction(tx)
-            .build();
+            .build(&mut rng);
 
         let result = tf.process_block(block, BlockSource::Local);
 
@@ -337,7 +337,7 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_issuance_fee)))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
     })
@@ -379,7 +379,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_issuance_fee)))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -415,7 +415,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build();
+            .build(&mut rng);
         let split_outpoint_id: OutPointSourceId =
             split_block.transactions()[0].transaction().get_id().into();
         tf.process_block(split_block, BlockSource::Local).unwrap().unwrap();
@@ -443,7 +443,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
     })
@@ -499,7 +499,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     .add_output(TxOutput::Burn(OutputValue::Coin(token_issuance_fee)))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -535,7 +535,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
         let block_b1 = tf.block(*block_index.block_id());
@@ -565,7 +565,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -593,7 +593,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
         let block_c1 = tf.block(*block_index.block_id());
@@ -614,7 +614,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
         let block_d1 = tf.block(*block_index.block_id());
@@ -644,7 +644,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build();
+            .build(&mut rng);
         let b2_outpoint_id: OutPointSourceId =
             block_b2.transactions()[0].transaction().get_id().into();
         assert!(
@@ -679,7 +679,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build();
+            .build(&mut rng);
         let c2_outpoint_id: OutPointSourceId =
             block_c2.transactions()[0].transaction().get_id().into();
         assert!(
@@ -714,7 +714,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build();
+            .build(&mut rng);
         let d2_outpoint_id: OutPointSourceId =
             block_d2.transactions()[0].transaction().get_id().into();
         assert!(
@@ -741,7 +741,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process();
+            .build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -780,7 +780,7 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
             .make_block_builder()
             .with_reward(vec![reward_output])
             .add_test_transaction_from_best_block(&mut rng)
-            .build();
+            .build(&mut rng);
 
         assert!(matches!(
             tf.process_block(block, BlockSource::Local),
@@ -802,7 +802,7 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
             .make_block_builder()
             .with_reward(vec![reward_output])
             .add_test_transaction_from_best_block(&mut rng)
-            .build();
+            .build(&mut rng);
 
         assert!(matches!(
             tf.process_block(block, BlockSource::Local),
@@ -823,7 +823,7 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
             .make_block_builder()
             .with_reward(vec![reward_output])
             .add_test_transaction_from_best_block(&mut rng)
-            .build();
+            .build(&mut rng);
 
         assert!(matches!(
             tf.process_block(block, BlockSource::Local),
@@ -937,7 +937,7 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
         tf.make_block_builder()
             .add_transaction(tx_1)
             .add_transaction(tx_2)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
     })
@@ -986,7 +986,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
 
-        let res = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             res.unwrap_err(),
@@ -1060,7 +1060,7 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .add_transaction(tx_with_issuance)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
 
         let tx = TransactionBuilder::new()
@@ -1079,7 +1079,7 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
 
-        let res = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             res.unwrap_err(),

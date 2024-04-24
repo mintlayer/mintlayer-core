@@ -450,7 +450,7 @@ async fn send_block_from_the_future_again(#[case] seed: Seed) {
         let normal_block = tf
             .make_block_builder()
             .with_timestamp(BlockTimestamp::from_time(start_time))
-            .build();
+            .build(&mut rng);
         let normal_block_id = normal_block.get_id();
 
         let future_block_delay = Duration::from_secs(60 * 60 * 24);
@@ -459,7 +459,7 @@ async fn send_block_from_the_future_again(#[case] seed: Seed) {
             .make_block_builder()
             .with_parent(normal_block_id.into())
             .with_timestamp(BlockTimestamp::from_time(future_block_time))
-            .build();
+            .build(&mut rng);
         let future_block_id = future_block.get_id();
 
         log::debug!("normal_block_id = {normal_block_id}, future_block_id = {future_block_id}");

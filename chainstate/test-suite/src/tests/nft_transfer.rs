@@ -57,7 +57,7 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
         let block_index = tf
             .make_block_builder()
             .add_transaction(tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
@@ -78,7 +78,7 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
             ))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -120,7 +120,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
         let block_index = tf
             .make_block_builder()
             .add_transaction(tx.clone())
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
         let block = tf.block(*block_index.block_id());
@@ -139,7 +139,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
             ))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -168,7 +168,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     })
 }
@@ -208,7 +208,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
         let block_index = tf
             .make_block_builder()
             .add_transaction(tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -244,7 +244,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
         let block_index = tf
             .make_block_builder()
             .add_transaction(tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -276,7 +276,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
             ))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -318,7 +318,7 @@ fn nft_valid_transfer(#[case] seed: Seed) {
         let _ = tf
             .make_block_builder()
             .add_transaction(tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -338,7 +338,7 @@ fn nft_valid_transfer(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -400,7 +400,7 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
             .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
             .build();
         let issuance_outpoint_id: OutPointSourceId = tx.transaction().get_id().into();
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Try print Nfts on transfer
         let tx = TransactionBuilder::new()
@@ -414,7 +414,7 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
             ))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -442,7 +442,7 @@ fn ensure_nft_cannot_be_printed_from_tokens_op(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     })
 }

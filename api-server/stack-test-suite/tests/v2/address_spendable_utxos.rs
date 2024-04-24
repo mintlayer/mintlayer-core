@@ -130,6 +130,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                         &transaction,
                         &[Some(&previous_tx_out)],
                         0,
+                        &mut rng,
                     )
                     .unwrap(),
                 );
@@ -137,7 +138,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                 let mut chainstate_block_ids = vec![*tf
                     .make_block_builder()
                     .add_transaction(transaction.clone())
-                    .build_and_process()
+                    .build_and_process(&mut rng)
                     .unwrap()
                     .unwrap()
                     .block_id()];
@@ -204,6 +205,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                         &transaction,
                         &[Some(&previous_tx_out)],
                         0,
+                        &mut rng,
                     )
                     .unwrap(),
                 );
@@ -217,7 +219,7 @@ async fn multiple_utxos_to_single_address(#[case] seed: Seed) {
                 chainstate_block_ids.push(
                     *tf.make_block_builder()
                         .add_transaction(signed_transaction)
-                        .build_and_process()
+                        .build_and_process(&mut rng)
                         .unwrap()
                         .unwrap()
                         .block_id(),
@@ -377,6 +379,7 @@ async fn ok(#[case] seed: Seed) {
                         &transaction,
                         &[Some(&previous_tx_out)],
                         0,
+                        &mut rng,
                     )
                     .unwrap(),
                 );
@@ -384,7 +387,7 @@ async fn ok(#[case] seed: Seed) {
                 let mut chainstate_block_ids = vec![*tf
                     .make_block_builder()
                     .add_transaction(transaction.clone())
-                    .build_and_process()
+                    .build_and_process(&mut rng)
                     .unwrap()
                     .unwrap()
                     .block_id()];
@@ -444,6 +447,7 @@ async fn ok(#[case] seed: Seed) {
                             &transaction,
                             &[Some(&previous_tx_out)],
                             0,
+                            &mut rng,
                         )
                         .unwrap(),
                     );
@@ -457,7 +461,7 @@ async fn ok(#[case] seed: Seed) {
                     chainstate_block_ids.push(
                         *tf.make_block_builder()
                             .add_transaction(signed_transaction)
-                            .build_and_process()
+                            .build_and_process(&mut rng)
                             .unwrap()
                             .unwrap()
                             .block_id(),

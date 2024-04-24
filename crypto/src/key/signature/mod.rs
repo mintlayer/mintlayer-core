@@ -106,7 +106,7 @@ mod test {
         let mut rng = make_seedable_rng(seed);
         let (sk, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let msg = b"abc";
-        let sig = sk.sign_message(msg).unwrap();
+        let sig = sk.sign_message(msg, &mut rng).unwrap();
         assert!(pk.verify_message(&sig, msg));
 
         let encoded_sig = sig.encode();

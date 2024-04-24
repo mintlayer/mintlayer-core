@@ -176,7 +176,7 @@ async fn has_reward(#[case] seed: Seed) {
                             Destination::PublicKey(pk),
                             OutputTimeLock::ForBlockCount(0),
                         )])
-                        .build();
+                        .build(&mut rng);
 
                     let block_index =
                         tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();

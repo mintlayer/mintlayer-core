@@ -91,7 +91,7 @@ fn add_block_with_stake_pool(
         .build();
     let tx_id = tx.transaction().get_id();
 
-    tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+    tf.make_block_builder().add_transaction(tx).build_and_process(rng).unwrap();
 
     tf.progress_time_seconds_since_epoch(1);
 
@@ -140,7 +140,7 @@ fn add_block_with_2_stake_pools(
 
     tf.make_block_builder()
         .with_transactions(vec![tx1, tx2])
-        .build_and_process()
+        .build_and_process(rng)
         .unwrap();
 
     tf.progress_time_seconds_since_epoch(1);
@@ -260,6 +260,7 @@ fn setup_test_chain_with_2_staked_pools_with_net_upgrades(
 }
 
 fn produce_kernel_signature(
+    rng: &mut (impl Rng + CryptoRng),
     tf: &TestFramework,
     staking_sk: &PrivateKey,
     reward_outputs: &[TxOutput],
@@ -282,6 +283,7 @@ fn produce_kernel_signature(
         &block_reward_tx,
         std::iter::once(Some(utxo)).collect::<Vec<_>>().as_slice(),
         0,
+        rng,
     )
     .unwrap()
 }
@@ -320,7 +322,7 @@ fn pos_enforce_strict_time_ordering(#[case] seed: Seed) {
             .make_block_builder()
             .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
             .with_timestamp(block_timestamp)
-            .build();
+            .build(&mut rng);
         let block_id = block.get_id();
 
         let res = tf.process_block(block, BlockSource::Local).unwrap_err();
@@ -354,6 +356,7 @@ fn pos_basic(#[case] seed: Seed) {
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
 
     let kernel_sig = produce_kernel_signature(
+        &mut rng,
         &tf,
         &staking_sk,
         reward_outputs.as_slice(),
@@ -393,7 +396,7 @@ fn pos_basic(#[case] seed: Seed) {
             .make_block_builder()
             .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
             .with_timestamp(block_timestamp)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap_err();
         assert_eq!(
             res,
@@ -412,7 +415,7 @@ fn pos_basic(#[case] seed: Seed) {
             .with_consensus_data(consensus_data.clone())
             .with_block_signing_key(staking_sk.clone())
             .with_timestamp(block_timestamp)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap_err();
         assert_eq!(
             res,
@@ -432,7 +435,7 @@ fn pos_basic(#[case] seed: Seed) {
         .with_block_signing_key(staking_sk)
         .with_timestamp(block_timestamp)
         .with_reward(reward_outputs)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     let res_pool_balance =
@@ -479,7 +482,7 @@ fn pos_block_signature(#[case] seed: Seed) {
         .with_consensus_data(consensus_data.clone())
         .with_reward(vec![reward_output.clone()])
         .with_timestamp(block_timestamp)
-        .build();
+        .build(&mut rng);
     let block_id = block.get_id();
     assert_eq!(
         tf.process_block(block, BlockSource::Local).unwrap_err(),
@@ -516,7 +519,7 @@ fn pos_block_signature(#[case] seed: Seed) {
         .with_reward(vec![reward_output])
         .with_timestamp(block_timestamp)
         .with_transactions(vec![tx])
-        .build();
+        .build(&mut rng);
     let block_id = block.get_id();
     assert_eq!(
         tf.process_block(block, BlockSource::Local).unwrap_err(),
@@ -533,6 +536,7 @@ fn pos_block_signature(#[case] seed: Seed) {
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
 
     let kernel_sig = produce_kernel_signature(
+        &mut rng,
         &tf,
         &staking_sk,
         reward_outputs.as_slice(),
@@ -563,7 +567,7 @@ fn pos_block_signature(#[case] seed: Seed) {
         .with_block_signing_key(staking_sk)
         .with_timestamp(block_timestamp)
         .with_reward(reward_outputs)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap()
         .unwrap();
 }
@@ -627,7 +631,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
         .with_block_signing_key(staking_sk)
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_timestamp(block_timestamp)
-        .build();
+        .build(&mut rng);
     let block_id = block.get_id();
 
     assert_eq!(
@@ -675,6 +679,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
 
     let kernel_sig = produce_kernel_signature(
+        &mut rng,
         &tf,
         &staking_sk,
         reward_outputs.as_slice(),
@@ -720,7 +725,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             .make_block_builder()
             .with_block_signing_key(staking_sk.clone())
             .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap_err();
 
         assert_eq!(res, expected_error);
@@ -744,7 +749,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             .make_block_builder()
             .with_block_signing_key(staking_sk.clone())
             .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap_err();
 
         assert_eq!(res, expected_error);
@@ -770,7 +775,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             .make_block_builder()
             .with_block_signing_key(staking_sk.clone())
             .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap_err();
 
         assert_eq!(res, expected_error);
@@ -792,7 +797,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             .make_block_builder()
             .with_block_signing_key(staking_sk.clone())
             .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap_err();
 
         assert_eq!(res, expected_error);
@@ -806,7 +811,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             .with_consensus_data(consensus_data)
             .with_reward(reward_outputs)
             .with_timestamp(valid_block_timestamp)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     }
 }
@@ -829,6 +834,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
 
     let kernel_sig = produce_kernel_signature(
+        &mut rng,
         &tf,
         &staking_sk,
         reward_outputs.as_slice(),
@@ -871,7 +877,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         .with_block_signing_key(staking_sk.clone())
         .with_timestamp(block_timestamp)
         .with_consensus_data(ConsensusData::PoS(Box::new(invalid_pos_data)))
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap_err();
 
     assert_eq!(
@@ -889,7 +895,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         .with_consensus_data(ConsensusData::PoS(Box::new(valid_pos_data)))
         .with_reward(reward_outputs)
         .with_timestamp(block_timestamp)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 }
 
@@ -953,7 +959,7 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
         .with_block_signing_key(staking_sk)
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_timestamp(block_timestamp)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap_err();
 
     assert_eq!(
@@ -994,6 +1000,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
 
     let kernel_sig = produce_kernel_signature(
+        &mut rng,
         &tf,
         &staking_sk,
         reward_outputs.as_slice(),
@@ -1027,7 +1034,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(reward_outputs)
         .with_timestamp(block_timestamp)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
@@ -1041,6 +1048,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
 
     let kernel_sig = produce_kernel_signature(
+        &mut rng,
         &tf,
         &staking_sk,
         reward_outputs.as_slice(),
@@ -1070,7 +1078,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(reward_outputs)
         .with_timestamp(block_timestamp)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
@@ -1085,6 +1093,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
 
     let kernel_sig = produce_kernel_signature(
+        &mut rng,
         &tf,
         &staking_sk,
         reward_outputs.as_slice(),
@@ -1119,7 +1128,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(reward_outputs)
         .with_timestamp(block_timestamp)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     let res_pool_balance =
@@ -1176,7 +1185,7 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
         .with_timestamp(block_timestamp)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap_err();
 
     assert_eq!(
@@ -1215,7 +1224,7 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
         .make_block_builder()
         .with_reward(vec![reward_output])
         .with_block_signing_key(staking_sk)
-        .build();
+        .build(&mut rng);
     let block_id = block.get_id();
     assert_eq!(
         tf.process_block(block, chainstate::BlockSource::Local).unwrap_err(),
@@ -1265,7 +1274,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap()
         .unwrap()
         .block_id();
@@ -1275,7 +1284,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     // prepare and process block_c from block_b
@@ -1285,7 +1294,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .with_randomness(initial_randomness) // no epoch is sealed yet while constructing this block
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap()
         .unwrap()
         .block_id();
@@ -1297,7 +1306,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build();
+        .build(&mut rng);
     let block_d_id = block_d.get_id();
     tf.process_block(block_d, BlockSource::Local).unwrap();
 
@@ -1309,7 +1318,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         .with_stake_spending_key(staking_sk.clone())
         .with_randomness(initial_randomness) // no epoch is sealed yet while constructing this block
         .with_vrf_key(vrf_sk.clone())
-        .build();
+        .build(&mut rng);
     let block_e_id = block_e.get_id();
     // have to calculate randomness of prev block because reorg hasn't happen yet and it's not in the db
     let block_e_pos_data = match block_e.consensus_data() {
@@ -1339,7 +1348,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk)
         .with_randomness(block_e_randomness)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap()
         .unwrap()
         .block_id();
@@ -1389,6 +1398,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id1)];
 
     let kernel_sig = produce_kernel_signature(
+        &mut rng,
         &tf,
         &staking_sk1,
         reward_outputs.as_slice(),
@@ -1423,7 +1433,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(reward_outputs)
         .with_timestamp(block_timestamp)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
@@ -1433,6 +1443,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id2)];
 
     let kernel_sig = produce_kernel_signature(
+        &mut rng,
         &tf,
         &staking_sk2,
         reward_outputs.as_slice(),
@@ -1481,7 +1492,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         .with_reward(reward_outputs)
         .with_timestamp(block_timestamp)
         .add_transaction(tx)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
@@ -1540,6 +1551,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
     let produce_block_output =
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id1)];
     let kernel_sig = produce_kernel_signature(
+        &mut rng,
         &tf,
         &staking_sk1,
         produce_block_output.as_slice(),
@@ -1581,7 +1593,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data.clone())))
         .with_reward(produce_block_output.clone())
         .with_timestamp(block_timestamp)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     let tx = TransactionBuilder::new()
@@ -1600,7 +1612,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         .with_timestamp(block_timestamp)
         .with_parent(block_a_id)
         .add_transaction(tx)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
 
@@ -1667,6 +1679,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), genesis_pool_id)];
 
     let kernel_sig = produce_kernel_signature(
+        &mut rng,
         &tf,
         &staker_sk,
         reward_outputs.as_slice(),
@@ -1701,7 +1714,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
         .with_block_signing_key(staker_sk.clone())
         .with_timestamp(block_timestamp)
         .with_reward(reward_outputs)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap()
         .unwrap();
 
@@ -1719,6 +1732,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), genesis_pool_id)];
 
     let kernel_sig = produce_kernel_signature(
+        &mut rng,
         &tf,
         &staker_sk,
         reward_outputs.as_slice(),
@@ -1753,7 +1767,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
         .with_block_signing_key(staker_sk)
         .with_timestamp(block_timestamp)
         .with_reward(reward_outputs)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 }
 
@@ -1824,7 +1838,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     // Process block_2: distribute some reward
@@ -1832,7 +1846,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .with_stake_pool(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     // Process block_3: spend part of the share including reward
@@ -1855,7 +1869,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .add_transaction(tx)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     // Process block_4 and spend some share including reward
@@ -1885,7 +1899,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
             .with_stake_spending_key(staking_sk.clone())
             .with_vrf_key(vrf_sk.clone())
             .add_transaction(tx)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap_err();
         assert_eq!(
             res,
@@ -1918,7 +1932,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk)
         .add_transaction(tx)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     let res_pool_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
@@ -1974,6 +1988,7 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), genesis_pool_id)];
 
     let kernel_sig = produce_kernel_signature(
+        &mut rng,
         &tf,
         &genesis_staking_sk,
         reward_outputs.as_slice(),
@@ -2027,7 +2042,7 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
         .with_timestamp(block_timestamp)
         .with_reward(reward_outputs)
         .add_transaction(create_new_pool_tx)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
     tf.progress_time_seconds_since_epoch(1);
 
@@ -2047,6 +2062,7 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), new_pool_id)];
 
     let kernel_sig = produce_kernel_signature(
+        &mut rng,
         &tf,
         &staking_sk,
         reward_outputs.as_slice(),
@@ -2103,6 +2119,7 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
             &tx,
             &[Some(input_utxo.output())],
             0,
+            &mut rng,
         )
         .unwrap();
         SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)])
@@ -2116,7 +2133,7 @@ fn pos_decommission_genesis_pool(#[case] seed: Seed) {
         .with_timestamp(block_timestamp)
         .with_reward(reward_outputs)
         .add_transaction(decommission_genesis_pool_tx)
-        .build_and_process()
+        .build_and_process(&mut rng)
         .unwrap();
 
     let decommissioned_genesis_utxo = tf

@@ -46,7 +46,9 @@ fn no_signature_size() -> usize {
 
 fn public_key_signature_size() -> usize {
     let (private_key, _) = PrivateKey::new_from_entropy(crypto::key::KeyKind::Secp256k1Schnorr);
-    let signature = private_key.sign_message(&[0; 32]).expect("should not fail");
+    let signature = private_key
+        .sign_message(&[0; 32], randomness::make_true_rng())
+        .expect("should not fail");
     let raw_signature = AuthorizedPublicKeySpend::new(signature).encode();
     let standard = StandardInputSignature::new(
         SigHashType::try_from(SigHashType::ALL).expect("should not fail"),
@@ -58,7 +60,9 @@ fn public_key_signature_size() -> usize {
 fn address_signature_size() -> usize {
     let (private_key, public_key) =
         PrivateKey::new_from_entropy(crypto::key::KeyKind::Secp256k1Schnorr);
-    let signature = private_key.sign_message(&[0; 32]).expect("should not fail");
+    let signature = private_key
+        .sign_message(&[0; 32], randomness::make_true_rng())
+        .expect("should not fail");
     let raw_signature = AuthorizedPublicKeyHashSpend::new(public_key, signature).encode();
     let standard = StandardInputSignature::new(
         SigHashType::try_from(SigHashType::ALL).expect("should not fail"),

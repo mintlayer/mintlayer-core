@@ -40,7 +40,7 @@ use crypto::{
 };
 use itertools::Itertools;
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
-use randomness::Rng;
+use randomness::{CryptoRng, Rng};
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
     use randomness::SliceRandom;
@@ -214,6 +214,7 @@ pub fn create_chain_config_with_staking_pool(
 
 pub fn produce_kernel_signature(
     tf: &TestFramework,
+    rng: &mut (impl Rng + CryptoRng),
     staking_sk: &PrivateKey,
     reward_outputs: &[TxOutput],
     staking_destination: Destination,
@@ -245,6 +246,7 @@ pub fn produce_kernel_signature(
         &block_reward_tx,
         std::iter::once(Some(&utxo)).collect::<Vec<_>>().as_slice(),
         0,
+        rng,
     )
     .unwrap()
 }
@@ -345,6 +347,7 @@ pub fn assert_gen_block_index_opt_identical_to(
 }
 
 pub fn sign_witnesses(
+    rng: &mut (impl Rng + CryptoRng),
     key_manager: &KeyManager,
     chain_config: &ChainConfig,
     tx: &common::chain::Transaction,
@@ -356,7 +359,7 @@ pub fn sign_witnesses(
         .enumerate()
         .map(|(idx, (_, dest))| {
             key_manager
-                .get_signature(dest, chain_config, tx, &input_utxos_refs, idx)
+                .get_signature(rng, dest, chain_config, tx, &input_utxos_refs, idx)
                 .unwrap()
         })
         .collect();

@@ -306,7 +306,7 @@ pub fn public_key_from_private_key(private_key: &[u8]) -> Result<Vec<u8>, Error>
 pub fn sign_message_for_spending(private_key: &[u8], message: &[u8]) -> Result<Vec<u8>, Error> {
     let private_key = PrivateKey::decode_all(&mut &private_key[..])
         .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
-    let signature = private_key.sign_message(message)?;
+    let signature = private_key.sign_message(message, randomness::make_true_rng())?;
     Ok(signature.encode())
 }
 
@@ -860,6 +860,7 @@ pub fn encode_witness(
         &tx,
         &utxos,
         input_num as usize,
+        randomness::make_true_rng(),
     )
     .map(InputWitness::Standard)
     .map_err(|_| Error::InvalidWitness)?;

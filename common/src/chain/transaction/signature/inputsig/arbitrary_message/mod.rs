@@ -16,6 +16,7 @@
 const MESSAGE_MAGIC_PREFIX: &str = "===MINTLAYER MESSAGE BEGIN===\n";
 const MESSAGE_MAGIC_SUFFIX: &str = "\n===MINTLAYER MESSAGE END===";
 
+use randomness::{CryptoRng, Rng};
 use thiserror::Error;
 
 use serialization::Encode;
@@ -115,10 +116,11 @@ impl ArbitraryMessageSignature {
         Ok(())
     }
 
-    pub fn produce_uniparty_signature(
+    pub fn produce_uniparty_signature<R: Rng + CryptoRng>(
         private_key: &crypto::key::PrivateKey,
         destination: &Destination,
         message: &[u8],
+        rng: R,
     ) -> Result<Self, SignArbitraryMessageError> {
         let challenge = produce_message_challenge(message);
         let signature =
@@ -128,7 +130,7 @@ impl ArbitraryMessageSignature {
                     sig.encode()
                 }
                 Destination::PublicKey(pubkey) => {
-                    let sig = sign_pubkey_spending(private_key, pubkey, &challenge)?;
+                    let sig = sign_pubkey_spending(private_key, pubkey, &challenge, rng)?;
                     sig.encode()
                 }
                 Destination::ScriptHash(_) => return Err(SignArbitraryMessageError::Unsupported),

@@ -79,7 +79,7 @@ fn stake_pool_basic(#[case] seed: Seed) {
             ))
             .build();
 
-        let block = tf.make_block_builder().add_transaction(tx).build();
+        let block = tf.make_block_builder().add_transaction(tx).build(&mut rng);
         let block_id = block.get_id();
 
         tf.process_block(block, BlockSource::Local).unwrap();
@@ -126,7 +126,7 @@ fn stake_pool_and_spend_coin_same_tx(#[case] seed: Seed) {
             ))
             .build();
 
-        let block = tf.make_block_builder().add_transaction(tx).build();
+        let block = tf.make_block_builder().add_transaction(tx).build(&mut rng);
         let block_id = block.get_id();
 
         tf.process_block(block, BlockSource::Local).unwrap();
@@ -170,7 +170,7 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
             ))))
             .build();
 
-        let block = tf.make_block_builder().add_transaction(tx).build();
+        let block = tf.make_block_builder().add_transaction(tx).build(&mut rng);
         let block_id = block.get_id();
 
         tf.process_block(block, BlockSource::Local).unwrap();
@@ -257,7 +257,7 @@ fn stake_pool_and_mint_tokens_same_tx(#[case] seed: Seed) {
         let best_block_index = tf
             .make_block_builder()
             .with_transactions(vec![tx0, tx1])
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -302,7 +302,7 @@ fn stake_pool_twice(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
 
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -344,7 +344,10 @@ fn stake_pool_twice_two_blocks(#[case] seed: Seed) {
                 Box::new(stake_pool_data.clone()),
             ))
             .build();
-        tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(tx1)
+            .build_and_process(&mut rng)
+            .unwrap();
 
         let tx2 = TransactionBuilder::new()
             .add_input(genesis_outpoint.clone().into(), empty_witness(&mut rng))
@@ -353,7 +356,7 @@ fn stake_pool_twice_two_blocks(#[case] seed: Seed) {
                 Box::new(stake_pool_data),
             ))
             .build();
-        let result = tf.make_block_builder().add_transaction(tx2).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx2).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -401,7 +404,7 @@ fn stake_pool_twice_two_txs(#[case] seed: Seed) {
             ))
             .build();
 
-        let block = tf.make_block_builder().with_transactions(vec![tx1, tx2]).build();
+        let block = tf.make_block_builder().with_transactions(vec![tx1, tx2]).build(&mut rng);
         let block_id = block.get_id();
         let result = tf.process_block(block, BlockSource::Local);
 
@@ -452,7 +455,7 @@ fn stake_pool_overspend(#[case] seed: Seed) {
             ))
             .build();
         let tx_id = tx.transaction().get_id();
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -499,7 +502,7 @@ fn stake_pool_not_enough_pledge(#[case] seed: Seed) {
             .build();
         let tx_id = tx.transaction().get_id();
 
-        let result = tf.make_block_builder().add_transaction(tx).build_and_process();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
@@ -523,7 +526,7 @@ fn stake_pool_not_enough_pledge(#[case] seed: Seed) {
             ))
             .build();
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
     });
 }
 
@@ -558,7 +561,10 @@ fn decommission_from_stake_pool(#[case] seed: Seed) {
             .build();
         let stake_pool_tx_id = tx1.transaction().get_id();
 
-        tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(tx1)
+            .build_and_process(&mut rng)
+            .unwrap();
 
         {
             //try overspend
@@ -575,8 +581,11 @@ fn decommission_from_stake_pool(#[case] seed: Seed) {
                 ))
                 .build();
             let tx2_id = tx2.transaction().get_id();
-            let result =
-                tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
+            let result = tf
+                .make_block_builder()
+                .add_transaction(tx2)
+                .build_and_process(&mut rng)
+                .unwrap_err();
 
             assert_eq!(
                 result,
@@ -603,7 +612,10 @@ fn decommission_from_stake_pool(#[case] seed: Seed) {
             ))
             .build();
 
-        tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(tx2)
+            .build_and_process(&mut rng)
+            .unwrap();
 
         let pool_balance =
             PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
@@ -643,7 +655,10 @@ fn decommission_from_stake_pool_same_block(#[case] seed: Seed) {
             .build();
         let stake_pool_tx_id = tx1.transaction().get_id();
 
-        tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(tx1)
+            .build_and_process(&mut rng)
+            .unwrap();
 
         let tx2 = TransactionBuilder::new()
             .add_input(
@@ -657,7 +672,10 @@ fn decommission_from_stake_pool_same_block(#[case] seed: Seed) {
             ))
             .build();
 
-        tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(tx2)
+            .build_and_process(&mut rng)
+            .unwrap();
 
         let pool_balance =
             PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
@@ -709,7 +727,10 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
             ))
             .build();
 
-        tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
+        tf.make_block_builder()
+            .add_transaction(tx1)
+            .build_and_process(&mut rng)
+            .unwrap();
 
         let (best_block_source_id, best_block_utxos) =
             tf.outputs_from_genblock(tf.best_block_id()).into_iter().next().unwrap();
@@ -739,14 +760,18 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
                     &tx,
                     &inputs_utxos,
                     0,
+                    &mut rng,
                 )
                 .unwrap();
 
                 SignedTransaction::new(tx, vec![InputWitness::Standard(staking_sig)]).unwrap()
             };
 
-            let result =
-                tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
+            let result = tf
+                .make_block_builder()
+                .add_transaction(tx2)
+                .build_and_process(&mut rng)
+                .unwrap_err();
 
             assert_eq!(
                 result,
@@ -780,6 +805,7 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
                 &tx,
                 &inputs_utxos,
                 0,
+                &mut rng,
             )
             .unwrap();
 
@@ -788,7 +814,7 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .add_transaction(tx2)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
     });

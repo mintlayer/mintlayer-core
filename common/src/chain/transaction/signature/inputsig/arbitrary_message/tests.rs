@@ -57,9 +57,13 @@ fn sign_verify_supported_destinations(#[case] seed: Seed) {
     let destination_pub_key = Destination::PublicKey(public_key);
 
     for dest in [&destination_addr, &destination_pub_key] {
-        let sig =
-            ArbitraryMessageSignature::produce_uniparty_signature(&private_key, dest, &message)
-                .unwrap();
+        let sig = ArbitraryMessageSignature::produce_uniparty_signature(
+            &private_key,
+            dest,
+            &message,
+            &mut rng,
+        )
+        .unwrap();
         let ver_result = sig.verify_signature(&chain_config, dest, &message_challenge);
         assert_eq!(ver_result, Ok(()));
     }
@@ -86,9 +90,13 @@ fn sign_verify_unsupported_destination(#[case] seed: Seed) {
 
     // Destination::ClassicMultisig can't be used by produce_uniparty_signature.
     let destination = Destination::ClassicMultisig(PublicKeyHash::from(&public_key));
-    let sig_err =
-        ArbitraryMessageSignature::produce_uniparty_signature(&private_key, &destination, &message)
-            .unwrap_err();
+    let sig_err = ArbitraryMessageSignature::produce_uniparty_signature(
+        &private_key,
+        &destination,
+        &message,
+        &mut rng,
+    )
+    .unwrap_err();
     assert_eq!(
         sig_err,
         SignArbitraryMessageError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode
@@ -96,9 +104,13 @@ fn sign_verify_unsupported_destination(#[case] seed: Seed) {
 
     // Destination::ScriptHash is unsupported
     let destination = Destination::ScriptHash(Id::<_>::new(H256::random_using(&mut rng)));
-    let sig_err =
-        ArbitraryMessageSignature::produce_uniparty_signature(&private_key, &destination, &message)
-            .unwrap_err();
+    let sig_err = ArbitraryMessageSignature::produce_uniparty_signature(
+        &private_key,
+        &destination,
+        &message,
+        &mut rng,
+    )
+    .unwrap_err();
     assert_eq!(sig_err, SignArbitraryMessageError::Unsupported);
     // Verifying a random signature should also produce an "Unsupported" error.
     let ver_err = random_sig
@@ -108,9 +120,13 @@ fn sign_verify_unsupported_destination(#[case] seed: Seed) {
 
     // Destination::AnyoneCanSpend makes no sense for this functionality.
     let destination = Destination::AnyoneCanSpend;
-    let sig_err =
-        ArbitraryMessageSignature::produce_uniparty_signature(&private_key, &destination, &message)
-            .unwrap_err();
+    let sig_err = ArbitraryMessageSignature::produce_uniparty_signature(
+        &private_key,
+        &destination,
+        &message,
+        &mut rng,
+    )
+    .unwrap_err();
     assert_eq!(
         sig_err,
         SignArbitraryMessageError::AttemptedToProduceSignatureForAnyoneCanSpend
@@ -213,6 +229,7 @@ fn verify_wrong_destination(#[case] seed: Seed) {
             &private_key,
             sign_dest,
             &message,
+            &mut rng,
         )
         .unwrap();
         let ver_result = sig.verify_signature(&chain_config, verify_dest, &message_challenge);
@@ -240,9 +257,13 @@ fn verify_corrupted_message(#[case] seed: Seed) {
     let destination_pub_key = Destination::PublicKey(public_key);
 
     for dest in [&destination_addr, &destination_pub_key] {
-        let sig =
-            ArbitraryMessageSignature::produce_uniparty_signature(&private_key, dest, &message)
-                .unwrap();
+        let sig = ArbitraryMessageSignature::produce_uniparty_signature(
+            &private_key,
+            dest,
+            &message,
+            &mut rng,
+        )
+        .unwrap();
         let ver_result = sig.verify_signature(&chain_config, dest, &corrupted_message_challenge);
         assert_eq!(
             ver_result,
@@ -269,9 +290,13 @@ fn verify_corrupted_signature(#[case] seed: Seed) {
     let destination_pub_key = Destination::PublicKey(public_key);
 
     for dest in [&destination_addr, &destination_pub_key] {
-        let mut sig =
-            ArbitraryMessageSignature::produce_uniparty_signature(&private_key, dest, &message)
-                .unwrap();
+        let mut sig = ArbitraryMessageSignature::produce_uniparty_signature(
+            &private_key,
+            dest,
+            &message,
+            &mut rng,
+        )
+        .unwrap();
         flip_random_bit(&mut sig.raw_signature, &mut rng);
 
         let ver_result = sig.verify_signature(&chain_config, dest, &message_challenge);
@@ -331,8 +356,9 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
         let expected_hash = signature_hash(sighash_type, &tx, &[Some(&input_utxo)], 0).unwrap();
         assert_eq!(tx_data_hash, expected_hash);
 
-        let raw_sig =
-            sign_pubkey_spending(&private_key, &public_key, &tx_data_hash).unwrap().encode();
+        let raw_sig = sign_pubkey_spending(&private_key, &public_key, &tx_data_hash, &mut rng)
+            .unwrap()
+            .encode();
 
         let sig = StandardInputSignature::new(sighash_type, raw_sig);
         let signed_tx =
@@ -353,6 +379,7 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
         &private_key,
         &destination,
         &unhashed_tx_data_to_sign,
+        &mut rng,
     )
     .unwrap();
     // Sanity check - ensure that the signature itself is correct.
@@ -374,8 +401,12 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
     assert_eq!(ver_err, DestinationSigError::SignatureVerificationFailed);
 }
 
-#[test]
-fn signature_with_chosen_text() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn signature_with_chosen_text(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let private_key_hex = "0085b02139ad6f21099f842d4cf6af705bb8927b9589835be1fef5f53e74e360f3";
     let private_key_bytes = hex::decode(private_key_hex).unwrap();
     let private_key = PrivateKey::decode_all(&mut private_key_bytes.as_slice()).unwrap();
@@ -404,6 +435,7 @@ fn signature_with_chosen_text() {
         &private_key,
         &destination_pubkeyhash,
         message,
+        &mut rng,
     )
     .unwrap();
 
@@ -426,6 +458,7 @@ fn signature_with_chosen_text() {
         &private_key,
         &destination_pub_key,
         message,
+        &mut rng,
     )
     .unwrap();
     ArbitraryMessageSignature::from_data(signature_pub_key.raw_signature)

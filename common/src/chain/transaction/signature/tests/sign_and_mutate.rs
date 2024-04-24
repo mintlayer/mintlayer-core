@@ -80,6 +80,7 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
 
         let tx = generate_unsigned_tx(&mut rng, &destination, &inputs_utxos, outputs).unwrap();
         match sign_whole_tx(
+            &mut rng,
             tx,
             &inputs_utxos_refs,
             &private_key,

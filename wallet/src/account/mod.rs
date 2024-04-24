@@ -37,6 +37,7 @@ use common::size_estimation::{
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
+use randomness::make_true_rng;
 use serialization::hex_encoded::HexEncoded;
 use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
@@ -1344,6 +1345,7 @@ impl Account {
                         tx,
                         input_utxos,
                         input_index,
+                        make_true_rng(),
                     )
                     .map(InputWitness::Standard)
                     .map_err(WalletError::TransactionSig)
@@ -1524,6 +1526,7 @@ impl Account {
             &private_key,
             &destination,
             &message,
+            make_true_rng(),
         )?;
 
         Ok(sig)

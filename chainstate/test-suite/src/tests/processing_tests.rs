@@ -90,7 +90,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             .make_block_builder()
             .with_reward(vec![TxOutput::Transfer(coins.clone(), destination.clone())])
             .add_test_transaction_from_best_block(&mut rng)
-            .build();
+            .build(&mut rng);
 
         let block_id = block.get_id();
         assert_eq!(
@@ -109,7 +109,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 OutputTimeLock::UntilHeight(BlockHeight::max()),
             )])
             .add_test_transaction_from_best_block(&mut rng)
-            .build();
+            .build(&mut rng);
 
         let block_id = block.get_id();
         let outpoint = UtxoOutPoint::new(block_id.into(), 0);
@@ -131,7 +131,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(u64::MAX)),
             )])
             .add_test_transaction_from_best_block(&mut rng)
-            .build();
+            .build(&mut rng);
 
         let block_id = block.get_id();
         let outpoint = UtxoOutPoint::new(block_id.into(), 0);
@@ -153,7 +153,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 OutputTimeLock::ForSeconds(u64::MAX),
             )])
             .add_test_transaction_from_best_block(&mut rng)
-            .build();
+            .build(&mut rng);
 
         let block_id = block.get_id();
         let outpoint = UtxoOutPoint::new(block_id.into(), 0);
@@ -175,7 +175,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 OutputTimeLock::ForBlockCount(u64::MAX),
             )])
             .add_test_transaction_from_best_block(&mut rng)
-            .build();
+            .build(&mut rng);
 
         tf.process_block(block, BlockSource::Local).unwrap();
 
@@ -191,7 +191,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 OutputTimeLock::ForBlockCount(reward_lock_distance.to_int() - 1),
             )])
             .add_test_transaction_from_best_block(&mut rng)
-            .build();
+            .build(&mut rng);
 
         let block_id = block.get_id();
         let outpoint = UtxoOutPoint::new(block_id.into(), 0);
@@ -226,7 +226,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 )),
             )])
             .add_test_transaction_from_best_block(&mut rng)
-            .build();
+            .build(&mut rng);
 
         assert!(matches!(
             tf.process_block(block, BlockSource::Local),
@@ -247,7 +247,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 OutputTimeLock::ForBlockCount(reward_lock_distance.to_int()),
             )])
             .add_test_transaction_from_best_block(&mut rng)
-            .build();
+            .build(&mut rng);
 
         let block_id = block.get_id();
         assert_eq!(
@@ -267,8 +267,10 @@ fn orphans_chains(#[case] seed: Seed) {
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
 
         // Prepare, but not process the block.
-        let missing_block =
-            tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
+        let missing_block = tf
+            .make_block_builder()
+            .add_test_transaction_from_best_block(&mut rng)
+            .build(&mut rng);
 
         // Create and process orphan blocks.
         const MAX_ORPHANS_COUNT_IN_TEST: usize = 100;
@@ -278,7 +280,7 @@ fn orphans_chains(#[case] seed: Seed) {
                 .make_block_builder()
                 .with_parent(current_block.get_id().into())
                 .add_test_transaction_from_block(&current_block, &mut rng)
-                .build();
+                .build(&mut rng);
             assert_eq!(
                 tf.process_block(current_block.clone(), BlockSource::Local).unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::OrphanCheckFailed(
@@ -331,7 +333,10 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         }
 
         // Create a new block
-        let block = tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
+        let block = tf
+            .make_block_builder()
+            .add_test_transaction_from_best_block(&mut rng)
+            .build(&mut rng);
 
         // Process the second block
         tf.process_block(block.clone(), BlockSource::Local).unwrap();
@@ -398,7 +403,11 @@ fn transaction_processing_order(#[case] seed: Seed) {
         .expect("invalid witness count");
 
         // Create a new block with tx2 appearing before tx1
-        let block = tf.make_block_builder().add_transaction(tx2).add_transaction(tx1).build();
+        let block = tf
+            .make_block_builder()
+            .add_transaction(tx2)
+            .add_transaction(tx1)
+            .build(&mut rng);
 
         // Processing this block should cause an error
         assert_eq!(
@@ -438,7 +447,7 @@ fn straight_chain(#[case] seed: Seed) {
                 .make_block_builder()
                 .with_parent(prev_block_id)
                 .add_test_transaction_with_parent(prev_block_id, &mut rng)
-                .build();
+                .build(&mut rng);
             let new_block_index =
                 tf.process_block(new_block.clone(), BlockSource::Peer).unwrap().unwrap();
 
@@ -703,7 +712,7 @@ fn consensus_type(#[case] seed: Seed) {
         tf.make_block_builder()
             .add_test_transaction_from_best_block(&mut rng)
             .with_consensus_data(ConsensusData::PoW(Box::new(PoWData::new(Compact(0), 0))))
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap_err(),
         ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
             CheckBlockError::ConsensusVerificationFailed(
@@ -721,7 +730,7 @@ fn consensus_type(#[case] seed: Seed) {
     assert!(matches!(
         tf.make_block_builder()
             .add_test_transaction_from_best_block(&mut rng)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap_err(),
         ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
             CheckBlockError::ConsensusVerificationFailed(
@@ -743,7 +752,7 @@ fn consensus_type(#[case] seed: Seed) {
                 OutputTimeLock::ForBlockCount(reward_lock_distance.to_int()),
             )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
-            .build();
+            .build(&mut rng);
         let mut block_header = mined_block.header().clone();
         let bits = min_difficulty.into();
         assert_eq!(
@@ -767,7 +776,7 @@ fn consensus_type(#[case] seed: Seed) {
         .make_block_builder()
         .with_parent(prev_block.get_id().into())
         .add_test_transaction_from_block(&prev_block, &mut rng)
-        .build();
+        .build(&mut rng);
     let bits = min_difficulty.into();
     let mut block_header = mined_block.header().clone();
     assert_eq!(
@@ -801,7 +810,7 @@ fn consensus_type(#[case] seed: Seed) {
         tf.make_block_builder()
             .with_parent(prev_block.get_id().into())
             .add_test_transaction_from_block(&prev_block, &mut rng)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap_err(),
         ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
             CheckBlockError::ConsensusVerificationFailed(
@@ -829,7 +838,7 @@ fn consensus_type(#[case] seed: Seed) {
                 OutputTimeLock::ForBlockCount(reward_lock_distance.to_int()),
             )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
-            .build();
+            .build(&mut rng);
         let bits = min_difficulty.into();
         let mut block_header = mined_block.header().clone();
         assert_eq!(
@@ -892,7 +901,7 @@ fn pow(#[case] seed: Seed) {
             OutputTimeLock::ForBlockCount(reward_lock_distance.to_int()),
         )])
         .add_test_transaction_from_best_block(&mut rng)
-        .build();
+        .build(&mut rng);
     make_invalid_pow_block(&mut random_invalid_block, u128::MAX, difficulty.into())
         .expect("generate invalid block");
     assert!(matches!(
@@ -975,7 +984,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
             .make_block_builder()
             .with_reward(expected_block_reward.clone())
             .add_test_transaction_from_best_block(&mut rng)
-            .build();
+            .build(&mut rng);
         make_invalid_pow_block(&mut random_invalid_block, u128::MAX, difficulty.into())
             .expect("generate invalid block");
 
@@ -1053,7 +1062,7 @@ fn blocks_from_the_future(#[case] seed: Seed) {
                 .with_timestamp(BlockTimestamp::from_int_seconds(
                     current_time.load() + max_future_offset,
                 ))
-                .build_and_process()
+                .build_and_process(&mut rng)
                 .unwrap()
                 .unwrap();
         }
@@ -1068,7 +1077,7 @@ fn blocks_from_the_future(#[case] seed: Seed) {
                     .with_timestamp(BlockTimestamp::from_int_seconds(
                         current_time.load() + max_future_offset + 1,
                     ))
-                    .build_and_process()
+                    .build_and_process(&mut rng)
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                     CheckBlockError::BlockFromTheFuture(_)
@@ -1081,7 +1090,7 @@ fn blocks_from_the_future(#[case] seed: Seed) {
             assert!(matches!(
                 tf.make_block_builder()
                     .with_timestamp(BlockTimestamp::from_int_seconds(current_time.load() - 1))
-                    .build_and_process()
+                    .build_and_process(&mut rng)
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                     CheckBlockError::BlockTimeOrderInvalid(_, _)
@@ -1118,7 +1127,7 @@ fn empty_inputs_in_tx(#[case] seed: Seed) {
         let first_tx = TransactionBuilder::new().build();
         let first_tx_id = first_tx.transaction().get_id();
 
-        let block = tf.make_block_builder().with_transactions(vec![first_tx]).build();
+        let block = tf.make_block_builder().with_transactions(vec![first_tx]).build(&mut rng);
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
@@ -1152,7 +1161,7 @@ fn empty_outputs_in_tx(#[case] seed: Seed) {
                     )
                     .build(),
             )
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
         let new_block_id: Id<GenBlock> = (*new_block_index.block_id()).into();
@@ -1215,7 +1224,7 @@ fn temporarily_bad_block_not_invalidated_during_integration(#[case] seed: Seed) 
             .make_block_builder()
             .with_parent(m2_id.into())
             .with_timestamp(BlockTimestamp::from_int_seconds(future_block_time_secs))
-            .build();
+            .build(&mut rng);
         let future_block_id = future_block.get_id();
         let error = tf.process_block(future_block.clone(), BlockSource::Local).unwrap_err();
 

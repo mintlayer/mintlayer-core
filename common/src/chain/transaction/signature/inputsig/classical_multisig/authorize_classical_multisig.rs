@@ -233,7 +233,7 @@ pub fn sign_classical_multisig_spending(
         return Err(ClassicalMultisigSigningError::SpendeePrivateChallengePublicKeyMismatch);
     }
     let signature = private_key
-        .sign_message(&msg)
+        .sign_message(&msg, randomness::make_true_rng())
         .map_err(ClassicalMultisigSigningError::ProducingSignatureFailed)?;
 
     let mut current_signatures = current_signatures;
@@ -670,7 +670,9 @@ mod tests {
 
             signatures.insert(
                 *tampered_with_key_index,
-                new_random_private_key.sign_message(&sighash.encode()).unwrap(),
+                new_random_private_key
+                    .sign_message(&sighash.encode(), randomness::make_true_rng())
+                    .unwrap(),
             );
 
             let current_signatures = AuthorizedClassicalMultisigSpend::new(
@@ -894,7 +896,9 @@ mod tests {
             let current_signatures = sign_result.take();
             let (new_random_private_key, _) =
                 PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-            let sig = new_random_private_key.sign_message(&sighash.encode()).unwrap();
+            let sig = new_random_private_key
+                .sign_message(&sighash.encode(), randomness::make_true_rng())
+                .unwrap();
             let new_sigs = BTreeMap::from([(key_index, sig)]);
             let tampered_with_signatures = AuthorizedClassicalMultisigSpend::new(
                 new_sigs,

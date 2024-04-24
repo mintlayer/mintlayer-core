@@ -69,7 +69,7 @@ pub fn sign_address_spending(
     }
     let msg = sighash.encode();
     let signature = private_key
-        .sign_message(&msg)
+        .sign_message(&msg, randomness::make_true_rng())
         .map_err(DestinationSigError::ProducingSignatureFailed)?;
 
     Ok(AuthorizedPublicKeyHashSpend::new(public_key, signature))
@@ -117,6 +117,7 @@ mod test {
                 &tx,
                 &inputs_utxos_refs,
                 1,
+                &mut rng,
             );
             assert_eq!(res, Err(DestinationSigError::InvalidInputIndex(1, 1)));
         }
@@ -146,6 +147,7 @@ mod test {
                 &tx,
                 &inputs_utxos_refs,
                 rng.gen_range(0..inputs_utxos.len()),
+                &mut rng,
             )
             .unwrap();
             assert!(
@@ -182,6 +184,7 @@ mod test {
                 &tx,
                 &inputs_utxos_refs,
                 rng.gen_range(0..inputs_utxos.len()),
+                &mut rng,
             )
             .unwrap();
 
@@ -226,6 +229,7 @@ mod test {
                 &tx,
                 &inputs_utxos_refs,
                 input,
+                &mut rng,
             )
             .unwrap();
             let spender_signature =
@@ -263,6 +267,7 @@ mod test {
                 &tx,
                 &inputs_utxos_refs,
                 input,
+                &mut rng,
             )
             .unwrap();
             let sighash =

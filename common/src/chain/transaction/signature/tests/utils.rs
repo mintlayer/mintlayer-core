@@ -127,6 +127,7 @@ pub fn generate_unsigned_tx(
 }
 
 pub fn sign_whole_tx(
+    rng: &mut (impl Rng + CryptoRng),
     tx: Transaction,
     inputs_utxos: &[Option<&TxOutput>],
     private_key: &PrivateKey,
@@ -139,6 +140,7 @@ pub fn sign_whole_tx(
         .enumerate()
         .map(|(i, _input)| {
             make_signature(
+                rng,
                 &tx,
                 inputs_utxos,
                 i,
@@ -165,6 +167,7 @@ pub fn generate_and_sign_tx(
     let tx = generate_unsigned_tx(rng, destination, inputs_utxos, outputs).unwrap();
     let inputs_utxos_refs = inputs_utxos.iter().map(|i| i.as_ref()).collect::<Vec<_>>();
     let signed_tx = sign_whole_tx(
+        rng,
         tx,
         inputs_utxos_refs.as_slice(),
         private_key,
@@ -185,6 +188,7 @@ pub fn generate_and_sign_tx(
 }
 
 pub fn make_signature(
+    rng: &mut (impl Rng + CryptoRng),
     tx: &Transaction,
     inputs_utxos: &[Option<&TxOutput>],
     input_num: usize,
@@ -199,6 +203,7 @@ pub fn make_signature(
         tx,
         inputs_utxos,
         input_num,
+        rng,
     )?;
     Ok(input_sig)
 }

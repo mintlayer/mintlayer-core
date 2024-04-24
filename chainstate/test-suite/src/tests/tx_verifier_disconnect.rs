@@ -124,7 +124,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
         let best_block = tf
             .make_block_builder()
             .add_transaction(tx0)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 
@@ -214,7 +214,7 @@ fn connect_disconnect_tx_mempool_derived(#[case] seed: Seed) {
         let best_block = tf
             .make_block_builder()
             .add_transaction(tx0)
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap()
             .unwrap();
 

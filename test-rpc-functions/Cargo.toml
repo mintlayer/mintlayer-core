@@ -12,6 +12,7 @@ chainstate-types = { path = "../chainstate/types" }
 chainstate = { path = "../chainstate/" }
 common = { path = "../common/" }
 crypto = { path = "../crypto/" }
+randomness = { path = "../randomness/" }
 rpc = { path = "../rpc/" }
 serialization = { path = "../serialization" }
 subsystem = { path = "../subsystem/" }

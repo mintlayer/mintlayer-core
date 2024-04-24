@@ -96,6 +96,7 @@ fn signed_tx(#[case] seed: Seed) {
                 &tx,
                 &[Some(&tx_1.transaction().outputs()[0])],
                 0,
+                &mut rng,
             )
             .unwrap();
             SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)])
@@ -104,7 +105,7 @@ fn signed_tx(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .with_transactions(vec![tx_1, tx_2])
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     });
 }
@@ -186,7 +187,8 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
             let sighash = sighash.encode();
 
             for key_index in key_indexes.iter().take(min_required_signatures.get() as usize) {
-                let signature = priv_keys[*key_index as usize].sign_message(&sighash).unwrap();
+                let signature =
+                    priv_keys[*key_index as usize].sign_message(&sighash, &mut rng).unwrap();
                 authorization.add_signature(*key_index, signature);
             }
 
@@ -211,7 +213,7 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
 
         tf.make_block_builder()
             .with_transactions(vec![tx_1, tx_2])
-            .build_and_process()
+            .build_and_process(&mut rng)
             .unwrap();
     });
 }
@@ -296,7 +298,8 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
         let sighash = sighash.encode();
 
         for key_index in key_indexes.iter().take(min_required_signatures.get() as usize) {
-            let signature = priv_keys[*key_index as usize].sign_message(&sighash).unwrap();
+            let signature =
+                priv_keys[*key_index as usize].sign_message(&sighash, &mut rng).unwrap();
             authorization.add_signature(*key_index, signature);
             authrorizations.push(authorization.clone());
         }
@@ -331,7 +334,7 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
             let process_result = tf
                 .make_block_builder()
                 .with_transactions(vec![tx_1.clone(), tx_2.clone()])
-                .build_and_process();
+                .build_and_process(&mut rng);
 
             if authorization_potentially_missing_sigs.available_signatures_count()
                 < min_required_signatures.get() as usize
@@ -397,12 +400,12 @@ fn too_large_no_sig_data(#[case] seed: Seed, #[case] valid_size: bool) {
 
             if valid_size {
                 let process_result =
-                    tf.make_block_builder().with_transactions(vec![tx]).build_and_process();
+                    tf.make_block_builder().with_transactions(vec![tx]).build_and_process(&mut rng);
 
                 process_result.unwrap().unwrap();
             } else {
                 let process_result =
-                    tf.make_block_builder().with_transactions(vec![tx]).build_and_process();
+                    tf.make_block_builder().with_transactions(vec![tx]).build_and_process(&mut rng);
 
                 assert_eq!(
                     process_result.unwrap_err(),
@@ -474,7 +477,7 @@ fn no_sig_data_not_allowed(
             ))
             .build();
 
-        let block = tf.make_block_builder().with_transactions(vec![tx.clone()]).build();
+        let block = tf.make_block_builder().with_transactions(vec![tx.clone()]).build(&mut rng);
         let process_result = tf.process_block(block, chainstate::BlockSource::Local);
 
         match (data_allowed, data_provided) {
@@ -541,7 +544,7 @@ fn try_to_spend_with_no_signature_on_mainnet(#[case] seed: Seed) {
                     ))
                     .build(),
             )
-            .build();
+            .build(&mut rng);
 
         let process_result = tf.process_block(block.clone(), chainstate::BlockSource::Local);
 
@@ -571,7 +574,7 @@ fn try_to_spend_with_no_signature_on_mainnet(#[case] seed: Seed) {
             ))
             .build();
         let tx_id = tx.transaction().get_id();
-        let block = tf.make_block_builder().add_transaction(tx).build();
+        let block = tf.make_block_builder().add_transaction(tx).build(&mut rng);
 
         let process_result = tf.process_block(block.clone(), chainstate::BlockSource::Local);
 

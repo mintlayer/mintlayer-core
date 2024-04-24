@@ -21,6 +21,7 @@ mod pow;
 mod validator;
 
 pub use pos::calculate_effective_pool_balance;
+use randomness::{CryptoRng, Rng};
 
 use std::sync::Arc;
 
@@ -102,7 +103,8 @@ pub enum FinalizeBlockInputData {
     None,
 }
 
-pub fn generate_consensus_data_and_reward<G>(
+#[allow(clippy::too_many_arguments)]
+pub fn generate_consensus_data_and_reward<G, R>(
     chain_config: &ChainConfig,
     prev_block_index: &GenBlockIndex,
     sealed_epoch_randomness: PoSRandomness,
@@ -110,9 +112,11 @@ pub fn generate_consensus_data_and_reward<G>(
     block_timestamp: BlockTimestamp,
     block_height: BlockHeight,
     get_ancestor: G,
+    rng: R,
 ) -> Result<(ConsensusData, BlockReward), ConsensusCreationError>
 where
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+    R: Rng + CryptoRng,
 {
     match chain_config.consensus_upgrades().consensus_status(block_height) {
         RequiredConsensus::IgnoreConsensus => {
@@ -141,6 +145,7 @@ where
                 block_timestamp,
                 block_height,
                 get_ancestor,
+                rng,
             ),
             GenerateBlockInputData::PoW(_) => Err(ConsensusPoSError::PoWInputDataProvided)?,
             GenerateBlockInputData::None => Err(ConsensusPoSError::NoInputDataProvided)?,
@@ -204,7 +209,7 @@ pub fn finalize_consensus_data(
                     )?;
 
                     let signed_block_header = stake_private_key
-                        .sign_message(&block_header.encode())
+                        .sign_message(&block_header.encode(), randomness::make_true_rng())
                         .map_err(|_| {
                             ConsensusCreationError::StakingError(
                                 ConsensusPoSError::FailedToSignBlockHeader,

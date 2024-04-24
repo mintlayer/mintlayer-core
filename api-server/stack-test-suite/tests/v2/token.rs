@@ -117,7 +117,7 @@ async fn ok(#[case] seed: Seed) {
                 let chainstate_block_ids = [*tf
                     .make_block_builder()
                     .add_transaction(transaction.clone())
-                    .build_and_process()
+                    .build_and_process(&mut rng)
                     .unwrap()
                     .unwrap()
                     .block_id()];
