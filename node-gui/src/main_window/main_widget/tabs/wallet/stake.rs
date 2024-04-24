@@ -98,7 +98,7 @@ pub fn view_stake(
                     .push(field("Pool balance".to_owned()))
                     .push(field("Decommission".to_owned())),
             );
-            for (pool_id, (pool_data, balance)) in account.staking_balance.iter() {
+            for (pool_id, pool_data) in account.staking_balance.iter() {
                 let pool_id_address = Address::new(chain_config, *pool_id)
                     .expect("Encoding pool id to address can't fail (GUI)");
                 staking_balance_grid = staking_balance_grid.push(
@@ -131,9 +131,12 @@ pub fn view_stake(
                         )))
                         .push(field(print_coin_amount(
                             chain_config,
-                            pool_data.cost_per_block,
+                            pool_data.cost_per_block.amount(),
                         )))
-                        .push(field(print_coin_amount(chain_config, *balance))),
+                        .push(field(print_coin_amount(
+                            chain_config,
+                            pool_data.balance.amount(),
+                        ))),
                 );
             }
             staking_balance_grid

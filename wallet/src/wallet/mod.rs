@@ -62,6 +62,7 @@ use pos_accounting::make_delegation_id;
 use tx_verifier::error::TokenIssuanceError;
 use tx_verifier::{check_transaction, CheckTransactionError};
 use utils::ensure;
+pub use wallet_storage::Error;
 use wallet_storage::{
     DefaultBackend, Store, StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked, TransactionRwLocked,
     TransactionRwUnlocked, Transactional, WalletStorageReadLocked, WalletStorageReadUnlocked,

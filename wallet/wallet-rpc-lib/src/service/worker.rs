@@ -205,6 +205,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
         whether_to_store_seed_phrase: StoreSeedPhrase,
         mnemonic: Option<String>,
         passphrase: Option<String>,
+        skip_syncing: bool,
     ) -> Result<CreatedWallet, RpcError<N>> {
         utils::ensure!(
             self.controller.is_none(),
@@ -220,7 +221,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletWorker<N> {
         };
         let passphrase_ref = passphrase.as_ref().map(|x| x.as_ref());
 
-        let wallet = if newly_generated_mnemonic {
+        let wallet = if newly_generated_mnemonic || skip_syncing {
             let info = self.node_rpc.chainstate_info().await.map_err(RpcError::RpcError)?;
             WalletController::create_wallet(
                 self.chain_config.clone(),

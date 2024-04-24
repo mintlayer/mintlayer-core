@@ -95,6 +95,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
                 whether_to_store_seed_phrase,
                 mnemonic,
                 passphrase,
+                false,
             )
             .await
             .map(Into::<CreatedWallet>::into),
@@ -496,7 +497,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
                 selected_utxos.into_iter().map(|o| o.into_outpoint()).collect(),
                 config,
             )
-            .await,
+            .await
+            .map(NewTransaction::new),
         )
     }
 
@@ -605,7 +607,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
                 decommission_address,
                 config,
             )
-            .await,
+            .await
+            .map(NewTransaction::new),
         )
     }
 
@@ -627,7 +630,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
                 output_address,
                 config,
             )
-            .await,
+            .await
+            .map(NewTransaction::new),
         )
     }
 
@@ -667,7 +671,11 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         };
         rpc::handle_result(
             self.create_delegation(account_arg.index::<N>()?, address, pool_id, config)
-                .await,
+                .await
+                .map(|(tx, delegation_id)| NewDelegation {
+                    tx_id: tx.transaction().get_id(),
+                    delegation_id,
+                }),
         )
     }
 
@@ -684,7 +692,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         };
         rpc::handle_result(
             self.delegate_staking(account_arg.index::<N>()?, amount, delegation_id, config)
-                .await,
+                .await
+                .map(NewTransaction::new),
         )
     }
 
@@ -708,7 +717,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
                 delegation_id,
                 config,
             )
-            .await,
+            .await
+            .map(NewTransaction::new),
         )
     }
 

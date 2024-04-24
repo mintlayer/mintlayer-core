@@ -149,6 +149,15 @@ pub enum ImportOrCreate {
     Create,
 }
 
+impl ImportOrCreate {
+    pub fn skip_syncing(&self) -> bool {
+        match self {
+            Self::Create => true,
+            Self::Import => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum MainWindowMessage {
     MenuMessage(main_menu::MenuMessage),
