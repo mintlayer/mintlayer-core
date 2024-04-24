@@ -13,12 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
+use std::{
+    fmt::Display,
+    net::{Ipv4Addr, Ipv6Addr},
+};
 
 use serialization::{Decode, Encode};
 
 use crate::{
     ip_address::{Ip4, Ip6},
+    socket_address::SocketAddress,
     IsGlobalIp,
 };
 
@@ -53,6 +57,34 @@ impl PeerAddress {
 
     pub fn is_global_unicast_ip(&self) -> bool {
         std::net::SocketAddr::from(self).ip().is_global_unicast_ip()
+    }
+
+    /// If the address is eligible for being sent to peers via AddrListResponse, return Some,
+    /// otherwise return None.
+    ///
+    /// The address is eligible if it has a public routable IP and any valid (non-zero) port.
+    /// Private and local IPs are allowed if `allow_discover_private_ips` is true.
+    pub fn as_discoverable_socket_address(
+        &self,
+        allow_discover_private_ips: bool,
+    ) -> Option<SocketAddress> {
+        match self {
+            PeerAddress::Ip4(socket)
+                if (Ipv4Addr::from(socket.ip).is_global_unicast_ip()
+                    || allow_discover_private_ips)
+                    && socket.port != 0 =>
+            {
+                Some(SocketAddress::new(self.into()))
+            }
+            PeerAddress::Ip6(socket)
+                if (Ipv6Addr::from(socket.ip).is_global_unicast_ip()
+                    || allow_discover_private_ips)
+                    && socket.port != 0 =>
+            {
+                Some(SocketAddress::new(self.into()))
+            }
+            _ => None,
+        }
     }
 }
 

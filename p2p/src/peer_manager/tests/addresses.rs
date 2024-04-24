@@ -72,10 +72,10 @@ use crate::{
     PeerManagerEvent,
 };
 
-fn get_new_public_address(rng: &mut impl Rng) -> PeerAddress {
+fn get_new_discoverable_address(rng: &mut impl Rng) -> PeerAddress {
     loop {
         let address = TestAddressMaker::new_random_address(&mut *rng).as_peer_address();
-        if SocketAddress::from_peer_address(&address, false).is_some() {
+        if address.as_discoverable_socket_address(false).is_some() {
             return address;
         }
     }
@@ -123,7 +123,7 @@ where
     assert_eq!(pm.peers.len(), 1);
 
     // Check that nodes are allowed to send own address immediately after connecting
-    let address = get_new_public_address(&mut rng);
+    let address = get_new_discoverable_address(&mut rng);
     pm.handle_announce_addr_request(peer_id, address);
     let accepted_count = pm.peerdb.known_addresses().count();
     assert_eq!(accepted_count, 1);
@@ -460,7 +460,7 @@ async fn resend_own_addresses(#[case] seed: Seed) {
                 PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest { address }),
             ) = message.categorize()
             {
-                let announced_addr = SocketAddress::from_peer_address(&address, false).unwrap();
+                let announced_addr = address.as_discoverable_socket_address(false).unwrap();
                 listening_addresses.remove(&announced_addr);
             }
         }

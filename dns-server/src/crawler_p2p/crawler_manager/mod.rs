@@ -224,7 +224,7 @@ where
                     peer_id,
                     address.to_string()
                 );
-                if let Some(address) = SocketAddress::from_peer_address(&address, false) {
+                if let Some(address) = address.as_discoverable_socket_address(false) {
                     self.send_crawler_event(CrawlerEvent::AddressAnnouncement {
                         address,
                         sender: peer_id,
@@ -257,7 +257,7 @@ where
 
                 let addresses = addresses
                     .iter()
-                    .filter_map(|addr| SocketAddress::from_peer_address(addr, false))
+                    .filter_map(|addr| addr.as_discoverable_socket_address(false))
                     .collect::<Vec<_>>();
 
                 self.send_crawler_event(CrawlerEvent::AddressListResponse {

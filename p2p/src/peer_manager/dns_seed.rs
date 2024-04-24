@@ -18,7 +18,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common::chain::ChainConfig;
 use logging::log;
-use p2p_types::socket_address::SocketAddress;
+use p2p_types::{peer_address::PeerAddress, socket_address::SocketAddress};
 use randomness::{make_pseudo_rng, seq::IteratorRandom};
 
 use crate::config::P2pConfig;
@@ -67,9 +67,8 @@ impl DnsSeed for DefaultDnsSeed {
             match result {
                 Ok(list) => {
                     list.filter_map(|addr| {
-                        SocketAddress::from_peer_address(
-                            // Convert SocketAddr to PeerAddress
-                            &addr.into(),
+                        let addr: PeerAddress = addr.into();
+                        addr.as_discoverable_socket_address(
                             *self.p2p_config.allow_discover_private_ips,
                         )
                     })

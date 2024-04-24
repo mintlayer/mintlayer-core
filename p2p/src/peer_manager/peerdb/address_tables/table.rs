@@ -270,7 +270,12 @@ pub mod test_utils {
     pub fn make_random_address(rng: &mut impl Rng) -> SocketAddress {
         let addr_v4 = SocketAddrV4::new(
             Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
-            rng.gen(),
+            // Note: addresses with zero port are never considered discoverable
+            // (PeerAddress::.as_discoverable_socket_address always returns None for them),
+            // so some test may malfunction if such an address is generated.
+            // On the other hand, in general, it doesn't make much sense to produce random socket
+            // addresses with zero port, so we disable it on this level.
+            rng.gen_range(1..=u16::MAX),
         );
         SocketAddress::new(SocketAddr::V4(addr_v4))
     }

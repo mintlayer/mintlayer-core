@@ -25,7 +25,7 @@ use common::{
 use networking::test_helpers::TestAddressMaker;
 use networking::{transport::TcpTransportSocket, types::ConnectionDirection};
 use p2p_test_utils::expect_recv;
-use p2p_types::{peer_address::PeerAddress, socket_address::SocketAddress};
+use p2p_types::peer_address::PeerAddress;
 use randomness::Rng;
 use test_utils::{
     assert_matches_return_val,
@@ -99,7 +99,8 @@ async fn basic_test(#[case] seed: Seed) {
     // Remove the addresses from the db
     for address in &addresses_for_peer1 {
         peer_mgr.peerdb.remove_address(
-            &SocketAddress::from_peer_address(address, *p2p_config.allow_discover_private_ips)
+            &address
+                .as_discoverable_socket_address(*p2p_config.allow_discover_private_ips)
                 .unwrap(),
         );
     }

@@ -15,13 +15,13 @@
 
 use std::{
     fmt::Display,
-    net::{AddrParseError, IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+    net::{AddrParseError, IpAddr, SocketAddr},
     str::FromStr,
 };
 
 use serde::{Deserialize, Serialize};
 
-use crate::{bannable_address::BannableAddress, peer_address::PeerAddress, IsGlobalIp};
+use crate::{bannable_address::BannableAddress, peer_address::PeerAddress};
 
 #[derive(
     Debug,
@@ -57,24 +57,6 @@ impl SocketAddress {
 
     pub fn as_peer_address(&self) -> PeerAddress {
         self.0.into()
-    }
-
-    pub fn from_peer_address(address: &PeerAddress, allow_private_ips: bool) -> Option<Self> {
-        match &address {
-            PeerAddress::Ip4(socket)
-                if (Ipv4Addr::from(socket.ip).is_global_unicast_ip() || allow_private_ips)
-                    && socket.port != 0 =>
-            {
-                Some(SocketAddress::new(address.into()))
-            }
-            PeerAddress::Ip6(socket)
-                if (Ipv6Addr::from(socket.ip).is_global_unicast_ip() || allow_private_ips)
-                    && socket.port != 0 =>
-            {
-                Some(SocketAddress::new(address.into()))
-            }
-            _ => None,
-        }
     }
 }
 
