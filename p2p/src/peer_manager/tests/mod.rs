@@ -26,32 +26,32 @@ mod whitelist;
 
 use std::{sync::Arc, time::Duration};
 
-use p2p_test_utils::expect_recv;
-use tokio::sync::{mpsc, oneshot};
+use tokio::{
+    sync::{
+        mpsc::{self, UnboundedReceiver, UnboundedSender},
+        oneshot,
+    },
+    time::timeout,
+};
 
 use ::utils::atomics::SeqCstAtomicBool;
 use common::{chain::ChainConfig, time_getter::TimeGetter};
+use networking::transport::TcpTransportSocket;
+use p2p_test_utils::expect_recv;
 use p2p_types::socket_address::SocketAddress;
 use randomness::Rng;
 use test_utils::assert_matches_return_val;
-use tokio::{
-    sync::mpsc::{UnboundedReceiver, UnboundedSender},
-    time::timeout,
-};
 
 use crate::{
     interface::types::ConnectedPeer,
     message::{PeerManagerMessage, PingRequest, PingResponse},
     net::{
-        default_backend::{
-            transport::TcpTransportSocket, types::Command, ConnectivityHandle,
-            DefaultNetworkingService,
-        },
+        default_backend::{types::Command, ConnectivityHandle, DefaultNetworkingService},
         types::ConnectivityEvent,
         ConnectivityService, NetworkingService,
     },
     peer_manager::PeerManager,
-    testing_utils::{peerdb_inmemory_store, test_p2p_config},
+    test_helpers::{peerdb_inmemory_store, test_p2p_config},
     tests::helpers::{PeerManagerNotification, PeerManagerObserver},
     types::peer_id::PeerId,
     utils::oneshot_nofail,

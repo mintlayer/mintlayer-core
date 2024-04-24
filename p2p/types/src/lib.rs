@@ -20,6 +20,7 @@ pub mod p2p_event;
 pub mod peer_address;
 pub mod peer_id;
 pub mod services;
+pub mod socket_addr_ext;
 pub mod socket_address;
 
 pub use global_ip::IsGlobalIp;

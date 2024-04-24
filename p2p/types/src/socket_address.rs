@@ -91,3 +91,9 @@ impl FromStr for SocketAddress {
         SocketAddr::from_str(s).map(SocketAddress)
     }
 }
+
+impl From<SocketAddr> for SocketAddress {
+    fn from(value: SocketAddr) -> Self {
+        SocketAddress::new(value)
+    }
+}

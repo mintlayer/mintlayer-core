@@ -16,7 +16,6 @@
 use std::{collections::BTreeSet, panic, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use logging::log;
 use tokio::{
     sync::{
         mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
@@ -25,11 +24,6 @@ use tokio::{
     task::JoinHandle,
     time,
 };
-
-use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
-use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use randomness::Rng;
-use test_utils::random::Seed;
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
@@ -50,17 +44,23 @@ use common::{
     primitives::{Amount, BlockHeight, Id, Idable, H256},
     time_getter::TimeGetter,
 };
+use logging::log;
 use mempool::{MempoolConfig, MempoolHandle};
+use networking::transport::TcpTransportSocket;
+use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use randomness::Rng;
 use subsystem::{ManagerJoinHandle, ShutdownTrigger};
+use test_utils::random::Seed;
 use utils::atomics::SeqCstAtomicBool;
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
     message::{BlockSyncMessage, HeaderList, TransactionSyncMessage},
-    net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
+    net::types::SyncingEvent,
     protocol::{choose_common_protocol_version, ProtocolVersion},
     sync::{subscribe_to_new_tip, Observer, SyncManager},
-    testing_utils::test_p2p_config,
+    test_helpers::test_p2p_config,
     types::peer_id::PeerId,
     MessagingService, NetworkingService, P2pConfig, P2pError, P2pEventHandler, PeerManagerEvent,
     Result, SyncingEventReceiver,

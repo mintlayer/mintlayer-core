@@ -6,19 +6,17 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-chainstate = { path = "../../chainstate/" }
+chainstate = { path = "../../chainstate" }
 chainstate-storage = { path = "../../chainstate/storage" }
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
-common = { path = "../../common/" }
-crypto = { path = "../../crypto/" }
-logging = { path = "../../logging/" }
-mempool = { path = "../../mempool/" }
-subsystem = { path = "../../subsystem/" }
-test-utils = { path = "../../test-utils" }
+common = { path = "../../common" }
+logging = { path = "../../logging" }
+mempool = { path = "../../mempool" }
+storage = { path = "../../storage" }
+subsystem = { path = "../../subsystem" }
 utils = { path = "../../utils" }
 
 ctor.workspace = true
 once_cell.workspace = true
-portpicker.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 tracing.workspace = true

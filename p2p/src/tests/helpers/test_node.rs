@@ -19,14 +19,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use chainstate::{
-    make_chainstate, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
-};
-use mempool::MempoolConfig;
-use p2p_test_utils::{P2pBasicTestTimeGetter, SHORT_TIMEOUT};
-use p2p_types::{p2p_event::P2pEventHandler, socket_address::SocketAddress};
-use storage_inmemory::InMemory;
-use subsystem::ShutdownTrigger;
 use tokio::{
     sync::{
         mpsc::{self},
@@ -35,19 +27,25 @@ use tokio::{
     task::JoinHandle,
     time,
 };
+
+use ::test_utils::BasicTestTimeGetter;
+use chainstate::{
+    make_chainstate, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
+};
+use common::chain::ChainConfig;
+use mempool::MempoolConfig;
+use networking::transport::{TransportListener, TransportSocket};
+use p2p_test_utils::SHORT_TIMEOUT;
+use p2p_types::{p2p_event::P2pEventHandler, socket_address::SocketAddress};
+use storage_inmemory::InMemory;
+use subsystem::ShutdownTrigger;
+use utils::atomics::SeqCstAtomicBool;
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
     config::P2pConfig,
     error::P2pError,
-    net::{
-        default_backend::{
-            transport::{TransportListener, TransportSocket},
-            DefaultNetworkingService,
-        },
-        types::PeerRole,
-        ConnectivityService,
-    },
+    net::{default_backend::DefaultNetworkingService, types::PeerRole, ConnectivityService},
     peer_manager::{
         peerdb::storage_impl::PeerDbStorageImpl,
         test_utils::{mutate_peer_manager, query_peer_manager},
@@ -55,12 +53,10 @@ use crate::{
     },
     protocol::ProtocolVersion,
     sync::SyncManager,
-    testing_utils::peerdb_inmemory_store,
+    test_helpers::peerdb_inmemory_store,
     utils::oneshot_nofail,
     PeerManagerEvent,
 };
-use common::chain::ChainConfig;
-use utils::atomics::SeqCstAtomicBool;
 
 use super::{PeerManagerNotification, PeerManagerObserver, TestDnsSeed, TestPeersInfo};
 
@@ -71,7 +67,7 @@ pub struct TestNode<Transport>
 where
     Transport: TransportSocket,
 {
-    time_getter: P2pBasicTestTimeGetter,
+    time_getter: BasicTestTimeGetter,
     p2p_config: Arc<P2pConfig>,
     peer_mgr_event_sender: mpsc::UnboundedSender<PeerManagerEvent>,
     local_address: SocketAddress,
@@ -107,7 +103,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub async fn start(
         networking_enabled: bool,
-        time_getter: P2pBasicTestTimeGetter,
+        time_getter: BasicTestTimeGetter,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         transport: Transport,
@@ -115,7 +111,7 @@ where
         protocol_version: ProtocolVersion,
         node_name: Option<&str>,
     ) -> Self {
-        let socket = transport.bind(vec![bind_address]).await.unwrap();
+        let socket = transport.bind(vec![bind_address.socket_addr()]).await.unwrap();
         let local_address = socket.local_addresses().unwrap()[0];
 
         let tracing_span = if let Some(node_name) = node_name {
@@ -123,7 +119,7 @@ where
                 parent: &tracing::Span::current(),
                 "",
                 node = node_name,
-                addr = ?local_address.socket_addr()
+                addr = ?local_address
             )
         } else {
             tracing::Span::current()
@@ -244,7 +240,7 @@ where
         }
     }
 
-    pub fn time_getter(&self) -> &P2pBasicTestTimeGetter {
+    pub fn time_getter(&self) -> &BasicTestTimeGetter {
         &self.time_getter
     }
 

@@ -16,23 +16,22 @@
 use std::sync::Arc;
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
-use p2p_test_utils::P2pBasicTestTimeGetter;
+use networking::transport::TcpTransportSocket;
 use p2p_types::{
     services::{Service, Services},
     PeerId,
 };
+use test_utils::BasicTestTimeGetter;
 
 use crate::{
     config::{NodeType, P2pConfig},
     error::{ConnectionValidationError, P2pError},
     net::{
-        default_backend::{
-            transport::TcpTransportSocket, ConnectivityHandle, DefaultNetworkingService,
-        },
+        default_backend::{ConnectivityHandle, DefaultNetworkingService},
         types::{PeerInfo, PeerRole},
     },
     peer_manager::PeerManager,
-    testing_utils::{peerdb_inmemory_store, TEST_PROTOCOL_VERSION},
+    test_helpers::{peerdb_inmemory_store, TEST_PROTOCOL_VERSION},
     PeerManagerEvent,
 };
 
@@ -69,7 +68,7 @@ fn validate_services() {
         let (_conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
         let (_peer_mgr_event_sender, peer_mgr_event_receiver) =
             tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
         let connectivity_handle = ConnectivityHandle::<TestNetworkingService>::new(
             vec![],
             cmd_sender,

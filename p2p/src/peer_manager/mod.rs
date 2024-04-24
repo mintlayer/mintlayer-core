@@ -32,7 +32,6 @@ use std::{
 };
 
 use futures::never::Never;
-use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, IsGlobalIp};
 use tokio::sync::mpsc;
 
 use chainstate::ban_score::BanScore;
@@ -42,6 +41,8 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
+use networking::types::ConnectionDirection;
+use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, IsGlobalIp};
 use randomness::{make_pseudo_rng, seq::IteratorRandom, Rng};
 use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, set_flag::SetFlag};
 use utils_networking::IpOrSocketAddress;
@@ -58,7 +59,7 @@ use crate::{
     net::{
         types::{
             services::{Service, Services},
-            ConnectionDirection, ConnectivityEvent, PeerInfo, PeerRole,
+            ConnectivityEvent, PeerInfo, PeerRole,
         },
         ConnectivityService, NetworkingService,
     },

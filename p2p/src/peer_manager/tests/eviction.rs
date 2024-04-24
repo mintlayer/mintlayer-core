@@ -15,12 +15,20 @@
 
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
-use logging::log;
 use rstest::rstest;
-use test_utils::random::make_seedable_rng;
 
-use p2p_test_utils::{expect_no_recv, expect_recv, P2pBasicTestTimeGetter};
-use test_utils::random::Seed;
+use common::{
+    chain::{config, Block},
+    primitives::{user_agent::mintlayer_core_user_agent, Id},
+    Uint256,
+};
+use logging::log;
+use networking::test_helpers::{TestTransportMaker, TestTransportTcp};
+use p2p_test_utils::{expect_no_recv, expect_recv};
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
 
 use crate::{
     config::P2pConfig,
@@ -34,18 +42,9 @@ use crate::{
             make_standalone_peer_manager,
             utils::{expect_cmd_connect_to_one_of, outbound_block_relay_peer_accepted_by_backend},
         },
+        HEARTBEAT_INTERVAL_MAX,
     },
     sync::sync_status::PeerBlockSyncStatus,
-    testing_utils::{TestTransportMaker, TestTransportTcp},
-};
-use common::{
-    chain::{config, Block},
-    primitives::{user_agent::mintlayer_core_user_agent, Id},
-    Uint256,
-};
-
-use crate::{
-    peer_manager::{tests::utils::wait_for_heartbeat, HEARTBEAT_INTERVAL_MAX},
     PeerManagerEvent,
 };
 
@@ -81,6 +80,8 @@ mod dont_evict_if_blocks_in_flight {
         )]
         test_case: TestCase,
     ) {
+        use crate::peer_manager::tests::utils::wait_for_heartbeat;
+
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = Arc::new(config::create_unit_test_config());
@@ -141,8 +142,8 @@ mod dont_evict_if_blocks_in_flight {
             protocol_config: Default::default(),
         });
 
-        let bind_address = TestTransportTcp::make_address();
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let bind_address = TestTransportTcp::make_address().into();
+        let time_getter = BasicTestTimeGetter::new();
 
         let (
             mut peer_mgr,

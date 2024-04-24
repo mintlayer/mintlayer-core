@@ -8,15 +8,15 @@ rust-version.workspace = true
 [dependencies]
 chainstate = { path = "../../chainstate/" }
 common = { path = "../../common" }
-crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
+networking = { path = "../../networking" }
 p2p = { path = "../../p2p" }
-p2p-test-utils = { path = "../p2p-test-utils" }
+p2p-test-utils = { path = "../test-utils" }
 serialization = { path = "../../serialization" }
 subsystem = { path = "../../subsystem/" }
+test-utils = { path = "../../test-utils/" }
 utils = { path = "../../utils/" }
 
-futures.workspace = true
 libtest-mimic.workspace = true
 rlimit.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }

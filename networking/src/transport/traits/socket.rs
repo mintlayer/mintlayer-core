@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::net::SocketAddr;
+
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use p2p_types::socket_address::SocketAddress;
 
 use crate::Result;
 
@@ -34,17 +35,17 @@ pub trait TransportSocket: Send + Sync + 'static {
     type Stream: PeerStream + ConnectedSocketInfo;
 
     /// Creates a new listener bound to the specified address.
-    async fn bind(&self, address: Vec<SocketAddress>) -> Result<Self::Listener>;
+    async fn bind(&self, address: Vec<SocketAddr>) -> Result<Self::Listener>;
 
     /// Returns a future that opens a connection to the given address.
-    fn connect(&self, address: SocketAddress) -> BoxFuture<'static, Result<Self::Stream>>;
+    fn connect(&self, address: SocketAddr) -> BoxFuture<'static, Result<Self::Stream>>;
 }
 
 /// Additional information for a connected socket.
 pub trait ConnectedSocketInfo {
     /// Local socket address.
-    fn local_address(&self) -> crate::Result<SocketAddress>;
+    fn local_address(&self) -> crate::Result<SocketAddr>;
 
     /// Remote socket address.
-    fn remote_address(&self) -> crate::Result<SocketAddress>;
+    fn remote_address(&self) -> crate::Result<SocketAddr>;
 }

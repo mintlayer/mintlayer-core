@@ -135,7 +135,8 @@ async fn initialize(
                     std::fs::remove_dir_all(&peerdb_data_dir)?;
                     open_storage(open_storage_backend(peerdb_data_dir))
                 }
-                P2pError::ProtocolError(_)
+                P2pError::NetworkingError(_)
+                | P2pError::ProtocolError(_)
                 | P2pError::DialError(_)
                 | P2pError::ChannelClosed
                 | P2pError::PeerError(_)
@@ -146,7 +147,6 @@ async fn initialize(
                 | P2pError::InvalidConfigurationValue(_)
                 | P2pError::InvalidStorageState(_)
                 | P2pError::MempoolError(_)
-                | P2pError::MessageCodecError(_)
                 | P2pError::ConnectionValidationFailed(_)
                 | P2pError::SyncError(_) => Err(err),
             },

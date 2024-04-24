@@ -149,6 +149,13 @@ pub fn with_random_bit_flipped(data: &[u8], rng: &mut impl Rng) -> Vec<u8> {
     data
 }
 
+pub fn gen_random_bytes(rng: &mut impl Rng, min_len: usize, max_len: usize) -> Vec<u8> {
+    let data_length = rng.gen_range(min_len..=max_len);
+    let mut bytes = vec![0; data_length];
+    rng.fill_bytes(&mut bytes);
+    bytes
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;

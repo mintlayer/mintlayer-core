@@ -13,16 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use p2p::{
-    net::default_backend::{
-        transport::{
-            NoiseEncryptionAdapter, NoiseEncryptionAdapterMaker, TcpTransportSocket,
-            WrappedTransportSocket,
-        },
-        DefaultNetworkingService,
-    },
-    testing_utils::TestTransportNoise,
+use networking::test_helpers::TestTransportNoise;
+use networking::transport::{
+    NoiseEncryptionAdapter, NoiseEncryptionAdapterMaker, TcpTransportSocket, WrappedTransportSocket,
 };
+use p2p::net::default_backend::DefaultNetworkingService;
 
 fn main() {
     logging::init_logging();

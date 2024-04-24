@@ -14,42 +14,31 @@
 // limitations under the License.
 
 use std::{
-    net::{Ipv4Addr, SocketAddrV4},
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::{Arc, Mutex},
     time::Duration,
 };
 
 use async_trait::async_trait;
 use futures::{future::BoxFuture, StreamExt};
-use p2p_test_utils::P2pBasicTestTimeGetter;
-use p2p_types::socket_address::SocketAddress;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     time::timeout,
 };
 
-use common::{
-    chain::Block,
-    primitives::{Id, H256},
+use test_utils::{
+    random::{gen_random_bytes, Seed},
+    BasicTestTimeGetter,
 };
-use randomness::Rng;
-use test_utils::random::Seed;
 
 use crate::{
-    message::BlockListRequest,
-    net::default_backend::{
-        transport::{
-            impls::stream_adapter::{
-                noise::NoiseEncryptionAdapterMaker,
-                wrapped_transport::wrapped_listener::MAX_CONCURRENT_HANDSHAKES,
-            },
-            BufferedTranscoder, ChannelListener, IdentityStreamAdapter, MpscChannelTransport,
-            NoiseEncryptionAdapter, PeerStream, TcpTransportSocket, TransportListener,
-            TransportSocket,
-        },
-        types::Message,
+    test_helpers::{TestTransportChannel, TestTransportMaker, TestTransportTcp},
+    transport::{
+        impls::stream_adapter::wrapped_transport::wrapped_listener::MAX_CONCURRENT_HANDSHAKES,
+        BufferedTranscoder, ChannelListener, IdentityStreamAdapter, MpscChannelTransport,
+        NoiseEncryptionAdapter, NoiseEncryptionAdapterMaker, PeerStream, TcpTransportSocket,
+        TransportListener, TransportSocket,
     },
-    testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp},
 };
 
 use super::wrapped_socket::WrappedTransportSocket;
@@ -182,7 +171,7 @@ impl TransportSocket for TestTransport {
     type Listener = TestListener;
     type Stream = <MpscChannelTransport as TransportSocket>::Stream;
 
-    async fn bind(&self, addresses: Vec<SocketAddress>) -> crate::Result<Self::Listener> {
+    async fn bind(&self, addresses: Vec<SocketAddr>) -> crate::Result<Self::Listener> {
         let listener = self.transport.bind(addresses).await.unwrap();
         *self.port_open.lock().unwrap() = true;
         Ok(TestListener {
@@ -191,7 +180,7 @@ impl TransportSocket for TestTransport {
         })
     }
 
-    fn connect(&self, address: SocketAddress) -> BoxFuture<'static, crate::Result<Self::Stream>> {
+    fn connect(&self, address: SocketAddr) -> BoxFuture<'static, crate::Result<Self::Stream>> {
         Box::pin(self.transport.connect(address))
     }
 }
@@ -204,12 +193,12 @@ impl TransportListener for TestListener {
         &mut self,
     ) -> crate::Result<(
         <MpscChannelTransport as TransportSocket>::Stream,
-        SocketAddress,
+        SocketAddr,
     )> {
         self.listener.accept().await
     }
 
-    fn local_addresses(&self) -> crate::Result<Vec<SocketAddress>> {
+    fn local_addresses(&self) -> crate::Result<Vec<SocketAddr>> {
         self.listener.local_addresses()
     }
 }
@@ -231,7 +220,7 @@ async fn test_bind_port_closed() {
     >::new(NoiseEncryptionAdapter::gen_new, TestTransport::new());
     assert!(!*transport.base_transport.port_open.lock().unwrap());
 
-    let address = SocketAddress::new(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into());
+    let address = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into();
     let listener = transport.bind(vec![address]).await.unwrap();
     assert!(*transport.base_transport.port_open.lock().unwrap());
 
@@ -259,15 +248,14 @@ async fn send_2_reqs(#[case] seed: Seed) {
     let server_stream = server_res.unwrap().0;
     let peer_stream = peer_res.unwrap();
 
-    let message_1 = Message::BlockListRequest(BlockListRequest::new(vec![]));
-    let id: Id<Block> = H256::random_using(&mut rng).into();
-    let message_2 = Message::BlockListRequest(BlockListRequest::new(vec![id]));
-    let mut peer_stream = BufferedTranscoder::new(peer_stream, rng.gen_range(512..1024));
-    peer_stream.send(message_1.clone()).await.unwrap();
+    let message_1 = gen_random_bytes(&mut rng, 0, 1000);
+    let message_2 = gen_random_bytes(&mut rng, 0, 1000);
 
+    let mut peer_stream = BufferedTranscoder::<_, Vec<u8>>::new(peer_stream, None);
+    peer_stream.send(message_1.clone()).await.unwrap();
     peer_stream.send(message_2.clone()).await.unwrap();
 
-    let mut server_stream = BufferedTranscoder::new(server_stream, rng.gen_range(512..1024));
+    let mut server_stream = BufferedTranscoder::<_, Vec<u8>>::new(server_stream, None);
     assert_eq!(server_stream.recv().await.unwrap(), message_1);
     assert_eq!(server_stream.recv().await.unwrap(), message_2);
 }
@@ -291,9 +279,7 @@ async fn pending_handshakes() {
 
     // Connect MAX_CONCURRENT_HANDSHAKES amount of idle clients
     let mut sockets = futures::stream::iter(0..MAX_CONCURRENT_HANDSHAKES)
-        .then(|_| async {
-            tokio::net::TcpStream::connect(local_addr[0].socket_addr()).await.unwrap()
-        })
+        .then(|_| async { tokio::net::TcpStream::connect(local_addr[0]).await.unwrap() })
         .collect::<Vec<_>>()
         .await;
 
@@ -318,7 +304,7 @@ async fn pending_handshakes() {
 #[tracing::instrument]
 #[tokio::test]
 async fn handshake_timeout() {
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let transport = WrappedTransportSocket::<
         NoiseEncryptionAdapterMaker,
         NoiseEncryptionAdapter,
@@ -336,7 +322,7 @@ async fn handshake_timeout() {
         }
     });
 
-    let mut bad_client = tokio::net::TcpStream::connect(local_addr[0].socket_addr()).await.unwrap();
+    let mut bad_client = tokio::net::TcpStream::connect(local_addr[0]).await.unwrap();
     for _ in 0..30 {
         time_getter.advance_time(Duration::from_secs(1));
     }

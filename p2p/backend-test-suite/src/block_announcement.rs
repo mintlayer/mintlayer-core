@@ -22,6 +22,7 @@ use common::{
     primitives::{user_agent::mintlayer_core_user_agent, Id, H256},
     time_getter::TimeGetter,
 };
+use networking::test_helpers::TestTransportMaker;
 use p2p::{
     config::{NodeType, P2pConfig},
     message::{BlockSyncMessage, HeaderList},
@@ -29,7 +30,7 @@ use p2p::{
         types::SyncingEvent, ConnectivityService, MessagingService, NetworkingService,
         SyncingEventReceiver,
     },
-    testing_utils::{connect_and_accept_services, test_p2p_config, TestTransportMaker},
+    test_helpers::{connect_and_accept_services, test_p2p_config},
 };
 use utils::atomics::SeqCstAtomicBool;
 
@@ -54,7 +55,7 @@ where
     let (mut conn1, mut messaging_handle1, mut sync1, _) = N::start(
         true,
         T::make_transport(),
-        vec![T::make_address()],
+        vec![T::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter.clone(),
@@ -70,7 +71,7 @@ where
     let (mut conn2, mut messaging_handle2, mut sync2, _) = N::start(
         true,
         T::make_transport(),
-        vec![T::make_address()],
+        vec![T::make_address().into()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         time_getter,
@@ -200,7 +201,7 @@ where
     let (mut conn1, mut messaging_handle1, _sync1, _) = N::start(
         true,
         T::make_transport(),
-        vec![T::make_address()],
+        vec![T::make_address().into()],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         time_getter.clone(),
@@ -216,7 +217,7 @@ where
     let (mut conn2, _messaging_handle2, _sync2, _) = N::start(
         true,
         T::make_transport(),
-        vec![T::make_address()],
+        vec![T::make_address().into()],
         chain_config,
         p2p_config,
         time_getter,

@@ -13,24 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use futures::future::BoxFuture;
+use std::net::SocketAddr;
 
-use crate::{
-    net::{
-        default_backend::transport::{ConnectedSocketInfo, PeerStream},
-        types::ConnectionDirection,
-    },
-    Result,
-};
+use async_trait::async_trait;
 
-/// Represents a stream that requires a handshake to function (such as encrypted streams)
-pub trait StreamAdapter<T>: Clone + Send + Sync + 'static {
+use crate::Result;
+
+use super::{ConnectedSocketInfo, PeerStream};
+
+/// An abstraction layer over a potential inbound network connection (acceptor in boost terminology).
+#[async_trait]
+pub trait TransportListener: Send {
     type Stream: PeerStream + ConnectedSocketInfo;
 
-    /// Wraps base async stream into AsyncRead/AsyncWrite stream that may implement encryption.
-    fn handshake(
-        &self,
-        base: T,
-        conn_dir: ConnectionDirection,
-    ) -> BoxFuture<'static, Result<Self::Stream>>;
+    /// Accepts a new inbound connection.
+    ///
+    /// The returned address is the same as the one returned by `Stream::remote_address`.
+    async fn accept(&mut self) -> Result<(Self::Stream, SocketAddr)>;
+
+    /// Returns the local address of the listener.
+    fn local_addresses(&self) -> Result<Vec<SocketAddr>>;
 }

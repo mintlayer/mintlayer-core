@@ -15,21 +15,19 @@
 
 use std::sync::Arc;
 
-use p2p_test_utils::{run_with_timeout, P2pBasicTestTimeGetter};
-use test_utils::assert_matches;
+use networking::test_helpers::{
+    TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+};
+use networking::transport::{BufferedTranscoder, TransportListener, TransportSocket};
+use p2p_test_utils::run_with_timeout;
+use test_utils::{assert_matches, BasicTestTimeGetter};
 
 use crate::{
     disconnection_reason::DisconnectionReason,
     message::WillDisconnectMessage,
-    net::default_backend::{
-        transport::{BufferedTranscoder, TransportListener, TransportSocket},
-        types::{HandshakeMessage, Message, P2pTimestamp},
-    },
+    net::default_backend::types::{HandshakeMessage, Message, P2pTimestamp},
     protocol::SupportedProtocolVersion,
-    testing_utils::{
-        test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
-        TestTransportTcp,
-    },
+    test_helpers::test_p2p_config,
     tests::helpers::TestNode,
 };
 
@@ -41,7 +39,7 @@ where
     TTM::Transport: TransportSocket,
 {
     for protocol_version in [SupportedProtocolVersion::V2, SupportedProtocolVersion::V3] {
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let p2p_config = Arc::new(test_p2p_config());
 
@@ -51,7 +49,7 @@ where
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             TTM::make_transport(),
-            TTM::make_address(),
+            TTM::make_address().into(),
             protocol_version.into(),
             None,
         )
@@ -60,14 +58,14 @@ where
         let transport = TTM::make_transport();
         let mut listener = transport.bind(vec![TTM::make_address()]).await.unwrap();
 
-        let outgoing_conn_address = listener.local_addresses().unwrap()[0];
+        let outgoing_conn_address = listener.local_addresses().unwrap()[0].into();
         let _outgoing_connect_result_receiver = test_node.start_connecting(outgoing_conn_address);
 
         let (outgoing_conn_stream, _) = listener.accept().await.unwrap();
 
         let mut outgoing_conn_msg_stream = BufferedTranscoder::new(
             outgoing_conn_stream,
-            *p2p_config.protocol_config.max_message_size,
+            Some(*p2p_config.protocol_config.max_message_size),
         );
 
         let msg = outgoing_conn_msg_stream.recv().await.unwrap();
@@ -86,11 +84,12 @@ where
         };
         assert_matches!(msg, Message::Handshake(HandshakeMessage::Hello { .. }));
 
-        let incoming_conn_stream = transport.connect(*test_node.local_address()).await.unwrap();
+        let incoming_conn_stream =
+            transport.connect(test_node.local_address().socket_addr()).await.unwrap();
 
         let mut incoming_conn_msg_stream = BufferedTranscoder::new(
             incoming_conn_stream,
-            *p2p_config.protocol_config.max_message_size,
+            Some(*p2p_config.protocol_config.max_message_size),
         );
 
         incoming_conn_msg_stream

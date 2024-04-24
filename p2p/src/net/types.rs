@@ -34,12 +34,6 @@ use crate::{
 
 use self::services::Services;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum ConnectionDirection {
-    Inbound,
-    Outbound,
-}
-
 #[derive(
     Debug,
     Clone,

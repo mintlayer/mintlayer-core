@@ -30,9 +30,8 @@ use mempool::{
     tx_origin::RemoteTxOrigin,
     FeeRate, MempoolConfig,
 };
-use p2p_test_utils::P2pBasicTestTimeGetter;
 use serialization::Encode;
-use test_utils::random::Seed;
+use test_utils::{random::Seed, BasicTestTimeGetter};
 
 use crate::{
     config::NodeType,
@@ -43,7 +42,7 @@ use crate::{
         peer::requested_transactions::REQUESTED_TX_EXPIRY_PERIOD,
         tests::helpers::{PeerManagerEventDesc, SyncManagerNotification, TestNode},
     },
-    testing_utils::{for_each_protocol_version, test_p2p_config},
+    test_helpers::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
     P2pConfig, P2pError,
 };
@@ -210,7 +209,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let chain_config = Arc::new(create_unit_test_config());
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.as_ref().clone())
             .with_time_getter(time_getter.get_time_getter())

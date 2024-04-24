@@ -20,7 +20,6 @@
 use std::{collections::HashMap, sync::Arc};
 
 use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt};
-use p2p_types::socket_address::SocketAddress;
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
@@ -33,6 +32,8 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
+use networking::transport::{ConnectedSocketInfo, TransportListener, TransportSocket};
+use p2p_types::socket_address::SocketAddress;
 use randomness::{make_pseudo_rng, Rng};
 use utils::{
     atomics::SeqCstAtomicBool, eventhandler::EventsController, set_flag::SetFlag,
@@ -47,7 +48,6 @@ use crate::{
     net::{
         default_backend::{
             peer,
-            transport::{ConnectedSocketInfo, TransportListener, TransportSocket},
             types::{BackendEvent, Command, PeerEvent},
         },
         types::{services::Services, ConnectivityEvent, PeerInfo, SyncingEvent},
@@ -344,7 +344,7 @@ where
                                     stream,
                                     PeerId::new(),
                                     ConnectionInfo::Inbound,
-                                    address,
+                                    address.into(),
                                 )?;
                             }
                         },
@@ -417,7 +417,7 @@ where
             PendingPeerContext {
                 handle,
                 peer_address,
-                bind_address,
+                bind_address: bind_address.into(),
                 connection_info,
                 backend_event_sender,
             },
@@ -720,13 +720,16 @@ where
             } => {
                 let connection_fut = timeout(
                     *self.p2p_config.outbound_connection_timeout,
-                    self.transport.connect(address),
+                    self.transport.connect(address.socket_addr()),
                 );
 
                 let backend_task: BackendTask<T> = async move {
-                    let connection_res = connection_fut.await.unwrap_or(Err(P2pError::DialError(
-                        DialError::ConnectionRefusedOrTimedOut,
-                    )));
+                    let connection_res = match connection_fut.await {
+                        Err(_) => Err(P2pError::DialError(DialError::ConnectionRefusedOrTimedOut)),
+                        Ok(networking_result) => {
+                            networking_result.map_err(P2pError::NetworkingError)
+                        }
+                    };
 
                     boxed_cb(move |this| {
                         this.handle_connect_res(address, local_services_override, connection_res)

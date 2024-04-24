@@ -30,6 +30,7 @@ members = [
   "mempool/types",                      # Common mempool types.
   "mocks",                              # Mock implementations of our traits (used for testing)
   "node-daemon",                        # Node terminal binary.
+  "networking",                         # Pure networking implementations
   "node-gui",                           # Node GUI binary.
   "node-lib",                           # Node lib; the common library between daemon, tui and gui node executables.
   "p2p",                                # P2p communication interfaces and protocols.
@@ -85,6 +86,7 @@ default-members = [
   "dns-server",
   "logging",
   "mempool",
+  "networking",
   "node-daemon",
   "node-gui",
   "node-lib",
@@ -182,7 +184,6 @@ oneshot = "0.1"
 parity-scale-codec = "3.1"
 parking_lot = "0.12"
 paste = "1.0"
-portpicker = "0.1"
 probabilistic-collections = "0.7"
 proc-macro2 = "1.0"
 proptest = "1.0"

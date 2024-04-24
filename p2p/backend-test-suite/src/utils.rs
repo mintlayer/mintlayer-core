@@ -17,7 +17,7 @@ macro_rules! tests {
     ($($(#[$meta:meta])* $name:ident,)+) => {
         pub fn tests<T, N>() -> impl Iterator<Item = libtest_mimic::Trial>
         where
-            T: p2p::testing_utils::TestTransportMaker<Transport = N::Transport>,
+            T: networking::test_helpers::TestTransportMaker<Transport = N::Transport>,
             N: p2p::net::NetworkingService + std::fmt::Debug + 'static,
             N::ConnectivityHandle: p2p::net::ConnectivityService<N> + std::fmt::Debug,
             N::MessagingHandle: MessagingService + std::fmt::Debug,

@@ -9,29 +9,26 @@ rust-version.workspace = true
 default = []
 
 [dependencies]
+chainstate = { path = "../chainstate" }
+common = { path = "../common" }
+logging = { path = "../logging" }
+mempool = { path = "../mempool" }
+networking = { path = "../networking" }
 p2p-types = { path = "types" }
-
-chainstate = { path = "../chainstate/" }
-common = { path = "../common/" }
-crypto = { path = "../crypto/" }
-logging = { path = "../logging/" }
-mempool = { path = "../mempool/" }
-randomness = { path = "../randomness/" }
-rpc = { path = "../rpc/" }
+randomness = { path = "../randomness" }
+rpc = { path = "../rpc" }
 rpc-description = { path = "../rpc/description" }
-serialization = { path = "../serialization/" }
+serialization = { path = "../serialization" }
 storage = { path = "../storage" }
-subsystem = { path = "../subsystem/" }
-utils = { path = "../utils/" }
+subsystem = { path = "../subsystem" }
+utils = { path = "../utils" }
 utils-networking = { path = "../utils/networking" }
 
 async-trait.workspace = true
-bytes.workspace = true
 enum-iterator.workspace = true
 derive_more.workspace = true
 dyn-clone.workspace = true
 futures.workspace = true
-hex.workspace = true
 itertools.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }
 lazy_static.workspace = true
@@ -41,10 +38,6 @@ once_cell.workspace = true
 parity-scale-codec.workspace = true
 serde.workspace = true
 siphasher.workspace = true
-snowstorm.workspace = true
-socket2 = { workspace = true, features = ["all"] }
-sscanf.workspace = true
-tap.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 tokio-stream.workspace = true
@@ -56,9 +49,8 @@ tracing.workspace = true
 chainstate-storage = { path = "../chainstate/storage" }
 chainstate-test-framework = { path = "../chainstate/test-framework" }
 consensus = { path = "../consensus" }
-crypto = { path = "../crypto/" }
 p2p-backend-test-suite = { path = "backend-test-suite" }
-p2p-test-utils = { path = "p2p-test-utils" }
+p2p-test-utils = { path = "test-utils" }
 storage-inmemory = { path = "../storage/inmemory" }
 test-utils = { path = "../test-utils" }
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time", "test-util"] }
@@ -66,7 +58,6 @@ tokio = { workspace = true, default-features = false, features = ["io-util", "ma
 criterion.workspace = true
 ctor.workspace = true
 num.workspace = true
-portpicker.workspace = true
 rstest.workspace = true
 
 [[test]]

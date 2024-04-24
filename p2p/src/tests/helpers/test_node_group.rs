@@ -15,15 +15,15 @@
 
 use std::time::Duration;
 
-use common::{chain::Block, primitives::Id};
-use p2p_test_utils::{P2pBasicTestTimeGetter, SHORT_TIMEOUT};
-use p2p_types::socket_address::SocketAddress;
 use tokio::time;
 
-use crate::{
-    config::P2pConfig,
-    net::{default_backend::transport::TransportSocket, types::PeerRole},
-};
+use ::test_utils::BasicTestTimeGetter;
+use common::{chain::Block, primitives::Id};
+use networking::transport::TransportSocket;
+use p2p_test_utils::SHORT_TIMEOUT;
+use p2p_types::socket_address::SocketAddress;
+
+use crate::{config::P2pConfig, net::types::PeerRole};
 
 use super::test_node::TestNode;
 
@@ -52,7 +52,7 @@ where
         &self.nodes
     }
 
-    pub fn time_getter(&self) -> &P2pBasicTestTimeGetter {
+    pub fn time_getter(&self) -> &BasicTestTimeGetter {
         self.nodes[0].time_getter()
     }
 

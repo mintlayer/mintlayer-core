@@ -1,0 +1,34 @@
+[package]
+name = "networking"
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+license.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+randomness = { path = "../randomness" }
+serialization = { path = "../serialization" }
+utils = { path = "../utils" }
+
+async-trait.workspace = true
+bytes.workspace = true
+futures.workspace = true
+logging = { path = "../logging" }
+once_cell.workspace = true
+parity-scale-codec.workspace = true
+serde.workspace = true
+snowstorm.workspace = true
+socket2 = { workspace = true, features = ["all"] }
+thiserror.workspace = true
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
+tokio-socks.workspace = true
+tokio-util = { workspace = true, default-features = false, features = ["codec"] }
+tracing.workspace = true
+
+[dev-dependencies]
+test-utils = { path = "../test-utils" }
+
+rstest.workspace = true
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time", "test-util"] }

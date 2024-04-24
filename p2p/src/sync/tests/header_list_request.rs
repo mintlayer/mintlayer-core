@@ -21,15 +21,14 @@ use common::{
     chain::config::create_unit_test_config,
     primitives::{user_agent::mintlayer_core_user_agent, Idable},
 };
-use p2p_test_utils::P2pBasicTestTimeGetter;
-use test_utils::random::Seed;
+use test_utils::{random::Seed, BasicTestTimeGetter};
 
 use crate::{
     config::P2pConfig,
     error::ProtocolError,
     message::{BlockSyncMessage, HeaderList, HeaderListRequest},
     sync::tests::helpers::TestNode,
-    testing_utils::for_each_protocol_version,
+    test_helpers::for_each_protocol_version,
     types::peer_id::PeerId,
     P2pError,
 };
@@ -128,7 +127,7 @@ async fn valid_request(#[case] seed: Seed) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn respond_with_empty_header_list_when_in_ibd() {
     for_each_protocol_version(|protocol_version| async move {
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
 
         const STALLING_TIMEOUT: Duration = Duration::from_millis(500);
 

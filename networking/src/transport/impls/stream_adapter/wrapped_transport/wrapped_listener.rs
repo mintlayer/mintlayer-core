@@ -13,20 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::net::SocketAddr;
+
 use async_trait::async_trait;
 use futures::{
     future::BoxFuture,
     stream::{FuturesUnordered, StreamExt},
 };
-use p2p_types::socket_address::SocketAddress;
 
 use crate::{
-    net::{
-        default_backend::transport::{
-            impls::stream_adapter::traits::StreamAdapter, TransportListener, TransportSocket,
-        },
-        types::ConnectionDirection,
-    },
+    transport::{impls::stream_adapter::traits::StreamAdapter, TransportListener, TransportSocket},
+    types::ConnectionDirection,
     Result,
 };
 
@@ -40,7 +37,7 @@ pub struct AdaptedListener<S: StreamAdapter<T::Stream>, T: TransportSocket> {
     stream_adapter: S,
     listener: T::Listener,
     #[allow(clippy::type_complexity)]
-    handshakes: FuturesUnordered<BoxFuture<'static, (Result<S::Stream>, SocketAddress)>>,
+    handshakes: FuturesUnordered<BoxFuture<'static, (Result<S::Stream>, SocketAddr)>>,
 }
 
 impl<S: StreamAdapter<T::Stream>, T: TransportSocket> AdaptedListener<S, T> {
@@ -57,7 +54,7 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> AdaptedListener<S, T> {
 impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener for AdaptedListener<S, T> {
     type Stream = S::Stream;
 
-    async fn accept(&mut self) -> Result<(S::Stream, SocketAddress)> {
+    async fn accept(&mut self) -> Result<(S::Stream, SocketAddr)> {
         loop {
             let accept_new = self.handshakes.len() < MAX_CONCURRENT_HANDSHAKES;
             tokio::select! {
@@ -92,7 +89,7 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener for Adap
         }
     }
 
-    fn local_addresses(&self) -> Result<Vec<SocketAddress>> {
+    fn local_addresses(&self) -> Result<Vec<SocketAddr>> {
         self.listener.local_addresses()
     }
 }

@@ -21,17 +21,15 @@ use std::{
 };
 
 use async_trait::async_trait;
-use p2p_test_utils::P2pBasicTestTimeGetter;
 use tokio::sync::mpsc::UnboundedSender;
 
 use logging::log;
+use networking::transport::TransportSocket;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
+use test_utils::BasicTestTimeGetter;
 
 use crate::{
-    net::{
-        default_backend::transport::TransportSocket,
-        types::{PeerInfo, PeerRole},
-    },
+    net::types::{PeerInfo, PeerRole},
     peer_manager::{self, dns_seed::DnsSeed},
 };
 
@@ -247,7 +245,7 @@ pub async fn nodes_wait_for_connections_to_sock_addrs<Transport>(
     nodes: &[TestNode<Transport>],
     address: SocketAddress,
     required_connected_nodes_count: std::ops::RangeInclusive<usize>,
-    iteration_time_advancement: Option<(&P2pBasicTestTimeGetter, Duration)>,
+    iteration_time_advancement: Option<(&BasicTestTimeGetter, Duration)>,
     iteration_sleep_duration: Option<Duration>,
 ) where
     Transport: TransportSocket,
@@ -280,7 +278,7 @@ pub async fn nodes_wait_for_connections_to_ip_addrs<Transport>(
     nodes: &[TestNode<Transport>],
     address: IpAddr,
     required_connected_nodes_count: std::ops::RangeInclusive<usize>,
-    iteration_time_advancement: Option<(&P2pBasicTestTimeGetter, Duration)>,
+    iteration_time_advancement: Option<(&BasicTestTimeGetter, Duration)>,
     iteration_sleep_duration: Option<Duration>,
 ) where
     Transport: TransportSocket,

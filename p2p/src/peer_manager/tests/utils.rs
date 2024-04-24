@@ -15,15 +15,15 @@
 
 use std::{collections::BTreeSet, time::Duration};
 
-use common::{chain::ChainConfig, primitives::user_agent::mintlayer_core_user_agent};
-use logging::log;
 use tokio::sync::mpsc;
 
-use p2p_test_utils::{wait_for_recv, P2pBasicTestTimeGetter};
+use common::{chain::ChainConfig, primitives::user_agent::mintlayer_core_user_agent};
+use logging::log;
+use p2p_test_utils::wait_for_recv;
 use p2p_types::{
     bannable_address::BannableAddress, services::Service, socket_address::SocketAddress, PeerId,
 };
-use test_utils::assert_matches_return_val;
+use test_utils::{assert_matches_return_val, BasicTestTimeGetter};
 use utils_networking::IpOrSocketAddress;
 
 use crate::{
@@ -34,7 +34,7 @@ use crate::{
         types::{ConnectivityEvent, PeerInfo},
     },
     peer_manager::PeerManagerInterface,
-    testing_utils::TEST_PROTOCOL_VERSION,
+    test_helpers::TEST_PROTOCOL_VERSION,
     tests::helpers::PeerManagerNotification,
     utils::oneshot_nofail,
     PeerManagerEvent,
@@ -54,7 +54,7 @@ pub fn cmd_to_peer_man_msg(cmd: Command) -> (PeerId, PeerManagerMessage) {
 
 pub async fn recv_command_advance_time(
     cmd_receiver: &mut mpsc::UnboundedReceiver<Command>,
-    time_getter: &P2pBasicTestTimeGetter,
+    time_getter: &BasicTestTimeGetter,
     advance_duration: Duration,
 ) -> Result<Command, mpsc::error::TryRecvError> {
     loop {

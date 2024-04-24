@@ -92,7 +92,7 @@ pub async fn start_subsystems(
     );
     let mempool_handle = manager.add_custom_subsystem("test-mempool", |hdl| mempool.init(hdl));
 
-    let peerdb_storage = p2p::testing_utils::peerdb_inmemory_store();
+    let peerdb_storage = p2p::test_helpers::peerdb_inmemory_store();
     let p2p_handle = p2p::make_p2p(
         true,
         Arc::clone(&chain_config),

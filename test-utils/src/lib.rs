@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod basic_test_time_getter;
 pub mod mock_time_getter;
 pub mod nft_utils;
 pub mod random;
@@ -22,8 +23,11 @@ use std::collections::BTreeMap;
 
 use hex::ToHex;
 use itertools::Itertools;
+
 use randomness::distributions::uniform::SampleRange;
 use randomness::Rng;
+
+pub use basic_test_time_getter::BasicTestTimeGetter;
 
 /// Assert that the encoded object matches the expected hex string.
 pub fn assert_encoded_eq<E: serialization::Encode>(to_encode: &E, expected_hex: &str) {

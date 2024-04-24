@@ -13,19 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use p2p_types::socket_address::SocketAddress;
 use tokio::net::TcpStream;
 use tokio_socks::tcp::Socks5Stream;
 
 use crate::{
-    error::{DialError, P2pError},
-    net::default_backend::transport::{
-        ConnectedSocketInfo, PeerStream, TransportListener, TransportSocket,
-    },
+    error::NetworkingError,
+    transport::{ConnectedSocketInfo, PeerStream, TransportListener, TransportSocket},
     Result,
 };
 
@@ -50,20 +47,20 @@ impl TransportSocket for Socks5TransportSocket {
     type Listener = Socks5TransportListener;
     type Stream = Socks5TransportStream;
 
-    async fn bind(&self, addresses: Vec<SocketAddress>) -> Result<Self::Listener> {
+    async fn bind(&self, addresses: Vec<SocketAddr>) -> Result<Self::Listener> {
         Socks5TransportListener::new(addresses)
     }
 
-    fn connect(&self, address: SocketAddress) -> BoxFuture<'static, Result<Self::Stream>> {
+    fn connect(&self, address: SocketAddr) -> BoxFuture<'static, Result<Self::Stream>> {
         let proxy = Arc::clone(&self.proxy);
         Box::pin(async move {
             let socket = TcpStream::connect(proxy.as_str()).await.map_err(|e| {
-                DialError::ProxyError(format!("Connection to the SOCKS5 proxy failed: {e}"))
+                NetworkingError::ProxyError(format!("Connection to the SOCKS5 proxy failed: {e}"))
             })?;
 
-            let stream = Socks5Stream::connect_with_socket(socket, address.socket_addr())
-                .await
-                .map_err(|e| DialError::ProxyError(format!("Unexpected SOCKS5 error: {e}")))?;
+            let stream = Socks5Stream::connect_with_socket(socket, address).await.map_err(|e| {
+                NetworkingError::ProxyError(format!("Unexpected SOCKS5 error: {e}"))
+            })?;
 
             Ok(stream)
         })
@@ -73,12 +70,10 @@ impl TransportSocket for Socks5TransportSocket {
 pub struct Socks5TransportListener {}
 
 impl Socks5TransportListener {
-    fn new(addresses: Vec<SocketAddress>) -> Result<Self> {
+    fn new(addresses: Vec<SocketAddr>) -> Result<Self> {
         utils::ensure!(
             addresses.is_empty(),
-            P2pError::InvalidConfigurationValue(
-                "Listening with socks5 proxy not implemented".to_owned()
-            ),
+            NetworkingError::ProxyError("Listening with socks5 proxy not implemented".to_owned()),
         );
         Ok(Self {})
     }
@@ -88,11 +83,11 @@ impl Socks5TransportListener {
 impl TransportListener for Socks5TransportListener {
     type Stream = Socks5TransportStream;
 
-    async fn accept(&mut self) -> Result<(Socks5TransportStream, SocketAddress)> {
+    async fn accept(&mut self) -> Result<(Socks5TransportStream, SocketAddr)> {
         std::future::pending().await
     }
 
-    fn local_addresses(&self) -> Result<Vec<SocketAddress>> {
+    fn local_addresses(&self) -> Result<Vec<SocketAddr>> {
         Ok(Vec::new())
     }
 }
@@ -102,11 +97,11 @@ pub type Socks5TransportStream = Socks5Stream<TcpStream>;
 impl PeerStream for Socks5TransportStream {}
 
 impl ConnectedSocketInfo for Socks5TransportStream {
-    fn local_address(&self) -> crate::Result<SocketAddress> {
-        Ok(SocketAddress::new(TcpStream::local_addr(self)?))
+    fn local_address(&self) -> crate::Result<SocketAddr> {
+        Ok(TcpStream::local_addr(self)?)
     }
 
-    fn remote_address(&self) -> crate::Result<SocketAddress> {
-        Ok(SocketAddress::new(TcpStream::peer_addr(self)?))
+    fn remote_address(&self) -> crate::Result<SocketAddr> {
+        Ok(TcpStream::peer_addr(self)?)
     }
 }

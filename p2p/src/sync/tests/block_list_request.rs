@@ -22,15 +22,15 @@ use common::{
     primitives::{Id, Idable},
 };
 use logging::log;
-use p2p_test_utils::{create_n_blocks, P2pBasicTestTimeGetter};
+use p2p_test_utils::create_n_blocks;
 use randomness::Rng;
-use test_utils::random::Seed;
+use test_utils::{random::Seed, BasicTestTimeGetter};
 
 use crate::{
     error::ProtocolError,
     message::{BlockListRequest, BlockResponse, BlockSyncMessage},
     sync::tests::helpers::{make_new_blocks, TestNode},
-    testing_utils::{for_each_protocol_version, test_p2p_config},
+    test_helpers::{for_each_protocol_version, test_p2p_config},
     types::peer_id::PeerId,
     P2pError,
 };
@@ -254,7 +254,7 @@ async fn request_same_block_while_downloading(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let chain_config = Arc::new(create_unit_test_config());
-        let time_getter = P2pBasicTestTimeGetter::new();
+        let time_getter = BasicTestTimeGetter::new();
 
         let initial_blocks = make_new_blocks(
             &chain_config,

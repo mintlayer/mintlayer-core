@@ -23,15 +23,13 @@ use tokio::{
 
 use common::time_getter::TimeGetter;
 use logging::log;
+use networking::transport::{TransportListener, TransportSocket};
 use p2p_types::socket_address::SocketAddress;
 use utils::atomics::SeqCstAtomicBool;
 
 use crate::{
     error::P2pError,
-    net::{
-        default_backend::transport::{TransportListener, TransportSocket},
-        NetworkingService,
-    },
+    net::NetworkingService,
     protocol::{ProtocolVersion, SupportedProtocolVersion},
     P2pConfig, P2pEventHandler,
 };
@@ -76,7 +74,12 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
         let (cmd_sender, cmd_receiver) = mpsc::unbounded_channel();
         let (conn_event_sender, conn_event_receiver) = mpsc::unbounded_channel();
         let (syncing_event_sender, syncing_event_receiver) = mpsc::unbounded_channel();
-        let local_addresses = socket.local_addresses().expect("to have bind address available");
+        let local_addresses = socket
+            .local_addresses()
+            .expect("to have bind address available")
+            .into_iter()
+            .map(SocketAddress::new)
+            .collect();
 
         let backend = Backend::<T>::new(
             networking_enabled,
@@ -137,6 +140,7 @@ impl<T: TransportSocket> DefaultNetworkingService<T> {
         <Self as NetworkingService>::SyncingEventReceiver,
         JoinHandle<()>,
     )> {
+        let bind_addresses = bind_addresses.iter().map(SocketAddress::socket_addr).collect();
         let socket = transport.bind(bind_addresses).await?;
         Self::start_generic(
             networking_enabled,

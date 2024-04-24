@@ -17,6 +17,14 @@ use std::{sync::Arc, time::Duration};
 
 use rstest::rstest;
 
+use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
+use networking::test_helpers::{TestAddressMaker, TestTransportMaker, TestTransportTcp};
+use p2p_test_utils::{expect_no_recv, expect_recv, wait_for_no_recv};
+use test_utils::{
+    random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
+};
+
 use crate::{
     ban_config::BanConfig,
     config::P2pConfig,
@@ -41,15 +49,11 @@ use crate::{
         },
         MAX_ADDR_RATE_PER_SECOND,
     },
-    testing_utils::{
+    test_helpers::{
         test_p2p_config_with_ban_config, test_p2p_config_with_peer_mgr_config,
-        test_peer_mgr_config_with_no_auto_outbound_connections, TestAddressMaker,
-        TestTransportMaker, TestTransportTcp,
+        test_peer_mgr_config_with_no_auto_outbound_connections,
     },
 };
-use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
-use p2p_test_utils::{expect_no_recv, expect_recv, wait_for_no_recv, P2pBasicTestTimeGetter};
-use test_utils::random::{make_seedable_rng, Seed};
 
 // Check that a peer is discouraged once the threshold is reached.
 // Also check that
@@ -70,8 +74,8 @@ async fn discourage_connected_peer(#[case] seed: Seed) {
     };
     let p2p_config = Arc::new(test_p2p_config_with_ban_config(ban_config.clone()));
 
-    let time_getter = P2pBasicTestTimeGetter::new();
-    let bind_addr = TestTransportTcp::make_address();
+    let time_getter = BasicTestTimeGetter::new();
+    let bind_addr = TestTransportTcp::make_address().into();
 
     let (
         peer_mgr,
@@ -92,7 +96,7 @@ async fn discourage_connected_peer(#[case] seed: Seed) {
         peer_mgr
     });
 
-    let peer_addr = TestAddressMaker::new_random_address(&mut rng);
+    let peer_addr = TestAddressMaker::new_random_address(&mut rng).into();
     let peer_id = inbound_block_relay_peer_accepted_by_backend(
         &conn_event_sender,
         peer_addr,
@@ -172,6 +176,8 @@ async fn discourage_connected_peer(#[case] seed: Seed) {
 async fn dont_reject_incoming_connection_from_discouraged_peer_if_limit_not_reached(
     #[case] seed: Seed,
 ) {
+    use p2p_types::socket_address::SocketAddress;
+
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = Arc::new(config::create_unit_test_config());
@@ -197,8 +203,8 @@ async fn dont_reject_incoming_connection_from_discouraged_peer_if_limit_not_reac
         peerdb_config: Default::default(),
     }));
 
-    let time_getter = P2pBasicTestTimeGetter::new();
-    let bind_addr = TestTransportTcp::make_address();
+    let time_getter = BasicTestTimeGetter::new();
+    let bind_addr = TestTransportTcp::make_address().into();
 
     let (mut peer_mgr, conn_event_sender, peer_mgr_event_sender, mut cmd_receiver, _) =
         make_standalone_peer_manager(
@@ -208,7 +214,7 @@ async fn dont_reject_incoming_connection_from_discouraged_peer_if_limit_not_reac
             time_getter.get_time_getter(),
         );
 
-    let peer_addr = TestAddressMaker::new_random_address(&mut rng);
+    let peer_addr: SocketAddress = TestAddressMaker::new_random_address(&mut rng).into();
 
     peer_mgr.discourage(peer_addr.as_bannable());
 
@@ -269,8 +275,8 @@ async fn reject_incoming_connection_from_discouraged_peer_if_limit_reached(#[cas
         peerdb_config: Default::default(),
     }));
 
-    let time_getter = P2pBasicTestTimeGetter::new();
-    let bind_addr = TestTransportTcp::make_address();
+    let time_getter = BasicTestTimeGetter::new();
+    let bind_addr = TestTransportTcp::make_address().into();
 
     let (mut peer_mgr, conn_event_sender, peer_mgr_event_sender, mut cmd_receiver, _) =
         make_standalone_peer_manager(
@@ -387,8 +393,8 @@ async fn no_outgoing_connection_to_discouraged_peer(#[case] seed: Seed) {
         peerdb_config: Default::default(),
     }));
 
-    let time_getter = P2pBasicTestTimeGetter::new();
-    let bind_addr = TestTransportTcp::make_address();
+    let time_getter = BasicTestTimeGetter::new();
+    let bind_addr = TestTransportTcp::make_address().into();
 
     let (mut peer_mgr, conn_event_sender, peer_mgr_event_sender, mut cmd_receiver, _) =
         make_standalone_peer_manager(
@@ -469,8 +475,8 @@ async fn discouraged_address_is_not_announced(#[case] seed: Seed) {
         protocol_config: Default::default(),
     });
 
-    let time_getter = P2pBasicTestTimeGetter::new();
-    let bind_addr = TestTransportTcp::make_address();
+    let time_getter = BasicTestTimeGetter::new();
+    let bind_addr = TestTransportTcp::make_address().into();
 
     let (mut peer_mgr, conn_event_sender, peer_mgr_event_sender, mut cmd_receiver, _) =
         make_standalone_peer_manager(
@@ -588,8 +594,8 @@ async fn discouraged_address_not_in_addr_response(#[case] seed: Seed) {
         protocol_config: Default::default(),
     });
 
-    let time_getter = P2pBasicTestTimeGetter::new();
-    let bind_addr = TestTransportTcp::make_address();
+    let time_getter = BasicTestTimeGetter::new();
+    let bind_addr = TestTransportTcp::make_address().into();
 
     let (mut peer_mgr, conn_event_sender, peer_mgr_event_sender, mut cmd_receiver, _) =
         make_standalone_peer_manager(

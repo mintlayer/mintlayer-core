@@ -15,8 +15,8 @@
 
 use futures::future::{ready, BoxFuture};
 
-use crate::net::{
-    default_backend::transport::{ConnectedSocketInfo, PeerStream},
+use crate::{
+    transport::{ConnectedSocketInfo, PeerStream},
     types::ConnectionDirection,
 };
 

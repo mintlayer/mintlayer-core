@@ -28,11 +28,21 @@ use common::{
     chain::{self, config, ChainConfig},
     primitives::user_agent::mintlayer_core_user_agent,
 };
-use p2p_test_utils::{expect_future_val, expect_no_recv, P2pBasicTestTimeGetter};
-use p2p_types::{peer_address::PeerAddress, socket_address::SocketAddress};
+use networking::test_helpers::{
+    TestAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportTcp,
+};
+use networking::{
+    transport::{MpscChannelTransport, TcpTransportSocket},
+    types::ConnectionDirection,
+};
+use p2p_test_utils::{expect_future_val, expect_no_recv};
+use p2p_types::{
+    peer_address::PeerAddress, socket_addr_ext::SocketAddrExt, socket_address::SocketAddress,
+};
 use test_utils::{
     assert_matches,
     random::{make_seedable_rng, Seed},
+    BasicTestTimeGetter,
 };
 
 use crate::{
@@ -41,11 +51,10 @@ use crate::{
     message::{AddrListRequest, AnnounceAddrRequest, PeerManagerMessage},
     net::{
         default_backend::{
-            transport::{MpscChannelTransport, TcpTransportSocket},
             types::{CategorizedMessage, Command, Message},
             ConnectivityHandle, DefaultNetworkingService,
         },
-        types::{ConnectionDirection, ConnectivityEvent, PeerInfo},
+        types::{ConnectivityEvent, PeerInfo},
         ConnectivityService, NetworkingService,
     },
     peer_manager::{
@@ -56,10 +65,7 @@ use crate::{
         },
         OutboundConnectType, PeerManager, DNS_SEED_QUERY_INTERVAL,
     },
-    testing_utils::{
-        peerdb_inmemory_store, test_p2p_config, TestAddressMaker, TestTransportChannel,
-        TestTransportMaker, TestTransportTcp, TEST_PROTOCOL_VERSION,
-    },
+    test_helpers::{peerdb_inmemory_store, test_p2p_config, TEST_PROTOCOL_VERSION},
     tests::helpers::TestDnsSeed,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -86,11 +92,11 @@ where
     let bind_address = A::make_address();
     let config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let (mut pm, _peer_mgr_event_sender, _shutdown_sender, _subscribers_sender) =
         make_peer_manager_custom::<T>(
             A::make_transport(),
-            bind_address,
+            bind_address.into(),
             Arc::clone(&config),
             p2p_config,
             time_getter.get_time_getter(),
@@ -108,8 +114,8 @@ where
         common_services: NodeType::Full.into(),
     };
     pm.accept_connection(
-        address,
-        bind_address,
+        address.into(),
+        bind_address.into(),
         ConnectionDirection::Inbound,
         peer_info,
         None,
@@ -162,14 +168,14 @@ fn test_addr_list_handling_inbound(#[case] seed: Seed) {
 
     let mut rng = make_seedable_rng(seed);
 
-    let bind_address = TestTransportTcp::make_address();
+    let bind_address = TestTransportTcp::make_address().into();
     let chain_config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_mgr_event_sender, peer_mgr_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let connectivity_handle =
         ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
@@ -194,7 +200,7 @@ fn test_addr_list_handling_inbound(#[case] seed: Seed) {
         common_services: NodeType::Full.into(),
     };
     pm.accept_connection(
-        TestAddressMaker::new_random_address(&mut rng),
+        TestAddressMaker::new_random_address(&mut rng).into(),
         bind_address,
         ConnectionDirection::Inbound,
         peer_info,
@@ -253,14 +259,14 @@ fn test_addr_list_handling_outbound(#[case] seed: Seed) {
 
     let mut rng = make_seedable_rng(seed);
 
-    let bind_address = TestTransportTcp::make_address();
+    let bind_address = TestTransportTcp::make_address().into();
     let chain_config = Arc::new(config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
     let (cmd_sender, mut cmd_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_mgr_event_sender, peer_mgr_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let connectivity_handle =
         ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
@@ -276,7 +282,7 @@ fn test_addr_list_handling_outbound(#[case] seed: Seed) {
     .unwrap();
 
     let peer_id_1 = PeerId::new();
-    let peer_address = TestAddressMaker::new_random_address(&mut rng);
+    let peer_address = TestAddressMaker::new_random_address(&mut rng).into();
     let peer_info = PeerInfo {
         peer_id: peer_id_1,
         protocol_version: TEST_PROTOCOL_VERSION,
@@ -374,7 +380,7 @@ async fn resend_own_addresses(#[case] seed: Seed) {
     let (_conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_mgr_event_sender, peer_mgr_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService>::new(
         listening_addresses.clone(),
         cmd_sender,
@@ -395,7 +401,7 @@ async fn resend_own_addresses(#[case] seed: Seed) {
     let peer_count = p2p_config.peer_manager_config.outbound_full_and_block_relay_count();
     for peer_index in 0..peer_count {
         let new_peer_id = PeerId::new();
-        let peer_address = TestAddressMaker::new_random_address(&mut rng);
+        let peer_address = TestAddressMaker::new_random_address(&mut rng).into();
         let peer_info = PeerInfo {
             peer_id: new_peer_id,
             protocol_version: TEST_PROTOCOL_VERSION,
@@ -473,7 +479,8 @@ async fn connect_to_predefined_address_if_dns_seed_is_empty(#[case] seed: Seed) 
 
     let mut rng = make_seedable_rng(seed);
 
-    let predefined_peer_address = TestAddressMaker::new_random_address(&mut rng);
+    let predefined_peer_address: SocketAddress =
+        TestAddressMaker::new_random_address(&mut rng).into();
 
     let chain_config = Arc::new(
         chain::config::create_unit_test_config_builder()
@@ -486,7 +493,7 @@ async fn connect_to_predefined_address_if_dns_seed_is_empty(#[case] seed: Seed) 
     let (conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (peer_mgr_event_sender, peer_mgr_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let connectivity_handle =
         ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
@@ -536,8 +543,9 @@ async fn dont_connect_to_predefined_address_if_dns_seed_is_non_empty(#[case] see
 
     let mut rng = make_seedable_rng(seed);
 
-    let seeded_peer_address = TestAddressMaker::new_random_address(&mut rng);
-    let predefined_peer_address = TestAddressMaker::new_random_address(&mut rng);
+    let seeded_peer_address = TestAddressMaker::new_random_address(&mut rng).into();
+    let predefined_peer_address: SocketAddress =
+        TestAddressMaker::new_random_address(&mut rng).into();
 
     let chain_config = Arc::new(
         chain::config::create_unit_test_config_builder()
@@ -550,7 +558,7 @@ async fn dont_connect_to_predefined_address_if_dns_seed_is_non_empty(#[case] see
     let (conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (peer_mgr_event_sender, peer_mgr_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let connectivity_handle =
         ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
@@ -605,8 +613,9 @@ async fn connect_to_predefined_address_if_dns_seed_returned_bogus_address(#[case
 
     let mut rng = make_seedable_rng(seed);
 
-    let seeded_peer_address = TestAddressMaker::new_random_address(&mut rng);
-    let predefined_peer_address = TestAddressMaker::new_random_address(&mut rng);
+    let seeded_peer_address = TestAddressMaker::new_random_address(&mut rng).into();
+    let predefined_peer_address: SocketAddress =
+        TestAddressMaker::new_random_address(&mut rng).into();
 
     let chain_config = Arc::new(
         chain::config::create_unit_test_config_builder()
@@ -619,7 +628,7 @@ async fn connect_to_predefined_address_if_dns_seed_returned_bogus_address(#[case
     let (conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (peer_mgr_event_sender, peer_mgr_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let connectivity_handle =
         ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
@@ -686,9 +695,9 @@ async fn dont_use_dns_seed_if_connections_exist(#[case] seed: Seed) {
 
     let mut rng = make_seedable_rng(seed);
 
-    let local_bind_address = TestAddressMaker::new_random_address(&mut rng);
-    let existing_address = TestAddressMaker::new_random_address(&mut rng);
-    let seeded_peer_address = TestAddressMaker::new_random_address(&mut rng);
+    let local_bind_address = TestAddressMaker::new_random_address(&mut rng).into();
+    let existing_address = TestAddressMaker::new_random_address(&mut rng).into();
+    let seeded_peer_address = TestAddressMaker::new_random_address(&mut rng).into();
 
     let chain_config = Arc::new(chain::config::create_unit_test_config());
 
@@ -717,7 +726,7 @@ async fn dont_use_dns_seed_if_connections_exist(#[case] seed: Seed) {
     let (conn_event_sender, conn_event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let (peer_mgr_event_sender, peer_mgr_event_receiver) =
         tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent>();
-    let time_getter = P2pBasicTestTimeGetter::new();
+    let time_getter = BasicTestTimeGetter::new();
     let connectivity_handle =
         ConnectivityHandle::<TestNetworkingService>::new(vec![], cmd_sender, conn_event_receiver);
 
@@ -780,7 +789,7 @@ async fn dont_use_dns_seed_if_connections_exist(#[case] seed: Seed) {
 
 async fn recv_command_advance_time(
     cmd_receiver: &mut UnboundedReceiver<Command>,
-    time_getter: &P2pBasicTestTimeGetter,
+    time_getter: &BasicTestTimeGetter,
 ) -> Result<Command, TryRecvError> {
     super::utils::recv_command_advance_time(
         cmd_receiver,

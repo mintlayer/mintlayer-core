@@ -28,10 +28,8 @@ use std::fmt::Debug;
 
 use libtest_mimic::{Arguments, Trial};
 
-use p2p::{
-    net::{ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver},
-    testing_utils::TestTransportMaker,
-};
+use networking::test_helpers::TestTransportMaker;
+use p2p::net::{ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver};
 
 /// Runs all tests.
 pub fn run<T, N>()

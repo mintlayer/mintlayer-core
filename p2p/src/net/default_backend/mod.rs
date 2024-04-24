@@ -16,7 +16,6 @@
 pub mod backend;
 mod default_networking_service;
 mod peer;
-pub mod transport;
 pub mod types;
 
 use std::marker::PhantomData;

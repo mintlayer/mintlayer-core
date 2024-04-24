@@ -15,35 +15,30 @@
 
 use std::sync::Arc;
 
-use chainstate::ban_score::BanScore;
-use p2p_types::services::Services;
 use tokio::{
     sync::{mpsc, oneshot},
     time::timeout,
 };
 
+use chainstate::ban_score::BanScore;
 use common::{chain::ChainConfig, primitives::time::Time, time_getter::TimeGetter};
 use logging::log;
+use networking::transport::{BufferedTranscoder, ConnectedSocketInfo, TransportSocket};
+use p2p_types::{services::Services, socket_addr_ext::SocketAddrExt};
 
 use crate::{
     config::P2pConfig,
     disconnection_reason::DisconnectionReason,
     error::{ConnectionValidationError, P2pError, PeerError, ProtocolError},
     message::{BlockSyncMessage, TransactionSyncMessage, WillDisconnectMessage},
-    net::default_backend::{
-        transport::{ConnectedSocketInfo, TransportSocket},
-        types::{BackendEvent, PeerEvent},
-    },
+    net::default_backend::types::{BackendEvent, PeerEvent},
     protocol::{choose_common_protocol_version, ProtocolVersion, SupportedProtocolVersion},
     types::peer_id::PeerId,
 };
 
-use super::{
-    transport::BufferedTranscoder,
-    types::{
-        can_send_will_disconnect, peer_event, CategorizedMessage, HandshakeMessage, HandshakeNonce,
-        Message, P2pTimestamp,
-    },
+use super::types::{
+    can_send_will_disconnect, peer_event, CategorizedMessage, HandshakeMessage, HandshakeNonce,
+    Message, P2pTimestamp,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,7 +62,7 @@ pub struct Peer<T: TransportSocket> {
     connection_info: ConnectionInfo,
 
     /// Peer socket
-    socket: BufferedTranscoder<T::Stream>,
+    socket: BufferedTranscoder<T::Stream, Message>,
 
     /// Channel sender for sending events to Backend
     peer_event_sender: mpsc::Sender<PeerEvent>,
@@ -103,7 +98,8 @@ where
         node_protocol_version: ProtocolVersion,
         time_getter: TimeGetter,
     ) -> Self {
-        let socket = BufferedTranscoder::new(socket, *p2p_config.protocol_config.max_message_size);
+        let socket =
+            BufferedTranscoder::new(socket, Some(*p2p_config.protocol_config.max_message_size));
 
         Self {
             peer_id,
@@ -514,9 +510,17 @@ where
 
 #[cfg(test)]
 mod tests {
-    use common::chain::config::MagicBytes;
-    use futures::FutureExt;
     use std::time::Duration;
+
+    use futures::FutureExt;
+
+    use chainstate::Locator;
+    use common::chain::config::MagicBytes;
+    use networking::test_helpers::{
+        get_two_connected_sockets, TestTransportChannel, TestTransportMaker, TestTransportNoise,
+        TestTransportTcp,
+    };
+    use networking::transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket};
     use test_utils::{
         assert_matches,
         mock_time_getter::{mocked_time_getter_milliseconds, mocked_time_getter_seconds},
@@ -526,18 +530,9 @@ mod tests {
     use super::*;
     use crate::{
         message::HeaderListRequest,
-        net::{
-            default_backend::transport::{
-                MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket,
-            },
-            types::services::Service,
-        },
-        testing_utils::{
-            get_two_connected_sockets, test_p2p_config, TestTransportChannel, TestTransportMaker,
-            TestTransportNoise, TestTransportTcp, TEST_PROTOCOL_VERSION,
-        },
+        net::types::services::Service,
+        test_helpers::{test_p2p_config, TEST_PROTOCOL_VERSION},
     };
-    use chainstate::Locator;
 
     const TEST_CHAN_BUF_SIZE: usize = 100;
 
@@ -610,7 +605,7 @@ mod tests {
         });
 
         let mut socket2 =
-            BufferedTranscoder::new(socket2, *p2p_config.protocol_config.max_message_size);
+            BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(Message::Handshake(HandshakeMessage::Hello {
@@ -696,7 +691,7 @@ mod tests {
         });
 
         let mut socket2 =
-            BufferedTranscoder::new(socket2, *p2p_config.protocol_config.max_message_size);
+            BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
         socket2.recv().await.unwrap();
         assert!(socket2
             .send(Message::Handshake(HandshakeMessage::HelloAck {
@@ -774,7 +769,7 @@ mod tests {
         let handle = logging::spawn_in_current_span(async move { peer.handshake().await });
 
         let mut socket2 =
-            BufferedTranscoder::new(socket2, *p2p_config.protocol_config.max_message_size);
+            BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(Message::Handshake(HandshakeMessage::Hello {
@@ -842,7 +837,7 @@ mod tests {
         let handle = logging::spawn_in_current_span(async move { peer.handshake().await });
 
         let mut socket2 =
-            BufferedTranscoder::new(socket2, *p2p_config.protocol_config.max_message_size);
+            BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
         assert!(socket2.recv().now_or_never().is_none());
         socket2
             .send(Message::HeaderListRequest(HeaderListRequest::new(
@@ -973,7 +968,7 @@ mod tests {
         }
 
         let mut socket2 =
-            BufferedTranscoder::new(socket2, *p2p_config.protocol_config.max_message_size);
+            BufferedTranscoder::new(socket2, Some(*p2p_config.protocol_config.max_message_size));
         socket2.recv().await.unwrap();
         let _ = socket2
             .send(Message::Handshake(HandshakeMessage::HelloAck {

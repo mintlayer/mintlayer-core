@@ -18,7 +18,10 @@ use std::{marker::PhantomData, mem::size_of};
 use bytes::{Buf, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{error::MessageCodecError, P2pError, Result};
+use crate::{
+    error::{MessageCodecError, NetworkingError},
+    Result,
+};
 use serialization::{DecodeAll, Encode};
 
 /// The header that precedes each message and specifies the size of the message, not including
@@ -26,22 +29,36 @@ use serialization::{DecodeAll, Encode};
 type MsgLenHeader = u32;
 
 pub struct MessageCodec<Msg> {
-    max_message_size: usize,
+    max_encoded_message_size: Option<usize>,
     _phantom_msg: PhantomData<Msg>,
 }
 
 impl<Msg> MessageCodec<Msg> {
-    pub fn new(max_message_size: usize) -> Self {
+    pub fn new(max_encoded_message_size: Option<usize>) -> Self {
         Self {
-            max_message_size,
+            max_encoded_message_size,
             _phantom_msg: PhantomData::<Msg>,
         }
+    }
+
+    fn check_encoded_message_size(&self, size: usize) -> Result<()> {
+        if let Some(max_message_size) = self.max_encoded_message_size {
+            if size > max_message_size {
+                return Err(MessageCodecError::MessageTooLarge {
+                    actual_size: size,
+                    max_size: max_message_size,
+                }
+                .into());
+            }
+        }
+
+        Ok(())
     }
 }
 
 impl<Msg: DecodeAll> Decoder for MessageCodec<Msg> {
     type Item = Msg;
-    type Error = P2pError;
+    type Error = NetworkingError;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>> {
         if src.len() < size_of::<MsgLenHeader>() {
@@ -53,13 +70,7 @@ impl<Msg: DecodeAll> Decoder for MessageCodec<Msg> {
         // Unwrap is safe here because the header size is exactly size_of::<Header>().
         let length = MsgLenHeader::from_le_bytes(header.try_into().expect("valid size")) as usize;
 
-        if length > self.max_message_size {
-            return Err(MessageCodecError::MessageTooLarge {
-                actual_size: length,
-                max_size: self.max_message_size,
-            }
-            .into());
-        }
+        self.check_encoded_message_size(length)?;
 
         if remaining_bytes.len() < length {
             src.reserve(size_of::<MsgLenHeader>() + length - src.len());
@@ -80,18 +91,12 @@ impl<Msg: DecodeAll> Decoder for MessageCodec<Msg> {
 }
 
 impl<Msg: Encode> Encoder<Msg> for MessageCodec<Msg> {
-    type Error = P2pError;
+    type Error = NetworkingError;
 
     fn encode(&mut self, msg: Msg, dst: &mut BytesMut) -> Result<()> {
         let encoded = msg.encode();
 
-        if encoded.len() > self.max_message_size {
-            return Err(MessageCodecError::MessageTooLarge {
-                actual_size: encoded.len(),
-                max_size: self.max_message_size,
-            }
-            .into());
-        }
+        self.check_encoded_message_size(encoded.len())?;
 
         let len_slice = u32::to_le_bytes(encoded.len() as u32);
 
@@ -106,8 +111,10 @@ impl<Msg: Encode> Encoder<Msg> for MessageCodec<Msg> {
 #[cfg(test)]
 mod tests {
     use randomness::Rng;
-    use serialization::Decode;
+    use serialization::{Decode, Encode};
     use test_utils::random::Seed;
+
+    use crate::error::NetworkingError;
 
     use super::*;
 
@@ -127,18 +134,18 @@ mod tests {
 
         let mut buf = BytesMut::new();
         // Encode to determine the serialized message length.
-        MessageCodec::new(rng.gen_range(64..128))
+        MessageCodec::new(Some(rng.gen_range(64..128)))
             .encode(message.clone(), &mut buf)
             .unwrap();
         assert!(buf.len() > size_of::<MsgLenHeader>());
 
         let message_length = buf.len() - size_of::<MsgLenHeader>();
         let max_length = rng.gen_range(0..message_length);
-        let mut encoder = MessageCodec::new(max_length);
+        let mut encoder = MessageCodec::new(Some(max_length));
         let result = encoder.encode(message, &mut buf);
         assert_eq!(
             result,
-            Err(P2pError::MessageCodecError(
+            Err(NetworkingError::MessageCodecError(
                 MessageCodecError::MessageTooLarge {
                     actual_size: message_length,
                     max_size: max_length,
@@ -156,17 +163,17 @@ mod tests {
 
         let message = TestMessage { data: rng.gen() };
         let mut encoded = BytesMut::new();
-        MessageCodec::new(rng.gen_range(126..512))
+        MessageCodec::new(Some(rng.gen_range(126..512)))
             .encode(message, &mut encoded)
             .unwrap();
 
         let message_length = encoded.len() - size_of::<MsgLenHeader>();
         let max_length = rng.gen_range(0..message_length);
-        let mut decoder = MessageCodec::<TestMessage>::new(max_length);
+        let mut decoder = MessageCodec::<TestMessage>::new(Some(max_length));
         let result = decoder.decode(&mut encoded);
         assert_eq!(
             result,
-            Err(P2pError::MessageCodecError(
+            Err(NetworkingError::MessageCodecError(
                 MessageCodecError::MessageTooLarge {
                     actual_size: message_length,
                     max_size: max_length,
@@ -184,7 +191,7 @@ mod tests {
 
         let message = TestMessage { data: rng.gen() };
 
-        let mut encoder = MessageCodec::new(rng.gen_range(128..2048));
+        let mut encoder = MessageCodec::new(Some(rng.gen_range(128..2048)));
 
         let mut buf = BytesMut::new();
         encoder.encode(message.clone(), &mut buf).unwrap();

@@ -29,7 +29,7 @@ use common::{
     chain::{self, ChainConfig},
     primitives::{per_thousand::PerThousand, semver::SemVer},
 };
-use p2p::testing_utils::TestAddressMaker;
+use networking::test_helpers::TestAddressMaker;
 use randomness::{Rng, SliceRandom};
 use test_utils::{assert_matches_return_val, merge_btree_maps, random::Seed};
 
