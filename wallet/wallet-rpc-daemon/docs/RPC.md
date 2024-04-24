@@ -481,8 +481,10 @@ Returns:
                          4) { "type": "FullySigned" }
                          5) {
                                 "type": "PartialMultisig",
-                                "required_signatures": number,
-                                "num_signatures": number,
+                                "content": {
+                                    "required_signatures": number,
+                                    "num_signatures": number,
+                                },
                             }, .. ],
                 }
              2) null,
@@ -2155,8 +2157,10 @@ Returns:
          4) { "type": "FullySigned" }
          5) {
                 "type": "PartialMultisig",
-                "required_signatures": number,
-                "num_signatures": number,
+                "content": {
+                    "required_signatures": number,
+                    "num_signatures": number,
+                },
             }, .. ],
     "current_signatures": [ EITHER OF
          1) { "type": "NotSigned" }
@@ -2165,8 +2169,10 @@ Returns:
          4) { "type": "FullySigned" }
          5) {
                 "type": "PartialMultisig",
-                "required_signatures": number,
-                "num_signatures": number,
+                "content": {
+                    "required_signatures": number,
+                    "num_signatures": number,
+                },
             }, .. ],
 }
 ```
