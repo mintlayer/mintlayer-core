@@ -27,6 +27,7 @@ use common::{
 use crypto::key::hdkd::u31::U31;
 use p2p::P2pEvent;
 use wallet::account::transaction_list::TransactionList;
+use wallet_cli_lib::commands::ConsoleCommand;
 use wallet_controller::types::Balances;
 use wallet_rpc_lib::types::PoolInfo;
 use wallet_types::wallet_type::WalletType;
@@ -78,6 +79,7 @@ pub struct AccountInfo {
     pub staking_balance: BTreeMap<PoolId, PoolInfo>,
     pub delegations_balance: BTreeMap<DelegationId, (PoolId, Amount)>,
     pub transaction_list: TransactionList,
+    pub console_outputs: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -250,4 +252,6 @@ pub enum BackendEvent {
     Broadcast(Result<WalletId, BackendError>),
 
     TransactionList(WalletId, AccountId, Result<TransactionList, BackendError>),
+
+    ConsoleResponse(WalletId, AccountId, Result<ConsoleCommand, BackendError>),
 }

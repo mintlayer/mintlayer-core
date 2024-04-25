@@ -732,7 +732,7 @@ pub enum WalletCommand {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ConsoleCommand {
     Print(String),
     ClearScreen,

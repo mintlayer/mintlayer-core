@@ -35,6 +35,7 @@ use config::{CliArgs, Network};
 use console::{ConsoleInput, ConsoleOutput};
 use errors::WalletCliError;
 use node_comm::{make_cold_wallet_rpc_client, make_rpc_client, rpc_client::ColdWalletClient};
+pub use repl::{get_repl_command, parse_input};
 use rpc::RpcAuthData;
 use tokio::sync::mpsc;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain, ensure};

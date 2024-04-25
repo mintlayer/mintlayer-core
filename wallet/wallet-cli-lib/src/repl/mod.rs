@@ -81,7 +81,7 @@ pub fn get_repl_command(cold_wallet: bool) -> Command {
 }
 
 /// Try to parse REPL input string as a [WalletCommands]
-fn parse_input<N: NodeInterface>(
+pub fn parse_input<N: NodeInterface>(
     line: &str,
     repl_command: &Command,
 ) -> Result<Option<WalletCommand>, WalletCliError<N>> {
