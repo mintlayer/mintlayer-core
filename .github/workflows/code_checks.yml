@@ -25,3 +25,48 @@ jobs:
         run: cargo install cargo-deny --locked
       - name: Run checks
         run: ./do_checks.sh
+
+  static_checks_windows:
+    runs-on: windows-latest
+    steps:
+      # This prevents git from changing line-endings to crlf, which messes cargo fmt checks
+      - name: Set git to use LF
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Install python toml package
+        run: python3 -m pip install toml
+      - name: Install rust
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/rust-version-extractor/rust-version-extractor.py)
+      - name: Install rust clippy
+        run: rustup component add clippy
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+      - name: Run checks
+        shell: bash
+        run: ./do_checks.sh
+
+  static_checks_macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Install python toml package
+        run: python3 -m pip install toml --break-system-packages --user
+      - name: Install rust
+        run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/rust-version-extractor/rust-version-extractor.py)
+      - name: Install rust clippy
+        run: rustup component add clippy
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+      - name: Run checks
+        run: bash ./do_checks.sh
