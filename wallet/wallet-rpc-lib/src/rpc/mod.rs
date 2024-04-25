@@ -112,7 +112,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         &self.chain_config
     }
 
-    fn shutdown(&self) -> WRpcResult<(), N> {
+    pub fn shutdown(&self) -> WRpcResult<(), N> {
         self.wallet.shallow_clone().stop().map_err(RpcError::SubmitError)
     }
 

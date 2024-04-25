@@ -37,7 +37,7 @@ use wallet_controller::{
     WalletHandlesClient,
 };
 use wallet_rpc_client::handles_client::WalletRpcHandlesClient;
-use wallet_rpc_lib::{WalletRpc, WalletService};
+use wallet_rpc_lib::{EventStream, WalletRpc, WalletService};
 use wallet_types::{
     seed_phrase::StoreSeedPhrase, wallet_type::WalletType, with_locked::WithLocked,
 };
@@ -81,6 +81,19 @@ impl WalletData {
         match &mut self.controller {
             GuiHotColdController::Hot(w) => Some(w),
             GuiHotColdController::Cold(_) => None,
+        }
+    }
+
+    async fn shutdown(mut self) {
+        match &mut self.controller {
+            GuiHotColdController::Hot(w) => {
+                w.close_wallet().await.expect("should close the wallet");
+                w.shutdown().expect("should close the wallet");
+            }
+            GuiHotColdController::Cold(w) => {
+                w.close_wallet().await.expect("should close the wallet");
+                w.shutdown().expect("should close the wallet");
+            }
         }
     }
 }
@@ -261,8 +274,7 @@ impl Backend {
         import: ImportOrCreate,
     ) -> Result<WalletInfo, BackendError> {
         let wallet_id = WalletId::new();
-        // FIXME
-        let _wallet_events = GuiWalletEvents::new(wallet_id, self.wallet_updated_tx.clone());
+        let wallet_events = GuiWalletEvents::new(wallet_id, self.wallet_updated_tx.clone());
 
         let (wallet_data, accounts_info, best_block) = match (wallet_type, &self.controller) {
             (WalletType::Hot, ColdHotNodeController::Hot(controller)) => {
@@ -302,6 +314,16 @@ impl Backend {
                     )
                     .await
                     .map_err(|err| BackendError::WalletError(err.to_string()))?;
+
+                // Forward events from wallet to the gui
+                tokio::spawn(forward_events(
+                    wallet_events,
+                    wallet_service
+                        .handle()
+                        .subscribe()
+                        .await
+                        .map_err(|e| BackendError::WalletError(e.to_string()))?,
+                ));
 
                 let _command_handler = CommandHandler::new(
                     ControllerConfig {
@@ -444,8 +466,7 @@ impl Backend {
         wallet_type: WalletType,
     ) -> Result<WalletInfo, BackendError> {
         let wallet_id = WalletId::new();
-        // FIXME
-        let _wallet_events = GuiWalletEvents::new(wallet_id, self.wallet_updated_tx.clone());
+        let wallet_events = GuiWalletEvents::new(wallet_id, self.wallet_updated_tx.clone());
 
         let (wallet_data, accounts_info, best_block, encryption) =
             match (wallet_type, &self.controller) {
@@ -480,6 +501,16 @@ impl Backend {
                         .open_wallet(file_path.clone(), None, false)
                         .await
                         .map_err(|err| BackendError::WalletError(err.to_string()))?;
+
+                    // Forward events from wallet to the gui
+                    tokio::spawn(forward_events(
+                        wallet_events,
+                        wallet_service
+                            .handle()
+                            .subscribe()
+                            .await
+                            .map_err(|e| BackendError::WalletError(e.to_string()))?,
+                    ));
 
                     let _command_handler = CommandHandler::new(
                         ControllerConfig {
@@ -1040,7 +1071,7 @@ impl Backend {
             }
             BackendRequest::CloseWallet(wallet_id) => {
                 if let Some(wallet) = self.wallets.remove(&wallet_id) {
-                    drop(wallet);
+                    wallet.shutdown().await;
                     Self::send_event(&self.event_tx, BackendEvent::CloseWallet(wallet_id));
                 }
             }
@@ -1427,5 +1458,11 @@ pub async fn run_cold(
                 backend.wallet_updated(wallet_id);
             }
         }
+    }
+}
+
+async fn forward_events(tx: GuiWalletEvents, mut rx: EventStream) {
+    while rx.recv().await.is_some() {
+        tx.notify()
     }
 }
