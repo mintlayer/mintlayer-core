@@ -71,7 +71,7 @@ jobs:
           submodules: recursive
 
       - name: Install python toml package
-        run: python3 -m pip install toml
+        run: python3 -m pip install toml --break-system-packages
       - name: Install rust
         run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain $(python3 ./build-tools/rust-version-extractor/rust-version-extractor.py)
       - name: Install rust clippy
