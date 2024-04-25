@@ -180,6 +180,7 @@ impl KeyManager {
                         &challenge,
                         &sighash,
                         current_signatures,
+                        rng,
                     )
                     .unwrap();
 

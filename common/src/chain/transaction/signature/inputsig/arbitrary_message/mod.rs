@@ -126,7 +126,7 @@ impl ArbitraryMessageSignature {
         let signature =
             match destination {
                 Destination::PublicKeyHash(addr) => {
-                    let sig = sign_address_spending(private_key, addr, &challenge)?;
+                    let sig = sign_address_spending(private_key, addr, &challenge, rng)?;
                     sig.encode()
                 }
                 Destination::PublicKey(pubkey) => {

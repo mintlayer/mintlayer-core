@@ -347,6 +347,7 @@ impl<'f> PoSBlockBuilder<'f> {
         });
 
         pos_mine(
+            rng,
             &self.framework.storage.transaction_ro().unwrap(),
             pos_status.get_chain_config(),
             BlockTimestamp::from_time(self.framework.current_time()),

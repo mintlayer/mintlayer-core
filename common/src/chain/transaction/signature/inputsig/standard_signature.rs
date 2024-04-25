@@ -111,7 +111,7 @@ impl StandardInputSignature {
         let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num)?;
         let serialized_sig = match outpoint_destination {
             Destination::PublicKeyHash(ref addr) => {
-                let sig = sign_address_spending(private_key, addr, &sighash)?;
+                let sig = sign_address_spending(private_key, addr, &sighash, rng)?;
                 sig.encode()
             }
             Destination::PublicKey(ref pubkey) => {
