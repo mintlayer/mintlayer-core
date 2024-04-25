@@ -55,7 +55,7 @@ enum MintlayerNodeGUI {
     Initial,
     SelectNetwork,
     SelectWalletMode(InitNetwork),
-    Loading,
+    Loading(WalletMode),
     Loaded(BackendSender, MainWindow),
     IntializationError(String),
 }
@@ -66,7 +66,7 @@ pub enum InitNetwork {
     Testnet,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum WalletMode {
     Cold,
     Hot,
@@ -109,7 +109,7 @@ impl Application for MintlayerNodeGUI {
             MintlayerNodeGUI::SelectWalletMode(_) => {
                 "Mintlayer Node - Selecting mode...".to_string()
             }
-            MintlayerNodeGUI::Loading => "Mintlayer Node - Loading...".to_string(),
+            MintlayerNodeGUI::Loading(_) => "Mintlayer Node - Loading...".to_string(),
             MintlayerNodeGUI::Loaded(_backend_sender, w) => {
                 format!(
                     "Mintlayer Node - {} - v{version}",
@@ -170,7 +170,7 @@ impl Application for MintlayerNodeGUI {
                 let init = *init;
                 match message {
                     Message::InitWalletMode(mode) => {
-                        *self = Self::Loading;
+                        *self = Self::Loading(mode);
 
                         Command::perform(
                             node_initialize(TimeGetter::default(), init, mode),
@@ -193,7 +193,7 @@ impl Application for MintlayerNodeGUI {
                     | Message::MainWindowMessage(_) => unreachable!(),
                 }
             }
-            MintlayerNodeGUI::Loading => match message {
+            MintlayerNodeGUI::Loading(mode) => match message {
                 Message::InitNetwork(_)
                 | Message::InitWalletMode(_)
                 | Message::FromBackend(_, _, _) => unreachable!(),
@@ -204,8 +204,10 @@ impl Application for MintlayerNodeGUI {
                         backend_receiver,
                         low_priority_backend_receiver,
                     } = backend_controls;
-                    *self =
-                        MintlayerNodeGUI::Loaded(backend_sender, MainWindow::new(initialized_node));
+                    *self = MintlayerNodeGUI::Loaded(
+                        backend_sender,
+                        MainWindow::new(initialized_node, *mode),
+                    );
                     recv_backend_command(backend_receiver, low_priority_backend_receiver)
                 }
                 Message::Loaded(Err(e)) => {
@@ -368,7 +370,7 @@ impl Application for MintlayerNodeGUI {
                 res.map(Message::InitWalletMode)
             }
 
-            MintlayerNodeGUI::Loading => {
+            MintlayerNodeGUI::Loading(_) => {
                 container(CupertinoSpinner::new().width(Length::Fill).height(Length::Fill)).into()
             }
 

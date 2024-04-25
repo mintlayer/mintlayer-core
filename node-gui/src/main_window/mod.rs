@@ -43,6 +43,7 @@ use crate::{
         wallet_set_password::wallet_set_password_dialog,
         wallet_unlock::wallet_unlock_dialog,
     },
+    WalletMode,
 };
 
 use self::main_widget::tabs::{wallet::WalletMessage, TabsMessage};
@@ -209,7 +210,7 @@ pub enum MainWindowMessage {
 }
 
 impl MainWindow {
-    pub fn new(initialized_node: InitializedNode) -> Self {
+    pub fn new(initialized_node: InitializedNode, wallet_mode: WalletMode) -> Self {
         let InitializedNode {
             chain_config,
             chain_info,
@@ -224,7 +225,7 @@ impl MainWindow {
 
         Self {
             main_menu: main_menu::MainMenu::new(),
-            main_widget: main_widget::MainWidget::new(),
+            main_widget: main_widget::MainWidget::new(wallet_mode),
             // TODO: Support other languages
             language: wallet::wallet::Language::English,
             node_state,

@@ -18,7 +18,10 @@ pub mod tabs;
 use iced::{Command, Element};
 use wallet_types::wallet_type::WalletType;
 
-use crate::backend::{messages::WalletId, BackendSender};
+use crate::{
+    backend::{messages::WalletId, BackendSender},
+    WalletMode,
+};
 
 use super::NodeState;
 
@@ -37,9 +40,9 @@ pub struct MainWidget {
 }
 
 impl MainWidget {
-    pub fn new() -> Self {
+    pub fn new(wallet_mode: WalletMode) -> Self {
         Self {
-            tabs: tabs::TabsWidget::new(),
+            tabs: tabs::TabsWidget::new(wallet_mode),
         }
     }
 
