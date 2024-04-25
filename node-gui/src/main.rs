@@ -23,12 +23,19 @@ use backend::messages::{BackendEvent, BackendRequest};
 use backend::{node_initialize, BackendControls, BackendSender};
 use common::time_getter::TimeGetter;
 use iced::advanced::graphics::core::window;
-use iced::widget::{column, container, text};
+use iced::widget::{column, container, row, text, tooltip, Text};
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced::{font, Subscription};
 use iced_aw::native::cupertino::cupertino_spinner::CupertinoSpinner;
 use main_window::{MainWindow, MainWindowMessage};
 use tokio::sync::mpsc::UnboundedReceiver;
+
+const COLD_WALLET_TOOLTIP_TEXT: &str =
+    "Start the wallet in Cold mode without connecting to the network or any nodes.";
+const HOT_WALLET_TOOLTIP_TEXT: &str = "Start the wallet in Hot mode and connect to the network.";
+
+const MAIN_NETWORK_TOOLTIP: &str = "The 'Mainnet' is the main network that has coins with value.";
+const TEST_NETWORK_TOOLTIP: &str = "The 'Testnet' is the network with coins that have no value, but is used for testing various applications before deploying them on Mainnet.";
 
 pub fn main() -> iced::Result {
     utils::rust_backtrace::enable();
@@ -46,6 +53,7 @@ pub fn main() -> iced::Result {
 
 enum MintlayerNodeGUI {
     Initial,
+    SelectNetwork,
     SelectWalletMode(InitNetwork),
     Loading,
     Loaded(BackendSender, MainWindow),
@@ -87,13 +95,17 @@ impl Application for MintlayerNodeGUI {
     type Flags = ();
 
     fn new(_flags: ()) -> (Self, Command<Message>) {
-        (MintlayerNodeGUI::Initial, Command::none())
+        (
+            MintlayerNodeGUI::Initial,
+            font::load(iced_aw::graphics::icons::BOOTSTRAP_FONT_BYTES).map(Message::FontLoaded),
+        )
     }
 
     fn title(&self) -> String {
         let version = env!("CARGO_PKG_VERSION");
         match self {
             MintlayerNodeGUI::Initial => "Mintlayer Node - Initializing...".to_string(),
+            MintlayerNodeGUI::SelectNetwork => "Mintlayer Node - Selecting network...".to_string(),
             MintlayerNodeGUI::SelectWalletMode(_) => {
                 "Mintlayer Node - Selecting mode...".to_string()
             }
@@ -111,6 +123,30 @@ impl Application for MintlayerNodeGUI {
     fn update(&mut self, message: Message) -> Command<Message> {
         match self {
             MintlayerNodeGUI::Initial => match message {
+                Message::FontLoaded(Ok(())) => {
+                    *self = Self::SelectNetwork;
+                    Command::none()
+                }
+                Message::FontLoaded(Err(_)) => {
+                    *self = MintlayerNodeGUI::IntializationError("Failed to load font".into());
+                    Command::none()
+                }
+                Message::ShuttingDownFinished => iced::window::close(window::Id::MAIN),
+                Message::EventOccurred(event) => {
+                    if let iced::Event::Window(_, iced::window::Event::CloseRequested) = event {
+                        iced::window::close(window::Id::MAIN)
+                    } else {
+                        // While the screen is loading, ignore all events
+                        Command::none()
+                    }
+                }
+                Message::Loaded(_)
+                | Message::InitNetwork(_)
+                | Message::InitWalletMode(_)
+                | Message::FromBackend(_, _, _)
+                | Message::MainWindowMessage(_) => unreachable!(),
+            },
+            MintlayerNodeGUI::SelectNetwork => match message {
                 Message::InitNetwork(init) => {
                     *self = Self::SelectWalletMode(init);
                     Command::none()
@@ -136,14 +172,10 @@ impl Application for MintlayerNodeGUI {
                     Message::InitWalletMode(mode) => {
                         *self = Self::Loading;
 
-                        Command::batch(vec![
-                            font::load(iced_aw::graphics::icons::BOOTSTRAP_FONT_BYTES)
-                                .map(Message::FontLoaded),
-                            Command::perform(
-                                node_initialize(TimeGetter::default(), init, mode),
-                                Message::Loaded,
-                            ),
-                        ])
+                        Command::perform(
+                            node_initialize(TimeGetter::default(), init, mode),
+                            Message::Loaded,
+                        )
                     }
                     Message::ShuttingDownFinished => iced::window::close(window::Id::MAIN),
                     Message::EventOccurred(event) => {
@@ -255,11 +287,34 @@ impl Application for MintlayerNodeGUI {
     fn view(&self) -> Element<Message> {
         match self {
             MintlayerNodeGUI::Initial => {
+                iced::widget::text("Loading fonts...".to_string()).size(32).into()
+            }
+            MintlayerNodeGUI::SelectNetwork => {
                 let error_box = column![
                     iced::widget::text("Please choose the network you want to use".to_string())
                         .size(32),
-                    iced::widget::button(text("Mainnet")).on_press(InitNetwork::Mainnet),
-                    iced::widget::button(text("Testnet")).on_press(InitNetwork::Testnet),
+                    row![
+                        iced::widget::button(text("Mainnet")).on_press(InitNetwork::Mainnet),
+                        tooltip(
+                            Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                                .font(iced_aw::BOOTSTRAP_FONT),
+                            MAIN_NETWORK_TOOLTIP,
+                            tooltip::Position::Bottom
+                        )
+                        .gap(10)
+                        .style(iced::theme::Container::Box)
+                    ],
+                    row![
+                        iced::widget::button(text("Testnet")).on_press(InitNetwork::Testnet),
+                        tooltip(
+                            Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                                .font(iced_aw::BOOTSTRAP_FONT),
+                            TEST_NETWORK_TOOLTIP,
+                            tooltip::Position::Bottom
+                        )
+                        .gap(10)
+                        .style(iced::theme::Container::Box)
+                    ],
                 ]
                 .align_items(iced::Alignment::Center)
                 .spacing(5);
@@ -277,8 +332,28 @@ impl Application for MintlayerNodeGUI {
             MintlayerNodeGUI::SelectWalletMode(_) => {
                 let error_box = column![
                     iced::widget::text("Please choose the wallet mode".to_string()).size(32),
-                    iced::widget::button(text("Cold")).on_press(WalletMode::Cold),
-                    iced::widget::button(text("Hot")).on_press(WalletMode::Hot),
+                    row![
+                        iced::widget::button(text("Cold")).on_press(WalletMode::Cold),
+                        tooltip(
+                            Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                                .font(iced_aw::BOOTSTRAP_FONT),
+                            COLD_WALLET_TOOLTIP_TEXT,
+                            tooltip::Position::Bottom
+                        )
+                        .gap(10)
+                        .style(iced::theme::Container::Box)
+                    ],
+                    row![
+                        iced::widget::button(text("Hot")).on_press(WalletMode::Hot),
+                        tooltip(
+                            Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                                .font(iced_aw::BOOTSTRAP_FONT),
+                            HOT_WALLET_TOOLTIP_TEXT,
+                            tooltip::Position::Bottom
+                        )
+                        .gap(10)
+                        .style(iced::theme::Container::Box)
+                    ],
                 ]
                 .align_items(iced::Alignment::Center)
                 .spacing(5);
