@@ -312,10 +312,11 @@ where
         (now + delay).expect("Unexpected time overflow")
     }
 
-    /// Verify that the peer address has a public routable IP and any valid (non-zero) port.
-    /// Private and local IPs are allowed if `allow_discover_private_ips` is true.
-    fn is_peer_address_valid(address: &PeerAddress, p2p_config: &P2pConfig) -> bool {
-        SocketAddress::from_peer_address(address, *p2p_config.allow_discover_private_ips).is_some()
+    /// Determine whether the address can be sent to peers via AddrListResponse.
+    fn is_peer_address_discoverable(address: &PeerAddress, p2p_config: &P2pConfig) -> bool {
+        address
+            .as_discoverable_socket_address(*p2p_config.allow_discover_private_ips)
+            .is_some()
     }
 
     /// Discover public addresses for this node after a new outbound connection is made
@@ -366,10 +367,7 @@ where
                 }
             })
             .filter_map(|address| {
-                SocketAddress::from_peer_address(
-                    &address,
-                    *self.p2p_config.allow_discover_private_ips,
-                )
+                address.as_discoverable_socket_address(*self.p2p_config.allow_discover_private_ips)
             })
             .collect::<Vec<_>>();
 
@@ -1413,7 +1411,7 @@ where
 
     fn handle_announce_addr_request(&mut self, peer_id: PeerId, address: PeerAddress) {
         if let Some(address) =
-            SocketAddress::from_peer_address(&address, *self.p2p_config.allow_discover_private_ips)
+            address.as_discoverable_socket_address(*self.p2p_config.allow_discover_private_ips)
         {
             let peer = self
                 .peers
@@ -1462,7 +1460,7 @@ where
                     .filter_map(|address| {
                         let peer_addr = address.as_peer_address();
                         let bannable_addr = address.as_bannable();
-                        if Self::is_peer_address_valid(&peer_addr, &self.p2p_config)
+                        if Self::is_peer_address_discoverable(&peer_addr, &self.p2p_config)
                             && !self.peerdb.is_address_banned_or_discouraged(&bannable_addr)
                         {
                             Some(peer_addr)
@@ -1515,10 +1513,9 @@ where
         );
 
         for address in &addresses {
-            if let Some(address) = SocketAddress::from_peer_address(
-                address,
-                *self.p2p_config.allow_discover_private_ips,
-            ) {
+            if let Some(address) =
+                address.as_discoverable_socket_address(*self.p2p_config.allow_discover_private_ips)
+            {
                 self.peerdb.peer_discovered(address);
             }
         }
