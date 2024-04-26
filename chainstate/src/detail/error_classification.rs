@@ -425,18 +425,6 @@ impl BlockProcessingErrorClassification for UtxosBlockUndoError {
     }
 }
 
-impl BlockProcessingErrorClassification for pos_accounting::BlockUndoError {
-    fn classify(&self) -> BlockProcessingErrorClass {
-        use pos_accounting::BlockUndoError;
-
-        match self {
-            BlockUndoError::UndoAlreadyExists(_)
-            | BlockUndoError::MissingTxUndo(_)
-            | BlockUndoError::UndoAlreadyExistsForReward => BlockProcessingErrorClass::BadBlock,
-        }
-    }
-}
-
 impl BlockProcessingErrorClassification for accounting::BlockUndoError {
     fn classify(&self) -> BlockProcessingErrorClass {
         use accounting::BlockUndoError;
@@ -656,14 +644,6 @@ impl BlockProcessingErrorClassification for tokens_accounting::Error {
 }
 
 impl BlockProcessingErrorClassification for accounting::Error {
-    fn classify(&self) -> BlockProcessingErrorClass {
-        // Nothing other than BadBlock here.
-        // TODO: should we descend into inner errors just in case?
-        BlockProcessingErrorClass::BadBlock
-    }
-}
-
-impl BlockProcessingErrorClassification for tokens_accounting::BlockUndoError {
     fn classify(&self) -> BlockProcessingErrorClass {
         // Nothing other than BadBlock here.
         // TODO: should we descend into inner errors just in case?

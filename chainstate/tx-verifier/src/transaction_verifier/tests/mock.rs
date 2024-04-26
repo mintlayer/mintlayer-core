@@ -38,7 +38,8 @@ use pos_accounting::{
     PoSAccountingUndo, PoSAccountingView, PoolData,
 };
 use tokens_accounting::{
-    FlushableTokensAccountingView, TokenAccountingUndo, TokenData, TokensAccountingDeltaData, TokensAccountingDeltaUndoData, TokensAccountingStorageRead
+    FlushableTokensAccountingView, TokenAccountingUndo, TokenData, TokensAccountingDeltaData,
+    TokensAccountingDeltaUndoData, TokensAccountingStorageRead,
 };
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead};
 

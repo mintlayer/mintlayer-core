@@ -80,6 +80,7 @@ impl<U> BlockUndo<U> {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn consume(
         self,
     ) -> (
