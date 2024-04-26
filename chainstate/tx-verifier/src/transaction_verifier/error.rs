@@ -87,6 +87,9 @@ pub enum ConnectTransactionError {
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("utxo BlockUndo error: {0}")]
     UtxoBlockUndoError(#[from] utxo::UtxosBlockUndoError),
+    #[error("Accounting BlockUndo error: {0}")]
+    BaseAccountingBlockUndoError(#[from] accounting::BlockUndoError),
+    // FIXME: remove error
     #[error("PoS accounting BlockUndo error: {0}")]
     AccountingBlockUndoError(#[from] pos_accounting::BlockUndoError),
     #[error("Failed to sum amounts of burns in transaction: {0}")]

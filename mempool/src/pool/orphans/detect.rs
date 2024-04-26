@@ -60,6 +60,7 @@ impl OrphanType {
             | CTE::TokensError(_)
             | CTE::TransactionVerifierError(_)
             | CTE::UtxoBlockUndoError(_)
+            | CTE::BaseAccountingBlockUndoError(_)
             | CTE::AccountingBlockUndoError(_)
             | CTE::BurnAmountSumError(_)
             | CTE::AttemptToSpendBurnedAmount

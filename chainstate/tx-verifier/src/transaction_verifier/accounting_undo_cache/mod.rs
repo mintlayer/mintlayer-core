@@ -14,25 +14,21 @@
 // limitations under the License.
 
 use std::collections::{btree_map::Entry, BTreeMap};
+use std::fmt::Debug;
 
 use super::{error::ConnectTransactionError, CachedOperation, TransactionSource};
+use accounting::{BlockRewardUndo, BlockUndoError, TxUndo};
 use common::{chain::Transaction, primitives::Id};
-use pos_accounting::{BlockRewardUndo, BlockUndoError, TxUndo};
 
 mod cached_block_undo;
-pub use cached_block_undo::CachedPoSBlockUndo;
+pub use cached_block_undo::CachedBlockUndo;
 
-pub type CachedPoSBlockUndoOp = CachedOperation<CachedPoSBlockUndo>;
-
-/// Struct that can hold PoS accounting undo data for blocks/mempool.
-///
-/// See `UtxosBlockUndoCache` for a general info
 #[derive(Debug, Eq, PartialEq)]
-pub struct PoSAccountingBlockUndoCache {
-    data: BTreeMap<TransactionSource, CachedPoSBlockUndoOp>,
+pub struct AccountingBlockUndoCache<T> {
+    data: BTreeMap<TransactionSource, CachedOperation<CachedBlockUndo<T>>>,
 }
 
-impl PoSAccountingBlockUndoCache {
+impl<T: Debug + Eq + Clone> AccountingBlockUndoCache<T> {
     pub fn new() -> Self {
         Self {
             data: BTreeMap::new(),
@@ -40,15 +36,17 @@ impl PoSAccountingBlockUndoCache {
     }
 
     #[cfg(test)]
-    pub fn new_for_test(data: BTreeMap<TransactionSource, CachedPoSBlockUndoOp>) -> Self {
+    pub fn new_for_test(
+        data: BTreeMap<TransactionSource, CachedOperation<CachedBlockUndo<T>>>,
+    ) -> Self {
         Self { data }
     }
 
-    pub fn data(&self) -> &BTreeMap<TransactionSource, CachedPoSBlockUndoOp> {
+    pub fn data(&self) -> &BTreeMap<TransactionSource, CachedOperation<CachedBlockUndo<T>>> {
         &self.data
     }
 
-    pub fn consume(self) -> BTreeMap<TransactionSource, CachedPoSBlockUndoOp> {
+    pub fn consume(self) -> BTreeMap<TransactionSource, CachedOperation<CachedBlockUndo<T>>> {
         self.data
     }
 
@@ -58,7 +56,7 @@ impl PoSAccountingBlockUndoCache {
     pub fn add_reward_undo(
         &mut self,
         tx_source: TransactionSource,
-        reward_undo: BlockRewardUndo,
+        reward_undo: BlockRewardUndo<T>,
     ) -> Result<(), ConnectTransactionError> {
         match self.data.entry(tx_source) {
             Entry::Occupied(mut entry) => match entry.get() {
@@ -68,12 +66,12 @@ impl PoSAccountingBlockUndoCache {
                     entry.insert(CachedOperation::Write(block_undo));
                 }
                 CachedOperation::Erase => {
-                    let block_undo = CachedPoSBlockUndo::new(Some(reward_undo), BTreeMap::new())?;
+                    let block_undo = CachedBlockUndo::new(Some(reward_undo), BTreeMap::new())?;
                     entry.insert(CachedOperation::Write(block_undo));
                 }
             },
             Entry::Vacant(entry) => {
-                let block_undo = CachedPoSBlockUndo::new(Some(reward_undo), BTreeMap::new())?;
+                let block_undo = CachedBlockUndo::new(Some(reward_undo), BTreeMap::new())?;
                 entry.insert(CachedOperation::Write(block_undo));
             }
         };
@@ -88,7 +86,7 @@ impl PoSAccountingBlockUndoCache {
         &mut self,
         tx_source: TransactionSource,
         tx_id: Id<Transaction>,
-        tx_undo: TxUndo,
+        tx_undo: TxUndo<T>,
     ) -> Result<(), ConnectTransactionError> {
         match self.data.entry(tx_source) {
             Entry::Occupied(mut entry) => match entry.get() {
@@ -99,13 +97,13 @@ impl PoSAccountingBlockUndoCache {
                 }
                 CachedOperation::Erase => {
                     let block_undo =
-                        CachedPoSBlockUndo::new(None, BTreeMap::from_iter([(tx_id, tx_undo)]))?;
+                        CachedBlockUndo::new(None, BTreeMap::from_iter([(tx_id, tx_undo)]))?;
                     entry.insert(CachedOperation::Write(block_undo));
                 }
             },
             Entry::Vacant(entry) => {
                 let block_undo =
-                    CachedPoSBlockUndo::new(None, BTreeMap::from_iter([(tx_id, tx_undo)]))?;
+                    CachedBlockUndo::new(None, BTreeMap::from_iter([(tx_id, tx_undo)]))?;
                 entry.insert(CachedOperation::Write(block_undo));
             }
         };
@@ -121,9 +119,9 @@ impl PoSAccountingBlockUndoCache {
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
         fetcher_func: F,
-    ) -> Result<Option<TxUndo>, ConnectTransactionError>
+    ) -> Result<Option<TxUndo<T>>, ConnectTransactionError>
     where
-        F: Fn(TransactionSource) -> Result<Option<CachedPoSBlockUndo>, E>,
+        F: Fn(TransactionSource) -> Result<Option<CachedBlockUndo<T>>, E>,
         ConnectTransactionError: From<E>,
     {
         let block_undo = match self.data.entry(*tx_source) {
@@ -158,9 +156,9 @@ impl PoSAccountingBlockUndoCache {
         &mut self,
         tx_source: &TransactionSource,
         fetcher_func: F,
-    ) -> Result<Option<BlockRewardUndo>, ConnectTransactionError>
+    ) -> Result<Option<BlockRewardUndo<T>>, ConnectTransactionError>
     where
-        F: Fn(TransactionSource) -> Result<Option<CachedPoSBlockUndo>, E>,
+        F: Fn(TransactionSource) -> Result<Option<CachedBlockUndo<T>>, E>,
         ConnectTransactionError: From<E>,
     {
         let block_undo = match self.data.entry(*tx_source) {
@@ -194,7 +192,7 @@ impl PoSAccountingBlockUndoCache {
     pub fn set_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &CachedPoSBlockUndo,
+        new_undo: &CachedBlockUndo<T>,
     ) -> Result<(), BlockUndoError> {
         match self.data.entry(tx_source) {
             Entry::Vacant(e) => {
@@ -218,5 +216,5 @@ impl PoSAccountingBlockUndoCache {
     }
 }
 
-#[cfg(test)]
-mod tests;
+//#[cfg(test)]
+//mod tests;

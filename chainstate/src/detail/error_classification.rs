@@ -299,6 +299,7 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             ConnectTransactionError::TransactionVerifierError(err) => err.classify(),
             ConnectTransactionError::UtxoBlockUndoError(err) => err.classify(),
             ConnectTransactionError::AccountingBlockUndoError(err) => err.classify(),
+            ConnectTransactionError::BaseAccountingBlockUndoError(err) => err.classify(),
             ConnectTransactionError::DestinationRetrievalError(err) => err.classify(),
             ConnectTransactionError::OutputTimelockError(err) => err.classify(),
             ConnectTransactionError::SpendStakeError(err) => err.classify(),
@@ -430,6 +431,18 @@ impl BlockProcessingErrorClassification for UtxosBlockUndoError {
 impl BlockProcessingErrorClassification for pos_accounting::BlockUndoError {
     fn classify(&self) -> BlockProcessingErrorClass {
         use pos_accounting::BlockUndoError;
+
+        match self {
+            BlockUndoError::UndoAlreadyExists(_)
+            | BlockUndoError::MissingTxUndo(_)
+            | BlockUndoError::UndoAlreadyExistsForReward => BlockProcessingErrorClass::BadBlock,
+        }
+    }
+}
+
+impl BlockProcessingErrorClassification for accounting::BlockUndoError {
+    fn classify(&self) -> BlockProcessingErrorClass {
+        use accounting::BlockUndoError;
 
         match self {
             BlockUndoError::UndoAlreadyExists(_)

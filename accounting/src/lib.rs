@@ -13,10 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_undo;
 mod delta;
 mod error;
 
 pub use crate::{
+    block_undo::{BlockRewardUndo, BlockUndo, BlockUndoError, TxUndo},
     delta::{
         combine::{combine_amount_delta, combine_data_with_delta},
         delta_amount_collection::DeltaAmountCollection,

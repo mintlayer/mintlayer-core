@@ -126,6 +126,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::BurnAmountSumError(_) => 100,
             ConnectTransactionError::AttemptToSpendBurnedAmount => 100,
             ConnectTransactionError::PoSAccountingError(err) => err.ban_score(),
+            ConnectTransactionError::BaseAccountingBlockUndoError(_) => 100,
             ConnectTransactionError::AccountingBlockUndoError(_) => 100,
             ConnectTransactionError::SpendStakeError(_) => 100,
             ConnectTransactionError::StakerBalanceNotFound(_) => 0,

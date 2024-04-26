@@ -39,6 +39,8 @@ pub use tx_source::{TransactionSource, TransactionSourceForConnect};
 mod cached_operation;
 pub use cached_operation::CachedOperation;
 
+mod accounting_undo_cache;
+
 mod pos_accounting_undo_cache;
 pub use pos_accounting_undo_cache::CachedPoSBlockUndo;
 
