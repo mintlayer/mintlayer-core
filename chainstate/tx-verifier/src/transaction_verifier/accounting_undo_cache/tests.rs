@@ -24,7 +24,7 @@ use common::{
     chain::{config::Builder as ConfigBuilder, Block},
     primitives::H256,
 };
-use pos_accounting::{DeltaMergeUndo, TxUndo};
+use pos_accounting::{DeltaMergeUndo, PoSAccountingUndo};
 use test_utils::random::Seed;
 use tokens_accounting::TokensAccountingDeltaUndoData;
 
@@ -51,7 +51,7 @@ fn connect_txs_in_hierarchy_default(#[case] seed: Seed) {
     let tx_id_2: Id<Transaction> = H256::random_using(&mut rng).into();
     let tx_id_3: Id<Transaction> = H256::random_using(&mut rng).into();
 
-    let expected_block_undo_1 = CachedPoSBlockUndo::new(
+    let expected_block_undo_1 = CachedBlockUndo::<PoSAccountingUndo>::new(
         None,
         BTreeMap::from([
             (tx_id_1, TxUndo::new(vec![undo1.clone()])),
@@ -60,7 +60,7 @@ fn connect_txs_in_hierarchy_default(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let expected_block_undo_2 = CachedPoSBlockUndo::new(
+    let expected_block_undo_2 = CachedBlockUndo::<PoSAccountingUndo>::new(
         None,
         BTreeMap::from([(tx_id_3, TxUndo::new(vec![undo3.clone(), undo3_2.clone()]))]),
     )
@@ -154,7 +154,7 @@ fn connect_txs_in_hierarchy_disposable(#[case] seed: Seed) {
     let tx_id_2: Id<Transaction> = H256::random_using(&mut rng).into();
     let tx_id_3: Id<Transaction> = H256::random_using(&mut rng).into();
 
-    let expected_block_undo_1 = CachedPoSBlockUndo::new(
+    let expected_block_undo_1 = CachedBlockUndo::<PoSAccountingUndo>::new(
         None,
         BTreeMap::from([
             (tx_id_1, TxUndo::new(vec![undo1.clone()])),
@@ -163,7 +163,7 @@ fn connect_txs_in_hierarchy_disposable(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let expected_block_undo_2 = CachedPoSBlockUndo::new(
+    let expected_block_undo_2 = CachedBlockUndo::<PoSAccountingUndo>::new(
         None,
         BTreeMap::from([(tx_id_3, TxUndo::new(vec![undo3.clone(), undo3_2.clone()]))]),
     )
@@ -252,7 +252,7 @@ fn connect_txs_in_hierarchy_twice(#[case] seed: Seed) {
 
     let tx_id: Id<Transaction> = H256::random_using(&mut rng).into();
 
-    let expected_block_undo = CachedPoSBlockUndo::new(
+    let expected_block_undo = CachedBlockUndo::<PoSAccountingUndo>::new(
         None,
         BTreeMap::from([(tx_id, TxUndo::new(vec![undo1.clone()]))]),
     )
@@ -298,7 +298,7 @@ fn connect_txs_in_hierarchy_twice(#[case] seed: Seed) {
     assert_eq!(
         result.unwrap_err(),
         ConnectTransactionError::AccountingBlockUndoError(
-            pos_accounting::BlockUndoError::UndoAlreadyExists(tx_id)
+            accounting::BlockUndoError::UndoAlreadyExists(tx_id)
         )
     );
 
@@ -334,7 +334,7 @@ fn connect_reward_in_hierarchy_twice(#[case] seed: Seed) {
 
     let block_id: Id<Block> = H256::random_using(&mut rng).into();
 
-    let expected_block_undo = CachedPoSBlockUndo::new(
+    let expected_block_undo = CachedBlockUndo::<PoSAccountingUndo>::new(
         Some(BlockRewardUndo::new(vec![undo1.clone()])),
         BTreeMap::new(),
     )
@@ -378,7 +378,7 @@ fn connect_reward_in_hierarchy_twice(#[case] seed: Seed) {
     assert_eq!(
         result.unwrap_err(),
         ConnectTransactionError::AccountingBlockUndoError(
-            pos_accounting::BlockUndoError::UndoAlreadyExistsForReward
+            accounting::BlockUndoError::UndoAlreadyExistsForReward
         )
     );
 
@@ -424,7 +424,7 @@ fn disconnect_txs_in_hierarchy_default(#[case] seed: Seed) {
     let block_undo_db = BTreeMap::from_iter([
         (
             TransactionSource::Chain(block_id_1),
-            CachedPoSBlockUndo::new(
+            CachedBlockUndo::<PoSAccountingUndo>::new(
                 None,
                 BTreeMap::from([
                     (tx_id_1, TxUndo::new(vec![undo1.clone()])),
@@ -435,7 +435,7 @@ fn disconnect_txs_in_hierarchy_default(#[case] seed: Seed) {
         ),
         (
             TransactionSource::Chain(block_id_2),
-            CachedPoSBlockUndo::new(
+            CachedBlockUndo::<PoSAccountingUndo>::new(
                 None,
                 BTreeMap::from([(tx_id_3, TxUndo::new(vec![undo3.clone(), undo3_2.clone()]))]),
             )
@@ -443,10 +443,10 @@ fn disconnect_txs_in_hierarchy_default(#[case] seed: Seed) {
         ),
     ]);
 
-    let fetch_block_undo =
-        |tx_source| -> Result<Option<CachedPoSBlockUndo>, ConnectTransactionError> {
-            Ok(block_undo_db.get(&tx_source).cloned())
-        };
+    let fetch_block_undo = |tx_source| -> Result<
+        Option<CachedBlockUndo<PoSAccountingUndo>>,
+        ConnectTransactionError,
+    > { Ok(block_undo_db.get(&tx_source).cloned()) };
 
     let mut store = mock::MockStore::new();
     store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
@@ -525,7 +525,7 @@ fn disconnect_txs_in_hierarchy_disposable(#[case] seed: Seed) {
     let tx_id_2: Id<Transaction> = H256::random_using(&mut rng).into();
     let tx_id_3: Id<Transaction> = H256::random_using(&mut rng).into();
 
-    let block_undo_1 = CachedPoSBlockUndo::new(
+    let block_undo_1 = CachedBlockUndo::<PoSAccountingUndo>::new(
         None,
         BTreeMap::from([
             (tx_id_1, TxUndo::new(vec![undo1.clone()])),
@@ -534,7 +534,7 @@ fn disconnect_txs_in_hierarchy_disposable(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let block_undo_2 = CachedPoSBlockUndo::new(
+    let block_undo_2 = CachedBlockUndo::<PoSAccountingUndo>::new(
         None,
         BTreeMap::from([(tx_id_3, TxUndo::new(vec![undo3.clone(), undo3_2.clone()]))]),
     )
@@ -576,10 +576,10 @@ fn disconnect_txs_in_hierarchy_disposable(#[case] seed: Seed) {
     let mut derived_verifier = base_verifier.derive_child();
 
     {
-        let fetch_block_undo =
-            |tx_source| -> Result<Option<CachedPoSBlockUndo>, ConnectTransactionError> {
-                Ok(base_verifier.get_pos_accounting_undo(tx_source)?)
-            };
+        let fetch_block_undo = |tx_source| -> Result<
+            Option<CachedBlockUndo<PoSAccountingUndo>>,
+            ConnectTransactionError,
+        > { Ok(base_verifier.get_pos_accounting_undo(tx_source)?) };
 
         // Undo tx2
         derived_verifier
@@ -599,10 +599,10 @@ fn disconnect_txs_in_hierarchy_disposable(#[case] seed: Seed) {
     let mut derived_verifier = base_verifier.derive_child();
 
     {
-        let fetch_block_undo =
-            |tx_source| -> Result<Option<CachedPoSBlockUndo>, ConnectTransactionError> {
-                Ok(base_verifier.get_pos_accounting_undo(tx_source)?)
-            };
+        let fetch_block_undo = |tx_source| -> Result<
+            Option<CachedBlockUndo<PoSAccountingUndo>>,
+            ConnectTransactionError,
+        > { Ok(base_verifier.get_pos_accounting_undo(tx_source)?) };
 
         derived_verifier
             .pos_accounting_block_undo
@@ -620,10 +620,10 @@ fn disconnect_txs_in_hierarchy_disposable(#[case] seed: Seed) {
     // Undo tx3 from another block
     let mut derived_verifier = base_verifier.derive_child();
     {
-        let fetch_block_undo =
-            |tx_source| -> Result<Option<CachedPoSBlockUndo>, ConnectTransactionError> {
-                Ok(base_verifier.get_pos_accounting_undo(tx_source)?)
-            };
+        let fetch_block_undo = |tx_source| -> Result<
+            Option<CachedBlockUndo<PoSAccountingUndo>>,
+            ConnectTransactionError,
+        > { Ok(base_verifier.get_pos_accounting_undo(tx_source)?) };
 
         derived_verifier
             .pos_accounting_block_undo
@@ -682,10 +682,10 @@ fn connect_disconnect_for_mempool(#[case] seed: Seed) {
     let mut derived_verifier = base_verifier.derive_child();
 
     {
-        let fetch_block_undo =
-            |tx_source| -> Result<Option<CachedPoSBlockUndo>, ConnectTransactionError> {
-                Ok(base_verifier.get_pos_accounting_undo(tx_source)?)
-            };
+        let fetch_block_undo = |tx_source| -> Result<
+            Option<CachedBlockUndo<PoSAccountingUndo>>,
+            ConnectTransactionError,
+        > { Ok(base_verifier.get_pos_accounting_undo(tx_source)?) };
 
         derived_verifier
             .pos_accounting_block_undo
@@ -696,8 +696,10 @@ fn connect_disconnect_for_mempool(#[case] seed: Seed) {
     let consumed_derived_verifier = derived_verifier.consume().unwrap();
     flush::flush_to_storage(&mut base_verifier, consumed_derived_verifier).unwrap();
 
-    let fetch_block_undo =
-        |_| -> Result<Option<CachedPoSBlockUndo>, ConnectTransactionError> { Ok(None) };
+    let fetch_block_undo = |_| -> Result<
+        Option<CachedBlockUndo<PoSAccountingUndo>>,
+        ConnectTransactionError,
+    > { Ok(None) };
 
     base_verifier
         .pos_accounting_block_undo
@@ -736,10 +738,10 @@ fn connect_disconnect_connect_for_mempool(#[case] seed: Seed) {
 
     // Disconnect a transaction in derived and flush
     {
-        let fetch_block_undo =
-            |tx_source| -> Result<Option<CachedPoSBlockUndo>, ConnectTransactionError> {
-                Ok(base_verifier.get_pos_accounting_undo(tx_source)?)
-            };
+        let fetch_block_undo = |tx_source| -> Result<
+            Option<CachedBlockUndo<PoSAccountingUndo>>,
+            ConnectTransactionError,
+        > { Ok(base_verifier.get_pos_accounting_undo(tx_source)?) };
 
         derived_verifier
             .pos_accounting_block_undo

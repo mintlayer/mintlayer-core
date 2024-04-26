@@ -299,7 +299,6 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             ConnectTransactionError::TransactionVerifierError(err) => err.classify(),
             ConnectTransactionError::UtxoBlockUndoError(err) => err.classify(),
             ConnectTransactionError::AccountingBlockUndoError(err) => err.classify(),
-            ConnectTransactionError::BaseAccountingBlockUndoError(err) => err.classify(),
             ConnectTransactionError::DestinationRetrievalError(err) => err.classify(),
             ConnectTransactionError::OutputTimelockError(err) => err.classify(),
             ConnectTransactionError::SpendStakeError(err) => err.classify(),

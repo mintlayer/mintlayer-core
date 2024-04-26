@@ -166,7 +166,6 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_) => 0,
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _) => 0,
             ConnectTransactionError::UtxoBlockUndoError(_) => 0,
-            ConnectTransactionError::BaseAccountingBlockUndoError(_) => 0,
             ConnectTransactionError::AccountingBlockUndoError(_) => 0,
             ConnectTransactionError::StakerBalanceNotFound(_) => 0,
             ConnectTransactionError::PoolDataNotFound(_) => 0,

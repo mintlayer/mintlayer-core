@@ -218,5 +218,5 @@ impl<T: Debug + Eq + Clone> AccountingBlockUndoCache<T> {
     }
 }
 
-//#[cfg(test)]
-//mod tests;
+#[cfg(test)]
+mod tests;
