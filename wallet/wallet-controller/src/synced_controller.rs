@@ -55,6 +55,7 @@ use wallet::{
     DefaultWallet, WalletError, WalletResult,
 };
 use wallet_types::{
+    signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
     with_locked::WithLocked,
 };
@@ -861,7 +862,14 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     pub fn sign_raw_transaction(
         &mut self,
         tx: TransactionToSign,
-    ) -> Result<PartiallySignedTransaction, ControllerError<T>> {
+    ) -> Result<
+        (
+            PartiallySignedTransaction,
+            Vec<SignatureStatus>,
+            Vec<SignatureStatus>,
+        ),
+        ControllerError<T>,
+    > {
         self.wallet
             .sign_raw_transaction(self.account_index, tx)
             .map_err(ControllerError::WalletError)

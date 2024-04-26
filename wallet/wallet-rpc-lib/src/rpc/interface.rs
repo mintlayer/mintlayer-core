@@ -28,7 +28,7 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use rpc::types::RpcHexString;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
+    types::{BlockInfo, CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer,
 };
 use wallet_types::with_locked::WithLocked;
@@ -37,10 +37,10 @@ use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
     CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
     MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcStandaloneAddresses, RpcTokenId,
-    RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType, StakePoolBalance, StakingStatus,
-    StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-    VrfPublicKeyInfo,
+    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcInspectTransaction,
+    RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
+    StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
+    TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -401,7 +401,7 @@ trait WalletRpc {
     async fn transaction_inspect(
         &self,
         transaction: RpcHexString,
-    ) -> rpc::RpcResult<InspectTransaction>;
+    ) -> rpc::RpcResult<RpcInspectTransaction>;
 
     /// Create a staking pool. The pool will be capable of creating blocks and gaining rewards,
     /// and will be capable of taking delegations from other users and staking.

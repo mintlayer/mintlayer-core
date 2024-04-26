@@ -35,9 +35,9 @@ use utils::qrcode::{QrCode, QrCodeError};
 use wallet::{account::PartiallySignedTransaction, version::get_version};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
-    Balances, ComposedTransaction, ControllerConfig, InspectTransaction, MnemonicInfo,
-    NewTransaction, NftMetadata, RpcStandaloneAddressDetails, SignatureStats, TokenMetadata,
-    ValidatedSignatures,
+    Balances, ComposedTransaction, ControllerConfig, MnemonicInfo, NewTransaction, NftMetadata,
+    RpcInspectTransaction, RpcSignatureStats, RpcSignatureStatus, RpcStandaloneAddressDetails,
+    RpcValidatedSignatures, TokenMetadata,
 };
 
 use crate::errors::WalletCliError;
@@ -509,7 +509,7 @@ where
                 let result =
                     wallet.sign_raw_transaction(selected_account, transaction, self.config).await?;
 
-                let output_str = match result {
+                let output_str = match result.transaction {
                     PartialOrSignedTx::Signed(signed_tx) => {
                         let summary = signed_tx.transaction().text_summary(chain_config);
                         let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
@@ -528,8 +528,23 @@ where
 
                         let qr_code_string = qrcode_or_error_string(&result_hex.to_string());
 
+                        let prev_sigs = result
+                            .previous_signatures
+                            .iter()
+                            .enumerate()
+                            .map(format_signature_status)
+                            .join(", ");
+                        let current_sigs = result
+                            .current_signatures
+                            .iter()
+                            .enumerate()
+                            .map(format_signature_status)
+                            .join(", ");
+
                         format!(
-                            "Not all transaction inputs have been signed. This wallet does not have all the keys for that. \
+                            "Not all transaction inputs have been signed. This wallet does not have all the keys for that.\n\
+                             The signatures states before signing were:\n{prev_sigs}\n\
+                             and the current signature states are:\n{current_sigs}\n\
                              Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n{result_hex}\n\n\
                              Or scan the Qr code with it:\n\n{qr_code_string}"
                         )
@@ -1263,10 +1278,10 @@ where
             }
 
             WalletCommand::InspectTransaction { transaction } => {
-                let InspectTransaction {
+                let RpcInspectTransaction {
                     tx,
                     stats:
-                        SignatureStats {
+                        RpcSignatureStats {
                             num_inputs,
                             total_signatures,
                             validated_signatures,
@@ -1276,22 +1291,37 @@ where
 
                 let summary = tx.take().text_summary(chain_config);
                 let mut output_str = format!("{summary}\n");
-                if let Some(ValidatedSignatures {
+                if let Some(RpcValidatedSignatures {
                     num_valid_signatures,
                     num_invalid_signatures,
+                    signature_statuses,
                 }) = validated_signatures
                 {
                     let missing_signatures = num_inputs - total_signatures;
                     writeln!(
                         output_str,
-                        "number of inputs: {num_inputs} and total signatures {total_signatures}, of which {num_valid_signatures} have valid signatures, {num_invalid_signatures} with invalid signatures and {missing_signatures} missing signatures\n"
+                        "Number of inputs: {num_inputs}\n\
+                        Total signatures: {total_signatures}\n\
+                        Valid signatures: {num_valid_signatures}\n\
+                        Invalid signatures: {num_invalid_signatures}\n\
+                        Missing signatures: {missing_signatures}\n"
                     )
                     .expect("Writing to a memory buffer should not fail");
+                    let sig_statuses = signature_statuses
+                        .iter()
+                        .enumerate()
+                        .map(format_signature_status)
+                        .join("\n");
+                    writeln!(output_str, "All signature statuses:\n{sig_statuses}\n")
+                        .expect("Writing to a memory buffer should not fail");
                 } else {
                     let missing_signatures = num_inputs - total_signatures;
                     writeln!(
                         output_str,
-                        "number of inputs: {num_inputs} and total signatures {total_signatures} with {missing_signatures} missing signatures\nThe signatures could not be verified because the UTXOs were spend or not found"
+                        "Number of inputs: {num_inputs}\n\
+                        Total signatures: {total_signatures}\n\
+                        Missing signatures: {missing_signatures}\n
+                        The signatures could not be verified because the UTXOs were spend or not found\n"
                     )
                     .expect("Writing to a memory buffer should not fail");
                 }
@@ -1571,6 +1601,18 @@ where
             }
         }
     }
+}
+
+fn format_signature_status((idx, status): (usize, &RpcSignatureStatus)) -> String {
+    let status = match status {
+        RpcSignatureStatus::FullySigned => "FullySigned".to_owned(),
+        RpcSignatureStatus::NotSigned => "NotSigned".to_owned(),
+        RpcSignatureStatus::InvalidSignature => "InvalidSignature".to_owned(),
+        RpcSignatureStatus::UnknownSignature => "UnknownSignature".to_owned(),
+        RpcSignatureStatus::PartialMultisig { required_signatures, num_signatures } => format!("PartialMultisig having {num_signatures} out of {required_signatures} required signatures"),
+    };
+
+    format!("Signature for input {idx}: {status}")
 }
 
 fn format_fees(output: &mut String, fees: Balances, chain_config: &ChainConfig) {

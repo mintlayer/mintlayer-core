@@ -153,10 +153,10 @@ class WalletComposeTransaction(BitcoinTestFramework):
             assert_in(f"Transfer({acc1_address}, {coins_to_send-1})", output)
             assert_in(f"Transfer({change_address}, 0.9)", output)
             assert_in(f"Fees that will be paid by the transaction:\nCoins amount: {fees}.1", output)
-            assert_in(f"number of inputs: {len(utxos)}", output)
-            assert_in(f"0 have valid signatures", output)
-            assert_in(f"0 with invalid signatures", output)
-            assert_in(f"{len(utxos)} missing signatures", output)
+            assert_in(f"Number of inputs: {len(utxos)}", output)
+            assert_in(f"Valid signatures: 0", output)
+            assert_in(f"Invalid signatures: 0", output)
+            assert_in(f"Missing signatures: {len(utxos)}", output)
 
             output = await wallet.compose_transaction(outputs, utxos, False)
             assert_in("The hex encoded transaction is", output)
@@ -168,10 +168,10 @@ class WalletComposeTransaction(BitcoinTestFramework):
             assert_in(f"Transfer({acc1_address}, {coins_to_send-1})", output)
             assert_in(f"Transfer({change_address}, 0.9)", output)
             assert_in(f"Fees that will be paid by the transaction:\nCoins amount: {fees}.1", output)
-            assert_in(f"number of inputs: {len(utxos)}", output)
-            assert_in(f"0 have valid signatures", output)
-            assert_in(f"0 with invalid signatures", output)
-            assert_in(f"{len(utxos)} missing signatures", output)
+            assert_in(f"Number of inputs: {len(utxos)}", output)
+            assert_in(f"Valid signatures: 0", output)
+            assert_in(f"Invalid signatures: 0", output)
+            assert_in(f"Missing signatures: {len(utxos)}", output)
 
             # partially_signed_tx is bigger than just the tx
             assert len(encoded_tx) < len(encoded_ptx)
@@ -184,10 +184,12 @@ class WalletComposeTransaction(BitcoinTestFramework):
             assert_in(f"Transfer({acc1_address}, {coins_to_send-1})", output)
             assert_in(f"Transfer({change_address}, 0.9)", output)
             assert_in(f"Fees that will be paid by the transaction:\nCoins amount: {fees}.1", output)
-            assert_in(f"number of inputs: {len(utxos)}", output)
-            assert_in(f"{len(utxos)} have valid signatures", output)
-            assert_in(f"0 with invalid signatures", output)
-            assert_in(f"0 missing signatures", output)
+            assert_in(f"Number of inputs: {len(utxos)}", output)
+            assert_in(f"Valid signatures: {len(utxos)}", output)
+            assert_in(f"Invalid signatures: 0", output)
+            assert_in(f"Missing signatures: 0", output)
+            statuses = '\n'.join(map(lambda idx: f"Signature for input {idx}: FullySigned", range(len(utxos))))
+            assert_in(f"All signature statuses:\n{statuses}", output)
 
             assert_in("The transaction was submitted successfully", await wallet.submit_transaction(signed_tx))
 
@@ -223,8 +225,8 @@ class WalletComposeTransaction(BitcoinTestFramework):
             output = await wallet.inspect_transaction(signed_tx2)
             assert_in(f"Transfer({acc1_address}, 0.1)", output)
             assert_in(f"Could not calculate fees", output)
-            assert_in(f"number of inputs: 1", output)
-            assert_in(f"total signatures 1", output)
+            assert_in(f"Number of inputs: 1", output)
+            assert_in(f"Total signatures: 1", output)
             assert_in(f"The signatures could not be verified because the UTXOs were spend or not found", output)
 
 

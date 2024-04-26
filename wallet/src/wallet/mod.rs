@@ -70,6 +70,7 @@ use wallet_storage::{
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::chain_info::ChainInfo;
 use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
+use wallet_types::signature_status::SignatureStatus;
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::{TxData, TxState};
 use wallet_types::wallet_type::WalletType;
@@ -1686,7 +1687,11 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
         tx: TransactionToSign,
-    ) -> WalletResult<PartiallySignedTransaction> {
+    ) -> WalletResult<(
+        PartiallySignedTransaction,
+        Vec<SignatureStatus>,
+        Vec<SignatureStatus>,
+    )> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(account_index, |account, db_tx, _| {
             account.sign_raw_transaction(tx, latest_median_time, db_tx)

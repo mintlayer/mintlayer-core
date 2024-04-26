@@ -54,6 +54,7 @@ pub use wallet_controller::types::{
 };
 pub use wallet_controller::{ControllerConfig, NodeInterface};
 use wallet_controller::{UtxoState, UtxoType};
+use wallet_types::signature_status::SignatureStatus;
 
 use crate::service::SubmitError;
 
@@ -625,9 +626,93 @@ pub struct ComposedTransaction {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type", content = "content")]
+pub enum RpcSignatureStatus {
+    NotSigned,
+    InvalidSignature,
+    UnknownSignature,
+    FullySigned,
+    PartialMultisig {
+        required_signatures: u8,
+        num_signatures: u8,
+    },
+}
+
+impl From<SignatureStatus> for RpcSignatureStatus {
+    fn from(value: SignatureStatus) -> Self {
+        match value {
+            SignatureStatus::NotSigned => Self::NotSigned,
+            SignatureStatus::InvalidSignature => Self::InvalidSignature,
+            SignatureStatus::UnknownSignature => Self::UnknownSignature,
+            SignatureStatus::FullySigned => Self::FullySigned,
+            SignatureStatus::PartialMultisig {
+                required_signatures,
+                num_signatures,
+            } => Self::PartialMultisig {
+                required_signatures,
+                num_signatures,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct MaybeSignedTransaction {
     pub hex: String,
     pub is_complete: bool,
+    pub previous_signatures: Vec<RpcSignatureStatus>,
+    pub current_signatures: Vec<RpcSignatureStatus>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct RpcValidatedSignatures {
+    pub num_valid_signatures: usize,
+    pub num_invalid_signatures: usize,
+    pub signature_statuses: Vec<RpcSignatureStatus>,
+}
+
+impl From<ValidatedSignatures> for RpcValidatedSignatures {
+    fn from(value: ValidatedSignatures) -> Self {
+        Self {
+            num_valid_signatures: value.num_valid_signatures,
+            num_invalid_signatures: value.num_invalid_signatures,
+            signature_statuses: value.signature_statuses.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct RpcSignatureStats {
+    pub num_inputs: usize,
+    pub total_signatures: usize,
+    pub validated_signatures: Option<RpcValidatedSignatures>,
+}
+
+impl From<SignatureStats> for RpcSignatureStats {
+    fn from(value: SignatureStats) -> Self {
+        Self {
+            num_inputs: value.num_inputs,
+            total_signatures: value.total_signatures,
+            validated_signatures: value.validated_signatures.map(Into::into),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct RpcInspectTransaction {
+    pub tx: HexEncoded<Transaction>,
+    pub fees: Option<Balances>,
+    pub stats: RpcSignatureStats,
+}
+
+impl From<InspectTransaction> for RpcInspectTransaction {
+    fn from(value: InspectTransaction) -> Self {
+        Self {
+            tx: value.tx,
+            fees: value.fees,
+            stats: value.stats.into(),
+        }
+    }
 }
 
 #[cfg(test)]

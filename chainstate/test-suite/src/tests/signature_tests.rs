@@ -347,7 +347,7 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
                     chainstate::ChainstateError::ProcessBlockError(
                         chainstate::BlockError::StateUpdateFailed(
                             chainstate::ConnectTransactionError::SignatureVerificationFailed(
-                                common::chain::signature::DestinationSigError::IncompleteClassicalMultisigSignature
+                                common::chain::signature::DestinationSigError::IncompleteClassicalMultisigSignature(min_required_signatures.get(), authorization_potentially_missing_sigs.available_signatures_count() as u8)
                             )
                         )
                     )

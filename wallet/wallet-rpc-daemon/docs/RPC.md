@@ -474,6 +474,18 @@ Returns:
              1) {
                     "num_valid_signatures": number,
                     "num_invalid_signatures": number,
+                    "signature_statuses": [ EITHER OF
+                         1) { "type": "NotSigned" }
+                         2) { "type": "InvalidSignature" }
+                         3) { "type": "UnknownSignature" }
+                         4) { "type": "FullySigned" }
+                         5) {
+                                "type": "PartialMultisig",
+                                "content": {
+                                    "required_signatures": number,
+                                    "num_signatures": number,
+                                },
+                            }, .. ],
                 }
              2) null,
     },
@@ -2138,6 +2150,30 @@ Returns:
 {
     "hex": string,
     "is_complete": bool,
+    "previous_signatures": [ EITHER OF
+         1) { "type": "NotSigned" }
+         2) { "type": "InvalidSignature" }
+         3) { "type": "UnknownSignature" }
+         4) { "type": "FullySigned" }
+         5) {
+                "type": "PartialMultisig",
+                "content": {
+                    "required_signatures": number,
+                    "num_signatures": number,
+                },
+            }, .. ],
+    "current_signatures": [ EITHER OF
+         1) { "type": "NotSigned" }
+         2) { "type": "InvalidSignature" }
+         3) { "type": "UnknownSignature" }
+         4) { "type": "FullySigned" }
+         5) {
+                "type": "PartialMultisig",
+                "content": {
+                    "required_signatures": number,
+                    "num_signatures": number,
+                },
+            }, .. ],
 }
 ```
 

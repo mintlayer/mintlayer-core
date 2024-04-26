@@ -52,6 +52,7 @@ use common::{
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::signature_hash,
+            DestinationSigError,
         },
         tokens::{RPCTokenInfo, TokenId},
         Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxInput,
@@ -88,7 +89,8 @@ pub use wallet_types::{
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
 use wallet_types::{
-    seed_phrase::StoreSeedPhrase, wallet_type::WalletType, with_locked::WithLocked,
+    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, wallet_type::WalletType,
+    with_locked::WithLocked,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -661,19 +663,29 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &self,
         stx: SignedTransaction,
     ) -> Result<InspectTransaction, ControllerError<T>> {
-        let (fees, num_valid_signatures) =
-            match self.calculate_fees_and_valid_signatures(&stx).await {
-                Ok((fees, num_valid_signatures)) => (Some(fees), Some(num_valid_signatures)),
-                Err(_) => (None, None),
-            };
+        let (fees, signature_statuses) = match self.calculate_fees_and_valid_signatures(&stx).await
+        {
+            Ok((fees, num_valid_signatures)) => (Some(fees), Some(num_valid_signatures)),
+            Err(_) => (None, None),
+        };
 
         let num_inputs = stx.inputs().len();
         let total_signatures = stx.signatures().len();
-        let validated_signatures = num_valid_signatures.map(|num_valid_signatures| {
-            let num_invalid_signatures = total_signatures - num_valid_signatures;
+        let validated_signatures = signature_statuses.map(|signature_statuses| {
+            let num_invalid_signatures = signature_statuses
+                .iter()
+                .copied()
+                .filter(|x| *x == SignatureStatus::InvalidSignature)
+                .count();
+            let num_valid_signatures = signature_statuses
+                .iter()
+                .copied()
+                .filter(|x| *x == SignatureStatus::FullySigned)
+                .count();
             ValidatedSignatures {
                 num_valid_signatures,
                 num_invalid_signatures,
+                signature_statuses,
             }
         });
 
@@ -691,7 +703,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     async fn calculate_fees_and_valid_signatures(
         &self,
         stx: &SignedTransaction,
-    ) -> Result<(Balances, usize), ControllerError<T>> {
+    ) -> Result<(Balances, Vec<SignatureStatus>), ControllerError<T>> {
         let tasks: FuturesOrdered<_> =
             stx.inputs().iter().map(|input| self.fetch_opt_utxo(input)).collect();
         let input_utxos: Vec<Option<TxOutput>> = tasks.try_collect().await?;
@@ -710,25 +722,25 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             })
             .collect::<Result<Vec<_>, WalletError>>()
             .map_err(ControllerError::WalletError)?;
-        let num_valid_signatures = stx
+        let signature_statuses = stx
             .signatures()
             .iter()
             .enumerate()
             .zip(destinations)
-            .filter(|((input_num, w), d)| match (w, d) {
-                (InputWitness::NoSignature(_), None) => true,
-                (InputWitness::NoSignature(_), Some(_)) => false,
-                (InputWitness::Standard(_), None) => false,
+            .map(|((input_num, w), d)| match (w, d) {
+                (InputWitness::NoSignature(_), None) => SignatureStatus::FullySigned,
+                (InputWitness::NoSignature(_), Some(_)) => SignatureStatus::NotSigned,
+                (InputWitness::Standard(_), None) => SignatureStatus::InvalidSignature,
                 (InputWitness::Standard(sig), Some(dest)) => self.verify_tx_signature(
                     sig,
                     stx.transaction(),
                     &inputs_utxos_refs,
-                    *input_num,
-                    dest,
+                    input_num,
+                    &dest,
                 ),
             })
-            .count();
-        Ok((fees, num_valid_signatures))
+            .collect();
+        Ok((fees, signature_statuses))
     }
 
     async fn inspect_partial_tx(
@@ -738,39 +750,34 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let input_utxos: Vec<_> = ptx.input_utxos().iter().flatten().cloned().collect();
         let fees = self.get_fees(&input_utxos, ptx.tx().outputs()).await?;
         let inputs_utxos_refs: Vec<_> = ptx.input_utxos().iter().map(|out| out.as_ref()).collect();
-        let signatures_status: Vec<_> = ptx
+        let signature_statuses: Vec<_> = ptx
             .witnesses()
             .iter()
             .enumerate()
             .zip(ptx.destinations())
-            .filter_map(|((input_num, w), d)| match (w, d) {
-                (Some(InputWitness::NoSignature(_)), None) => Some(true),
-                (Some(InputWitness::NoSignature(_)), Some(_)) => Some(false),
-                (Some(InputWitness::Standard(_)), None) => None,
-                (Some(InputWitness::Standard(sig)), Some(dest)) => Some(self.verify_tx_signature(
-                    sig,
-                    ptx.tx(),
-                    &inputs_utxos_refs,
-                    input_num,
-                    dest,
-                )),
-                (None, _) => None,
+            .map(|((input_num, w), d)| match (w, d) {
+                (Some(InputWitness::NoSignature(_)), None) => SignatureStatus::FullySigned,
+                (Some(InputWitness::NoSignature(_)), Some(_)) => SignatureStatus::InvalidSignature,
+                (Some(InputWitness::Standard(_)), None) => SignatureStatus::UnknownSignature,
+                (Some(InputWitness::Standard(sig)), Some(dest)) => {
+                    self.verify_tx_signature(sig, ptx.tx(), &inputs_utxos_refs, input_num, dest)
+                }
+                (None, _) => SignatureStatus::NotSigned,
             })
             .collect();
-        let num_valid_signatures = signatures_status.iter().copied().filter(|x| *x).count();
-        let num_invalid_signatures = signatures_status.iter().copied().filter(|x| !*x).count();
         let num_inputs = ptx.count_inputs();
-        let total_signatures = num_valid_signatures + num_invalid_signatures;
+        let total_signatures = signature_statuses
+            .iter()
+            .copied()
+            .filter(|x| *x != SignatureStatus::NotSigned)
+            .count();
         Ok(InspectTransaction {
             tx: ptx.take_tx().into(),
             fees: Some(fees),
             stats: SignatureStats {
                 num_inputs,
                 total_signatures,
-                validated_signatures: Some(ValidatedSignatures {
-                    num_valid_signatures,
-                    num_invalid_signatures,
-                }),
+                validated_signatures: Some(ValidatedSignatures::new(signature_statuses)),
             },
         })
     }
@@ -796,10 +803,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             stats: SignatureStats {
                 num_inputs,
                 total_signatures: 0,
-                validated_signatures: Some(ValidatedSignatures {
-                    num_valid_signatures: 0,
-                    num_invalid_signatures: 0,
-                }),
+                validated_signatures: Some(ValidatedSignatures::new(vec![])),
             },
         })
     }
@@ -811,10 +815,25 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         inputs_utxos_refs: &[Option<&TxOutput>],
         input_num: usize,
         dest: &Destination,
-    ) -> bool {
-        signature_hash(sig.sighash_type(), tx, inputs_utxos_refs, input_num)
-            .and_then(|sighash| sig.verify_signature(&self.chain_config, dest, &sighash))
-            .is_ok()
+    ) -> SignatureStatus {
+        signature_hash(sig.sighash_type(), tx, inputs_utxos_refs, input_num).map_or(
+            SignatureStatus::InvalidSignature,
+            |sighash| {
+                let valid = sig.verify_signature(&self.chain_config, dest, &sighash);
+
+                match valid {
+                    Err(DestinationSigError::IncompleteClassicalMultisigSignature(
+                        required_signatures,
+                        num_signatures,
+                    )) => SignatureStatus::PartialMultisig {
+                        required_signatures,
+                        num_signatures,
+                    },
+                    Err(_) => SignatureStatus::InvalidSignature,
+                    Ok(_) => SignatureStatus::FullySigned,
+                }
+            },
+        )
     }
 
     pub async fn compose_transaction(

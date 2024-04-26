@@ -78,8 +78,8 @@ pub enum DestinationSigError {
     InvalidWitnessCount,
     #[error("Invalid classical multisig challenge")]
     InvalidClassicalMultisig(#[from] PartiallySignedMultisigStructureError),
-    #[error("Incomplete classical multisig signature(s)")]
-    IncompleteClassicalMultisigSignature,
+    #[error("Incomplete classical multisig , required {0} but have {1} signature(s)")]
+    IncompleteClassicalMultisigSignature(u8, u8),
     #[error("Invalid classical multisig signature(s)")]
     InvalidClassicalMultisigSignature,
     #[error("The hash provided does not match the hash in the witness")]

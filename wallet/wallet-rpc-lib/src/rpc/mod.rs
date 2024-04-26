@@ -68,8 +68,8 @@ use wallet_controller::{
     DEFAULT_ACCOUNT_INDEX,
 };
 use wallet_types::{
-    account_info::StandaloneAddressDetails, seed_phrase::StoreSeedPhrase, wallet_tx::TxData,
-    with_locked::WithLocked,
+    account_info::StandaloneAddressDetails, seed_phrase::StoreSeedPhrase,
+    signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked,
 };
 
 use crate::{service::CreatedWallet, WalletHandle, WalletRpcConfig};
@@ -748,7 +748,14 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         account_index: U31,
         raw_tx: RpcHexString,
         config: ControllerConfig,
-    ) -> WRpcResult<PartiallySignedTransaction, N> {
+    ) -> WRpcResult<
+        (
+            PartiallySignedTransaction,
+            Vec<SignatureStatus>,
+            Vec<SignatureStatus>,
+        ),
+        N,
+    > {
         let mut bytes = raw_tx.as_ref();
         let tx = Transaction::decode(&mut bytes).map_err(|_| RpcError::InvalidRawTransaction)?;
         let tx_to_sign = if bytes.is_empty() {

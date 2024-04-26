@@ -35,22 +35,23 @@ use wallet::{
     version::get_version,
 };
 use wallet_controller::{
-    types::{CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase, WalletInfo},
+    types::{CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcStandaloneAddresses, RpcTokenId,
-        StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
-        TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
+        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcInspectTransaction,
+        RpcStandaloneAddresses, RpcTokenId, StakePoolBalance, StakingStatus,
+        StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
+        VrfPublicKeyInfo,
     },
     RpcError, WalletRpc,
 };
 use wallet_types::{seed_phrase::StoreSeedPhrase, utxo_types::UtxoTypes, with_locked::WithLocked};
 
-use crate::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
+use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, WalletInterface};
 
 pub struct WalletRpcHandlesClient<N: Clone> {
     wallet_rpc: WalletRpc<N>,
@@ -481,11 +482,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
     async fn transaction_inspect(
         &self,
         transaction: String,
-    ) -> Result<InspectTransaction, Self::Error> {
+    ) -> Result<RpcInspectTransaction, Self::Error> {
         self.wallet_rpc
             .transaction_inspect(RpcHexString::from_str(&transaction)?)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
+            .map(Into::into)
     }
 
     async fn sign_challenge_hex(
@@ -1168,18 +1170,26 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
         account_index: U31,
         raw_tx: String,
         config: ControllerConfig,
-    ) -> Result<PartialOrSignedTx, Self::Error> {
+    ) -> Result<SignRawTransactionResult, Self::Error> {
         self.wallet_rpc
             .sign_raw_transaction(account_index, RpcHexString::from_str(&raw_tx)?, config)
             .await
-            .map(|ptx| {
-                if ptx.is_fully_signed(self.wallet_rpc.chain_config()) {
+            .map(|(ptx, prev_signatures, cur_signatures)| {
+                let tx = if ptx.is_fully_signed(self.wallet_rpc.chain_config()) {
                     PartialOrSignedTx::Signed(
                         ptx.into_signed_tx(self.wallet_rpc.chain_config())
                             .expect("already checked"),
                     )
                 } else {
                     PartialOrSignedTx::Partial(ptx)
+                };
+                let previous_signatures = prev_signatures.into_iter().map(Into::into).collect();
+                let current_signatures = cur_signatures.into_iter().map(Into::into).collect();
+
+                SignRawTransactionResult {
+                    transaction: tx,
+                    previous_signatures,
+                    current_signatures,
                 }
             })
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
