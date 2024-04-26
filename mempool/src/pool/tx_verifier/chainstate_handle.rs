@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use chainstate::{
     chainstate_interface::ChainstateInterface,
     tx_verifier::{
-        transaction_verifier::{CachedPoSBlockUndo, CachedTokensBlockUndo, CachedUtxosBlockUndo},
+        transaction_verifier::{CachedBlockUndo, CachedTokensBlockUndo, CachedUtxosBlockUndo},
         TransactionSource, TransactionVerifierStorageRef,
     },
     ChainstateError,
@@ -31,7 +31,7 @@ use common::{
     },
     primitives::{Amount, Id},
 };
-use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
+use pos_accounting::{DelegationData, PoSAccountingUndo, PoSAccountingView, PoolData};
 use subsystem::blocking::BlockingHandle;
 use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingView};
 use utils::shallow_clone::ShallowClone;
@@ -222,7 +222,7 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
     fn get_pos_accounting_undo(
         &self,
         _source: TransactionSource,
-    ) -> Result<Option<CachedPoSBlockUndo>, Error> {
+    ) -> Result<Option<CachedBlockUndo<PoSAccountingUndo>>, Error> {
         Ok(None)
     }
 

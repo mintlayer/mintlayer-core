@@ -23,6 +23,8 @@ use common::{chain::Transaction, primitives::Id};
 mod cached_block_undo;
 pub use cached_block_undo::CachedBlockUndo;
 
+pub type CachedBlockUndoOp<T> = CachedOperation<CachedBlockUndo<T>>;
+
 #[derive(Debug, Eq, PartialEq)]
 pub struct AccountingBlockUndoCache<T> {
     data: BTreeMap<TransactionSource, CachedOperation<CachedBlockUndo<T>>>,

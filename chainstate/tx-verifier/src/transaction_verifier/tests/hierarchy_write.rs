@@ -19,13 +19,14 @@ use crate::transaction_verifier::{
 };
 
 use super::*;
+use accounting::TxUndo;
 use common::chain::{
     config::Builder as ConfigBuilder,
     tokens::{IsTokenFreezable, IsTokenFrozen, TokenAuxiliaryData, TokenId, TokenTotalSupply},
     DelegationId,
 };
 use mockall::predicate::eq;
-use pos_accounting::{DeltaMergeUndo, TxUndo};
+use pos_accounting::DeltaMergeUndo;
 use rstest::rstest;
 use test_utils::random::Seed;
 use tokens_accounting::{FungibleTokenData, TokensAccountingDeltaUndoData};
@@ -770,7 +771,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_1),
                 tx_id,
-                TxUndo::new(vec![undo]),
+                TxUndo::<PoSAccountingUndo>::new(vec![undo]),
             )
             .unwrap();
         verifier
@@ -791,7 +792,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_2),
                 tx_id,
-                TxUndo::new(vec![undo_pool]),
+                TxUndo::<PoSAccountingUndo>::new(vec![undo_pool]),
             )
             .unwrap();
         verifier
@@ -876,7 +877,7 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_1),
                 tx_id,
-                TxUndo::new(vec![undo]),
+                TxUndo::<PoSAccountingUndo>::new(vec![undo]),
             )
             .unwrap();
         verifier
@@ -896,7 +897,7 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_2),
                 tx_id,
-                TxUndo::new(vec![undo_pool]),
+                TxUndo::<PoSAccountingUndo>::new(vec![undo_pool]),
             )
             .unwrap();
         verifier
@@ -917,7 +918,7 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_1),
                 tx_id,
-                TxUndo::new(vec![undo_delegation]),
+                TxUndo::<PoSAccountingUndo>::new(vec![undo_delegation]),
             )
             .unwrap();
         verifier
@@ -973,9 +974,9 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
         let mut verifier = TransactionVerifier::new(&store, &chain_config);
 
         verifier.pos_accounting_block_undo =
-            PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                CachedPoSBlockUndoOp::Erase,
+                CachedBlockUndoOp::Erase,
             )]));
         verifier
     };
@@ -984,9 +985,9 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
         let mut verifier = verifier1.derive_child();
 
         verifier.pos_accounting_block_undo =
-            PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                CachedPoSBlockUndoOp::Erase,
+                CachedBlockUndoOp::Erase,
             )]));
         verifier
     };

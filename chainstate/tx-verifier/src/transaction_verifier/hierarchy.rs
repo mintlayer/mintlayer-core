@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 
 use super::{
-    pos_accounting_undo_cache::CachedPoSBlockUndo,
+    accounting_undo_cache::CachedBlockUndo,
     storage::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
@@ -36,7 +36,7 @@ use common::{
 };
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
-    PoSAccountingView, PoolData,
+    PoSAccountingUndo, PoSAccountingView, PoolData,
 };
 use tokens_accounting::{
     FlushableTokensAccountingView, TokensAccountingDeltaData, TokensAccountingDeltaUndoData,
@@ -104,7 +104,10 @@ where
     fn get_pos_accounting_undo(
         &self,
         tx_source: TransactionSource,
-    ) -> Result<Option<CachedPoSBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
+    ) -> Result<
+        Option<CachedBlockUndo<PoSAccountingUndo>>,
+        <Self as TransactionVerifierStorageRef>::Error,
+    > {
         match self.pos_accounting_block_undo.data().get(&tx_source) {
             Some(op) => Ok(op.get().cloned()),
             None => self.storage.get_pos_accounting_undo(tx_source),
@@ -221,7 +224,7 @@ where
     fn set_pos_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &CachedPoSBlockUndo,
+        new_undo: &CachedBlockUndo<PoSAccountingUndo>,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.pos_accounting_block_undo
             .set_undo_data(tx_source, new_undo)

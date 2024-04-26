@@ -36,6 +36,7 @@ use common::{
 };
 use pos_accounting::{
     DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead, PoSAccountingStorageWrite,
+    PoSAccountingUndo,
 };
 use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
 use utxo::{UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
@@ -124,7 +125,7 @@ pub trait BlockchainStorageRead:
     fn get_pos_accounting_undo(
         &self,
         id: Id<Block>,
-    ) -> crate::Result<Option<pos_accounting::BlockUndo>>;
+    ) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
 
     /// Get accounting delta for specific epoch
     fn get_accounting_epoch_delta(
@@ -227,7 +228,7 @@ pub trait BlockchainStorageWrite:
     fn set_pos_accounting_undo_data(
         &mut self,
         id: Id<Block>,
-        undo: &pos_accounting::BlockUndo,
+        undo: &accounting::BlockUndo<PoSAccountingUndo>,
     ) -> Result<()>;
 
     /// Remove accounting block undo data for specific block

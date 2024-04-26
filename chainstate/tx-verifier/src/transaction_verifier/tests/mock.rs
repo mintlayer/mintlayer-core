@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use crate::transaction_verifier::TransactionSource;
 
 use super::{
-    pos_accounting_undo_cache::CachedPoSBlockUndo,
+    accounting_undo_cache::CachedBlockUndo,
     storage::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
@@ -35,8 +35,7 @@ use common::{
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
-    PoSAccountingView, PoolData,
+    DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingUndo, PoSAccountingView, PoolData
 };
 use tokens_accounting::{
     FlushableTokensAccountingView, TokenData, TokensAccountingDeltaData,
@@ -70,7 +69,7 @@ mockall::mock! {
         fn get_pos_accounting_undo(
             &self,
             tx_source: TransactionSource,
-        ) -> Result<Option<CachedPoSBlockUndo>, TransactionVerifierStorageError>;
+        ) -> Result<Option<CachedBlockUndo<PoSAccountingUndo>>, TransactionVerifierStorageError>;
 
         fn get_tokens_accounting_undo(
             &self,
@@ -112,7 +111,7 @@ mockall::mock! {
         fn set_pos_accounting_undo_data(
             &mut self,
             tx_source: TransactionSource,
-            undo: &CachedPoSBlockUndo,
+            undo: &CachedBlockUndo<PoSAccountingUndo>,
         ) -> Result<(), TransactionVerifierStorageError>;
 
         fn del_pos_accounting_undo_data(

@@ -1197,6 +1197,7 @@ dependencies = [
 name = "chainstate-storage"
 version = "0.4.2"
 dependencies = [
+ "accounting",
  "chainstate-types",
  "common",
  "crypto",

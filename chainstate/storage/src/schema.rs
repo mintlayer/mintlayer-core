@@ -25,7 +25,9 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id},
 };
-use pos_accounting::{DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoolData};
+use pos_accounting::{
+    DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingUndo, PoolData,
+};
 use utxo::{Utxo, UtxosBlockUndo};
 
 storage::decl_schema! {
@@ -57,7 +59,7 @@ storage::decl_schema! {
         pub DBTokensAccountingBlockUndo: Map<Id<Block>, tokens_accounting::BlockUndo>,
 
         /// Store for accounting BlockUndo
-        pub DBAccountingBlockUndo: Map<Id<Block>, pos_accounting::BlockUndo>,
+        pub DBAccountingBlockUndo: Map<Id<Block>, accounting::BlockUndo<PoSAccountingUndo>>,
         /// Store for accounting deltas per epoch
         pub DBAccountingEpochDelta: Map<EpochIndex, PoSAccountingDeltaData>,
         /// Store for accounting undo deltas per epoch
