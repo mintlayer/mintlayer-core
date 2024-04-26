@@ -31,7 +31,9 @@ use common::{
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingUndo, PoolData,
 };
-use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
+use tokens_accounting::{
+    TokenAccountingUndo, TokensAccountingStorageRead, TokensAccountingStorageWrite,
+};
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
 use super::mock_impl_accounting::{
@@ -72,7 +74,7 @@ mockall::mock! {
         fn get_tokens_accounting_undo(
             &self,
             id: Id<Block>,
-        ) -> crate::Result<Option<tokens_accounting::BlockUndo>>;
+        ) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
 
         fn get_block_tree_by_height(
             &self,
@@ -189,7 +191,7 @@ mockall::mock! {
         fn set_tokens_accounting_undo_data(
             &mut self,
             id: Id<Block>,
-            undo: &tokens_accounting::BlockUndo,
+            undo: &accounting::BlockUndo<TokenAccountingUndo>,
         ) -> crate::Result<()>;
         fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
@@ -347,7 +349,7 @@ mockall::mock! {
             start_from: BlockHeight,
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
-        fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<tokens_accounting::BlockUndo>>;
+        fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
 
         fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
 
@@ -460,7 +462,7 @@ mockall::mock! {
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
-        fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<tokens_accounting::BlockUndo>>;
+        fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
         fn get_block_tree_by_height(
             &self,
             start_from: BlockHeight,
@@ -576,7 +578,7 @@ mockall::mock! {
         fn set_tokens_accounting_undo_data(
             &mut self,
             id: Id<Block>,
-            undo: &tokens_accounting::BlockUndo,
+            undo: &accounting::BlockUndo<TokenAccountingUndo>,
         ) -> crate::Result<()>;
         fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 

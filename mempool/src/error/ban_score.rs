@@ -179,7 +179,6 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 0,
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
-            ConnectTransactionError::TokensAccountingBlockUndoError(_) => 0,
             ConnectTransactionError::AttemptToSpendFrozenToken(_) => 0,
         }
     }
@@ -218,7 +217,6 @@ impl MempoolBanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::UtxoBlockUndoError(_) => 0,
             TransactionVerifierStorageError::DuplicateBlockUndo(_) => 0,
             TransactionVerifierStorageError::AccountingBlockUndoError(_) => 0,
-            TransactionVerifierStorageError::TokensAccountingBlockUndoError(_) => 0,
         }
     }
 }

@@ -29,7 +29,7 @@ use pos_accounting::{
     DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageWrite,
     PoSAccountingUndo, PoolData,
 };
-use tokens_accounting::TokensAccountingStorageWrite;
+use tokens_accounting::{TokenAccountingUndo, TokensAccountingStorageWrite};
 use utils::log_error;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageWrite};
 
@@ -137,7 +137,7 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     fn set_tokens_accounting_undo_data(
         &mut self,
         id: Id<Block>,
-        undo: &tokens_accounting::BlockUndo,
+        undo: &accounting::BlockUndo<TokenAccountingUndo>,
     ) -> crate::Result<()> {
         self.write::<db::DBTokensAccountingBlockUndo, _, _, _>(id, undo)
     }

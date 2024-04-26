@@ -32,7 +32,7 @@ mod tx_source;
 use accounting::BlockRewardUndo;
 use constraints_value_accumulator::AccumulatedFee;
 use tokens_accounting::{
-    TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
+    TokenAccountingUndo, TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
     TokensAccountingOperations, TokensAccountingStorageRead, TokensAccountingView,
 };
 pub use tx_source::{TransactionSource, TransactionSourceForConnect};
@@ -42,11 +42,6 @@ pub use cached_operation::CachedOperation;
 
 mod accounting_undo_cache;
 pub use accounting_undo_cache::CachedBlockUndo;
-
-mod pos_accounting_undo_cache;
-
-mod tokens_accounting_undo_cache;
-pub use tokens_accounting_undo_cache::CachedTokensBlockUndo;
 
 mod utxos_undo_cache;
 pub use utxos_undo_cache::CachedUtxosBlockUndo;
@@ -62,7 +57,6 @@ use self::{
     signature_destination_getter::SignatureDestinationGetter,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
-    tokens_accounting_undo_cache::{CachedTokensBlockUndoOp, TokensAccountingBlockUndoCache},
     utxos_undo_cache::{CachedUtxoBlockUndoOp, UtxosBlockUndoCache},
 };
 use ::utils::{ensure, shallow_clone::ShallowClone};
@@ -98,7 +92,8 @@ pub struct TransactionVerifierDelta {
     pos_accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
     tokens_accounting_delta: TokensAccountingDeltaData,
-    tokens_accounting_delta_undo: BTreeMap<TransactionSource, CachedTokensBlockUndoOp>,
+    tokens_accounting_delta_undo:
+        BTreeMap<TransactionSource, CachedBlockUndoOp<TokenAccountingUndo>>,
 }
 
 impl TransactionVerifierDelta {
@@ -122,7 +117,7 @@ pub struct TransactionVerifier<C, S, U, A, T> {
     pos_accounting_block_undo: AccountingBlockUndoCache<PoSAccountingUndo>,
 
     tokens_accounting_cache: TokensAccountingCache<T>,
-    tokens_accounting_block_undo: TokensAccountingBlockUndoCache,
+    tokens_accounting_block_undo: AccountingBlockUndoCache<TokenAccountingUndo>,
 
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
 }
@@ -149,7 +144,7 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone>
             pos_accounting_adapter: accounting_delta_adapter,
             pos_accounting_block_undo: AccountingBlockUndoCache::<PoSAccountingUndo>::new(),
             tokens_accounting_cache,
-            tokens_accounting_block_undo: TokensAccountingBlockUndoCache::new(),
+            tokens_accounting_block_undo: AccountingBlockUndoCache::<TokenAccountingUndo>::new(),
             account_nonce: BTreeMap::new(),
         }
     }
@@ -185,7 +180,7 @@ where
             pos_accounting_adapter: PoSAccountingDeltaAdapter::new(accounting),
             pos_accounting_block_undo: AccountingBlockUndoCache::<PoSAccountingUndo>::new(),
             tokens_accounting_cache: TokensAccountingCache::new(tokens_accounting),
-            tokens_accounting_block_undo: TokensAccountingBlockUndoCache::new(),
+            tokens_accounting_block_undo: AccountingBlockUndoCache::<TokenAccountingUndo>::new(),
             account_nonce: BTreeMap::new(),
         }
     }
@@ -220,7 +215,7 @@ where
             ),
             pos_accounting_block_undo: AccountingBlockUndoCache::<PoSAccountingUndo>::new(),
             tokens_accounting_cache: TokensAccountingCache::new(&self.tokens_accounting_cache),
-            tokens_accounting_block_undo: TokensAccountingBlockUndoCache::new(),
+            tokens_accounting_block_undo: AccountingBlockUndoCache::<TokenAccountingUndo>::new(),
             best_block: self.best_block,
             account_nonce: BTreeMap::new(),
         }
@@ -631,7 +626,7 @@ where
             self.tokens_accounting_block_undo.add_tx_undo(
                 TransactionSource::from(tx_source),
                 tx.get_id(),
-                tokens_accounting::TxUndo::new(tx_undos),
+                accounting::TxUndo::new(tx_undos),
             )?;
         }
 

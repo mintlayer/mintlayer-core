@@ -747,16 +747,16 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
         let undo_mint = verifier.tokens_accounting_cache.mint_tokens(token_id_1, supply1).unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo = CachedTokensBlockUndo::new(BTreeMap::from([(
-            tx_id,
-            tokens_accounting::TxUndo::new(vec![undo_issue, undo_mint]),
-        )]))
+        let block_undo = CachedBlockUndo::new(
+            None,
+            BTreeMap::from([(tx_id, accounting::TxUndo::new(vec![undo_issue, undo_mint]))]),
+        )
         .unwrap();
 
         verifier.tokens_accounting_block_undo =
-            TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                CachedTokensBlockUndoOp::Write(block_undo),
+                CachedBlockUndoOp::Write(block_undo),
             )]));
         verifier
     };
@@ -770,16 +770,16 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
         let undo_mint = verifier.tokens_accounting_cache.mint_tokens(token_id_2, supply2).unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo = CachedTokensBlockUndo::new(BTreeMap::from([(
-            tx_id,
-            tokens_accounting::TxUndo::new(vec![undo_issue, undo_mint]),
-        )]))
+        let block_undo = CachedBlockUndo::new(
+            None,
+            BTreeMap::from([(tx_id, accounting::TxUndo::new(vec![undo_issue, undo_mint]))]),
+        )
         .unwrap();
 
         verifier.tokens_accounting_block_undo =
-            TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                CachedTokensBlockUndoOp::Write(block_undo),
+                CachedBlockUndoOp::Write(block_undo),
             )]));
         verifier
     };

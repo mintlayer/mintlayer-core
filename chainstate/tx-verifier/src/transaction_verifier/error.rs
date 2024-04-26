@@ -140,8 +140,6 @@ pub enum ConnectTransactionError {
     ConstrainedValueAccumulatorError(constraints_value_accumulator::Error, OutPointSourceId),
     #[error("Tokens accounting error: {0}")]
     TokensAccountingError(#[from] tokens_accounting::Error),
-    #[error("Tokens accounting BlockUndo error: {0}")]
-    TokensAccountingBlockUndoError(#[from] tokens_accounting::BlockUndoError),
     #[error("Total fee required overflow")]
     TotalFeeRequiredOverflow,
     #[error("Insufficient coins fee provided in a transaction: {0:?} actual, {1:?} required")]

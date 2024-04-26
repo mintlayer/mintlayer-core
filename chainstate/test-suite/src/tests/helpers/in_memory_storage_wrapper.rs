@@ -32,9 +32,9 @@ use common::{
 use pos_accounting::{
     DelegationData, PoSAccountingDB, PoSAccountingUndo, PoSAccountingView, PoolData,
 };
-use tokens_accounting::TokensAccountingStorageRead;
+use tokens_accounting::{TokenAccountingUndo, TokensAccountingStorageRead};
 use tx_verifier::{
-    transaction_verifier::{CachedBlockUndo, CachedTokensBlockUndo, CachedUtxosBlockUndo},
+    transaction_verifier::{CachedBlockUndo, CachedUtxosBlockUndo},
     TransactionSource,
 };
 use utxo::UtxosStorageRead;
@@ -145,7 +145,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
     fn get_tokens_accounting_undo(
         &self,
         tx_source: TransactionSource,
-    ) -> Result<Option<CachedTokensBlockUndo>, TransactionVerifierStorageError> {
+    ) -> Result<Option<CachedBlockUndo<TokenAccountingUndo>>, TransactionVerifierStorageError> {
         match tx_source {
             TransactionSource::Chain(id) => {
                 let undo = self
@@ -153,7 +153,7 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
                     .transaction_ro()
                     .unwrap()
                     .get_tokens_accounting_undo(id)?
-                    .map(CachedTokensBlockUndo::from_block_undo);
+                    .map(CachedBlockUndo::from_block_undo);
                 Ok(undo)
             }
             TransactionSource::Mempool => Ok(None),

@@ -23,7 +23,6 @@ use super::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
     },
-    tokens_accounting_undo_cache::CachedTokensBlockUndo,
     CachedUtxosBlockUndo,
 };
 use chainstate_types::{storage_result, GenBlockIndex};
@@ -35,11 +34,11 @@ use common::{
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingUndo, PoSAccountingView, PoolData
+    DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
+    PoSAccountingUndo, PoSAccountingView, PoolData,
 };
 use tokens_accounting::{
-    FlushableTokensAccountingView, TokenData, TokensAccountingDeltaData,
-    TokensAccountingDeltaUndoData, TokensAccountingStorageRead,
+    FlushableTokensAccountingView, TokenAccountingUndo, TokenData, TokensAccountingDeltaData, TokensAccountingDeltaUndoData, TokensAccountingStorageRead
 };
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead};
 
@@ -74,7 +73,7 @@ mockall::mock! {
         fn get_tokens_accounting_undo(
             &self,
             tx_source: TransactionSource,
-        ) -> Result<Option<CachedTokensBlockUndo>, TransactionVerifierStorageError>;
+        ) -> Result<Option<CachedBlockUndo<TokenAccountingUndo>>, TransactionVerifierStorageError>;
 
         fn get_account_nonce_count(
             &self,
@@ -138,7 +137,7 @@ mockall::mock! {
         fn set_tokens_accounting_undo_data(
             &mut self,
             tx_source: TransactionSource,
-            undo: &CachedTokensBlockUndo,
+            undo: &CachedBlockUndo<TokenAccountingUndo>,
         ) -> Result<(), TransactionVerifierStorageError>;
 
         fn del_tokens_accounting_undo_data(

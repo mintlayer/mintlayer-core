@@ -304,7 +304,6 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             ConnectTransactionError::OutputTimelockError(err) => err.classify(),
             ConnectTransactionError::SpendStakeError(err) => err.classify(),
             ConnectTransactionError::TokensAccountingError(err) => err.classify(),
-            ConnectTransactionError::TokensAccountingBlockUndoError(err) => err.classify(),
             ConnectTransactionError::RewardDistributionError(err) => err.classify(),
             ConnectTransactionError::CheckTransactionError(err) => err.classify(),
             ConnectTransactionError::PoSAccountingError(err) => err.classify(),
@@ -398,7 +397,6 @@ impl BlockProcessingErrorClassification for TransactionVerifierStorageError {
             TransactionVerifierStorageError::PoSAccountingError(err) => err.classify(),
             TransactionVerifierStorageError::AccountingBlockUndoError(err) => err.classify(),
             TransactionVerifierStorageError::TokensAccountingError(err) => err.classify(),
-            TransactionVerifierStorageError::TokensAccountingBlockUndoError(err) => err.classify(),
         }
     }
 }

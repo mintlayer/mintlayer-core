@@ -33,7 +33,7 @@ use pos_accounting::{
 };
 use serialization::{Decode, Encode};
 use storage::MakeMapRef;
-use tokens_accounting::TokensAccountingStorageRead;
+use tokens_accounting::{TokenAccountingUndo, TokensAccountingStorageRead};
 use utils::log_error;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead};
 
@@ -164,7 +164,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
     fn get_tokens_accounting_undo(
         &self,
         id: Id<Block>,
-    ) -> crate::Result<Option<tokens_accounting::BlockUndo>> {
+    ) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>> {
         self.read::<db::DBTokensAccountingBlockUndo, _, _>(&id)
     }
 
@@ -445,7 +445,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     fn get_tokens_accounting_undo(
         &self,
         id: Id<Block>,
-    ) -> crate::Result<Option<tokens_accounting::BlockUndo>> {
+    ) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>> {
         self.read::<db::DBTokensAccountingBlockUndo, _, _>(&id)
     }
 

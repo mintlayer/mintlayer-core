@@ -22,7 +22,6 @@ use super::{
         TransactionVerifierStorageRef,
     },
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
-    tokens_accounting_undo_cache::CachedTokensBlockUndo,
     utxos_undo_cache::CachedUtxosBlockUndo,
     CachedOperation, TransactionSource, TransactionVerifier,
 };
@@ -39,8 +38,8 @@ use pos_accounting::{
     PoSAccountingUndo, PoSAccountingView, PoolData,
 };
 use tokens_accounting::{
-    FlushableTokensAccountingView, TokensAccountingDeltaData, TokensAccountingDeltaUndoData,
-    TokensAccountingStorageRead, TokensAccountingView,
+    FlushableTokensAccountingView, TokenAccountingUndo, TokensAccountingDeltaData,
+    TokensAccountingDeltaUndoData, TokensAccountingStorageRead, TokensAccountingView,
 };
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosStorageRead, UtxosView};
 
@@ -117,7 +116,10 @@ where
     fn get_tokens_accounting_undo(
         &self,
         tx_source: TransactionSource,
-    ) -> Result<Option<CachedTokensBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
+    ) -> Result<
+        Option<CachedBlockUndo<TokenAccountingUndo>>,
+        <Self as TransactionVerifierStorageRef>::Error,
+    > {
         match self.tokens_accounting_block_undo.data().get(&tx_source) {
             Some(op) => Ok(op.get().cloned()),
             None => self.storage.get_tokens_accounting_undo(tx_source),
@@ -271,11 +273,11 @@ where
     fn set_tokens_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        new_undo: &CachedTokensBlockUndo,
+        new_undo: &CachedBlockUndo<TokenAccountingUndo>,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.tokens_accounting_block_undo
             .set_undo_data(tx_source, new_undo)
-            .map_err(|e| TransactionVerifierStorageError::TokensAccountingBlockUndoError(e).into())
+            .map_err(|e| TransactionVerifierStorageError::AccountingBlockUndoError(e).into())
     }
 
     fn del_tokens_accounting_undo_data(
@@ -284,7 +286,7 @@ where
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.tokens_accounting_block_undo
             .del_undo_data(tx_source)
-            .map_err(|e| TransactionVerifierStorageError::TokensAccountingBlockUndoError(e).into())
+            .map_err(|e| TransactionVerifierStorageError::AccountingBlockUndoError(e).into())
     }
 }
 

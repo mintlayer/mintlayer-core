@@ -1204,7 +1204,7 @@ fn tokens_v1_set_hierarchy(#[case] seed: Seed) {
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_1),
                 tx_id_1,
-                tokens_accounting::TxUndo::new(vec![undo_issue, undo_mint]),
+                accounting::TxUndo::new(vec![undo_issue, undo_mint]),
             )
             .unwrap();
         verifier
@@ -1223,7 +1223,7 @@ fn tokens_v1_set_hierarchy(#[case] seed: Seed) {
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_2),
                 tx_id_2,
-                tokens_accounting::TxUndo::new(vec![undo_issue, undo_mint]),
+                accounting::TxUndo::new(vec![undo_issue, undo_mint]),
             )
             .unwrap();
         verifier
@@ -1316,7 +1316,7 @@ fn tokens_v1_set_issue_and_lock_undo_hierarchy(#[case] seed: Seed) {
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_1),
                 tx_id,
-                tokens_accounting::TxUndo::new(vec![undo_issue]),
+                accounting::TxUndo::new(vec![undo_issue]),
             )
             .unwrap();
         verifier
@@ -1335,7 +1335,7 @@ fn tokens_v1_set_issue_and_lock_undo_hierarchy(#[case] seed: Seed) {
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_2),
                 tx_id,
-                tokens_accounting::TxUndo::new(vec![undo_issue]),
+                accounting::TxUndo::new(vec![undo_issue]),
             )
             .unwrap();
         verifier
@@ -1352,7 +1352,7 @@ fn tokens_v1_set_issue_and_lock_undo_hierarchy(#[case] seed: Seed) {
             .add_tx_undo(
                 TransactionSource::Chain(block_undo_id_1),
                 tx_id,
-                tokens_accounting::TxUndo::new(vec![undo_lock]),
+                accounting::TxUndo::new(vec![undo_lock]),
             )
             .unwrap();
         verifier
@@ -1408,9 +1408,9 @@ fn tokens_v1_del_undo_hierarchy(#[case] seed: Seed) {
         let mut verifier = TransactionVerifier::new(&store, &chain_config);
 
         verifier.tokens_accounting_block_undo =
-            TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                CachedTokensBlockUndoOp::Erase,
+                CachedBlockUndoOp::Erase,
             )]));
         verifier
     };
@@ -1419,9 +1419,9 @@ fn tokens_v1_del_undo_hierarchy(#[case] seed: Seed) {
         let mut verifier = verifier1.derive_child();
 
         verifier.tokens_accounting_block_undo =
-            TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                CachedTokensBlockUndoOp::Erase,
+                CachedBlockUndoOp::Erase,
             )]));
         verifier
     };
