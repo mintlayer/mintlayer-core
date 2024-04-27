@@ -106,7 +106,7 @@ impl MintScript {
                 Some(MintScript::CheckSig(
                     sighash,
                     witness.clone(),
-                    pos_data.staker().clone(),
+                    pos_data.decommission_key().clone(),
                 ))
             }
             // TODO(PR): Complete this
