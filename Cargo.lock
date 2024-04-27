@@ -4202,6 +4202,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mintscript"
+version = "0.4.2"
+dependencies = [
+ "common",
+ "thiserror",
+ "utils",
+]
+
+[[package]]
 name = "mio"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
