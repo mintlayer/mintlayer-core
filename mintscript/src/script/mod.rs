@@ -81,14 +81,14 @@ impl MintScript {
         input_num: usize,
     ) -> Option<MintScript> {
         match input_utxo {
-            TxOutput::Transfer(_, dest) => {
+            TxOutput::Transfer(_val, dest) => {
                 let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
                 let sighash =
                     signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
 
                 Some(MintScript::CheckSig(sighash, witness.clone(), dest))
             }
-            TxOutput::LockThenTransfer(_, dest, tl) => {
+            TxOutput::LockThenTransfer(_val, dest, tl) => {
                 let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
                 let sighash =
                     signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
@@ -98,15 +98,25 @@ impl MintScript {
                     MintScript::CheckTimelock(tl).into(),
                 ))
             }
+            TxOutput::CreateStakePool(_id, pos_data) => {
+                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
+                let sighash =
+                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
+
+                Some(MintScript::CheckSig(
+                    sighash,
+                    witness.clone(),
+                    pos_data.staker().clone(),
+                ))
+            }
             // TODO(PR): Complete this
-            TxOutput::Burn(_) => None,
-            TxOutput::CreateStakePool(_, _) => None,
             TxOutput::ProduceBlockFromStake(_, _) => None,
             TxOutput::CreateDelegationId(_, _) => None,
             TxOutput::DelegateStaking(_, _) => None,
             TxOutput::IssueFungibleToken(_) => None,
             TxOutput::IssueNft(_, _, _) => None,
             TxOutput::DataDeposit(_) => None,
+            TxOutput::Burn(_) => None,
         }
     }
 }
