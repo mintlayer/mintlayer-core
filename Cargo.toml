@@ -28,7 +28,8 @@ members = [
   "logging",                            # Logging engine and its interfaces.
   "mempool",                            # Mempool interface and implementation.
   "mempool/types",                      # Common mempool types.
-  "mocks",                              # Mock implementations of our traits (used for testing)
+  "mintscript",                         # Basic scripting language for validating transactions.
+  "mocks",                              # Mock implementations of our traits (used for testing).
   "node-daemon",                        # Node terminal binary.
   "networking",                         # Pure networking implementations
   "node-gui",                           # Node GUI binary.
@@ -75,7 +76,7 @@ members = [
   "wallet/wallet-rpc-lib",              # Wallet RPC definitions library.
   "wallet/wallet-test-node",            # Node for wallet testing as a library.
   "wasm-wrappers",                      # WASM wrappers for various components.
-  "wasm-wrappers/wasm-doc-gen",         # WASM wrappers documentation generator.
+  "wasm-wrappers/wasm-doc-gen", "mintscript",         # WASM wrappers documentation generator.
 ]
 
 default-members = [
