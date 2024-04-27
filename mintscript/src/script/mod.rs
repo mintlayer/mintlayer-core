@@ -35,8 +35,7 @@ use crate::{
 #[derive(Debug)]
 pub enum MintScript {
     Bool(bool),
-    And(Box<MintScript>, Box<MintScript>),
-    Or(Box<MintScript>, Box<MintScript>),
+    Threshold(usize, Vec<MintScript>),
     CheckSig(H256, StandardInputSignature, Destination),
     CheckTimelock(OutputTimeLock),
 }
@@ -50,12 +49,16 @@ impl MintScript {
     ) -> Option<bool> {
         match self {
             MintScript::Bool(b) => Some(*b),
-            MintScript::And(v1, v2) => v1
-                .try_into_bool(chain_config, source_block_info, blockchain_state)
-                .and(v2.try_into_bool(chain_config, source_block_info, blockchain_state)),
-            MintScript::Or(v1, v2) => v1
-                .try_into_bool(chain_config, source_block_info, blockchain_state)
-                .or(v2.try_into_bool(chain_config, source_block_info, blockchain_state)),
+            MintScript::Threshold(count, v) => Some(
+                v.iter()
+                    .map(|el| {
+                        el.try_into_bool(chain_config, source_block_info, blockchain_state)
+                            .unwrap_or(false)
+                    })
+                    .filter(|v| *v)
+                    .count()
+                    >= *count,
+            ),
             MintScript::CheckSig(sighash, sig, d) => {
                 Some(sig.verify_signature(chain_config, d, sighash).ok().is_some())
             }
@@ -93,9 +96,12 @@ impl MintScript {
                 let sighash =
                     signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
 
-                Some(MintScript::And(
-                    MintScript::CheckSig(sighash, witness.clone(), dest).into(),
-                    MintScript::CheckTimelock(tl).into(),
+                Some(MintScript::Threshold(
+                    2,
+                    vec![
+                        MintScript::CheckSig(sighash, witness.clone(), dest),
+                        MintScript::CheckTimelock(tl),
+                    ],
                 ))
             }
             TxOutput::CreateStakePool(_id, pos_data) => {
