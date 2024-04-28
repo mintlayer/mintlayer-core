@@ -4897,6 +4897,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "orders-accounting"
+version = "0.5.1"
+dependencies = [
+ "accounting",
+ "chainstate-types",
+ "common",
+ "crypto",
+ "parity-scale-codec",
+ "randomness",
+ "rstest",
+ "serialization",
+ "test-utils",
+ "thiserror",
+ "utils",
+ "variant_count",
+]
+
+[[package]]
 name = "ouroboros"
 version = "0.18.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

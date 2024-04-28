@@ -22,6 +22,7 @@ pub mod tokens;
 pub mod transaction;
 
 mod coin_unit;
+mod order_id;
 mod pos;
 mod pow;
 mod upgrades;
@@ -34,6 +35,7 @@ pub use coin_unit::CoinUnit;
 pub use config::ChainConfig;
 pub use gen_block::{GenBlock, GenBlockId};
 pub use genesis::Genesis;
+pub use order_id::OrderId;
 pub use pos::{
     config::PoSChainConfig, config_builder::PoSChainConfigBuilder, get_initial_randomness,
     pos_initial_difficulty, DelegationId, PoSConsensusVersion, PoolId,

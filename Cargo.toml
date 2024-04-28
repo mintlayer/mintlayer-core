@@ -34,6 +34,7 @@ members = [
   "networking",                         # Pure networking implementations
   "node-gui",                           # Node GUI binary.
   "node-lib",                           # Node lib; the common library between daemon, tui and gui node executables.
+  "orders-accounting",                  # Orders accounting
   "p2p",                                # P2p communication interfaces and protocols.
   "p2p/backend-test-suite",             # P2p backend agnostic tests.
   "p2p/types",                          # P2p support types with minimal dependencies.
