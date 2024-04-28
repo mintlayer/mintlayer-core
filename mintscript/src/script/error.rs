@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::{DelegationId, PoolId};
+
 use super::MintScript;
 
 // TODO(PR): more info in errors
@@ -28,4 +30,8 @@ pub enum Error {
     BlockHeightArithmeticError,
     #[error("Block timestamp arithmetic error")]
     BlockTimestampArithmeticError,
+    #[error("Pool data not found for signature verification {0}")]
+    PoolDataNotFound(PoolId),
+    #[error("Delegation data not found for signature verification {0}")]
+    DelegationDataNotFound(DelegationId),
 }

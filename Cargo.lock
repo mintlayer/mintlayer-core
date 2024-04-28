@@ -4265,8 +4265,10 @@ name = "mintscript"
 version = "0.4.2"
 dependencies = [
  "common",
+ "pos-accounting",
  "thiserror",
  "utils",
+ "utxo",
 ]
 
 [[package]]

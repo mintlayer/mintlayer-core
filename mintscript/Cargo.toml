@@ -9,6 +9,8 @@ license.workspace = true
 
 [dependencies]
 common = { path = "../common" }
+pos-accounting = { path = "../pos-accounting" }
 utils = { path = "../utils" }
+utxo = { path = "../utxo" }
 
 thiserror.workspace = true
