@@ -26,11 +26,15 @@ use common::{
     },
     primitives::H256,
 };
+use pos_accounting::PoSAccountingView;
+use utxo::UtxosView;
 
 use crate::{
     helpers::{BlockchainState, SourceBlockState},
     timelock_check::check_timelock,
 };
+
+use self::error::Error;
 
 #[derive(Debug)]
 pub enum MintScript {
@@ -76,13 +80,21 @@ impl MintScript {
         }
     }
 
-    pub fn from_output_for_tx<T: Transactable>(
+    pub fn from_output_for_tx<
+        'a,
+        T: Transactable,
+        U: UtxosView,
+        P: PoSAccountingView<Error = pos_accounting::Error>,
+    >(
         _chain_config: &ChainConfig,
         input_utxo: TxOutput,
         tx: &T,
         inputs_utxos: &[Option<&TxOutput>],
         input_num: usize,
+        _utxos_view: &'a U,
+        accounting_view: &'a P,
     ) -> Option<MintScript> {
+        // TODO(PR): Check that the branches make sense
         match input_utxo {
             TxOutput::Transfer(_val, dest) => {
                 let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
@@ -115,12 +127,47 @@ impl MintScript {
                     pos_data.decommission_key().clone(),
                 ))
             }
-            // TODO(PR): Complete this
-            TxOutput::ProduceBlockFromStake(_, _) => None,
+            TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                let pos_data = accounting_view
+                    .get_pool_data(pool_id)
+                    .ok()?
+                    .ok_or(Error::PoolDataNotFound(pool_id))
+                    .ok()?;
+
+                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
+                let sighash =
+                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
+
+                Some(MintScript::CheckSig(
+                    sighash,
+                    witness.clone(),
+                    pos_data.decommission_destination().clone(),
+                ))
+            }
             TxOutput::CreateDelegationId(_, _) => None,
-            TxOutput::DelegateStaking(_, _) => None,
+            TxOutput::DelegateStaking(_, delegation_id) => {
+                let dest = accounting_view
+                    .get_delegation_data(delegation_id)
+                    .ok()?
+                    .ok_or(Error::DelegationDataNotFound(delegation_id))
+                    .ok()?
+                    .spend_destination()
+                    .clone();
+
+                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
+                let sighash =
+                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
+
+                Some(MintScript::CheckSig(sighash, witness.clone(), dest))
+            }
             TxOutput::IssueFungibleToken(_) => None,
-            TxOutput::IssueNft(_, _, _) => None,
+            TxOutput::IssueNft(_, _, d) => {
+                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
+                let sighash =
+                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
+
+                Some(MintScript::CheckSig(sighash, witness.clone(), d))
+            }
             TxOutput::DataDeposit(_) => None,
             TxOutput::Burn(_) => None,
         }
