@@ -40,7 +40,7 @@ use wallet_rpc_lib::types::{
     RpcValidatedSignatures, TokenMetadata,
 };
 
-use crate::errors::WalletCliCommandError;
+use crate::{errors::WalletCliCommandError, ManageableWalletCommand, WalletManagementCommand};
 
 use self::local_state::WalletWithState;
 
@@ -127,16 +127,15 @@ where
         self.wallet.get_wallet().await
     }
 
-    async fn handle_cold_wallet_command<N: NodeInterface>(
+    async fn handle_wallet_management_command<N: NodeInterface>(
         &mut self,
-        command: ColdWalletCommand,
-        chain_config: &ChainConfig,
+        command: WalletManagementCommand,
     ) -> Result<ConsoleCommand, WalletCliCommandError<N>>
     where
         WalletCliCommandError<N>: From<E>,
     {
         match command {
-            ColdWalletCommand::CreateWallet {
+            WalletManagementCommand::CreateWallet {
                 wallet_path,
                 mnemonic,
                 whether_to_store_seed_phrase,
@@ -184,7 +183,7 @@ where
                 })
             }
 
-            ColdWalletCommand::OpenWallet {
+            WalletManagementCommand::OpenWallet {
                 wallet_path,
                 encryption_password,
                 force_change_wallet_type,
@@ -205,7 +204,7 @@ where
                 })
             }
 
-            ColdWalletCommand::CloseWallet => {
+            WalletManagementCommand::CloseWallet => {
                 self.wallet().await?.close_wallet().await?;
                 self.wallet.update_wallet::<N>().await;
 
@@ -214,7 +213,26 @@ where
                     print_message: "Successfully closed the wallet.".to_owned(),
                 })
             }
+            WalletManagementCommand::RpcShutdownAndExit => {
+                self.wallet.get_wallet_mut().await?.shutdown().await?;
+                Ok(ConsoleCommand::Exit)
+            }
+            WalletManagementCommand::Exit => {
+                self.wallet.get_wallet_mut().await?.exit().await?;
+                Ok(ConsoleCommand::Exit)
+            }
+        }
+    }
 
+    async fn handle_cold_wallet_command<N: NodeInterface>(
+        &mut self,
+        command: ColdWalletCommand,
+        chain_config: &ChainConfig,
+    ) -> Result<ConsoleCommand, WalletCliCommandError<N>>
+    where
+        WalletCliCommandError<N>: From<E>,
+    {
+        match command {
             ColdWalletCommand::WalletInfo => {
                 let info = self.non_empty_wallet().await?.wallet_info().await?;
                 let names = info
@@ -620,14 +638,6 @@ where
             }
 
             ColdWalletCommand::Version => Ok(ConsoleCommand::Print(get_version())),
-            ColdWalletCommand::RpcShutdownAndExit => {
-                self.wallet.get_wallet_mut().await?.shutdown().await?;
-                Ok(ConsoleCommand::Exit)
-            }
-            ColdWalletCommand::Exit => {
-                self.wallet.get_wallet_mut().await?.exit().await?;
-                Ok(ConsoleCommand::Exit)
-            }
             ColdWalletCommand::PrintHistory => Ok(ConsoleCommand::PrintHistory),
             ColdWalletCommand::ClearScreen => Ok(ConsoleCommand::ClearScreen),
             ColdWalletCommand::ClearHistory => Ok(ConsoleCommand::ClearHistory),
@@ -1600,6 +1610,24 @@ where
             WalletCommand::RemoveReservedPeer { address } => {
                 self.wallet().await?.remove_reserved_peer(address).await?;
                 Ok(ConsoleCommand::Print("Success".to_owned()))
+            }
+        }
+    }
+
+    pub async fn handle_manageable_wallet_command<N: NodeInterface>(
+        &mut self,
+        chain_config: &ChainConfig,
+        command: ManageableWalletCommand,
+    ) -> Result<ConsoleCommand, WalletCliCommandError<N>>
+    where
+        WalletCliCommandError<N>: From<E>,
+    {
+        match command {
+            ManageableWalletCommand::WalletCommands(command) => {
+                self.handle_wallet_command(chain_config, command).await
+            }
+            ManageableWalletCommand::ManagementCommands(command) => {
+                self.handle_wallet_management_command(command).await
             }
         }
     }

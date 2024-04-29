@@ -18,14 +18,14 @@ pub mod non_interactive;
 
 use clap::Command;
 use tokio::sync::mpsc;
-use wallet_cli_commands::{ConsoleCommand, WalletCommand};
+use wallet_cli_commands::{ConsoleCommand, ManageableWalletCommand};
 use wallet_rpc_lib::types::NodeInterface;
 
 use crate::{cli_event_loop::Event, errors::WalletCliError};
 
 fn run_command_blocking<N: NodeInterface>(
     event_tx: &mpsc::UnboundedSender<Event<N>>,
-    command: WalletCommand,
+    command: ManageableWalletCommand,
 ) -> Result<ConsoleCommand, WalletCliError<N>> {
     let (res_tx, res_rx) = tokio::sync::oneshot::channel();
     // channel is closed so exit

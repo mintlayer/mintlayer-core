@@ -137,7 +137,7 @@ pub fn run<N: NodeInterface>(
     startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError<N>>>>,
     cold_wallet: bool,
 ) -> Result<(), WalletCliError<N>> {
-    let repl_command = get_repl_command(cold_wallet);
+    let repl_command = get_repl_command(cold_wallet, true);
 
     let mut line_editor = create_line_editor(
         logger.printer().clone(),

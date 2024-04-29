@@ -32,7 +32,8 @@ use tokio::{
 };
 use wallet::{account::transaction_list::TransactionList, wallet::Error, WalletError};
 use wallet_cli_commands::{
-    get_repl_command, parse_input, CommandHandler, ConsoleCommand, WalletCommand,
+    get_repl_command, parse_input, CommandHandler, ConsoleCommand, ManageableWalletCommand,
+    WalletCommand,
 };
 use wallet_controller::{
     make_cold_wallet_rpc_client, types::Balances, ControllerConfig, NodeInterface, UtxoState,
@@ -1089,7 +1090,7 @@ impl Backend {
         account_id: AccountId,
         command: String,
     ) -> Result<ConsoleCommand, BackendError> {
-        let repl_command = get_repl_command(self.controller.is_cold());
+        let repl_command = get_repl_command(self.controller.is_cold(), false);
         let command = parse_input::<ColdWalletClient>(&command, &repl_command)
             .map_err(|e| BackendError::InvalidConsoleCommand(e.to_string()))?
             .ok_or(BackendError::EmptyConsoleCommand)?;
@@ -1341,21 +1342,21 @@ async fn encrypt_action<T: NodeInterface + Clone + Send + Sync + 'static>(
 async fn select_acc_and_execute_cmd<N>(
     c: &mut CommandHandler<WalletRpcHandlesClient<N>>,
     account_id: AccountId,
-    command: WalletCommand,
+    command: ManageableWalletCommand,
     chain_config: &ChainConfig,
 ) -> Result<ConsoleCommand, BackendError>
 where
     N: NodeInterface + Clone + Send + Sync + 'static + Debug,
 {
-    c.handle_wallet_command(
+    c.handle_manageable_wallet_command(
         chain_config,
-        WalletCommand::SelectAccount {
+        ManageableWalletCommand::WalletCommands(WalletCommand::SelectAccount {
             account_index: account_id.account_index(),
-        },
+        }),
     )
     .await
     .map_err(|e| BackendError::WalletError(e.to_string()))?;
-    c.handle_wallet_command(chain_config, command)
+    c.handle_manageable_wallet_command(chain_config, command)
         .await
         .map_err(|e| BackendError::WalletError(e.to_string()))
 }
