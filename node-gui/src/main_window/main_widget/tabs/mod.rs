@@ -16,19 +16,23 @@
 use iced::{Command, Element, Length};
 use iced_aw::{TabLabel, Tabs};
 use variant_count::VariantCount;
+use wallet_types::wallet_type::WalletType;
 
 use crate::{
     backend::{messages::WalletId, BackendSender},
     main_window::NodeState,
+    WalletMode,
 };
 
 use self::{
+    cold_wallet::ColdWalletTab,
     networking::{NetworkingMessage, NetworkingTab},
     settings::{SettingsMessage, SettingsTab, TabBarPosition},
     summary::{SummaryMessage, SummaryTab},
     wallet::{WalletMessage, WalletTab},
 };
 
+pub mod cold_wallet;
 pub mod networking;
 pub mod settings;
 pub mod summary;
@@ -37,7 +41,10 @@ pub mod wallet;
 #[derive(Debug, Clone)]
 pub enum TabsMessage {
     TabSelected(usize),
-    WalletAdded(WalletId),
+    WalletAdded {
+        wallet_id: WalletId,
+        wallet_type: WalletType,
+    },
     WalletRemoved(WalletId),
     Summary(SummaryMessage),
     Networking(NetworkingMessage),
@@ -67,17 +74,21 @@ pub struct TabsWidget {
     summary_tab: SummaryTab,
     networking_tab: NetworkingTab,
     settings_tab: SettingsTab,
+    cold_wallet_tab: ColdWalletTab,
     wallets: Vec<WalletTab>,
+    wallet_mode: WalletMode,
 }
 
 impl TabsWidget {
-    pub fn new() -> Self {
+    pub fn new(wallet_mode: WalletMode) -> Self {
         TabsWidget {
             active_tab: TabIndex::default().into_usize(),
             summary_tab: SummaryTab::new(),
             networking_tab: NetworkingTab::new(),
             settings_tab: SettingsTab::new(),
+            cold_wallet_tab: ColdWalletTab::new(),
             wallets: Vec::new(),
+            wallet_mode,
         }
     }
 
@@ -88,18 +99,25 @@ impl TabsWidget {
     pub fn view(&self, node_state: &NodeState) -> Element<TabsMessage> {
         let position = self.settings_tab.settings().tab_bar_position.unwrap_or_default();
 
-        let mut tabs = Tabs::new(TabsMessage::TabSelected)
-            .icon_font(iced_aw::BOOTSTRAP_FONT)
-            .push(
+        let mut tabs = Tabs::new(TabsMessage::TabSelected).icon_font(iced_aw::BOOTSTRAP_FONT);
+        tabs = match self.wallet_mode {
+            WalletMode::Hot => tabs
+                .push(
+                    TabIndex::Summary as usize,
+                    self.summary_tab.tab_label(),
+                    self.summary_tab.view(node_state),
+                )
+                .push(
+                    TabIndex::Networking as usize,
+                    self.networking_tab.tab_label(),
+                    self.networking_tab.view(node_state),
+                ),
+            WalletMode::Cold => tabs.push(
                 TabIndex::Summary as usize,
-                self.summary_tab.tab_label(),
-                self.summary_tab.view(node_state),
-            )
-            .push(
-                TabIndex::Networking as usize,
-                self.networking_tab.tab_label(),
-                self.networking_tab.view(node_state),
-            );
+                self.cold_wallet_tab.tab_label(),
+                self.cold_wallet_tab.view(node_state),
+            ),
+        };
         // TODO: enable settings tab when needed
         //.push(
         //    TabIndex::Settings as usize,
@@ -135,8 +153,11 @@ impl TabsWidget {
                 self.active_tab = n;
                 Command::none()
             }
-            TabsMessage::WalletAdded(waller_id) => {
-                let wallet_tab = WalletTab::new(waller_id);
+            TabsMessage::WalletAdded {
+                wallet_id,
+                wallet_type,
+            } => {
+                let wallet_tab = WalletTab::new(wallet_id, wallet_type);
                 self.wallets.push(wallet_tab);
                 self.active_tab = self.last_wallet_tab_index();
                 Command::none()

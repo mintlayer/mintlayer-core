@@ -25,7 +25,7 @@ use common::{
         ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id, Idable},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
 };
 use crypto::{
     key::{
@@ -353,6 +353,8 @@ pub struct PoolInfo {
     pub vrf_public_key: RpcAddress<VRFPublicKey>,
     pub decommission_key: RpcAddress<Destination>,
     pub staker: RpcAddress<Destination>,
+    pub margin_ratio_per_thousand: PerThousand,
+    pub cost_per_block: RpcAmountOut,
 }
 
 impl PoolInfo {
@@ -366,6 +368,8 @@ impl PoolInfo {
         let decimals = chain_config.coin_decimals();
         let balance = RpcAmountOut::from_amount_no_padding(balance, decimals);
         let pledge = RpcAmountOut::from_amount_no_padding(pledge, decimals);
+        let cost_per_block =
+            RpcAmountOut::from_amount_no_padding(pool_data.cost_per_block, decimals);
 
         Self {
             pool_id: RpcAddress::new(chain_config, pool_id).expect("addressable"),
@@ -379,6 +383,8 @@ impl PoolInfo {
                 .expect("addressable"),
             staker: RpcAddress::new(chain_config, pool_data.stake_destination)
                 .expect("addressable"),
+            margin_ratio_per_thousand: pool_data.margin_ratio_per_thousand,
+            cost_per_block,
         }
     }
 }
@@ -392,16 +398,23 @@ pub struct NewDelegation {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct DelegationInfo {
     pub delegation_id: RpcAddress<DelegationId>,
+    pub pool_id: RpcAddress<PoolId>,
     pub balance: RpcAmountOut,
 }
 
 impl DelegationInfo {
-    pub fn new(delegation_id: DelegationId, balance: Amount, chain_config: &ChainConfig) -> Self {
+    pub fn new(
+        delegation_id: DelegationId,
+        pool_id: PoolId,
+        balance: Amount,
+        chain_config: &ChainConfig,
+    ) -> Self {
         let decimals = chain_config.coin_decimals();
         let balance = RpcAmountOut::from_amount_no_padding(balance, decimals);
 
         Self {
             delegation_id: RpcAddress::new(chain_config, delegation_id).expect("addressable"),
+            pool_id: RpcAddress::new(chain_config, pool_id).expect("addressable"),
             balance,
         }
     }

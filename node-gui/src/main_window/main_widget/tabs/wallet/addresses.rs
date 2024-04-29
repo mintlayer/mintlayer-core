@@ -34,17 +34,14 @@ pub fn view_addresses(
         .addresses
         .iter()
         .map(|(index, address)| {
-            GridRow::new()
-                .push(field(index.to_string()))
-                .push(field(address.as_str().to_owned()))
-                .push(
-                    button(
-                        Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
-                            .font(iced_aw::BOOTSTRAP_FONT),
-                    )
-                    .style(iced::theme::Button::Text)
-                    .on_press(WalletMessage::CopyToClipboard(address.as_str().to_owned())),
+            GridRow::new().push(field(index.clone())).push(field(address.clone())).push(
+                button(
+                    Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
+                        .font(iced_aw::BOOTSTRAP_FONT),
                 )
+                .style(iced::theme::Button::Text)
+                .on_press(WalletMessage::CopyToClipboard(address.as_str().to_owned())),
+            )
         })
         .fold(Grid::new(), |grid, row| grid.push(row));
 

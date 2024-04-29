@@ -21,13 +21,15 @@ use std::{
 
 use chainstate::ChainInfo;
 use common::{
-    address::Address,
-    chain::{DelegationId, Destination, GenBlock, PoolId, SignedTransaction},
+    chain::{DelegationId, GenBlock, PoolId, SignedTransaction},
     primitives::{Amount, BlockHeight, Id},
 };
-use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
+use crypto::key::hdkd::u31::U31;
 use p2p::P2pEvent;
-use wallet::account::{currency_grouper::Currency, transaction_list::TransactionList, PoolData};
+use wallet::account::transaction_list::TransactionList;
+use wallet_controller::types::Balances;
+use wallet_rpc_lib::types::PoolInfo;
+use wallet_types::wallet_type::WalletType;
 
 use crate::main_window::ImportOrCreate;
 
@@ -64,15 +66,16 @@ pub struct WalletInfo {
     pub encryption: EncryptionState,
     pub accounts: BTreeMap<AccountId, AccountInfo>,
     pub best_block: (Id<GenBlock>, BlockHeight),
+    pub wallet_type: WalletType,
 }
 
 #[derive(Debug, Clone)]
 pub struct AccountInfo {
     pub name: Option<String>,
-    pub addresses: BTreeMap<ChildNumber, Address<Destination>>,
+    pub addresses: BTreeMap<String, String>,
     pub staking_enabled: bool,
-    pub balance: BTreeMap<Currency, Amount>,
-    pub staking_balance: BTreeMap<PoolId, (PoolData, Amount)>,
+    pub balance: Balances,
+    pub staking_balance: BTreeMap<PoolId, PoolInfo>,
     pub delegations_balance: BTreeMap<DelegationId, (PoolId, Amount)>,
     pub transaction_list: TransactionList,
 }
@@ -81,8 +84,8 @@ pub struct AccountInfo {
 pub struct AddressInfo {
     pub wallet_id: WalletId,
     pub account_id: AccountId,
-    pub index: ChildNumber,
-    pub address: Address<Destination>,
+    pub index: String,
+    pub address: String,
 }
 
 #[derive(Debug, Clone)]
@@ -161,6 +164,7 @@ pub enum EncryptionState {
 pub enum BackendRequest {
     OpenWallet {
         file_path: PathBuf,
+        wallet_type: WalletType,
     },
     // This will remove the old file if it already exists.
     // The frontend should check if this is what the user really wants.
@@ -168,6 +172,7 @@ pub enum BackendRequest {
         mnemonic: wallet_controller::mnemonic::Mnemonic,
         file_path: PathBuf,
         import: ImportOrCreate,
+        wallet_type: WalletType,
     },
     CloseWallet(WalletId),
 
@@ -204,6 +209,12 @@ pub enum BackendRequest {
         skip: usize,
     },
 
+    ConsoleCommand {
+        wallet_id: WalletId,
+        account_id: AccountId,
+        command: String,
+    },
+
     Shutdown,
 }
 
@@ -221,8 +232,8 @@ pub enum BackendEvent {
     NewAccount(Result<(WalletId, AccountId, AccountInfo), BackendError>),
 
     WalletBestBlock(WalletId, (Id<GenBlock>, BlockHeight)),
-    Balance(WalletId, AccountId, BTreeMap<Currency, Amount>),
-    StakingBalance(WalletId, AccountId, BTreeMap<PoolId, (PoolData, Amount)>),
+    Balance(WalletId, AccountId, Balances),
+    StakingBalance(WalletId, AccountId, BTreeMap<PoolId, PoolInfo>),
     DelegationsBalance(
         WalletId,
         AccountId,

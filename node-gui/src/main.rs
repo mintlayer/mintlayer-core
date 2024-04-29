@@ -23,12 +23,19 @@ use backend::messages::{BackendEvent, BackendRequest};
 use backend::{node_initialize, BackendControls, BackendSender};
 use common::time_getter::TimeGetter;
 use iced::advanced::graphics::core::window;
-use iced::widget::{column, container, text};
+use iced::widget::{column, container, row, text, tooltip, Text};
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced::{font, Subscription};
 use iced_aw::native::cupertino::cupertino_spinner::CupertinoSpinner;
 use main_window::{MainWindow, MainWindowMessage};
 use tokio::sync::mpsc::UnboundedReceiver;
+
+const COLD_WALLET_TOOLTIP_TEXT: &str =
+    "Start the wallet in Cold mode without connecting to the network or any nodes.";
+const HOT_WALLET_TOOLTIP_TEXT: &str = "Start the wallet in Hot mode and connect to the network.";
+
+const MAIN_NETWORK_TOOLTIP: &str = "The 'Mainnet' is the main network that has coins with value.";
+const TEST_NETWORK_TOOLTIP: &str = "The 'Testnet' is the network with coins that have no value, but is used for testing various applications before deploying them on Mainnet.";
 
 pub fn main() -> iced::Result {
     utils::rust_backtrace::enable();
@@ -45,13 +52,30 @@ pub fn main() -> iced::Result {
 }
 
 enum MintlayerNodeGUI {
-    Loading,
+    Initial,
+    SelectNetwork,
+    SelectWalletMode(InitNetwork),
+    Loading(WalletMode),
     Loaded(BackendSender, MainWindow),
     IntializationError(String),
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum InitNetwork {
+    Mainnet,
+    Testnet,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum WalletMode {
+    Cold,
+    Hot,
+}
+
 #[derive(Debug)]
 pub enum Message {
+    InitNetwork(InitNetwork),
+    InitWalletMode(WalletMode),
     FromBackend(
         UnboundedReceiver<BackendEvent>,
         UnboundedReceiver<BackendEvent>,
@@ -72,18 +96,20 @@ impl Application for MintlayerNodeGUI {
 
     fn new(_flags: ()) -> (Self, Command<Message>) {
         (
-            MintlayerNodeGUI::Loading,
-            Command::batch(vec![
-                font::load(iced_aw::graphics::icons::BOOTSTRAP_FONT_BYTES).map(Message::FontLoaded),
-                Command::perform(node_initialize(TimeGetter::default()), Message::Loaded),
-            ]),
+            MintlayerNodeGUI::Initial,
+            font::load(iced_aw::graphics::icons::BOOTSTRAP_FONT_BYTES).map(Message::FontLoaded),
         )
     }
 
     fn title(&self) -> String {
         let version = env!("CARGO_PKG_VERSION");
         match self {
-            MintlayerNodeGUI::Loading => "Mintlayer Node - Loading...".to_string(),
+            MintlayerNodeGUI::Initial => "Mintlayer Node - Initializing...".to_string(),
+            MintlayerNodeGUI::SelectNetwork => "Mintlayer Node - Selecting network...".to_string(),
+            MintlayerNodeGUI::SelectWalletMode(_) => {
+                "Mintlayer Node - Selecting mode...".to_string()
+            }
+            MintlayerNodeGUI::Loading(_) => "Mintlayer Node - Loading...".to_string(),
             MintlayerNodeGUI::Loaded(_backend_sender, w) => {
                 format!(
                     "Mintlayer Node - {} - v{version}",
@@ -96,8 +122,81 @@ impl Application for MintlayerNodeGUI {
 
     fn update(&mut self, message: Message) -> Command<Message> {
         match self {
-            MintlayerNodeGUI::Loading => match message {
-                Message::FromBackend(_, _, _) => unreachable!(),
+            MintlayerNodeGUI::Initial => match message {
+                Message::FontLoaded(Ok(())) => {
+                    *self = Self::SelectNetwork;
+                    Command::none()
+                }
+                Message::FontLoaded(Err(_)) => {
+                    *self = MintlayerNodeGUI::IntializationError("Failed to load font".into());
+                    Command::none()
+                }
+                Message::ShuttingDownFinished => iced::window::close(window::Id::MAIN),
+                Message::EventOccurred(event) => {
+                    if let iced::Event::Window(_, iced::window::Event::CloseRequested) = event {
+                        iced::window::close(window::Id::MAIN)
+                    } else {
+                        // While the screen is loading, ignore all events
+                        Command::none()
+                    }
+                }
+                Message::Loaded(_)
+                | Message::InitNetwork(_)
+                | Message::InitWalletMode(_)
+                | Message::FromBackend(_, _, _)
+                | Message::MainWindowMessage(_) => unreachable!(),
+            },
+            MintlayerNodeGUI::SelectNetwork => match message {
+                Message::InitNetwork(init) => {
+                    *self = Self::SelectWalletMode(init);
+                    Command::none()
+                }
+                Message::ShuttingDownFinished => iced::window::close(window::Id::MAIN),
+                Message::EventOccurred(event) => {
+                    if let iced::Event::Window(_, iced::window::Event::CloseRequested) = event {
+                        iced::window::close(window::Id::MAIN)
+                    } else {
+                        // While the screen is loading, ignore all events
+                        Command::none()
+                    }
+                }
+                Message::Loaded(_)
+                | Message::InitWalletMode(_)
+                | Message::FontLoaded(_)
+                | Message::FromBackend(_, _, _)
+                | Message::MainWindowMessage(_) => unreachable!(),
+            },
+            MintlayerNodeGUI::SelectWalletMode(init) => {
+                let init = *init;
+                match message {
+                    Message::InitWalletMode(mode) => {
+                        *self = Self::Loading(mode);
+
+                        Command::perform(
+                            node_initialize(TimeGetter::default(), init, mode),
+                            Message::Loaded,
+                        )
+                    }
+                    Message::ShuttingDownFinished => iced::window::close(window::Id::MAIN),
+                    Message::EventOccurred(event) => {
+                        if let iced::Event::Window(_, iced::window::Event::CloseRequested) = event {
+                            iced::window::close(window::Id::MAIN)
+                        } else {
+                            // While the screen is loading, ignore all events
+                            Command::none()
+                        }
+                    }
+                    Message::InitNetwork(_)
+                    | Message::Loaded(_)
+                    | Message::FontLoaded(_)
+                    | Message::FromBackend(_, _, _)
+                    | Message::MainWindowMessage(_) => unreachable!(),
+                }
+            }
+            MintlayerNodeGUI::Loading(mode) => match message {
+                Message::InitNetwork(_)
+                | Message::InitWalletMode(_)
+                | Message::FromBackend(_, _, _) => unreachable!(),
                 Message::Loaded(Ok(backend_controls)) => {
                     let BackendControls {
                         initialized_node,
@@ -105,8 +204,10 @@ impl Application for MintlayerNodeGUI {
                         backend_receiver,
                         low_priority_backend_receiver,
                     } = backend_controls;
-                    *self =
-                        MintlayerNodeGUI::Loaded(backend_sender, MainWindow::new(initialized_node));
+                    *self = MintlayerNodeGUI::Loaded(
+                        backend_sender,
+                        MainWindow::new(initialized_node, *mode),
+                    );
                     recv_backend_command(backend_receiver, low_priority_backend_receiver)
                 }
                 Message::Loaded(Err(e)) => {
@@ -143,7 +244,9 @@ impl Application for MintlayerNodeGUI {
                     .map(Message::MainWindowMessage),
                     recv_backend_command(backend_receiver, low_priority_backend_receiver),
                 ]),
-                Message::Loaded(_) => unreachable!("Already loaded"),
+                Message::InitNetwork(_) | Message::InitWalletMode(_) | Message::Loaded(_) => {
+                    unreachable!("Already loaded")
+                }
                 Message::FontLoaded(status) => {
                     if status.is_err() {
                         *self = MintlayerNodeGUI::IntializationError("Failed to load font".into());
@@ -165,7 +268,9 @@ impl Application for MintlayerNodeGUI {
                 }
             },
             MintlayerNodeGUI::IntializationError(_) => match message {
-                Message::FromBackend(_, _, _) => unreachable!(),
+                Message::InitNetwork(_)
+                | Message::InitWalletMode(_)
+                | Message::FromBackend(_, _, _) => unreachable!(),
                 Message::Loaded(_) => Command::none(),
                 Message::FontLoaded(_) => Command::none(),
                 Message::EventOccurred(event) => {
@@ -183,7 +288,89 @@ impl Application for MintlayerNodeGUI {
 
     fn view(&self) -> Element<Message> {
         match self {
-            MintlayerNodeGUI::Loading => {
+            MintlayerNodeGUI::Initial => {
+                iced::widget::text("Loading fonts...".to_string()).size(32).into()
+            }
+            MintlayerNodeGUI::SelectNetwork => {
+                let error_box = column![
+                    iced::widget::text("Please choose the network you want to use".to_string())
+                        .size(32),
+                    row![
+                        iced::widget::button(text("Mainnet")).on_press(InitNetwork::Mainnet),
+                        tooltip(
+                            Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                                .font(iced_aw::BOOTSTRAP_FONT),
+                            MAIN_NETWORK_TOOLTIP,
+                            tooltip::Position::Bottom
+                        )
+                        .gap(10)
+                        .style(iced::theme::Container::Box)
+                    ],
+                    row![
+                        iced::widget::button(text("Testnet")).on_press(InitNetwork::Testnet),
+                        tooltip(
+                            Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                                .font(iced_aw::BOOTSTRAP_FONT),
+                            TEST_NETWORK_TOOLTIP,
+                            tooltip::Position::Bottom
+                        )
+                        .gap(10)
+                        .style(iced::theme::Container::Box)
+                    ],
+                ]
+                .align_items(iced::Alignment::Center)
+                .spacing(5);
+
+                let res: Element<InitNetwork> = container(error_box)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center_x()
+                    .center_y()
+                    .into();
+
+                res.map(Message::InitNetwork)
+            }
+
+            MintlayerNodeGUI::SelectWalletMode(_) => {
+                let error_box = column![
+                    iced::widget::text("Please choose the wallet mode".to_string()).size(32),
+                    row![
+                        iced::widget::button(text("Cold")).on_press(WalletMode::Cold),
+                        tooltip(
+                            Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                                .font(iced_aw::BOOTSTRAP_FONT),
+                            COLD_WALLET_TOOLTIP_TEXT,
+                            tooltip::Position::Bottom
+                        )
+                        .gap(10)
+                        .style(iced::theme::Container::Box)
+                    ],
+                    row![
+                        iced::widget::button(text("Hot")).on_press(WalletMode::Hot),
+                        tooltip(
+                            Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                                .font(iced_aw::BOOTSTRAP_FONT),
+                            HOT_WALLET_TOOLTIP_TEXT,
+                            tooltip::Position::Bottom
+                        )
+                        .gap(10)
+                        .style(iced::theme::Container::Box)
+                    ],
+                ]
+                .align_items(iced::Alignment::Center)
+                .spacing(5);
+
+                let res: Element<WalletMode> = container(error_box)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center_x()
+                    .center_y()
+                    .into();
+
+                res.map(Message::InitWalletMode)
+            }
+
+            MintlayerNodeGUI::Loading(_) => {
                 container(CupertinoSpinner::new().width(Length::Fill).height(Length::Fill)).into()
             }
 

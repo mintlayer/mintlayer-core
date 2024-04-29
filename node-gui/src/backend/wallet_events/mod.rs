@@ -34,7 +34,7 @@ impl GuiWalletEvents {
         }
     }
 
-    fn notify(&self) {
+    pub fn notify(&self) {
         let _ = self.wallet_updated_tx.send(self.wallet_id);
     }
 }

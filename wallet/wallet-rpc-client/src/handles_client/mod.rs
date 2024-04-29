@@ -123,7 +123,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             StoreSeedPhrase::DoNotStore
         };
         self.wallet_rpc
-            .create_wallet(path, whether_to_store_seed_phrase, mnemonic, passphrase)
+            .create_wallet(
+                path,
+                whether_to_store_seed_phrase,
+                mnemonic,
+                passphrase,
+                false,
+            )
             .await
             .map(Into::into)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
@@ -566,6 +572,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
+            .map(NewTransaction::new)
     }
 
     async fn sweep_addresses(
@@ -624,6 +631,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
+            .map(NewTransaction::new)
     }
 
     async fn decommission_stake_pool(
@@ -642,6 +650,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
+            .map(NewTransaction::new)
     }
 
     async fn decommission_stake_pool_request(
@@ -674,6 +683,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .create_delegation(account_index, address.into(), pool_id.into(), config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
+            .map(|(tx, delegation_id)| NewDelegation {
+                tx_id: tx.transaction().get_id(),
+                delegation_id,
+            })
     }
 
     async fn delegate_staking(
@@ -687,6 +700,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             .delegate_staking(account_index, amount.into(), delegation_id.into(), config)
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
+            .map(NewTransaction::new)
     }
 
     async fn withdraw_from_delegation(
@@ -707,6 +721,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
+            .map(NewTransaction::new)
     }
 
     async fn start_staking(&self, account_index: U31) -> Result<(), Self::Error> {

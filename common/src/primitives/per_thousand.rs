@@ -16,6 +16,7 @@
 use std::fmt::Display;
 
 use randomness::Rng;
+use rpc_description::HasValueHint;
 use serialization::{Decode, Encode, Error, Input};
 use thiserror::Error;
 
@@ -153,6 +154,11 @@ impl serde::Serialize for PerThousand {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.to_percentage_str().serialize(serializer)
     }
+}
+
+impl HasValueHint for PerThousand {
+    const HINT_DE: rpc_description::ValueHint = rpc_description::ValueHint::STRING;
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::STRING;
 }
 
 #[cfg(test)]

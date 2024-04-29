@@ -35,7 +35,10 @@ use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
-    account::{PartiallySignedTransaction, PoolData, TransactionToSign, TxInfo},
+    account::{
+        transaction_list::TransactionList, PartiallySignedTransaction, PoolData, TransactionToSign,
+        TxInfo,
+    },
     WalletError,
 };
 
@@ -77,7 +80,7 @@ use crate::{service::CreatedWallet, WalletHandle, WalletRpcConfig};
 pub use self::types::RpcError;
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo,
-    NewDelegation, NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
+    NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
     RpcStandaloneAddress, RpcStandaloneAddressDetails, RpcStandaloneAddresses,
     RpcStandalonePrivateKeyAddress, RpcTokenId, RpcUtxoOutpoint, StakingStatus,
     StandaloneAddressWithDetails, VrfPublicKeyInfo,
@@ -109,7 +112,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         &self.chain_config
     }
 
-    fn shutdown(&self) -> WRpcResult<(), N> {
+    pub fn shutdown(&self) -> WRpcResult<(), N> {
         self.wallet.shallow_clone().stop().map_err(RpcError::SubmitError)
     }
 
@@ -119,12 +122,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         store_seed_phrase: StoreSeedPhrase,
         mnemonic: Option<String>,
         passphrase: Option<String>,
+        skip_syncing: bool,
     ) -> WRpcResult<CreatedWallet, N> {
         self.wallet
             .manage_async(move |wallet_manager| {
                 Box::pin(async move {
                     wallet_manager
-                        .create_wallet(path, store_seed_phrase, mnemonic, passphrase)
+                        .create_wallet(path, store_seed_phrase, mnemonic, passphrase, skip_syncing)
                         .await
                 })
             })
@@ -482,6 +486,21 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                     })
                     .collect()
             })
+    }
+
+    pub async fn get_transaction_list(
+        &self,
+        account_index: U31,
+        skip: usize,
+        count: usize,
+    ) -> WRpcResult<TransactionList, N> {
+        let txs = self
+            .wallet
+            .call(move |controller| {
+                controller.readonly_controller(account_index).get_transaction_list(skip, count)
+            })
+            .await??;
+        Ok(txs)
     }
 
     pub async fn get_issued_addresses(
@@ -891,7 +910,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         amount: RpcAmountIn,
         selected_utxos: Vec<UtxoOutPoint>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<SignedTransaction, N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let address =
@@ -906,7 +925,6 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                         .send_to_address(address, amount, selected_utxos)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
                 })
             })
             .await?
@@ -1016,7 +1034,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         margin_ratio_per_thousand: String,
         decommission_address: RpcAddress<Destination>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<SignedTransaction, N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let cost_per_block =
@@ -1043,7 +1061,6 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                         )
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
                 })
             })
             .await?
@@ -1055,7 +1072,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         pool_id: RpcAddress<PoolId>,
         output_address: Option<RpcAddress<Destination>>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<SignedTransaction, N> {
         let pool_id =
             pool_id.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidPoolId)?;
 
@@ -1072,7 +1089,6 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                         .decommission_stake_pool(pool_id, output_address)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
                 })
             })
             .await?
@@ -1112,7 +1128,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         address: RpcAddress<Destination>,
         pool_id: RpcAddress<PoolId>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewDelegation, N> {
+    ) -> WRpcResult<(SignedTransaction, RpcAddress<DelegationId>), N> {
         let address =
             address.into_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
 
@@ -1131,10 +1147,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 })
             })
             .await?
-            .map(|(tx, delegation_id)| NewDelegation {
-                tx_id: tx.transaction().get_id(),
-                delegation_id: RpcAddress::new(&self.chain_config, delegation_id)
-                    .expect("addressable delegation id"),
+            .map(|(tx, delegation_id)| {
+                (
+                    tx,
+                    RpcAddress::new(&self.chain_config, delegation_id)
+                        .expect("addressable delegation id"),
+                )
             })
     }
 
@@ -1144,7 +1162,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         amount: RpcAmountIn,
         delegation_id: RpcAddress<DelegationId>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<SignedTransaction, N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
 
@@ -1161,7 +1179,6 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                         .delegate_staking(amount, delegation_id)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
                 })
             })
             .await?
@@ -1174,7 +1191,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         amount: RpcAmountIn,
         delegation_id: RpcAddress<DelegationId>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<SignedTransaction, N> {
         let decimals = self.chain_config.coin_decimals();
         let amount = amount.to_amount(decimals).ok_or(RpcError::InvalidCoinAmount)?;
         let address =
@@ -1192,7 +1209,6 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                         .send_to_address_from_delegation(address, amount, delegation_id)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
                 })
             })
             .await?
@@ -1602,8 +1618,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .map(|delegations: Vec<(DelegationId, PoolId, Amount)>| {
                 delegations
                     .into_iter()
-                    .map(|(delegation_id, _, balance)| {
-                        DelegationInfo::new(delegation_id, balance, &self.chain_config)
+                    .map(|(delegation_id, pool_id, balance)| {
+                        DelegationInfo::new(delegation_id, pool_id, balance, &self.chain_config)
                     })
                     .collect()
             })

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 mod cli_event_loop;
-mod commands;
+pub mod commands;
 pub mod config;
 pub mod console;
 pub mod errors;

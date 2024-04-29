@@ -16,14 +16,21 @@
 pub mod tabs;
 
 use iced::{Command, Element};
+use wallet_types::wallet_type::WalletType;
 
-use crate::backend::{messages::WalletId, BackendSender};
+use crate::{
+    backend::{messages::WalletId, BackendSender},
+    WalletMode,
+};
 
 use super::NodeState;
 
 #[derive(Debug, Clone)]
 pub enum MainWidgetMessage {
-    WalletAdded(WalletId),
+    WalletAdded {
+        wallet_id: WalletId,
+        wallet_type: WalletType,
+    },
     WalletRemoved(WalletId),
     TabsMessage(tabs::TabsMessage),
 }
@@ -33,9 +40,9 @@ pub struct MainWidget {
 }
 
 impl MainWidget {
-    pub fn new() -> Self {
+    pub fn new(wallet_mode: WalletMode) -> Self {
         Self {
-            tabs: tabs::TabsWidget::new(),
+            tabs: tabs::TabsWidget::new(wallet_mode),
         }
     }
 
@@ -45,8 +52,14 @@ impl MainWidget {
         backend_sender: &BackendSender,
     ) -> Command<MainWidgetMessage> {
         match msg {
-            MainWidgetMessage::WalletAdded(wallet_id) => Command::perform(async {}, move |_| {
-                MainWidgetMessage::TabsMessage(tabs::TabsMessage::WalletAdded(wallet_id))
+            MainWidgetMessage::WalletAdded {
+                wallet_id,
+                wallet_type,
+            } => Command::perform(async {}, move |_| {
+                MainWidgetMessage::TabsMessage(tabs::TabsMessage::WalletAdded {
+                    wallet_id,
+                    wallet_type,
+                })
             }),
             MainWidgetMessage::WalletRemoved(wallet_id) => Command::perform(async {}, move |_| {
                 MainWidgetMessage::TabsMessage(tabs::TabsMessage::WalletRemoved(wallet_id))

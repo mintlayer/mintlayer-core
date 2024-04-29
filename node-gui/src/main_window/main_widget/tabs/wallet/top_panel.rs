@@ -13,12 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{chain::ChainConfig, primitives::Amount};
+use common::chain::ChainConfig;
 use iced::{
     widget::{button, horizontal_space, row, text::LineHeight, tooltip, Text},
     Alignment, Element, Length,
 };
-use wallet::account::currency_grouper::Currency;
 
 use crate::{
     backend::messages::{AccountInfo, EncryptionState, WalletInfo},
@@ -37,8 +36,9 @@ pub fn view_top_panel(
     wallet_info: &WalletInfo,
     account: &AccountInfo,
 ) -> Element<'static, WalletMessage> {
-    let balance = account.balance.get(&Currency::Coin).cloned().unwrap_or(Amount::ZERO);
-    let balance = print_coin_amount_with_ticker(chain_config, balance);
+    let balance = account.balance.coins();
+    //TODO: can use the decimals directly
+    let balance = print_coin_amount_with_ticker(chain_config, balance.amount());
     let balance = Text::new(balance).size(20);
 
     let password = match wallet_info.encryption {

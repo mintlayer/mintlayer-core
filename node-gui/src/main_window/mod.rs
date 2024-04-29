@@ -25,6 +25,7 @@ use iced_aw::native::Modal;
 use logging::log;
 use p2p::{net::types::services::Services, types::peer_id::PeerId, P2pEvent};
 use rfd::AsyncFileDialog;
+use wallet_types::wallet_type::WalletType;
 
 use crate::{
     backend::{
@@ -42,6 +43,7 @@ use crate::{
         wallet_set_password::wallet_set_password_dialog,
         wallet_unlock::wallet_unlock_dialog,
     },
+    WalletMode,
 };
 
 use self::main_widget::tabs::{wallet::WalletMessage, TabsMessage};
@@ -54,8 +56,11 @@ enum ActiveDialog {
     None,
     WalletCreate {
         generated_mnemonic: wallet_controller::mnemonic::Mnemonic,
+        wallet_type: WalletType,
     },
-    WalletRecover,
+    WalletRecover {
+        wallet_type: WalletType,
+    },
     WalletSetPassword {
         wallet_id: WalletId,
     },
@@ -145,6 +150,15 @@ pub enum ImportOrCreate {
     Create,
 }
 
+impl ImportOrCreate {
+    pub fn skip_syncing(&self) -> bool {
+        match self {
+            Self::Create => true,
+            Self::Import => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum MainWindowMessage {
     MenuMessage(main_menu::MenuMessage),
@@ -153,17 +167,20 @@ pub enum MainWindowMessage {
 
     OpenWalletFileSelected {
         file_path: PathBuf,
+        wallet_type: WalletType,
     },
     OpenWalletFileCanceled,
 
     ImportWalletMnemonic {
         mnemonic: String,
         import: ImportOrCreate,
+        wallet_type: WalletType,
     },
     ImportWalletFileSelected {
         mnemonic: wallet_controller::mnemonic::Mnemonic,
         file_path: PathBuf,
         import: ImportOrCreate,
+        wallet_type: WalletType,
     },
     ImportWalletFileCanceled,
 
@@ -193,7 +210,7 @@ pub enum MainWindowMessage {
 }
 
 impl MainWindow {
-    pub fn new(initialized_node: InitializedNode) -> Self {
+    pub fn new(initialized_node: InitializedNode, wallet_mode: WalletMode) -> Self {
         let InitializedNode {
             chain_config,
             chain_info,
@@ -208,7 +225,7 @@ impl MainWindow {
 
         Self {
             main_menu: main_menu::MainMenu::new(),
-            main_widget: main_widget::MainWidget::new(),
+            main_widget: main_widget::MainWidget::new(wallet_mode),
             // TODO: Support other languages
             language: wallet::wallet::Language::English,
             node_state,
@@ -245,17 +262,20 @@ impl MainWindow {
         match msg {
             MainWindowMessage::MenuMessage(menu_message) => match menu_message {
                 MenuMessage::NoOp => Command::none(),
-                MenuMessage::CreateNewWallet => {
+                MenuMessage::CreateNewWallet { wallet_type } => {
                     let generated_mnemonic =
                         wallet_controller::mnemonic::generate_new_mnemonic(self.language);
-                    self.active_dialog = ActiveDialog::WalletCreate { generated_mnemonic };
+                    self.active_dialog = ActiveDialog::WalletCreate {
+                        generated_mnemonic,
+                        wallet_type,
+                    };
                     Command::none()
                 }
-                MenuMessage::RecoverWallet => {
-                    self.active_dialog = ActiveDialog::WalletRecover;
+                MenuMessage::RecoverWallet { wallet_type } => {
+                    self.active_dialog = ActiveDialog::WalletRecover { wallet_type };
                     Command::none()
                 }
-                MenuMessage::OpenWallet => {
+                MenuMessage::OpenWallet { wallet_type } => {
                     self.file_dialog_active = true;
                     Command::perform(
                         async move {
@@ -264,6 +284,7 @@ impl MainWindow {
                                 log::info!("Open wallet file: {file:?}");
                                 MainWindowMessage::OpenWalletFileSelected {
                                     file_path: file.path().to_owned(),
+                                    wallet_type,
                                 }
                             } else {
                                 MainWindowMessage::OpenWalletFileCanceled
@@ -362,12 +383,14 @@ impl MainWindow {
                 | BackendEvent::ImportWallet(Ok(wallet_info)) => {
                     self.active_dialog = ActiveDialog::None;
                     let wallet_id = wallet_info.wallet_id;
+                    let wallet_type = wallet_info.wallet_type;
                     self.node_state.wallets.insert(wallet_id, wallet_info);
 
                     Command::perform(async {}, move |_| {
-                        MainWindowMessage::MainWidgetMessage(MainWidgetMessage::WalletAdded(
+                        MainWindowMessage::MainWidgetMessage(MainWidgetMessage::WalletAdded {
                             wallet_id,
-                        ))
+                            wallet_type,
+                        })
                     })
                 }
 
@@ -577,9 +600,15 @@ impl MainWindow {
                     Command::none()
                 }
             },
-            MainWindowMessage::OpenWalletFileSelected { file_path } => {
+            MainWindowMessage::OpenWalletFileSelected {
+                file_path,
+                wallet_type,
+            } => {
                 self.file_dialog_active = false;
-                backend_sender.send(BackendRequest::OpenWallet { file_path });
+                backend_sender.send(BackendRequest::OpenWallet {
+                    file_path,
+                    wallet_type,
+                });
                 Command::none()
             }
             MainWindowMessage::OpenWalletFileCanceled => {
@@ -587,7 +616,11 @@ impl MainWindow {
                 Command::none()
             }
 
-            MainWindowMessage::ImportWalletMnemonic { mnemonic, import } => {
+            MainWindowMessage::ImportWalletMnemonic {
+                mnemonic,
+                import,
+                wallet_type,
+            } => {
                 let mnemonic_res =
                     wallet_controller::mnemonic::parse_mnemonic(self.language, &mnemonic);
                 match mnemonic_res {
@@ -602,6 +635,7 @@ impl MainWindow {
                                         mnemonic,
                                         file_path: file.path().to_owned(),
                                         import,
+                                        wallet_type,
                                     }
                                 } else {
                                     MainWindowMessage::ImportWalletFileCanceled
@@ -620,12 +654,14 @@ impl MainWindow {
                 mnemonic,
                 file_path,
                 import,
+                wallet_type,
             } => {
                 self.file_dialog_active = false;
                 backend_sender.send(BackendRequest::RecoverWallet {
                     mnemonic,
                     file_path,
                     import,
+                    wallet_type,
                 });
                 Command::none()
             }
@@ -700,25 +736,36 @@ impl MainWindow {
             match &self.active_dialog {
                 ActiveDialog::None => Text::new("Nothing to show").into(),
 
-                ActiveDialog::WalletCreate { generated_mnemonic } => wallet_mnemonic_dialog(
-                    Some(generated_mnemonic.clone()),
-                    Box::new(|mnemonic| MainWindowMessage::ImportWalletMnemonic {
-                        mnemonic,
-                        import: ImportOrCreate::Create,
-                    }),
-                    Box::new(|| MainWindowMessage::CloseDialog),
-                )
-                .into(),
+                ActiveDialog::WalletCreate {
+                    generated_mnemonic,
+                    wallet_type,
+                } => {
+                    let wallet_type = *wallet_type;
+                    wallet_mnemonic_dialog(
+                        Some(generated_mnemonic.clone()),
+                        Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
+                            mnemonic,
+                            import: ImportOrCreate::Create,
+                            wallet_type,
+                        }),
+                        Box::new(|| MainWindowMessage::CloseDialog),
+                    )
+                    .into()
+                }
 
-                ActiveDialog::WalletRecover => wallet_mnemonic_dialog(
-                    None,
-                    Box::new(|mnemonic| MainWindowMessage::ImportWalletMnemonic {
-                        mnemonic,
-                        import: ImportOrCreate::Import,
-                    }),
-                    Box::new(|| MainWindowMessage::CloseDialog),
-                )
-                .into(),
+                ActiveDialog::WalletRecover { wallet_type } => {
+                    let wallet_type = *wallet_type;
+                    wallet_mnemonic_dialog(
+                        None,
+                        Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
+                            mnemonic,
+                            import: ImportOrCreate::Import,
+                            wallet_type,
+                        }),
+                        Box::new(|| MainWindowMessage::CloseDialog),
+                    )
+                    .into()
+                }
 
                 ActiveDialog::WalletSetPassword { wallet_id } => {
                     let wallet_id = *wallet_id;

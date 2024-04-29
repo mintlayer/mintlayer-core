@@ -731,6 +731,11 @@ Returns:
     "vrf_public_key": bech32 string,
     "decommission_key": bech32 string,
     "staker": bech32 string,
+    "margin_ratio_per_thousand": string,
+    "cost_per_block": {
+        "atoms": number string,
+        "decimal": decimal string,
+    },
 }, .. ]
 ```
 
@@ -761,6 +766,11 @@ Returns:
     "vrf_public_key": bech32 string,
     "decommission_key": bech32 string,
     "staker": bech32 string,
+    "margin_ratio_per_thousand": string,
+    "cost_per_block": {
+        "atoms": number string,
+        "decimal": decimal string,
+    },
 }, .. ]
 ```
 
@@ -795,6 +805,7 @@ Returns:
 ```
 [ {
     "delegation_id": bech32 string,
+    "pool_id": bech32 string,
     "balance": {
         "atoms": number string,
         "decimal": decimal string,

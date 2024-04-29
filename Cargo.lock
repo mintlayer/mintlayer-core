@@ -4489,6 +4489,7 @@ dependencies = [
  "iced_aw",
  "logging",
  "mempool",
+ "node-comm",
  "node-lib",
  "p2p",
  "rfd",
@@ -4499,7 +4500,10 @@ dependencies = [
  "utils",
  "variant_count",
  "wallet",
+ "wallet-cli-lib",
  "wallet-controller",
+ "wallet-rpc-client",
+ "wallet-rpc-lib",
  "wallet-types",
 ]
 
