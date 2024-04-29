@@ -1069,7 +1069,7 @@ impl Backend {
 
             wallet_data.updated = false;
 
-            let best_block = controller.best_block().await.expect("shouldn't fail normaly");
+            let best_block = controller.best_block().await.expect("shouldn't fail normally");
             let best_block = (best_block.id, best_block.height);
 
             if wallet_data.best_block != best_block {
@@ -1196,7 +1196,7 @@ impl Backend {
                                         (
                                             info.pool_id
                                                 .decode_object(&self.chain_config)
-                                                .expect("valid addresable"),
+                                                .expect("valid addressable"),
                                             info.balance.amount(),
                                         ),
                                     )
