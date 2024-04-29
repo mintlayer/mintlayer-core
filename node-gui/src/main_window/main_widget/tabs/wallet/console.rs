@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use iced::{
-    widget::{column, row, scrollable::Id, tooltip, Scrollable, Text},
+    widget::{button, column, row, scrollable::Id, tooltip, Scrollable, Text},
     Element, Length,
 };
 
@@ -25,18 +25,17 @@ pub const CONSOLE_OUTPUT_ID: &str = "console_input_id";
 
 pub fn view_console(
     state: &ConsoleState,
-    console_outputs: &Vec<String>,
     still_syncing: Option<WalletMessage>,
 ) -> Element<'static, WalletMessage> {
     let s: Vec<String> = state
-        .console_outputs
+        .console_inputs
         .iter()
-        .zip(console_outputs)
+        .zip(&state.console_outputs)
         .map(|(inp, out)| format!("> {inp}\n$ {out}"))
         .collect();
 
     let output = s.join("\n");
-    let console_output = Scrollable::new(iced::widget::text(output))
+    let console_output = Scrollable::new(iced::widget::text(&output))
         .height(Length::Fixed(350.0))
         .width(Length::Fill)
         .id(Id::new(CONSOLE_OUTPUT_ID));
@@ -45,7 +44,25 @@ pub fn view_console(
         .on_input(WalletMessage::ConsoleInputChange)
         .on_submit(WalletMessage::ConsoleInputSubmit);
 
+    let buttons = row![
+        iced::widget::horizontal_space(),
+        button(
+            Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
+                .font(iced_aw::BOOTSTRAP_FONT),
+        )
+        .style(iced::theme::Button::Text)
+        .width(Length::Shrink)
+        .on_press(WalletMessage::CopyToClipboard(output)),
+        button(Text::new(iced_aw::BootstrapIcon::Trash.to_string()).font(iced_aw::BOOTSTRAP_FONT),)
+            .style(iced::theme::Button::Text)
+            .width(Length::Shrink)
+            .on_press(WalletMessage::ConsoleClear),
+    ]
+    .width(Length::Fill)
+    .align_items(iced::Alignment::End);
+
     column![
+        buttons,
         console_output,
         row![
             console_input,

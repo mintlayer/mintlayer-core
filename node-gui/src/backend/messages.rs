@@ -79,7 +79,6 @@ pub struct AccountInfo {
     pub staking_balance: BTreeMap<PoolId, PoolInfo>,
     pub delegations_balance: BTreeMap<DelegationId, (PoolId, Amount)>,
     pub transaction_list: TransactionList,
-    pub console_outputs: Vec<String>,
 }
 
 #[derive(Debug, Clone)]

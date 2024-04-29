@@ -115,6 +115,8 @@ pub enum WalletMessage {
 
     ConsoleInputChange(String),
     ConsoleInputSubmit,
+    ConsoleOutput(String),
+    ConsoleClear,
 
     StillSyncing,
     Close,
@@ -123,6 +125,7 @@ pub enum WalletMessage {
 
 #[derive(Debug, Clone, Default)]
 pub struct ConsoleState {
+    pub console_inputs: Vec<String>,
     pub console_outputs: Vec<String>,
     pub console_input: String,
 }
@@ -348,7 +351,7 @@ impl WalletTab {
             WalletMessage::ConsoleInputSubmit => {
                 self.account_state
                     .console_state
-                    .console_outputs
+                    .console_inputs
                     .push(self.account_state.console_state.console_input.clone());
                 backend_sender.send(BackendRequest::ConsoleCommand {
                     wallet_id: self.wallet_id,
@@ -356,6 +359,20 @@ impl WalletTab {
                     command: std::mem::take(&mut self.account_state.console_state.console_input),
                 });
                 Command::none()
+            }
+            WalletMessage::ConsoleClear => {
+                self.account_state.console_state.console_outputs.clear();
+                self.account_state.console_state.console_inputs.clear();
+
+                Command::none()
+            }
+            WalletMessage::ConsoleOutput(output) => {
+                self.account_state.console_state.console_outputs.push(output);
+
+                snap_to(
+                    Id::new(CONSOLE_OUTPUT_ID),
+                    iced::widget::scrollable::RelativeOffset { x: 0.0, y: 1.0 },
+                )
             }
             WalletMessage::StillSyncing => Command::none(),
             WalletMessage::Close => {
@@ -522,14 +539,6 @@ impl Tab for WalletTab {
                         ),
                         SelectedPanel::Console => console::view_console(
                             &self.account_state.console_state,
-                            &node_state
-                                .wallets
-                                .get(&self.wallet_id)
-                                .expect("exists")
-                                .accounts
-                                .get(&self.selected_account)
-                                .expect("exists")
-                                .console_outputs,
                             still_syncing.clone(),
                         ),
                     };

@@ -20,13 +20,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, ChainConfig, SignedTransaction},
     primitives::{per_thousand::PerThousand, semver::SemVer, user_agent::UserAgent, Amount},
 };
-use iced::{
-    widget::{
-        scrollable::{snap_to, Id},
-        Text,
-    },
-    window, Command, Element,
-};
+use iced::{widget::Text, window, Command, Element};
 use iced_aw::native::Modal;
 use logging::log;
 use p2p::{net::types::services::Services, types::peer_id::PeerId, P2pEvent};
@@ -53,10 +47,7 @@ use crate::{
     WalletMode,
 };
 
-use self::main_widget::tabs::{
-    wallet::{WalletMessage, CONSOLE_OUTPUT_ID},
-    TabsMessage,
-};
+use self::main_widget::tabs::{wallet::WalletMessage, TabsMessage};
 
 mod main_menu;
 mod main_widget;
@@ -609,49 +600,46 @@ impl MainWindow {
                     self.show_error(error.to_string());
                     Command::none()
                 }
-                BackendEvent::ConsoleResponse(wallet_id, account_id, Ok(command)) => {
-                    match command {
-                        ConsoleCommand::SetStatus {
-                            status: _,
-                            print_message: out,
-                        }
-                        | ConsoleCommand::Print(out) => self
-                            .node_state
-                            .wallets
-                            .get_mut(&wallet_id)
-                            .expect("wallet must be known (ConsoleResponse)")
-                            .accounts
-                            .get_mut(&account_id)
-                            .expect("account must be known (ConsoleResponse)")
-                            .console_outputs
-                            .push(out),
-                        ConsoleCommand::ClearScreen
-                        | ConsoleCommand::ClearHistory
-                        | ConsoleCommand::PrintHistory
-                        | ConsoleCommand::Exit => {}
+                BackendEvent::ConsoleResponse(wallet_id, _account_id, Ok(command)) => match command
+                {
+                    ConsoleCommand::SetStatus {
+                        status: _,
+                        print_message: out,
                     }
-
-                    snap_to(
-                        Id::new(CONSOLE_OUTPUT_ID),
-                        iced::widget::scrollable::RelativeOffset { x: 0.0, y: 1.0 },
+                    | ConsoleCommand::Print(out) => self
+                        .main_widget
+                        .update(
+                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                wallet_id,
+                                WalletMessage::ConsoleOutput(out),
+                            )),
+                            backend_sender,
+                        )
+                        .map(MainWindowMessage::MainWidgetMessage),
+                    ConsoleCommand::ClearScreen
+                    | ConsoleCommand::ClearHistory
+                    | ConsoleCommand::PrintHistory
+                    | ConsoleCommand::Exit => self
+                        .main_widget
+                        .update(
+                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                wallet_id,
+                                WalletMessage::ConsoleOutput(String::new()),
+                            )),
+                            backend_sender,
+                        )
+                        .map(MainWindowMessage::MainWidgetMessage),
+                },
+                BackendEvent::ConsoleResponse(wallet_id, _account_id, Err(error)) => self
+                    .main_widget
+                    .update(
+                        MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                            wallet_id,
+                            WalletMessage::ConsoleOutput(error.to_string()),
+                        )),
+                        backend_sender,
                     )
-                }
-                BackendEvent::ConsoleResponse(wallet_id, account_id, Err(error)) => {
-                    self.node_state
-                        .wallets
-                        .get_mut(&wallet_id)
-                        .expect("wallet must be known (ConsoleResponse)")
-                        .accounts
-                        .get_mut(&account_id)
-                        .expect("account must be known (ConsoleResponse)")
-                        .console_outputs
-                        .push(error.to_string());
-
-                    snap_to(
-                        Id::new(CONSOLE_OUTPUT_ID),
-                        iced::widget::scrollable::RelativeOffset { x: 0.0, y: 1.0 },
-                    )
-                }
+                    .map(MainWindowMessage::MainWidgetMessage),
             },
             MainWindowMessage::OpenWalletFileSelected {
                 file_path,

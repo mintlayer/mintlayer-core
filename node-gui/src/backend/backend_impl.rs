@@ -237,7 +237,6 @@ impl Backend {
             staking_balance: Default::default(),
             delegations_balance: Default::default(),
             transaction_list,
-            console_outputs: Default::default(),
         })
     }
 
@@ -279,7 +278,6 @@ impl Backend {
                 staking_balance: Default::default(),
                 delegations_balance: Default::default(),
                 transaction_list,
-                console_outputs: Default::default(),
             },
         ))
     }
