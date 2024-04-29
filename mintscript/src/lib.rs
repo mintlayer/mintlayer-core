@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use common::chain::ChainConfig;
-use helpers::{BlockchainState, SourceBlockState};
+use helpers::{InputUtxoBlockInfo, SourceTransactionInfo};
 use script::MintScript;
 
 pub mod helpers;
@@ -31,8 +31,8 @@ pub struct ScriptEvaluator {
 impl ScriptEvaluator {
     pub fn execute(
         &self,
-        source_block_info: &SourceBlockState,
-        blochchain_state: &BlockchainState,
+        source_block_info: &SourceTransactionInfo,
+        blochchain_state: &InputUtxoBlockInfo,
     ) -> bool {
         self.script
             .try_into_bool(&self.chain_config, source_block_info, blochchain_state)

@@ -63,6 +63,8 @@ pub enum ConnectTransactionError {
     TxFeeTotalCalcFailed(Amount, Amount),
     #[error("Signature verification failed in transaction: {0}")]
     SignatureVerificationFailed(#[from] DestinationSigError),
+    #[error("Script evaluation failed: {0}")]
+    ScriptEvaluationFailed(#[from] mintscript::script::error::Error),
     #[error("Error while calculating block height; possibly an overflow")]
     BlockHeightArithmeticError,
     #[error("Error while calculating timestamps; possibly an overflow")]

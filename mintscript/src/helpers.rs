@@ -15,12 +15,12 @@
 
 use common::{chain::block::timestamp::BlockTimestamp, primitives::BlockHeight};
 
-pub struct BlockchainState {
-    pub current_block_height: BlockHeight,
-    pub tip_block_timestamp: BlockTimestamp,
+pub struct InputUtxoBlockInfo {
+    pub block_height: BlockHeight,
+    pub block_timestamp: BlockTimestamp,
 }
 
-pub struct SourceBlockState {
+pub struct SourceTransactionInfo {
     pub block_height: BlockHeight,
     pub block_timestamp: BlockTimestamp,
 }

@@ -17,7 +17,7 @@ use common::chain::{DelegationId, PoolId};
 
 use super::MintScript;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum Error {
     #[error("Invalid combination {0:?} with {1:?}")]
     InvalidCombination(MintScript, MintScript),
@@ -33,4 +33,6 @@ pub enum Error {
     PoolDataNotFound(PoolId),
     #[error("Delegation data not found for signature verification {0}")]
     DelegationDataNotFound(DelegationId),
+    #[error("Script evaluation failed")]
+    ScriptEvalFailed,
 }

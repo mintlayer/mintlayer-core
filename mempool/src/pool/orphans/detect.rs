@@ -85,6 +85,7 @@ impl OrphanType {
             | CTE::PoolBalanceNotFound(_)
             | CTE::RewardDistributionError(_)
             | CTE::CheckTransactionError(_)
+            | CTE::ScriptEvaluationFailed(_)
             | CTE::IOPolicyError(_, _) => None,
         }
     }

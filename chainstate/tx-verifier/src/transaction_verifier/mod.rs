@@ -754,6 +754,16 @@ where
             ),
         )?;
 
+        // signature_check::check_scripts_for_tx(
+        //     self.chain_config.as_ref(),
+        //     &self.storage,
+        //     &self.utxo_cache,
+        //     &self.pos_accounting_adapter.accounting_delta(),
+        //     &tx_source,
+        //     median_time_past,
+        //     tx,
+        // )?;
+
         self.connect_pos_accounting_outputs(tx_source, tx.transaction())?;
 
         self.connect_tokens_outputs(tx_source, tx.transaction())?;

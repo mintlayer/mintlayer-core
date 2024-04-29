@@ -14,6 +14,7 @@ chainstate-types = { path = "../chainstate/types" }
 common = { path = "../common" }
 crypto = { path = "../crypto" }
 logging = { path = "../logging" }
+mintscript = { path = "../mintscript" }
 mempool-types = { path = "types" }
 p2p-types = { path = "../p2p/types" }
 pos-accounting = { path = "../pos-accounting" }

@@ -31,13 +31,13 @@ use pos_accounting::PoSAccountingView;
 use utxo::UtxosView;
 
 use crate::{
-    helpers::{BlockchainState, SourceBlockState},
+    helpers::{InputUtxoBlockInfo, SourceTransactionInfo},
     timelock_check::check_timelock,
 };
 
 use self::error::Error;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum MintScript {
     Bool(bool),
     Threshold(usize, Vec<MintScript>),
@@ -49,15 +49,15 @@ impl MintScript {
     pub fn try_into_bool(
         &self,
         chain_config: &ChainConfig,
-        source_block_info: &SourceBlockState,
-        blockchain_state: &BlockchainState,
+        source_tx_info: &SourceTransactionInfo,
+        utxo_block_info: &InputUtxoBlockInfo,
     ) -> Option<bool> {
         match self {
             MintScript::Bool(b) => Some(*b),
             MintScript::Threshold(count, v) => Some(
                 v.iter()
                     .map(|el| {
-                        el.try_into_bool(chain_config, source_block_info, blockchain_state)
+                        el.try_into_bool(chain_config, source_tx_info, utxo_block_info)
                             .unwrap_or(false)
                     })
                     .filter(|v| *v)
@@ -69,11 +69,11 @@ impl MintScript {
             }
             MintScript::CheckTimelock(tl) => Some(
                 check_timelock(
-                    &source_block_info.block_height,
-                    &source_block_info.block_timestamp,
+                    &source_tx_info.block_height,
+                    &source_tx_info.block_timestamp,
                     tl,
-                    &blockchain_state.current_block_height,
-                    &blockchain_state.tip_block_timestamp,
+                    &utxo_block_info.block_height,
+                    &utxo_block_info.block_timestamp,
                 )
                 .ok()
                 .is_some(),

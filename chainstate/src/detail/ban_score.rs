@@ -152,6 +152,22 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::PoolBalanceNotFound(_) => 100,
             ConnectTransactionError::RewardDistributionError(err) => err.ban_score(),
             ConnectTransactionError::CheckTransactionError(err) => err.ban_score(),
+            ConnectTransactionError::ScriptEvaluationFailed(err) => err.ban_score(),
+        }
+    }
+}
+
+impl BanScore for mintscript::script::error::Error {
+    fn ban_score(&self) -> u32 {
+        match self {
+            mintscript::script::error::Error::InvalidCombination(_, _) => 100,
+            mintscript::script::error::Error::TimelockNotSatisfied => 100,
+            mintscript::script::error::Error::BlockDistanceInvalid(_) => 100,
+            mintscript::script::error::Error::BlockHeightArithmeticError(_, _) => 100,
+            mintscript::script::error::Error::BlockTimestampArithmeticError(_, _) => 100,
+            mintscript::script::error::Error::PoolDataNotFound(_) => 100,
+            mintscript::script::error::Error::DelegationDataNotFound(_) => 100,
+            mintscript::script::error::Error::ScriptEvalFailed => 100,
         }
     }
 }

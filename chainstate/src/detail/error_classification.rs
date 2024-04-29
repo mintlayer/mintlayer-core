@@ -307,7 +307,15 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             ConnectTransactionError::CheckTransactionError(err) => err.classify(),
             ConnectTransactionError::PoSAccountingError(err) => err.classify(),
             ConnectTransactionError::ConstrainedValueAccumulatorError(err, _) => err.classify(),
+
+            ConnectTransactionError::ScriptEvaluationFailed(err) => err.classify(),
         }
+    }
+}
+
+impl BlockProcessingErrorClassification for mintscript::script::error::Error {
+    fn classify(&self) -> BlockProcessingErrorClass {
+        BlockProcessingErrorClass::BadBlock
     }
 }
 
