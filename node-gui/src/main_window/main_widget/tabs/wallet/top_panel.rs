@@ -37,7 +37,7 @@ pub fn view_top_panel(
     account: &AccountInfo,
 ) -> Element<'static, WalletMessage> {
     let balance = account.balance.coins();
-    //FIXME: can use the decimals directly
+    //TODO: can use the decimals directly
     let balance = print_coin_amount_with_ticker(chain_config, balance.amount());
     let balance = Text::new(balance).size(20);
 

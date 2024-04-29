@@ -1039,7 +1039,7 @@ impl Backend {
                 account_id: _,
                 command: _,
             } => {
-                //FIXME
+                //TODO: done in the other PR
             }
             BackendRequest::Shutdown => unreachable!(),
         }

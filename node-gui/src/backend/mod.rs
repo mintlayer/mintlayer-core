@@ -91,7 +91,7 @@ pub async fn node_initialize(
         );
     }
 
-    // FIXME: move this out
+    // TODO: move this out
     let mut opts = node_lib::Options::from_args(std::env::args_os());
     opts.command = match network {
         InitNetwork::Mainnet => Some(Command::Mainnet(RunOptions::default())),
