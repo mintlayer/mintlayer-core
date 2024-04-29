@@ -14,6 +14,7 @@
 // limitations under the License.
 
 mod addresses;
+mod console;
 mod delegation;
 mod left_panel;
 mod send;
@@ -24,10 +25,12 @@ mod transactions;
 use std::collections::BTreeMap;
 
 use common::chain::DelegationId;
+pub use console::CONSOLE_OUTPUT_ID;
 use iced::{
     widget::{
-        column, container, horizontal_rule, pane_grid, row, vertical_rule, PaneGrid, Scrollable,
-        Text,
+        column, container, horizontal_rule, pane_grid, row,
+        scrollable::{snap_to, Id},
+        vertical_rule, PaneGrid, Scrollable, Text,
     },
     Command, Element, Length,
 };
@@ -56,6 +59,7 @@ pub enum SelectedPanel {
     Send,
     Staking,
     Delegation,
+    Console,
 }
 
 #[derive(Debug, Clone)]
@@ -109,9 +113,21 @@ pub enum WalletMessage {
 
     TransactionList { skip: usize },
 
+    ConsoleInputChange(String),
+    ConsoleInputSubmit,
+    ConsoleOutput(String),
+    ConsoleClear,
+
     StillSyncing,
     Close,
     NoOp,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ConsoleState {
+    pub console_inputs: Vec<String>,
+    pub console_outputs: Vec<String>,
+    pub console_input: String,
 }
 
 /// State that should be reset after changing the selected account
@@ -134,6 +150,8 @@ pub struct AccountState {
     send_delegation_address: String,
     send_delegation_amount: String,
     send_delegation_id: String,
+
+    console_state: ConsoleState,
 }
 
 pub struct WalletTab {
@@ -189,7 +207,14 @@ impl WalletTab {
 
             WalletMessage::SelectPanel(selected_panel) => {
                 self.selected_panel = selected_panel;
-                Command::none()
+                if self.selected_panel == SelectedPanel::Console {
+                    snap_to(
+                        Id::new(CONSOLE_OUTPUT_ID),
+                        iced::widget::scrollable::RelativeOffset { x: 0.0, y: 1.0 },
+                    )
+                } else {
+                    Command::none()
+                }
             }
 
             WalletMessage::Resized(pane_grid::ResizeEvent { split, ratio }) => {
@@ -318,6 +343,36 @@ impl WalletTab {
                     skip,
                 });
                 Command::none()
+            }
+            WalletMessage::ConsoleInputChange(new_state) => {
+                self.account_state.console_state.console_input = new_state;
+                Command::none()
+            }
+            WalletMessage::ConsoleInputSubmit => {
+                self.account_state
+                    .console_state
+                    .console_inputs
+                    .push(self.account_state.console_state.console_input.clone());
+                backend_sender.send(BackendRequest::ConsoleCommand {
+                    wallet_id: self.wallet_id,
+                    account_id: self.selected_account,
+                    command: std::mem::take(&mut self.account_state.console_state.console_input),
+                });
+                Command::none()
+            }
+            WalletMessage::ConsoleClear => {
+                self.account_state.console_state.console_outputs.clear();
+                self.account_state.console_state.console_inputs.clear();
+
+                Command::none()
+            }
+            WalletMessage::ConsoleOutput(output) => {
+                self.account_state.console_state.console_outputs.push(output);
+
+                snap_to(
+                    Id::new(CONSOLE_OUTPUT_ID),
+                    iced::widget::scrollable::RelativeOffset { x: 0.0, y: 1.0 },
+                )
             }
             WalletMessage::StillSyncing => Command::none(),
             WalletMessage::Close => {
@@ -480,6 +535,10 @@ impl Tab for WalletTab {
                             &self.account_state.send_delegation_amount,
                             &self.account_state.send_delegation_id,
                             &self.account_state.delegate_staking_amounts,
+                            still_syncing.clone(),
+                        ),
+                        SelectedPanel::Console => console::view_console(
+                            &self.account_state.console_state,
                             still_syncing.clone(),
                         ),
                     };

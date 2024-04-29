@@ -19,7 +19,7 @@ use node_comm::node_traits::NodeInterface;
 use wallet_rpc_client::wallet_rpc_traits::WalletInterface;
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
-use crate::errors::WalletCliError;
+use crate::errors::WalletCliCommandError;
 
 pub struct CliWalletState {
     wallet_id: H256,
@@ -79,36 +79,38 @@ where
 
     pub async fn get_wallet_with_acc<N: NodeInterface>(
         &mut self,
-    ) -> Result<(&W, U31), WalletCliError<N>> {
+    ) -> Result<(&W, U31), WalletCliCommandError<N>> {
         let state = Self::update_state(&mut self.state, &self.wallet)
             .await?
             .as_ref()
-            .ok_or(WalletCliError::NoWallet)?;
+            .ok_or(WalletCliCommandError::NoWallet)?;
         Ok((&self.wallet, state.selected_account))
     }
 
-    pub async fn get_wallet<N: NodeInterface>(&mut self) -> Result<&W, WalletCliError<N>> {
+    pub async fn get_wallet<N: NodeInterface>(&mut self) -> Result<&W, WalletCliCommandError<N>> {
         Self::update_state(&mut self.state, &self.wallet).await?;
         Ok(&self.wallet)
     }
 
-    pub async fn get_wallet_mut<N: NodeInterface>(&mut self) -> Result<&mut W, WalletCliError<N>> {
+    pub async fn get_wallet_mut<N: NodeInterface>(
+        &mut self,
+    ) -> Result<&mut W, WalletCliCommandError<N>> {
         Self::update_state(&mut self.state, &self.wallet).await?;
         Ok(&mut self.wallet)
     }
 
     pub async fn get_mut_state<N: NodeInterface>(
         &mut self,
-    ) -> Result<&mut CliWalletState, WalletCliError<N>> {
+    ) -> Result<&mut CliWalletState, WalletCliCommandError<N>> {
         Self::update_state(&mut self.state, &self.wallet)
             .await?
             .as_mut()
-            .ok_or(WalletCliError::NoWallet)
+            .ok_or(WalletCliCommandError::NoWallet)
     }
 
     pub async fn get_opt_state<N: NodeInterface>(
         &mut self,
-    ) -> Result<&Option<CliWalletState>, WalletCliError<N>> {
+    ) -> Result<&Option<CliWalletState>, WalletCliCommandError<N>> {
         Self::update_state(&mut self.state, &self.wallet).await.map(|state| &*state)
     }
 
@@ -119,16 +121,16 @@ where
     async fn update_state<'a, N: NodeInterface>(
         local_state: &'a mut Option<CliWalletState>,
         wallet: &W,
-    ) -> Result<&'a mut Option<CliWalletState>, WalletCliError<N>> {
+    ) -> Result<&'a mut Option<CliWalletState>, WalletCliCommandError<N>> {
         match (local_state.as_mut(), Self::fetch_wallet_state(wallet).await) {
             (None, Some(rpc_state)) => {
                 *local_state = Some(rpc_state);
-                Err(WalletCliError::NewWalletWasOpened)
+                Err(WalletCliCommandError::NewWalletWasOpened)
             }
             (Some(state), Some(rpc_state)) => {
                 if state.wallet_id != rpc_state.wallet_id {
                     *local_state = Some(rpc_state);
-                    Err(WalletCliError::DifferentWalletWasOpened)
+                    Err(WalletCliCommandError::DifferentWalletWasOpened)
                 } else {
                     state.account_names = rpc_state.account_names;
                     Ok(local_state)
@@ -136,7 +138,7 @@ where
             }
             (Some(_), None) => {
                 *local_state = None;
-                Err(WalletCliError::ExistingWalletWasClosed)
+                Err(WalletCliCommandError::ExistingWalletWasClosed)
             }
             (None, None) => Ok(local_state),
         }

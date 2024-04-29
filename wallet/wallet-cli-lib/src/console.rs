@@ -16,6 +16,7 @@
 use std::{collections::VecDeque, path::PathBuf};
 
 use crossterm::tty::IsTty;
+use wallet_cli_commands::WalletCliCommandError;
 use wallet_rpc_lib::types::NodeInterface;
 
 use crate::errors::WalletCliError;
@@ -57,7 +58,9 @@ impl ConsoleOutput for StdioOutputConsole {
     }
 
     fn print_error<N: NodeInterface>(&mut self, error: WalletCliError<N>) {
-        if let WalletCliError::InvalidCommandInput(e) = &error {
+        if let WalletCliError::WalletCommandError(WalletCliCommandError::InvalidCommandInput(e)) =
+            &error
+        {
             // Print help and parse errors using styles
             e.print().expect("Should not fail normally");
         } else {

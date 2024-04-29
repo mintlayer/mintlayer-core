@@ -25,6 +25,7 @@ use iced_aw::native::Modal;
 use logging::log;
 use p2p::{net::types::services::Services, types::peer_id::PeerId, P2pEvent};
 use rfd::AsyncFileDialog;
+use wallet_cli_commands::ConsoleCommand;
 use wallet_types::wallet_type::WalletType;
 
 use crate::{
@@ -224,7 +225,7 @@ impl MainWindow {
         };
 
         Self {
-            main_menu: main_menu::MainMenu::new(),
+            main_menu: main_menu::MainMenu::new(wallet_mode),
             main_widget: main_widget::MainWidget::new(wallet_mode),
             // TODO: Support other languages
             language: wallet::wallet::Language::English,
@@ -599,6 +600,46 @@ impl MainWindow {
                     self.show_error(error.to_string());
                     Command::none()
                 }
+                BackendEvent::ConsoleResponse(wallet_id, _account_id, Ok(command)) => match command
+                {
+                    ConsoleCommand::SetStatus {
+                        status: _,
+                        print_message: out,
+                    }
+                    | ConsoleCommand::Print(out) => self
+                        .main_widget
+                        .update(
+                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                wallet_id,
+                                WalletMessage::ConsoleOutput(out),
+                            )),
+                            backend_sender,
+                        )
+                        .map(MainWindowMessage::MainWidgetMessage),
+                    ConsoleCommand::ClearScreen
+                    | ConsoleCommand::ClearHistory
+                    | ConsoleCommand::PrintHistory
+                    | ConsoleCommand::Exit => self
+                        .main_widget
+                        .update(
+                            MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                                wallet_id,
+                                WalletMessage::ConsoleOutput(String::new()),
+                            )),
+                            backend_sender,
+                        )
+                        .map(MainWindowMessage::MainWidgetMessage),
+                },
+                BackendEvent::ConsoleResponse(wallet_id, _account_id, Err(error)) => self
+                    .main_widget
+                    .update(
+                        MainWidgetMessage::TabsMessage(TabsMessage::WalletMessage(
+                            wallet_id,
+                            WalletMessage::ConsoleOutput(error.to_string()),
+                        )),
+                        backend_sender,
+                    )
+                    .map(MainWindowMessage::MainWidgetMessage),
             },
             MainWindowMessage::OpenWalletFileSelected {
                 file_path,

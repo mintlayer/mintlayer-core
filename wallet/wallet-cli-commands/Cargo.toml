@@ -1,5 +1,5 @@
 [package]
-name = "wallet-cli-lib"
+name = "wallet-cli-commands"
 license.workspace = true
 edition.workspace = true
 version.workspace = true
@@ -26,7 +26,6 @@ wallet-storage = { path = "../storage" }
 wallet-types = { path = "../types" }
 wallet-rpc-lib = { path = "../wallet-rpc-lib" }
 wallet-rpc-client = { path = "../wallet-rpc-client" }
-wallet-cli-commands = { path = "../wallet-cli-commands" }
 
 clap = { workspace = true, features = ["derive"] }
 async-trait.workspace = true

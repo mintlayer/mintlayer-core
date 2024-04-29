@@ -65,6 +65,7 @@ members = [
   "wallet",                             # Wallet primitives.
   "wallet/wallet-cli",                  # Wallet CLI/REPL binary.
   "wallet/wallet-cli-lib",              # Wallet CLI/REPL lib.
+  "wallet/wallet-cli-commands",         # Wallet CLI/REPL commands.
   "wallet/wallet-controller",           # Common code for wallet UI applications.
   "wallet/wallet-node-client",          # Wallet-to-node communication tools.
   "wallet/wallet-address-generator",    # Wallet address generator binary.

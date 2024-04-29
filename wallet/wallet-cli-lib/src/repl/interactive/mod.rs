@@ -27,14 +27,13 @@ use reedline::{
     Reedline, ReedlineMenu, Signal, Vi,
 };
 use tokio::sync::{mpsc, oneshot};
+use wallet_cli_commands::{get_repl_command, parse_input, ConsoleCommand};
 use wallet_rpc_lib::types::NodeInterface;
 
 use crate::{
-    cli_event_loop::Event, commands::ConsoleCommand, console::ConsoleOutput,
-    errors::WalletCliError, repl::interactive::key_bindings::add_menu_keybindings,
+    cli_event_loop::Event, console::ConsoleOutput, errors::WalletCliError,
+    repl::interactive::key_bindings::add_menu_keybindings,
 };
-
-use super::{get_repl_command, parse_input};
 
 const HISTORY_MAX_LINES: usize = 1000;
 
@@ -138,7 +137,7 @@ pub fn run<N: NodeInterface>(
     startup_command_futures: Vec<oneshot::Receiver<Result<ConsoleCommand, WalletCliError<N>>>>,
     cold_wallet: bool,
 ) -> Result<(), WalletCliError<N>> {
-    let repl_command = get_repl_command(cold_wallet);
+    let repl_command = get_repl_command(cold_wallet, true);
 
     let mut line_editor = create_line_editor(
         logger.printer().clone(),

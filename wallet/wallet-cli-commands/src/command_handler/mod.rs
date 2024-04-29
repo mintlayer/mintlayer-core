@@ -40,7 +40,7 @@ use wallet_rpc_lib::types::{
     RpcValidatedSignatures, TokenMetadata,
 };
 
-use crate::errors::WalletCliError;
+use crate::{errors::WalletCliCommandError, ManageableWalletCommand, WalletManagementCommand};
 
 use self::local_state::WalletWithState;
 
@@ -76,23 +76,23 @@ where
     async fn set_selected_account<N: NodeInterface>(
         &mut self,
         account_index: U31,
-    ) -> Result<(), WalletCliError<N>>
+    ) -> Result<(), WalletCliCommandError<N>>
     where
-        WalletCliError<N>: From<E>,
+        WalletCliCommandError<N>: From<E>,
     {
         let state = self.wallet.get_mut_state().await?;
 
         if account_index.into_u32() as usize >= state.num_accounts() {
-            return Err(WalletCliError::AccountNotFound(account_index));
+            return Err(WalletCliCommandError::AccountNotFound(account_index));
         }
 
         state.set_selected_account(account_index);
         Ok(())
     }
 
-    async fn repl_status<N: NodeInterface>(&mut self) -> Result<String, WalletCliError<N>>
+    async fn repl_status<N: NodeInterface>(&mut self) -> Result<String, WalletCliCommandError<N>>
     where
-        WalletCliError<N>: From<E>,
+        WalletCliCommandError<N>: From<E>,
     {
         let status = match self.wallet.get_opt_state().await? {
             Some(state) => {
@@ -119,24 +119,23 @@ where
         ConsoleCommand::Print(status_text)
     }
 
-    async fn non_empty_wallet<N: NodeInterface>(&mut self) -> Result<&W, WalletCliError<N>> {
+    async fn non_empty_wallet<N: NodeInterface>(&mut self) -> Result<&W, WalletCliCommandError<N>> {
         self.wallet.get_wallet_with_acc().await.map(|(w, _)| w)
     }
 
-    async fn wallet<N: NodeInterface>(&mut self) -> Result<&W, WalletCliError<N>> {
+    async fn wallet<N: NodeInterface>(&mut self) -> Result<&W, WalletCliCommandError<N>> {
         self.wallet.get_wallet().await
     }
 
-    async fn handle_cold_wallet_command<N: NodeInterface>(
+    async fn handle_wallet_management_command<N: NodeInterface>(
         &mut self,
-        command: ColdWalletCommand,
-        chain_config: &ChainConfig,
-    ) -> Result<ConsoleCommand, WalletCliError<N>>
+        command: WalletManagementCommand,
+    ) -> Result<ConsoleCommand, WalletCliCommandError<N>>
     where
-        WalletCliError<N>: From<E>,
+        WalletCliCommandError<N>: From<E>,
     {
         match command {
-            ColdWalletCommand::CreateWallet {
+            WalletManagementCommand::CreateWallet {
                 wallet_path,
                 mnemonic,
                 whether_to_store_seed_phrase,
@@ -184,7 +183,7 @@ where
                 })
             }
 
-            ColdWalletCommand::OpenWallet {
+            WalletManagementCommand::OpenWallet {
                 wallet_path,
                 encryption_password,
                 force_change_wallet_type,
@@ -205,7 +204,7 @@ where
                 })
             }
 
-            ColdWalletCommand::CloseWallet => {
+            WalletManagementCommand::CloseWallet => {
                 self.wallet().await?.close_wallet().await?;
                 self.wallet.update_wallet::<N>().await;
 
@@ -214,7 +213,26 @@ where
                     print_message: "Successfully closed the wallet.".to_owned(),
                 })
             }
+            WalletManagementCommand::RpcShutdownAndExit => {
+                self.wallet.get_wallet_mut().await?.shutdown().await?;
+                Ok(ConsoleCommand::Exit)
+            }
+            WalletManagementCommand::Exit => {
+                self.wallet.get_wallet_mut().await?.exit().await?;
+                Ok(ConsoleCommand::Exit)
+            }
+        }
+    }
 
+    async fn handle_cold_wallet_command<N: NodeInterface>(
+        &mut self,
+        command: ColdWalletCommand,
+        chain_config: &ChainConfig,
+    ) -> Result<ConsoleCommand, WalletCliCommandError<N>>
+    where
+        WalletCliCommandError<N>: From<E>,
+    {
+        match command {
             ColdWalletCommand::WalletInfo => {
                 let info = self.non_empty_wallet().await?.wallet_info().await?;
                 let names = info
@@ -324,7 +342,9 @@ where
 
             ColdWalletCommand::AddressQRCode { address } => {
                 let addr: Address<Destination> = Address::from_string(chain_config, address)
-                    .map_err(|_| WalletCliError::InvalidInput("Invalid address".to_string()))?;
+                    .map_err(|_| {
+                        WalletCliCommandError::InvalidInput("Invalid address".to_string())
+                    })?;
 
                 let qr_code_string = qrcode_or_error_string(&addr.to_string());
                 Ok(ConsoleCommand::Print(qr_code_string))
@@ -618,14 +638,6 @@ where
             }
 
             ColdWalletCommand::Version => Ok(ConsoleCommand::Print(get_version())),
-            ColdWalletCommand::RpcShutdownAndExit => {
-                self.wallet.get_wallet_mut().await?.shutdown().await?;
-                Ok(ConsoleCommand::Exit)
-            }
-            ColdWalletCommand::Exit => {
-                self.wallet.get_wallet_mut().await?.exit().await?;
-                Ok(ConsoleCommand::Exit)
-            }
             ColdWalletCommand::PrintHistory => Ok(ConsoleCommand::PrintHistory),
             ColdWalletCommand::ClearScreen => Ok(ConsoleCommand::ClearScreen),
             ColdWalletCommand::ClearHistory => Ok(ConsoleCommand::ClearHistory),
@@ -636,9 +648,9 @@ where
         &mut self,
         chain_config: &ChainConfig,
         command: WalletCommand,
-    ) -> Result<ConsoleCommand, WalletCliError<N>>
+    ) -> Result<ConsoleCommand, WalletCliCommandError<N>>
     where
-        WalletCliError<N>: From<E>,
+        WalletCliCommandError<N>: From<E>,
     {
         match command {
             WalletCommand::ColdCommands(command) => {
@@ -914,12 +926,12 @@ where
                 let outputs: Vec<TxOutput> = outputs
                     .into_iter()
                     .map(|input| parse_output(input, chain_config))
-                    .collect::<Result<Vec<_>, WalletCliError<N>>>()?;
+                    .collect::<Result<Vec<_>, WalletCliCommandError<N>>>()?;
 
                 let input_utxos: Vec<UtxoOutPoint> = utxos
                     .into_iter()
                     .map(parse_utxo_outpoint)
-                    .collect::<Result<Vec<_>, WalletCliError<N>>>(
+                    .collect::<Result<Vec<_>, WalletCliCommandError<N>>>(
                 )?;
 
                 let ComposedTransaction { hex, fees } = self
@@ -1196,7 +1208,7 @@ where
                 let input_utxos: Vec<UtxoOutPoint> = utxos
                     .into_iter()
                     .map(parse_utxo_outpoint)
-                    .collect::<Result<Vec<_>, WalletCliError<N>>>(
+                    .collect::<Result<Vec<_>, WalletCliCommandError<N>>>(
                 )?;
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let new_tx = wallet
@@ -1601,6 +1613,24 @@ where
             }
         }
     }
+
+    pub async fn handle_manageable_wallet_command<N: NodeInterface>(
+        &mut self,
+        chain_config: &ChainConfig,
+        command: ManageableWalletCommand,
+    ) -> Result<ConsoleCommand, WalletCliCommandError<N>>
+    where
+        WalletCliCommandError<N>: From<E>,
+    {
+        match command {
+            ManageableWalletCommand::WalletCommands(command) => {
+                self.handle_wallet_command(chain_config, command).await
+            }
+            ManageableWalletCommand::ManagementCommands(command) => {
+                self.handle_wallet_management_command(command).await
+            }
+        }
+    }
 }
 
 fn format_signature_status((idx, status): (usize, &RpcSignatureStatus)) -> String {
@@ -1650,7 +1680,7 @@ fn qrcode_or_error_string(str_data: &str) -> String {
 
 async fn wallet_and_selected_acc<E, W, N>(
     wallet: &mut WalletWithState<W>,
-) -> Result<(&W, U31), WalletCliError<N>>
+) -> Result<(&W, U31), WalletCliCommandError<N>>
 where
     W: WalletInterface<Error = E> + Send + Sync + 'static,
     N: NodeInterface,

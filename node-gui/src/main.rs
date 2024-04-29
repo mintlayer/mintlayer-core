@@ -31,7 +31,7 @@ use main_window::{MainWindow, MainWindowMessage};
 use tokio::sync::mpsc::UnboundedReceiver;
 
 const COLD_WALLET_TOOLTIP_TEXT: &str =
-    "Start the wallet in Cold mode without connecting to the network or any nodes.";
+    "Start the wallet in Cold mode without connecting to the network or any nodes. The Cold mode is made to run the wallet on an air-gapped machine without internet connection for storage of keys of high-value. For example, pool decommission keys.";
 const HOT_WALLET_TOOLTIP_TEXT: &str = "Start the wallet in Hot mode and connect to the network.";
 
 const MAIN_NETWORK_TOOLTIP: &str = "The 'Mainnet' is the main network that has coins with value.";
@@ -335,22 +335,22 @@ impl Application for MintlayerNodeGUI {
                 let error_box = column![
                     iced::widget::text("Please choose the wallet mode".to_string()).size(32),
                     row![
-                        iced::widget::button(text("Cold")).on_press(WalletMode::Cold),
+                        iced::widget::button(text("Hot")).on_press(WalletMode::Hot),
                         tooltip(
                             Text::new(iced_aw::BootstrapIcon::Question.to_string())
                                 .font(iced_aw::BOOTSTRAP_FONT),
-                            COLD_WALLET_TOOLTIP_TEXT,
+                            HOT_WALLET_TOOLTIP_TEXT,
                             tooltip::Position::Bottom
                         )
                         .gap(10)
                         .style(iced::theme::Container::Box)
                     ],
                     row![
-                        iced::widget::button(text("Hot")).on_press(WalletMode::Hot),
+                        iced::widget::button(text("Cold")).on_press(WalletMode::Cold),
                         tooltip(
                             Text::new(iced_aw::BootstrapIcon::Question.to_string())
                                 .font(iced_aw::BOOTSTRAP_FONT),
-                            HOT_WALLET_TOOLTIP_TEXT,
+                            COLD_WALLET_TOOLTIP_TEXT,
                             tooltip::Position::Bottom
                         )
                         .gap(10)

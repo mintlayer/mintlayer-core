@@ -31,7 +31,10 @@ use tokio::{
     task::JoinHandle,
 };
 use wallet::{account::transaction_list::TransactionList, wallet::Error, WalletError};
-use wallet_cli_lib::commands::CommandHandler;
+use wallet_cli_commands::{
+    get_repl_command, parse_input, CommandHandler, ConsoleCommand, ManageableWalletCommand,
+    WalletCommand,
+};
 use wallet_controller::{
     make_cold_wallet_rpc_client, types::Balances, ControllerConfig, NodeInterface, UtxoState,
     WalletHandlesClient,
@@ -65,8 +68,14 @@ const TRANSACTION_LIST_PAGE_COUNT: usize = 10;
 const IN_TOP_X_MB: usize = 5;
 
 enum GuiHotColdController {
-    Hot(WalletRpc<WalletHandlesClient>),
-    Cold(WalletRpc<ColdWalletClient>),
+    Hot(
+        WalletRpc<WalletHandlesClient>,
+        CommandHandler<WalletRpcHandlesClient<WalletHandlesClient>>,
+    ),
+    Cold(
+        WalletRpc<ColdWalletClient>,
+        CommandHandler<WalletRpcHandlesClient<ColdWalletClient>>,
+    ),
 }
 
 struct WalletData {
@@ -79,18 +88,18 @@ struct WalletData {
 impl WalletData {
     fn hot_wallet(&mut self) -> Option<&mut WalletRpc<WalletHandlesClient>> {
         match &mut self.controller {
-            GuiHotColdController::Hot(w) => Some(w),
-            GuiHotColdController::Cold(_) => None,
+            GuiHotColdController::Hot(w, _) => Some(w),
+            GuiHotColdController::Cold(_, _) => None,
         }
     }
 
     async fn shutdown(mut self) {
         match &mut self.controller {
-            GuiHotColdController::Hot(w) => {
+            GuiHotColdController::Hot(w, _) => {
                 w.close_wallet().await.expect("should close the wallet");
                 w.shutdown().expect("should close the wallet");
             }
-            GuiHotColdController::Cold(w) => {
+            GuiHotColdController::Cold(w, _) => {
                 w.close_wallet().await.expect("should close the wallet");
                 w.shutdown().expect("should close the wallet");
             }
@@ -110,6 +119,13 @@ impl ColdHotNodeController {
                 controller.shutdown_trigger.initiate();
             }
             Self::Cold => {}
+        }
+    }
+
+    fn is_cold(&self) -> bool {
+        match self {
+            Self::Hot(_) => false,
+            Self::Cold => true,
         }
     }
 }
@@ -287,7 +303,7 @@ impl Backend {
                 .await
                 .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-                let (wallet_rpc, best_block, accounts_info, accounts_data) = self
+                let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) = self
                     .create_wallet(
                         handles_client,
                         file_path.clone(),
@@ -298,7 +314,7 @@ impl Backend {
                     .await?;
 
                 let wallet_data = WalletData {
-                    controller: GuiHotColdController::Hot(wallet_rpc /* , command_handler */),
+                    controller: GuiHotColdController::Hot(wallet_rpc, command_handler),
                     accounts: accounts_data,
                     best_block,
                     updated: false,
@@ -309,12 +325,12 @@ impl Backend {
             (WalletType::Cold, _) => {
                 let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
 
-                let (wallet_rpc, best_block, accounts_info, accounts_data) = self
+                let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) = self
                     .create_wallet(client, file_path.clone(), &mnemonic, import, wallet_events)
                     .await?;
 
                 let wallet_data = WalletData {
-                    controller: GuiHotColdController::Cold(wallet_rpc /* command_handler */),
+                    controller: GuiHotColdController::Cold(wallet_rpc, command_handler),
                     accounts: accounts_data,
                     best_block,
                     updated: false,
@@ -353,6 +369,7 @@ impl Backend {
     ) -> Result<
         (
             WalletRpc<N>,
+            CommandHandler<WalletRpcHandlesClient<N>>,
             (Id<GenBlock>, BlockHeight),
             BTreeMap<AccountId, AccountInfo>,
             BTreeMap<AccountId, AccountData>,
@@ -390,7 +407,7 @@ impl Backend {
                 .await
                 .map_err(|e| BackendError::WalletError(e.to_string()))?,
         ));
-        let _command_handler = CommandHandler::new(
+        let command_handler = CommandHandler::new(
             ControllerConfig {
                 in_top_x_mb: IN_TOP_X_MB,
                 broadcast_to_mempool: true,
@@ -420,7 +437,13 @@ impl Backend {
                 )
             })
             .collect();
-        Ok((wallet_rpc, best_block, accounts_info, accounts_data))
+        Ok((
+            wallet_rpc,
+            command_handler,
+            best_block,
+            accounts_info,
+            accounts_data,
+        ))
     }
 
     async fn add_open_wallet(
@@ -443,13 +466,17 @@ impl Backend {
                     .await
                     .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-                    let (wallet_rpc, encryption_state, best_block, accounts_info, accounts_data) =
-                        self.open_wallet(handles_client, file_path.clone(), wallet_events).await?;
+                    let (
+                        wallet_rpc,
+                        command_handler,
+                        encryption_state,
+                        best_block,
+                        accounts_info,
+                        accounts_data,
+                    ) = self.open_wallet(handles_client, file_path.clone(), wallet_events).await?;
 
                     let wallet_data = WalletData {
-                        controller: GuiHotColdController::Hot(
-                            wallet_rpc, /* , command_handler */
-                        ),
+                        controller: GuiHotColdController::Hot(wallet_rpc, command_handler),
                         accounts: accounts_data,
                         best_block,
                         updated: false,
@@ -460,13 +487,17 @@ impl Backend {
                 (WalletType::Cold, _) => {
                     let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
 
-                    let (wallet_rpc, encryption_state, best_block, accounts_info, accounts_data) =
-                        self.open_wallet(client, file_path.clone(), wallet_events).await?;
+                    let (
+                        wallet_rpc,
+                        command_handler,
+                        encryption_state,
+                        best_block,
+                        accounts_info,
+                        accounts_data,
+                    ) = self.open_wallet(client, file_path.clone(), wallet_events).await?;
 
                     let wallet_data = WalletData {
-                        controller: GuiHotColdController::Cold(
-                            wallet_rpc, /* , command_handler */
-                        ),
+                        controller: GuiHotColdController::Cold(wallet_rpc, command_handler),
                         accounts: accounts_data,
                         best_block,
                         updated: false,
@@ -501,6 +532,7 @@ impl Backend {
     ) -> Result<
         (
             WalletRpc<N>,
+            CommandHandler<WalletRpcHandlesClient<N>>,
             EncryptionState,
             (Id<GenBlock>, BlockHeight),
             BTreeMap<AccountId, AccountInfo>,
@@ -533,7 +565,7 @@ impl Backend {
                 .await
                 .map_err(|e| BackendError::WalletError(e.to_string()))?,
         ));
-        let _command_handler = CommandHandler::new(
+        let command_handler = CommandHandler::new(
             ControllerConfig {
                 in_top_x_mb: IN_TOP_X_MB,
                 broadcast_to_mempool: true,
@@ -574,6 +606,7 @@ impl Backend {
             .collect();
         Ok((
             wallet_rpc,
+            command_handler,
             encryption_state,
             best_block,
             accounts_info,
@@ -592,8 +625,8 @@ impl Backend {
             .ok_or(BackendError::UnknownWalletIndex(wallet_id))?;
 
         match &mut wallet.controller {
-            GuiHotColdController::Hot(w) => encrypt_action(action, w, wallet_id).await,
-            GuiHotColdController::Cold(w) => encrypt_action(action, w, wallet_id).await,
+            GuiHotColdController::Hot(w, _) => encrypt_action(action, w, wallet_id).await,
+            GuiHotColdController::Cold(w, _) => encrypt_action(action, w, wallet_id).await,
         }
     }
 
@@ -637,12 +670,12 @@ impl Backend {
             .ok_or(BackendError::UnknownWalletIndex(wallet_id))?;
 
         let (index, address) = match &mut wallet.controller {
-            GuiHotColdController::Cold(w) => w
+            GuiHotColdController::Cold(w, _) => w
                 .issue_address(account_id.account_index())
                 .await
                 .map_err(|e| BackendError::WalletError(e.to_string()))
                 .map(|info| (info.index, info.address))?,
-            GuiHotColdController::Hot(w) => w
+            GuiHotColdController::Hot(w, _) => w
                 .issue_address(account_id.account_index())
                 .await
                 .map_err(|e| BackendError::WalletError(e.to_string()))
@@ -1035,13 +1068,43 @@ impl Backend {
                 );
             }
             BackendRequest::ConsoleCommand {
-                wallet_id: _,
-                account_id: _,
-                command: _,
+                wallet_id,
+                account_id,
+                command,
             } => {
-                //TODO: done in the other PR
+                let res = self.handle_console_command(wallet_id, account_id, command).await;
+                Self::send_event(
+                    &self.event_tx,
+                    BackendEvent::ConsoleResponse(wallet_id, account_id, res),
+                );
             }
             BackendRequest::Shutdown => unreachable!(),
+        }
+    }
+
+    async fn handle_console_command(
+        &mut self,
+        wallet_id: WalletId,
+        account_id: AccountId,
+        command: String,
+    ) -> Result<ConsoleCommand, BackendError> {
+        let repl_command = get_repl_command(self.controller.is_cold(), false);
+        let command = parse_input::<ColdWalletClient>(&command, &repl_command)
+            .map_err(|e| BackendError::InvalidConsoleCommand(e.to_string()))?
+            .ok_or(BackendError::EmptyConsoleCommand)?;
+
+        let wallet = self
+            .wallets
+            .get_mut(&wallet_id)
+            .ok_or(BackendError::UnknownWalletIndex(wallet_id))?;
+
+        match &mut wallet.controller {
+            GuiHotColdController::Hot(_, c) => {
+                select_acc_and_execute_cmd(c, account_id, command, &self.chain_config).await
+            }
+            GuiHotColdController::Cold(_, c) => {
+                select_acc_and_execute_cmd(c, account_id, command, &self.chain_config).await
+            }
         }
     }
 
@@ -1063,8 +1126,8 @@ impl Backend {
             self.wallets.iter_mut().filter(|(_, wallet_data)| wallet_data.updated)
         {
             let controller = match &mut wallet_data.controller {
-                GuiHotColdController::Cold(_) => continue,
-                GuiHotColdController::Hot(w) => w,
+                GuiHotColdController::Cold(_, _) => continue,
+                GuiHotColdController::Hot(w, _) => w,
             };
 
             wallet_data.updated = false;
@@ -1146,8 +1209,8 @@ impl Backend {
         // `get_stake_pool_balances` may fail if we ever start using remote RPC
         for (wallet_id, wallet_data) in self.wallets.iter_mut() {
             let controller = match &mut wallet_data.controller {
-                GuiHotColdController::Hot(w) => w,
-                GuiHotColdController::Cold(_) => continue,
+                GuiHotColdController::Hot(w, _) => w,
+                GuiHotColdController::Cold(_, _) => continue,
             };
             for (account_id, account_data) in
                 wallet_data.accounts.iter_mut().filter(|(_account_id, account_data)| {
@@ -1272,6 +1335,28 @@ async fn encrypt_action<T: NodeInterface + Clone + Send + Sync + 'static>(
             .map(|()| (wallet_id, EncryptionState::EnabledLocked)),
     }
     .map_err(|err| BackendError::WalletError(err.to_string()))
+}
+
+async fn select_acc_and_execute_cmd<N>(
+    c: &mut CommandHandler<WalletRpcHandlesClient<N>>,
+    account_id: AccountId,
+    command: ManageableWalletCommand,
+    chain_config: &ChainConfig,
+) -> Result<ConsoleCommand, BackendError>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
+{
+    c.handle_manageable_wallet_command(
+        chain_config,
+        ManageableWalletCommand::WalletCommands(WalletCommand::SelectAccount {
+            account_index: account_id.account_index(),
+        }),
+    )
+    .await
+    .map_err(|e| BackendError::WalletError(e.to_string()))?;
+    c.handle_manageable_wallet_command(chain_config, command)
+        .await
+        .map_err(|e| BackendError::WalletError(e.to_string()))
 }
 
 pub async fn run(
