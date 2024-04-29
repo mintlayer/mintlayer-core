@@ -335,22 +335,22 @@ impl Application for MintlayerNodeGUI {
                 let error_box = column![
                     iced::widget::text("Please choose the wallet mode".to_string()).size(32),
                     row![
-                        iced::widget::button(text("Cold")).on_press(WalletMode::Cold),
+                        iced::widget::button(text("Hot")).on_press(WalletMode::Hot),
                         tooltip(
                             Text::new(iced_aw::BootstrapIcon::Question.to_string())
                                 .font(iced_aw::BOOTSTRAP_FONT),
-                            COLD_WALLET_TOOLTIP_TEXT,
+                            HOT_WALLET_TOOLTIP_TEXT,
                             tooltip::Position::Bottom
                         )
                         .gap(10)
                         .style(iced::theme::Container::Box)
                     ],
                     row![
-                        iced::widget::button(text("Hot")).on_press(WalletMode::Hot),
+                        iced::widget::button(text("Cold")).on_press(WalletMode::Cold),
                         tooltip(
                             Text::new(iced_aw::BootstrapIcon::Question.to_string())
                                 .font(iced_aw::BOOTSTRAP_FONT),
-                            HOT_WALLET_TOOLTIP_TEXT,
+                            COLD_WALLET_TOOLTIP_TEXT,
                             tooltip::Position::Bottom
                         )
                         .gap(10)

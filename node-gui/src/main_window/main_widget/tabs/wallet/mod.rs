@@ -28,8 +28,9 @@ use common::chain::DelegationId;
 pub use console::CONSOLE_OUTPUT_ID;
 use iced::{
     widget::{
-        column, container, horizontal_rule, pane_grid, row, vertical_rule, PaneGrid, Scrollable,
-        Text,
+        column, container, horizontal_rule, pane_grid, row,
+        scrollable::{snap_to, Id},
+        vertical_rule, PaneGrid, Scrollable, Text,
     },
     Command, Element, Length,
 };
@@ -203,7 +204,14 @@ impl WalletTab {
 
             WalletMessage::SelectPanel(selected_panel) => {
                 self.selected_panel = selected_panel;
-                Command::none()
+                if self.selected_panel == SelectedPanel::Console {
+                    snap_to(
+                        Id::new(CONSOLE_OUTPUT_ID),
+                        iced::widget::scrollable::RelativeOffset { x: 0.0, y: 1.0 },
+                    )
+                } else {
+                    Command::none()
+                }
             }
 
             WalletMessage::Resized(pane_grid::ResizeEvent { split, ratio }) => {

@@ -41,7 +41,7 @@ impl Tab for ColdWalletTab {
     type Message = TabsMessage;
 
     fn title(&self) -> String {
-        String::from("")
+        String::from("Cold wallet summary")
     }
 
     fn tab_label(&self) -> TabLabel {

@@ -21,6 +21,8 @@ use iced::{
 use iced_aw::menu::{Item, Menu, MenuBar};
 use wallet_types::wallet_type::WalletType;
 
+use crate::WalletMode;
+
 #[derive(Debug, Clone)]
 pub enum MenuMessage {
     NoOp,
@@ -30,15 +32,17 @@ pub enum MenuMessage {
     Exit,
 }
 
-pub struct MainMenu {}
+pub struct MainMenu {
+    wallet_mode: WalletMode,
+}
 
 impl MainMenu {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(wallet_mode: WalletMode) -> Self {
+        Self { wallet_mode }
     }
 
     pub fn view(&self) -> Element<MenuMessage> {
-        let file_menu = make_menu_file();
+        let file_menu = make_menu_file(self.wallet_mode);
 
         let menu_bar = MenuBar::new(vec![file_menu]).spacing(4.0).check_bounds_width(30.0);
 
@@ -99,50 +103,61 @@ fn menu_item(label: &str, msg: MenuMessage) -> Item<'_, MenuMessage, Theme, iced
     Item::new(labeled_button(label, msg).width(Length::Fixed(230.0)))
 }
 
-fn make_menu_file<'a>() -> Item<'a, MenuMessage, Theme, iced::Renderer> {
+fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, iced::Renderer> {
     let root = Item::with_menu(
         labeled_button("File", MenuMessage::NoOp),
-        Menu::new(vec![
-            menu_item(
-                "Create new Hot wallet",
-                MenuMessage::CreateNewWallet {
-                    wallet_type: WalletType::Hot,
-                },
-            ),
-            menu_item(
-                "Create new Cold wallet",
-                MenuMessage::CreateNewWallet {
-                    wallet_type: WalletType::Cold,
-                },
-            ),
-            menu_item(
-                "Recover Hot wallet",
-                MenuMessage::RecoverWallet {
-                    wallet_type: WalletType::Hot,
-                },
-            ),
-            menu_item(
-                "Recover Cold wallet",
-                MenuMessage::RecoverWallet {
-                    wallet_type: WalletType::Cold,
-                },
-            ),
-            menu_item(
-                "Open Hot wallet",
-                MenuMessage::OpenWallet {
-                    wallet_type: WalletType::Hot,
-                },
-            ),
-            menu_item(
-                "Open Cold wallet",
-                MenuMessage::OpenWallet {
-                    wallet_type: WalletType::Cold,
-                },
-            ),
-            // TODO: enable setting when needed
-            // menu_item("Settings", MenuMessage::NoOp),
-            menu_item("Exit", MenuMessage::Exit),
-        ])
+        Menu::new(match wallet_mode {
+            WalletMode::Hot => {
+                vec![
+                    menu_item(
+                        "Create new Hot wallet",
+                        MenuMessage::CreateNewWallet {
+                            wallet_type: WalletType::Hot,
+                        },
+                    ),
+                    menu_item(
+                        "Recover Hot wallet",
+                        MenuMessage::RecoverWallet {
+                            wallet_type: WalletType::Hot,
+                        },
+                    ),
+                    menu_item(
+                        "Open Hot wallet",
+                        MenuMessage::OpenWallet {
+                            wallet_type: WalletType::Hot,
+                        },
+                    ),
+                    // TODO: enable setting when needed
+                    // menu_item("Settings", MenuMessage::NoOp),
+                    menu_item("Exit", MenuMessage::Exit),
+                ]
+            }
+            WalletMode::Cold => {
+                vec![
+                    menu_item(
+                        "Create new Cold wallet",
+                        MenuMessage::CreateNewWallet {
+                            wallet_type: WalletType::Cold,
+                        },
+                    ),
+                    menu_item(
+                        "Recover Cold wallet",
+                        MenuMessage::RecoverWallet {
+                            wallet_type: WalletType::Cold,
+                        },
+                    ),
+                    menu_item(
+                        "Open Cold wallet",
+                        MenuMessage::OpenWallet {
+                            wallet_type: WalletType::Cold,
+                        },
+                    ),
+                    // TODO: enable setting when needed
+                    // menu_item("Settings", MenuMessage::NoOp),
+                    menu_item("Exit", MenuMessage::Exit),
+                ]
+            }
+        })
         .width(260),
     );
 

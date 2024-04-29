@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use iced::{
-    widget::{column, container, row, scrollable::Id, tooltip, Scrollable, Text},
+    widget::{column, row, scrollable::Id, tooltip, Scrollable, Text},
     Element, Length,
 };
 
@@ -28,8 +28,6 @@ pub fn view_console(
     console_outputs: &Vec<String>,
     still_syncing: Option<WalletMessage>,
 ) -> Element<'static, WalletMessage> {
-    let title = container(Text::new("Console:")).padding(5);
-
     let s: Vec<String> = state
         .console_outputs
         .iter()
@@ -48,7 +46,6 @@ pub fn view_console(
         .on_submit(WalletMessage::ConsoleInputSubmit);
 
     column![
-        title,
         console_output,
         row![
             console_input,

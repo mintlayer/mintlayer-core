@@ -234,7 +234,7 @@ impl MainWindow {
         };
 
         Self {
-            main_menu: main_menu::MainMenu::new(),
+            main_menu: main_menu::MainMenu::new(wallet_mode),
             main_widget: main_widget::MainWidget::new(wallet_mode),
             // TODO: Support other languages
             language: wallet::wallet::Language::English,
