@@ -18,10 +18,11 @@ use std::{collections::BTreeMap, num::NonZeroU64};
 use common::{
     chain::{
         output_value::OutputValue, timelock::OutputTimeLock, AccountCommand, AccountSpending,
-        ChainConfig, TxInput, TxOutput, UtxoOutPoint,
+        AccountType, ChainConfig, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Subsidy},
 };
+use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
 use utils::ensure;
 
@@ -59,6 +60,7 @@ impl ConstrainedValueAccumulator {
     pub fn from_inputs(
         chain_config: &ChainConfig,
         block_height: BlockHeight,
+        orders_accounting_view: &impl OrdersAccountingView,
         pos_accounting_view: &impl PoSAccountingView,
         inputs: &[TxInput],
         inputs_utxos: &[Option<TxOutput>],
@@ -98,6 +100,7 @@ impl ConstrainedValueAccumulator {
                         chain_config,
                         block_height,
                         command,
+                        orders_accounting_view,
                     )?;
 
                     total_fee_deducted = (total_fee_deducted + fee_to_deduct)
@@ -235,6 +238,7 @@ impl ConstrainedValueAccumulator {
         chain_config: &ChainConfig,
         block_height: BlockHeight,
         command: &AccountCommand,
+        orders_accounting_view: &impl OrdersAccountingView,
     ) -> Result<Amount, Error> {
         match command {
             AccountCommand::MintTokens(token_id, amount) => {
@@ -253,6 +257,32 @@ impl ConstrainedValueAccumulator {
             }
             AccountCommand::ChangeTokenAuthority(_, _) => {
                 Ok(chain_config.token_change_authority_fee(block_height))
+            }
+            AccountCommand::WithdrawOrder(id) => {
+                let order_data = orders_accounting_view
+                    .get_order_data(id)
+                    .map_err(|_| orders_accounting::Error::ViewFail)?
+                    .ok_or(orders_accounting::Error::OrderDataNotFound(*id))?;
+                let ask_balance = orders_accounting_view
+                    .get_ask_balance(id)
+                    .map_err(|_| orders_accounting::Error::ViewFail)?
+                    .ok_or(orders_accounting::Error::OrderAskBalanceNotFound(*id))?;
+                let give_balance = orders_accounting_view
+                    .get_give_balance(id)
+                    .map_err(|_| orders_accounting::Error::ViewFail)?
+                    .ok_or(orders_accounting::Error::OrderGiveBalanceNotFound(*id))?;
+
+                let initially_asked = order_data.ask.amount();
+                let ask_amount = (initially_asked - ask_balance)
+                    .ok_or(Error::NegativeAccountBalance(AccountType::Order(*id)))?;
+
+                let ask_id = CoinOrTokenId::from_output_value(order_data.ask).expect("cannot fail");
+                insert_or_increase(&mut self.unconstrained_value, ask_id, ask_amount)?;
+
+                let give_id =
+                    CoinOrTokenId::from_output_value(order_data.give).expect("cannot fail");
+                insert_or_increase(&mut self.unconstrained_value, give_id, give_balance)?;
+                Ok(Amount::ZERO)
             }
         }
     }

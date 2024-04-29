@@ -409,6 +409,7 @@ impl<'a> RandomTxMaker<'a> {
                     result_inputs.extend(inputs);
                     result_outputs.extend(outputs);
                 }
+                AccountType::Order(_) => todo!(),
             }
         }
 

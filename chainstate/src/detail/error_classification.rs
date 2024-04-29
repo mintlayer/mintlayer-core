@@ -874,6 +874,7 @@ impl BlockProcessingErrorClassification for constraints_value_accumulator::Error
             | Error::NegativeAccountBalance(_) => BlockProcessingErrorClass::BadBlock,
 
             Error::PoSAccountingError(err) => err.classify(),
+            Error::OrdersAccountingError(_) => todo!(),
         }
     }
 }

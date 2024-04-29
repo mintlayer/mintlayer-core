@@ -333,6 +333,7 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                     "nonce": nonce,
                 })
             }
+            AccountCommand::WithdrawOrder(_) => todo!(),
         },
     }
 }

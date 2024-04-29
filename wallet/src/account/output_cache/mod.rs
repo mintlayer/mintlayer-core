@@ -670,6 +670,7 @@ impl OutputCache {
                 | AccountCommand::ChangeTokenAuthority(_, _)
                 | AccountCommand::UnfreezeToken(_) => None,
                 AccountCommand::FreezeToken(frozen_token_id, _) => Some(frozen_token_id),
+                AccountCommand::WithdrawOrder(_) => todo!(),
             },
         });
 
@@ -727,6 +728,7 @@ impl OutputCache {
                 | AccountCommand::UnfreezeToken(token_id)
                 | AccountCommand::ChangeTokenAuthority(token_id, _)
                 | AccountCommand::UnmintTokens(token_id) => frozen_token_id == token_id,
+                AccountCommand::WithdrawOrder(_) => todo!(),
             },
             TxInput::Account(_) => false,
         })
@@ -917,6 +919,7 @@ impl OutputCache {
                             self.token_issuance.insert(*token_id, data);
                         }
                     }
+                    AccountCommand::WithdrawOrder(_) => todo!(),
                 },
             }
         }
@@ -1017,6 +1020,7 @@ impl OutputCache {
                                 data.unconfirmed_txs.remove(tx_id);
                             }
                         }
+                        AccountCommand::WithdrawOrder(_) => todo!(),
                     },
                 }
             }
@@ -1305,6 +1309,7 @@ impl OutputCache {
                                                 data.unconfirmed_txs.remove(&tx_id.into());
                                             }
                                         }
+                                        AccountCommand::WithdrawOrder(_) => todo!(),
                                     },
                                 }
                             }
@@ -1509,6 +1514,7 @@ fn apply_freeze_mutations_from_tx(
                 | AccountCommand::UnmintTokens(_)
                 | AccountCommand::LockTokenSupply(_)
                 | AccountCommand::ChangeTokenAuthority(_, _) => {}
+                AccountCommand::WithdrawOrder(_) => todo!(),
             },
         }
     }
@@ -1548,6 +1554,7 @@ fn apply_total_supply_mutations_from_tx(
                 AccountCommand::FreezeToken(_, _)
                 | AccountCommand::UnfreezeToken(_)
                 | AccountCommand::ChangeTokenAuthority(_, _) => {}
+                AccountCommand::WithdrawOrder(_) => todo!(),
             },
         }
     }

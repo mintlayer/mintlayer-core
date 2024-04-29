@@ -24,6 +24,7 @@ use common::{
     primitives::{Amount, BlockHeight, Fee, Id, Idable, Subsidy},
 };
 use constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
+use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
 
 use thiserror::Error;
@@ -145,6 +146,7 @@ pub fn check_tx_inputs_outputs_policy(
     tx: &Transaction,
     chain_config: &ChainConfig,
     block_height: BlockHeight,
+    orders_accounting_view: &impl OrdersAccountingView,
     pos_accounting_view: &impl PoSAccountingView,
     utxo_view: &impl utxo::UtxosView,
 ) -> Result<AccumulatedFee, ConnectTransactionError> {
@@ -183,6 +185,7 @@ pub fn check_tx_inputs_outputs_policy(
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         chain_config,
         block_height,
+        orders_accounting_view,
         pos_accounting_view,
         tx.inputs(),
         &inputs_utxos,

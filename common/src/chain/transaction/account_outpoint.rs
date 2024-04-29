@@ -16,7 +16,7 @@
 use crate::{
     chain::{
         tokens::{IsTokenUnfreezable, TokenId},
-        AccountNonce, DelegationId,
+        AccountNonce, DelegationId, OrderId,
     },
     primitives::Amount,
 };
@@ -32,6 +32,8 @@ pub enum AccountType {
     /// Token account type is used to authorize changes in token data.
     #[codec(index = 1)]
     Token(TokenId),
+    #[codec(index = 1)]
+    Order(OrderId),
 }
 
 impl From<AccountSpending> for AccountType {
@@ -51,6 +53,7 @@ impl From<AccountCommand> for AccountType {
             | AccountCommand::FreezeToken(id, _)
             | AccountCommand::UnfreezeToken(id)
             | AccountCommand::ChangeTokenAuthority(id, _) => AccountType::Token(id),
+            AccountCommand::WithdrawOrder(id) => AccountType::Order(id),
         }
     }
 }
@@ -110,6 +113,8 @@ pub enum AccountCommand {
     // Change the authority who can authorize operations for a token
     #[codec(index = 5)]
     ChangeTokenAuthority(TokenId, Destination),
+    #[codec(index = 6)]
+    WithdrawOrder(OrderId),
 }
 
 /// Type of OutPoint that represents spending from an account

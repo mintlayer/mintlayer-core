@@ -15,6 +15,7 @@ constraints-value-accumulator = { path = "./constraints-value-accumulator" }
 crypto = { path = "../crypto" }
 logging = { path = "../logging" }
 mintscript = { path = "../mintscript" }
+orders-accounting = { path = "../orders-accounting" }
 pos-accounting = { path = "../pos-accounting" }
 randomness = { path = "../randomness" }
 rpc = { path = "../rpc" }

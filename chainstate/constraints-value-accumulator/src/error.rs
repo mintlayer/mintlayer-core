@@ -38,6 +38,8 @@ pub enum Error {
     MissingOutputOrSpent(UtxoOutPoint),
     #[error("PoS accounting error: `{0}`")]
     PoSAccountingError(#[from] pos_accounting::Error),
+    #[error("Orders accounting error: `{0}`")]
+    OrdersAccountingError(#[from] orders_accounting::Error),
     #[error("Pledge amount not found for pool: `{0}`")]
     PledgeAmountNotFound(PoolId),
     #[error("Spending non-spendable output: `{0:?}`")]

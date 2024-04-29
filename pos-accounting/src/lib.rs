@@ -20,7 +20,7 @@ mod storage;
 
 pub use crate::{
     data::PoSAccountingData,
-    error::{Error, Result},
+    error::Error,
     pool::{
         delegation::DelegationData,
         delta::{data::PoSAccountingDeltaData, DeltaMergeUndo, PoSAccountingDelta},

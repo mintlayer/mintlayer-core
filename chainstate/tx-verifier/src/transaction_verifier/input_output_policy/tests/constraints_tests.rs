@@ -24,6 +24,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, CoinOrTokenId, H256},
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
+use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use randomness::{CryptoRng, Rng, SliceRandom};
 use rstest::rstest;
 use test_utils::{
@@ -101,6 +102,10 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
     );
     let pos_db = pos_accounting::PoSAccountingDB::new(&pos_store);
 
+    // FIXME: proper  impl
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
     let decommission_pool_utxo = if rng.gen::<bool>() {
         TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data))
     } else {
@@ -158,6 +163,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
             &tx,
             &chain_config,
             BlockHeight::new(1),
+            &orders_db,
             &pos_db,
             &utxo_db,
         )
@@ -205,8 +211,15 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
 
         let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs);
 
-        check_tx_inputs_outputs_policy(&tx, &chain_config, BlockHeight::new(1), &pos_db, &utxo_db)
-            .unwrap();
+        check_tx_inputs_outputs_policy(
+            &tx,
+            &chain_config,
+            BlockHeight::new(1),
+            &orders_db,
+            &pos_db,
+            &utxo_db,
+        )
+        .unwrap();
     }
 }
 
@@ -239,6 +252,10 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
     );
     let pos_db = pos_accounting::PoSAccountingDB::new(&pos_store);
     let utxo_db = UtxosDBInMemoryImpl::new(Id::<GenBlock>::new(H256::zero()), BTreeMap::new());
+
+    // FIXME: proper  impl
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
 
     // make timelock outputs but total atoms that locked is less than required
     {
@@ -284,6 +301,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
             &tx,
             &chain_config,
             BlockHeight::new(1),
+            &orders_db,
             &pos_db,
             &utxo_db,
         )
@@ -336,7 +354,14 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         )
         .unwrap();
 
-        check_tx_inputs_outputs_policy(&tx, &chain_config, BlockHeight::new(1), &pos_db, &utxo_db)
-            .unwrap();
+        check_tx_inputs_outputs_policy(
+            &tx,
+            &chain_config,
+            BlockHeight::new(1),
+            &orders_db,
+            &pos_db,
+            &utxo_db,
+        )
+        .unwrap();
     }
 }

@@ -614,6 +614,7 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
                     | AccountCommand::UnfreezeToken(token_id)
                     | AccountCommand::LockTokenSupply(token_id)
                     | AccountCommand::ChangeTokenAuthority(token_id, _) => Some(*token_id),
+                    AccountCommand::WithdrawOrder(_) => todo!(),
                 },
             })
             .collect();
@@ -733,9 +734,14 @@ async fn tx_fees<T: ApiServerStorageWrite>(
     let pools = prefetch_pool_data(&inputs_utxos, db_tx).await?;
     let pos_accounting_adapter = PoSAccountingAdapterToCheckFees { pools };
 
+    // FIXME: proper  impl
+    let orders_store = orders_accounting::InMemoryOrdersAccounting::new();
+    let orders_db = orders_accounting::OrdersAccountingDB::new(&orders_store);
+
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         chain_config,
         block_height,
+        &orders_db,
         &pos_accounting_adapter,
         tx.inputs(),
         &inputs_utxos,
@@ -1096,6 +1102,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     )
                     .await;
                 }
+                AccountCommand::WithdrawOrder(_) => todo!(),
             },
             TxInput::Account(outpoint) => {
                 match outpoint.account() {

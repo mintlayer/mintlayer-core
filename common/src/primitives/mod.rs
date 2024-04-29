@@ -35,7 +35,7 @@ pub use height::{BlockCount, BlockDistance, BlockHeight};
 pub use id::{Id, Idable, H256};
 pub use version_tag::VersionTag;
 
-use crate::chain::tokens::TokenId;
+use crate::chain::{output_value::OutputValue, tokens::TokenId};
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -48,4 +48,14 @@ pub struct Subsidy(pub Amount);
 pub enum CoinOrTokenId {
     Coin,
     TokenId(TokenId),
+}
+
+impl CoinOrTokenId {
+    pub fn from_output_value(value: OutputValue) -> Option<Self> {
+        match value {
+            OutputValue::Coin(_) => Some(Self::Coin),
+            OutputValue::TokenV0(_) => None,
+            OutputValue::TokenV1(id, _) => Some(Self::TokenId(id)),
+        }
+    }
 }

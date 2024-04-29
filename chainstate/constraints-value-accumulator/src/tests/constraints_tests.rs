@@ -27,6 +27,7 @@ use common::{
     },
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
+use orders_accounting::{InMemoryOrdersAccounting, OrderData, OrdersAccountingDB};
 use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB, PoolData};
 use randomness::{CryptoRng, Rng};
 use rstest::rstest;
@@ -75,6 +76,10 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
+    // FIXME: proper  impl
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
     let inputs = vec![TxInput::Utxo(UtxoOutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
         0,
@@ -93,6 +98,7 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
+        &orders_db,
         &pos_db,
         &inputs,
         &input_utxos,
@@ -139,6 +145,10 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
+    // FIXME: proper  impl
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
     let inputs_utxos = vec![None];
     let inputs = vec![TxInput::from_account(
         AccountNonce::new(0),
@@ -154,6 +164,7 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
+        &orders_db,
         &pos_db,
         &inputs,
         &inputs_utxos,
@@ -202,6 +213,10 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
+    // FIXME: proper  impl
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
     let inputs = vec![
         TxInput::from_utxo(
             OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
@@ -233,6 +248,7 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
+            &orders_db,
             &pos_db,
             &inputs,
             &inputs_utxos,
@@ -260,6 +276,7 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
+            &orders_db,
             &pos_db,
             &inputs,
             &inputs_utxos,
@@ -305,6 +322,10 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
+    // FIXME: proper  impl
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
     let inputs = vec![
         TxInput::from_utxo(
             OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
@@ -346,6 +367,7 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
+        &orders_db,
         &pos_db,
         &inputs,
         &inputs_utxos,
@@ -384,6 +406,7 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
+            &orders_db,
             &pos_db,
             &inputs,
             &inputs_utxos,
@@ -443,6 +466,10 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
+    // FIXME: proper  impl
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
     let inputs = vec![
         TxInput::from_utxo(
             OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
@@ -484,6 +511,7 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
+        &orders_db,
         &pos_db,
         &inputs,
         &inputs_utxos,
@@ -515,6 +543,7 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
+        &orders_db,
         &pos_db,
         &inputs,
         &inputs_utxos,
@@ -557,6 +586,10 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
+    // FIXME: proper  impl
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
     // it's an error to spend more the balance
     let inputs = vec![TxInput::from_account(
         AccountNonce::new(0),
@@ -568,6 +601,7 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
+            &orders_db,
             &pos_db,
             &inputs,
             &inputs_utxos,
@@ -598,6 +632,7 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
+            &orders_db,
             &pos_db,
             &inputs,
             &inputs_utxos,
@@ -634,6 +669,7 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
+            &orders_db,
             &pos_db,
             &inputs,
             &inputs_utxos,

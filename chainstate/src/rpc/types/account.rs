@@ -103,6 +103,7 @@ impl RpcAccountCommand {
                     new_authority: RpcAddress::new(chain_config, destination.clone())?,
                 }
             }
+            AccountCommand::WithdrawOrder(_) => todo!(),
         };
         Ok(result)
     }

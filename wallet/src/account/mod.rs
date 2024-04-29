@@ -1345,6 +1345,7 @@ impl Account {
                             .token_data(token_id)
                             .map(|data| (None, Some(data.authority.clone())))
                             .ok_or(WalletError::UnknownTokenId(*token_id)),
+                        AccountCommand::WithdrawOrder(_) => todo!(),
                     }
                 }
             })
@@ -1822,6 +1823,7 @@ impl Account {
                     self.find_token(token_id).is_ok()
                         || self.is_destination_mine_or_watched(address)
                 }
+                AccountCommand::WithdrawOrder(_) => todo!(),
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
@@ -2228,6 +2230,7 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
+                AccountCommand::WithdrawOrder(_) => todo!(),
             },
         }
     }

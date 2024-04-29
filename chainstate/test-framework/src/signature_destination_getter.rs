@@ -160,6 +160,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             };
                             Ok(destination)
                         }
+                        AccountCommand::WithdrawOrder(_) => todo!(),
                     },
                 }
             };

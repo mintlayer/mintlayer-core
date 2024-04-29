@@ -152,6 +152,10 @@ async fn simulation(
     let mut delegations = BTreeSet::new();
     let mut token_ids = BTreeSet::new();
 
+    // FIXME: proper  impl
+    let orders_store = orders_accounting::InMemoryOrdersAccounting::new();
+    let orders_db = orders_accounting::OrdersAccountingDB::new(&orders_store);
+
     let mut data_per_block_height = BTreeMap::new();
     data_per_block_height.insert(
         BlockHeight::zero(),
@@ -384,6 +388,7 @@ async fn simulation(
                                 chain_config.token_change_authority_fee(block_height);
                             burn_coins(&mut statistics, token_change_authority_fee);
                         }
+                        AccountCommand::WithdrawOrder(_) => todo!(),
                     },
                 });
             }
@@ -415,25 +420,28 @@ async fn simulation(
                     })
                     .collect();
 
-                let staker_balance_getter = |pool_id: PoolId| {
-                    Ok(Some(
-                        tf.chainstate
-                            .get_stake_pool_data(pool_id)
-                            .unwrap()
-                            .unwrap()
-                            .staker_balance()
-                            .unwrap(),
-                    ))
-                };
+                //let staker_balance_getter = |pool_id: PoolId| {
+                //    Ok(Some(
+                //        tf.chainstate
+                //            .get_stake_pool_data(pool_id)
+                //            .unwrap()
+                //            .unwrap()
+                //            .staker_balance()
+                //            .unwrap(),
+                //    ))
+                //};
                 // only used for checks for attempted to print money but we don't need to check that here
-                let delegation_balance_getter =
-                    |_delegation_id: DelegationId| Ok(Some(Amount::MAX));
+                //let delegation_balance_getter =
+                //    |_delegation_id: DelegationId| Ok(Some(Amount::MAX));
+                // FIXME: proper impl
+                let pos_store = pos_accounting::InMemoryPoSAccounting::new();
+                let pos_db = pos_accounting::PoSAccountingDB::new(&pos_store);
 
                 let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
                     &chain_config,
                     block_height,
-                    staker_balance_getter,
-                    delegation_balance_getter,
+                    &orders_db,
+                    &pos_db,
                     tx.inputs(),
                     &inputs_utxos,
                 )
