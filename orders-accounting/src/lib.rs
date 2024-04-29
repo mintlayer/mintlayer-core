@@ -17,7 +17,7 @@ mod cache;
 mod data;
 mod error;
 mod operations;
-//mod storage;
+mod storage;
 mod view;
 
 //pub use {
