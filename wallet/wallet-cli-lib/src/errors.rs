@@ -15,12 +15,10 @@
 
 use std::path::PathBuf;
 
-use crypto::key::hdkd::u31::U31;
-use utils::{cookie::LoadCookieError, qrcode::QrCodeError};
-use wallet::WalletError;
-use wallet_rpc_client::{handles_client::WalletRpcHandlesClientError, rpc_client::WalletRpcError};
+use utils::cookie::LoadCookieError;
+use wallet_cli_commands::WalletCliCommandError;
+use wallet_rpc_client::rpc_client::WalletRpcError;
 use wallet_rpc_lib::types::NodeInterface;
-use wallet_rpc_lib::RpcError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum WalletCliError<N: NodeInterface> {
@@ -32,38 +30,12 @@ pub enum WalletCliError<N: NodeInterface> {
     CookieFileReadError(#[from] LoadCookieError),
     #[error("Invalid config: {0}")]
     InvalidConfig(String),
-    #[error("Invalid quoting")]
-    InvalidQuoting,
-    #[error("{0}")]
-    InvalidCommandInput(clap::Error),
     #[error("Invalid input: {0}")]
     InvalidInput(String),
-    #[error("Wallet file already open")]
-    WalletFileAlreadyOpen,
-    #[error("Please open or create a wallet file first")]
-    NoWallet,
-    #[error("Please select an account to use")]
-    NoSelectedAccount,
-    #[error("Account not found for index: {0}")]
-    AccountNotFound(U31),
-    #[error("QR Code encoding error: {0}")]
-    QrCodeEncoding(#[from] QrCodeError),
-    #[error("Retrieving addresses with usage failed for account {0}: {1}")]
-    AddressesRetrievalFailed(U31, String),
     #[error("Error converting to json: {0}")]
     SerdeJsonFormatError(#[from] serde_json::Error),
     #[error("{0}")]
-    WalletRpcError(#[from] RpcError<N>),
-    #[error("Failed to convert to signed transaction: {0}")]
-    FailedToConvertToSignedTransaction(#[from] WalletError),
-    #[error("{0}")]
-    WalletHandlessRpcError(#[from] WalletRpcHandlesClientError<N>),
-    #[error("{0}")]
     WalletClientRpcError(#[from] WalletRpcError),
-    #[error("A new wallet has been opened between commands")]
-    NewWalletWasOpened,
-    #[error("A different wallet than the existing one has been opened between commands")]
-    DifferentWalletWasOpened,
-    #[error("The wallet has been closed between commands")]
-    ExistingWalletWasClosed,
+    #[error("{0}")]
+    WalletCommandError(#[from] WalletCliCommandError<N>),
 }

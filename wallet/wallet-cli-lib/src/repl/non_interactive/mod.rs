@@ -17,14 +17,10 @@ pub mod log;
 
 use clap::Command;
 use tokio::sync::{mpsc, oneshot};
+use wallet_cli_commands::{get_repl_command, parse_input, ConsoleCommand};
 use wallet_rpc_lib::types::NodeInterface;
 
-use crate::{
-    cli_event_loop::Event, commands::ConsoleCommand, console::ConsoleOutput,
-    errors::WalletCliError, ConsoleInput,
-};
-
-use super::{get_repl_command, parse_input};
+use crate::{cli_event_loop::Event, console::ConsoleOutput, errors::WalletCliError, ConsoleInput};
 
 #[derive(Debug)]
 enum LineOutput {

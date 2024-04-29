@@ -17,6 +17,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use common::chain::ChainConfig;
 use tokio::sync::{mpsc, oneshot};
+use wallet_cli_commands::{CommandHandler, ConsoleCommand, WalletCommand};
 use wallet_rpc_client::{handles_client::WalletRpcHandlesClient, rpc_client::ClientWalletRpc};
 use wallet_rpc_lib::types::{ControllerConfig, NodeInterface};
 use wallet_rpc_lib::{
@@ -24,10 +25,7 @@ use wallet_rpc_lib::{
     WalletRpcServer, WalletService,
 };
 
-use crate::{
-    commands::{CommandHandler, ConsoleCommand, WalletCommand},
-    errors::WalletCliError,
-};
+use crate::errors::WalletCliError;
 
 #[derive(Debug)]
 pub enum Event<N: NodeInterface> {
@@ -105,7 +103,7 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
                     cmd = event_rx.recv() => {
                         if let Some(Event::HandleCommand { command, res_tx }) = cmd {
                             let res = command_handler.handle_wallet_command(&chain_config, command).await;
-                            let _ = res_tx.send(res);
+                            let _ = res_tx.send(res.map_err(WalletCliError::WalletCommandError));
                         } else {
                             return Ok(());
                         }
@@ -136,7 +134,7 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
                     cmd = event_rx.recv() => {
                         if let Some(Event::HandleCommand { command, res_tx }) = cmd {
                             let res = command_handler.handle_wallet_command(chain_config, command).await;
-                            let _ = res_tx.send(res);
+                            let _ = res_tx.send(res.map_err(WalletCliError::WalletCommandError));
                         } else {
                             return Ok(());
                         }

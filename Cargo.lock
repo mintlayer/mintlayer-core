@@ -4499,6 +4499,7 @@ dependencies = [
  "utils",
  "variant_count",
  "wallet",
+ "wallet-cli-commands",
  "wallet-cli-lib",
  "wallet-controller",
  "wallet-rpc-client",
@@ -8299,6 +8300,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "wallet-cli-commands"
+version = "0.4.2"
+dependencies = [
+ "async-trait",
+ "blockprod",
+ "chainstate",
+ "chainstate-storage",
+ "clap",
+ "common",
+ "consensus",
+ "crossterm",
+ "crypto",
+ "directories",
+ "futures",
+ "hex",
+ "humantime",
+ "itertools 0.12.1",
+ "logging",
+ "mempool",
+ "node-comm",
+ "node-lib",
+ "p2p",
+ "p2p-types",
+ "prettytable-rs",
+ "randomness",
+ "reedline",
+ "rpc",
+ "rstest",
+ "serde_json",
+ "serialization",
+ "shlex",
+ "subsystem",
+ "test-utils",
+ "thiserror",
+ "tokio",
+ "utils",
+ "utils-networking",
+ "wallet",
+ "wallet-rpc-client",
+ "wallet-rpc-lib",
+ "wallet-storage",
+ "wallet-test-node",
+ "wallet-types",
+]
+
+[[package]]
 name = "wallet-cli-lib"
 version = "0.4.2"
 dependencies = [
@@ -8337,6 +8384,7 @@ dependencies = [
  "utils",
  "utils-networking",
  "wallet",
+ "wallet-cli-commands",
  "wallet-rpc-client",
  "wallet-rpc-lib",
  "wallet-storage",

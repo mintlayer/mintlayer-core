@@ -14,7 +14,6 @@
 // limitations under the License.
 
 mod cli_event_loop;
-pub mod commands;
 pub mod config;
 pub mod console;
 pub mod errors;
@@ -26,7 +25,6 @@ use std::{
 };
 
 use cli_event_loop::Event;
-use commands::WalletCommand;
 use common::chain::{
     config::{regtest_options::regtest_chain_config, ChainType},
     ChainConfig,
@@ -35,10 +33,10 @@ use config::{CliArgs, Network};
 use console::{ConsoleInput, ConsoleOutput};
 use errors::WalletCliError;
 use node_comm::{make_cold_wallet_rpc_client, make_rpc_client, rpc_client::ColdWalletClient};
-pub use repl::{get_repl_command, parse_input};
 use rpc::RpcAuthData;
 use tokio::sync::mpsc;
 use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain, ensure};
+use wallet_cli_commands::{ColdWalletCommand, WalletCommand};
 use wallet_rpc_lib::types::NodeInterface;
 use wallet_rpc_lib::{cmdline::make_wallet_config, config::WalletRpcConfig};
 
@@ -281,7 +279,7 @@ fn setup_events_and_repl<N: NodeInterface + Send + Sync + 'static>(
         let (res_tx, res_rx) = tokio::sync::oneshot::channel();
         event_tx
             .send(Event::HandleCommand {
-                command: WalletCommand::ColdCommands(commands::ColdWalletCommand::OpenWallet {
+                command: WalletCommand::ColdCommands(ColdWalletCommand::OpenWallet {
                     wallet_path,
                     encryption_password: args.wallet_password,
                     force_change_wallet_type: args.force_change_wallet_type,

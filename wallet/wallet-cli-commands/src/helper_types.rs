@@ -26,7 +26,7 @@ use common::{
 use wallet_rpc_lib::types::{NodeInterface, PoolInfo, TokenTotalSupply};
 use wallet_types::with_locked::WithLocked;
 
-use crate::errors::WalletCliError;
+use crate::errors::WalletCliCommandError;
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CliUtxoTypes {
@@ -162,35 +162,35 @@ impl EnableOrDisable {
 /// e.g block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
 pub fn parse_utxo_outpoint<N: NodeInterface>(
     mut input: String,
-) -> Result<UtxoOutPoint, WalletCliError<N>> {
+) -> Result<UtxoOutPoint, WalletCliCommandError<N>> {
     if !input.ends_with(')') {
-        return Err(WalletCliError::<N>::InvalidInput(
+        return Err(WalletCliCommandError::<N>::InvalidInput(
             "Invalid input format".into(),
         ));
     }
     input.pop();
 
     let mut parts: Vec<&str> = input.split('(').collect();
-    let last = parts.pop().ok_or(WalletCliError::<N>::InvalidInput(
+    let last = parts.pop().ok_or(WalletCliCommandError::<N>::InvalidInput(
         "Invalid input format".to_owned(),
     ))?;
     parts.extend(last.split(','));
 
     if parts.len() != 3 {
-        return Err(WalletCliError::<N>::InvalidInput(
+        return Err(WalletCliCommandError::<N>::InvalidInput(
             "Invalid input format".into(),
         ));
     }
 
     let h256 = H256::from_str(parts[1])
-        .map_err(|err| WalletCliError::<N>::InvalidInput(err.to_string()))?;
+        .map_err(|err| WalletCliCommandError::<N>::InvalidInput(err.to_string()))?;
     let output_index = u32::from_str(parts[2])
-        .map_err(|err| WalletCliError::<N>::InvalidInput(err.to_string()))?;
+        .map_err(|err| WalletCliCommandError::<N>::InvalidInput(err.to_string()))?;
     let source_id = match parts[0] {
         "tx" => OutPointSourceId::Transaction(Id::new(h256)),
         "block" => OutPointSourceId::BlockReward(Id::new(h256)),
         _ => {
-            return Err(WalletCliError::<N>::InvalidInput(
+            return Err(WalletCliCommandError::<N>::InvalidInput(
                 "Invalid input: unknown ID type".into(),
             ));
         }
@@ -207,45 +207,45 @@ pub fn parse_utxo_outpoint<N: NodeInterface>(
 pub fn parse_output<N: NodeInterface>(
     mut input: String,
     chain_config: &ChainConfig,
-) -> Result<TxOutput, WalletCliError<N>> {
+) -> Result<TxOutput, WalletCliCommandError<N>> {
     if !input.ends_with(')') {
-        return Err(WalletCliError::<N>::InvalidInput(
+        return Err(WalletCliCommandError::<N>::InvalidInput(
             "Invalid output format".into(),
         ));
     }
     input.pop();
 
     let mut parts: Vec<&str> = input.split('(').collect();
-    let last = parts.pop().ok_or(WalletCliError::<N>::InvalidInput(
+    let last = parts.pop().ok_or(WalletCliCommandError::<N>::InvalidInput(
         "Invalid output format".to_owned(),
     ))?;
     parts.extend(last.split(','));
 
     if parts.len() != 3 {
-        return Err(WalletCliError::<N>::InvalidInput(
+        return Err(WalletCliCommandError::<N>::InvalidInput(
             "Invalid output format".into(),
         ));
     }
 
     let dest = Address::from_string(chain_config, parts[1])
         .map_err(|err| {
-            WalletCliError::<N>::InvalidInput(format!("invalid address {} {err}", parts[1]))
+            WalletCliCommandError::<N>::InvalidInput(format!("invalid address {} {err}", parts[1]))
         })?
         .into_object();
 
     let amount = DecimalAmount::from_str(parts[2])
         .map_err(|err| {
-            WalletCliError::<N>::InvalidInput(format!("invalid amount {} {err}", parts[2]))
+            WalletCliCommandError::<N>::InvalidInput(format!("invalid amount {} {err}", parts[2]))
         })?
         .to_amount(chain_config.coin_decimals())
-        .ok_or(WalletCliError::<N>::InvalidInput(
+        .ok_or(WalletCliCommandError::<N>::InvalidInput(
             "invalid coins amount".to_string(),
         ))?;
 
     let output = match parts[0] {
         "transfer" => TxOutput::Transfer(OutputValue::Coin(amount), dest),
         _ => {
-            return Err(WalletCliError::<N>::InvalidInput(
+            return Err(WalletCliCommandError::<N>::InvalidInput(
                 "Invalid output: unknown type".into(),
             ));
         }
@@ -259,7 +259,7 @@ pub fn parse_output<N: NodeInterface>(
 pub fn parse_token_supply<N: NodeInterface>(
     input: &str,
     token_number_of_decimals: u8,
-) -> Result<TokenTotalSupply, WalletCliError<N>> {
+) -> Result<TokenTotalSupply, WalletCliCommandError<N>> {
     match input {
         "unlimited" => Ok(TokenTotalSupply::Unlimited),
         "lockable" => Ok(TokenTotalSupply::Lockable),
@@ -271,14 +271,14 @@ pub fn parse_token_supply<N: NodeInterface>(
 fn parse_fixed_token_supply<N: NodeInterface>(
     input: &str,
     token_number_of_decimals: u8,
-) -> Result<TokenTotalSupply, WalletCliError<N>> {
+) -> Result<TokenTotalSupply, WalletCliCommandError<N>> {
     if let Some(inner) = input.strip_prefix("fixed(").and_then(|str| str.strip_suffix(')')) {
         Ok(TokenTotalSupply::Fixed(parse_token_amount(
             token_number_of_decimals,
             inner,
         )?))
     } else {
-        Err(WalletCliError::<N>::InvalidInput(format!(
+        Err(WalletCliCommandError::<N>::InvalidInput(format!(
             "Failed to parse token supply from {input}"
         )))
     }
@@ -287,9 +287,9 @@ fn parse_fixed_token_supply<N: NodeInterface>(
 fn parse_token_amount<N: NodeInterface>(
     token_number_of_decimals: u8,
     value: &str,
-) -> Result<wallet_rpc_lib::types::RpcAmountIn, WalletCliError<N>> {
+) -> Result<wallet_rpc_lib::types::RpcAmountIn, WalletCliCommandError<N>> {
     let amount = common::primitives::Amount::from_fixedpoint_str(value, token_number_of_decimals)
-        .ok_or_else(|| WalletCliError::<N>::InvalidInput(value.to_owned()))?;
+        .ok_or_else(|| WalletCliCommandError::<N>::InvalidInput(value.to_owned()))?;
     Ok(amount.into())
 }
 

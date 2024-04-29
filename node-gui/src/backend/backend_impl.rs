@@ -31,9 +31,8 @@ use tokio::{
     task::JoinHandle,
 };
 use wallet::{account::transaction_list::TransactionList, wallet::Error, WalletError};
-use wallet_cli_lib::{
-    commands::{CommandHandler, ConsoleCommand, WalletCommand},
-    get_repl_command, parse_input,
+use wallet_cli_commands::{
+    get_repl_command, parse_input, CommandHandler, ConsoleCommand, WalletCommand,
 };
 use wallet_controller::{
     make_cold_wallet_rpc_client, types::Balances, ControllerConfig, NodeInterface, UtxoState,
