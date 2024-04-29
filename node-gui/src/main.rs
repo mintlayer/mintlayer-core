@@ -31,7 +31,7 @@ use main_window::{MainWindow, MainWindowMessage};
 use tokio::sync::mpsc::UnboundedReceiver;
 
 const COLD_WALLET_TOOLTIP_TEXT: &str =
-    "Start the wallet in Cold mode without connecting to the network or any nodes.";
+    "Start the wallet in Cold mode without connecting to the network or any nodes. The Cold mode is made to run the wallet on an air-gapped machine without internet connection for storage of keys of high-value. For example, pool decommission keys.";
 const HOT_WALLET_TOOLTIP_TEXT: &str = "Start the wallet in Hot mode and connect to the network.";
 
 const MAIN_NETWORK_TOOLTIP: &str = "The 'Mainnet' is the main network that has coins with value.";

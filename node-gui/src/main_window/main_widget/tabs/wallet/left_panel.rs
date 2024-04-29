@@ -37,7 +37,7 @@ const STAKING_TOOLTIP_TEXT: &str = "Staking is the process of assisting the netw
 const DELEGATION_TOOLTIP_TEXT: &str = "Delegation is part of staking, where if you do not own the minimum required amount to stake, \
     you can delegate your coins to a pool to do the staking for you. The staking pool earns a cut of your rewards, \
     and you won't have to keep your node running.";
-const CONSOLE_TOOLTIP_TEXT: &str = "Console for inputing text commands directly to the wallet";
+const CONSOLE_TOOLTIP_TEXT: &str = "Console for using low-level functions of the wallet.";
 
 const NEW_ACCOUNT_TOOLTIP_TEXT: &str =
     "Accounts provide a way to completely separate keys and operations. \

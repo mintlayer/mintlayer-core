@@ -20,7 +20,7 @@ use iced::{
 
 use super::{ConsoleState, WalletMessage};
 
-const SUBMIT_TOOLTIP_TEXT: &str = "Submit the inputed command to be processed";
+const SUBMIT_TOOLTIP_TEXT: &str = "Submit the provided command to be processed";
 pub const CONSOLE_OUTPUT_ID: &str = "console_input_id";
 
 pub fn view_console(
