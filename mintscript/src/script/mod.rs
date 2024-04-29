@@ -18,7 +18,8 @@ pub mod error;
 use common::{
     chain::{
         signature::{
-            inputsig::standard_signature::StandardInputSignature, sighash::signature_hash,
+            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            sighash::signature_hash,
             Transactable,
         },
         timelock::OutputTimeLock,
@@ -96,36 +97,22 @@ impl MintScript {
     ) -> Option<MintScript> {
         match input_utxo {
             TxOutput::Transfer(_val, dest) => {
-                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
-                let sighash =
-                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
-
-                Some(MintScript::CheckSig(sighash, witness.clone(), dest))
+                script_from_transactable(dest, tx, inputs_utxos, input_num)
             }
             TxOutput::LockThenTransfer(_val, dest, tl) => {
-                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
-                let sighash =
-                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
+                let sig_check = script_from_transactable(dest, tx, inputs_utxos, input_num)?;
 
                 Some(MintScript::Threshold(
                     2,
-                    vec![
-                        MintScript::CheckSig(sighash, witness.clone(), dest),
-                        MintScript::CheckTimelock(tl),
-                    ],
+                    vec![sig_check, MintScript::CheckTimelock(tl)],
                 ))
             }
-            TxOutput::CreateStakePool(_id, pos_data) => {
-                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
-                let sighash =
-                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
-
-                Some(MintScript::CheckSig(
-                    sighash,
-                    witness.clone(),
-                    pos_data.decommission_key().clone(),
-                ))
-            }
+            TxOutput::CreateStakePool(_id, pos_data) => script_from_transactable(
+                pos_data.decommission_key().clone(),
+                tx,
+                inputs_utxos,
+                input_num,
+            ),
             TxOutput::ProduceBlockFromStake(_, pool_id) => {
                 let pos_data = accounting_view
                     .get_pool_data(pool_id)
@@ -133,15 +120,12 @@ impl MintScript {
                     .ok_or(Error::PoolDataNotFound(pool_id))
                     .ok()?;
 
-                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
-                let sighash =
-                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
-
-                Some(MintScript::CheckSig(
-                    sighash,
-                    witness.clone(),
+                script_from_transactable(
                     pos_data.decommission_destination().clone(),
-                ))
+                    tx,
+                    inputs_utxos,
+                    input_num,
+                )
             }
             TxOutput::CreateDelegationId(_, _) => None,
             TxOutput::DelegateStaking(_, delegation_id) => {
@@ -153,20 +137,10 @@ impl MintScript {
                     .spend_destination()
                     .clone();
 
-                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
-                let sighash =
-                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
-
-                Some(MintScript::CheckSig(sighash, witness.clone(), dest))
+                script_from_transactable(dest, tx, inputs_utxos, input_num)
             }
             TxOutput::IssueFungibleToken(_) => None,
-            TxOutput::IssueNft(_, _, d) => {
-                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
-                let sighash =
-                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
-
-                Some(MintScript::CheckSig(sighash, witness.clone(), d))
-            }
+            TxOutput::IssueNft(_, _, d) => script_from_transactable(d, tx, inputs_utxos, input_num),
             TxOutput::DataDeposit(_) => None,
             TxOutput::Burn(_) => None,
         }
@@ -190,22 +164,10 @@ impl MintScript {
             TxOutput::Transfer(_, _) => None,
             TxOutput::LockThenTransfer(_, _, _) => None,
             TxOutput::CreateStakePool(_id, pos_data) => {
-                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
-                let sighash =
-                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
-
-                Some(MintScript::CheckSig(
-                    sighash,
-                    witness.clone(),
-                    pos_data.staker().clone(),
-                ))
+                script_from_transactable(pos_data.staker().clone(), tx, inputs_utxos, input_num)
             }
             TxOutput::ProduceBlockFromStake(d, _) => {
-                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
-                let sighash =
-                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
-
-                Some(MintScript::CheckSig(sighash, witness.clone(), d.clone()))
+                script_from_transactable(d.clone(), tx, inputs_utxos, input_num)
             }
             TxOutput::CreateDelegationId(_, _) => None,
             TxOutput::DelegateStaking(_, _) => None,
@@ -213,6 +175,35 @@ impl MintScript {
             TxOutput::IssueNft(_, _, _) => None,
             TxOutput::DataDeposit(_) => None,
             TxOutput::Burn(_) => None,
+        }
+    }
+}
+
+pub fn script_from_transactable<T: Transactable>(
+    outpoint_destination: Destination,
+    tx: &T,
+    inputs_utxos: &[Option<&TxOutput>],
+    input_num: usize,
+) -> Option<MintScript> {
+    let sigs = tx.signatures()?;
+    let input_witness = sigs.get(input_num)?;
+
+    match input_witness {
+        InputWitness::NoSignature(_) => match outpoint_destination {
+            Destination::PublicKeyHash(_)
+            | Destination::PublicKey(_)
+            | Destination::ScriptHash(_)
+            | Destination::ClassicMultisig(_) => None,
+            Destination::AnyoneCanSpend => Some(MintScript::Bool(true)),
+        },
+        InputWitness::Standard(witness) => {
+            let sighash =
+                signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
+            Some(MintScript::CheckSig(
+                sighash,
+                witness.clone(),
+                outpoint_destination.clone(),
+            ))
         }
     }
 }
