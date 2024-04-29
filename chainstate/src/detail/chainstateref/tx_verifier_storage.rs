@@ -35,15 +35,13 @@ use common::{
 };
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDB,
-    PoSAccountingDeltaData, PoSAccountingView, PoolData,
+    PoSAccountingDeltaData, PoSAccountingUndo, PoSAccountingView, PoolData,
 };
 use tokens_accounting::{
-    FlushableTokensAccountingView, TokensAccountingDB, TokensAccountingDeltaUndoData,
-    TokensAccountingStorageRead,
+    FlushableTokensAccountingView, TokenAccountingUndo, TokensAccountingDB,
+    TokensAccountingDeltaUndoData, TokensAccountingStorageRead,
 };
-use tx_verifier::transaction_verifier::{
-    CachedPoSBlockUndo, CachedTokensBlockUndo, CachedUtxosBlockUndo, TransactionSource,
-};
+use tx_verifier::transaction_verifier::{CachedBlockUndo, CachedUtxosBlockUndo, TransactionSource};
 use utils::log_error;
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosDB, UtxosStorageRead};
 
@@ -99,13 +97,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
     fn get_pos_accounting_undo(
         &self,
         tx_source: TransactionSource,
-    ) -> Result<Option<CachedPoSBlockUndo>, TransactionVerifierStorageError> {
+    ) -> Result<Option<CachedBlockUndo<PoSAccountingUndo>>, TransactionVerifierStorageError> {
         match tx_source {
             TransactionSource::Chain(id) => {
-                let undo = self
-                    .db_tx
-                    .get_pos_accounting_undo(id)?
-                    .map(CachedPoSBlockUndo::from_block_undo);
+                let undo =
+                    self.db_tx.get_pos_accounting_undo(id)?.map(CachedBlockUndo::from_block_undo);
                 Ok(undo)
             }
             TransactionSource::Mempool => {
@@ -118,13 +114,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
     fn get_tokens_accounting_undo(
         &self,
         tx_source: TransactionSource,
-    ) -> Result<Option<CachedTokensBlockUndo>, TransactionVerifierStorageError> {
+    ) -> Result<Option<CachedBlockUndo<TokenAccountingUndo>>, TransactionVerifierStorageError> {
         match tx_source {
             TransactionSource::Chain(id) => {
                 let undo = self
                     .db_tx
                     .get_tokens_accounting_undo(id)?
-                    .map(CachedTokensBlockUndo::from_block_undo);
+                    .map(CachedBlockUndo::from_block_undo);
                 Ok(undo)
             }
             TransactionSource::Mempool => {
@@ -272,7 +268,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     fn set_pos_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &CachedPoSBlockUndo,
+        undo: &CachedBlockUndo<PoSAccountingUndo>,
     ) -> Result<(), TransactionVerifierStorageError> {
         // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {
@@ -362,7 +358,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     fn set_tokens_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-        undo: &CachedTokensBlockUndo,
+        undo: &CachedBlockUndo<TokenAccountingUndo>,
     ) -> Result<(), TransactionVerifierStorageError> {
         // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
         match tx_source {

@@ -303,7 +303,6 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             ConnectTransactionError::OutputTimelockError(err) => err.classify(),
             ConnectTransactionError::SpendStakeError(err) => err.classify(),
             ConnectTransactionError::TokensAccountingError(err) => err.classify(),
-            ConnectTransactionError::TokensAccountingBlockUndoError(err) => err.classify(),
             ConnectTransactionError::RewardDistributionError(err) => err.classify(),
             ConnectTransactionError::CheckTransactionError(err) => err.classify(),
             ConnectTransactionError::PoSAccountingError(err) => err.classify(),
@@ -397,7 +396,6 @@ impl BlockProcessingErrorClassification for TransactionVerifierStorageError {
             TransactionVerifierStorageError::PoSAccountingError(err) => err.classify(),
             TransactionVerifierStorageError::AccountingBlockUndoError(err) => err.classify(),
             TransactionVerifierStorageError::TokensAccountingError(err) => err.classify(),
-            TransactionVerifierStorageError::TokensAccountingBlockUndoError(err) => err.classify(),
         }
     }
 }
@@ -427,9 +425,9 @@ impl BlockProcessingErrorClassification for UtxosBlockUndoError {
     }
 }
 
-impl BlockProcessingErrorClassification for pos_accounting::BlockUndoError {
+impl BlockProcessingErrorClassification for accounting::BlockUndoError {
     fn classify(&self) -> BlockProcessingErrorClass {
-        use pos_accounting::BlockUndoError;
+        use accounting::BlockUndoError;
 
         match self {
             BlockUndoError::UndoAlreadyExists(_)
@@ -646,14 +644,6 @@ impl BlockProcessingErrorClassification for tokens_accounting::Error {
 }
 
 impl BlockProcessingErrorClassification for accounting::Error {
-    fn classify(&self) -> BlockProcessingErrorClass {
-        // Nothing other than BadBlock here.
-        // TODO: should we descend into inner errors just in case?
-        BlockProcessingErrorClass::BadBlock
-    }
-}
-
-impl BlockProcessingErrorClassification for tokens_accounting::BlockUndoError {
     fn classify(&self) -> BlockProcessingErrorClass {
         // Nothing other than BadBlock here.
         // TODO: should we descend into inner errors just in case?

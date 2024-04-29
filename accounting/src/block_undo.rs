@@ -15,8 +15,6 @@
 
 use std::collections::BTreeMap;
 
-use crate::PoSAccountingUndo;
-
 use common::{chain::Transaction, primitives::Id};
 use serialization::{Decode, Encode};
 use thiserror::Error;
@@ -32,49 +30,49 @@ pub enum BlockUndoError {
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub struct BlockRewardUndo(Vec<PoSAccountingUndo>);
+pub struct BlockRewardUndo<U>(Vec<U>);
 
-impl BlockRewardUndo {
-    pub fn new(utxos: Vec<PoSAccountingUndo>) -> Self {
+impl<U> BlockRewardUndo<U> {
+    pub fn new(utxos: Vec<U>) -> Self {
         Self(utxos)
     }
 
-    pub fn inner(&self) -> &[PoSAccountingUndo] {
+    pub fn inner(&self) -> &[U] {
         &self.0
     }
 
-    pub fn into_inner(self) -> Vec<PoSAccountingUndo> {
+    pub fn into_inner(self) -> Vec<U> {
         self.0
     }
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub struct TxUndo(Vec<PoSAccountingUndo>);
+pub struct TxUndo<U>(Vec<U>);
 
-impl TxUndo {
-    pub fn new(undos: Vec<PoSAccountingUndo>) -> Self {
+impl<U> TxUndo<U> {
+    pub fn new(undos: Vec<U>) -> Self {
         Self(undos)
     }
 
-    pub fn inner(&self) -> &[PoSAccountingUndo] {
+    pub fn inner(&self) -> &[U] {
         &self.0
     }
 
-    pub fn into_inner(self) -> Vec<PoSAccountingUndo> {
+    pub fn into_inner(self) -> Vec<U> {
         self.0
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq, Encode, Decode)]
-pub struct BlockUndo {
-    reward_undos: Option<BlockRewardUndo>,
-    tx_undos: BTreeMap<Id<Transaction>, TxUndo>,
+#[derive(Clone, Debug, Eq, PartialEq, Encode, Decode)]
+pub struct BlockUndo<U> {
+    reward_undos: Option<BlockRewardUndo<U>>,
+    tx_undos: BTreeMap<Id<Transaction>, TxUndo<U>>,
 }
 
-impl BlockUndo {
+impl<U> BlockUndo<U> {
     pub fn new(
-        reward_undos: Option<BlockRewardUndo>,
-        tx_undos: BTreeMap<Id<Transaction>, TxUndo>,
+        reward_undos: Option<BlockRewardUndo<U>>,
+        tx_undos: BTreeMap<Id<Transaction>, TxUndo<U>>,
     ) -> Self {
         Self {
             reward_undos,
@@ -82,7 +80,13 @@ impl BlockUndo {
         }
     }
 
-    pub fn consume(self) -> (Option<BlockRewardUndo>, BTreeMap<Id<Transaction>, TxUndo>) {
+    #[allow(clippy::type_complexity)]
+    pub fn consume(
+        self,
+    ) -> (
+        Option<BlockRewardUndo<U>>,
+        BTreeMap<Id<Transaction>, TxUndo<U>>,
+    ) {
         (self.reward_undos, self.tx_undos)
     }
 }

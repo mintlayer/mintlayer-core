@@ -18,12 +18,11 @@ use std::collections::BTreeMap;
 use crate::transaction_verifier::TransactionSource;
 
 use super::{
-    pos_accounting_undo_cache::CachedPoSBlockUndo,
+    accounting_undo_cache::CachedBlockUndo,
     storage::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
     },
-    tokens_accounting_undo_cache::CachedTokensBlockUndo,
     CachedUtxosBlockUndo,
 };
 use chainstate_types::{storage_result, GenBlockIndex};
@@ -36,10 +35,10 @@ use common::{
 };
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
-    PoSAccountingView, PoolData,
+    PoSAccountingUndo, PoSAccountingView, PoolData,
 };
 use tokens_accounting::{
-    FlushableTokensAccountingView, TokenData, TokensAccountingDeltaData,
+    FlushableTokensAccountingView, TokenAccountingUndo, TokenData, TokensAccountingDeltaData,
     TokensAccountingDeltaUndoData, TokensAccountingStorageRead,
 };
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosStorageRead};
@@ -70,12 +69,12 @@ mockall::mock! {
         fn get_pos_accounting_undo(
             &self,
             tx_source: TransactionSource,
-        ) -> Result<Option<CachedPoSBlockUndo>, TransactionVerifierStorageError>;
+        ) -> Result<Option<CachedBlockUndo<PoSAccountingUndo>>, TransactionVerifierStorageError>;
 
         fn get_tokens_accounting_undo(
             &self,
             tx_source: TransactionSource,
-        ) -> Result<Option<CachedTokensBlockUndo>, TransactionVerifierStorageError>;
+        ) -> Result<Option<CachedBlockUndo<TokenAccountingUndo>>, TransactionVerifierStorageError>;
 
         fn get_account_nonce_count(
             &self,
@@ -112,7 +111,7 @@ mockall::mock! {
         fn set_pos_accounting_undo_data(
             &mut self,
             tx_source: TransactionSource,
-            undo: &CachedPoSBlockUndo,
+            undo: &CachedBlockUndo<PoSAccountingUndo>,
         ) -> Result<(), TransactionVerifierStorageError>;
 
         fn del_pos_accounting_undo_data(
@@ -139,7 +138,7 @@ mockall::mock! {
         fn set_tokens_accounting_undo_data(
             &mut self,
             tx_source: TransactionSource,
-            undo: &CachedTokensBlockUndo,
+            undo: &CachedBlockUndo<TokenAccountingUndo>,
         ) -> Result<(), TransactionVerifierStorageError>;
 
         fn del_tokens_accounting_undo_data(

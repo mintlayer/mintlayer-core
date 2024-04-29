@@ -146,7 +146,6 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
             ConnectTransactionError::ConstrainedValueAccumulatorError(err, _) => err.ban_score(),
             ConnectTransactionError::TokensAccountingError(err) => err.ban_score(),
-            ConnectTransactionError::TokensAccountingBlockUndoError(_) => 100,
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
             ConnectTransactionError::AttemptToSpendFrozenToken(_) => 100,
@@ -196,7 +195,6 @@ impl BanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::PoSAccountingError(err) => err.ban_score(),
             TransactionVerifierStorageError::AccountingBlockUndoError(_) => 100,
             TransactionVerifierStorageError::TokensAccountingError(err) => err.ban_score(),
-            TransactionVerifierStorageError::TokensAccountingBlockUndoError(_) => 100,
         }
     }
 }

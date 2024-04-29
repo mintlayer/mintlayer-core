@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::transaction_verifier::{
-    pos_accounting_undo_cache::CachedPoSBlockUndo,
+    accounting_undo_cache::CachedBlockUndo,
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
 };
 
@@ -29,7 +29,7 @@ use common::{
     primitives::H256,
 };
 use mockall::predicate::eq;
-use pos_accounting::{PoSAccountingView, TxUndo};
+use pos_accounting::PoSAccountingView;
 use rstest::rstest;
 use test_utils::random::Seed;
 use tokens_accounting::{FungibleTokenData, TokensAccountingStorageRead};
@@ -383,6 +383,8 @@ fn hierarchy_test_block_index(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn hierarchy_test_stake_pool(#[case] seed: Seed) {
+    use accounting::TxUndo;
+
     let mut rng = test_utils::random::make_seedable_rng(seed);
     let chain_config = ConfigBuilder::test_chain().build();
 
@@ -459,14 +461,16 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo =
-            CachedPoSBlockUndo::new(None, BTreeMap::from([(tx_id, TxUndo::new(vec![undo]))]))
-                .unwrap();
+        let block_undo = CachedBlockUndo::new(
+            None,
+            BTreeMap::from([(tx_id, TxUndo::<PoSAccountingUndo>::new(vec![undo]))]),
+        )
+        .unwrap();
 
         verifier.pos_accounting_block_undo =
-            PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                CachedPoSBlockUndoOp::Write(block_undo),
+                CachedBlockUndoOp::Write(block_undo),
             )]));
         verifier
     };
@@ -480,14 +484,16 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo =
-            CachedPoSBlockUndo::new(None, BTreeMap::from([(tx_id, TxUndo::new(vec![undo]))]))
-                .unwrap();
+        let block_undo = CachedBlockUndo::<PoSAccountingUndo>::new(
+            None,
+            BTreeMap::from([(tx_id, TxUndo::<PoSAccountingUndo>::new(vec![undo]))]),
+        )
+        .unwrap();
 
         verifier.pos_accounting_block_undo =
-            PoSAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                CachedPoSBlockUndoOp::Write(block_undo),
+                CachedBlockUndoOp::Write(block_undo),
             )]));
         verifier
     };
@@ -741,16 +747,16 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
         let undo_mint = verifier.tokens_accounting_cache.mint_tokens(token_id_1, supply1).unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo = CachedTokensBlockUndo::new(BTreeMap::from([(
-            tx_id,
-            tokens_accounting::TxUndo::new(vec![undo_issue, undo_mint]),
-        )]))
+        let block_undo = CachedBlockUndo::new(
+            None,
+            BTreeMap::from([(tx_id, accounting::TxUndo::new(vec![undo_issue, undo_mint]))]),
+        )
         .unwrap();
 
         verifier.tokens_accounting_block_undo =
-            TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_1),
-                CachedTokensBlockUndoOp::Write(block_undo),
+                CachedBlockUndoOp::Write(block_undo),
             )]));
         verifier
     };
@@ -764,16 +770,16 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
         let undo_mint = verifier.tokens_accounting_cache.mint_tokens(token_id_2, supply2).unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo = CachedTokensBlockUndo::new(BTreeMap::from([(
-            tx_id,
-            tokens_accounting::TxUndo::new(vec![undo_issue, undo_mint]),
-        )]))
+        let block_undo = CachedBlockUndo::new(
+            None,
+            BTreeMap::from([(tx_id, accounting::TxUndo::new(vec![undo_issue, undo_mint]))]),
+        )
         .unwrap();
 
         verifier.tokens_accounting_block_undo =
-            TokensAccountingBlockUndoCache::new_for_test(BTreeMap::from([(
+            AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
                 TransactionSource::Chain(block_undo_id_2),
-                CachedTokensBlockUndoOp::Write(block_undo),
+                CachedBlockUndoOp::Write(block_undo),
             )]));
         verifier
     };

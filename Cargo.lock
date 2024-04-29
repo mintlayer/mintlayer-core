@@ -1197,6 +1197,7 @@ dependencies = [
 name = "chainstate-storage"
 version = "0.4.2"
 dependencies = [
+ "accounting",
  "chainstate-types",
  "common",
  "crypto",
@@ -7910,6 +7911,7 @@ checksum = "17f77d76d837a7830fe1d4f12b7b4ba4192c1888001c7164257e4bc6d21d96b4"
 name = "tx-verifier"
 version = "0.4.2"
 dependencies = [
+ "accounting",
  "chainstate-storage",
  "chainstate-types",
  "common",

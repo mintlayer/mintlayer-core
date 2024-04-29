@@ -28,8 +28,12 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id},
 };
-use pos_accounting::{DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoolData};
-use tokens_accounting::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
+use pos_accounting::{
+    DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingUndo, PoolData,
+};
+use tokens_accounting::{
+    TokenAccountingUndo, TokensAccountingStorageRead, TokensAccountingStorageWrite,
+};
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
 use super::mock_impl_accounting::{
@@ -70,14 +74,14 @@ mockall::mock! {
         fn get_tokens_accounting_undo(
             &self,
             id: Id<Block>,
-        ) -> crate::Result<Option<tokens_accounting::BlockUndo>>;
+        ) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
 
         fn get_block_tree_by_height(
             &self,
             start_from: BlockHeight,
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
-        fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<pos_accounting::BlockUndo>>;
+        fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
 
         fn get_accounting_epoch_delta(
             &self,
@@ -187,11 +191,11 @@ mockall::mock! {
         fn set_tokens_accounting_undo_data(
             &mut self,
             id: Id<Block>,
-            undo: &tokens_accounting::BlockUndo,
+            undo: &accounting::BlockUndo<TokenAccountingUndo>,
         ) -> crate::Result<()>;
         fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
-        fn set_pos_accounting_undo_data(&mut self, id: Id<Block>, undo: &pos_accounting::BlockUndo) -> crate::Result<()>;
+        fn set_pos_accounting_undo_data(&mut self, id: Id<Block>, undo: &accounting::BlockUndo<PoSAccountingUndo>) -> crate::Result<()>;
         fn del_pos_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
         fn set_accounting_epoch_delta(
@@ -345,9 +349,9 @@ mockall::mock! {
             start_from: BlockHeight,
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
-        fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<tokens_accounting::BlockUndo>>;
+        fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
 
-        fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<pos_accounting::BlockUndo>>;
+        fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
 
         fn get_accounting_epoch_delta(
             &self,
@@ -458,13 +462,13 @@ mockall::mock! {
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
-        fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<tokens_accounting::BlockUndo>>;
+        fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
         fn get_block_tree_by_height(
             &self,
             start_from: BlockHeight,
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
-        fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<pos_accounting::BlockUndo>>;
+        fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
 
         fn get_accounting_epoch_delta(
             &self,
@@ -574,11 +578,11 @@ mockall::mock! {
         fn set_tokens_accounting_undo_data(
             &mut self,
             id: Id<Block>,
-            undo: &tokens_accounting::BlockUndo,
+            undo: &accounting::BlockUndo<TokenAccountingUndo>,
         ) -> crate::Result<()>;
         fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
-        fn set_pos_accounting_undo_data(&mut self, id: Id<Block>, undo: &pos_accounting::BlockUndo) -> crate::Result<()>;
+        fn set_pos_accounting_undo_data(&mut self, id: Id<Block>, undo: &accounting::BlockUndo<PoSAccountingUndo>) -> crate::Result<()>;
         fn del_pos_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
         fn set_accounting_epoch_delta(

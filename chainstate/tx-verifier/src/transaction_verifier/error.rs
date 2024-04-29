@@ -87,8 +87,8 @@ pub enum ConnectTransactionError {
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("utxo BlockUndo error: {0}")]
     UtxoBlockUndoError(#[from] utxo::UtxosBlockUndoError),
-    #[error("PoS accounting BlockUndo error: {0}")]
-    AccountingBlockUndoError(#[from] pos_accounting::BlockUndoError),
+    #[error("Accounting BlockUndo error: {0}")]
+    AccountingBlockUndoError(#[from] accounting::BlockUndoError),
     #[error("Failed to sum amounts of burns in transaction: {0}")]
     BurnAmountSumError(Id<Transaction>),
     #[error("Attempt to spend burned amount in transaction")]
@@ -137,8 +137,6 @@ pub enum ConnectTransactionError {
     ConstrainedValueAccumulatorError(constraints_value_accumulator::Error, OutPointSourceId),
     #[error("Tokens accounting error: {0}")]
     TokensAccountingError(#[from] tokens_accounting::Error),
-    #[error("Tokens accounting BlockUndo error: {0}")]
-    TokensAccountingBlockUndoError(#[from] tokens_accounting::BlockUndoError),
     #[error("Total fee required overflow")]
     TotalFeeRequiredOverflow,
     #[error("Insufficient coins fee provided in a transaction: {0:?} actual, {1:?} required")]
