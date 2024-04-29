@@ -26,7 +26,6 @@ wallet-controller = { path = "../wallet/wallet-controller" }
 wallet-types = { path = "../wallet/types" }
 wallet-rpc-lib = { path = "../wallet/wallet-rpc-lib"}
 wallet-rpc-client = { path = "../wallet/wallet-rpc-client"}
-wallet-cli-lib = { path = "../wallet/wallet-cli-lib"}
 wallet-cli-commands = { path = "../wallet/wallet-cli-commands"}
 
 anyhow.workspace = true

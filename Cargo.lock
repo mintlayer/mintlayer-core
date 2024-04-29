@@ -4500,7 +4500,6 @@ dependencies = [
  "variant_count",
  "wallet",
  "wallet-cli-commands",
- "wallet-cli-lib",
  "wallet-controller",
  "wallet-rpc-client",
  "wallet-rpc-lib",
