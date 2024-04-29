@@ -32,19 +32,23 @@ pub fn check_timelock(
         OutputTimeLock::UntilHeight(h) => spend_height >= h,
         OutputTimeLock::UntilTime(t) => spending_time >= t,
         OutputTimeLock::ForBlockCount(d) => {
-            let d: i64 = (*d).try_into().map_err(|_| Error::BlockHeightArithmeticError)?;
-            let d = BlockDistance::from(d);
-            *spend_height >= (*source_block_height + d).ok_or(Error::BlockHeightArithmeticError)?
+            let dist: i64 = (*d).try_into().map_err(|_| Error::BlockDistanceInvalid(*d))?;
+            let dist = BlockDistance::from(dist);
+            *spend_height
+                >= (*source_block_height + dist).ok_or(Error::BlockHeightArithmeticError(
+                    source_block_height.into_int(),
+                    *d,
+                ))?
         }
         OutputTimeLock::ForSeconds(dt) => {
             *spending_time
-                >= source_block_time
-                    .add_int_seconds(*dt)
-                    .ok_or(Error::BlockTimestampArithmeticError)?
+                >= source_block_time.add_int_seconds(*dt).ok_or(
+                    Error::BlockTimestampArithmeticError(source_block_time.as_int_seconds(), *dt),
+                )?
         }
     };
 
-    ensure!(past_lock, Error::TimelockEvaluationError);
+    ensure!(past_lock, Error::TimelockNotSatisfied);
 
     Ok(())
 }

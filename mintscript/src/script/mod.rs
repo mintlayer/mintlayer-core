@@ -94,7 +94,6 @@ impl MintScript {
         _utxos_view: &'a U,
         accounting_view: &'a P,
     ) -> Option<MintScript> {
-        // TODO(PR): Check that the branches make sense
         match input_utxo {
             TxOutput::Transfer(_val, dest) => {
                 let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
@@ -168,6 +167,50 @@ impl MintScript {
 
                 Some(MintScript::CheckSig(sighash, witness.clone(), d))
             }
+            TxOutput::DataDeposit(_) => None,
+            TxOutput::Burn(_) => None,
+        }
+    }
+
+    pub fn from_output_for_block_reward<
+        'a,
+        T: Transactable,
+        U: UtxosView,
+        P: PoSAccountingView<Error = pos_accounting::Error>,
+    >(
+        _chain_config: &ChainConfig,
+        input_utxo: TxOutput,
+        tx: &T,
+        inputs_utxos: &[Option<&TxOutput>],
+        input_num: usize,
+        _utxos_view: &'a U,
+        _accounting_view: &'a P,
+    ) -> Option<MintScript> {
+        match input_utxo {
+            TxOutput::Transfer(_, _) => None,
+            TxOutput::LockThenTransfer(_, _, _) => None,
+            TxOutput::CreateStakePool(_id, pos_data) => {
+                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
+                let sighash =
+                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
+
+                Some(MintScript::CheckSig(
+                    sighash,
+                    witness.clone(),
+                    pos_data.staker().clone(),
+                ))
+            }
+            TxOutput::ProduceBlockFromStake(d, _) => {
+                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
+                let sighash =
+                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
+
+                Some(MintScript::CheckSig(sighash, witness.clone(), d.clone()))
+            }
+            TxOutput::CreateDelegationId(_, _) => None,
+            TxOutput::DelegateStaking(_, _) => None,
+            TxOutput::IssueFungibleToken(_) => None,
+            TxOutput::IssueNft(_, _, _) => None,
             TxOutput::DataDeposit(_) => None,
             TxOutput::Burn(_) => None,
         }

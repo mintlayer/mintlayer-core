@@ -17,19 +17,18 @@ use common::chain::{DelegationId, PoolId};
 
 use super::MintScript;
 
-// TODO(PR): more info in errors
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Invalid combination {0:?} with {1:?}")]
     InvalidCombination(MintScript, MintScript),
-    #[error("Timelock evaluation error")]
-    TimelockEvaluationError,
     #[error("Timelock not satisfied")]
     TimelockNotSatisfied,
-    #[error("Block height arithmetic error")]
-    BlockHeightArithmeticError,
-    #[error("Block timestamp arithmetic error")]
-    BlockTimestampArithmeticError,
+    #[error("Block distance invalid: {0}")]
+    BlockDistanceInvalid(u64),
+    #[error("Block height arithmetic error: {0} + {1} failed")]
+    BlockHeightArithmeticError(u64, u64),
+    #[error("Block timestamp arithmetic error: {0} + {1} failed")]
+    BlockTimestampArithmeticError(u64, u64),
     #[error("Pool data not found for signature verification {0}")]
     PoolDataNotFound(PoolId),
     #[error("Delegation data not found for signature verification {0}")]
