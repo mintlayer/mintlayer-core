@@ -18,10 +18,11 @@ use std::{collections::BTreeMap, num::NonZeroU64};
 use common::{
     chain::{
         output_value::OutputValue, timelock::OutputTimeLock, AccountCommand, AccountSpending,
-        ChainConfig, DelegationId, PoolId, TxInput, TxOutput, UtxoOutPoint,
+        ChainConfig, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Subsidy},
 };
+use pos_accounting::PoSAccountingView;
 use utils::ensure;
 
 use crate::accounts_balances_tracker::AccountsBalancesTracker;
@@ -55,18 +56,13 @@ impl ConstrainedValueAccumulator {
         })
     }
 
-    pub fn from_inputs<StakerBalanceGetterFn, DelegationBalanceGetterFn>(
+    pub fn from_inputs(
         chain_config: &ChainConfig,
         block_height: BlockHeight,
-        staker_balance_getter: StakerBalanceGetterFn,
-        delegation_balance_getter: DelegationBalanceGetterFn,
+        pos_accounting_view: &impl PoSAccountingView,
         inputs: &[TxInput],
         inputs_utxos: &[Option<TxOutput>],
-    ) -> Result<Self, Error>
-    where
-        StakerBalanceGetterFn: Fn(PoolId) -> Result<Option<Amount>, Error>,
-        DelegationBalanceGetterFn: Fn(DelegationId) -> Result<Option<Amount>, Error>,
-    {
+    ) -> Result<Self, Error> {
         ensure!(
             inputs.len() == inputs_utxos.len(),
             Error::InputsAndInputsUtxosLengthMismatch(inputs.len(), inputs_utxos.len())
@@ -74,8 +70,7 @@ impl ConstrainedValueAccumulator {
 
         let mut accumulator = Self::new();
         let mut total_fee_deducted = Amount::ZERO;
-        let mut accounts_balances_tracker =
-            AccountsBalancesTracker::new(&delegation_balance_getter);
+        let mut accounts_balances_tracker = AccountsBalancesTracker::new(pos_accounting_view);
 
         for (input, input_utxo) in inputs.iter().zip(inputs_utxos.iter()) {
             match input {
@@ -85,7 +80,7 @@ impl ConstrainedValueAccumulator {
                     accumulator.process_input_utxo(
                         chain_config,
                         block_height,
-                        &staker_balance_getter,
+                        pos_accounting_view,
                         outpoint.clone(),
                         input_utxo,
                     )?;
@@ -121,17 +116,14 @@ impl ConstrainedValueAccumulator {
         Ok(accumulator)
     }
 
-    fn process_input_utxo<StakerBalanceGetterFn>(
+    fn process_input_utxo(
         &mut self,
         chain_config: &ChainConfig,
         block_height: BlockHeight,
-        staker_balance_getter: &StakerBalanceGetterFn,
+        pos_accounting_view: &impl PoSAccountingView,
         outpoint: UtxoOutPoint,
         input_utxo: &TxOutput,
-    ) -> Result<(), Error>
-    where
-        StakerBalanceGetterFn: Fn(PoolId) -> Result<Option<Amount>, Error>,
-    {
+    ) -> Result<(), Error> {
         match input_utxo {
             TxOutput::Transfer(value, _)
             | TxOutput::LockThenTransfer(value, _, _)
@@ -167,8 +159,14 @@ impl ConstrainedValueAccumulator {
                 insert_or_increase(&mut self.unconstrained_value, CoinOrTokenId::Coin, *coins)?;
             }
             TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                let staker_balance = staker_balance_getter(*pool_id)?
+                let staker_balance = pos_accounting_view
+                    .get_pool_data(*pool_id)
+                    .map_err(|_| pos_accounting::Error::ViewFail)?
+                    .map(|pool_data| pool_data.staker_balance())
+                    .transpose()
+                    .map_err(Error::PoSAccountingError)?
                     .ok_or(Error::PledgeAmountNotFound(*pool_id))?;
+
                 let maturity_distance =
                     chain_config.staking_pool_spend_maturity_block_count(block_height);
 
@@ -195,16 +193,13 @@ impl ConstrainedValueAccumulator {
         Ok(())
     }
 
-    fn process_input_account<DelegationBalanceGetterFn>(
+    fn process_input_account<P: PoSAccountingView>(
         &mut self,
         chain_config: &ChainConfig,
         block_height: BlockHeight,
         account: &AccountSpending,
-        accounts_balances_tracker: &mut AccountsBalancesTracker<DelegationBalanceGetterFn>,
-    ) -> Result<(), Error>
-    where
-        DelegationBalanceGetterFn: Fn(DelegationId) -> Result<Option<Amount>, Error>,
-    {
+        accounts_balances_tracker: &mut AccountsBalancesTracker<P>,
+    ) -> Result<(), Error> {
         match account {
             AccountSpending::DelegationBalance(_, spend_amount) => {
                 accounts_balances_tracker.spend_from_account(account.clone())?;

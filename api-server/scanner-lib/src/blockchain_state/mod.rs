@@ -672,6 +672,56 @@ async fn token_decimals<T: ApiServerStorageRead>(
     Ok((token_id, decimals))
 }
 
+struct PoSAccountingAdapterToCheckFees {
+    pools: BTreeMap<PoolId, PoolData>,
+}
+
+impl PoSAccountingView for PoSAccountingAdapterToCheckFees {
+    type Error = pos_accounting::Error;
+
+    fn pool_exists(&self, _pool_id: PoolId) -> Result<bool, Self::Error> {
+        unimplemented!()
+    }
+
+    fn get_pool_balance(&self, _pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        unimplemented!()
+    }
+
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
+        Ok(self.pools.get(&pool_id).cloned())
+    }
+
+    fn get_pool_delegations_shares(
+        &self,
+        _pool_id: PoolId,
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
+        unimplemented!()
+    }
+
+    fn get_delegation_balance(
+        &self,
+        _delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        // only used for checks for attempted to print money but we don't need to check that here
+        Ok(Some(Amount::MAX))
+    }
+
+    fn get_delegation_data(
+        &self,
+        _delegation_id: DelegationId,
+    ) -> Result<Option<pos_accounting::DelegationData>, Self::Error> {
+        unimplemented!()
+    }
+
+    fn get_pool_delegation_share(
+        &self,
+        _pool_id: PoolId,
+        _delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        unimplemented!()
+    }
+}
+
 async fn tx_fees<T: ApiServerStorageWrite>(
     chain_config: &ChainConfig,
     block_height: BlockHeight,
@@ -680,17 +730,13 @@ async fn tx_fees<T: ApiServerStorageWrite>(
     new_outputs: &BTreeMap<UtxoOutPoint, &TxOutput>,
 ) -> Result<AccumulatedFee, ApiServerStorageError> {
     let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs(), new_outputs).await?;
-    let pools = prefetch_pool_amounts(&inputs_utxos, db_tx).await?;
-
-    let staker_balance_getter = |pool_id: PoolId| Ok(pools.get(&pool_id).cloned());
-    // only used for checks for attempted to print money but we don't need to check that here
-    let delegation_balance_getter = |_delegation_id: DelegationId| Ok(Some(Amount::MAX));
+    let pools = prefetch_pool_data(&inputs_utxos, db_tx).await?;
+    let pos_accounting_adapter = PoSAccountingAdapterToCheckFees { pools };
 
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         chain_config,
         block_height,
-        staker_balance_getter,
-        delegation_balance_getter,
+        &pos_accounting_adapter,
         tx.inputs(),
         &inputs_utxos,
     )
@@ -703,23 +749,18 @@ async fn tx_fees<T: ApiServerStorageWrite>(
     Ok(consumed_accumulator)
 }
 
-async fn prefetch_pool_amounts<T: ApiServerStorageWrite>(
+async fn prefetch_pool_data<T: ApiServerStorageWrite>(
     inputs_utxos: &Vec<Option<TxOutput>>,
     db_tx: &mut T,
-) -> Result<BTreeMap<PoolId, Amount>, ApiServerStorageError> {
+) -> Result<BTreeMap<PoolId, PoolData>, ApiServerStorageError> {
     let mut pools = BTreeMap::new();
     for output in inputs_utxos {
         match output {
             Some(
                 TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id),
             ) => {
-                let amount = db_tx
-                    .get_pool_data(*pool_id)
-                    .await?
-                    .expect("should exist")
-                    .staker_balance()
-                    .expect("no overflow");
-                pools.insert(*pool_id, amount);
+                let data = db_tx.get_pool_data(*pool_id).await?.expect("should exist");
+                pools.insert(*pool_id, data);
             }
             Some(
                 TxOutput::Burn(_)
