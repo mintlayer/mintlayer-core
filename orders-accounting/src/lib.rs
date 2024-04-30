@@ -17,11 +17,13 @@ mod cache;
 mod data;
 mod error;
 mod operations;
+mod price_calculation;
 mod storage;
 mod view;
 
 pub use {
     error::Error,
+    price_calculation::calculate_fill_order,
     storage::{db::OrdersAccountingDB, in_memory::InMemoryOrdersAccounting},
     view::OrdersAccountingView,
 };

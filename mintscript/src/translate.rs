@@ -206,6 +206,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                     Ok(checksig(dest))
                 }
                 AccountCommand::WithdrawOrder(_) => todo!(),
+                AccountCommand::FillOrder(_, _) => todo!(),
             },
         }
     }
@@ -295,7 +296,9 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 | AccountCommand::FreezeToken(_token_id, _)
                 | AccountCommand::UnfreezeToken(_token_id)
                 | AccountCommand::ChangeTokenAuthority(_token_id, _) => Ok(WitnessScript::TRUE),
-                AccountCommand::WithdrawOrder(_) => Ok(WitnessScript::TRUE),
+                AccountCommand::WithdrawOrder(_) | AccountCommand::FillOrder(_, _) => {
+                    Ok(WitnessScript::TRUE)
+                }
             },
         }
     }

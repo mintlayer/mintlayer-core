@@ -20,6 +20,7 @@ use common::{
 use utils::ensure;
 
 use crate::{
+    calculate_fill_order,
     data::OrdersAccountingDeltaData,
     error::{Error, Result},
     operations::{
@@ -94,24 +95,7 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
     }
 
     fn fill_order(&mut self, id: OrderId, fill_value: OutputValue) -> Result<OrdersAccountingUndo> {
-        let order_data = self.get_order_data(&id)?.ok_or(Error::OrderDataNotFound(id))?;
-        let give_balance =
-            self.get_give_balance(&id)?.ok_or(Error::OrderGiveBalanceNotFound(id))?;
-        let ask_balance = self.get_ask_balance(&id)?.ok_or(Error::OrderAskBalanceNotFound(id))?;
-
-        {
-            let ask_balance = match order_data.ask {
-                OutputValue::Coin(_) => OutputValue::Coin(ask_balance),
-                OutputValue::TokenV0(_) => return Err(Error::UnsupportedTokenVersion),
-                OutputValue::TokenV1(token_id, _) => OutputValue::TokenV1(token_id, ask_balance),
-            };
-
-            // FIXME: given_value > ask_balance should be possible
-            ensure_currencies_and_amounts_match(id, &ask_balance, &fill_value)?;
-        }
-
-        let filled_amount = calculate_filled_amount(ask_balance, give_balance, fill_value.amount())
-            .ok_or(Error::OrderOverflow(id))?;
+        let filled_amount = calculate_fill_order(self, id, &fill_value)?;
 
         self.data.give_balances.sub_unsigned(id, filled_amount)?;
         self.data.ask_balances.sub_unsigned(id, fill_value.amount())?;
@@ -125,32 +109,5 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
 
     fn undo(&mut self, undo_data: OrdersAccountingUndo) -> Result<()> {
         todo!()
-    }
-}
-
-fn calculate_filled_amount(ask: Amount, give: Amount, fill: Amount) -> Option<Amount> {
-    (give * fill.into_atoms()).and_then(|v| v / ask.into_atoms())
-}
-
-fn ensure_currencies_and_amounts_match(
-    order_id: OrderId,
-    left: &OutputValue,
-    right: &OutputValue,
-) -> Result<()> {
-    match (left, right) {
-        (OutputValue::Coin(amount1), OutputValue::Coin(amount2)) => {
-            ensure!(amount1 >= amount2, Error::OrderOverflow(order_id));
-            Ok(())
-        }
-        (OutputValue::TokenV1(id1, amount1), OutputValue::TokenV1(id2, amount2)) => {
-            ensure!(amount1 >= amount2, Error::OrderOverflow(order_id));
-            ensure!(id1 == id2, Error::CurrencyMismatch);
-            Ok(())
-        }
-        (OutputValue::Coin(_), OutputValue::TokenV1(_, _))
-        | (OutputValue::TokenV1(_, _), OutputValue::Coin(_)) => Err(Error::CurrencyMismatch),
-        (OutputValue::TokenV0(_), _) | (_, OutputValue::TokenV0(_)) => {
-            Err(Error::UnsupportedTokenVersion)
-        }
     }
 }

@@ -104,6 +104,7 @@ impl RpcAccountCommand {
                 }
             }
             AccountCommand::WithdrawOrder(_) => todo!(),
+            AccountCommand::FillOrder(_, _) => todo!(),
         };
         Ok(result)
     }

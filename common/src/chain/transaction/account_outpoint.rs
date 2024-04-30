@@ -22,7 +22,7 @@ use crate::{
 };
 use serialization::{Decode, Encode};
 
-use super::Destination;
+use super::{output_value::OutputValue, Destination};
 
 /// Type of an account that can be used to identify series of spending from an account
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
@@ -53,7 +53,9 @@ impl From<AccountCommand> for AccountType {
             | AccountCommand::FreezeToken(id, _)
             | AccountCommand::UnfreezeToken(id)
             | AccountCommand::ChangeTokenAuthority(id, _) => AccountType::Token(id),
-            AccountCommand::WithdrawOrder(id) => AccountType::Order(id),
+            AccountCommand::WithdrawOrder(id) | AccountCommand::FillOrder(id, _) => {
+                AccountType::Order(id)
+            }
         }
     }
 }
@@ -115,6 +117,8 @@ pub enum AccountCommand {
     ChangeTokenAuthority(TokenId, Destination),
     #[codec(index = 6)]
     WithdrawOrder(OrderId),
+    #[codec(index = 7)]
+    FillOrder(OrderId, OutputValue),
 }
 
 /// Type of OutPoint that represents spending from an account

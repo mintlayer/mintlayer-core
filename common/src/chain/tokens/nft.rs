@@ -22,7 +22,18 @@ pub enum NftIssuance {
     V0(NftIssuanceV0),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct NftIssuanceV0 {
     pub metadata: Metadata,
     // TODO: Implement after additional research payout, royalty and refund.
@@ -57,7 +68,18 @@ impl From<PublicKey> for TokenCreator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Encode,
+    PartialOrd,
+    Ord,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct Metadata {
     pub creator: Option<TokenCreator>,
     pub name: Vec<u8>,

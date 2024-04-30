@@ -584,6 +584,7 @@ where
                         Some(res)
                     }
                     AccountCommand::WithdrawOrder(_) => todo!(),
+                    AccountCommand::FillOrder(_, _) => todo!(),
                 },
             })
             .collect::<Result<Vec<_>, _>>()?;

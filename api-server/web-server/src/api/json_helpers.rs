@@ -334,6 +334,7 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                 })
             }
             AccountCommand::WithdrawOrder(_) => todo!(),
+            AccountCommand::FillOrder(_, _) => todo!(),
         },
     }
 }

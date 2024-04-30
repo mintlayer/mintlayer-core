@@ -71,7 +71,7 @@ impl ConstrainedValueAccumulator {
         );
 
         let mut accumulator = Self::new();
-        let mut total_fee_deducted = Amount::ZERO;
+        let mut total_fee_deducted = BTreeMap::<CoinOrTokenId, Amount>::new();
         let mut accounts_balances_tracker = AccountsBalancesTracker::new(pos_accounting_view);
 
         for (input, input_utxo) in inputs.iter().zip(inputs_utxos.iter()) {
@@ -96,25 +96,26 @@ impl ConstrainedValueAccumulator {
                     )?;
                 }
                 TxInput::AccountCommand(_, command) => {
-                    let fee_to_deduct = accumulator.process_input_account_command(
+                    let (id, fee_to_deduct) = accumulator.process_input_account_command(
                         chain_config,
                         block_height,
                         command,
                         orders_accounting_view,
                     )?;
 
-                    total_fee_deducted = (total_fee_deducted + fee_to_deduct)
-                        .ok_or(Error::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
+                    insert_or_increase(&mut total_fee_deducted, id, fee_to_deduct)?;
                 }
             }
         }
 
-        decrease_or(
-            &mut accumulator.unconstrained_value,
-            CoinOrTokenId::Coin,
-            total_fee_deducted,
-            Error::AttemptToViolateFeeRequirements,
-        )?;
+        for (id, fee) in total_fee_deducted {
+            decrease_or(
+                &mut accumulator.unconstrained_value,
+                id,
+                fee,
+                Error::AttemptToViolateFeeRequirements,
+            )?;
+        }
 
         Ok(accumulator)
     }
@@ -239,7 +240,7 @@ impl ConstrainedValueAccumulator {
         block_height: BlockHeight,
         command: &AccountCommand,
         orders_accounting_view: &impl OrdersAccountingView,
-    ) -> Result<Amount, Error> {
+    ) -> Result<(CoinOrTokenId, Amount), Error> {
         match command {
             AccountCommand::MintTokens(token_id, amount) => {
                 insert_or_increase(
@@ -247,17 +248,23 @@ impl ConstrainedValueAccumulator {
                     CoinOrTokenId::TokenId(*token_id),
                     *amount,
                 )?;
-                Ok(chain_config.token_supply_change_fee(block_height))
+                Ok((
+                    CoinOrTokenId::Coin,
+                    chain_config.token_supply_change_fee(block_height),
+                ))
             }
-            AccountCommand::LockTokenSupply(_) | AccountCommand::UnmintTokens(_) => {
-                Ok(chain_config.token_supply_change_fee(block_height))
-            }
-            AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => {
-                Ok(chain_config.token_freeze_fee(block_height))
-            }
-            AccountCommand::ChangeTokenAuthority(_, _) => {
-                Ok(chain_config.token_change_authority_fee(block_height))
-            }
+            AccountCommand::LockTokenSupply(_) | AccountCommand::UnmintTokens(_) => Ok((
+                CoinOrTokenId::Coin,
+                chain_config.token_supply_change_fee(block_height),
+            )),
+            AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => Ok((
+                CoinOrTokenId::Coin,
+                chain_config.token_freeze_fee(block_height),
+            )),
+            AccountCommand::ChangeTokenAuthority(_, _) => Ok((
+                CoinOrTokenId::Coin,
+                chain_config.token_change_authority_fee(block_height),
+            )),
             AccountCommand::WithdrawOrder(id) => {
                 let order_data = orders_accounting_view
                     .get_order_data(id)
@@ -276,13 +283,27 @@ impl ConstrainedValueAccumulator {
                 let ask_amount = (initially_asked - ask_balance)
                     .ok_or(Error::NegativeAccountBalance(AccountType::Order(*id)))?;
 
-                let ask_id = CoinOrTokenId::from_output_value(order_data.ask).expect("cannot fail");
+                let ask_id =
+                    CoinOrTokenId::from_output_value(&order_data.ask).expect("cannot fail");
                 insert_or_increase(&mut self.unconstrained_value, ask_id, ask_amount)?;
 
                 let give_id =
-                    CoinOrTokenId::from_output_value(order_data.give).expect("cannot fail");
+                    CoinOrTokenId::from_output_value(&order_data.give).expect("cannot fail");
                 insert_or_increase(&mut self.unconstrained_value, give_id, give_balance)?;
-                Ok(Amount::ZERO)
+                Ok((CoinOrTokenId::Coin, Amount::ZERO))
+            }
+            AccountCommand::FillOrder(order_id, fill_value) => {
+                let filled_amount = orders_accounting::calculate_fill_order(
+                    &orders_accounting_view,
+                    *order_id,
+                    fill_value,
+                )?;
+
+                let fill_id = CoinOrTokenId::from_output_value(&fill_value).unwrap();
+                insert_or_increase(&mut self.unconstrained_value, fill_id, filled_amount)?;
+
+                let fill_id = CoinOrTokenId::from_output_value(fill_value).unwrap();
+                Ok((fill_id, fill_value.amount()))
             }
         }
     }
