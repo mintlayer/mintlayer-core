@@ -77,7 +77,29 @@ impl<'de> serde::Deserialize<'de> for OrderId {
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct OrderData {
-    pub authority: Destination,
-    pub ask: OutputValue,
-    pub give: OutputValue,
+    authority: Destination,
+    ask: OutputValue,
+    give: OutputValue,
+}
+
+impl OrderData {
+    pub fn new(authority: Destination, ask: OutputValue, give: OutputValue) -> Self {
+        Self {
+            authority,
+            ask,
+            give,
+        }
+    }
+
+    pub fn authority(&self) -> &Destination {
+        &self.authority
+    }
+
+    pub fn ask(&self) -> &OutputValue {
+        &self.ask
+    }
+
+    pub fn give(&self) -> &OutputValue {
+        &self.give
+    }
 }

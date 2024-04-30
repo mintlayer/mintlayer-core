@@ -156,14 +156,24 @@ fn check_tokens_tx(
                     OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
                     OutputValue::TokenV0(_) => true,
                 },
+                TxOutput::CreateOrder(data) => {
+                    let ask_token_v0 = match data.ask() {
+                        OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
+                        OutputValue::TokenV0(_) => true,
+                    };
+                    let give_token_v0 = match data.ask() {
+                        OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
+                        OutputValue::TokenV0(_) => true,
+                    };
+                    ask_token_v0 || give_token_v0
+                }
                 TxOutput::CreateStakePool(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::IssueNft(_, _, _)
-                | TxOutput::DataDeposit(_)
-                | TxOutput::CreateOrder(_) => false,
+                | TxOutput::DataDeposit(_) => false,
             });
             ensure!(
                 !has_tokens_v0_op,

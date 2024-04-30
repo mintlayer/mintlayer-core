@@ -20,8 +20,6 @@ use common::{
     primitives::Amount,
 };
 
-use crate::view::OrdersAccountingView;
-
 use super::{OrdersAccountingStorageRead, OrdersAccountingStorageWrite};
 
 #[must_use]
@@ -111,21 +109,5 @@ impl OrdersAccountingStorageWrite for InMemoryOrdersAccounting {
     fn del_give_balance(&mut self, id: &OrderId) -> Result<(), Self::Error> {
         self.give_balances.remove(id);
         Ok(())
-    }
-}
-
-impl OrdersAccountingView for InMemoryOrdersAccounting {
-    type Error = chainstate_types::storage_result::Error;
-
-    fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
-        Ok(self.orders_data.get(id).cloned())
-    }
-
-    fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        Ok(self.ask_balances.get(id).cloned())
-    }
-
-    fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        Ok(self.give_balances.get(id).cloned())
     }
 }

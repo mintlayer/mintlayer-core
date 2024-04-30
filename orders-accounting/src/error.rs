@@ -29,12 +29,34 @@ pub enum Error {
     OrderAskBalanceNotFound(OrderId),
     #[error("Give balance for order {0}` not found")]
     OrderGiveBalanceNotFound(OrderId),
-    #[error("Unsupported token version")]
-    UnsupportedTokenVersion,
+    #[error("Data for order {0}` not found for undo")]
+    InvariantOrderDataNotFoundForUndo(OrderId),
+    #[error("Ask balance for order {0}` not found for undo")]
+    InvariantOrderAskBalanceNotFoundForUndo(OrderId),
+    #[error("Ask balance for order {0}` changed for undo")]
+    InvariantOrderAskBalanceChangedForUndo(OrderId),
+    #[error("Give balance for order {0}` not found for undo")]
+    InvariantOrderGiveBalanceNotFoundForUndo(OrderId),
+    #[error("Give balance for order {0}` changed for undo")]
+    InvariantOrderGiveBalanceChangedForUndo(OrderId),
+    #[error("Data for order {0}` still exist on withdraw undo")]
+    InvariantOrderDataExistForWithdrawUndo(OrderId),
+    #[error("Ask balance for order {0}` still exist on withdraw undo")]
+    InvariantOrderAskBalanceExistForWithdrawUndo(OrderId),
+    #[error("Give balance for order {0}` still exist on withdraw undo")]
+    InvariantOrderGiveBalanceExistForWithdrawUndo(OrderId),
+    #[error("Fill operation for order {0}` left a change")]
+    FillOrderChangeLeft(OrderId),
     #[error("Coin type mismatch")]
     CurrencyMismatch,
     #[error("Order overflow: `{0}`")]
     OrderOverflow(OrderId),
+    #[error("Attempt to withdraw non-existing order data `{0}`")]
+    AttemptedWithdrawNonexistingOrderData(OrderId),
+    #[error("Attempt to withdraw non-existing ask balance `{0}`")]
+    AttemptedWithdrawNonexistingAskBalance(OrderId),
+    #[error("Attempt to withdraw non-existing give balance `{0}`")]
+    AttemptedWithdrawNonexistingGiveBalance(OrderId),
 
     // TODO Need a more granular error reporting in the following
     //      https://github.com/mintlayer/mintlayer-core/issues/811

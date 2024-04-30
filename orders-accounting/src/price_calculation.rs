@@ -40,13 +40,12 @@ pub fn calculate_fill_order(
         .ok_or(Error::OrderGiveBalanceNotFound(order_id))?;
 
     {
-        let ask_balance = match order_data.ask {
+        let ask_balance = match order_data.ask() {
             OutputValue::Coin(_) => OutputValue::Coin(ask_balance),
-            OutputValue::TokenV0(_) => return Err(Error::UnsupportedTokenVersion),
-            OutputValue::TokenV1(token_id, _) => OutputValue::TokenV1(token_id, ask_balance),
+            OutputValue::TokenV0(_) => unreachable!(),
+            OutputValue::TokenV1(token_id, _) => OutputValue::TokenV1(*token_id, ask_balance),
         };
 
-        // FIXME: fill > ask_balance should be possible
         ensure_currencies_and_amounts_match(order_id, &ask_balance, fill_value)?;
     }
 
@@ -76,9 +75,123 @@ fn ensure_currencies_and_amounts_match(
         (OutputValue::Coin(_), OutputValue::TokenV1(_, _))
         | (OutputValue::TokenV1(_, _), OutputValue::Coin(_)) => Err(Error::CurrencyMismatch),
         (OutputValue::TokenV0(_), _) | (_, OutputValue::TokenV0(_)) => {
-            Err(Error::UnsupportedTokenVersion)
+            unreachable!()
         }
     }
 }
 
-// FIXME: tests
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+    use common::{
+        chain::{tokens::TokenId, Destination, OrderData},
+        primitives::H256,
+    };
+    use rstest::rstest;
+
+    use crate::{InMemoryOrdersAccounting, OrdersAccountingDB};
+
+    macro_rules! coin {
+        ($value:expr) => {
+            OutputValue::Coin(Amount::from_atoms($value))
+        };
+    }
+
+    macro_rules! token {
+        ($value:expr) => {
+            OutputValue::TokenV1(TokenId::zero(), Amount::from_atoms($value))
+        };
+    }
+
+    macro_rules! token2 {
+        ($value:expr) => {
+            OutputValue::TokenV1(H256::from_low_u64_be(1).into(), Amount::from_atoms($value))
+        };
+    }
+
+    #[rstest]
+    #[case(token!(1), coin!(0), token!(0), 0)]
+    #[case(token!(1), coin!(0), token!(1), 0)]
+    #[case(token!(3), coin!(100), token!(0), 0)]
+    #[case(token!(3), coin!(100), token!(1), 33)]
+    #[case(token!(3), coin!(100), token!(2), 66)]
+    #[case(token!(3), coin!(100), token!(3), 100)]
+    #[case(token!(5), coin!(100), token!(0), 0)]
+    #[case(token!(5), coin!(100), token!(1), 20)]
+    #[case(token!(5), coin!(100), token!(2), 40)]
+    #[case(token!(5), coin!(100), token!(3), 60)]
+    #[case(token!(5), coin!(100), token!(4), 80)]
+    #[case(token!(5), coin!(100), token!(5), 100)]
+    #[case(coin!(100), token!(3), coin!(0), 0)]
+    #[case(coin!(100), token!(3), coin!(1), 0)]
+    #[case(coin!(100), token!(3), coin!(33), 0)]
+    #[case(coin!(100), token!(3), coin!(34), 1)]
+    #[case(coin!(100), token!(3), coin!(66), 1)]
+    #[case(coin!(100), token!(3), coin!(67), 2)]
+    #[case(coin!(100), token!(3), coin!(99), 2)]
+    #[case(coin!(100), token!(3), coin!(100), 3)]
+    #[case(token!(3), token2!(100), token!(0), 0)]
+    #[case(token!(3), token2!(100), token!(1), 33)]
+    #[case(token!(3), token2!(100), token!(2), 66)]
+    #[case(token!(3), token2!(100), token!(3), 100)]
+    #[case(coin!(3), coin!(100), coin!(0), 0)]
+    #[case(coin!(3), coin!(100), coin!(1), 33)]
+    #[case(coin!(3), coin!(100), coin!(2), 66)]
+    #[case(coin!(3), coin!(100), coin!(3), 100)]
+    #[case(coin!(1), token!(u128::MAX), coin!(1), u128::MAX)]
+    fn valid_values(
+        #[case] ask: OutputValue,
+        #[case] give: OutputValue,
+        #[case] fill: OutputValue,
+        #[case] result: u128,
+    ) {
+        let order_id = OrderId::zero();
+        let orders_store = InMemoryOrdersAccounting::from_values(
+            BTreeMap::from_iter([(
+                order_id,
+                OrderData::new(Destination::AnyoneCanSpend, ask.clone(), give.clone()),
+            )]),
+            BTreeMap::from_iter([(order_id, ask.amount())]),
+            BTreeMap::from_iter([(order_id, give.amount())]),
+        );
+        let orders_db = OrdersAccountingDB::new(&orders_store);
+
+        assert_eq!(
+            calculate_fill_order(&orders_db, order_id, &fill),
+            Ok(Amount::from_atoms(result))
+        );
+    }
+
+    #[rstest]
+    #[case(token!(0), coin!(1), token!(0), Error::OrderOverflow(OrderId::zero()))]
+    #[case(token!(0), coin!(1), token!(1), Error::OrderOverflow(OrderId::zero()))]
+    #[case(coin!(1), token!(1), coin!(2), Error::OrderOverflow(OrderId::zero()))]
+    #[case(coin!(1), token!(u128::MAX), coin!(2), Error::OrderOverflow(OrderId::zero()))]
+    #[case(coin!(1), token!(1), token!(1), Error::CurrencyMismatch)]
+    #[case(coin!(1), token!(1), token!(1), Error::CurrencyMismatch)]
+    #[case(token!(1), token2!(1), token2!(1), Error::CurrencyMismatch)]
+    fn invalid_values(
+        #[case] ask: OutputValue,
+        #[case] give: OutputValue,
+        #[case] fill: OutputValue,
+        #[case] error: Error,
+    ) {
+        let order_id = OrderId::zero();
+        let orders_store = InMemoryOrdersAccounting::from_values(
+            BTreeMap::from_iter([(
+                order_id,
+                OrderData::new(Destination::AnyoneCanSpend, ask.clone(), give.clone()),
+            )]),
+            BTreeMap::from_iter([(order_id, ask.amount())]),
+            BTreeMap::from_iter([(order_id, give.amount())]),
+        );
+        let orders_db = OrdersAccountingDB::new(&orders_store);
+
+        assert_eq!(
+            calculate_fill_order(&orders_db, order_id, &fill),
+            Err(error)
+        );
+    }
+}

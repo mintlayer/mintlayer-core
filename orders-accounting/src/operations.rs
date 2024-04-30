@@ -27,34 +27,37 @@ use crate::error::Result;
 pub struct CreateOrderUndo {
     pub(crate) id: OrderId,
     pub(crate) undo_data: DataDeltaUndo<OrderData>,
+    pub(crate) ask_balance: Amount,
+    pub(crate) give_balance: Amount,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub struct CancelOrderUndo {
+pub struct WithdrawOrderUndo {
     pub(crate) id: OrderId,
     pub(crate) undo_data: DataDeltaUndo<OrderData>,
-    pub(crate) ask_value: OutputValue,
-    pub(crate) give_value: OutputValue,
+    pub(crate) ask_balance: Amount,
+    pub(crate) give_balance: Amount,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct FillOrderUndo {
     pub(crate) id: OrderId,
-    pub(crate) sub_ask_value: Amount,
-    pub(crate) sub_give_value: Amount,
+    pub(crate) undo_data: Option<DataDeltaUndo<OrderData>>,
+    pub(crate) ask_balance: Amount,
+    pub(crate) give_balance: Amount,
 }
 
 #[must_use]
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, VariantCount)]
 pub enum OrdersAccountingUndo {
     CreateOrder(CreateOrderUndo),
-    CancelOrder(CancelOrderUndo),
+    WithdrawOrder(WithdrawOrderUndo),
     FillOrder(FillOrderUndo),
 }
 
 pub trait OrdersAccountingOperations {
     fn create_order(&mut self, id: OrderId, data: OrderData) -> Result<OrdersAccountingUndo>;
-
+    fn withdraw_order(&mut self, id: OrderId) -> Result<OrdersAccountingUndo>;
     fn fill_order(&mut self, id: OrderId, value: OutputValue) -> Result<OrdersAccountingUndo>;
 
     fn undo(&mut self, undo_data: OrdersAccountingUndo) -> Result<()>;

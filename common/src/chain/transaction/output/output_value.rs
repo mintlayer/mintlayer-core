@@ -52,7 +52,7 @@ impl OutputValue {
     pub fn amount(&self) -> Amount {
         match self {
             OutputValue::Coin(v) | OutputValue::TokenV1(_, v) => *v,
-            OutputValue::TokenV0(_) => Amount::ZERO, // FIXME: convenient but suspicious
+            OutputValue::TokenV0(_) => unreachable!(),
         }
     }
 }

@@ -280,16 +280,16 @@ impl ConstrainedValueAccumulator {
                     .map_err(|_| orders_accounting::Error::ViewFail)?
                     .ok_or(orders_accounting::Error::OrderGiveBalanceNotFound(*id))?;
 
-                let initially_asked = order_data.ask.amount();
+                let initially_asked = order_data.ask().amount();
                 let ask_amount = (initially_asked - ask_balance)
                     .ok_or(Error::NegativeAccountBalance(AccountType::Order(*id)))?;
 
                 let ask_id =
-                    CoinOrTokenId::from_output_value(&order_data.ask).expect("cannot fail");
+                    CoinOrTokenId::from_output_value(order_data.ask()).expect("cannot fail");
                 insert_or_increase(&mut self.unconstrained_value, ask_id, ask_amount)?;
 
                 let give_id =
-                    CoinOrTokenId::from_output_value(&order_data.give).expect("cannot fail");
+                    CoinOrTokenId::from_output_value(order_data.give()).expect("cannot fail");
                 insert_or_increase(&mut self.unconstrained_value, give_id, give_balance)?;
                 Ok((CoinOrTokenId::Coin, Amount::ZERO))
             }
@@ -373,11 +373,11 @@ impl ConstrainedValueAccumulator {
                     chain_config.nft_issuance_fee(block_height),
                 )?,
                 TxOutput::CreateOrder(order_data) => {
-                    let id = CoinOrTokenId::from_output_value(&order_data.give).unwrap();
+                    let id = CoinOrTokenId::from_output_value(order_data.give()).unwrap();
                     insert_or_increase(
                         &mut accumulator.unconstrained_value,
                         id,
-                        order_data.give.amount(),
+                        order_data.give().amount(),
                     )?;
                 }
             };

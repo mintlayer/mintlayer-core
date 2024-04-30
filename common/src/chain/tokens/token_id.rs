@@ -18,7 +18,7 @@ use crate::{
     chain::ChainConfig,
     primitives::{Id, H256},
 };
-use randomness::{CryptoRng, Rng};
+use randomness::Rng;
 use serialization::{DecodeAll, Encode};
 use typename::TypeName;
 
@@ -27,7 +27,7 @@ pub enum Token {}
 pub type TokenId = Id<Token>;
 
 impl TokenId {
-    pub fn random_using<R: Rng + CryptoRng>(rng: &mut R) -> Self {
+    pub fn random_using<R: Rng>(rng: &mut R) -> Self {
         Self::new(H256::random_using(rng))
     }
 

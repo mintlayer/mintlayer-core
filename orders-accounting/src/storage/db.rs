@@ -22,6 +22,7 @@ use common::{
     chain::{OrderData, OrderId},
     primitives::Amount,
 };
+use utils::tap_log::TapLog;
 
 use crate::{
     data::{OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData},
@@ -37,6 +38,99 @@ pub struct OrdersAccountingDB<S>(S);
 impl<S: OrdersAccountingStorageRead> OrdersAccountingDB<S> {
     pub fn new(store: S) -> Self {
         Self(store)
+    }
+}
+
+impl<S: OrdersAccountingStorageWrite> OrdersAccountingDB<S> {
+    pub fn merge_with_delta(
+        &mut self,
+        other: OrdersAccountingDeltaData,
+    ) -> Result<OrdersAccountingDeltaUndoData, Error> {
+        let data_undo = other
+            .order_data
+            .consume()
+            .into_iter()
+            .map(|(id, delta)| -> Result<_, Error> {
+                let undo = delta.clone().invert();
+                let old_data = self.0.get_order_data(&id).log_err().map_err(|_| Error::ViewFail)?;
+                match combine_data_with_delta(old_data, Some(delta))? {
+                    Some(result) => self
+                        .0
+                        .set_order_data(&id, &result)
+                        .log_err()
+                        .map_err(|_| Error::StorageWrite)?,
+                    None => {
+                        self.0.del_order_data(&id).log_err().map_err(|_| Error::StorageWrite)?
+                    }
+                };
+                Ok((id, undo))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+
+        let ask_balance_undo = other
+            .ask_balances
+            .consume()
+            .into_iter()
+            .map(|(id, delta)| -> Result<_, Error> {
+                let balance = self.0.get_ask_balance(&id).log_err().map_err(|_| Error::ViewFail)?;
+                match combine_amount_delta(&balance, &Some(delta))? {
+                    Some(result) => {
+                        if result > Amount::ZERO {
+                            self.0
+                                .set_ask_balance(&id, &result)
+                                .log_err()
+                                .map_err(|_| Error::StorageWrite)?
+                        } else {
+                            self.0
+                                .del_ask_balance(&id)
+                                .log_err()
+                                .map_err(|_| Error::StorageWrite)?
+                        }
+                    }
+                    None => {
+                        self.0.del_ask_balance(&id).log_err().map_err(|_| Error::StorageWrite)?
+                    }
+                };
+                let balance_undo = delta.neg().expect("amount negation some");
+                Ok((id, balance_undo))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+
+        let give_balance_undo = other
+            .give_balances
+            .consume()
+            .into_iter()
+            .map(|(id, delta)| -> Result<_, Error> {
+                let balance =
+                    self.0.get_give_balance(&id).log_err().map_err(|_| Error::ViewFail)?;
+                match combine_amount_delta(&balance, &Some(delta))? {
+                    Some(result) => {
+                        if result > Amount::ZERO {
+                            self.0
+                                .set_give_balance(&id, &result)
+                                .log_err()
+                                .map_err(|_| Error::StorageWrite)?
+                        } else {
+                            self.0
+                                .del_give_balance(&id)
+                                .log_err()
+                                .map_err(|_| Error::StorageWrite)?
+                        }
+                    }
+                    None => {
+                        self.0.del_give_balance(&id).log_err().map_err(|_| Error::StorageWrite)?
+                    }
+                };
+                let balance_undo = delta.neg().expect("amount negation some");
+                Ok((id, balance_undo))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+
+        Ok(OrdersAccountingDeltaUndoData {
+            order_data: DeltaDataUndoCollection::from_data(data_undo),
+            ask_balances: DeltaAmountCollection::from_iter(ask_balance_undo),
+            give_balances: DeltaAmountCollection::from_iter(give_balance_undo),
+        })
     }
 }
 
@@ -105,7 +199,6 @@ impl<S: OrdersAccountingStorageWrite> FlushableOrdersAccountingView for OrdersAc
         &mut self,
         delta: OrdersAccountingDeltaData,
     ) -> Result<OrdersAccountingDeltaUndoData, Self::Error> {
-        //self.merge_with_delta(delta).log_err().map_err(|_| Error::StorageWrite)
-        todo!()
+        self.merge_with_delta(delta).log_err().map_err(|_| Error::StorageWrite)
     }
 }
