@@ -47,6 +47,7 @@ fn update_functions_below_if_new_outputs_were_added(output: TxOutput) {
         TxOutput::IssueNft(_, _, _) => unimplemented!(),
         TxOutput::DataDeposit(_) => unimplemented!(),
         TxOutput::Htlc(_, _) => unimplemented!(),
+        TxOutput::CreateOrder(_) => todo!(),
     }
 }
 
@@ -244,7 +245,8 @@ pub fn is_stake_pool(output: &TxOutput) -> bool {
         | TxOutput::IssueFungibleToken(..)
         | TxOutput::IssueNft(..)
         | TxOutput::DataDeposit(..)
-        | TxOutput::Htlc(..) => false,
+        | TxOutput::Htlc(..)
+        | TxOutput::CreateOrder(..) => false,
         TxOutput::CreateStakePool(..) => true,
     }
 }
@@ -260,7 +262,8 @@ pub fn is_produce_block(output: &TxOutput) -> bool {
         | TxOutput::IssueFungibleToken(..)
         | TxOutput::IssueNft(..)
         | TxOutput::DataDeposit(..)
-        | TxOutput::Htlc(..) => false,
+        | TxOutput::Htlc(..)
+        | TxOutput::CreateOrder(..) => false,
         TxOutput::ProduceBlockFromStake(..) => true,
     }
 }

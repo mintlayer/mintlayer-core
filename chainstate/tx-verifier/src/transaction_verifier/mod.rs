@@ -303,7 +303,8 @@ where
             | TxOutput::IssueFungibleToken(_)
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::DataDeposit(_)
-            | TxOutput::Htlc(_, _) => Ok(None),
+            | TxOutput::Htlc(_, _)
+            | TxOutput::CreateOrder(_) => Ok(None),
         }
     }
 
@@ -423,7 +424,8 @@ where
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
-                | TxOutput::Htlc(_, _) => None,
+                | TxOutput::Htlc(_, _)
+                | TxOutput::CreateOrder(_) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -602,7 +604,8 @@ where
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
-                | TxOutput::Htlc(_, _) => None,
+                | TxOutput::Htlc(_, _)
+                | TxOutput::CreateOrder(_) => None,
                 TxOutput::IssueFungibleToken(issuance_data) => {
                     let result = make_token_id(tx.inputs())
                         .ok_or(ConnectTransactionError::TokensError(
@@ -674,7 +677,8 @@ where
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::IssueNft(_, _, _)
                     | TxOutput::DataDeposit(_)
-                    | TxOutput::Htlc(_, _) => Ok(()),
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::CreateOrder(_) => Ok(()),
                 }
             })
     }

@@ -109,6 +109,7 @@ fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         TxOutput::IssueFungibleToken(_)
         | TxOutput::Burn(_)
         | TxOutput::DelegateStaking(_, _)
-        | TxOutput::DataDeposit(_) => None,
+        | TxOutput::DataDeposit(_)
+        | TxOutput::CreateOrder(_) => None,
     }
 }

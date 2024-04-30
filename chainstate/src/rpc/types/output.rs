@@ -203,6 +203,7 @@ impl RpcTxOutput {
             TxOutput::DataDeposit(data) => RpcTxOutput::DataDeposit {
                 data: RpcHexString::from_bytes(data),
             },
+            TxOutput::CreateOrder(_) => todo!(),
         };
         Ok(result)
     }

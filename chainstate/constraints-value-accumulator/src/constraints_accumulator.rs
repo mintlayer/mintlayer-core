@@ -148,8 +148,9 @@ impl ConstrainedValueAccumulator {
             }
             TxOutput::CreateDelegationId(..)
             | TxOutput::IssueFungibleToken(..)
-            | TxOutput::Burn(_)
-            | TxOutput::DataDeposit(_) => {
+            | TxOutput::Burn(..)
+            | TxOutput::DataDeposit(..)
+            | TxOutput::CreateOrder(..) => {
                 return Err(Error::SpendingNonSpendableOutput(outpoint.clone()));
             }
             TxOutput::IssueNft(token_id, _, _) => {
@@ -371,6 +372,14 @@ impl ConstrainedValueAccumulator {
                     CoinOrTokenId::Coin,
                     chain_config.nft_issuance_fee(block_height),
                 )?,
+                TxOutput::CreateOrder(order_data) => {
+                    let id = CoinOrTokenId::from_output_value(&order_data.give).unwrap();
+                    insert_or_increase(
+                        &mut accumulator.unconstrained_value,
+                        id,
+                        order_data.give.amount(),
+                    )?;
+                }
             };
         }
 

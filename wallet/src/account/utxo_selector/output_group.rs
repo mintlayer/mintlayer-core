@@ -67,7 +67,8 @@ impl OutputGroup {
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::IssueFungibleToken(_)
-            | TxOutput::DataDeposit(_) => {
+            | TxOutput::DataDeposit(_)
+            | TxOutput::CreateOrder(_) => {
                 return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
                     output.1.clone(),
                 )))

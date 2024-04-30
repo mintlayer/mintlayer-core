@@ -280,7 +280,8 @@ impl<'a> RandomTxMaker<'a> {
             | TxOutput::IssueFungibleToken(_)
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::DataDeposit(_)
-            | TxOutput::Htlc(_, _) => { /* do nothing */ }
+            | TxOutput::Htlc(_, _)
+            | TxOutput::CreateOrder(_) => { /* do nothing */ }
             TxOutput::CreateStakePool(pool_id, _) => {
                 let (staker_sk, vrf_sk) = new_staking_pools.get(pool_id).unwrap();
                 staking_pools_observer.on_pool_created(
@@ -685,7 +686,8 @@ impl<'a> RandomTxMaker<'a> {
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::IssueFungibleToken(_)
-                | TxOutput::DataDeposit(_) => unreachable!(),
+                | TxOutput::DataDeposit(_)
+                | TxOutput::CreateOrder(_) => unreachable!(),
             };
 
             result_inputs.extend(new_inputs);
@@ -1048,6 +1050,7 @@ impl<'a> RandomTxMaker<'a> {
                     *dummy_token_id = make_token_id(inputs).unwrap();
                     Some(output)
                 }
+                TxOutput::CreateOrder(_) => todo!(),
             })
             .collect();
 

@@ -253,7 +253,8 @@ fn is_htlc_output(output: &TxOutput) -> bool {
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::IssueNft(_, _, _)
-        | TxOutput::DataDeposit(_) => false,
+        | TxOutput::DataDeposit(_)
+        | TxOutput::CreateOrder(_) => false,
         TxOutput::Htlc(_, _) => true,
     }
 }

@@ -240,7 +240,8 @@ fn has_tokens_issuance_to_cache(outputs: &[TxOutput]) -> Option<TokenId> {
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::DataDeposit(_)
-        | TxOutput::Htlc(_, _) => None,
+        | TxOutput::Htlc(_, _)
+        | TxOutput::CreateOrder(_) => None,
         TxOutput::IssueNft(id, _, _) => Some(*id),
     })
 }

@@ -58,6 +58,7 @@ pub(crate) fn group_outputs<T, Grouped: Clone>(
                     get_tx_output(&output).clone(),
                 )))
             }
+            TxOutput::CreateOrder(_) => todo!(),
         };
 
         match output_value {
@@ -112,6 +113,7 @@ pub fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
                     get_tx_output(&output).clone(),
                 )))
             }
+            TxOutput::CreateOrder(_) => todo!(),
         };
 
         match output_value {
@@ -155,7 +157,8 @@ fn output_spendable_value(output: &TxOutput) -> Result<(Currency, Amount), UtxoS
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::IssueFungibleToken(_)
-        | TxOutput::DataDeposit(_) => {
+        | TxOutput::DataDeposit(_)
+        | TxOutput::CreateOrder(_) => {
             return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
                 output.clone(),
             )))

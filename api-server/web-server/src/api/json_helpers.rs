@@ -197,6 +197,7 @@ pub fn txoutput_to_json(
                 },
             })
         }
+        TxOutput::CreateOrder(_) => todo!(),
     }
 }
 

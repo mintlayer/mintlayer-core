@@ -22,9 +22,10 @@ use crate::{
         AddressError,
     },
     chain::{
+        order::OrderData,
         output_value::OutputValue,
         tokens::{IsTokenFreezable, NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
-        ChainConfig, DelegationId, PoolId,
+        ChainConfig, DelegationId, OrderId, PoolId,
     },
     primitives::{Amount, Id},
     text_summary::TextSummary,
@@ -140,6 +141,8 @@ pub enum TxOutput {
     /// Transfer an output under Hashed TimeLock Contract.
     #[codec(index = 10)]
     Htlc(OutputValue, Box<HashedTimelockContract>),
+    #[codec(index = 11)]
+    CreateOrder(OrderData),
 }
 
 impl TxOutput {
@@ -154,7 +157,8 @@ impl TxOutput {
             | TxOutput::IssueFungibleToken(_)
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::DataDeposit(_)
-            | TxOutput::Htlc(_, _) => None,
+            | TxOutput::Htlc(_, _)
+            | TxOutput::CreateOrder(_) => None,
             TxOutput::LockThenTransfer(_, _, tl) => Some(tl),
         }
     }
@@ -326,6 +330,7 @@ impl TextSummary for TxOutput {
                     fmt_dest(&htlc.refund_key)
                 )
             }
+            TxOutput::CreateOrder(_) => todo!(),
         }
     }
 }

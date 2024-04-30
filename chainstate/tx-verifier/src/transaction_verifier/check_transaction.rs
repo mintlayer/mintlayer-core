@@ -162,7 +162,8 @@ fn check_tokens_tx(
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::IssueNft(_, _, _)
-                | TxOutput::DataDeposit(_) => false,
+                | TxOutput::DataDeposit(_)
+                | TxOutput::CreateOrder(_) => false,
             });
             ensure!(
                 !has_tokens_v0_op,
@@ -201,7 +202,8 @@ fn check_tokens_tx(
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::DataDeposit(_)
-            | TxOutput::Htlc(_, _) => Ok(()),
+            | TxOutput::Htlc(_, _)
+            | TxOutput::CreateOrder(_) => Ok(()),
         })
         .map_err(CheckTransactionError::TokensError)?;
 
@@ -254,7 +256,8 @@ fn check_data_deposit_outputs(
             | TxOutput::DelegateStaking(..)
             | TxOutput::IssueFungibleToken(..)
             | TxOutput::IssueNft(..)
-            | TxOutput::Htlc(_, _) => { /* Do nothing */ }
+            | TxOutput::Htlc(_, _)
+            | TxOutput::CreateOrder(..) => { /* Do nothing */ }
             TxOutput::DataDeposit(v) => {
                 // Ensure the size of the data doesn't exceed the max allowed
                 if v.len() > chain_config.data_deposit_max_size() {
@@ -271,6 +274,7 @@ fn check_data_deposit_outputs(
     Ok(())
 }
 
+// FIXME: orders here as well
 fn check_htlc_outputs(
     chain_config: &ChainConfig,
     block_height: BlockHeight,
@@ -295,7 +299,8 @@ fn check_htlc_outputs(
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::IssueNft(_, _, _)
-                | TxOutput::DataDeposit(_) => false,
+                | TxOutput::DataDeposit(_)
+                | TxOutput::CreateOrder(_) => false,
                 TxOutput::Htlc(_, _) => true,
             });
 

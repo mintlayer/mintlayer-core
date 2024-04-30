@@ -558,7 +558,8 @@ impl OutputCache {
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::IssueFungibleToken(_)
-            | TxOutput::Htlc(_, _) => false,
+            | TxOutput::Htlc(_, _)
+            | TxOutput::CreateOrder(_) => false,
         }
     }
 
@@ -720,6 +721,7 @@ impl OutputCache {
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::ProduceBlockFromStake(_, _) => false,
+                    TxOutput::CreateOrder(_) => todo!(),
                 }
             }),
             TxInput::AccountCommand(_, cmd) => match cmd {
@@ -833,6 +835,7 @@ impl OutputCache {
                     }
                 }
                 TxOutput::IssueNft(_, _, _) => {}
+                TxOutput::CreateOrder(_) => todo!(),
             };
         }
         Ok(())
@@ -1050,6 +1053,7 @@ impl OutputCache {
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::Htlc(_, _) => {}
+                    TxOutput::CreateOrder(_) => todo!(),
                 }
             }
         }
@@ -1374,7 +1378,8 @@ impl OutputCache {
                     | TxOutput::Burn(_)
                     | TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::Htlc(_, _) => None,
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::CreateOrder(_) => None,
                     TxOutput::ProduceBlockFromStake(_, pool_id)
                     | TxOutput::CreateStakePool(pool_id, _) => {
                         self.pools.get(pool_id).and_then(|pool_data| {
@@ -1417,7 +1422,8 @@ fn is_v0_token_output(output: &TxOutput) -> bool {
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::DataDeposit(_)
-        | TxOutput::ProduceBlockFromStake(_, _) => false,
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::CreateOrder(_) => false,
     }
 }
 

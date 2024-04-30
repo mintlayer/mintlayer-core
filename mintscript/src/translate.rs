@@ -180,6 +180,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                 TxOutput::IssueFungibleToken(_issuance) => Err(TranslationError::Unspendable),
                 TxOutput::Burn(_val) => Err(TranslationError::Unspendable),
                 TxOutput::DataDeposit(_data) => Err(TranslationError::Unspendable),
+                TxOutput::CreateOrder(_) => Err(TranslationError::Unspendable),
             },
             InputInfo::Account { outpoint } => match outpoint.account() {
                 AccountSpending::DelegationBalance(delegation_id, _amount) => {
@@ -222,7 +223,8 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_>
                     TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::Htlc(_, _) => Err(TranslationError::IllegalOutputSpend),
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::CreateOrder(_) => Err(TranslationError::IllegalOutputSpend),
                     TxOutput::CreateDelegationId(_, _)
                     | TxOutput::Burn(_)
                     | TxOutput::DataDeposit(_)
@@ -279,7 +281,8 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 TxOutput::Transfer(_, _)
                 | TxOutput::CreateStakePool(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::IssueNft(_, _, _) => Ok(WitnessScript::TRUE),
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::CreateOrder(_) => Ok(WitnessScript::TRUE),
                 TxOutput::CreateDelegationId(_, _)
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::DelegateStaking(_, _)

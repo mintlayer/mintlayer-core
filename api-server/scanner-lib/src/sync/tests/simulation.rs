@@ -264,7 +264,8 @@ async fn simulation(
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::Htlc(_, _) => None,
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::CreateOrder(_) => None,
                 });
                 staking_pools.extend(new_pools);
 
@@ -283,7 +284,8 @@ async fn simulation(
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::Htlc(_, _) => None,
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::CreateOrder(_) => None,
                 });
                 delegations.extend(new_delegations);
 
@@ -299,7 +301,8 @@ async fn simulation(
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::Htlc(_, _) => None,
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::CreateOrder(_) => None,
                 });
                 token_ids.extend(new_tokens);
 
@@ -344,6 +347,7 @@ async fn simulation(
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::Htlc(_, _) => {}
+                    TxOutput::CreateOrder(_) => todo!(),
                 });
 
                 tx.inputs().iter().for_each(|inp| match inp {
@@ -389,6 +393,7 @@ async fn simulation(
                             burn_coins(&mut statistics, token_change_authority_fee);
                         }
                         AccountCommand::WithdrawOrder(_) => todo!(),
+                        AccountCommand::FillOrder(_, _) => todo!(),
                     },
                 });
             }
