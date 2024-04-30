@@ -22,6 +22,8 @@ use randomness::{CryptoRng, Rng};
 use serialization::{Decode, DecodeAll, Encode};
 use typename::TypeName;
 
+use super::{output_value::OutputValue, Destination};
+
 #[derive(Eq, PartialEq, TypeName)]
 pub enum Order {}
 pub type OrderId = Id<Order>;
@@ -71,4 +73,11 @@ impl<'de> serde::Deserialize<'de> for OrderId {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         HexifiedAddress::<Self>::serde_deserialize(deserializer)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
+pub struct OrderData {
+    pub authority: Destination,
+    pub ask: OutputValue,
+    pub give: OutputValue,
 }

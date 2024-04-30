@@ -18,10 +18,13 @@ use std::{collections::BTreeMap, ops::Neg};
 use accounting::{
     combine_amount_delta, combine_data_with_delta, DeltaAmountCollection, DeltaDataUndoCollection,
 };
-use common::{chain::OrderId, primitives::Amount};
+use common::{
+    chain::{OrderData, OrderId},
+    primitives::Amount,
+};
 
 use crate::{
-    data::{OrderData, OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData},
+    data::{OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData},
     error::Error,
     view::{FlushableOrdersAccountingView, OrdersAccountingView},
 };

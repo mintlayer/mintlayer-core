@@ -17,17 +17,10 @@ use std::collections::BTreeMap;
 
 use accounting::{DeltaAmountCollection, DeltaDataCollection, DeltaDataUndoCollection};
 use common::{
-    chain::{output_value::OutputValue, Destination, OrderId},
+    chain::{output_value::OutputValue, Destination, OrderData, OrderId},
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
-
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub struct OrderData {
-    pub authority: Destination,
-    pub ask: OutputValue,
-    pub give: OutputValue,
-}
 
 #[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct OrdersAccountingData {

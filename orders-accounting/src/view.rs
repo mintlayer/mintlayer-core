@@ -15,9 +15,12 @@
 
 use std::ops::Deref;
 
-use common::{chain::OrderId, primitives::Amount};
+use common::{
+    chain::{OrderData, OrderId},
+    primitives::Amount,
+};
 
-use crate::data::{OrderData, OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData};
+use crate::data::{OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData};
 
 pub trait OrdersAccountingView {
     /// Error that can occur during queries

@@ -14,13 +14,13 @@
 // limitations under the License.
 
 use common::{
-    chain::{output_value::OutputValue, OrderId},
+    chain::{output_value::OutputValue, OrderData, OrderId},
     primitives::Amount,
 };
 use utils::ensure;
 
 use crate::{
-    data::{OrderData, OrdersAccountingDeltaData},
+    data::OrdersAccountingDeltaData,
     error::{Error, Result},
     operations::{
         CreateOrderUndo, FillOrderUndo, OrdersAccountingOperations, OrdersAccountingUndo,

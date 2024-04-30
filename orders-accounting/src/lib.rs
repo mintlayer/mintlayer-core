@@ -21,7 +21,6 @@ mod storage;
 mod view;
 
 pub use {
-    data::OrderData,
     error::Error,
     storage::{db::OrdersAccountingDB, in_memory::InMemoryOrdersAccounting},
     view::OrdersAccountingView,

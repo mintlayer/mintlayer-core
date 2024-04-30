@@ -27,7 +27,7 @@ use common::{
     },
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
-use orders_accounting::{InMemoryOrdersAccounting, OrderData, OrdersAccountingDB};
+use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB, PoolData};
 use randomness::{CryptoRng, Rng};
 use rstest::rstest;

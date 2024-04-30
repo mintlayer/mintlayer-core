@@ -15,9 +15,12 @@
 
 use std::collections::BTreeMap;
 
-use common::{chain::OrderId, primitives::Amount};
+use common::{
+    chain::{OrderData, OrderId},
+    primitives::Amount,
+};
 
-use crate::{data::OrderData, view::OrdersAccountingView};
+use crate::view::OrdersAccountingView;
 
 use super::{OrdersAccountingStorageRead, OrdersAccountingStorageWrite};
 
