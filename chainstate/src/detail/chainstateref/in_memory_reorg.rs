@@ -16,17 +16,20 @@
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{ConsumedEpochDataCache, EpochDataCache, GenBlockIndex, PropertyQueryError};
 use common::{
-    chain::{block::BlockHeader, Block, GenBlock, GenBlockId},
+    chain::{Block, GenBlock, GenBlockId},
     primitives::{id::WithId, Id},
 };
+use thiserror::Error;
 use tx_verifier::{
-    flush_to_storage, transaction_verifier::TransactionVerifierDelta, TransactionVerifier,
+    error::ConnectTransactionError, flush_to_storage,
+    transaction_verifier::TransactionVerifierDelta, TransactionVerifier,
+    TransactionVerifierStorageError,
 };
 use utils::{log_error, tap_log::TapLog};
 
-use crate::{calculate_median_time_past, CheckBlockError, TransactionVerificationStrategy};
+use crate::{calculate_median_time_past, TransactionVerificationStrategy};
 
-use super::{epoch_seal, ChainstateRef};
+use super::{epoch_seal, ChainstateRef, EpochSealError};
 
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> ChainstateRef<'a, S, V> {
     // Disconnect all blocks from the mainchain up until common ancestor of provided block
@@ -36,24 +39,17 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn reorganize_in_memory(
         &self,
-        new_block_header: &BlockHeader,
-        best_block_id: Id<GenBlock>,
-    ) -> Result<(TransactionVerifierDelta, ConsumedEpochDataCache), CheckBlockError> {
-        let prev_block_id = new_block_header.prev_block_id();
-        let new_chain =
-            match self.get_gen_block_index(prev_block_id).log_err()?.ok_or_else(|| {
-                PropertyQueryError::PrevBlockIndexNotFound {
-                    block_id: new_block_header.block_id(),
-                    prev_block_id: *prev_block_id,
-                }
-            })? {
-                GenBlockIndex::Block(block_index) => self.get_new_chain(&block_index).log_err()?,
-                GenBlockIndex::Genesis(_) => Vec::new(),
-            };
+        new_tip: &Id<GenBlock>,
+    ) -> Result<(TransactionVerifierDelta, ConsumedEpochDataCache), InMemoryReorgError> {
+        let cur_tip = self.get_best_block_id()?;
+        let new_chain = match self.get_existing_gen_block_index(new_tip)? {
+            GenBlockIndex::Block(block_index) => self.get_new_chain(&block_index)?,
+            GenBlockIndex::Genesis(_) => Vec::new(),
+        };
 
         let common_ancestor_id = match new_chain.first() {
             Some(block_index) => block_index.prev_block_id(),
-            None => prev_block_id,
+            None => new_tip,
         };
 
         let mut tx_verifier = TransactionVerifier::new(self, self.chain_config);
@@ -62,20 +58,18 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let mut epoch_data_cache = EpochDataCache::new(&self.db_tx);
 
         // Disconnect the current chain if it is not a genesis
-        if let GenBlockId::Block(best_block_id) = best_block_id.classify(self.chain_config) {
-            let mainchain_tip = self.get_existing_block_index(&best_block_id)?;
+        if let GenBlockId::Block(cur_tip) = cur_tip.classify(self.chain_config) {
+            let cur_tip_index = self.get_existing_block_index(&cur_tip)?;
 
-            let mut to_disconnect = GenBlockIndex::Block(mainchain_tip);
+            let mut to_disconnect = GenBlockIndex::Block(cur_tip_index);
             while to_disconnect.block_id() != *common_ancestor_id {
                 let to_disconnect_block = match to_disconnect {
                     GenBlockIndex::Genesis(_) => panic!("Attempt to disconnect genesis"),
                     GenBlockIndex::Block(block_index) => block_index,
                 };
 
-                let block = self
-                    .get_block_from_index(&to_disconnect_block)
-                    .log_err()?
-                    .expect("Inconsistent DB");
+                let block =
+                    self.get_block_from_index(&to_disconnect_block)?.expect("Inconsistent DB");
 
                 // Disconnect transactions
                 let cached_inputs = self
@@ -106,9 +100,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         // Connect the new chain
         for new_tip_block_index in new_chain {
             let new_tip: WithId<Block> = self
-                .get_block_from_index(&new_tip_block_index)
-                .log_err()?
-                .ok_or(CheckBlockError::BlockNotFoundDuringInMemoryReorg(
+                .get_block_from_index(&new_tip_block_index)?
+                .ok_or(InMemoryReorgError::BlockNotFound(
                     (*new_tip_block_index.block_id()).into(),
                 ))?
                 .into();
@@ -146,4 +139,20 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let consumed_epoch_data = epoch_data_cache.consume();
         Ok((consumed_verifier, consumed_epoch_data))
     }
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum InMemoryReorgError {
+    #[error("Blockchain storage error: {0}")]
+    StorageError(#[from] chainstate_storage::Error),
+    #[error("Property query error: {0}")]
+    PropertyQueryError(#[from] PropertyQueryError),
+    #[error("Failed to update the internal blockchain state: {0}")]
+    StateUpdateFailed(#[from] ConnectTransactionError),
+    #[error("TransactionVerifier error: {0}")]
+    TransactionVerifierError(#[from] TransactionVerifierStorageError),
+    #[error("Error during sealing an epoch: {0}")]
+    EpochSealError(#[from] EpochSealError),
+    #[error("Block {0} not found in the db")]
+    BlockNotFound(Id<GenBlock>),
 }

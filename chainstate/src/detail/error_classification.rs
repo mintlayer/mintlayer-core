@@ -37,7 +37,9 @@ use utxo::UtxosBlockUndoError;
 use crate::{BlockError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError};
 
 use super::{
-    block_invalidation::BestChainCandidatesError, chainstateref::EpochSealError, BlockSizeError,
+    block_invalidation::BestChainCandidatesError,
+    chainstateref::{EpochSealError, InMemoryReorgError},
+    BlockSizeError,
 };
 
 /// When handling errors during block processing, we need to differentiate between errors that
@@ -131,6 +133,7 @@ impl BlockProcessingErrorClassification for BlockError {
             BlockError::CheckBlockFailed(err) => err.classify(),
             BlockError::StateUpdateFailed(err) => err.classify(),
             BlockError::PropertyQueryError(err) => err.classify(),
+            BlockError::InMemoryReorgFailed(err) => err.classify(),
         }
     }
 }
@@ -159,7 +162,6 @@ impl BlockProcessingErrorClassification for CheckBlockError {
         match self {
             CheckBlockError::MerkleRootMismatch
             | CheckBlockError::ParentBlockMissing { .. }
-            | CheckBlockError::BlockNotFoundDuringInMemoryReorg(_)
             | CheckBlockError::BlockTimeOrderInvalid(_, _)
             | CheckBlockError::InvalidBlockRewardOutputType(_)
             | CheckBlockError::CheckpointMismatch(_, _)
@@ -174,7 +176,6 @@ impl BlockProcessingErrorClassification for CheckBlockError {
             CheckBlockError::StorageError(err) => err.classify(),
             CheckBlockError::PropertyQueryError(err) => err.classify(),
             CheckBlockError::MerkleRootCalculationFailed(_, err) => err.classify(),
-            CheckBlockError::StateUpdateFailed(err) => err.classify(),
             CheckBlockError::BlockSizeError(err) => err.classify(),
             CheckBlockError::BlockRewardMaturityError(err) => err.classify(),
             CheckBlockError::TransactionVerifierError(err) => err.classify(),
@@ -182,6 +183,21 @@ impl BlockProcessingErrorClassification for CheckBlockError {
             CheckBlockError::CheckTransactionFailed(err) => err.classify(),
             CheckBlockError::ConsensusVerificationFailed(err) => err.classify(),
             CheckBlockError::GetAncestorError(err) => err.classify(),
+            CheckBlockError::InMemoryReorgFailed(err) => err.classify(),
+        }
+    }
+}
+
+impl BlockProcessingErrorClassification for InMemoryReorgError {
+    fn classify(&self) -> BlockProcessingErrorClass {
+        match self {
+            InMemoryReorgError::BlockNotFound(_) => BlockProcessingErrorClass::General,
+
+            InMemoryReorgError::StorageError(err) => err.classify(),
+            InMemoryReorgError::PropertyQueryError(err) => err.classify(),
+            InMemoryReorgError::StateUpdateFailed(err) => err.classify(),
+            InMemoryReorgError::TransactionVerifierError(err) => err.classify(),
+            InMemoryReorgError::EpochSealError(err) => err.classify(),
         }
     }
 }

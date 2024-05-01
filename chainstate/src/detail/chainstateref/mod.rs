@@ -20,7 +20,10 @@ mod in_memory_reorg;
 mod tx_verifier_storage;
 
 use itertools::Itertools;
-use std::{cmp::max, collections::BTreeSet};
+use std::{
+    cmp::max,
+    collections::{BTreeMap, BTreeSet},
+};
 use thiserror::Error;
 
 use chainstate_storage::{
@@ -39,10 +42,12 @@ use common::{
         },
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, Transaction, TxOutput,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, PoolId, Transaction,
+        TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, time::Time, BlockCount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{
+        id::WithId, time::Time, Amount, BlockCount, BlockDistance, BlockHeight, Id, Idable,
+    },
     time_getter::TimeGetter,
     Uint256,
 };
@@ -66,6 +71,7 @@ use super::{
 };
 
 pub use epoch_seal::EpochSealError;
+pub use in_memory_reorg::InMemoryReorgError;
 
 pub struct ChainstateRef<'a, S, V> {
     chain_config: &'a ChainConfig,
@@ -609,9 +615,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             // Validating PoS blocks in branches requires utxo set, accounting info and epoch data
             // that should be updated by doing a reorg beforehand.
             // It will be a no-op for attaching a block to the tip.
-            let best_block_id = self.get_best_block_id()?;
             let (verifier_delta, consumed_epoch_data) =
-                self.reorganize_in_memory(header.header(), best_block_id)?;
+                self.reorganize_in_memory(header.header().prev_block_id())?;
             let (consumed_utxos, consumed_deltas) = verifier_delta.consume();
 
             let utxos_cache =
@@ -985,6 +990,47 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             block_status,
         );
         Ok(block_index)
+    }
+
+    // FIXME tests
+    pub fn get_stake_pool_balances_at_height(
+        &self,
+        pool_ids: &[PoolId],
+        height: BlockHeight,
+    ) -> Result<BTreeMap<PoolId, Amount>, BlockError> {
+        let best_block_index =
+            self.get_best_block_index().map_err(BlockError::PropertyQueryError)?;
+
+        if height >= best_block_index.block_height() {
+            // No need to reorg
+            Self::collect_pool_balances(pool_ids, self)
+        } else {
+            let block_id = self
+                .get_existing_block_id_by_height(&height)
+                .map_err(BlockError::PropertyQueryError)?;
+
+            let (verifier_delta, _consumed_epoch_data) = self.reorganize_in_memory(&block_id)?;
+            let (_consumed_utxos, consumed_deltas) = verifier_delta.consume();
+            let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
+            let pos_delta = PoSAccountingDelta::from_data(&pos_db, consumed_deltas);
+
+            Self::collect_pool_balances(pool_ids, &pos_delta)
+        }
+    }
+
+    fn collect_pool_balances(
+        pool_ids: &[PoolId],
+        pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
+    ) -> Result<BTreeMap<PoolId, Amount>, BlockError> {
+        let mut balances = BTreeMap::new();
+
+        for pool_id in pool_ids {
+            if let Some(balance) = pos_accounting_view.get_pool_balance(*pool_id)? {
+                balances.insert(*pool_id, balance);
+            }
+        }
+
+        Ok(balances)
     }
 
     /// Panic if block index consistency is violated.
