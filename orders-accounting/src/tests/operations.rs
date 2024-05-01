@@ -132,8 +132,7 @@ fn fill_order_must_converge(#[case] seed: Seed) {
 
     db.batch_write_orders_data(cache.consume()).unwrap();
 
-    let expected_storage =
-        InMemoryOrdersAccounting::from_values(BTreeMap::new(), BTreeMap::new(), BTreeMap::new());
-
-    assert_eq!(expected_storage, storage);
+    assert_eq!(InMemoryOrdersAccounting::new(), storage);
 }
+
+// FIXME: more tests

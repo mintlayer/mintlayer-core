@@ -284,13 +284,13 @@ impl ConstrainedValueAccumulator {
                 let ask_amount = (initially_asked - ask_balance)
                     .ok_or(Error::NegativeAccountBalance(AccountType::Order(*id)))?;
 
-                let ask_id =
+                let ask_currency =
                     CoinOrTokenId::from_output_value(order_data.ask()).expect("cannot fail");
-                insert_or_increase(&mut self.unconstrained_value, ask_id, ask_amount)?;
+                insert_or_increase(&mut self.unconstrained_value, ask_currency, ask_amount)?;
 
-                let give_id =
+                let give_currency =
                     CoinOrTokenId::from_output_value(order_data.give()).expect("cannot fail");
-                insert_or_increase(&mut self.unconstrained_value, give_id, give_balance)?;
+                insert_or_increase(&mut self.unconstrained_value, give_currency, give_balance)?;
                 Ok((CoinOrTokenId::Coin, Amount::ZERO))
             }
             AccountCommand::FillOrder(order_id, fill_value) => {
@@ -300,11 +300,15 @@ impl ConstrainedValueAccumulator {
                     fill_value,
                 )?;
 
-                let fill_id = CoinOrTokenId::from_output_value(&fill_value).unwrap();
-                insert_or_increase(&mut self.unconstrained_value, fill_id, filled_amount)?;
+                let order_data = orders_accounting_view
+                    .get_order_data(order_id)
+                    .map_err(|_| orders_accounting::Error::ViewFail)?
+                    .ok_or(orders_accounting::Error::OrderDataNotFound(*order_id))?;
+                let give_currency = CoinOrTokenId::from_output_value(order_data.give()).unwrap();
+                insert_or_increase(&mut self.unconstrained_value, give_currency, filled_amount)?;
 
-                let fill_id = CoinOrTokenId::from_output_value(fill_value).unwrap();
-                Ok((fill_id, fill_value.amount()))
+                let ask_currency = CoinOrTokenId::from_output_value(fill_value).unwrap();
+                Ok((ask_currency, fill_value.amount()))
             }
         }
     }

@@ -32,7 +32,7 @@ pub enum AccountType {
     /// Token account type is used to authorize changes in token data.
     #[codec(index = 1)]
     Token(TokenId),
-    #[codec(index = 1)]
+    #[codec(index = 2)]
     Order(OrderId),
 }
 
