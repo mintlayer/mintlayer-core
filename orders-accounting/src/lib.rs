@@ -23,10 +23,15 @@ mod view;
 
 pub use {
     cache::OrdersAccountingCache,
+    data::{OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData},
     error::Error,
+    operations::{OrdersAccountingOperations, OrdersAccountingUndo},
     price_calculation::calculate_fill_order,
-    storage::{db::OrdersAccountingDB, in_memory::InMemoryOrdersAccounting},
-    view::OrdersAccountingView,
+    storage::{
+        db::OrdersAccountingDB, in_memory::InMemoryOrdersAccounting, OrdersAccountingStorageRead,
+        OrdersAccountingStorageWrite,
+    },
+    view::{FlushableOrdersAccountingView, OrdersAccountingView},
 };
 
 #[cfg(test)]

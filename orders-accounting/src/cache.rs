@@ -29,6 +29,7 @@ use crate::{
         WithdrawOrderUndo,
     },
     view::OrdersAccountingView,
+    FlushableOrdersAccountingView, OrdersAccountingDeltaUndoData,
 };
 
 pub struct OrdersAccountingCache<P> {
@@ -244,5 +245,16 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
             OrdersAccountingUndo::WithdrawOrder(undo) => self.undo_withdraw_order(undo),
             OrdersAccountingUndo::FillOrder(undo) => self.undo_fill_order(undo),
         }
+    }
+}
+
+impl<P> FlushableOrdersAccountingView for OrdersAccountingCache<P> {
+    type Error = Error;
+
+    fn batch_write_orders_data(
+        &mut self,
+        delta: OrdersAccountingDeltaData,
+    ) -> Result<OrdersAccountingDeltaUndoData> {
+        self.data.merge_with_delta(delta)
     }
 }

@@ -20,11 +20,12 @@ use common::{
     chain::{
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderData, OrderId, PoolId,
+        Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
+use orders_accounting::OrdersAccountingStorageWrite;
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageWrite,
     PoSAccountingUndo, PoolData,
@@ -400,5 +401,37 @@ impl<'st, B: storage::Backend> TokensAccountingStorageWrite for StoreTxRw<'st, B
     #[log_error]
     fn del_circulating_supply(&mut self, id: &TokenId) -> crate::Result<()> {
         self.del::<db::DBTokensCirculatingSupply, _, _>(id)
+    }
+}
+
+impl<'st, B: storage::Backend> OrdersAccountingStorageWrite for StoreTxRw<'st, B> {
+    #[log_error]
+    fn set_order_data(&mut self, id: &OrderId, data: &OrderData) -> crate::Result<()> {
+        todo!()
+    }
+
+    #[log_error]
+    fn del_order_data(&mut self, id: &OrderId) -> crate::Result<()> {
+        todo!()
+    }
+
+    #[log_error]
+    fn set_ask_balance(&mut self, id: &OrderId, balance: &Amount) -> crate::Result<()> {
+        todo!()
+    }
+
+    #[log_error]
+    fn del_ask_balance(&mut self, id: &OrderId) -> crate::Result<()> {
+        todo!()
+    }
+
+    #[log_error]
+    fn set_give_balance(&mut self, id: &OrderId, balance: &Amount) -> crate::Result<()> {
+        todo!()
+    }
+
+    #[log_error]
+    fn del_give_balance(&mut self, id: &OrderId) -> crate::Result<()> {
+        todo!()
     }
 }

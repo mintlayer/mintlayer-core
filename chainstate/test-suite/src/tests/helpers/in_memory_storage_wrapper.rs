@@ -24,11 +24,12 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, GenBlock, GenBlockId, PoolId,
-        Transaction,
+        AccountNonce, AccountType, ChainConfig, DelegationId, GenBlock, GenBlockId, OrderData,
+        OrderId, PoolId, Transaction,
     },
     primitives::{Amount, Id},
 };
+use orders_accounting::OrdersAccountingStorageRead;
 use pos_accounting::{
     DelegationData, PoSAccountingDB, PoSAccountingUndo, PoSAccountingView, PoolData,
 };
@@ -235,5 +236,21 @@ impl TokensAccountingStorageRead for InMemoryStorageWrapper {
 
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
         self.storage.transaction_ro().unwrap().get_circulating_supply(id)
+    }
+}
+
+impl OrdersAccountingStorageRead for InMemoryStorageWrapper {
+    type Error = storage_result::Error;
+
+    fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
+        todo!()
+    }
+
+    fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
+    }
+
+    fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
     }
 }

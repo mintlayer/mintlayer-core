@@ -27,10 +27,12 @@ use chainstate_types::storage_result;
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, DelegationId, GenBlock, PoolId, Transaction, UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, GenBlock, OrderData, OrderId, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
+use orders_accounting::{OrdersAccountingStorageRead, OrdersAccountingView};
 use pos_accounting::{DelegationData, PoSAccountingUndo, PoSAccountingView, PoolData};
 use subsystem::blocking::BlockingHandle;
 use tokens_accounting::{TokenAccountingUndo, TokensAccountingStorageRead, TokensAccountingView};
@@ -290,5 +292,37 @@ impl TokensAccountingStorageRead for ChainstateHandle {
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
         let id = *id;
         self.call(move |c| c.get_token_circulating_supply(&id))
+    }
+}
+
+impl OrdersAccountingView for ChainstateHandle {
+    type Error = Error;
+
+    fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
+        todo!()
+    }
+
+    fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
+    }
+
+    fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
+    }
+}
+
+impl OrdersAccountingStorageRead for ChainstateHandle {
+    type Error = Error;
+
+    fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
+        todo!()
+    }
+
+    fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
+    }
+
+    fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
     }
 }

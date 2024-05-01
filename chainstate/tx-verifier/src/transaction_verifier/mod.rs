@@ -30,6 +30,10 @@ pub mod tokens_check;
 mod tx_source;
 use accounting::BlockRewardUndo;
 use constraints_value_accumulator::AccumulatedFee;
+use orders_accounting::{
+    OrdersAccountingCache, OrdersAccountingDB, OrdersAccountingDeltaData, OrdersAccountingUndo,
+    OrdersAccountingView,
+};
 use tokens_accounting::{
     TokenAccountingUndo, TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
     TokensAccountingOperations, TokensAccountingStorageRead, TokensAccountingView,
@@ -92,6 +96,9 @@ pub struct TransactionVerifierDelta {
     tokens_accounting_delta: TokensAccountingDeltaData,
     tokens_accounting_delta_undo:
         BTreeMap<TransactionSource, CachedBlockUndoOp<TokenAccountingUndo>>,
+    orders_accounting_delta: OrdersAccountingDeltaData,
+    orders_accounting_delta_undo:
+        BTreeMap<TransactionSource, CachedBlockUndoOp<OrdersAccountingUndo>>,
 }
 
 impl TransactionVerifierDelta {
@@ -101,7 +108,7 @@ impl TransactionVerifierDelta {
 }
 
 /// The tool used to verify transactions and cache their updated states in memory
-pub struct TransactionVerifier<C, S, U, A, T> {
+pub struct TransactionVerifier<C, S, U, A, T, O> {
     chain_config: C,
     storage: S,
     best_block: Id<GenBlock>,
@@ -117,11 +124,14 @@ pub struct TransactionVerifier<C, S, U, A, T> {
     tokens_accounting_cache: TokensAccountingCache<T>,
     tokens_accounting_block_undo: AccountingBlockUndoCache<TokenAccountingUndo>,
 
+    orders_accounting_cache: OrdersAccountingCache<O>,
+    orders_accounting_block_undo: AccountingBlockUndoCache<OrdersAccountingUndo>,
+
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
 }
 
 impl<C, S: TransactionVerifierStorageRef + ShallowClone>
-    TransactionVerifier<C, S, UtxosDB<S>, S, TokensAccountingDB<S>>
+    TransactionVerifier<C, S, UtxosDB<S>, S, TokensAccountingDB<S>, OrdersAccountingDB<S>>
 {
     pub fn new(storage: S, chain_config: C) -> Self {
         let accounting_delta_adapter = PoSAccountingDeltaAdapter::new(storage.shallow_clone());
@@ -132,6 +142,8 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone>
             .expect("Database error while reading utxos best block");
         let tokens_accounting_cache =
             TokensAccountingCache::new(TokensAccountingDB::new(storage.shallow_clone()));
+        let orders_accounting_cache =
+            OrdersAccountingCache::new(OrdersAccountingDB::new(storage.shallow_clone()));
         Self {
             storage,
             chain_config,
@@ -143,17 +155,20 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone>
             pos_accounting_block_undo: AccountingBlockUndoCache::<PoSAccountingUndo>::new(),
             tokens_accounting_cache,
             tokens_accounting_block_undo: AccountingBlockUndoCache::<TokenAccountingUndo>::new(),
+            orders_accounting_cache,
+            orders_accounting_block_undo: AccountingBlockUndoCache::<OrdersAccountingUndo>::new(),
             account_nonce: BTreeMap::new(),
         }
     }
 }
 
-impl<C, S, U, A, T> TransactionVerifier<C, S, U, A, T>
+impl<C, S, U, A, T, O> TransactionVerifier<C, S, U, A, T, O>
 where
     S: TransactionVerifierStorageRef,
     U: UtxosView + Send + Sync,
     A: PoSAccountingView + Send + Sync,
     T: TokensAccountingView + Send + Sync,
+    O: OrdersAccountingView + Send + Sync,
 {
     pub fn new_generic(
         storage: S,
@@ -161,6 +176,7 @@ where
         utxos: U,
         accounting: A,
         tokens_accounting: T,
+        orders_accounting: O,
     ) -> Self {
         // TODO: both "expect"s in this function may fire when exiting the node-gui app;
         // get rid of them and return a proper Result.
@@ -179,18 +195,21 @@ where
             pos_accounting_block_undo: AccountingBlockUndoCache::<PoSAccountingUndo>::new(),
             tokens_accounting_cache: TokensAccountingCache::new(tokens_accounting),
             tokens_accounting_block_undo: AccountingBlockUndoCache::<TokenAccountingUndo>::new(),
+            orders_accounting_cache: OrdersAccountingCache::new(orders_accounting),
+            orders_accounting_block_undo: AccountingBlockUndoCache::<OrdersAccountingUndo>::new(),
             account_nonce: BTreeMap::new(),
         }
     }
 }
 
-impl<C, S, U, A, T> TransactionVerifier<C, S, U, A, T>
+impl<C, S, U, A, T, O> TransactionVerifier<C, S, U, A, T, O>
 where
     C: AsRef<ChainConfig>,
     S: TransactionVerifierStorageRef,
     U: UtxosView,
     A: PoSAccountingView,
     T: TokensAccountingView,
+    O: OrdersAccountingView,
     <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {
     pub fn derive_child(
@@ -201,6 +220,7 @@ where
         &UtxosCache<U>,
         &PoSAccountingDelta<A>,
         &TokensAccountingCache<T>,
+        &OrdersAccountingCache<O>,
     > {
         TransactionVerifier {
             storage: self,
@@ -214,6 +234,8 @@ where
             pos_accounting_block_undo: AccountingBlockUndoCache::<PoSAccountingUndo>::new(),
             tokens_accounting_cache: TokensAccountingCache::new(&self.tokens_accounting_cache),
             tokens_accounting_block_undo: AccountingBlockUndoCache::<TokenAccountingUndo>::new(),
+            orders_accounting_cache: OrdersAccountingCache::new(&self.orders_accounting_cache),
+            orders_accounting_block_undo: AccountingBlockUndoCache::<OrdersAccountingUndo>::new(),
             best_block: self.best_block,
             account_nonce: BTreeMap::new(),
         }
@@ -994,6 +1016,8 @@ where
             account_nonce: self.account_nonce,
             tokens_accounting_delta: self.tokens_accounting_cache.consume(),
             tokens_accounting_delta_undo: self.tokens_accounting_block_undo.consume(),
+            orders_accounting_delta: self.orders_accounting_cache.consume(),
+            orders_accounting_delta_undo: self.orders_accounting_block_undo.consume(),
         })
     }
 }

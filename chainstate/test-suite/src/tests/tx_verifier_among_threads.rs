@@ -16,9 +16,10 @@
 use chainstate_test_framework::{TestFramework, TestStore};
 use common::chain::config::Builder as ConfigBuilder;
 use common::{
-    chain::{DelegationId, PoolId, UtxoOutPoint},
+    chain::{DelegationId, OrderData, OrderId, PoolId, UtxoOutPoint},
     primitives::{Id, H256},
 };
+use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -126,6 +127,30 @@ impl TokensAccountingView for EmptyTokensAccountingView {
     }
 }
 
+struct EmptyOrdersAccountingView;
+
+impl OrdersAccountingView for EmptyOrdersAccountingView {
+    type Error = orders_accounting::Error;
+
+    fn get_order_data(&self, _id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
+        Ok(None)
+    }
+
+    fn get_ask_balance(
+        &self,
+        _id: &OrderId,
+    ) -> Result<Option<common::primitives::Amount>, Self::Error> {
+        Ok(None)
+    }
+
+    fn get_give_balance(
+        &self,
+        _id: &OrderId,
+    ) -> Result<Option<common::primitives::Amount>, Self::Error> {
+        Ok(None)
+    }
+}
+
 /// This test proves that a transaction verifier with this structure can be moved among threads
 #[rstest]
 #[trace]
@@ -142,6 +167,7 @@ fn transfer_tx_verifier_to_thread(#[case] seed: Seed) {
         let utxos = EmptyUtxosView {};
         let accounting = EmptyAccountingView {};
         let tokens_accounting = EmptyTokensAccountingView {};
+        let orders_accounting = EmptyOrdersAccountingView {};
 
         let verifier = TransactionVerifier::new_generic(
             &storage,
@@ -149,6 +175,7 @@ fn transfer_tx_verifier_to_thread(#[case] seed: Seed) {
             utxos,
             accounting,
             tokens_accounting,
+            orders_accounting,
         );
 
         std::thread::scope(|s| {

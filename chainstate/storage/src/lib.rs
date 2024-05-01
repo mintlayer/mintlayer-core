@@ -34,6 +34,7 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
+use orders_accounting::{OrdersAccountingStorageRead, OrdersAccountingStorageWrite};
 use pos_accounting::{
     DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead, PoSAccountingStorageWrite,
     PoSAccountingUndo,
@@ -66,6 +67,7 @@ pub trait BlockchainStorageRead:
     + PoSAccountingStorageRead<TipStorageTag>
     + EpochStorageRead
     + TokensAccountingStorageRead<Error = crate::Error>
+    + OrdersAccountingStorageRead<Error = crate::Error>
 {
     // TODO: below (and in lots of other places too) Id is sometimes passes by ref and sometimes
     // by value. It's better to choose one "canonical" approach and use it everywhere.
@@ -163,6 +165,7 @@ pub trait BlockchainStorageWrite:
     + PoSAccountingStorageWrite<TipStorageTag>
     + EpochStorageWrite
     + TokensAccountingStorageWrite
+    + OrdersAccountingStorageWrite
 {
     /// Set storage version
     fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> Result<()>;

@@ -28,11 +28,12 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, GenBlock, GenBlockId, PoolId,
-        Transaction,
+        AccountNonce, AccountType, ChainConfig, DelegationId, GenBlock, GenBlockId, OrderData,
+        OrderId, PoolId, Transaction,
     },
     primitives::{Amount, Id},
 };
+use orders_accounting::{FlushableOrdersAccountingView, OrdersAccountingStorageRead};
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDB,
     PoSAccountingDeltaData, PoSAccountingUndo, PoSAccountingView, PoolData,
@@ -492,5 +493,39 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     ) -> Result<TokensAccountingDeltaUndoData, Self::Error> {
         let mut db = TokensAccountingDB::new(&mut self.db_tx);
         db.batch_write_tokens_data(delta)
+    }
+}
+
+impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> OrdersAccountingStorageRead
+    for ChainstateRef<'a, S, V>
+{
+    type Error = storage_result::Error;
+
+    #[log_error]
+    fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
+        todo!()
+    }
+
+    #[log_error]
+    fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
+    }
+
+    #[log_error]
+    fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
+    }
+}
+
+impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
+    FlushableOrdersAccountingView for ChainstateRef<'a, S, V>
+{
+    type Error = orders_accounting::Error;
+
+    fn batch_write_orders_data(
+        &mut self,
+        delta: orders_accounting::OrdersAccountingDeltaData,
+    ) -> Result<orders_accounting::OrdersAccountingDeltaUndoData, Self::Error> {
+        todo!()
     }
 }

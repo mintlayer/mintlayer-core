@@ -23,6 +23,7 @@ use common::{
     },
     primitives::Id,
 };
+use orders_accounting::{FlushableOrdersAccountingView, OrdersAccountingStorageRead};
 use pos_accounting::{
     FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingUndo, PoSAccountingView,
 };
@@ -64,7 +65,7 @@ pub enum TransactionVerifierStorageError {
 // TODO(Gosha): PoSAccountingView should be replaced with PoSAccountingStorageRead in which the
 //              return error type can handle both storage_result::Error and pos_accounting::Error
 pub trait TransactionVerifierStorageRef:
-    UtxosStorageRead + PoSAccountingView + TokensAccountingStorageRead
+    UtxosStorageRead + PoSAccountingView + TokensAccountingStorageRead + OrdersAccountingStorageRead
 {
     type Error: std::error::Error;
 
@@ -113,6 +114,8 @@ pub trait TransactionVerifierStorageRef:
         &self,
         account: AccountType,
     ) -> Result<Option<AccountNonce>, <Self as TransactionVerifierStorageRef>::Error>;
+
+    // FIXME: add methods for order undo
 }
 
 pub trait TransactionVerifierStorageMut:
@@ -120,6 +123,7 @@ pub trait TransactionVerifierStorageMut:
     + FlushableUtxoView
     + FlushablePoSAccountingView
     + FlushableTokensAccountingView
+    + FlushableOrdersAccountingView
 {
     fn set_token_aux_data(
         &mut self,

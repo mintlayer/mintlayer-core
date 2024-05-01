@@ -23,6 +23,7 @@ use common::{
     chain::{Block, ChainConfig, GenBlock, GenBlockId},
     primitives::{id::WithId, Id},
 };
+use orders_accounting::OrdersAccountingDB;
 use thiserror::Error;
 use tokens_accounting::TokensAccountingDB;
 use tx_verifier::{
@@ -197,6 +198,7 @@ type TxVerifier<'a, 'b, S, V> = TransactionVerifier<
     UtxosDB<&'b ChainstateRef<'a, S, V>>,
     &'b ChainstateRef<'a, S, V>,
     TokensAccountingDB<&'b ChainstateRef<'a, S, V>>,
+    OrdersAccountingDB<&'b ChainstateRef<'a, S, V>>,
 >;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

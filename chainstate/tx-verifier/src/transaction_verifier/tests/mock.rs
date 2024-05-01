@@ -29,10 +29,12 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, DelegationId, GenBlock, PoolId, Transaction, UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, GenBlock, OrderData, OrderId, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
+use orders_accounting::{FlushableOrdersAccountingView, OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData, OrdersAccountingStorageRead};
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
     PoSAccountingUndo, PoSAccountingView, PoolData,
@@ -195,5 +197,20 @@ mockall::mock! {
     impl FlushableTokensAccountingView for Store {
         type Error = tokens_accounting::Error;
         fn batch_write_tokens_data(&mut self, delta: TokensAccountingDeltaData) -> Result<TokensAccountingDeltaUndoData, tokens_accounting::Error>;
+    }
+
+    impl OrdersAccountingStorageRead for Store {
+        type Error = orders_accounting::Error;
+        fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, orders_accounting::Error>;
+        fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, orders_accounting::Error>;
+        fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, orders_accounting::Error>;
+    }
+
+    impl FlushableOrdersAccountingView for Store {
+        type Error = orders_accounting::Error;
+        fn batch_write_orders_data(
+            &mut self,
+            data: OrdersAccountingDeltaData,
+        ) -> Result<OrdersAccountingDeltaUndoData, orders_accounting::Error>;
     }
 }

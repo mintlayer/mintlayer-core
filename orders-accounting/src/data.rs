@@ -22,6 +22,8 @@ use common::{
 };
 use serialization::{Decode, Encode};
 
+use crate::error::Result;
+
 #[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct OrdersAccountingData {
     pub order_data: BTreeMap<OrderId, OrderData>,
@@ -44,6 +46,27 @@ pub struct OrdersAccountingDeltaData {
     pub(crate) order_data: DeltaDataCollection<OrderId, OrderData>,
     pub(crate) ask_balances: DeltaAmountCollection<OrderId>,
     pub(crate) give_balances: DeltaAmountCollection<OrderId>,
+}
+
+impl OrdersAccountingDeltaData {
+    pub fn merge_with_delta(
+        &mut self,
+        other: OrdersAccountingDeltaData,
+    ) -> Result<OrdersAccountingDeltaUndoData> {
+        let order_data_undo = self.order_data.merge_delta_data(other.order_data)?;
+
+        let ask_balance_undo = other.ask_balances.clone();
+        self.ask_balances.merge_delta_amounts(other.ask_balances)?;
+
+        let give_balance_undo = other.give_balances.clone();
+        self.give_balances.merge_delta_amounts(other.give_balances)?;
+
+        Ok(OrdersAccountingDeltaUndoData {
+            order_data: order_data_undo,
+            ask_balances: ask_balance_undo,
+            give_balances: give_balance_undo,
+        })
+    }
 }
 
 impl OrdersAccountingDeltaData {

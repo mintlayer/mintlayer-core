@@ -24,10 +24,12 @@ use common::{
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::Transaction,
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderData, OrderId, PoolId,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
+use orders_accounting::{OrdersAccountingStorageRead, OrdersAccountingStorageWrite};
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingUndo, PoolData,
 };
@@ -158,6 +160,13 @@ mockall::mock! {
         type Error = crate::Error;
         fn get_token_data(&self, id: &TokenId,) -> crate::Result<Option<tokens_accounting::TokenData>>;
         fn get_circulating_supply(&self, id: &TokenId,) -> crate::Result<Option<Amount> >;
+    }
+
+    impl OrdersAccountingStorageRead for Store {
+        type Error = crate::Error;
+        fn get_order_data(&self, id: &OrderId) -> crate::Result<Option<OrderData>>;
+        fn get_ask_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+        fn get_give_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
     }
 
     impl crate::BlockchainStorageWrite for Store {
@@ -307,6 +316,17 @@ mockall::mock! {
         fn del_circulating_supply(&mut self, id: &TokenId) -> crate::Result<()>;
     }
 
+    impl OrdersAccountingStorageWrite for Store {
+        fn set_order_data(&mut self, id: &OrderId, data: &OrderData) -> crate::Result<()>;
+        fn del_order_data(&mut self, id: &OrderId) -> crate::Result<()>;
+
+        fn set_ask_balance(&mut self, id: &OrderId, balance: &Amount) -> crate::Result<()>;
+        fn del_ask_balance(&mut self, id: &OrderId) -> crate::Result<()>;
+
+        fn set_give_balance(&mut self, id: &OrderId, balance: &Amount) -> crate::Result<()>;
+        fn del_give_balance(&mut self, id: &OrderId) -> crate::Result<()>;
+    }
+
     #[allow(clippy::extra_unused_lifetimes)]
     impl<'tx> crate::Transactional<'tx> for Store {
         type TransactionRo = MockStoreTxRo;
@@ -430,6 +450,13 @@ mockall::mock! {
         fn get_circulating_supply(&self, id: &TokenId,) -> crate::Result<Option<Amount> >;
     }
 
+    impl OrdersAccountingStorageRead for StoreTxRo {
+        type Error = crate::Error;
+        fn get_order_data(&self, id: &OrderId) -> crate::Result<Option<OrderData>>;
+        fn get_ask_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+        fn get_give_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+    }
+
     impl crate::TransactionRo for StoreTxRo {
         fn close(self);
     }
@@ -545,6 +572,13 @@ mockall::mock! {
         type Error = crate::Error;
         fn get_token_data(&self, id: &TokenId,) -> crate::Result<Option<tokens_accounting::TokenData>>;
         fn get_circulating_supply(&self, id: &TokenId,) -> crate::Result<Option<Amount> >;
+    }
+
+    impl OrdersAccountingStorageRead for StoreTxRw {
+        type Error = crate::Error;
+        fn get_order_data(&self, id: &OrderId) -> crate::Result<Option<OrderData>>;
+        fn get_ask_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+        fn get_give_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
     }
 
     impl crate::BlockchainStorageWrite for StoreTxRw {
@@ -692,6 +726,18 @@ mockall::mock! {
 
         fn set_circulating_supply(&mut self, id: &TokenId, supply: &Amount) -> crate::Result<() >;
         fn del_circulating_supply(&mut self, id: &TokenId) -> crate::Result<()>;
+    }
+
+
+    impl OrdersAccountingStorageWrite for StoreTxRw {
+        fn set_order_data(&mut self, id: &OrderId, data: &OrderData) -> crate::Result<()>;
+        fn del_order_data(&mut self, id: &OrderId) -> crate::Result<()>;
+
+        fn set_ask_balance(&mut self, id: &OrderId, balance: &Amount) -> crate::Result<()>;
+        fn del_ask_balance(&mut self, id: &OrderId) -> crate::Result<()>;
+
+        fn set_give_balance(&mut self, id: &OrderId, balance: &Amount) -> crate::Result<()>;
+        fn del_give_balance(&mut self, id: &OrderId) -> crate::Result<()>;
     }
 
     impl crate::TransactionRw for StoreTxRw {
