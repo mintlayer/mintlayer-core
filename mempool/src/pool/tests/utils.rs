@@ -23,7 +23,7 @@ use mempool_types::{tx_origin::TxOrigin, TxOptions, TxStatus};
 pub use crate::pool::tx_pool::tests::utils::*;
 pub use rstest::rstest;
 
-use super::{Error, MemoryUsageEstimator, Mempool, TxEntry, WorkQueue};
+use super::{Error, MemoryUsageEstimator, Mempool, TxEntry};
 
 pub fn setup_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
@@ -57,24 +57,22 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         &mut self,
         tx: SignedTransaction,
         origin: TxOrigin,
-        work_queue: &mut WorkQueue,
     ) -> Result<TxStatus, Error> {
         let options = TxOptions::default_for(origin);
         let entry = TxEntry::new(tx, self.clock.get_time(), origin, options);
-        self.add_transaction(entry, work_queue)
+        self.add_transaction(entry)
     }
 
     pub fn add_transaction_test(&mut self, tx: SignedTransaction) -> Result<TxStatus, Error> {
         let entry = self.tx_pool().make_transaction_test(tx);
-        let mut work_queue = WorkQueue::new();
-        let result = self.add_transaction(entry, &mut work_queue)?;
-        self.process_queue(&mut work_queue);
+        let result = self.add_transaction(entry)?;
+        self.process_queue();
         Ok(result)
     }
 
-    pub fn process_queue(&mut self, work_queue: &mut WorkQueue) {
-        while !work_queue.is_empty() {
-            self.perform_work_unit(work_queue);
+    pub fn process_queue(&mut self) {
+        while self.has_work() {
+            self.perform_work_unit();
         }
     }
 }

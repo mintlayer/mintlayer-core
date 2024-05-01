@@ -65,6 +65,7 @@ pub type WorkQueue = work_queue::WorkQueue<Id<Transaction>>;
 pub struct Mempool<M> {
     tx_pool: tx_pool::TxPool<M>,
     orphans: TxOrphanPool,
+    work_queue: WorkQueue,
     events_controller: EventsController<MempoolEvent>,
     clock: TimeGetter,
 }
@@ -87,6 +88,7 @@ impl<M> Mempool<M> {
         Self {
             tx_pool,
             orphans: orphans::TxOrphanPool::new(),
+            work_queue: WorkQueue::new(),
             events_controller: EventsController::new(),
             clock,
         }
@@ -98,6 +100,7 @@ impl<M> Mempool<M> {
 
     pub fn on_peer_disconnected(&mut self, peer_id: p2p_types::PeerId) {
         self.orphans.remove_by_origin(RemoteTxOrigin::new(peer_id));
+        self.work_queue.remove_peer(peer_id);
     }
 
     pub fn get_all(&self) -> Vec<SignedTransaction> {
@@ -128,13 +131,15 @@ impl<M> Mempool<M> {
         self.tx_pool.chainstate_handle()
     }
 
-    fn as_tx_pool_and_finalizer<'a>(
-        &'a mut self,
-        work_queue: &'a mut WorkQueue,
-    ) -> (&mut TxPool<M>, TxFinalizer<'a>) {
+    pub fn has_work(&self) -> bool {
+        !self.work_queue.is_empty()
+    }
+
+    fn as_tx_pool_and_finalizer(&mut self) -> (&mut TxPool<M>, TxFinalizer) {
         let Self {
             tx_pool,
             orphans,
+            work_queue,
             events_controller,
             clock,
         } = self;
@@ -147,11 +152,7 @@ impl<M> Mempool<M> {
 // Mempool Interface and Event Reactions
 impl<M: MemoryUsageEstimator> Mempool<M> {
     /// Add transaction to transaction pool if valid or orphan pool if it's a possible orphan.
-    pub fn add_transaction(
-        &mut self,
-        transaction: TxEntry,
-        work_queue: &mut WorkQueue,
-    ) -> Result<TxStatus, Error> {
+    pub fn add_transaction(&mut self, transaction: TxEntry) -> Result<TxStatus, Error> {
         match transaction.options().trust_policy() {
             TxTrustPolicy::Trusted => {
                 log::warn!(concat!(
@@ -162,7 +163,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             TxTrustPolicy::Untrusted => (),
         }
 
-        let (tx_pool, mut finalizer) = self.as_tx_pool_and_finalizer(work_queue);
+        let (tx_pool, mut finalizer) = self.as_tx_pool_and_finalizer();
 
         tx_pool.add_transaction(transaction, |outcome, tx_pool| {
             finalizer.finalize_tx(tx_pool, outcome)
@@ -180,10 +181,10 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
         TxEntry::new(tx, creation_time, origin, options)
     }
 
-    pub fn perform_work_unit(&mut self, work_queue: &mut WorkQueue) {
+    pub fn perform_work_unit(&mut self) {
         log::trace!("Performing orphan processing work");
 
-        let orphan = work_queue.pick(|peer, orphan_id| {
+        let orphan = self.work_queue.pick(|peer, orphan_id| {
             log::debug!("Processing orphan tx {orphan_id:?} coming from peer{peer}");
 
             match self.orphans.entry(&orphan_id) {
@@ -209,7 +210,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
                 let orphan = orphan.map_origin(TxOrigin::from);
                 let orphan_id = *orphan.tx_id();
                 log::trace!("Re-processing orphan transaction {orphan_id:?}");
-                if let Err(err) = self.add_transaction(orphan, work_queue) {
+                if let Err(err) = self.add_transaction(orphan) {
                     log::debug!("Orphan transaction {orphan_id:?} evicted: {err}");
                 }
             }
@@ -221,26 +222,18 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     pub fn process_chainstate_event(
         &mut self,
         evt: ChainstateEvent,
-        work_queue: &mut WorkQueue,
     ) -> Result<(), ChainstateEventError> {
         log::debug!("mempool: Processing chainstate event {evt:?}");
         match evt {
-            ChainstateEvent::NewTip(block_id, height) => {
-                self.on_new_tip(block_id, height, work_queue)?
-            }
+            ChainstateEvent::NewTip(block_id, height) => self.on_new_tip(block_id, height)?,
         };
         Ok(())
     }
 
-    fn on_new_tip(
-        &mut self,
-        block_id: Id<Block>,
-        height: BlockHeight,
-        work_queue: &mut WorkQueue,
-    ) -> Result<(), ReorgError> {
+    fn on_new_tip(&mut self, block_id: Id<Block>, height: BlockHeight) -> Result<(), ReorgError> {
         log::info!("New block tip: {block_id:?} at height {height}");
 
-        let (tx_pool, mut finalizer) = self.as_tx_pool_and_finalizer(work_queue);
+        let (tx_pool, mut finalizer) = self.as_tx_pool_and_finalizer();
 
         tx_pool.reorg(block_id, height, |outcome, tx_pool| {
             match finalizer.finalize_tx(tx_pool, outcome) {
