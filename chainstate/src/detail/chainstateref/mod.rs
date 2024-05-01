@@ -52,7 +52,9 @@ use common::{
     Uint256,
 };
 use logging::log;
-use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
+use pos_accounting::{
+    PoSAccountingDB, PoSAccountingDelta, PoSAccountingDeltaRef, PoSAccountingView,
+};
 use tx_verifier::transaction_verifier::TransactionVerifier;
 use utils::{debug_assert_or_log, ensure, log_error, tap_log::TapLog};
 use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
@@ -1018,6 +1020,64 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
     }
 
+    pub fn get_stake_pool_balances_for_heights(
+        &self,
+        pool_ids: &[PoolId],
+        min_height: BlockHeight,
+        max_height: BlockHeight,
+    ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, Amount>>, BlockError> {
+        let best_block_index =
+            self.get_best_block_index().map_err(BlockError::PropertyQueryError)?;
+        let best_block_height = best_block_index.block_height();
+
+        ensure!(
+            min_height <= max_height && max_height <= best_block_height,
+            BlockError::UnexpectedHeightRange(min_height, max_height)
+        );
+
+        let mut height_map = BTreeMap::new();
+
+        let max_height = if max_height == best_block_height {
+            let balances_at_tip = Self::collect_pool_balances(pool_ids, self)?;
+            height_map.insert(best_block_height, balances_at_tip);
+
+            if max_height == min_height {
+                return Ok(height_map);
+            }
+
+            max_height.prev_height().expect("max_height can't be zero at this point")
+        } else {
+            max_height
+        };
+
+        let lowest_block_id = self
+            .get_existing_block_id_by_height(&min_height)
+            .map_err(BlockError::PropertyQueryError)?;
+
+        self.disconnect_tip_in_memory_until(
+            &lowest_block_id,
+            |disconnected_block_index, tx_verifier, _| -> Result<_, BlockError> {
+                let cur_height = disconnected_block_index
+                    .block_height()
+                    .prev_height()
+                    .expect("Genesis can't be disconnected");
+                assert!(cur_height >= min_height);
+
+                if cur_height <= max_height {
+                    let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
+                    let pos_delta =
+                        PoSAccountingDeltaRef::new(&pos_db, tx_verifier.accounting_delta_data());
+                    let balances = Self::collect_pool_balances(pool_ids, &pos_delta)?;
+
+                    height_map.insert(cur_height, balances);
+                }
+                Ok(true)
+            },
+        )?;
+
+        Ok(height_map)
+    }
+
     fn collect_pool_balances(
         pool_ids: &[PoolId],
         pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
@@ -1026,6 +1086,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         for pool_id in pool_ids {
             if let Some(balance) = pos_accounting_view.get_pool_balance(*pool_id)? {
+                debug_assert!(balance != Amount::ZERO);
                 balances.insert(*pool_id, balance);
             }
         }

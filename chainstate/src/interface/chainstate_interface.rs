@@ -271,6 +271,15 @@ pub trait ChainstateInterface: Send + Sync {
         height: BlockHeight,
     ) -> Result<BTreeMap<PoolId, Amount>, ChainstateError>;
 
+    /// Same as `get_stake_pool_balances_at_height`, but for a range of heights.
+    /// This is more efficient than calling `get_stake_pool_balances_at_height` in a loop.
+    fn get_stake_pool_balances_for_heights(
+        &self,
+        pool_ids: &[PoolId],
+        min_height: BlockHeight,
+        max_height: BlockHeight,
+    ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, Amount>>, ChainstateError>;
+
     /// Get stake pool data. See [pos_accounting::PoSAccountingView::get_pool_data].
     fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
 

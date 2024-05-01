@@ -79,6 +79,8 @@ impl BanScore for BlockError {
             BlockError::InvariantErrorAttemptToConnectInvalidBlock(_) => 0,
             BlockError::InvariantErrorDisconnectedHeaders => 0,
 
+            BlockError::UnexpectedHeightRange(_, _) => 0,
+
             BlockError::TokensAccountingError(err) => err.ban_score(),
         }
     }
@@ -251,6 +253,12 @@ impl BanScore for InMemoryReorgError {
             InMemoryReorgError::TransactionVerifierError(err) => err.ban_score(),
             InMemoryReorgError::EpochSealError(err) => err.ban_score(),
             InMemoryReorgError::BlockNotFound(_) => 0,
+            InMemoryReorgError::MainchainBlockExpected(_) => 0,
+            InMemoryReorgError::StepHandlerFailedWhenDisconnectingBlocks {
+                error: _,
+                error_class: _,
+                ban_score,
+            } => *ban_score,
         }
     }
 }

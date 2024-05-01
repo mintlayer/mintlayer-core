@@ -97,6 +97,7 @@ impl BlockProcessingErrorClassification for BlockError {
             | BlockError::InvariantErrorInvalidTip(_)
             | BlockError::InvariantErrorAttemptToConnectInvalidBlock(_)
             | BlockError::InvariantErrorDisconnectedHeaders
+            | BlockError::UnexpectedHeightRange(_, _)
             | BlockError::DbCommitError(_, _, _)
             | BlockError::BlockAlreadyExists(_)
             | BlockError::BlockIndexAlreadyExists(_)
@@ -191,13 +192,20 @@ impl BlockProcessingErrorClassification for CheckBlockError {
 impl BlockProcessingErrorClassification for InMemoryReorgError {
     fn classify(&self) -> BlockProcessingErrorClass {
         match self {
-            InMemoryReorgError::BlockNotFound(_) => BlockProcessingErrorClass::General,
+            InMemoryReorgError::BlockNotFound(_)
+            | InMemoryReorgError::MainchainBlockExpected(_) => BlockProcessingErrorClass::General,
 
             InMemoryReorgError::StorageError(err) => err.classify(),
             InMemoryReorgError::PropertyQueryError(err) => err.classify(),
             InMemoryReorgError::StateUpdateFailed(err) => err.classify(),
             InMemoryReorgError::TransactionVerifierError(err) => err.classify(),
             InMemoryReorgError::EpochSealError(err) => err.classify(),
+
+            InMemoryReorgError::StepHandlerFailedWhenDisconnectingBlocks {
+                error: _,
+                error_class,
+                ban_score: _,
+            } => *error_class,
         }
     }
 }

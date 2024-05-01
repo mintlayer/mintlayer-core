@@ -23,7 +23,9 @@ pub use crate::{
     error::{Error, Result},
     pool::{
         delegation::DelegationData,
-        delta::{data::PoSAccountingDeltaData, DeltaMergeUndo, PoSAccountingDelta},
+        delta::{
+            data::PoSAccountingDeltaData, DeltaMergeUndo, PoSAccountingDelta, PoSAccountingDeltaRef,
+        },
         helpers::{make_delegation_id, make_pool_id, random_undo_for_test},
         operations::{PoSAccountingOperations, PoSAccountingUndo},
         pool_data::PoolData,

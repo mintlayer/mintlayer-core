@@ -343,6 +343,16 @@ where
         self.deref().get_stake_pool_balances_at_height(pool_ids, height)
     }
 
+    fn get_stake_pool_balances_for_heights(
+        &self,
+        pool_ids: &[PoolId],
+        min_height: BlockHeight,
+        max_height: BlockHeight,
+    ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, Amount>>, ChainstateError> {
+        self.deref()
+            .get_stake_pool_balances_for_heights(pool_ids, min_height, max_height)
+    }
+
     fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError> {
         self.deref().get_stake_pool_data(pool_id)
     }

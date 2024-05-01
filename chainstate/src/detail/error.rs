@@ -97,6 +97,9 @@ pub enum BlockError {
     InvariantErrorAttemptToConnectInvalidBlock(Id<GenBlock>),
     #[error("Disconnected headers")]
     InvariantErrorDisconnectedHeaders,
+
+    #[error("Unexpected block height range: first = {0}, second = {1}")]
+    UnexpectedHeightRange(BlockHeight, BlockHeight),
 }
 
 // Note: this enum isn't supposed to represent a complete error; this is why its elements

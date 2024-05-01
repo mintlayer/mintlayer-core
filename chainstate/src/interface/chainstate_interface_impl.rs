@@ -650,7 +650,22 @@ where
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_stake_pool_balances_at_height(pool_ids, height)
             // FIXME don't return ProcessBlockError
-            .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
+            .map_err(ChainstateError::ProcessBlockError)
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn get_stake_pool_balances_for_heights(
+        &self,
+        pool_ids: &[PoolId],
+        min_height: BlockHeight,
+        max_height: BlockHeight,
+    ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, Amount>>, ChainstateError> {
+        self.chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
+            .get_stake_pool_balances_for_heights(pool_ids, min_height, max_height)
+            // FIXME don't return ProcessBlockError
+            .map_err(ChainstateError::ProcessBlockError)
     }
 
     #[tracing::instrument(skip_all, fields(pool_id = %pool_id))]
