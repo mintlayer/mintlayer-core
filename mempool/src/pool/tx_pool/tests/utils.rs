@@ -41,10 +41,10 @@ pub const HUGE_MAX_TIP_AGE: MaxTipAge =
 pub const TEST_MIN_TX_RELAY_FEE_RATE: FeeRate =
     FeeRate::from_amount_per_kb(Amount::from_atoms(1000));
 
-pub fn create_mempool_config() -> MempoolConfig {
-    MempoolConfig {
+pub fn create_mempool_config() -> ConstValue<MempoolConfig> {
+    ConstValue::new(MempoolConfig {
         min_tx_relay_fee_rate: TEST_MIN_TX_RELAY_FEE_RATE.into(),
-    }
+    })
 }
 
 pub fn get_relay_fee_from_tx_size(tx_size: usize) -> Amount {
@@ -346,7 +346,7 @@ pub fn setup_with_min_tx_relay_fee_rate(fee_rate: FeeRate) -> TxPool<StoreMemory
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&chain_config));
     TxPool::new(
         chain_config,
-        mempool_config,
+        mempool_config.into(),
         chainstate_interface,
         Default::default(),
         StoreMemoryUsageEstimator,

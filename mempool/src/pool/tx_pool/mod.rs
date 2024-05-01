@@ -47,7 +47,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use utils::{ensure, shallow_clone::ShallowClone};
+use utils::{const_value::ConstValue, ensure, shallow_clone::ShallowClone};
 
 use self::{
     memory_usage_estimator::MemoryUsageEstimator,
@@ -71,7 +71,7 @@ use crate::{
 
 pub struct TxPool<M> {
     chain_config: Arc<ChainConfig>,
-    mempool_config: MempoolConfig,
+    mempool_config: ConstValue<MempoolConfig>,
     store: MempoolStore,
     rolling_fee_rate: RwLock<RollingFeeRate>,
     max_size: config::MempoolMaxSize,
@@ -91,7 +91,7 @@ impl<M> std::fmt::Debug for TxPool<M> {
 impl<M> TxPool<M> {
     pub fn new(
         chain_config: Arc<ChainConfig>,
-        mempool_config: MempoolConfig,
+        mempool_config: ConstValue<MempoolConfig>,
         chainstate_handle: chainstate::ChainstateHandle,
         clock: TimeGetter,
         memory_usage_estimator: M,

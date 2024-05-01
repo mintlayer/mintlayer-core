@@ -22,7 +22,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use utils::{ensure, eventhandler::EventsController};
+use utils::{const_value::ConstValue, ensure, eventhandler::EventsController};
 
 pub use self::{feerate::FeeRate, tx_pool::feerate_points};
 
@@ -73,7 +73,7 @@ pub struct Mempool<M> {
 impl<M> Mempool<M> {
     pub fn new(
         chain_config: Arc<ChainConfig>,
-        mempool_config: crate::MempoolConfig,
+        mempool_config: ConstValue<crate::MempoolConfig>,
         chainstate_handle: chainstate::ChainstateHandle,
         clock: TimeGetter,
         memory_usage_estimator: M,

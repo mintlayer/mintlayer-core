@@ -30,7 +30,7 @@ use common::{
 };
 use logging::log;
 use std::{num::NonZeroUsize, sync::Arc};
-use utils::tap_log::TapLog;
+use utils::{const_value::ConstValue, tap_log::TapLog};
 
 type Mempool = crate::pool::Mempool<StoreMemoryUsageEstimator>;
 
@@ -39,7 +39,7 @@ type Mempool = crate::pool::Mempool<StoreMemoryUsageEstimator>;
 /// Contains all the information required to spin up the mempool subsystem
 pub struct MempoolInit {
     chain_config: Arc<ChainConfig>,
-    mempool_config: MempoolConfig,
+    mempool_config: ConstValue<MempoolConfig>,
     chainstate_handle: chainstate::ChainstateHandle,
     time_getter: TimeGetter,
 }
@@ -53,7 +53,7 @@ impl MempoolInit {
     ) -> Self {
         Self {
             chain_config,
-            mempool_config,
+            mempool_config: mempool_config.into(),
             chainstate_handle,
             time_getter,
         }
