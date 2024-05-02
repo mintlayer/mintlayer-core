@@ -293,7 +293,7 @@ impl ConstrainedValueAccumulator {
                 insert_or_increase(&mut self.unconstrained_value, give_currency, give_balance)?;
                 Ok((CoinOrTokenId::Coin, Amount::ZERO))
             }
-            AccountCommand::FillOrder(order_id, fill_value) => {
+            AccountCommand::FillOrder(order_id, fill_value, _) => {
                 let filled_amount = orders_accounting::calculate_fill_order(
                     &orders_accounting_view,
                     *order_id,

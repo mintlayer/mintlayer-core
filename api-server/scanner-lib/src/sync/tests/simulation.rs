@@ -393,7 +393,7 @@ async fn simulation(
                             burn_coins(&mut statistics, token_change_authority_fee);
                         }
                         AccountCommand::WithdrawOrder(_) => todo!(),
-                        AccountCommand::FillOrder(_, _) => todo!(),
+                        AccountCommand::FillOrder(_, _, _) => todo!(),
                     },
                 });
             }

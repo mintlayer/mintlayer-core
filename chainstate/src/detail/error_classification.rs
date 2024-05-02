@@ -540,13 +540,15 @@ impl BlockProcessingErrorClassification for SignatureDestinationGetterError {
             | SignatureDestinationGetterError::PoolDataNotFound(_)
             | SignatureDestinationGetterError::DelegationDataNotFound(_)
             | SignatureDestinationGetterError::TokenDataNotFound(_)
-            | SignatureDestinationGetterError::UtxoOutputNotFound(_) => {
+            | SignatureDestinationGetterError::UtxoOutputNotFound(_)
+            | SignatureDestinationGetterError::OrderDataNotFound(_) => {
                 BlockProcessingErrorClass::BadBlock
             }
 
             SignatureDestinationGetterError::UtxoViewError(err) => err.classify(),
             SignatureDestinationGetterError::PoSAccountingViewError(err) => err.classify(),
             SignatureDestinationGetterError::TokensAccountingViewError(err) => err.classify(),
+            SignatureDestinationGetterError::OrdersAccountingViewError(err) => err.classify(),
         }
     }
 }

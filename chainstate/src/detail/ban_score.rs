@@ -232,6 +232,8 @@ impl BanScore for SignatureDestinationGetterError {
             SignatureDestinationGetterError::UtxoViewError(_) => 100,
             SignatureDestinationGetterError::TokenDataNotFound(_) => 100,
             SignatureDestinationGetterError::TokensAccountingViewError(_) => 100,
+            SignatureDestinationGetterError::OrdersAccountingViewError(_) => 100,
+            SignatureDestinationGetterError::OrderDataNotFound(_) => 0,
         }
     }
 }

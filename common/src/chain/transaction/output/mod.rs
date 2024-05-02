@@ -25,7 +25,7 @@ use crate::{
         order::OrderData,
         output_value::OutputValue,
         tokens::{IsTokenFreezable, NftIssuance, TokenId, TokenIssuance, TokenTotalSupply},
-        ChainConfig, DelegationId, OrderId, PoolId,
+        ChainConfig, DelegationId, PoolId,
     },
     primitives::{Amount, Id},
     text_summary::TextSummary,

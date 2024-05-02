@@ -18,7 +18,7 @@ use common::{
     chain::{
         block::{Block, GenBlock},
         tokens::TokenId,
-        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, Transaction,
+        AccountNonce, AccountType, DelegationId, OrderId, OutPointSourceId, PoolId, Transaction,
         UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
@@ -151,6 +151,8 @@ pub enum SignatureDestinationGetterError {
     DelegationDataNotFound(DelegationId),
     #[error("Token data not found for signature verification {0}")]
     TokenDataNotFound(TokenId),
+    #[error("Order data not found for signature verification {0}")]
+    OrderDataNotFound(OrderId),
     #[error("Utxo for the outpoint not fount: {0:?}")]
     UtxoOutputNotFound(UtxoOutPoint),
     #[error("Error accessing utxo set")]
@@ -159,6 +161,8 @@ pub enum SignatureDestinationGetterError {
     PoSAccountingViewError(#[from] pos_accounting::Error),
     #[error("During destination getting for signature verification: Tokens accounting error {0}")]
     TokensAccountingViewError(#[from] tokens_accounting::Error),
+    #[error("During destination getting for signature verification: Orders accounting error {0}")]
+    OrdersAccountingViewError(#[from] orders_accounting::Error),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

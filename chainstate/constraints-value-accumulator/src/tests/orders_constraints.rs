@@ -284,6 +284,7 @@ fn fill_order_constraints(#[case] seed: Seed) {
                 AccountCommand::FillOrder(
                     order_id,
                     OutputValue::TokenV1(token_id, (ask_amount + Amount::from_atoms(1)).unwrap()),
+                    Destination::AnyoneCanSpend,
                 ),
             ),
         ];
@@ -319,7 +320,11 @@ fn fill_order_constraints(#[case] seed: Seed) {
             )),
             TxInput::AccountCommand(
                 AccountNonce::new(0),
-                AccountCommand::FillOrder(order_id, OutputValue::Coin(ask_amount)),
+                AccountCommand::FillOrder(
+                    order_id,
+                    OutputValue::Coin(ask_amount),
+                    Destination::AnyoneCanSpend,
+                ),
             ),
         ];
         let input_utxos = vec![
@@ -354,7 +359,11 @@ fn fill_order_constraints(#[case] seed: Seed) {
             )),
             TxInput::AccountCommand(
                 AccountNonce::new(0),
-                AccountCommand::FillOrder(order_id, OutputValue::TokenV1(token_id, ask_amount)),
+                AccountCommand::FillOrder(
+                    order_id,
+                    OutputValue::TokenV1(token_id, ask_amount),
+                    Destination::AnyoneCanSpend,
+                ),
             ),
         ];
         let input_utxos = vec![
@@ -401,7 +410,11 @@ fn fill_order_constraints(#[case] seed: Seed) {
             )),
             TxInput::AccountCommand(
                 AccountNonce::new(0),
-                AccountCommand::FillOrder(order_id, OutputValue::TokenV1(token_id, ask_amount)),
+                AccountCommand::FillOrder(
+                    order_id,
+                    OutputValue::TokenV1(token_id, ask_amount),
+                    Destination::AnyoneCanSpend,
+                ),
             ),
         ];
         let input_utxos = vec![
@@ -453,7 +466,11 @@ fn fill_order_constraints(#[case] seed: Seed) {
             )),
             TxInput::AccountCommand(
                 AccountNonce::new(0),
-                AccountCommand::FillOrder(order_id, OutputValue::TokenV1(token_id, ask_amount)),
+                AccountCommand::FillOrder(
+                    order_id,
+                    OutputValue::TokenV1(token_id, ask_amount),
+                    Destination::AnyoneCanSpend,
+                ),
             ),
         ];
         let input_utxos = vec![
@@ -503,7 +520,11 @@ fn fill_order_constraints(#[case] seed: Seed) {
         )),
         TxInput::AccountCommand(
             AccountNonce::new(0),
-            AccountCommand::FillOrder(order_id, OutputValue::TokenV1(token_id, ask_amount)),
+            AccountCommand::FillOrder(
+                order_id,
+                OutputValue::TokenV1(token_id, ask_amount),
+                Destination::AnyoneCanSpend,
+            ),
         ),
     ];
     let input_utxos = vec![

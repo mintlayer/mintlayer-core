@@ -53,7 +53,7 @@ impl From<AccountCommand> for AccountType {
             | AccountCommand::FreezeToken(id, _)
             | AccountCommand::UnfreezeToken(id)
             | AccountCommand::ChangeTokenAuthority(id, _) => AccountType::Token(id),
-            AccountCommand::WithdrawOrder(id) | AccountCommand::FillOrder(id, _) => {
+            AccountCommand::WithdrawOrder(id) | AccountCommand::FillOrder(id, _, _) => {
                 AccountType::Order(id)
             }
         }
@@ -118,7 +118,7 @@ pub enum AccountCommand {
     #[codec(index = 6)]
     WithdrawOrder(OrderId),
     #[codec(index = 7)]
-    FillOrder(OrderId, OutputValue),
+    FillOrder(OrderId, OutputValue, Destination),
 }
 
 /// Type of OutPoint that represents spending from an account

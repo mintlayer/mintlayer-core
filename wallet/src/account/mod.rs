@@ -1348,7 +1348,7 @@ impl Account {
                             .map(|data| (None, Some(data.authority.clone())))
                             .ok_or(WalletError::UnknownTokenId(*token_id)),
                         AccountCommand::WithdrawOrder(_) => todo!(),
-                        AccountCommand::FillOrder(_, _) => todo!(),
+                        AccountCommand::FillOrder(_, _, _) => todo!(),
                     }
                 }
             })
@@ -1828,7 +1828,7 @@ impl Account {
                         || self.is_destination_mine_or_watched(address)
                 }
                 AccountCommand::WithdrawOrder(_) => todo!(),
-                AccountCommand::FillOrder(_, _) => todo!(),
+                AccountCommand::FillOrder(_, _, _) => todo!(),
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
@@ -2237,7 +2237,7 @@ fn group_preselected_inputs(
                     )?;
                 }
                 AccountCommand::WithdrawOrder(_) => todo!(),
-                AccountCommand::FillOrder(_, _) => todo!(),
+                AccountCommand::FillOrder(_, _, _) => todo!(),
             },
         }
     }

@@ -37,6 +37,7 @@ use common::{
 };
 use crypto::key::PrivateKey;
 use itertools::Itertools;
+use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
 use randomness::{CryptoRng, Rng};
 use serialization::Encode;
@@ -165,8 +166,11 @@ impl<'f> BlockBuilder<'f> {
             // spending destinations could change
             let tokens_db = TokensAccountingDB::new(&self.tokens_accounting_store);
             let pos_db = PoSAccountingDB::new(&self.pos_accounting_store);
-            let destination_getter =
-                SignatureDestinationGetter::new_for_transaction(&tokens_db, &pos_db, &utxo_set);
+            let orders_store = InMemoryOrdersAccounting::new();
+            let orders_db = OrdersAccountingDB::new(&orders_store);
+            let destination_getter = SignatureDestinationGetter::new_for_transaction(
+                &tokens_db, &pos_db, &orders_db, &utxo_set,
+            );
             let witnesses = sign_witnesses(
                 rng,
                 &self.framework.key_manager,

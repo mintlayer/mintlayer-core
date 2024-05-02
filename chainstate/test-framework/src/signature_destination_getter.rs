@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use common::chain::{AccountCommand, AccountSpending, Destination, TxInput, TxOutput};
+use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
 use tx_verifier::error::SignatureDestinationGetterError;
@@ -43,9 +44,15 @@ pub struct SignatureDestinationGetter<'a> {
 }
 
 impl<'a> SignatureDestinationGetter<'a> {
-    pub fn new_for_transaction<T: TokensAccountingView, P: PoSAccountingView, U: UtxosView>(
+    pub fn new_for_transaction<
+        T: TokensAccountingView,
+        P: PoSAccountingView,
+        U: UtxosView,
+        O: OrdersAccountingView,
+    >(
         tokens_view: &'a T,
         accounting_view: &'a P,
+        orders_view: &'a O,
         utxos_view: &'a U,
     ) -> Self {
         let destination_getter =
@@ -161,8 +168,20 @@ impl<'a> SignatureDestinationGetter<'a> {
                             };
                             Ok(destination)
                         }
-                        AccountCommand::WithdrawOrder(_) => todo!(),
-                        AccountCommand::FillOrder(_, _) => todo!(),
+                        AccountCommand::WithdrawOrder(order_id) => {
+                            let order_data = orders_view
+                                .get_order_data(order_id)
+                                .map_err(|_| {
+                                    SignatureDestinationGetterError::OrdersAccountingViewError(
+                                        orders_accounting::Error::ViewFail,
+                                    )
+                                })?
+                                .ok_or(SignatureDestinationGetterError::OrderDataNotFound(
+                                    *order_id,
+                                ))?;
+                            Ok(order_data.authority().clone())
+                        }
+                        AccountCommand::FillOrder(_, _, d) => Ok(d.clone()),
                     },
                 }
             };

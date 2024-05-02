@@ -610,8 +610,7 @@ where
                             });
                         Some(res)
                     }
-                    AccountCommand::WithdrawOrder(_) => todo!(),
-                    AccountCommand::FillOrder(_, _) => todo!(),
+                    AccountCommand::WithdrawOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
                 },
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -762,7 +761,7 @@ where
                             });
                         Some(res)
                     }
-                    AccountCommand::FillOrder(order_id, fill) => {
+                    AccountCommand::FillOrder(order_id, fill, _) => {
                         let res = self
                             .spend_input_from_account(*nonce, account_op.clone().into())
                             .and_then(|_| {
