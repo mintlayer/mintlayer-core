@@ -99,6 +99,8 @@ pub enum ConnectTransactionError {
     AttemptToCreateStakePoolFromAccounts,
     #[error("Attempt to create delegation from accounting inputs")]
     AttemptToCreateDelegationFromAccounts,
+    #[error("Attempt to create order from accounting inputs")]
+    AttemptToCreateOrderFromAccounts,
     #[error("Failed to increment account nonce")]
     FailedToIncrementAccountNonce,
     #[error("Input output policy error: `{0}` in : `{1:?}`")]

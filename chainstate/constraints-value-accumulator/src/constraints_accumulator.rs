@@ -71,7 +71,7 @@ impl ConstrainedValueAccumulator {
         );
 
         let mut accumulator = Self::new();
-        let mut total_fee_deducted = BTreeMap::<CoinOrTokenId, Amount>::new();
+        let mut total_to_deduct = BTreeMap::<CoinOrTokenId, Amount>::new();
         let mut accounts_balances_tracker = AccountsBalancesTracker::new(pos_accounting_view);
 
         for (input, input_utxo) in inputs.iter().zip(inputs_utxos.iter()) {
@@ -96,23 +96,23 @@ impl ConstrainedValueAccumulator {
                     )?;
                 }
                 TxInput::AccountCommand(_, command) => {
-                    let (id, fee_to_deduct) = accumulator.process_input_account_command(
+                    let (id, to_deduct) = accumulator.process_input_account_command(
                         chain_config,
                         block_height,
                         command,
                         orders_accounting_view,
                     )?;
 
-                    insert_or_increase(&mut total_fee_deducted, id, fee_to_deduct)?;
+                    insert_or_increase(&mut total_to_deduct, id, to_deduct)?;
                 }
             }
         }
 
-        for (id, fee) in total_fee_deducted {
+        for (currency, amount) in total_to_deduct {
             decrease_or(
                 &mut accumulator.unconstrained_value,
-                id,
-                fee,
+                currency,
+                amount,
                 Error::AttemptToViolateFeeRequirements,
             )?;
         }

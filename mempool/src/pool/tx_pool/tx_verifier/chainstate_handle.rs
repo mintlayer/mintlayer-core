@@ -306,15 +306,18 @@ impl OrdersAccountingView for ChainstateHandle {
     type Error = Error;
 
     fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
-        todo!()
+        let id = *id;
+        self.call(move |c| c.get_order_data(&id))
     }
 
     fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        let id = *id;
+        self.call(move |c| c.get_order_ask_balance(&id))
     }
 
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        let id = *id;
+        self.call(move |c| c.get_order_give_balance(&id))
     }
 }
 
@@ -322,14 +325,17 @@ impl OrdersAccountingStorageRead for ChainstateHandle {
     type Error = Error;
 
     fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
-        todo!()
+        let id = *id;
+        self.call(move |c| c.get_order_data(&id))
     }
 
     fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        let id = *id;
+        self.call(move |c| c.get_order_ask_balance(&id))
     }
 
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        let id = *id;
+        self.call(move |c| c.get_order_give_balance(&id))
     }
 }

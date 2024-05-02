@@ -296,6 +296,7 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             | ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _)
             | ConnectTransactionError::AttemptToCreateStakePoolFromAccounts
             | ConnectTransactionError::AttemptToCreateDelegationFromAccounts
+            | ConnectTransactionError::AttemptToCreateOrderFromAccounts
             | ConnectTransactionError::IOPolicyError(_, _)
             | ConnectTransactionError::TotalFeeRequiredOverflow
             | ConnectTransactionError::InsufficientCoinsFee(_, _)

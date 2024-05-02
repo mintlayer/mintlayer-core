@@ -174,7 +174,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         &self,
         id: Id<Block>,
     ) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>> {
-        todo!()
+        self.read::<db::DBOrdersAccountingBlockUndo, _, _>(id)
     }
 
     #[log_error]
@@ -379,17 +379,17 @@ impl<'st, B: storage::Backend> OrdersAccountingStorageRead for super::StoreTxRo<
 
     #[log_error]
     fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
-        todo!()
+        self.read::<db::DBOrdersData, _, _>(id)
     }
 
     #[log_error]
     fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        self.read::<db::DBOrdersAskBalances, _, _>(id)
     }
 
     #[log_error]
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        self.read::<db::DBOrdersGiveBalances, _, _>(id)
     }
 }
 
@@ -482,7 +482,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         &self,
         id: Id<Block>,
     ) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>> {
-        todo!()
+        self.read::<db::DBOrdersAccountingBlockUndo, _, _>(id)
     }
 
     #[log_error]
@@ -692,16 +692,16 @@ impl<'st, B: storage::Backend> OrdersAccountingStorageRead for super::StoreTxRw<
 
     #[log_error]
     fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
-        todo!()
+        self.read::<db::DBOrdersData, _, _>(id)
     }
 
     #[log_error]
     fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        self.read::<db::DBOrdersAskBalances, _, _>(id)
     }
 
     #[log_error]
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        self.read::<db::DBOrdersGiveBalances, _, _>(id)
     }
 }

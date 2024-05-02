@@ -34,7 +34,8 @@ use common::{
     primitives::{Amount, Id},
 };
 use orders_accounting::{
-    FlushableOrdersAccountingView, OrdersAccountingStorageRead, OrdersAccountingUndo,
+    FlushableOrdersAccountingView, OrdersAccountingDB, OrdersAccountingStorageRead,
+    OrdersAccountingUndo,
 };
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDB,
@@ -560,17 +561,17 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> OrdersAcc
 
     #[log_error]
     fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
-        todo!()
+        self.db_tx.get_order_data(id)
     }
 
     #[log_error]
     fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        self.db_tx.get_ask_balance(id)
     }
 
     #[log_error]
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        self.db_tx.get_give_balance(id)
     }
 }
 
@@ -583,6 +584,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
         &mut self,
         delta: orders_accounting::OrdersAccountingDeltaData,
     ) -> Result<orders_accounting::OrdersAccountingDeltaUndoData, Self::Error> {
-        todo!()
+        let mut db = OrdersAccountingDB::new(&mut self.db_tx);
+        db.batch_write_orders_data(delta)
     }
 }

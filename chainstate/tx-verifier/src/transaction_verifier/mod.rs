@@ -799,7 +799,9 @@ where
                             .map_err(ConnectTransactionError::OrdersAccountingError);
                         Some(result)
                     }
-                    None => todo!(),
+                    None => Some(Err(
+                        ConnectTransactionError::AttemptToCreateOrderFromAccounts,
+                    )),
                 },
             })
             .collect::<Result<Vec<_>, _>>()?;

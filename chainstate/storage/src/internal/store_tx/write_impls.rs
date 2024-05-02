@@ -154,12 +154,12 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
         id: Id<Block>,
         undo: &accounting::BlockUndo<OrdersAccountingUndo>,
     ) -> crate::Result<()> {
-        todo!()
+        self.write::<db::DBOrdersAccountingBlockUndo, _, _, _>(id, undo)
     }
 
     #[log_error]
     fn del_orders_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
-        todo!()
+        self.del::<db::DBOrdersAccountingBlockUndo, _, _>(id)
     }
 
     #[log_error]
@@ -421,31 +421,31 @@ impl<'st, B: storage::Backend> TokensAccountingStorageWrite for StoreTxRw<'st, B
 impl<'st, B: storage::Backend> OrdersAccountingStorageWrite for StoreTxRw<'st, B> {
     #[log_error]
     fn set_order_data(&mut self, id: &OrderId, data: &OrderData) -> crate::Result<()> {
-        todo!()
+        self.write::<db::DBOrdersData, _, _, _>(id, data)
     }
 
     #[log_error]
     fn del_order_data(&mut self, id: &OrderId) -> crate::Result<()> {
-        todo!()
+        self.del::<db::DBOrdersData, _, _>(id)
     }
 
     #[log_error]
     fn set_ask_balance(&mut self, id: &OrderId, balance: &Amount) -> crate::Result<()> {
-        todo!()
+        self.write::<db::DBOrdersAskBalances, _, _, _>(id, balance)
     }
 
     #[log_error]
     fn del_ask_balance(&mut self, id: &OrderId) -> crate::Result<()> {
-        todo!()
+        self.del::<db::DBOrdersAskBalances, _, _>(id)
     }
 
     #[log_error]
     fn set_give_balance(&mut self, id: &OrderId, balance: &Amount) -> crate::Result<()> {
-        todo!()
+        self.write::<db::DBOrdersGiveBalances, _, _, _>(id, balance)
     }
 
     #[log_error]
     fn del_give_balance(&mut self, id: &OrderId) -> crate::Result<()> {
-        todo!()
+        self.del::<db::DBOrdersGiveBalances, _, _>(id)
     }
 }

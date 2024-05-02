@@ -141,6 +141,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::CheckTransactionError(err) => err.ban_score(),
             ConnectTransactionError::InputCheck(e) => e.ban_score(),
             ConnectTransactionError::OrdersAccountingError(err) => err.ban_score(),
+            ConnectTransactionError::AttemptToCreateOrderFromAccounts => 100,
         }
     }
 }
