@@ -31,7 +31,7 @@ use crate::{
     DeltaMergeUndo,
 };
 
-use super::{data::PoSAccountingDeltaData, PoSAccountingDelta, PoSAccountingDeltaRef};
+use super::{data::PoSAccountingDeltaData, PoSAccountingDelta};
 
 fn signed_to_unsigned_pair(
     (k, v): (DelegationId, SignedAmount),
@@ -63,7 +63,7 @@ fn sum_maps<K: Ord + Copy>(
     Ok(m1)
 }
 
-impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingDeltaRef<'a, P> {
+impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
     type Error = Error;
 
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Self::Error> {
@@ -144,51 +144,6 @@ impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingDeltaRef<'a, P
         let local_amount =
             self.data.pool_delegation_shares.data().get(&(pool_id, delegation_id)).copied();
         combine_amount_delta(&parent_amount, &local_amount).map_err(Error::AccountingError)
-    }
-}
-
-impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
-    type Error = Error;
-
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Self::Error> {
-        self.get_ref().pool_exists(pool_id)
-    }
-
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
-        self.get_ref().get_pool_balance(pool_id)
-    }
-
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
-        self.get_ref().get_pool_data(pool_id)
-    }
-
-    fn get_pool_delegations_shares(
-        &self,
-        pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
-        self.get_ref().get_pool_delegations_shares(pool_id)
-    }
-
-    fn get_delegation_balance(
-        &self,
-        delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
-        self.get_ref().get_delegation_balance(delegation_id)
-    }
-
-    fn get_delegation_data(
-        &self,
-        delegation_id: DelegationId,
-    ) -> Result<Option<DelegationData>, Self::Error> {
-        self.get_ref().get_delegation_data(delegation_id)
-    }
-
-    fn get_pool_delegation_share(
-        &self,
-        pool_id: PoolId,
-        delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
-        self.get_ref().get_pool_delegation_share(pool_id, delegation_id)
     }
 }
 

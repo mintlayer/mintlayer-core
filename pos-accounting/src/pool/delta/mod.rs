@@ -32,6 +32,11 @@ pub mod data;
 pub mod operator_impls;
 mod view_impl;
 
+pub struct PoSAccountingDelta<P> {
+    parent: P,
+    data: PoSAccountingDeltaData,
+}
+
 /// All the operations we have to do with the accounting state to undo a delta
 #[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct DeltaMergeUndo {
@@ -54,11 +59,6 @@ impl DeltaMergeUndo {
     }
 }
 
-pub struct PoSAccountingDelta<P> {
-    parent: P,
-    data: PoSAccountingDeltaData,
-}
-
 impl<P: PoSAccountingView> PoSAccountingDelta<P> {
     pub fn new(parent: P) -> Self {
         Self {
@@ -71,16 +71,27 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
         Self { parent, data }
     }
 
-    pub fn get_ref(&self) -> PoSAccountingDeltaRef<'_, P> {
-        PoSAccountingDeltaRef::new(&self.parent, &self.data)
-    }
-
     pub fn consume(self) -> PoSAccountingDeltaData {
         self.data
     }
 
     pub fn data(&self) -> &PoSAccountingDeltaData {
         &self.data
+    }
+
+    fn get_cached_delegations_shares(
+        &self,
+        pool_id: PoolId,
+    ) -> Option<BTreeMap<DelegationId, SignedAmount>> {
+        let range_start = (pool_id, DelegationId::new(H256::zero()));
+        let range_end = (pool_id, DelegationId::new(H256::repeat_byte(0xFF)));
+        let range = self.data.pool_delegation_shares.data().range(range_start..=range_end);
+        let result = range.map(|((_, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
+        if result.is_empty() {
+            None
+        } else {
+            Some(result)
+        }
     }
 
     pub fn merge_with_delta(
@@ -156,35 +167,5 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
             .pool_delegation_shares
             .sub_unsigned((pool_id, delegation_id), amount_to_add)
             .map_err(Error::AccountingError)
-    }
-}
-
-pub struct PoSAccountingDeltaRef<'a, P> {
-    parent: &'a P,
-    data: &'a PoSAccountingDeltaData,
-}
-
-impl<'a, P: PoSAccountingView> PoSAccountingDeltaRef<'a, P> {
-    pub fn new(parent: &'a P, data: &'a PoSAccountingDeltaData) -> Self {
-        Self { parent, data }
-    }
-
-    pub fn data(&self) -> &PoSAccountingDeltaData {
-        self.data
-    }
-
-    fn get_cached_delegations_shares(
-        &self,
-        pool_id: PoolId,
-    ) -> Option<BTreeMap<DelegationId, SignedAmount>> {
-        let range_start = (pool_id, DelegationId::new(H256::zero()));
-        let range_end = (pool_id, DelegationId::new(H256::repeat_byte(0xFF)));
-        let range = self.data.pool_delegation_shares.data().range(range_start..=range_end);
-        let result = range.map(|((_, del_id), v)| (*del_id, *v)).collect::<BTreeMap<_, _>>();
-        if result.is_empty() {
-            None
-        } else {
-            Some(result)
-        }
     }
 }

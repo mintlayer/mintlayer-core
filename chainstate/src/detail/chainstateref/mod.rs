@@ -52,9 +52,7 @@ use common::{
     Uint256,
 };
 use logging::log;
-use pos_accounting::{
-    PoSAccountingDB, PoSAccountingDelta, PoSAccountingDeltaRef, PoSAccountingView,
-};
+use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
 use tx_verifier::transaction_verifier::TransactionVerifier;
 use utils::{debug_assert_or_log, ensure, log_error, tap_log::TapLog};
 use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
@@ -1048,10 +1046,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     .expect("Genesis can't be disconnected");
                 assert!(cur_height >= min_height);
 
-                let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
-                let pos_delta =
-                    PoSAccountingDeltaRef::new(&pos_db, tx_verifier.accounting_delta_data());
-                let balances = Self::collect_pool_balances(pool_ids.iter(), &pos_delta)?;
+                let balances = Self::collect_pool_balances(pool_ids.iter(), &tx_verifier)?;
 
                 pool_ids.retain(|pool_id| {
                     // We didn't see this pool having balance yet.

@@ -972,10 +972,6 @@ where
         self.utxo_cache.set_best_block(id);
     }
 
-    pub fn accounting_delta_data(&self) -> &PoSAccountingDeltaData {
-        self.pos_accounting_adapter.accounting_delta().data()
-    }
-
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {
         let (accounting_delta, accounting_block_deltas) = self.pos_accounting_adapter.consume();
         Ok(TransactionVerifierDelta {
