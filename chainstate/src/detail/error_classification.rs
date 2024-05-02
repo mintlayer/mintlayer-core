@@ -316,6 +316,7 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             ConnectTransactionError::PoSAccountingError(err) => err.classify(),
             ConnectTransactionError::ConstrainedValueAccumulatorError(err, _) => err.classify(),
             ConnectTransactionError::InputCheck(err) => err.classify(),
+            ConnectTransactionError::OrdersAccountingError(err) => err.classify(),
         }
     }
 }
@@ -875,6 +876,36 @@ impl BlockProcessingErrorClassification for constraints_value_accumulator::Error
 
             Error::PoSAccountingError(err) => err.classify(),
             Error::OrdersAccountingError(_) => todo!(),
+        }
+    }
+}
+
+impl BlockProcessingErrorClassification for orders_accounting::Error {
+    fn classify(&self) -> BlockProcessingErrorClass {
+        use orders_accounting::Error;
+        match self {
+            Error::StorageError(_) => todo!(),
+            Error::AccountingError(_) => todo!(),
+            Error::OrderAlreadyExists(_) => todo!(),
+            Error::OrderDataNotFound(_) => todo!(),
+            Error::OrderAskBalanceNotFound(_) => todo!(),
+            Error::OrderGiveBalanceNotFound(_) => todo!(),
+            Error::InvariantOrderDataNotFoundForUndo(_) => todo!(),
+            Error::InvariantOrderAskBalanceNotFoundForUndo(_) => todo!(),
+            Error::InvariantOrderAskBalanceChangedForUndo(_) => todo!(),
+            Error::InvariantOrderGiveBalanceNotFoundForUndo(_) => todo!(),
+            Error::InvariantOrderGiveBalanceChangedForUndo(_) => todo!(),
+            Error::InvariantOrderDataExistForWithdrawUndo(_) => todo!(),
+            Error::InvariantOrderAskBalanceExistForWithdrawUndo(_) => todo!(),
+            Error::InvariantOrderGiveBalanceExistForWithdrawUndo(_) => todo!(),
+            Error::FillOrderChangeLeft(_) => todo!(),
+            Error::CurrencyMismatch => todo!(),
+            Error::OrderOverflow(_) => todo!(),
+            Error::AttemptedWithdrawNonexistingOrderData(_) => todo!(),
+            Error::AttemptedWithdrawNonexistingAskBalance(_) => todo!(),
+            Error::AttemptedWithdrawNonexistingGiveBalance(_) => todo!(),
+            Error::ViewFail => todo!(),
+            Error::StorageWrite => todo!(),
         }
     }
 }

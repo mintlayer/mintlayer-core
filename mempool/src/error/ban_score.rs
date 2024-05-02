@@ -130,6 +130,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::RewardDistributionError(err) => err.mempool_ban_score(),
             ConnectTransactionError::CheckTransactionError(err) => err.mempool_ban_score(),
             ConnectTransactionError::InputCheck(err) => err.mempool_ban_score(),
+            ConnectTransactionError::OrdersAccountingError(err) => err.mempool_ban_score(),
 
             // Transaction definitely invalid, ban peer
             ConnectTransactionError::RewardAdditionError(_) => 100,
@@ -480,6 +481,37 @@ impl MempoolBanScore for CheckTransactionError {
             CheckTransactionError::TxSizeTooLarge(_, _, _) => 100,
             CheckTransactionError::DeprecatedTokenOperationVersion(_, _) => 100,
             CheckTransactionError::HtlcsAreNotActivated => 100,
+        }
+    }
+}
+
+impl MempoolBanScore for orders_accounting::Error {
+    fn mempool_ban_score(&self) -> u32 {
+        use orders_accounting::Error;
+
+        match self {
+            Error::StorageError(_) => todo!(),
+            Error::AccountingError(_) => todo!(),
+            Error::OrderAlreadyExists(_) => todo!(),
+            Error::OrderDataNotFound(_) => todo!(),
+            Error::OrderAskBalanceNotFound(_) => todo!(),
+            Error::OrderGiveBalanceNotFound(_) => todo!(),
+            Error::InvariantOrderDataNotFoundForUndo(_) => todo!(),
+            Error::InvariantOrderAskBalanceNotFoundForUndo(_) => todo!(),
+            Error::InvariantOrderAskBalanceChangedForUndo(_) => todo!(),
+            Error::InvariantOrderGiveBalanceNotFoundForUndo(_) => todo!(),
+            Error::InvariantOrderGiveBalanceChangedForUndo(_) => todo!(),
+            Error::InvariantOrderDataExistForWithdrawUndo(_) => todo!(),
+            Error::InvariantOrderAskBalanceExistForWithdrawUndo(_) => todo!(),
+            Error::InvariantOrderGiveBalanceExistForWithdrawUndo(_) => todo!(),
+            Error::FillOrderChangeLeft(_) => todo!(),
+            Error::CurrencyMismatch => todo!(),
+            Error::OrderOverflow(_) => todo!(),
+            Error::AttemptedWithdrawNonexistingOrderData(_) => todo!(),
+            Error::AttemptedWithdrawNonexistingAskBalance(_) => todo!(),
+            Error::AttemptedWithdrawNonexistingGiveBalance(_) => todo!(),
+            Error::ViewFail => todo!(),
+            Error::StorageWrite => todo!(),
         }
     }
 }

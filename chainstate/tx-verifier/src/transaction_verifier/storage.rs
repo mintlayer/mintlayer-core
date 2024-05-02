@@ -23,7 +23,9 @@ use common::{
     },
     primitives::Id,
 };
-use orders_accounting::{FlushableOrdersAccountingView, OrdersAccountingStorageRead};
+use orders_accounting::{
+    FlushableOrdersAccountingView, OrdersAccountingStorageRead, OrdersAccountingUndo,
+};
 use pos_accounting::{
     FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingUndo, PoSAccountingView,
 };
@@ -115,7 +117,13 @@ pub trait TransactionVerifierStorageRef:
         account: AccountType,
     ) -> Result<Option<AccountNonce>, <Self as TransactionVerifierStorageRef>::Error>;
 
-    // FIXME: add methods for order undo
+    fn get_orders_accounting_undo(
+        &self,
+        tx_source: TransactionSource,
+    ) -> Result<
+        Option<CachedBlockUndo<OrdersAccountingUndo>>,
+        <Self as TransactionVerifierStorageRef>::Error,
+    >;
 }
 
 pub trait TransactionVerifierStorageMut:
@@ -195,6 +203,17 @@ pub trait TransactionVerifierStorageMut:
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
+
+    fn set_orders_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+        undo: &CachedBlockUndo<OrdersAccountingUndo>,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
+
+    fn del_orders_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 }
 
 impl<T: Deref> TransactionVerifierStorageRef for T
@@ -256,5 +275,15 @@ where
         account: AccountType,
     ) -> Result<Option<AccountNonce>, <Self as TransactionVerifierStorageRef>::Error> {
         self.deref().get_account_nonce_count(account)
+    }
+
+    fn get_orders_accounting_undo(
+        &self,
+        tx_source: TransactionSource,
+    ) -> Result<
+        Option<CachedBlockUndo<OrdersAccountingUndo>>,
+        <Self as TransactionVerifierStorageRef>::Error,
+    > {
+        self.deref().get_orders_accounting_undo(tx_source)
     }
 }

@@ -27,7 +27,7 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id, H256},
 };
-use orders_accounting::OrdersAccountingStorageRead;
+use orders_accounting::{OrdersAccountingStorageRead, OrdersAccountingUndo};
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead,
     PoSAccountingUndo, PoolData,
@@ -167,6 +167,14 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
         id: Id<Block>,
     ) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>> {
         self.read::<db::DBTokensAccountingBlockUndo, _, _>(&id)
+    }
+
+    #[log_error]
+    fn get_orders_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>> {
+        todo!()
     }
 
     #[log_error]
@@ -467,6 +475,14 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
         id: Id<Block>,
     ) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>> {
         self.read::<db::DBTokensAccountingBlockUndo, _, _>(&id)
+    }
+
+    #[log_error]
+    fn get_orders_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>> {
+        todo!()
     }
 
     #[log_error]

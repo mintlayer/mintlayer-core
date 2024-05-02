@@ -31,8 +31,8 @@ mod tx_source;
 use accounting::BlockRewardUndo;
 use constraints_value_accumulator::AccumulatedFee;
 use orders_accounting::{
-    OrdersAccountingCache, OrdersAccountingDB, OrdersAccountingDeltaData, OrdersAccountingUndo,
-    OrdersAccountingView,
+    OrdersAccountingCache, OrdersAccountingDB, OrdersAccountingDeltaData,
+    OrdersAccountingOperations, OrdersAccountingUndo, OrdersAccountingView,
 };
 use tokens_accounting::{
     TokenAccountingUndo, TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
@@ -68,6 +68,7 @@ use chainstate_types::BlockIndex;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
+        make_order_id,
         output_value::OutputValue,
         signature::Signable,
         signed_transaction::SignedTransaction,
@@ -497,6 +498,8 @@ where
 
         self.disconnect_tokens_accounting_outputs(tx_source, tx)?;
 
+        self.disconnect_orders_accounting_outputs(tx_source, tx)?;
+
         Ok(())
     }
 
@@ -732,6 +735,116 @@ where
         Ok(())
     }
 
+    fn connect_orders_outputs(
+        &mut self,
+        tx_source: &TransactionSourceForConnect,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
+        let input_undos = tx
+            .inputs()
+            .iter()
+            .filter_map(|input| match input {
+                TxInput::Utxo(_) | TxInput::Account(_) => None,
+                TxInput::AccountCommand(nonce, account_op) => match account_op {
+                    AccountCommand::MintTokens(..)
+                    | AccountCommand::UnmintTokens(..)
+                    | AccountCommand::LockTokenSupply(..)
+                    | AccountCommand::FreezeToken(..)
+                    | AccountCommand::UnfreezeToken(..)
+                    | AccountCommand::ChangeTokenAuthority(..) => None,
+                    AccountCommand::WithdrawOrder(order_id) => {
+                        let res = self
+                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .and_then(|_| {
+                                self.orders_accounting_cache
+                                    .withdraw_order(*order_id)
+                                    .map_err(ConnectTransactionError::OrdersAccountingError)
+                            });
+                        Some(res)
+                    }
+                    AccountCommand::FillOrder(order_id, fill) => {
+                        let res = self
+                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .and_then(|_| {
+                                self.orders_accounting_cache
+                                    .fill_order(*order_id, fill.clone())
+                                    .map_err(ConnectTransactionError::OrdersAccountingError)
+                            });
+                        Some(res)
+                    }
+                },
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let input_utxo_outpoint = tx.inputs().iter().find_map(|input| input.utxo_outpoint());
+        let output_undos = tx
+            .outputs()
+            .iter()
+            .filter_map(|output| match output {
+                TxOutput::Transfer(..)
+                | TxOutput::Burn(..)
+                | TxOutput::CreateStakePool(..)
+                | TxOutput::ProduceBlockFromStake(..)
+                | TxOutput::CreateDelegationId(..)
+                | TxOutput::DelegateStaking(..)
+                | TxOutput::LockThenTransfer(..)
+                | TxOutput::IssueNft(..)
+                | TxOutput::DataDeposit(..)
+                | TxOutput::IssueFungibleToken(..) => None,
+                | TxOutput::CreateOrder(order_data) => match input_utxo_outpoint {
+                    Some(input_utxo_outpoint) => {
+                        let order_id = make_order_id(&input_utxo_outpoint);
+                        let result = self
+                            .orders_accounting_cache
+                            .create_order(order_id, order_data.clone())
+                            .map_err(ConnectTransactionError::OrdersAccountingError);
+                        Some(result)
+                    }
+                    None => todo!(),
+                },
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Store accounting operations undos
+        if !input_undos.is_empty() || !output_undos.is_empty() {
+            let tx_undos = input_undos.into_iter().chain(output_undos).collect();
+            self.orders_accounting_block_undo.add_tx_undo(
+                TransactionSource::from(tx_source),
+                tx.get_id(),
+                accounting::TxUndo::new(tx_undos),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn disconnect_orders_accounting_outputs(
+        &mut self,
+        tx_source: TransactionSource,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
+        // apply undos to accounting
+        let block_undo_fetcher = |tx_source: TransactionSource| {
+            self.storage
+                .get_orders_accounting_undo(tx_source)
+                .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+        };
+        let undos = self.orders_accounting_block_undo.take_tx_undo(
+            &tx_source,
+            &tx.get_id(),
+            block_undo_fetcher,
+        )?;
+        if let Some(undos) = undos {
+            undos
+                .into_inner()
+                .into_iter()
+                .rev()
+                .try_for_each(|undo| self.orders_accounting_cache.undo(undo))?;
+        }
+
+        Ok(())
+    }
+
     pub fn connect_transaction(
         &mut self,
         tx_source: &TransactionSourceForConnect,
@@ -772,6 +885,8 @@ where
         self.connect_pos_accounting_outputs(tx_source, tx.transaction())?;
 
         self.connect_tokens_outputs(tx_source, tx.transaction())?;
+
+        self.connect_orders_outputs(tx_source, tx.transaction())?;
 
         // spend utxos
         let tx_undo = self

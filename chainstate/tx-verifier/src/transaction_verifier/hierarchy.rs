@@ -36,7 +36,7 @@ use common::{
 };
 use orders_accounting::{
     FlushableOrdersAccountingView, OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData,
-    OrdersAccountingStorageRead, OrdersAccountingView,
+    OrdersAccountingStorageRead, OrdersAccountingUndo, OrdersAccountingView,
 };
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
@@ -143,6 +143,19 @@ where
                 CachedOperation::Erase => Ok(None),
             },
             None => self.storage.get_account_nonce_count(account),
+        }
+    }
+
+    fn get_orders_accounting_undo(
+        &self,
+        tx_source: TransactionSource,
+    ) -> Result<
+        Option<CachedBlockUndo<OrdersAccountingUndo>>,
+        <Self as TransactionVerifierStorageRef>::Error,
+    > {
+        match self.orders_accounting_block_undo.data().get(&tx_source) {
+            Some(op) => Ok(op.get().cloned()),
+            None => self.storage.get_orders_accounting_undo(tx_source),
         }
     }
 }
@@ -292,6 +305,25 @@ where
         tx_source: TransactionSource,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.tokens_accounting_block_undo
+            .del_undo_data(tx_source)
+            .map_err(|e| TransactionVerifierStorageError::AccountingBlockUndoError(e).into())
+    }
+
+    fn set_orders_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+        new_undo: &CachedBlockUndo<OrdersAccountingUndo>,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
+        self.orders_accounting_block_undo
+            .set_undo_data(tx_source, new_undo)
+            .map_err(|e| TransactionVerifierStorageError::AccountingBlockUndoError(e).into())
+    }
+
+    fn del_orders_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
+        self.orders_accounting_block_undo
             .del_undo_data(tx_source)
             .map_err(|e| TransactionVerifierStorageError::AccountingBlockUndoError(e).into())
     }

@@ -32,7 +32,7 @@ use common::{
     },
     primitives::{Amount, Id},
 };
-use orders_accounting::{OrdersAccountingStorageRead, OrdersAccountingView};
+use orders_accounting::{OrdersAccountingStorageRead, OrdersAccountingUndo, OrdersAccountingView};
 use pos_accounting::{DelegationData, PoSAccountingUndo, PoSAccountingView, PoolData};
 use subsystem::blocking::BlockingHandle;
 use tokens_accounting::{TokenAccountingUndo, TokensAccountingStorageRead, TokensAccountingView};
@@ -236,6 +236,13 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
         &self,
         _source: TransactionSource,
     ) -> Result<Option<CachedBlockUndo<TokenAccountingUndo>>, Error> {
+        Ok(None)
+    }
+
+    fn get_orders_accounting_undo(
+        &self,
+        _source: TransactionSource,
+    ) -> Result<Option<CachedBlockUndo<OrdersAccountingUndo>>, Error> {
         Ok(None)
     }
 }

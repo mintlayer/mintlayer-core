@@ -33,7 +33,9 @@ use common::{
     },
     primitives::{Amount, Id},
 };
-use orders_accounting::{FlushableOrdersAccountingView, OrdersAccountingStorageRead};
+use orders_accounting::{
+    FlushableOrdersAccountingView, OrdersAccountingStorageRead, OrdersAccountingUndo,
+};
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDB,
     PoSAccountingDeltaData, PoSAccountingUndo, PoSAccountingView, PoolData,
@@ -138,6 +140,26 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
         self.db_tx
             .get_account_nonce_count(account)
             .map_err(TransactionVerifierStorageError::from)
+    }
+
+    #[log_error]
+    fn get_orders_accounting_undo(
+        &self,
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedBlockUndo<OrdersAccountingUndo>>, TransactionVerifierStorageError>
+    {
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                let undo = self
+                    .db_tx
+                    .get_orders_accounting_undo(id)?
+                    .map(CachedBlockUndo::from_block_undo);
+                Ok(undo)
+            }
+            TransactionSource::Mempool => {
+                panic!("Mempool should not undo stuff in chainstate")
+            }
+        }
     }
 }
 
@@ -383,6 +405,41 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
             TransactionSource::Chain(id) => self
                 .db_tx
                 .del_tokens_accounting_undo_data(id)
+                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
+    }
+
+    #[log_error]
+    fn set_orders_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+        undo: &CachedBlockUndo<OrdersAccountingUndo>,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
+        match tx_source {
+            TransactionSource::Chain(id) => self
+                .db_tx
+                .set_orders_accounting_undo_data(id, &undo.clone().consume())
+                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
+    }
+
+    #[log_error]
+    fn del_orders_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
+        match tx_source {
+            TransactionSource::Chain(id) => self
+                .db_tx
+                .del_orders_accounting_undo_data(id)
                 .map_err(TransactionVerifierStorageError::from),
             TransactionSource::Mempool => {
                 panic!("Flushing mempool info into the storage is forbidden")

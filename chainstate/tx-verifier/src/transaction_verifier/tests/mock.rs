@@ -34,7 +34,10 @@ use common::{
     },
     primitives::{Amount, Id},
 };
-use orders_accounting::{FlushableOrdersAccountingView, OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData, OrdersAccountingStorageRead};
+use orders_accounting::{
+    FlushableOrdersAccountingView, OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData,
+    OrdersAccountingStorageRead, OrdersAccountingUndo,
+};
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
     PoSAccountingUndo, PoSAccountingView, PoolData,
@@ -82,6 +85,11 @@ mockall::mock! {
             &self,
             account: AccountType,
         ) -> Result<Option<AccountNonce>, TransactionVerifierStorageError>;
+
+        fn get_orders_accounting_undo(
+            &self,
+            tx_source: TransactionSource,
+        ) -> Result<Option<CachedBlockUndo<OrdersAccountingUndo>>, TransactionVerifierStorageError>;
     }
 
     impl TransactionVerifierStorageMut for Store {
@@ -144,6 +152,17 @@ mockall::mock! {
         ) -> Result<(), TransactionVerifierStorageError>;
 
         fn del_tokens_accounting_undo_data(
+            &mut self,
+            tx_source: TransactionSource,
+        ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn set_orders_accounting_undo_data(
+            &mut self,
+            tx_source: TransactionSource,
+            undo: &CachedBlockUndo<OrdersAccountingUndo>,
+        ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn del_orders_accounting_undo_data(
             &mut self,
             tx_source: TransactionSource,
         ) -> Result<(), TransactionVerifierStorageError>;

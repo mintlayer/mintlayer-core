@@ -117,7 +117,8 @@ pub enum ConnectTransactionError {
     RewardDistributionError(#[from] reward_distribution::RewardDistributionError),
     #[error("Check transaction error: {0}")]
     CheckTransactionError(#[from] CheckTransactionError),
-
+    #[error("Orders accounting error: {0}")]
+    OrdersAccountingError(#[from] orders_accounting::Error),
     #[error(transparent)]
     InputCheck(#[from] InputCheckError),
 }

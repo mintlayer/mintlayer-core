@@ -29,7 +29,7 @@ use common::{
     },
     primitives::{Amount, Id},
 };
-use orders_accounting::OrdersAccountingStorageRead;
+use orders_accounting::{OrdersAccountingStorageRead, OrdersAccountingUndo};
 use pos_accounting::{
     DelegationData, PoSAccountingDB, PoSAccountingUndo, PoSAccountingView, PoolData,
 };
@@ -160,6 +160,25 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
             TransactionSource::Mempool => Ok(None),
         }
     }
+
+    fn get_orders_accounting_undo(
+        &self,
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedBlockUndo<OrdersAccountingUndo>>, TransactionVerifierStorageError>
+    {
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                let undo = self
+                    .storage
+                    .transaction_ro()
+                    .unwrap()
+                    .get_orders_accounting_undo(id)?
+                    .map(CachedBlockUndo::from_block_undo);
+                Ok(undo)
+            }
+            TransactionSource::Mempool => Ok(None),
+        }
+    }
 }
 
 impl UtxosStorageRead for InMemoryStorageWrapper {
@@ -243,14 +262,14 @@ impl OrdersAccountingStorageRead for InMemoryStorageWrapper {
     type Error = storage_result::Error;
 
     fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
-        todo!()
+        self.storage.transaction_ro().unwrap().get_order_data(id)
     }
 
     fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        self.storage.transaction_ro().unwrap().get_ask_balance(id)
     }
 
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        todo!()
+        self.storage.transaction_ro().unwrap().get_give_balance(id)
     }
 }

@@ -34,7 +34,9 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
-use orders_accounting::{OrdersAccountingStorageRead, OrdersAccountingStorageWrite};
+use orders_accounting::{
+    OrdersAccountingStorageRead, OrdersAccountingStorageWrite, OrdersAccountingUndo,
+};
 use pos_accounting::{
     DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead, PoSAccountingStorageWrite,
     PoSAccountingUndo,
@@ -124,6 +126,12 @@ pub trait BlockchainStorageRead:
         &self,
         id: Id<Block>,
     ) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
+
+    /// Get tokens accounting undo for specific block
+    fn get_orders_accounting_undo(
+        &self,
+        id: Id<Block>,
+    ) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>>;
 
     /// Get accounting undo for specific block
     fn get_pos_accounting_undo(
@@ -228,6 +236,16 @@ pub trait BlockchainStorageWrite:
 
     /// Remove tokens accounting undo data for specific block
     fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> Result<()>;
+
+    /// Set orders accounting undo data for specific block
+    fn set_orders_accounting_undo_data(
+        &mut self,
+        id: Id<Block>,
+        undo: &accounting::BlockUndo<OrdersAccountingUndo>,
+    ) -> Result<()>;
+
+    /// Remove orders accounting undo data for specific block
+    fn del_orders_accounting_undo_data(&mut self, id: Id<Block>) -> Result<()>;
 
     /// Set accounting block undo data for specific block
     fn set_pos_accounting_undo_data(
