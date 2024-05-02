@@ -53,6 +53,8 @@ use tx_verifier::{
     CheckTransactionError,
 };
 
+use crate::tests::helpers::{issue_token_from_block, mint_tokens_in_block};
+
 fn make_issuance(
     rng: &mut impl Rng,
     supply: TokenTotalSupply,
@@ -66,43 +68,6 @@ fn make_issuance(
         authority: Destination::AnyoneCanSpend,
         is_freezable: freezable,
     })
-}
-
-fn issue_token_from_block(
-    rng: &mut (impl Rng + CryptoRng),
-    tf: &mut TestFramework,
-    parent_block_id: Id<GenBlock>,
-    utxo_to_pay_fee: UtxoOutPoint,
-    issuance: TokenIssuance,
-) -> (TokenId, Id<Block>, UtxoOutPoint) {
-    let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
-
-    let fee_utxo_coins = chainstate_test_framework::get_output_value(
-        tf.chainstate.utxo(&utxo_to_pay_fee).unwrap().unwrap().output(),
-    )
-    .unwrap()
-    .coin_amount()
-    .unwrap();
-
-    let tx = TransactionBuilder::new()
-        .add_input(utxo_to_pay_fee.into(), InputWitness::NoSignature(None))
-        .add_output(TxOutput::Transfer(
-            OutputValue::Coin((fee_utxo_coins - token_issuance_fee).unwrap()),
-            Destination::AnyoneCanSpend,
-        ))
-        .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
-        .build();
-    let token_id = make_token_id(tx.transaction().inputs()).unwrap();
-    let tx_id = tx.transaction().get_id();
-    let block = tf
-        .make_block_builder()
-        .add_transaction(tx)
-        .with_parent(parent_block_id)
-        .build(rng);
-    let block_id = block.get_id();
-    tf.process_block(block, BlockSource::Local).unwrap();
-
-    (token_id, block_id, UtxoOutPoint::new(tx_id.into(), 0))
 }
 
 // Returns created token id and outpoint with change
@@ -121,69 +86,6 @@ fn issue_token_from_genesis(
         utxo_input_outpoint,
         issuance,
     )
-}
-
-fn mint_tokens_in_block(
-    rng: &mut (impl Rng + CryptoRng),
-    tf: &mut TestFramework,
-    parent_block_id: Id<GenBlock>,
-    utxo_to_pay_fee: UtxoOutPoint,
-    token_id: TokenId,
-    amount_to_mint: Amount,
-    produce_change: bool,
-) -> (Id<Block>, Id<Transaction>) {
-    let token_supply_change_fee =
-        tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
-
-    let nonce = BlockchainStorageRead::get_account_nonce_count(
-        &tf.storage.transaction_ro().unwrap(),
-        AccountType::Token(token_id),
-    )
-    .unwrap()
-    .map_or(AccountNonce::new(0), |n| n.increment().unwrap());
-
-    let tx_builder = TransactionBuilder::new()
-        .add_input(
-            TxInput::from_command(nonce, AccountCommand::MintTokens(token_id, amount_to_mint)),
-            InputWitness::NoSignature(None),
-        )
-        .add_input(
-            utxo_to_pay_fee.clone().into(),
-            InputWitness::NoSignature(None),
-        )
-        .add_output(TxOutput::Transfer(
-            OutputValue::TokenV1(token_id, amount_to_mint),
-            Destination::AnyoneCanSpend,
-        ));
-
-    let tx_builder = if produce_change {
-        let fee_utxo_coins = chainstate_test_framework::get_output_value(
-            tf.chainstate.utxo(&utxo_to_pay_fee).unwrap().unwrap().output(),
-        )
-        .unwrap()
-        .coin_amount()
-        .unwrap();
-
-        tx_builder.add_output(TxOutput::Transfer(
-            OutputValue::Coin((fee_utxo_coins - token_supply_change_fee).unwrap()),
-            Destination::AnyoneCanSpend,
-        ))
-    } else {
-        tx_builder
-    };
-
-    let tx = tx_builder.build();
-    let tx_id = tx.transaction().get_id();
-
-    let block = tf
-        .make_block_builder()
-        .add_transaction(tx)
-        .with_parent(parent_block_id)
-        .build(rng);
-    let block_id = block.get_id();
-    tf.process_block(block, BlockSource::Local).unwrap();
-
-    (block_id, tx_id)
 }
 
 fn unmint_tokens_in_block(

@@ -61,6 +61,12 @@ impl From<tokens_accounting::Error> for Error {
     }
 }
 
+impl From<orders_accounting::Error> for Error {
+    fn from(e: orders_accounting::Error) -> Self {
+        Error::from(ChainstateError::from(chainstate::BlockError::from(e)))
+    }
+}
+
 impl From<utxo::Error> for Error {
     fn from(e: utxo::Error) -> Self {
         chainstate::tx_verifier::TransactionVerifierStorageError::from(e).into()

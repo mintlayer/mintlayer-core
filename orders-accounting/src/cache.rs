@@ -193,8 +193,8 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
             .order_data
             .merge_delta_data_element(id, accounting::DataDelta::new(Some(order_data), None))?;
 
-        self.data.ask_balances.add_unsigned(id, ask_balance)?;
-        self.data.give_balances.add_unsigned(id, give_balance)?;
+        self.data.ask_balances.sub_unsigned(id, ask_balance)?;
+        self.data.give_balances.sub_unsigned(id, give_balance)?;
 
         Ok(OrdersAccountingUndo::WithdrawOrder(WithdrawOrderUndo {
             id,

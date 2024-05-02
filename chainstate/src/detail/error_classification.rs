@@ -130,6 +130,7 @@ impl BlockProcessingErrorClassification for BlockError {
 
             BlockError::BestChainCandidatesAccessorError(err) => err.classify(),
             BlockError::TokensAccountingError(err) => err.classify(),
+            BlockError::OrdersAccountingError(err) => err.classify(),
             BlockError::StorageError(err) => err.classify(),
             BlockError::OrphanCheckFailed(err) => err.classify(),
             BlockError::CheckBlockFailed(err) => err.classify(),
@@ -491,6 +492,7 @@ impl BlockProcessingErrorClassification for TransactionVerifierStorageError {
             TransactionVerifierStorageError::PoSAccountingError(err) => err.classify(),
             TransactionVerifierStorageError::AccountingBlockUndoError(err) => err.classify(),
             TransactionVerifierStorageError::TokensAccountingError(err) => err.classify(),
+            TransactionVerifierStorageError::OrdersAccountingError(err) => err.classify(),
         }
     }
 }
@@ -878,7 +880,7 @@ impl BlockProcessingErrorClassification for constraints_value_accumulator::Error
             | Error::NegativeAccountBalance(_) => BlockProcessingErrorClass::BadBlock,
 
             Error::PoSAccountingError(err) => err.classify(),
-            Error::OrdersAccountingError(_) => todo!(),
+            Error::OrdersAccountingError(err) => err.classify(),
         }
     }
 }
@@ -887,28 +889,31 @@ impl BlockProcessingErrorClassification for orders_accounting::Error {
     fn classify(&self) -> BlockProcessingErrorClass {
         use orders_accounting::Error;
         match self {
-            Error::StorageError(_) => todo!(),
-            Error::AccountingError(_) => todo!(),
-            Error::OrderAlreadyExists(_) => todo!(),
-            Error::OrderDataNotFound(_) => todo!(),
-            Error::OrderAskBalanceNotFound(_) => todo!(),
-            Error::OrderGiveBalanceNotFound(_) => todo!(),
-            Error::InvariantOrderDataNotFoundForUndo(_) => todo!(),
-            Error::InvariantOrderAskBalanceNotFoundForUndo(_) => todo!(),
-            Error::InvariantOrderAskBalanceChangedForUndo(_) => todo!(),
-            Error::InvariantOrderGiveBalanceNotFoundForUndo(_) => todo!(),
-            Error::InvariantOrderGiveBalanceChangedForUndo(_) => todo!(),
-            Error::InvariantOrderDataExistForWithdrawUndo(_) => todo!(),
-            Error::InvariantOrderAskBalanceExistForWithdrawUndo(_) => todo!(),
-            Error::InvariantOrderGiveBalanceExistForWithdrawUndo(_) => todo!(),
-            Error::FillOrderChangeLeft(_) => todo!(),
-            Error::CurrencyMismatch => todo!(),
-            Error::OrderOverflow(_) => todo!(),
-            Error::AttemptedWithdrawNonexistingOrderData(_) => todo!(),
-            Error::AttemptedWithdrawNonexistingAskBalance(_) => todo!(),
-            Error::AttemptedWithdrawNonexistingGiveBalance(_) => todo!(),
-            Error::ViewFail => todo!(),
-            Error::StorageWrite => todo!(),
+            Error::ViewFail | Error::StorageWrite => BlockProcessingErrorClass::General,
+
+            Error::OrderAlreadyExists(_)
+            | Error::OrderDataNotFound(_)
+            | Error::OrderAskBalanceNotFound(_)
+            | Error::OrderGiveBalanceNotFound(_)
+            | Error::InvariantOrderDataNotFoundForUndo(_)
+            | Error::InvariantOrderAskBalanceNotFoundForUndo(_)
+            | Error::InvariantOrderAskBalanceChangedForUndo(_)
+            | Error::InvariantOrderGiveBalanceNotFoundForUndo(_)
+            | Error::InvariantOrderGiveBalanceChangedForUndo(_)
+            | Error::InvariantOrderDataExistForWithdrawUndo(_)
+            | Error::InvariantOrderAskBalanceExistForWithdrawUndo(_)
+            | Error::InvariantOrderGiveBalanceExistForWithdrawUndo(_)
+            | Error::FillOrderChangeLeft(_)
+            | Error::CurrencyMismatch
+            | Error::OrderOverflow(_)
+            | Error::AttemptedWithdrawNonexistingOrderData(_)
+            | Error::AttemptedWithdrawNonexistingAskBalance(_)
+            | Error::AttemptedWithdrawNonexistingGiveBalance(_) => {
+                BlockProcessingErrorClass::BadBlock
+            }
+
+            Error::StorageError(err) => err.classify(),
+            Error::AccountingError(err) => err.classify(),
         }
     }
 }

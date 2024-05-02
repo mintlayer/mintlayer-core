@@ -25,7 +25,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
     cache::OrdersAccountingCache, operations::OrdersAccountingOperations,
-    view::FlushableOrdersAccountingView, InMemoryOrdersAccounting, OrdersAccountingDB,
+    view::FlushableOrdersAccountingView, Error, InMemoryOrdersAccounting, OrdersAccountingDB,
     OrdersAccountingView,
 };
 
@@ -62,6 +62,44 @@ fn create_order_and_flush(#[case] seed: Seed) {
     );
 
     assert_eq!(expected_storage, storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_order_twice(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let order_id = OrderId::random_using(&mut rng);
+    let order_data = make_order_data(&mut rng);
+
+    {
+        let storage = InMemoryOrdersAccounting::new();
+        let db = OrdersAccountingDB::new(&storage);
+        let mut cache = OrdersAccountingCache::new(&db);
+
+        let _ = cache.create_order(order_id, order_data.clone()).unwrap();
+
+        assert_eq!(
+            cache.create_order(order_id, order_data.clone()),
+            Err(Error::OrderAlreadyExists(order_id))
+        );
+    }
+
+    {
+        let storage = InMemoryOrdersAccounting::from_values(
+            BTreeMap::from_iter([(order_id, order_data.clone())]),
+            BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
+            BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+        );
+        let db = OrdersAccountingDB::new(&storage);
+        let mut cache = OrdersAccountingCache::new(&db);
+
+        assert_eq!(
+            cache.create_order(order_id, order_data.clone()),
+            Err(Error::OrderAlreadyExists(order_id))
+        );
+    }
 }
 
 #[rstest]
@@ -106,6 +144,382 @@ fn create_order_and_undo(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn withdraw_order_and_flush(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let order_id = OrderId::random_using(&mut rng);
+    let order_data = make_order_data(&mut rng);
+
+    let mut storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data.clone())]),
+        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
+        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+    );
+    let mut db = OrdersAccountingDB::new(&mut storage);
+    let mut cache = OrdersAccountingCache::new(&db);
+
+    // try to withdraw non-existing order
+    {
+        let random_order = OrderId::random_using(&mut rng);
+        let result = cache.withdraw_order(random_order);
+        assert_eq!(
+            result.unwrap_err(),
+            Error::AttemptedWithdrawNonexistingOrderData(random_order)
+        );
+    }
+
+    let _ = cache.withdraw_order(order_id).unwrap();
+
+    db.batch_write_orders_data(cache.consume()).unwrap();
+
+    assert_eq!(InMemoryOrdersAccounting::new(), storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn withdraw_order_twice(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let order_id = OrderId::random_using(&mut rng);
+    let order_data = make_order_data(&mut rng);
+
+    let storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data.clone())]),
+        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
+        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+    );
+    let db = OrdersAccountingDB::new(&storage);
+    let mut cache = OrdersAccountingCache::new(&db);
+
+    let _ = cache.withdraw_order(order_id).unwrap();
+
+    assert_eq!(
+        cache.withdraw_order(order_id,),
+        Err(Error::AttemptedWithdrawNonexistingOrderData(order_id))
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn withdraw_order_and_undo(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let order_id = OrderId::random_using(&mut rng);
+    let order_data = make_order_data(&mut rng);
+
+    let mut storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data.clone())]),
+        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
+        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+    );
+    let original_storage = storage.clone();
+    let mut db = OrdersAccountingDB::new(&mut storage);
+    let mut cache = OrdersAccountingCache::new(&db);
+
+    let undo = cache.withdraw_order(order_id).unwrap();
+
+    assert_eq!(None, cache.get_order_data(&order_id).unwrap().as_ref());
+    assert_eq!(
+        Some(Amount::ZERO),
+        cache.get_ask_balance(&order_id).unwrap()
+    );
+    assert_eq!(
+        Some(Amount::ZERO),
+        cache.get_give_balance(&order_id).unwrap()
+    );
+
+    cache.undo(undo).unwrap();
+
+    assert_eq!(
+        Some(&order_data),
+        cache.get_order_data(&order_id).unwrap().as_ref()
+    );
+    assert_eq!(
+        Some(order_data.ask().amount()),
+        cache.get_ask_balance(&order_id).unwrap()
+    );
+    assert_eq!(
+        Some(order_data.give().amount()),
+        cache.get_give_balance(&order_id).unwrap()
+    );
+
+    db.batch_write_orders_data(cache.consume()).unwrap();
+
+    assert_eq!(original_storage, storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn fill_entire_order_and_flush(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let order_id = OrderId::random_using(&mut rng);
+    let order_data = make_order_data(&mut rng);
+
+    let mut storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data.clone())]),
+        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
+        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+    );
+    let mut db = OrdersAccountingDB::new(&mut storage);
+    let mut cache = OrdersAccountingCache::new(&db);
+
+    // try to fill non-existing order
+    {
+        let random_order = OrderId::random_using(&mut rng);
+        let result = cache.fill_order(random_order, order_data.ask().clone());
+        assert_eq!(result.unwrap_err(), Error::OrderDataNotFound(random_order));
+    }
+
+    // try to overfill
+    {
+        let fill = OutputValue::Coin((order_data.ask().amount() + Amount::from_atoms(1)).unwrap());
+        let result = cache.fill_order(order_id, fill);
+        assert_eq!(result.unwrap_err(), Error::OrderOverflow(order_id));
+    }
+
+    let _ = cache.fill_order(order_id, order_data.ask().clone()).unwrap();
+
+    db.batch_write_orders_data(cache.consume()).unwrap();
+
+    assert_eq!(InMemoryOrdersAccounting::new(), storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn fill_order_partially_and_flush(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let order_id = OrderId::random_using(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
+    let order_data = OrderData::new(
+        Destination::AnyoneCanSpend,
+        OutputValue::TokenV1(token_id, Amount::from_atoms(3)),
+        OutputValue::Coin(Amount::from_atoms(10)),
+    );
+
+    let mut storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data.clone())]),
+        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
+        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+    );
+    let mut db = OrdersAccountingDB::new(&mut storage);
+    let mut cache = OrdersAccountingCache::new(&db);
+
+    let _ = cache
+        .fill_order(
+            order_id,
+            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+        )
+        .unwrap();
+
+    assert_eq!(
+        Some(&order_data),
+        cache.get_order_data(&order_id).unwrap().as_ref()
+    );
+    assert_eq!(
+        Some(Amount::from_atoms(2)),
+        cache.get_ask_balance(&order_id).unwrap()
+    );
+    assert_eq!(
+        Some(Amount::from_atoms(7)),
+        cache.get_give_balance(&order_id).unwrap()
+    );
+
+    let _ = cache
+        .fill_order(
+            order_id,
+            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+        )
+        .unwrap();
+
+    assert_eq!(
+        Some(&order_data),
+        cache.get_order_data(&order_id).unwrap().as_ref()
+    );
+    assert_eq!(
+        Some(Amount::from_atoms(1)),
+        cache.get_ask_balance(&order_id).unwrap()
+    );
+    assert_eq!(
+        Some(Amount::from_atoms(4)),
+        cache.get_give_balance(&order_id).unwrap()
+    );
+
+    let _ = cache
+        .fill_order(
+            order_id,
+            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+        )
+        .unwrap();
+
+    db.batch_write_orders_data(cache.consume()).unwrap();
+
+    assert_eq!(InMemoryOrdersAccounting::new(), storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn fill_order_partially_and_undo(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let order_id = OrderId::random_using(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
+    let order_data = OrderData::new(
+        Destination::AnyoneCanSpend,
+        OutputValue::TokenV1(token_id, Amount::from_atoms(3)),
+        OutputValue::Coin(Amount::from_atoms(10)),
+    );
+
+    let mut storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data.clone())]),
+        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
+        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+    );
+    let original_storage = storage.clone();
+    let mut db = OrdersAccountingDB::new(&mut storage);
+    let mut cache = OrdersAccountingCache::new(&db);
+
+    let undo1 = cache
+        .fill_order(
+            order_id,
+            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+        )
+        .unwrap();
+
+    let undo2 = cache
+        .fill_order(
+            order_id,
+            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+        )
+        .unwrap();
+
+    let undo3 = cache
+        .fill_order(
+            order_id,
+            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+        )
+        .unwrap();
+
+    assert_eq!(None, cache.get_order_data(&order_id).unwrap().as_ref());
+    assert_eq!(
+        Some(Amount::ZERO),
+        cache.get_ask_balance(&order_id).unwrap()
+    );
+    assert_eq!(
+        Some(Amount::ZERO),
+        cache.get_give_balance(&order_id).unwrap()
+    );
+
+    cache.undo(undo3).unwrap();
+
+    assert_eq!(
+        Some(&order_data),
+        cache.get_order_data(&order_id).unwrap().as_ref()
+    );
+    assert_eq!(
+        Some(Amount::from_atoms(1)),
+        cache.get_ask_balance(&order_id).unwrap()
+    );
+    assert_eq!(
+        Some(Amount::from_atoms(4)),
+        cache.get_give_balance(&order_id).unwrap()
+    );
+
+    cache.undo(undo2).unwrap();
+
+    assert_eq!(
+        Some(&order_data),
+        cache.get_order_data(&order_id).unwrap().as_ref()
+    );
+    assert_eq!(
+        Some(Amount::from_atoms(2)),
+        cache.get_ask_balance(&order_id).unwrap()
+    );
+    assert_eq!(
+        Some(Amount::from_atoms(7)),
+        cache.get_give_balance(&order_id).unwrap()
+    );
+
+    cache.undo(undo1).unwrap();
+
+    assert_eq!(
+        Some(&order_data),
+        cache.get_order_data(&order_id).unwrap().as_ref()
+    );
+    assert_eq!(
+        Some(Amount::from_atoms(3)),
+        cache.get_ask_balance(&order_id).unwrap()
+    );
+    assert_eq!(
+        Some(Amount::from_atoms(10)),
+        cache.get_give_balance(&order_id).unwrap()
+    );
+
+    db.batch_write_orders_data(cache.consume()).unwrap();
+
+    assert_eq!(original_storage, storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn fill_order_partially_and_withdraw(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let order_id = OrderId::random_using(&mut rng);
+    let token_id = TokenId::random_using(&mut rng);
+    let order_data = OrderData::new(
+        Destination::AnyoneCanSpend,
+        OutputValue::TokenV1(token_id, Amount::from_atoms(3)),
+        OutputValue::Coin(Amount::from_atoms(10)),
+    );
+
+    let mut storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data.clone())]),
+        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
+        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+    );
+    let mut db = OrdersAccountingDB::new(&mut storage);
+    let mut cache = OrdersAccountingCache::new(&db);
+
+    let _ = cache
+        .fill_order(
+            order_id,
+            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+        )
+        .unwrap();
+
+    assert_eq!(
+        Some(&order_data),
+        cache.get_order_data(&order_id).unwrap().as_ref()
+    );
+    assert_eq!(
+        Some(Amount::from_atoms(2)),
+        cache.get_ask_balance(&order_id).unwrap()
+    );
+    assert_eq!(
+        Some(Amount::from_atoms(7)),
+        cache.get_give_balance(&order_id).unwrap()
+    );
+
+    let _ = cache.withdraw_order(order_id).unwrap();
+
+    db.batch_write_orders_data(cache.consume()).unwrap();
+
+    assert_eq!(InMemoryOrdersAccounting::new(), storage);
+}
+
+// If total give balance of an order is split into a random number of fill operations
+// they must exhaust the order entirely without any change left.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn fill_order_must_converge(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
@@ -134,5 +548,3 @@ fn fill_order_must_converge(#[case] seed: Seed) {
 
     assert_eq!(InMemoryOrdersAccounting::new(), storage);
 }
-
-// FIXME: more tests

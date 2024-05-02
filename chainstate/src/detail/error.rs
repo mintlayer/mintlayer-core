@@ -74,6 +74,8 @@ pub enum BlockError {
     TokensAccountingError(#[from] tokens_accounting::Error),
     #[error("In-memory reorg failed: {0}")]
     InMemoryReorgFailed(#[from] InMemoryReorgError),
+    #[error("Orders accounting error: {0}")]
+    OrdersAccountingError(#[from] orders_accounting::Error),
 
     #[error("Failed to obtain best block id: {0}")]
     BestBlockIdQueryError(PropertyQueryError),

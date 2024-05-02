@@ -62,6 +62,8 @@ pub enum TransactionVerifierStorageError {
     AccountingBlockUndoError(#[from] accounting::BlockUndoError),
     #[error("Tokens accounting error: {0}")]
     TokensAccountingError(#[from] tokens_accounting::Error),
+    #[error("Orders accounting error: {0}")]
+    OrdersAccountingError(#[from] orders_accounting::Error),
 }
 
 // TODO(Gosha): PoSAccountingView should be replaced with PoSAccountingStorageRead in which the

@@ -265,6 +265,7 @@ impl MempoolBanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::UtxoError(err) => err.mempool_ban_score(),
             TransactionVerifierStorageError::PoSAccountingError(err) => err.mempool_ban_score(),
             TransactionVerifierStorageError::TokensAccountingError(err) => err.mempool_ban_score(),
+            TransactionVerifierStorageError::OrdersAccountingError(err) => err.mempool_ban_score(),
 
             // Should not happen in mempool (no undos, no block processing, internal errors)
             TransactionVerifierStorageError::GetAncestorError(_) => 0,

@@ -18,6 +18,7 @@ use super::{
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp, ConsumedTokenIssuanceCache},
     CachedOperation, TransactionVerifierDelta,
 };
+use orders_accounting::FlushableOrdersAccountingView;
 use tokens_accounting::FlushableTokensAccountingView;
 use utxo::FlushableUtxoView;
 
@@ -66,6 +67,7 @@ pub fn flush_to_storage<S: TransactionVerifierStorageMut>(
 where
     <S as TransactionVerifierStorageRef>::Error: From<<S as FlushableUtxoView>::Error>,
     <S as TransactionVerifierStorageRef>::Error: From<<S as FlushableTokensAccountingView>::Error>,
+    <S as TransactionVerifierStorageRef>::Error: From<<S as FlushableOrdersAccountingView>::Error>,
     <S as TransactionVerifierStorageRef>::Error: From<pos_accounting::Error>,
 {
     flush_tokens(storage, &consumed.token_issuance_cache)?;
@@ -120,6 +122,19 @@ where
             CachedOperation::Read(_) => (),
             CachedOperation::Erase => storage.del_account_nonce_count(account)?,
         };
+    }
+
+    storage.batch_write_orders_data(consumed.orders_accounting_delta)?;
+
+    // flush orders accounting block undo
+    for (tx_source, op) in consumed.orders_accounting_delta_undo {
+        match op {
+            CachedOperation::Write(undo) => {
+                storage.set_orders_accounting_undo_data(tx_source, &undo)?
+            }
+            CachedOperation::Read(_) => (),
+            CachedOperation::Erase => storage.del_orders_accounting_undo_data(tx_source)?,
+        }
     }
 
     Ok(())

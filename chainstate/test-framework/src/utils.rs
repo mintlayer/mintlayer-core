@@ -68,11 +68,11 @@ pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::IssueFungibleToken(_)
-        | TxOutput::DataDeposit(_) => None,
+        | TxOutput::DataDeposit(_)
+        | TxOutput::CreateOrder(_) => None,
         TxOutput::IssueNft(token_id, _, _) => {
             Some(OutputValue::TokenV1(*token_id, Amount::from_atoms(1)))
         }
-        TxOutput::CreateOrder(_) => todo!(),
     }
 }
 

@@ -85,3 +85,13 @@ pub struct OrdersAccountingDeltaUndoData {
     pub(crate) ask_balances: DeltaAmountCollection<OrderId>,
     pub(crate) give_balances: DeltaAmountCollection<OrderId>,
 }
+
+impl OrdersAccountingDeltaUndoData {
+    pub fn new() -> Self {
+        Self {
+            order_data: DeltaDataUndoCollection::new(),
+            ask_balances: DeltaAmountCollection::new(),
+            give_balances: DeltaAmountCollection::new(),
+        }
+    }
+}

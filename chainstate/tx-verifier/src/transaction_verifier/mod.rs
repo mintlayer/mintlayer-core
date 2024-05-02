@@ -867,16 +867,12 @@ where
                 .map_err(|_| ConnectTransactionError::TxVerifierStorage)
         })?;
 
-        // FIXME: proper impl
-        let orders_store = orders_accounting::InMemoryOrdersAccounting::new();
-        let orders_db = orders_accounting::OrdersAccountingDB::new(&orders_store);
-
         // check for attempted money printing and invalid inputs/outputs combinations
         let fee = input_output_policy::check_tx_inputs_outputs_policy(
             tx.transaction(),
             self.chain_config.as_ref(),
             tx_source.expected_block_height(),
-            &orders_db,
+            &self.orders_accounting_cache,
             &self.pos_accounting_adapter.accounting_delta(),
             &self.utxo_cache,
         )?;

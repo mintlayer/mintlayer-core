@@ -23,7 +23,7 @@ mod view;
 
 pub use {
     cache::OrdersAccountingCache,
-    data::{OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData},
+    data::{OrdersAccountingData, OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData},
     error::Error,
     operations::{OrdersAccountingOperations, OrdersAccountingUndo},
     price_calculation::calculate_fill_order,

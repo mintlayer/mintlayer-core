@@ -84,6 +84,7 @@ impl BanScore for BlockError {
             BlockError::UnexpectedHeightRange(_, _) => 0,
 
             BlockError::TokensAccountingError(err) => err.ban_score(),
+            BlockError::OrdersAccountingError(err) => err.ban_score(),
         }
     }
 }
@@ -252,6 +253,7 @@ impl BanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::PoSAccountingError(err) => err.ban_score(),
             TransactionVerifierStorageError::AccountingBlockUndoError(_) => 100,
             TransactionVerifierStorageError::TokensAccountingError(err) => err.ban_score(),
+            TransactionVerifierStorageError::OrdersAccountingError(err) => err.ban_score(),
         }
     }
 }

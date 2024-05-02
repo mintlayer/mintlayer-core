@@ -49,6 +49,7 @@ mod nft_burn;
 mod nft_issuance;
 mod nft_reorgs;
 mod nft_transfer;
+mod orders_tests;
 mod output_timelock;
 mod pos_accounting_reorg;
 mod pos_maturity_settings;
