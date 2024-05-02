@@ -1062,10 +1062,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
                 pool_ids_that_had_balance.extend(balances.keys().copied());
 
-                if cur_height <= max_height {
-                    if !balances.is_empty() {
-                        height_map.insert(cur_height, balances);
-                    }
+                if cur_height <= max_height && !balances.is_empty() {
+                    height_map.insert(cur_height, balances);
                 }
 
                 if pool_ids.is_empty() {
