@@ -258,22 +258,12 @@ pub trait ChainstateInterface: Send + Sync {
     /// Get stake pool balance. See [pos_accounting::PoSAccountingView::get_pool_balance].
     fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
 
-    /// Get balances of the specified stake pools at the specified height (i.e. at the point
-    /// when the mainchain had the specified height).
-    /// If the specified height is bigger or equal to the current main chain height, just return
-    /// the current pool balances.
+    /// Get balances of the specified stake pools at the specified heights (i.e. at the points
+    /// when the mainchain tip had that particular height).
     ///
-    /// Note: the function may perform an in-memory reorg, so it's a relatively expensive call.
-    /// FIXME: better name? ("at" is confusing)
-    fn get_stake_pool_balances_at_height(
-        &self,
-        pool_ids: &[PoolId],
-        height: BlockHeight,
-    ) -> Result<BTreeMap<PoolId, Amount>, ChainstateError>;
-
-    /// Same as `get_stake_pool_balances_at_height`, but for a range of heights.
-    /// This is more efficient than calling `get_stake_pool_balances_at_height` in a loop.
-    fn get_stake_pool_balances_for_heights(
+    /// `min_height` must be less or equal to `max_height`;
+    /// `max_height` must be less or equal to the best block height.
+    fn get_stake_pool_balances_at_heights(
         &self,
         pool_ids: &[PoolId],
         min_height: BlockHeight,

@@ -121,8 +121,6 @@ pub enum CheckBlockError {
     PropertyQueryError(#[from] PropertyQueryError),
     #[error("Block merkle root calculation failed for block {0} with error: {1}")]
     MerkleRootCalculationFailed(Id<Block>, BlockMerkleTreeError),
-    // #[error("Failed to update the internal blockchain state: {0}")]
-    // StateUpdateFailed(#[from] ConnectTransactionError),
     #[error("Block has an invalid merkle root")]
     MerkleRootMismatch,
     #[error("Parent block {parent_block_id} of block {block_id} not found in database")]

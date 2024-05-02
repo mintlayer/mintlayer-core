@@ -504,6 +504,7 @@ impl Builder {
     builder_method!(epoch_length: NonZeroU64);
     builder_method!(sealed_epoch_distance_from_tip: usize);
     builder_method!(data_deposit_max_size: usize);
+    builder_method!(min_stake_pool_pledge: Amount);
 
     pub fn checkpoints(mut self, checkpoints: BTreeMap<BlockHeight, Id<GenBlock>>) -> Self {
         self.checkpoints = Some(checkpoints);

@@ -169,12 +169,7 @@ mockall::mock! {
         fn is_initial_block_download(&self) -> bool;
         fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
         fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
-        fn get_stake_pool_balances_at_height(
-            &self,
-            pool_ids: &[PoolId],
-            height: BlockHeight,
-        ) -> Result<BTreeMap<PoolId, Amount>, ChainstateError>;
-        fn get_stake_pool_balances_for_heights(
+        fn get_stake_pool_balances_at_heights(
             &self,
             pool_ids: &[PoolId],
             min_height: BlockHeight,

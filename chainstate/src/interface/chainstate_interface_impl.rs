@@ -640,21 +640,7 @@ where
     }
 
     #[tracing::instrument(skip_all)]
-    fn get_stake_pool_balances_at_height(
-        &self,
-        pool_ids: &[PoolId],
-        height: BlockHeight,
-    ) -> Result<BTreeMap<PoolId, Amount>, ChainstateError> {
-        self.chainstate
-            .make_db_tx_ro()
-            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
-            .get_stake_pool_balances_at_height(pool_ids, height)
-            // FIXME don't return ProcessBlockError
-            .map_err(ChainstateError::ProcessBlockError)
-    }
-
-    #[tracing::instrument(skip_all)]
-    fn get_stake_pool_balances_for_heights(
+    fn get_stake_pool_balances_at_heights(
         &self,
         pool_ids: &[PoolId],
         min_height: BlockHeight,
@@ -663,8 +649,7 @@ where
         self.chainstate
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
-            .get_stake_pool_balances_for_heights(pool_ids, min_height, max_height)
-            // FIXME don't return ProcessBlockError
+            .get_stake_pool_balances_at_heights(pool_ids, min_height, max_height)
             .map_err(ChainstateError::ProcessBlockError)
     }
 

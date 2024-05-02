@@ -110,7 +110,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     /// Disconnect all blocks from mainchain until the specified block is met and return
     /// the accumulated `TransactionVerifier` and `EpochDataCache`.
-    /// On each step, call `step_handler`, passing to it references to block index  of the block
+    /// On each step, call `step_handler`, passing to it references to block index of the block
     /// that has just been disconnected, the current `TransactionVerifier` and `EpochDataCache`.
     /// If `step_handler` returns false, exit the loop immediately.
     #[log_error]

@@ -994,33 +994,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(block_index)
     }
 
-    // FIXME tests
-    pub fn get_stake_pool_balances_at_height(
-        &self,
-        pool_ids: &[PoolId],
-        height: BlockHeight,
-    ) -> Result<BTreeMap<PoolId, Amount>, BlockError> {
-        let best_block_index =
-            self.get_best_block_index().map_err(BlockError::PropertyQueryError)?;
-
-        if height >= best_block_index.block_height() {
-            // No need to reorg
-            Self::collect_pool_balances(pool_ids, self)
-        } else {
-            let block_id = self
-                .get_existing_block_id_by_height(&height)
-                .map_err(BlockError::PropertyQueryError)?;
-
-            let (verifier_delta, _consumed_epoch_data) = self.reorganize_in_memory(&block_id)?;
-            let (_consumed_utxos, consumed_deltas) = verifier_delta.consume();
-            let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
-            let pos_delta = PoSAccountingDelta::from_data(&pos_db, consumed_deltas);
-
-            Self::collect_pool_balances(pool_ids, &pos_delta)
-        }
-    }
-
-    pub fn get_stake_pool_balances_for_heights(
+    pub fn get_stake_pool_balances_at_heights(
         &self,
         pool_ids: &[PoolId],
         min_height: BlockHeight,
@@ -1035,11 +1009,22 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             BlockError::UnexpectedHeightRange(min_height, max_height)
         );
 
+        // This will track ids of pools that have non-zero balance above the current height.
+        let mut pool_ids_that_had_balance = BTreeSet::new();
+        // If a pool has no balance at a certain height but it's known to have one
+        // at a bigger height, it means that it is created above that height,
+        // so there is no point in checking its balance below it.
+        // Such pool ids will be removed from the set; if the set becomes empty, we'll stop
+        // iterating, to avoid performing useless reorgs.
+        let mut pool_ids = pool_ids.iter().copied().collect::<BTreeSet<_>>();
+
         let mut height_map = BTreeMap::new();
 
         let max_height = if max_height == best_block_height {
-            let balances_at_tip = Self::collect_pool_balances(pool_ids, self)?;
-            height_map.insert(best_block_height, balances_at_tip);
+            let balances_at_tip = Self::collect_pool_balances(pool_ids.iter(), self)?;
+            if !balances_at_tip.is_empty() {
+                height_map.insert(best_block_height, balances_at_tip);
+            }
 
             if max_height == min_height {
                 return Ok(height_map);
@@ -1063,31 +1048,49 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     .expect("Genesis can't be disconnected");
                 assert!(cur_height >= min_height);
 
-                if cur_height <= max_height {
-                    let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
-                    let pos_delta =
-                        PoSAccountingDeltaRef::new(&pos_db, tx_verifier.accounting_delta_data());
-                    let balances = Self::collect_pool_balances(pool_ids, &pos_delta)?;
+                let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
+                let pos_delta =
+                    PoSAccountingDeltaRef::new(&pos_db, tx_verifier.accounting_delta_data());
+                let balances = Self::collect_pool_balances(pool_ids.iter(), &pos_delta)?;
 
-                    height_map.insert(cur_height, balances);
+                pool_ids.retain(|pool_id| {
+                    // We didn't see this pool having balance yet.
+                    pool_ids_that_had_balance.get(pool_id).is_none() ||
+                    // We did see this pool having balance and it still does.
+                    balances.get(pool_id).is_some()
+                });
+
+                pool_ids_that_had_balance.extend(balances.keys().copied());
+
+                if cur_height <= max_height {
+                    if !balances.is_empty() {
+                        height_map.insert(cur_height, balances);
+                    }
                 }
-                Ok(true)
+
+                if pool_ids.is_empty() {
+                    log::debug!("Stopping iteration early at height {cur_height}");
+                    Ok(false)
+                } else {
+                    Ok(true)
+                }
             },
         )?;
 
         Ok(height_map)
     }
 
-    fn collect_pool_balances(
-        pool_ids: &[PoolId],
+    fn collect_pool_balances<'b>(
+        pool_ids: impl Iterator<Item = &'b PoolId>,
         pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
     ) -> Result<BTreeMap<PoolId, Amount>, BlockError> {
         let mut balances = BTreeMap::new();
 
         for pool_id in pool_ids {
             if let Some(balance) = pos_accounting_view.get_pool_balance(*pool_id)? {
-                debug_assert!(balance != Amount::ZERO);
-                balances.insert(*pool_id, balance);
+                if balance != Amount::ZERO {
+                    balances.insert(*pool_id, balance);
+                }
             }
         }
 
