@@ -30,9 +30,9 @@ use common::{
     chain::{
         block::{block_body::BlockMerkleTreeError, timestamp::BlockTimestamp},
         config::MagicBytes,
-        Block, GenBlock,
+        Block, GenBlock, PoolId,
     },
-    primitives::{BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
 use consensus::ConsensusVerificationError;
 
@@ -97,6 +97,16 @@ pub enum BlockError {
     InvariantErrorAttemptToConnectInvalidBlock(Id<GenBlock>),
     #[error("Disconnected headers")]
     InvariantErrorDisconnectedHeaders,
+    #[error("Total pool {pool_id} balance {total_balance:?} is less than the staker's balance {staker_balance:?}")]
+    InvariantErrorTotalPoolBalanceLessThanStakers {
+        total_balance: Amount,
+        staker_balance: Amount,
+        pool_id: PoolId,
+    },
+    #[error("Pool {0} data missing while balance is present")]
+    InvariantErrorPoolBalancePresentDataMissing(PoolId),
+    #[error("Pool {0} balance missing while pool data is present")]
+    InvariantErrorPoolDataPresentBalanceMissing(PoolId),
 
     #[error("Unexpected block height range: first = {0}, second = {1}")]
     UnexpectedHeightRange(BlockHeight, BlockHeight),

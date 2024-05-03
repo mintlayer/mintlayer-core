@@ -25,7 +25,7 @@ use crate::{
         tx_verification_strategy::TransactionVerificationStrategy,
         BlockSource, OrphanBlocksRef,
     },
-    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
+    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator, NonZeroPoolBalances,
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
@@ -645,7 +645,7 @@ where
         pool_ids: &[PoolId],
         min_height: BlockHeight,
         max_height: BlockHeight,
-    ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, Amount>>, ChainstateError> {
+    ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, NonZeroPoolBalances>>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?

@@ -38,8 +38,9 @@ pub use crate::{
         calculate_median_time_past_from_blocktimestamps, BlockError, BlockProcessingErrorClass,
         BlockProcessingErrorClassification, BlockSource, ChainInfo, CheckBlockError,
         CheckBlockTransactionsError, ConnectTransactionError, IOPolicyError, InitializationError,
-        Locator, OrphanCheckError, SpendStakeError, StorageCompatibilityCheckError,
-        TokenIssuanceError, TokensError, TransactionVerifierStorageError, MEDIAN_TIME_SPAN,
+        Locator, NonZeroPoolBalances, OrphanCheckError, SpendStakeError,
+        StorageCompatibilityCheckError, TokenIssuanceError, TokensError,
+        TransactionVerifierStorageError, MEDIAN_TIME_SPAN,
     },
 };
 pub use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};

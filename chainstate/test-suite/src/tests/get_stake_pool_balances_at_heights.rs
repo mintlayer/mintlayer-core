@@ -60,14 +60,14 @@ fn basic_test(#[case] seed: Seed) {
         let expected_balances_at_1 = [(pool1, pool1_pledge)];
 
         let check1 = |tf: &TestFramework| {
-            let balances_at_0_0 = get_balances_for_height(tf, &[pool1], Some(0), Some(0));
+            let balances_at_0_0 = get_balances_at_heights(tf, &[pool1], Some(0), Some(0));
             assert_eq!(balances_at_0_0, BTreeMap::new());
 
-            let balances_at_1_1 = get_balances_for_height(tf, &[pool1], Some(1), Some(1));
+            let balances_at_1_1 = get_balances_at_heights(tf, &[pool1], Some(1), Some(1));
             let expected_balances_at_1_1 = make_expected_balances(&[(1, &expected_balances_at_1)]);
             assert_eq!(balances_at_1_1, expected_balances_at_1_1);
 
-            let balances_at_0_1 = get_balances_for_height(tf, &[pool1], Some(0), Some(1));
+            let balances_at_0_1 = get_balances_at_heights(tf, &[pool1], Some(0), Some(1));
             assert_eq!(balances_at_0_1, expected_balances_at_1_1);
         };
 
@@ -80,18 +80,18 @@ fn basic_test(#[case] seed: Seed) {
         let check2 = |tf: &TestFramework| {
             check1(tf);
 
-            let balances_at_2_2 = get_balances_for_height(tf, &[pool1, pool2], Some(2), Some(2));
+            let balances_at_2_2 = get_balances_at_heights(tf, &[pool1, pool2], Some(2), Some(2));
             let expected_balances_at_2_2 = make_expected_balances(&[(2, &expected_balances_at_2)]);
             assert_eq!(balances_at_2_2, expected_balances_at_2_2);
 
-            let balances_at_1_2 = get_balances_for_height(tf, &[pool1, pool2], Some(1), Some(2));
+            let balances_at_1_2 = get_balances_at_heights(tf, &[pool1, pool2], Some(1), Some(2));
             let expected_balances_at_12 = make_expected_balances(&[
                 (1, &expected_balances_at_1),
                 (2, &expected_balances_at_2),
             ]);
             assert_eq!(balances_at_1_2, expected_balances_at_12);
 
-            let balances_at_0_2 = get_balances_for_height(tf, &[pool1, pool2], Some(0), Some(2));
+            let balances_at_0_2 = get_balances_at_heights(tf, &[pool1, pool2], Some(0), Some(2));
             assert_eq!(balances_at_0_2, expected_balances_at_12);
         };
 
@@ -106,21 +106,21 @@ fn basic_test(#[case] seed: Seed) {
 
             // Special case - asked only for the tip height and for the pool that doesn't
             // exist at that height.
-            let balance_of_1_at_3_3 = get_balances_for_height(tf, &[pool1], Some(3), Some(3));
+            let balance_of_1_at_3_3 = get_balances_at_heights(tf, &[pool1], Some(3), Some(3));
             assert_eq!(balance_of_1_at_3_3, BTreeMap::new());
 
-            let balances_at_3_3 = get_balances_for_height(tf, &[pool1, pool2], Some(3), Some(3));
+            let balances_at_3_3 = get_balances_at_heights(tf, &[pool1, pool2], Some(3), Some(3));
             let expected_balances_at_3_3 = make_expected_balances(&[(3, &expected_balances_at_3)]);
             assert_eq!(balances_at_3_3, expected_balances_at_3_3);
 
-            let balances_at_2_3 = get_balances_for_height(tf, &[pool1, pool2], Some(2), Some(3));
+            let balances_at_2_3 = get_balances_at_heights(tf, &[pool1, pool2], Some(2), Some(3));
             let expected_balances_at_2_3 = make_expected_balances(&[
                 (2, &expected_balances_at_2),
                 (3, &expected_balances_at_3),
             ]);
             assert_eq!(balances_at_2_3, expected_balances_at_2_3);
 
-            let balances_at_1_3 = get_balances_for_height(tf, &[pool1, pool2], Some(1), Some(3));
+            let balances_at_1_3 = get_balances_at_heights(tf, &[pool1, pool2], Some(1), Some(3));
             let expected_balances_at_1_3 = make_expected_balances(&[
                 (1, &expected_balances_at_1),
                 (2, &expected_balances_at_2),
@@ -128,7 +128,7 @@ fn basic_test(#[case] seed: Seed) {
             ]);
             assert_eq!(balances_at_1_3, expected_balances_at_1_3);
 
-            let balances_at_0_3 = get_balances_for_height(tf, &[pool1, pool2], Some(0), Some(3));
+            let balances_at_0_3 = get_balances_at_heights(tf, &[pool1, pool2], Some(0), Some(3));
             assert_eq!(balances_at_0_3, expected_balances_at_1_3);
         };
 
@@ -142,18 +142,18 @@ fn basic_test(#[case] seed: Seed) {
         let check4 = |tf: &TestFramework| {
             check3(tf);
 
-            let balances_at_4_4 = get_balances_for_height(tf, &[pool1, pool2], Some(4), Some(4));
+            let balances_at_4_4 = get_balances_at_heights(tf, &[pool1, pool2], Some(4), Some(4));
             let expected_balances_at_4_4 = make_expected_balances(&[(4, &expected_balances_at_4)]);
             assert_eq!(balances_at_4_4, expected_balances_at_4_4);
 
-            let balances_at_3_4 = get_balances_for_height(tf, &[pool1, pool2], Some(3), Some(4));
+            let balances_at_3_4 = get_balances_at_heights(tf, &[pool1, pool2], Some(3), Some(4));
             let expected_balances_at_3_4 = make_expected_balances(&[
                 (3, &expected_balances_at_3),
                 (4, &expected_balances_at_4),
             ]);
             assert_eq!(balances_at_3_4, expected_balances_at_3_4);
 
-            let balances_at_2_4 = get_balances_for_height(tf, &[pool1, pool2], Some(2), Some(4));
+            let balances_at_2_4 = get_balances_at_heights(tf, &[pool1, pool2], Some(2), Some(4));
             let expected_balances_at_2_4 = make_expected_balances(&[
                 (2, &expected_balances_at_2),
                 (3, &expected_balances_at_3),
@@ -161,7 +161,7 @@ fn basic_test(#[case] seed: Seed) {
             ]);
             assert_eq!(balances_at_2_4, expected_balances_at_2_4);
 
-            let balances_at_1_4 = get_balances_for_height(tf, &[pool1, pool2], Some(1), Some(4));
+            let balances_at_1_4 = get_balances_at_heights(tf, &[pool1, pool2], Some(1), Some(4));
             let expected_balances_at_1_4 = make_expected_balances(&[
                 (1, &expected_balances_at_1),
                 (2, &expected_balances_at_2),
@@ -170,7 +170,7 @@ fn basic_test(#[case] seed: Seed) {
             ]);
             assert_eq!(balances_at_1_4, expected_balances_at_1_4);
 
-            let balances_at_0_4 = get_balances_for_height(tf, &[pool1, pool2], Some(0), Some(4));
+            let balances_at_0_4 = get_balances_at_heights(tf, &[pool1, pool2], Some(0), Some(4));
             assert_eq!(balances_at_0_4, expected_balances_at_1_4);
         };
 
@@ -185,18 +185,18 @@ fn basic_test(#[case] seed: Seed) {
         let check5 = |tf: &TestFramework| {
             check4(tf);
 
-            let balances_at_5_5 = get_balances_for_height(tf, &[pool1, pool2], Some(5), Some(5));
+            let balances_at_5_5 = get_balances_at_heights(tf, &[pool1, pool2], Some(5), Some(5));
             let expected_balances_at_5_5 = make_expected_balances(&[(5, &expected_balances_at_5)]);
             assert_eq!(balances_at_5_5, expected_balances_at_5_5);
 
-            let balances_at_4_5 = get_balances_for_height(tf, &[pool1, pool2], Some(4), Some(5));
+            let balances_at_4_5 = get_balances_at_heights(tf, &[pool1, pool2], Some(4), Some(5));
             let expected_balances_at_4_5 = make_expected_balances(&[
                 (4, &expected_balances_at_4),
                 (5, &expected_balances_at_5),
             ]);
             assert_eq!(balances_at_4_5, expected_balances_at_4_5);
 
-            let balances_at_3_5 = get_balances_for_height(tf, &[pool1, pool2], Some(3), Some(5));
+            let balances_at_3_5 = get_balances_at_heights(tf, &[pool1, pool2], Some(3), Some(5));
             let expected_balances_at_3_5 = make_expected_balances(&[
                 (3, &expected_balances_at_3),
                 (4, &expected_balances_at_4),
@@ -204,7 +204,7 @@ fn basic_test(#[case] seed: Seed) {
             ]);
             assert_eq!(balances_at_3_5, expected_balances_at_3_5);
 
-            let balances_at_2_5 = get_balances_for_height(tf, &[pool1, pool2], Some(2), Some(5));
+            let balances_at_2_5 = get_balances_at_heights(tf, &[pool1, pool2], Some(2), Some(5));
             let expected_balances_at_2_4 = make_expected_balances(&[
                 (2, &expected_balances_at_2),
                 (3, &expected_balances_at_3),
@@ -213,7 +213,7 @@ fn basic_test(#[case] seed: Seed) {
             ]);
             assert_eq!(balances_at_2_5, expected_balances_at_2_4);
 
-            let balances_at_1_5 = get_balances_for_height(tf, &[pool1, pool2], Some(1), Some(5));
+            let balances_at_1_5 = get_balances_at_heights(tf, &[pool1, pool2], Some(1), Some(5));
             let expected_balances_at_1_5 = make_expected_balances(&[
                 (1, &expected_balances_at_1),
                 (2, &expected_balances_at_2),
@@ -223,7 +223,7 @@ fn basic_test(#[case] seed: Seed) {
             ]);
             assert_eq!(balances_at_1_5, expected_balances_at_1_5);
 
-            let balances_at_0_5 = get_balances_for_height(tf, &[pool1, pool2], Some(0), Some(5));
+            let balances_at_0_5 = get_balances_at_heights(tf, &[pool1, pool2], Some(0), Some(5));
             assert_eq!(balances_at_0_5, expected_balances_at_1_5);
         };
 
@@ -239,7 +239,7 @@ fn basic_test(#[case] seed: Seed) {
         let pool2_balance = (pool2_balance + added_amount).unwrap();
         let expected_balances_at_6 = [(pool2, pool2_balance)];
 
-        let balances_at_0_7 = get_balances_for_height(&tf, &[pool1, pool2], Some(0), Some(7));
+        let balances_at_0_7 = get_balances_at_heights(&tf, &[pool1, pool2], Some(0), Some(7));
         let expected_balances_at_0_7 = make_expected_balances(&[
             (1, &expected_balances_at_1),
             (2, &expected_balances_at_2),
@@ -340,7 +340,7 @@ fn make_block_builder(tf: &mut TestFramework) -> BlockBuilder {
     )))
 }
 
-fn get_balances_for_height(
+fn get_balances_at_heights(
     tf: &TestFramework,
     pool_ids: &[PoolId],
     min_height: Option<u32>,
@@ -350,9 +350,24 @@ fn get_balances_for_height(
     let bb_height = tf.best_block_index().block_height();
     let max_height = max_height.map_or(bb_height, |h| BlockHeight::new(h.into()));
 
-    tf.chainstate
+    let balances = tf
+        .chainstate
         .get_stake_pool_balances_at_heights(pool_ids, min_height, max_height)
-        .unwrap()
+        .unwrap();
+
+    // FIXME test the staker's balance
+    balances
+        .iter()
+        .map(|(height, pool_to_balances_map)| {
+            (
+                *height,
+                pool_to_balances_map
+                    .iter()
+                    .map(|(pool_id, balances)| (*pool_id, balances.total_balance()))
+                    .collect::<BTreeMap<_, _>>(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>()
 }
 
 fn get_cur_balances(tf: &TestFramework, pool_ids: &[PoolId]) -> BTreeMap<PoolId, Amount> {
@@ -683,7 +698,7 @@ impl TestData {
             .copied()
             .collect::<Vec<_>>();
 
-        let actual_balances = get_balances_for_height(tf, &pool_ids, None, None);
+        let actual_balances = get_balances_at_heights(tf, &pool_ids, None, None);
         let cur_actual_balances = get_cur_balances(tf, &pool_ids);
 
         let bb_height = tf.best_block_index().block_height();

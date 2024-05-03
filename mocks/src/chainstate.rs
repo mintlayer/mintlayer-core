@@ -174,7 +174,7 @@ mockall::mock! {
             pool_ids: &[PoolId],
             min_height: BlockHeight,
             max_height: BlockHeight,
-        ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, Amount>>, ChainstateError>;
+        ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, chainstate::NonZeroPoolBalances>>, ChainstateError>;
         fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
         fn get_stake_pool_delegations_shares(
             &self,

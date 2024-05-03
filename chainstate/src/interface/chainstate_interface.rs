@@ -15,7 +15,7 @@
 
 use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
 
-use crate::{detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
+use crate::{detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, NonZeroPoolBalances};
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 use common::{
     chain::{
@@ -268,7 +268,7 @@ pub trait ChainstateInterface: Send + Sync {
         pool_ids: &[PoolId],
         min_height: BlockHeight,
         max_height: BlockHeight,
-    ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, Amount>>, ChainstateError>;
+    ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, NonZeroPoolBalances>>, ChainstateError>;
 
     /// Get stake pool data. See [pos_accounting::PoSAccountingView::get_pool_data].
     fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;

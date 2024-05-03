@@ -992,12 +992,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(block_index)
     }
 
+    #[log_error]
     pub fn get_stake_pool_balances_at_heights(
         &self,
         pool_ids: &[PoolId],
         min_height: BlockHeight,
         max_height: BlockHeight,
-    ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, Amount>>, BlockError> {
+    ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, NonZeroPoolBalances>>, BlockError> {
         let best_block_index =
             self.get_best_block_index().map_err(BlockError::PropertyQueryError)?;
         let best_block_height = best_block_index.block_height();
@@ -1073,17 +1074,16 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(height_map)
     }
 
+    #[log_error]
     fn collect_pool_balances<'b>(
         pool_ids: impl Iterator<Item = &'b PoolId>,
         pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
-    ) -> Result<BTreeMap<PoolId, Amount>, BlockError> {
+    ) -> Result<BTreeMap<PoolId, NonZeroPoolBalances>, BlockError> {
         let mut balances = BTreeMap::new();
 
         for pool_id in pool_ids {
-            if let Some(balance) = pos_accounting_view.get_pool_balance(*pool_id)? {
-                if balance != Amount::ZERO {
-                    balances.insert(*pool_id, balance);
-                }
+            if let Some(pool_balance) = NonZeroPoolBalances::obtain(pool_id, pos_accounting_view)? {
+                balances.insert(*pool_id, pool_balance);
             }
         }
 
@@ -1457,4 +1457,60 @@ pub enum ReorgError {
     ConnectTipFailed(Id<Block>, BlockError),
     #[error("Generic error during reorg: {0}")]
     OtherError(#[from] BlockError),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NonZeroPoolBalances {
+    total_balance: Amount,
+    staker_balance: Amount,
+}
+
+impl NonZeroPoolBalances {
+    #[log_error]
+    pub fn obtain(
+        pool_id: &PoolId,
+        pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
+    ) -> Result<Option<Self>, BlockError> {
+        let total_balance = pos_accounting_view.get_pool_balance(*pool_id)?;
+        let pool_data = pos_accounting_view.get_pool_data(*pool_id)?;
+
+        match (total_balance, pool_data) {
+            (Some(total_balance), Some(pool_data)) => {
+                let staker_balance = pool_data.staker_balance()?;
+
+                ensure!(
+                    total_balance >= staker_balance,
+                    BlockError::InvariantErrorTotalPoolBalanceLessThanStakers {
+                        total_balance,
+                        staker_balance,
+                        pool_id: *pool_id,
+                    }
+                );
+
+                if total_balance != Amount::ZERO {
+                    Ok(Some(Self {
+                        total_balance,
+                        staker_balance,
+                    }))
+                } else {
+                    Ok(None)
+                }
+            }
+            (None, None) => Ok(None),
+            (Some(_), None) => Err(BlockError::InvariantErrorPoolBalancePresentDataMissing(
+                *pool_id,
+            )),
+            (None, Some(_)) => Err(BlockError::InvariantErrorPoolDataPresentBalanceMissing(
+                *pool_id,
+            )),
+        }
+    }
+
+    pub fn total_balance(&self) -> Amount {
+        self.total_balance
+    }
+
+    pub fn staker_balance(&self) -> Amount {
+        self.staker_balance
+    }
 }
