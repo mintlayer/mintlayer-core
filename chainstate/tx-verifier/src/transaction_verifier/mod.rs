@@ -23,6 +23,7 @@ pub mod check_transaction;
 pub mod error;
 pub mod flush;
 pub mod hierarchy;
+pub mod input_check;
 pub mod signature_destination_getter;
 pub mod storage;
 pub mod timelock_check;
@@ -255,7 +256,7 @@ where
         };
         ensure!(
             expected_nonce == nonce,
-            ConnectTransactionError::NonceIsNotIncremental(account, expected_nonce, nonce,)
+            ConnectTransactionError::NonceIsNotIncremental(account, expected_nonce, nonce)
         );
         // store new nonce
         self.account_nonce.insert(account, CachedOperation::Write(nonce));
@@ -732,27 +733,27 @@ where
             &self.utxo_cache,
         )?;
 
-        // check timelocks of the outputs and make sure there's no premature spending
-        timelock_check::check_timelocks(
-            &self.storage,
-            &self.chain_config,
-            &self.utxo_cache,
-            tx,
-            tx_source,
-            median_time_past,
-        )?;
-
-        // verify input signatures
-        signature_check::verify_signatures(
-            self.chain_config.as_ref(),
-            &self.utxo_cache,
-            tx,
-            SignatureDestinationGetter::new_for_transaction(
+        {
+            let accounting_adapter = &self.pos_accounting_adapter.accounting_delta();
+            let destination_getter = SignatureDestinationGetter::new_for_transaction(
                 &self.tokens_accounting_cache,
-                &self.pos_accounting_adapter.accounting_delta(),
+                &accounting_adapter,
                 &self.utxo_cache,
-            ),
-        )?;
+            );
+            let block_ctx = input_check::BlockVerificationContext::from_source(
+                self.chain_config.as_ref(),
+                destination_getter,
+                *median_time_past,
+                tx_source,
+            );
+            input_check::TransactionVerificationContext::new(
+                &block_ctx,
+                &self.utxo_cache,
+                tx,
+                &self.storage,
+            )?
+            .verify_inputs()?;
+        }
 
         self.connect_pos_accounting_outputs(tx_source, tx.transaction())?;
 
