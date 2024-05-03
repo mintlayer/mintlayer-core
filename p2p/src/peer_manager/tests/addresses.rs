@@ -528,7 +528,7 @@ async fn connect_to_predefined_address_if_dns_seed_is_empty(#[case] seed: Seed) 
 
     let peer_mgr = peer_mgr_join_handle.await.unwrap();
     let addresses: BTreeSet<_> = peer_mgr.peerdb().known_addresses().cloned().collect();
-    assert!(addresses.get(&predefined_peer_address).is_some());
+    assert!(addresses.contains(&predefined_peer_address));
 }
 
 // Configure the peer manager with a non-empty dns seed and a predefined peer address.
@@ -596,8 +596,8 @@ async fn dont_connect_to_predefined_address_if_dns_seed_is_non_empty(#[case] see
     let peer_mgr = peer_mgr_join_handle.await.unwrap();
     let addresses: BTreeSet<_> = peer_mgr.peerdb().known_addresses().cloned().collect();
     // seeded_peer_address is in the db, but predefined_peer_address is not.
-    assert!(addresses.get(&seeded_peer_address).is_some());
-    assert!(addresses.get(&predefined_peer_address).is_none());
+    assert!(addresses.contains(&seeded_peer_address));
+    assert!(!addresses.contains(&predefined_peer_address));
 }
 
 // 1) Configure the peer manager with a non-empty dns seed and a predefined peer address.
@@ -677,7 +677,7 @@ async fn connect_to_predefined_address_if_dns_seed_returned_bogus_address(#[case
     let peer_mgr = peer_mgr_join_handle.await.unwrap();
     let addresses: BTreeSet<_> = peer_mgr.peerdb().known_addresses().cloned().collect();
     // predefined_peer_address is in the db.
-    assert!(addresses.get(&predefined_peer_address).is_some());
+    assert!(addresses.contains(&predefined_peer_address));
 }
 
 // 1) Configure the peer manager with a non-empty dns seed and non-empty peerdb.
@@ -783,8 +783,8 @@ async fn dont_use_dns_seed_if_connections_exist(#[case] seed: Seed) {
     let peer_mgr = peer_mgr_join_handle.await.unwrap();
     let addresses: BTreeSet<_> = peer_mgr.peerdb().known_addresses().cloned().collect();
     // existing_address is in the db, but seeded_peer_address is not.
-    assert!(addresses.get(&existing_address).is_some());
-    assert!(addresses.get(&seeded_peer_address).is_none());
+    assert!(addresses.contains(&existing_address));
+    assert!(!addresses.contains(&seeded_peer_address));
 }
 
 async fn recv_command_advance_time(

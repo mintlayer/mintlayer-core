@@ -1769,7 +1769,7 @@ where
 
     /// Checks if the peer is in active state
     fn is_peer_connected(&self, peer_id: PeerId) -> bool {
-        self.peers.get(&peer_id).is_some()
+        self.peers.contains_key(&peer_id)
     }
 
     // Return an error if a connection to the specified address already exists and it prevents us

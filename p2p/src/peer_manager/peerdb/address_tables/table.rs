@@ -314,11 +314,10 @@ pub mod test_utils {
 
             let non_colliding = tables.iter().enumerate().all(|(table_idx, table)| {
                 let (bucket_idx, bucket_pos) = table.bucket_coords(&addr);
-                idx_set.get(&(table_idx, bucket_idx, bucket_pos)).is_none()
+                !idx_set.contains(&(table_idx, bucket_idx, bucket_pos))
             });
 
-            if non_colliding && (!in_distinct_addr_groups || addr_groups.get(&addr_group).is_none())
-            {
+            if non_colliding && (!in_distinct_addr_groups || !addr_groups.contains(&addr_group)) {
                 result.push(addr);
 
                 if result.len() == count {
