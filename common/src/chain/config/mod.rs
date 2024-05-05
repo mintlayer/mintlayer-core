@@ -330,6 +330,16 @@ impl ChainConfig {
     }
 
     #[must_use]
+    pub fn order_id_address_prefix(&self) -> &'static str {
+        match self.chain_type {
+            ChainType::Mainnet => "mordr",
+            ChainType::Testnet => "tordr",
+            ChainType::Regtest => "rordr",
+            ChainType::Signet => "sordr",
+        }
+    }
+
+    #[must_use]
     pub fn vrf_public_key_address_prefix(&self) -> &'static str {
         match self.chain_type {
             ChainType::Mainnet => "mvrfpk",

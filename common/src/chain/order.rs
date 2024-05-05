@@ -42,8 +42,7 @@ impl Addressable for OrderId {
     type Error = AddressError;
 
     fn address_prefix(&self, chain_config: &ChainConfig) -> &str {
-        //chain_config.order_id_address_prefix()
-        todo!()
+        chain_config.order_id_address_prefix()
     }
 
     fn encode_to_bytes_for_address(&self) -> Vec<u8> {

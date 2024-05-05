@@ -40,7 +40,7 @@ pub enum RpcOutputValue {
 }
 
 impl RpcOutputValue {
-    fn new(chain_config: &ChainConfig, value: OutputValue) -> Result<Self, AddressError> {
+    pub fn new(chain_config: &ChainConfig, value: OutputValue) -> Result<Self, AddressError> {
         let result = match value {
             OutputValue::Coin(amount) => RpcOutputValue::Coin {
                 amount: RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
@@ -151,6 +151,11 @@ pub enum RpcTxOutput {
         value: RpcOutputValue,
         htlc: RpcHashedTimelockContract,
     },
+    CreateOrder {
+        authority: RpcAddress<Destination>,
+        ask_value: RpcOutputValue,
+        give_value: RpcOutputValue,
+    },
 }
 
 impl RpcTxOutput {
@@ -203,7 +208,11 @@ impl RpcTxOutput {
             TxOutput::DataDeposit(data) => RpcTxOutput::DataDeposit {
                 data: RpcHexString::from_bytes(data),
             },
-            TxOutput::CreateOrder(_) => todo!(),
+            TxOutput::CreateOrder(data) => RpcTxOutput::CreateOrder {
+                authority: RpcAddress::new(chain_config, data.authority().clone())?,
+                ask_value: RpcOutputValue::new(chain_config, data.ask().clone())?,
+                give_value: RpcOutputValue::new(chain_config, data.give().clone())?,
+            },
         };
         Ok(result)
     }

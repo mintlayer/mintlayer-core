@@ -330,7 +330,12 @@ impl TextSummary for TxOutput {
                     fmt_dest(&htlc.refund_key)
                 )
             }
-            TxOutput::CreateOrder(_) => todo!(),
+            TxOutput::CreateOrder(order) => format!(
+                "CreateOrder(Authority({}), AskValue({}), GiveValue({}))",
+                fmt_dest(order.authority()),
+                fmt_val(order.ask()),
+                fmt_val(order.give()),
+            ),
         }
     }
 }

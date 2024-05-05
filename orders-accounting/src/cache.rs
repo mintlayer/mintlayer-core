@@ -157,8 +157,6 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
             return Err(Error::OrderAlreadyExists(id));
         }
 
-        // FIXME: ask type != give ?
-        // FIXME: forbid 0 value?
         let ask_value = data.ask().clone();
         let give_value = data.give().clone();
         let undo_data = self

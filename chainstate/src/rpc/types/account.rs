@@ -17,10 +17,12 @@ use common::{
     address::{AddressError, RpcAddress},
     chain::{
         tokens::{IsTokenUnfreezable, TokenId},
-        AccountCommand, AccountSpending, ChainConfig, DelegationId, Destination,
+        AccountCommand, AccountSpending, ChainConfig, DelegationId, Destination, OrderId,
     },
     primitives::amount::RpcAmountOut,
 };
+
+use super::output::RpcOutputValue;
 
 #[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
@@ -72,6 +74,14 @@ pub enum RpcAccountCommand {
         token_id: RpcAddress<TokenId>,
         new_authority: RpcAddress<Destination>,
     },
+    WithdrawOrder {
+        order_id: RpcAddress<OrderId>,
+    },
+    FillOrder {
+        order_id: RpcAddress<OrderId>,
+        fill_value: RpcOutputValue,
+        destination: RpcAddress<Destination>,
+    },
 }
 
 impl RpcAccountCommand {
@@ -103,8 +113,14 @@ impl RpcAccountCommand {
                     new_authority: RpcAddress::new(chain_config, destination.clone())?,
                 }
             }
-            AccountCommand::WithdrawOrder(_) => todo!(),
-            AccountCommand::FillOrder(_, _, _) => todo!(),
+            AccountCommand::WithdrawOrder(id) => RpcAccountCommand::WithdrawOrder {
+                order_id: RpcAddress::new(chain_config, *id)?,
+            },
+            AccountCommand::FillOrder(id, fill, dest) => RpcAccountCommand::FillOrder {
+                order_id: RpcAddress::new(chain_config, *id)?,
+                fill_value: RpcOutputValue::new(chain_config, fill.clone())?,
+                destination: RpcAddress::new(chain_config, dest.clone())?,
+            },
         };
         Ok(result)
     }

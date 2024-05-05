@@ -44,6 +44,7 @@ impl TxAccountDependency {
 pub enum TxDependency {
     DelegationAccount(TxAccountDependency),
     TokenSupplyAccount(TxAccountDependency),
+    OrderAccount(TxAccountDependency),
     TxOutput(Id<Transaction>, u32),
     // TODO: Block reward?
 }
@@ -74,8 +75,9 @@ impl TxDependency {
             | AccountCommand::ChangeTokenAuthority(_, _) => {
                 Self::TokenSupplyAccount(TxAccountDependency::new(acct.clone().into(), nonce))
             }
-            AccountCommand::WithdrawOrder(_) => todo!(),
-            AccountCommand::FillOrder(_, _, _) => todo!(),
+            AccountCommand::WithdrawOrder(_) | AccountCommand::FillOrder(_, _, _) => {
+                Self::OrderAccount(TxAccountDependency::new(acct.clone().into(), nonce))
+            }
         }
     }
 

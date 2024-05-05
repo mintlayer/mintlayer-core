@@ -410,7 +410,7 @@ impl<'a> RandomTxMaker<'a> {
                     result_inputs.extend(inputs);
                     result_outputs.extend(outputs);
                 }
-                AccountType::Order(_) => todo!(),
+                AccountType::Order(_) => unimplemented!(),
             }
         }
 
@@ -1050,7 +1050,7 @@ impl<'a> RandomTxMaker<'a> {
                     *dummy_token_id = make_token_id(inputs).unwrap();
                     Some(output)
                 }
-                TxOutput::CreateOrder(_) => todo!(),
+                TxOutput::CreateOrder(_) => unimplemented!(),
             })
             .collect();
 

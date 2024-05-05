@@ -831,8 +831,8 @@ fn get_output_coin_amount(
         TxOutput::CreateDelegationId(_, _)
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::IssueNft(_, _, _)
-        | TxOutput::DataDeposit(_) => None,
-        TxOutput::CreateOrder(_) => todo!(),
+        | TxOutput::DataDeposit(_)
+        | TxOutput::CreateOrder(_) => None,
     };
 
     Ok(amount)
