@@ -77,7 +77,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             TxOutput::CreateDelegationId(_, _)
                             | TxOutput::Burn(_)
                             | TxOutput::DataDeposit(_)
-                            | TxOutput::CreateOrder(_) => {
+                            | TxOutput::AnyoneCanTake(_) => {
                                 // This error is emitted in other places for attempting to make this spend,
                                 // but this is just a double-check.
                                 Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
@@ -179,7 +179,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                                 .ok_or(SignatureDestinationGetterError::OrderDataNotFound(
                                     *order_id,
                                 ))?;
-                            Ok(order_data.authority().clone())
+                            Ok(order_data.withdraw_key().clone())
                         }
                         AccountCommand::FillOrder(_, _, d) => Ok(d.clone()),
                     },

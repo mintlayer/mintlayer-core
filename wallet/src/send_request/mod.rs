@@ -307,7 +307,7 @@ where
         | TxOutput::Burn(_)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_)
-        | TxOutput::CreateOrder(_) => None,
+        | TxOutput::AnyoneCanTake(_) => None,
         TxOutput::Htlc(_, _) => None, // TODO(HTLC)
     }
 }

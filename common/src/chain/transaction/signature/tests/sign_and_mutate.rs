@@ -1138,7 +1138,7 @@ fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedT
         TxOutput::IssueNft(_, _, _) => unreachable!(),     // TODO: come back to this later
         TxOutput::DataDeposit(_) => unreachable!(),
         TxOutput::Htlc(_, _) => unreachable!(),
-        TxOutput::CreateOrder(_) => unreachable!(),
+        TxOutput::AnyoneCanTake(_) => unreachable!(),
     };
     SignedTransactionWithUtxo {
         tx: updater.generate_tx().unwrap(),

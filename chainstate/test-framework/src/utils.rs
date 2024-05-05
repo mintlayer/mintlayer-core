@@ -69,7 +69,7 @@ pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::DataDeposit(_)
-        | TxOutput::CreateOrder(_) => None,
+        | TxOutput::AnyoneCanTake(_) => None,
         TxOutput::IssueNft(token_id, _, _) => {
             Some(OutputValue::TokenV1(*token_id, Amount::from_atoms(1)))
         }
@@ -131,7 +131,7 @@ pub fn create_utxo_data(
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::DataDeposit(_)
         | TxOutput::Htlc(_, _)
-        | TxOutput::CreateOrder(_) => None,
+        | TxOutput::AnyoneCanTake(_) => None,
     }
 }
 
@@ -389,7 +389,7 @@ pub fn find_create_pool_tx_in_genesis(genesis: &Genesis, pool_id: &PoolId) -> Op
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::DataDeposit(_)
         | TxOutput::Htlc(_, _)
-        | TxOutput::CreateOrder(_) => false,
+        | TxOutput::AnyoneCanTake(_) => false,
         TxOutput::CreateStakePool(genesis_pool_id, _) => genesis_pool_id == pool_id,
     });
 

@@ -348,7 +348,7 @@ impl MemoryUsage for TxOutput {
             TxOutput::IssueNft(_, issuance, _) => issuance.indirect_memory_usage(),
             TxOutput::DataDeposit(v) => v.indirect_memory_usage(),
             TxOutput::Htlc(_, htlc) => htlc.indirect_memory_usage(),
-            TxOutput::CreateOrder(_) => 0,
+            TxOutput::AnyoneCanTake(_) => 0,
         }
     }
 }

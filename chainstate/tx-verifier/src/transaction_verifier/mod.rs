@@ -327,7 +327,7 @@ where
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::DataDeposit(_)
             | TxOutput::Htlc(_, _)
-            | TxOutput::CreateOrder(_) => Ok(None),
+            | TxOutput::AnyoneCanTake(_) => Ok(None),
         }
     }
 
@@ -448,7 +448,7 @@ where
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
                 | TxOutput::Htlc(_, _)
-                | TxOutput::CreateOrder(_) => None,
+                | TxOutput::AnyoneCanTake(_) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -629,7 +629,7 @@ where
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
                 | TxOutput::Htlc(_, _)
-                | TxOutput::CreateOrder(_) => None,
+                | TxOutput::AnyoneCanTake(_) => None,
                 TxOutput::IssueFungibleToken(issuance_data) => {
                     let result = make_token_id(tx.inputs())
                         .ok_or(ConnectTransactionError::TokensError(
@@ -702,7 +702,7 @@ where
                     | TxOutput::IssueNft(_, _, _)
                     | TxOutput::DataDeposit(_)
                     | TxOutput::Htlc(_, _)
-                    | TxOutput::CreateOrder(_) => Ok(()),
+                    | TxOutput::AnyoneCanTake(_) => Ok(()),
                 }
             })
     }
@@ -791,9 +791,9 @@ where
                 | TxOutput::DataDeposit(..)
                 | TxOutput::IssueFungibleToken(..)
                 | TxOutput::Htlc(_, _) => None,
-                | TxOutput::CreateOrder(order_data) => match input_utxo_outpoint {
+                TxOutput::AnyoneCanTake(order_data) => match input_utxo_outpoint {
                     Some(input_utxo_outpoint) => {
-                        let order_id = make_order_id(&input_utxo_outpoint);
+                        let order_id = make_order_id(input_utxo_outpoint);
                         let result = self
                             .orders_accounting_cache
                             .create_order(order_id, order_data.clone())

@@ -1019,7 +1019,7 @@ impl Account {
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
                 | TxOutput::Htlc(_, _)
-                | TxOutput::CreateOrder(_) => None,
+                | TxOutput::AnyoneCanTake(_) => None,
             })
             .expect("find output with dummy_pool_id");
         *old_pool_id = new_pool_id;
@@ -1075,7 +1075,7 @@ impl Account {
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::DataDeposit(_)
                 | TxOutput::Htlc(_, _)
-                | TxOutput::CreateOrder(_) => None,
+                | TxOutput::AnyoneCanTake(_) => None,
                 TxOutput::IssueNft(token_id, _, _) => {
                     (*token_id == dummy_token_id).then_some(token_id)
                 }
@@ -1550,7 +1550,7 @@ impl Account {
             | TxOutput::Burn(_)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::DataDeposit(_)
-            | TxOutput::CreateOrder(_) => Vec::new(),
+            | TxOutput::AnyoneCanTake(_) => Vec::new(),
         }
     }
 
@@ -2192,7 +2192,7 @@ fn group_preselected_inputs(
                             output.clone(),
                         )))
                     }
-                    TxOutput::CreateOrder(_) => todo!(),
+                    TxOutput::AnyoneCanTake(_) => todo!(),
                 };
                 update_preselected_inputs(currency, value, *fee)?;
             }

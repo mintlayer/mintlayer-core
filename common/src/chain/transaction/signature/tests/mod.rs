@@ -768,7 +768,7 @@ fn check_mutate_output(
         TxOutput::IssueNft(_, _, _) => unreachable!(),
         TxOutput::DataDeposit(_) => unreachable!(),
         TxOutput::Htlc(_, _) => unreachable!(),
-        TxOutput::CreateOrder(_) => unreachable!(),
+        TxOutput::AnyoneCanTake(_) => unreachable!(),
     };
 
     let tx = tx_updater.generate_tx().unwrap();

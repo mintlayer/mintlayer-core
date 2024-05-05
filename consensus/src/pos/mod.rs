@@ -166,7 +166,7 @@ where
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::DataDeposit(_)
         | TxOutput::Htlc(_, _)
-        | TxOutput::CreateOrder(_) => {
+        | TxOutput::AnyoneCanTake(_) => {
             // only pool outputs can be staked
             return Err(ConsensusPoSError::RandomnessError(
                 PoSRandomnessError::InvalidOutputTypeInStakeKernel(header.get_id()),

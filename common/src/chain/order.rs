@@ -80,22 +80,22 @@ pub fn make_order_id(input0_outpoint: &UtxoOutPoint) -> OrderId {
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct OrderData {
-    authority: Destination,
+    withdraw_key: Destination,
     ask: OutputValue,
     give: OutputValue,
 }
 
 impl OrderData {
-    pub fn new(authority: Destination, ask: OutputValue, give: OutputValue) -> Self {
+    pub fn new(withdraw_key: Destination, ask: OutputValue, give: OutputValue) -> Self {
         Self {
-            authority,
+            withdraw_key,
             ask,
             give,
         }
     }
 
-    pub fn authority(&self) -> &Destination {
-        &self.authority
+    pub fn withdraw_key(&self) -> &Destination {
+        &self.withdraw_key
     }
 
     pub fn ask(&self) -> &OutputValue {

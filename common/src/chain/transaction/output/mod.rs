@@ -142,7 +142,7 @@ pub enum TxOutput {
     #[codec(index = 10)]
     Htlc(OutputValue, Box<HashedTimelockContract>),
     #[codec(index = 11)]
-    CreateOrder(OrderData),
+    AnyoneCanTake(OrderData),
 }
 
 impl TxOutput {
@@ -158,7 +158,7 @@ impl TxOutput {
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::DataDeposit(_)
             | TxOutput::Htlc(_, _)
-            | TxOutput::CreateOrder(_) => None,
+            | TxOutput::AnyoneCanTake(_) => None,
             TxOutput::LockThenTransfer(_, _, tl) => Some(tl),
         }
     }
@@ -330,9 +330,9 @@ impl TextSummary for TxOutput {
                     fmt_dest(&htlc.refund_key)
                 )
             }
-            TxOutput::CreateOrder(order) => format!(
-                "CreateOrder(Authority({}), AskValue({}), GiveValue({}))",
-                fmt_dest(order.authority()),
+            TxOutput::AnyoneCanTake(order) => format!(
+                "AnyoneCanTake(WithdrawKey({}), AskValue({}), GiveValue({}))",
+                fmt_dest(order.withdraw_key()),
                 fmt_val(order.ask()),
                 fmt_val(order.give()),
             ),

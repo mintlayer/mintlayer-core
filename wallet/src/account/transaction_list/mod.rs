@@ -122,7 +122,7 @@ fn own_output(key_chain: &AccountKeyChainImpl, output: &TxOutput) -> bool {
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::DataDeposit(_)
-        | TxOutput::CreateOrder(_) => false,
+        | TxOutput::AnyoneCanTake(_) => false,
     }
 }
 

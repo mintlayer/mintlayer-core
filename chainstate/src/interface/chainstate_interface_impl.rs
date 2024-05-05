@@ -832,7 +832,7 @@ fn get_output_coin_amount(
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::DataDeposit(_)
-        | TxOutput::CreateOrder(_) => None,
+        | TxOutput::AnyoneCanTake(_) => None,
     };
 
     Ok(amount)

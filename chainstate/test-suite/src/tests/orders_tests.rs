@@ -99,7 +99,7 @@ fn create_order_check_storage(#[case] seed: Seed) {
         let order_id = make_order_id(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
-            .add_output(TxOutput::CreateOrder(order_data.clone()))
+            .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
@@ -139,8 +139,8 @@ fn create_two_orders_same_tx(#[case] seed: Seed) {
         let order_id = make_order_id(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
-            .add_output(TxOutput::CreateOrder(order_data.clone()))
-            .add_output(TxOutput::CreateOrder(order_data.clone()))
+            .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
+            .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
             .build();
         let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
@@ -178,7 +178,7 @@ fn withdraw_order_check_storage(#[case] seed: Seed) {
         let order_id = make_order_id(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
-            .add_output(TxOutput::CreateOrder(order_data.clone()))
+            .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
@@ -230,7 +230,7 @@ fn fill_order_check_storage(#[case] seed: Seed) {
         let order_id = make_order_id(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
-            .add_output(TxOutput::CreateOrder(order_data.clone()))
+            .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
@@ -341,7 +341,7 @@ fn withdraw_order_check_signature(#[case] seed: Seed) {
         let order_id = make_order_id(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
-            .add_output(TxOutput::CreateOrder(order_data.clone()))
+            .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
@@ -489,7 +489,7 @@ fn reorg_before_create(#[case] seed: Seed) {
         let order_id = make_order_id(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
-            .add_output(TxOutput::CreateOrder(order_data.clone()))
+            .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
@@ -576,7 +576,7 @@ fn reorg_after_create(#[case] seed: Seed) {
         let order_id = make_order_id(&tokens_outpoint);
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
-            .add_output(TxOutput::CreateOrder(order_data.clone()))
+            .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
             // transfer output just to be able to spend something in alternative branch
             .add_output(TxOutput::Transfer(
                 OutputValue::TokenV1(token_id, Amount::from_atoms(100)),

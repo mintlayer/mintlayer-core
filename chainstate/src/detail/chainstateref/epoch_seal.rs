@@ -176,7 +176,7 @@ where
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::DataDeposit(_)
         | TxOutput::Htlc(_, _)
-        | TxOutput::CreateOrder(_) => {
+        | TxOutput::AnyoneCanTake(_) => {
             return Err(EpochSealError::SpendStakeError(
                 SpendStakeError::InvalidBlockRewardOutputType,
             ));

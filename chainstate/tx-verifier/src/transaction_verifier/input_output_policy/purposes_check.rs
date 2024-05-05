@@ -65,7 +65,7 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::IssueNft(..)
                     | TxOutput::DataDeposit(..)
                     | TxOutput::Htlc(..)
-                    | TxOutput::CreateOrder(..) => Err(ConnectTransactionError::IOPolicyError(
+                    | TxOutput::AnyoneCanTake(..) => Err(ConnectTransactionError::IOPolicyError(
                         IOPolicyError::InvalidInputTypeInReward,
                         block_id.into(),
                     )),
@@ -90,7 +90,7 @@ pub fn check_reward_inputs_outputs_purposes(
                                 | TxOutput::IssueNft(..)
                                 | TxOutput::DataDeposit(..)
                                 | TxOutput::Htlc(..)
-                                | TxOutput::CreateOrder(..) => {
+                                | TxOutput::AnyoneCanTake(..) => {
                                     Err(ConnectTransactionError::IOPolicyError(
                                         IOPolicyError::InvalidOutputTypeInReward,
                                         block_id.into(),
@@ -142,7 +142,7 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::IssueNft(..)
                     | TxOutput::DataDeposit(..)
                     | TxOutput::Htlc(..)
-                    | TxOutput::CreateOrder(..) => false,
+                    | TxOutput::AnyoneCanTake(..) => false,
                 });
             ensure!(
                 all_lock_then_transfer,
@@ -174,7 +174,7 @@ pub fn check_tx_inputs_outputs_purposes(
         | TxOutput::DelegateStaking(..)
         | TxOutput::IssueFungibleToken(..)
         | TxOutput::DataDeposit(..)
-        | TxOutput::CreateOrder(..) => false,
+        | TxOutput::AnyoneCanTake(..) => false,
     });
     ensure!(are_inputs_valid, IOPolicyError::InvalidInputTypeInTx);
 
@@ -207,7 +207,7 @@ pub fn check_tx_inputs_outputs_purposes(
         | TxOutput::IssueNft(..)
         | TxOutput::DataDeposit(..)
         | TxOutput::Htlc(..)
-        | TxOutput::CreateOrder(..) => { /* do nothing */ }
+        | TxOutput::AnyoneCanTake(..) => { /* do nothing */ }
         TxOutput::CreateStakePool(..) => {
             stake_pool_outputs_count += 1;
         }

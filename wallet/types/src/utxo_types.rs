@@ -53,7 +53,7 @@ pub fn get_utxo_type(output: &TxOutput) -> Option<UtxoType> {
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::DataDeposit(_)
-        | TxOutput::CreateOrder(_) => None,
+        | TxOutput::AnyoneCanTake(_) => None,
         TxOutput::Htlc(_, _) => None, // TODO(HTLC)
     }
 }

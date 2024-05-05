@@ -254,7 +254,7 @@ fn is_htlc_output(output: &TxOutput) -> bool {
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::DataDeposit(_)
-        | TxOutput::CreateOrder(_) => false,
+        | TxOutput::AnyoneCanTake(_) => false,
         TxOutput::Htlc(_, _) => true,
     }
 }

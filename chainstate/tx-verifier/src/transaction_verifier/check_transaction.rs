@@ -156,7 +156,7 @@ fn check_tokens_tx(
                     OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
                     OutputValue::TokenV0(_) => true,
                 },
-                TxOutput::CreateOrder(data) => {
+                TxOutput::AnyoneCanTake(data) => {
                     let ask_token_v0 = match data.ask() {
                         OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
                         OutputValue::TokenV0(_) => true,
@@ -213,7 +213,7 @@ fn check_tokens_tx(
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::DataDeposit(_)
             | TxOutput::Htlc(_, _)
-            | TxOutput::CreateOrder(_) => Ok(()),
+            | TxOutput::AnyoneCanTake(_) => Ok(()),
         })
         .map_err(CheckTransactionError::TokensError)?;
 
@@ -267,7 +267,7 @@ fn check_data_deposit_outputs(
             | TxOutput::IssueFungibleToken(..)
             | TxOutput::IssueNft(..)
             | TxOutput::Htlc(_, _)
-            | TxOutput::CreateOrder(..) => { /* Do nothing */ }
+            | TxOutput::AnyoneCanTake(..) => { /* Do nothing */ }
             TxOutput::DataDeposit(v) => {
                 // Ensure the size of the data doesn't exceed the max allowed
                 if v.len() > chain_config.data_deposit_max_size() {
@@ -310,7 +310,7 @@ fn check_htlc_outputs(
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
-                | TxOutput::CreateOrder(_) => false,
+                | TxOutput::AnyoneCanTake(_) => false,
                 TxOutput::Htlc(_, _) => true,
             });
 

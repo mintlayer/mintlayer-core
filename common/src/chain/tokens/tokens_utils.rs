@@ -41,7 +41,7 @@ pub fn get_issuance_count_via_tokens_op(outputs: &[TxOutput]) -> usize {
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::DataDeposit(_)
             | TxOutput::Htlc(_, _)
-            | TxOutput::CreateOrder(_) => false,
+            | TxOutput::AnyoneCanTake(_) => false,
             TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => true,
         })
         .count()
@@ -83,7 +83,7 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_)
         | TxOutput::Htlc(_, _)
-        | TxOutput::CreateOrder(_) => false,
+        | TxOutput::AnyoneCanTake(_) => false,
         TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => true,
     }
 }
