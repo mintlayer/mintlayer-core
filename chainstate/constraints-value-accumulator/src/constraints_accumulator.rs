@@ -284,12 +284,10 @@ impl ConstrainedValueAccumulator {
                 let ask_amount = (initially_asked - ask_balance)
                     .ok_or(Error::NegativeAccountBalance(AccountType::Order(*id)))?;
 
-                let ask_currency =
-                    CoinOrTokenId::from_output_value(order_data.ask()).expect("cannot fail");
+                let ask_currency = CoinOrTokenId::from_output_value(order_data.ask());
                 insert_or_increase(&mut self.unconstrained_value, ask_currency, ask_amount)?;
 
-                let give_currency =
-                    CoinOrTokenId::from_output_value(order_data.give()).expect("cannot fail");
+                let give_currency = CoinOrTokenId::from_output_value(order_data.give());
                 insert_or_increase(&mut self.unconstrained_value, give_currency, give_balance)?;
                 Ok((CoinOrTokenId::Coin, Amount::ZERO))
             }
@@ -304,10 +302,10 @@ impl ConstrainedValueAccumulator {
                     .get_order_data(order_id)
                     .map_err(|_| orders_accounting::Error::ViewFail)?
                     .ok_or(orders_accounting::Error::OrderDataNotFound(*order_id))?;
-                let give_currency = CoinOrTokenId::from_output_value(order_data.give()).unwrap();
+                let give_currency = CoinOrTokenId::from_output_value(order_data.give());
                 insert_or_increase(&mut self.unconstrained_value, give_currency, filled_amount)?;
 
-                let ask_currency = CoinOrTokenId::from_output_value(fill_value).unwrap();
+                let ask_currency = CoinOrTokenId::from_output_value(fill_value);
                 Ok((ask_currency, fill_value.amount()))
             }
         }
@@ -377,7 +375,7 @@ impl ConstrainedValueAccumulator {
                     chain_config.nft_issuance_fee(block_height),
                 )?,
                 TxOutput::AnyoneCanTake(order_data) => {
-                    let id = CoinOrTokenId::from_output_value(order_data.give()).unwrap();
+                    let id = CoinOrTokenId::from_output_value(order_data.give());
                     insert_or_increase(
                         &mut accumulator.unconstrained_value,
                         id,

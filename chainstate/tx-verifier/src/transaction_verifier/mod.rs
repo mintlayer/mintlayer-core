@@ -203,6 +203,15 @@ where
     }
 }
 
+type DerivedTxVerifier<'a, C, S, U, A, T, O> = TransactionVerifier<
+    &'a ChainConfig,
+    &'a TransactionVerifier<C, S, U, A, T, O>,
+    &'a UtxosCache<U>,
+    &'a PoSAccountingDelta<A>,
+    &'a TokensAccountingCache<T>,
+    &'a OrdersAccountingCache<O>,
+>;
+
 impl<C, S, U, A, T, O> TransactionVerifier<C, S, U, A, T, O>
 where
     C: AsRef<ChainConfig>,
@@ -213,16 +222,7 @@ where
     O: OrdersAccountingView,
     <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {
-    pub fn derive_child(
-        &self,
-    ) -> TransactionVerifier<
-        &ChainConfig,
-        &Self,
-        &UtxosCache<U>,
-        &PoSAccountingDelta<A>,
-        &TokensAccountingCache<T>,
-        &OrdersAccountingCache<O>,
-    > {
+    pub fn derive_child(&self) -> DerivedTxVerifier<C, S, U, A, T, O> {
         TransactionVerifier {
             storage: self,
             chain_config: self.chain_config.as_ref(),
