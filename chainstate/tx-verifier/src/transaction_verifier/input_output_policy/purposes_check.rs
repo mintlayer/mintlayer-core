@@ -188,7 +188,6 @@ pub fn check_tx_inputs_outputs_purposes(
         })
         .count();
 
-    // FIXME: allow tokens and order commands?
     ensure!(
         account_commands_count <= 1,
         IOPolicyError::MultipleAccountCommands

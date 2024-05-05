@@ -119,6 +119,7 @@ fn tx_many_to_many_valid(#[case] seed: Seed) {
         issue_tokens(),
         issue_nft(),
         data_deposit(),
+        create_order(),
     ];
 
     let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
@@ -130,6 +131,56 @@ fn tx_many_to_many_valid(#[case] seed: Seed) {
         None,
     );
     let inputs_utxos = collect_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
+    check_tx_inputs_outputs_purposes(&tx, &inputs_utxos).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn tx_many_to_many_valid_with_account_input(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let number_of_inputs = rng.gen_range(1..10);
+    let number_of_outputs = rng.gen_range(1..10);
+
+    let account_inputs = all_account_inputs();
+    // stake pool and create delegation are skipped to avoid dealing with uniqueness
+    let valid_outputs = [
+        lock_then_transfer(),
+        transfer(),
+        burn(),
+        delegate_staking(),
+        issue_tokens(),
+        issue_nft(),
+        data_deposit(),
+        create_order(),
+    ];
+
+    let inputs_utxos = get_random_outputs_combination(
+        &mut rng,
+        &super::outputs_utils::valid_tx_inputs_utxos(),
+        number_of_inputs,
+    );
+
+    let inputs = {
+        let mut inputs = inputs_utxos
+            .iter()
+            .enumerate()
+            .map(|(i, _)| {
+                TxInput::from_utxo(
+                    OutPointSourceId::Transaction(Id::new(H256::zero())),
+                    i as u32,
+                )
+            })
+            .chain(get_random_inputs_combination(&mut rng, &account_inputs, 1))
+            .collect::<Vec<_>>();
+        inputs.shuffle(&mut rng);
+        inputs
+    };
+
+    let outputs = get_random_outputs_combination(&mut rng, &valid_outputs, number_of_outputs);
+
+    let tx = Transaction::new(0, inputs, outputs).unwrap();
+
     check_tx_inputs_outputs_purposes(&tx, &inputs_utxos).unwrap();
 }
 

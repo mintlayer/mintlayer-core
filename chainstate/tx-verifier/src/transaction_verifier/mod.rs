@@ -789,7 +789,8 @@ where
                 | TxOutput::LockThenTransfer(..)
                 | TxOutput::IssueNft(..)
                 | TxOutput::DataDeposit(..)
-                | TxOutput::IssueFungibleToken(..) => None,
+                | TxOutput::IssueFungibleToken(..)
+                | TxOutput::Htlc(_, _) => None,
                 | TxOutput::CreateOrder(order_data) => match input_utxo_outpoint {
                     Some(input_utxo_outpoint) => {
                         let order_id = make_order_id(&input_utxo_outpoint);

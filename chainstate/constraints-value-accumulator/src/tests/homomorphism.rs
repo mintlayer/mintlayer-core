@@ -102,7 +102,6 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
-    // FIXME: proper  impl
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
 

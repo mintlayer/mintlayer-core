@@ -76,7 +76,6 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
-    // FIXME: proper  impl
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
 
@@ -145,7 +144,6 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
-    // FIXME: proper  impl
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
 
@@ -213,7 +211,6 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
-    // FIXME: proper  impl
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
 
@@ -322,7 +319,6 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
-    // FIXME: proper  impl
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
 
@@ -466,7 +462,6 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
-    // FIXME: proper  impl
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
 
@@ -586,7 +581,6 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
-    // FIXME: proper  impl
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
 

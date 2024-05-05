@@ -23,8 +23,8 @@ use common::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, NftIssuance, NftIssuanceV0, TokenId,
             TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, PoolId, TxInput,
-        TxOutput,
+        AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, OrderData,
+        OrderId, PoolId, TxInput, TxOutput,
     },
     primitives::{per_thousand::PerThousand, Amount, H256},
 };
@@ -51,7 +51,7 @@ fn update_functions_below_if_new_outputs_were_added(output: TxOutput) {
     }
 }
 
-pub fn all_outputs() -> [TxOutput; 11] {
+pub fn all_outputs() -> [TxOutput; 12] {
     [
         transfer(),
         htlc(),
@@ -64,10 +64,11 @@ pub fn all_outputs() -> [TxOutput; 11] {
         issue_tokens(),
         issue_nft(),
         data_deposit(),
+        create_order(),
     ]
 }
 
-pub fn valid_tx_outputs() -> [TxOutput; 10] {
+pub fn valid_tx_outputs() -> [TxOutput; 11] {
     [
         transfer(),
         htlc(),
@@ -79,6 +80,7 @@ pub fn valid_tx_outputs() -> [TxOutput; 10] {
         issue_tokens(),
         issue_nft(),
         data_deposit(),
+        create_order(),
     ]
 }
 
@@ -93,11 +95,18 @@ pub fn valid_tx_inputs_utxos() -> [TxOutput; 6] {
     ]
 }
 
-pub fn invalid_tx_inputs_utxos() -> [TxOutput; 5] {
-    [burn(), delegate_staking(), create_delegation(), issue_tokens(), data_deposit()]
+pub fn invalid_tx_inputs_utxos() -> [TxOutput; 6] {
+    [
+        burn(),
+        delegate_staking(),
+        create_delegation(),
+        issue_tokens(),
+        data_deposit(),
+        create_order(),
+    ]
 }
 
-pub fn invalid_block_reward_for_pow() -> [TxOutput; 10] {
+pub fn invalid_block_reward_for_pow() -> [TxOutput; 11] {
     [
         transfer(),
         htlc(),
@@ -109,10 +118,11 @@ pub fn invalid_block_reward_for_pow() -> [TxOutput; 10] {
         issue_nft(),
         issue_tokens(),
         data_deposit(),
+        create_order(),
     ]
 }
 
-pub fn all_account_inputs() -> [TxInput; 7] {
+pub fn all_account_inputs() -> [TxInput; 9] {
     [
         TxInput::from_account(
             AccountNonce::new(0),
@@ -141,6 +151,18 @@ pub fn all_account_inputs() -> [TxInput; 7] {
         TxInput::from_command(
             AccountNonce::new(0),
             AccountCommand::ChangeTokenAuthority(TokenId::zero(), Destination::AnyoneCanSpend),
+        ),
+        TxInput::from_command(
+            AccountNonce::new(0),
+            AccountCommand::WithdrawOrder(OrderId::zero()),
+        ),
+        TxInput::from_command(
+            AccountNonce::new(0),
+            AccountCommand::FillOrder(
+                OrderId::zero(),
+                OutputValue::Coin(Amount::ZERO),
+                Destination::AnyoneCanSpend,
+            ),
         ),
     ]
 }
@@ -213,6 +235,14 @@ pub fn issue_tokens() -> TxOutput {
 
 pub fn data_deposit() -> TxOutput {
     TxOutput::DataDeposit(vec![])
+}
+
+pub fn create_order() -> TxOutput {
+    TxOutput::CreateOrder(OrderData::new(
+        Destination::AnyoneCanSpend,
+        OutputValue::Coin(Amount::ZERO),
+        OutputValue::Coin(Amount::ZERO),
+    ))
 }
 
 pub fn issue_nft() -> TxOutput {

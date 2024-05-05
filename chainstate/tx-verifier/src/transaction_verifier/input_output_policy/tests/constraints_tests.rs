@@ -102,7 +102,6 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
     );
     let pos_db = pos_accounting::PoSAccountingDB::new(&pos_store);
 
-    // FIXME: proper  impl
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
 
@@ -253,7 +252,6 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
     let pos_db = pos_accounting::PoSAccountingDB::new(&pos_store);
     let utxo_db = UtxosDBInMemoryImpl::new(Id::<GenBlock>::new(H256::zero()), BTreeMap::new());
 
-    // FIXME: proper  impl
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
 
