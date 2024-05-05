@@ -194,7 +194,7 @@ async fn multiple_tx_in_same_block(#[case] seed: Seed) {
                 "is_replaceable": transaction.is_replaceable(),
                 "flags": transaction.flags(),
                 "inputs": transaction.inputs().iter().zip(utxos).map(|(inp, utxo)| json!({
-                    "input": tx_input_to_json(inp, &chain_config),
+                    "input": tx_input_to_json(inp, &chain_config, &TokenDecimals::Single(None)),
                     "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, &chain_config, &TokenDecimals::Single(None))),
                     })).collect::<Vec<_>>(),
                 "outputs": transaction.outputs()
@@ -338,7 +338,7 @@ async fn ok(#[case] seed: Seed) {
                 "is_replaceable": transaction.is_replaceable(),
                 "flags": transaction.flags(),
                 "inputs": transaction.inputs().iter().zip(utxos).map(|(inp, utxo)| json!({
-                    "input": tx_input_to_json(inp, &chain_config),
+                    "input": tx_input_to_json(inp, &chain_config, &TokenDecimals::Single(None)),
                     "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, &chain_config, &TokenDecimals::Single(None))),
                     })).collect::<Vec<_>>(),
                 "outputs": transaction.outputs()

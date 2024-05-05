@@ -617,8 +617,7 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
                     | AccountCommand::UnfreezeToken(token_id)
                     | AccountCommand::LockTokenSupply(token_id)
                     | AccountCommand::ChangeTokenAuthority(token_id, _) => Some(*token_id),
-                    AccountCommand::WithdrawOrder(_) => todo!(),
-                    AccountCommand::FillOrder(_, _, _) => todo!(),
+                    AccountCommand::WithdrawOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
                 },
             })
             .collect();
@@ -738,7 +737,7 @@ async fn tx_fees<T: ApiServerStorageWrite>(
     let pools = prefetch_pool_data(&inputs_utxos, db_tx).await?;
     let pos_accounting_adapter = PoSAccountingAdapterToCheckFees { pools };
 
-    // FIXME: proper  impl
+    // TODO: support orders
     let orders_store = orders_accounting::InMemoryOrdersAccounting::new();
     let orders_db = orders_accounting::OrdersAccountingDB::new(&orders_store);
 
@@ -1107,8 +1106,9 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     )
                     .await;
                 }
-                AccountCommand::WithdrawOrder(_) => todo!(),
-                AccountCommand::FillOrder(_, _, _) => todo!(),
+                AccountCommand::WithdrawOrder(_) | AccountCommand::FillOrder(_, _, _) => {
+                    // TODO: support orders
+                }
             },
             TxInput::Account(outpoint) => {
                 match outpoint.account() {
@@ -1673,7 +1673,9 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 }
             }
             TxOutput::Htlc(_, _) => {} // TODO(HTLC)
-            TxOutput::AnyoneCanTake(_) => todo!(),
+            TxOutput::AnyoneCanTake(_) => {
+                // TODO: support orders
+            }
         }
     }
 

@@ -1347,8 +1347,9 @@ impl Account {
                             .token_data(token_id)
                             .map(|data| (None, Some(data.authority.clone())))
                             .ok_or(WalletError::UnknownTokenId(*token_id)),
-                        AccountCommand::WithdrawOrder(_) => todo!(),
-                        AccountCommand::FillOrder(_, _, _) => todo!(),
+                        // TODO: support orders
+                        AccountCommand::WithdrawOrder(_) => unimplemented!(),
+                        AccountCommand::FillOrder(_, _, _) => unimplemented!(),
                     }
                 }
             })
@@ -1827,8 +1828,9 @@ impl Account {
                     self.find_token(token_id).is_ok()
                         || self.is_destination_mine_or_watched(address)
                 }
-                AccountCommand::WithdrawOrder(_) => todo!(),
-                AccountCommand::FillOrder(_, _, _) => todo!(),
+                // TODO: support orders
+                AccountCommand::WithdrawOrder(_) => unimplemented!(),
+                AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
@@ -2192,7 +2194,8 @@ fn group_preselected_inputs(
                             output.clone(),
                         )))
                     }
-                    TxOutput::AnyoneCanTake(_) => todo!(),
+                    // TODO: support orders
+                    TxOutput::AnyoneCanTake(_) => unimplemented!(),
                 };
                 update_preselected_inputs(currency, value, *fee)?;
             }
@@ -2236,8 +2239,9 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
-                AccountCommand::WithdrawOrder(_) => todo!(),
-                AccountCommand::FillOrder(_, _, _) => todo!(),
+                // TODO: support orders
+                AccountCommand::WithdrawOrder(_) => unimplemented!(),
+                AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
         }
     }

@@ -197,7 +197,14 @@ pub fn txoutput_to_json(
                 },
             })
         }
-        TxOutput::AnyoneCanTake(_) => todo!(),
+        TxOutput::AnyoneCanTake(data) => {
+            json!({
+                "type": "AnyoneCanTake",
+                "withdraw_key": Address::new(chain_config, data.withdraw_key().clone()).expect("no error").as_str(),
+                "ask_value": outputvalue_to_json(data.ask(), chain_config, token_decimals),
+                "give_value": outputvalue_to_json(data.give(), chain_config, token_decimals),
+            })
+        }
     }
 }
 
@@ -247,7 +254,11 @@ pub fn utxo_outpoint_to_json(utxo: &UtxoOutPoint) -> serde_json::Value {
     }
 }
 
-pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json::Value {
+pub fn tx_input_to_json(
+    inp: &TxInput,
+    chain_config: &ChainConfig,
+    token_decimals: &TokenDecimals,
+) -> serde_json::Value {
     match inp {
         TxInput::Utxo(utxo) => match utxo.source_id() {
             OutPointSourceId::Transaction(tx_id) => {
@@ -334,8 +345,22 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                     "nonce": nonce,
                 })
             }
-            AccountCommand::WithdrawOrder(_) => todo!(),
-            AccountCommand::FillOrder(_, _, _) => todo!(),
+            AccountCommand::WithdrawOrder(order_id) => {
+                json!({
+                    "input_type": "AccountCommand",
+                    "command": "WithdrawOrder",
+                    "order_id": Address::new(chain_config, *order_id).expect("addressable").to_string(),
+                })
+            }
+            AccountCommand::FillOrder(order_id, fill, dest) => {
+                json!({
+                    "input_type": "AccountCommand",
+                    "command": "FillOrder",
+                    "order_id": Address::new(chain_config, *order_id).expect("addressable").to_string(),
+                    "fill_value": outputvalue_to_json(fill, chain_config, token_decimals),
+                    "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
+                })
+            }
         },
     }
 }
@@ -352,7 +377,7 @@ pub fn tx_to_json(
     "flags": tx.flags(),
     "fee": amount_to_json(additional_info.fee, chain_config.coin_decimals()),
     "inputs": tx.inputs().iter().zip(additional_info.input_utxos.iter()).map(|(inp, utxo)| json!({
-        "input": tx_input_to_json(inp, chain_config),
+        "input": tx_input_to_json(inp, chain_config, &(&additional_info.token_decimals).into()),
         "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, chain_config, &(&additional_info.token_decimals).into())),
         })).collect::<Vec<_>>(),
     "outputs": tx.outputs()
