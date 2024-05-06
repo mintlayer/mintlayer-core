@@ -1051,9 +1051,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
                 pool_ids.retain(|pool_id| {
                     // We didn't see this pool having balance yet.
-                    pool_ids_that_had_balance.get(pool_id).is_none() ||
+                    !pool_ids_that_had_balance.contains(pool_id) ||
                     // We did see this pool having balance and it still does.
-                    balances.get(pool_id).is_some()
+                    balances.contains_key(pool_id)
                 });
 
                 pool_ids_that_had_balance.extend(balances.keys().copied());
