@@ -72,12 +72,19 @@ pub struct ChangeTokenAuthorityUndo {
 #[must_use]
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, VariantCount)]
 pub enum TokenAccountingUndo {
+    #[codec(index = 0)]
     IssueToken(IssueTokenUndo),
+    #[codec(index = 1)]
     MintTokens(MintTokenUndo),
+    #[codec(index = 2)]
     UnmintTokens(UnmintTokenUndo),
+    #[codec(index = 3)]
     LockSupply(LockSupplyUndo),
+    #[codec(index = 4)]
     FreezeToken(FreezeTokenUndo),
+    #[codec(index = 5)]
     UnfreezeToken(UnfreezeTokenUndo),
+    #[codec(index = 6)]
     ChangeTokenAuthority(ChangeTokenAuthorityUndo),
 }
 

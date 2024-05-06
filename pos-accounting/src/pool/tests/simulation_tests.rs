@@ -73,36 +73,6 @@ fn get_random_delegation_balance(
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn simulation_test_db(#[case] seed: Seed) {
-    let mut rng = make_seedable_rng(seed);
-    let mut storage = InMemoryPoSAccounting::new();
-    let mut undos = Vec::<PoSAccountingUndo>::new();
-
-    let iterations_count = rng.gen_range(100..1000);
-
-    for _ in 0..iterations_count {
-        // collecting following random items every time is not efficient, because only single one of them might be used;
-        // but in this way the borrows checker can be appeased because `PoSAccountingDB` requires `&mut storage`
-        let random_pool = get_random_pool_id(&mut rng, &storage);
-        let random_delegation = get_random_delegation_data(&mut rng, &storage);
-        let random_delegation_balance = get_random_delegation_balance(&mut rng, &storage);
-
-        let mut db = PoSAccountingDB::new(&mut storage);
-        perform_random_operation(
-            &mut rng,
-            &mut db,
-            &mut undos,
-            random_pool,
-            random_delegation,
-            random_delegation_balance,
-        );
-        storage.check_consistency();
-    }
-}
-
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
 fn simulation_test_delta(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();

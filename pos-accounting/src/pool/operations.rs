@@ -24,41 +24,29 @@ use variant_count::VariantCount;
 use crate::error::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub(crate) enum PoolDataUndo {
-    Data(Box<PoolData>),
-    DataDelta(Box<DataDeltaUndo<PoolData>>),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub(crate) enum DelegationDataUndo {
-    Data(Box<DelegationData>),
-    DataDelta(Box<DataDeltaUndo<DelegationData>>),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct CreatePoolUndo {
     pub(crate) pool_id: PoolId,
     pub(crate) pledge_amount: Amount,
-    pub(crate) data_undo: PoolDataUndo,
+    pub(crate) data_undo: DataDeltaUndo<PoolData>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct CreateDelegationIdUndo {
     pub(crate) delegation_id: DelegationId,
-    pub(crate) data_undo: DelegationDataUndo,
+    pub(crate) data_undo: DataDeltaUndo<DelegationData>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct DeleteDelegationIdUndo {
     pub(crate) delegation_id: DelegationId,
-    pub(crate) data_undo: DelegationDataUndo,
+    pub(crate) data_undo: DataDeltaUndo<DelegationData>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct DecommissionPoolUndo {
     pub(crate) pool_id: PoolId,
     pub(crate) pool_balance: Amount,
-    pub(crate) data_undo: PoolDataUndo,
+    pub(crate) data_undo: DataDeltaUndo<PoolData>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -77,18 +65,25 @@ pub struct SpendFromShareUndo {
 pub struct IncreaseStakerRewardsUndo {
     pub(crate) pool_id: PoolId,
     pub(crate) amount_added: Amount,
-    pub(crate) data_undo: PoolDataUndo,
+    pub(crate) data_undo: DataDeltaUndo<PoolData>,
 }
 
 #[must_use]
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, VariantCount)]
 pub enum PoSAccountingUndo {
+    #[codec(index = 0)]
     CreatePool(CreatePoolUndo),
+    #[codec(index = 1)]
     DecommissionPool(DecommissionPoolUndo),
+    #[codec(index = 2)]
     CreateDelegationId(CreateDelegationIdUndo),
+    #[codec(index = 3)]
     DeleteDelegationId(DeleteDelegationIdUndo),
+    #[codec(index = 4)]
     DelegateStaking(DelegateStakingUndo),
+    #[codec(index = 5)]
     SpendFromShare(SpendFromShareUndo),
+    #[codec(index = 6)]
     IncreaseStakerRewards(IncreaseStakerRewardsUndo),
 }
 

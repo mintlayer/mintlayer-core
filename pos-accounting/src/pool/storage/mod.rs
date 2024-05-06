@@ -20,17 +20,13 @@ use accounting::{
     DeltaDataUndoCollection,
 };
 use chainstate_types::storage_result;
-use common::{
-    chain::{DelegationId, PoolId},
-    primitives::{amount::SignedAmount, Amount},
-};
+use common::primitives::{amount::SignedAmount, Amount};
 
 use crate::{
     error::Error, pool::delta::data::PoSAccountingDeltaData, storage::PoSAccountingStorageWrite,
     DeltaMergeUndo, StorageTag,
 };
 
-pub mod operator_impls;
 pub mod view_impls;
 
 mod helpers;
@@ -226,98 +222,6 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
             };
             Ok(())
         })
-    }
-
-    fn add_to_delegation_balance(
-        &mut self,
-        delegation_target: DelegationId,
-        amount_to_delegate: Amount,
-    ) -> Result<(), Error> {
-        let current_amount =
-            self.store.get_delegation_balance(delegation_target)?.unwrap_or(Amount::ZERO);
-        let new_amount =
-            (current_amount + amount_to_delegate).ok_or(Error::DelegationBalanceAdditionError)?;
-        self.store.set_delegation_balance(delegation_target, new_amount)?;
-        Ok(())
-    }
-
-    fn sub_from_delegation_balance(
-        &mut self,
-        delegation_target: DelegationId,
-        amount_to_delegate: Amount,
-    ) -> Result<(), Error> {
-        let current_amount = self
-            .store
-            .get_delegation_balance(delegation_target)?
-            .ok_or(Error::DelegateToNonexistingId)?;
-        let new_amount = (current_amount - amount_to_delegate)
-            .ok_or(Error::DelegationBalanceSubtractionError)?;
-        if new_amount == Amount::ZERO {
-            self.store.del_delegation_balance(delegation_target)?;
-        } else {
-            self.store.set_delegation_balance(delegation_target, new_amount)?;
-        }
-        Ok(())
-    }
-
-    fn add_balance_to_pool(&mut self, pool_id: PoolId, amount_to_add: Amount) -> Result<(), Error> {
-        let pool_amount =
-            self.store.get_pool_balance(pool_id)?.ok_or(Error::DelegateToNonexistingPool)?;
-        let new_amount = (pool_amount + amount_to_add).ok_or(Error::PoolBalanceAdditionError)?;
-        self.store.set_pool_balance(pool_id, new_amount)?;
-        Ok(())
-    }
-
-    fn sub_balance_from_pool(
-        &mut self,
-        pool_id: PoolId,
-        amount_to_add: Amount,
-    ) -> Result<(), Error> {
-        let pool_amount =
-            self.store.get_pool_balance(pool_id)?.ok_or(Error::DelegateToNonexistingPool)?;
-        let new_amount = (pool_amount - amount_to_add).ok_or(Error::PoolBalanceSubtractionError)?;
-        if new_amount == Amount::ZERO {
-            self.store.del_pool_balance(pool_id)?;
-        } else {
-            self.store.set_pool_balance(pool_id, new_amount)?;
-        }
-        Ok(())
-    }
-
-    fn add_delegation_to_pool_share(
-        &mut self,
-        pool_id: PoolId,
-        delegation_id: DelegationId,
-        amount_to_add: Amount,
-    ) -> Result<(), Error> {
-        let current_amount = self
-            .store
-            .get_pool_delegation_share(pool_id, delegation_id)?
-            .unwrap_or(Amount::ZERO);
-        let new_amount =
-            (current_amount + amount_to_add).ok_or(Error::DelegationSharesAdditionError)?;
-        self.store.set_pool_delegation_share(pool_id, delegation_id, new_amount)?;
-        Ok(())
-    }
-
-    fn sub_delegation_from_pool_share(
-        &mut self,
-        pool_id: PoolId,
-        delegation_id: DelegationId,
-        amount_to_add: Amount,
-    ) -> Result<(), Error> {
-        let current_amount = self
-            .store
-            .get_pool_delegation_share(pool_id, delegation_id)?
-            .ok_or(Error::InvariantErrorDelegationShareNotFound)?;
-        let new_amount =
-            (current_amount - amount_to_add).ok_or(Error::DelegationSharesSubtractionError)?;
-        if new_amount > Amount::ZERO {
-            self.store.set_pool_delegation_share(pool_id, delegation_id, new_amount)?;
-        } else {
-            self.store.del_pool_delegation_share(pool_id, delegation_id)?;
-        }
-        Ok(())
     }
 }
 
