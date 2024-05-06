@@ -97,7 +97,8 @@ fn issue_token_and_flush(#[case] seed: Seed) {
     let token_id = make_token_id(&mut rng);
 
     let mut storage = InMemoryTokensAccounting::new();
-    let mut cache = TokensAccountingCache::new(&mut storage);
+    let mut db = TokensAccountingDB::new(&mut storage);
+    let mut cache = TokensAccountingCache::new(&mut db);
     let _ = cache.issue_token(token_id, token_data.clone()).unwrap();
 
     assert_eq!(
@@ -107,7 +108,6 @@ fn issue_token_and_flush(#[case] seed: Seed) {
     assert_eq!(cache.get_circulating_supply(&token_id).unwrap(), None);
 
     let consumed_data = cache.consume();
-    let mut db = TokensAccountingDB::new(&mut storage);
     db.batch_write_tokens_data(consumed_data).unwrap();
 
     let expected_storage = InMemoryTokensAccounting::from_values(
@@ -127,8 +127,9 @@ fn issue_token_and_undo(#[case] seed: Seed) {
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
     let token_id = make_token_id(&mut rng);
 
-    let mut storage = InMemoryTokensAccounting::new();
-    let mut cache = TokensAccountingCache::new(&mut storage);
+    let storage = InMemoryTokensAccounting::new();
+    let db = TokensAccountingDB::new(&storage);
+    let mut cache = TokensAccountingCache::new(&db);
     let undo = cache.issue_token(token_id, token_data.clone()).unwrap();
 
     assert_eq!(
@@ -152,12 +153,13 @@ fn try_issue_twice(#[case] seed: Seed) {
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
     let token_id = make_token_id(&mut rng);
 
-    let mut storage = InMemoryTokensAccounting::from_values(
+    let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::new(),
     );
+    let db = TokensAccountingDB::new(&storage);
+    let mut cache = TokensAccountingCache::new(&db);
 
-    let mut cache = TokensAccountingCache::new(&mut storage);
     assert_eq!(
         cache.issue_token(token_id, token_data),
         Err(crate::Error::TokenAlreadyExists(token_id))
@@ -184,8 +186,9 @@ fn mint_token_and_flush(#[case] seed: Seed) {
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::new(),
     );
+    let mut db = TokensAccountingDB::new(&mut storage);
+    let mut cache = TokensAccountingCache::new(&mut db);
 
-    let mut cache = TokensAccountingCache::new(&mut storage);
     let _ = cache.mint_tokens(token_id, amount_to_mint).unwrap();
 
     assert_eq!(
@@ -198,7 +201,6 @@ fn mint_token_and_flush(#[case] seed: Seed) {
     );
 
     let consumed_data = cache.consume();
-    let mut db = TokensAccountingDB::new(&mut storage);
     db.batch_write_tokens_data(consumed_data).unwrap();
 
     let expected_storage = InMemoryTokensAccounting::from_values(
@@ -221,11 +223,12 @@ fn mint_token_unlimited_max(#[case] seed: Seed) {
     let max_amount_to_mint = Amount::from_atoms(i128::MAX as u128);
     let overflow_amount_to_mint = Amount::from_atoms(i128::MAX as u128 + 1);
 
-    let mut storage = InMemoryTokensAccounting::from_values(
+    let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::new(),
     );
-    let mut cache = TokensAccountingCache::new(&mut storage);
+    let db = TokensAccountingDB::new(&storage);
+    let mut cache = TokensAccountingCache::new(&db);
 
     let res_overflow = cache.mint_tokens(token_id, overflow_amount_to_mint);
     assert_eq!(
@@ -257,11 +260,12 @@ fn mint_token_multiple_times_and_over_supply(#[case] seed: Seed) {
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Fixed(total_supply), false);
     let token_id = make_token_id(&mut rng);
 
-    let mut storage = InMemoryTokensAccounting::from_values(
+    let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::new(),
     );
-    let mut cache = TokensAccountingCache::new(&mut storage);
+    let db = TokensAccountingDB::new(&storage);
+    let mut cache = TokensAccountingCache::new(&db);
 
     test_utils::split_value(&mut rng, total_supply.into_atoms()).iter().for_each(
         |amount_to_mint| {
@@ -300,12 +304,13 @@ fn mint_token_undo(#[case] seed: Seed) {
     let token_id = make_token_id(&mut rng);
     let amount_to_mint = Amount::from_atoms(rng.gen_range(1..1000));
 
-    let mut storage = InMemoryTokensAccounting::from_values(
+    let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::new(),
     );
+    let db = TokensAccountingDB::new(&storage);
+    let mut cache = TokensAccountingCache::new(&db);
 
-    let mut cache = TokensAccountingCache::new(&mut storage);
     let undo = cache.mint_tokens(token_id, amount_to_mint).unwrap();
 
     assert_eq!(
@@ -341,8 +346,9 @@ fn unmint_token_and_flush(#[case] seed: Seed) {
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::from_iter([(token_id, amount_to_mint)]),
     );
+    let mut db = TokensAccountingDB::new(&mut storage);
+    let mut cache = TokensAccountingCache::new(&mut db);
 
-    let mut cache = TokensAccountingCache::new(&mut storage);
     let _ = cache.unmint_tokens(token_id, amount_to_unmint).unwrap();
 
     assert_eq!(
@@ -355,7 +361,6 @@ fn unmint_token_and_flush(#[case] seed: Seed) {
     );
 
     let consumed_data = cache.consume();
-    let mut db = TokensAccountingDB::new(&mut storage);
     db.batch_write_tokens_data(consumed_data).unwrap();
 
     let expected_storage = InMemoryTokensAccounting::from_values(
@@ -377,12 +382,13 @@ fn unmint_token_undo(#[case] seed: Seed) {
     let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
     let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
-    let mut storage = InMemoryTokensAccounting::from_values(
+    let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::from_iter([(token_id, amount_to_mint)]),
     );
+    let db = TokensAccountingDB::new(&storage);
+    let mut cache = TokensAccountingCache::new(&db);
 
-    let mut cache = TokensAccountingCache::new(&mut storage);
     let undo = cache.unmint_tokens(token_id, amount_to_unmint).unwrap();
 
     assert_eq!(
@@ -417,11 +423,12 @@ fn unmint_token_multiple_times_and_over_minted(#[case] seed: Seed) {
     let token_id = make_token_id(&mut rng);
     let amount_minted = total_supply;
 
-    let mut storage = InMemoryTokensAccounting::from_values(
+    let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::from_iter([(token_id, amount_minted)]),
     );
-    let mut cache = TokensAccountingCache::new(&mut storage);
+    let db = TokensAccountingDB::new(&storage);
+    let mut cache = TokensAccountingCache::new(&db);
 
     let exceed_minted_by = (amount_minted + Amount::from_atoms(1)).unwrap();
     assert_eq!(
@@ -484,7 +491,8 @@ fn lock_supply_only_if_lockable(#[case] seed: Seed) {
         ]),
         BTreeMap::new(),
     );
-    let mut cache = TokensAccountingCache::new(&mut storage);
+    let mut db = TokensAccountingDB::new(&mut storage);
+    let mut cache = TokensAccountingCache::new(&mut db);
 
     let res1 = cache.lock_circulating_supply(token_id_1);
     assert_eq!(
@@ -516,7 +524,6 @@ fn lock_supply_only_if_lockable(#[case] seed: Seed) {
     assert_eq!(cache.get_circulating_supply(&token_id_3).unwrap(), None);
 
     let consumed_data = cache.consume();
-    let mut db = TokensAccountingDB::new(&mut storage);
     db.batch_write_tokens_data(consumed_data).unwrap();
 
     let expected_storage = InMemoryTokensAccounting::from_values(
@@ -542,12 +549,12 @@ fn lock_supply_and_try_mint_unmint(#[case] seed: Seed) {
     let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
     let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
-    let mut storage = InMemoryTokensAccounting::from_values(
+    let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::from_iter([(token_id, amount_to_mint)]),
     );
-
-    let mut cache = TokensAccountingCache::new(&mut storage);
+    let db = TokensAccountingDB::new(&storage);
+    let mut cache = TokensAccountingCache::new(&db);
 
     // Mint more
     let _ = cache.mint_tokens(token_id, amount_to_mint).unwrap();
@@ -580,12 +587,13 @@ fn lock_supply_undo_mint_unmint(#[case] seed: Seed) {
     let amount_to_mint = Amount::from_atoms(rng.gen_range(2..1000));
     let amount_to_unmint = Amount::from_atoms(rng.gen_range(1..amount_to_mint.into_atoms()));
 
-    let mut storage = InMemoryTokensAccounting::from_values(
+    let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::from_iter([(token_id, amount_to_mint)]),
     );
+    let db = TokensAccountingDB::new(&storage);
+    let mut cache = TokensAccountingCache::new(&db);
 
-    let mut cache = TokensAccountingCache::new(&mut storage);
     let undo = cache.lock_circulating_supply(token_id).unwrap();
 
     let locked_token_data = match token_data.clone() {
@@ -619,12 +627,13 @@ fn try_lock_twice(#[case] seed: Seed) {
     let token_data = make_token_data(&mut rng, TokenTotalSupply::Lockable, true);
     let token_id = make_token_id(&mut rng);
 
-    let mut storage = InMemoryTokensAccounting::from_values(
+    let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::new(),
     );
+    let db = TokensAccountingDB::new(&storage);
+    let mut cache = TokensAccountingCache::new(&db);
 
-    let mut cache = TokensAccountingCache::new(&mut storage);
     assert_eq!(
         cache.lock_circulating_supply(token_id),
         Err(crate::Error::SupplyIsAlreadyLocked(token_id))
@@ -642,8 +651,10 @@ fn try_freeze_not_freezable_token(#[case] seed: Seed) {
     let token_data = TokenData::FungibleToken(token_issuance.into());
     let token_id = make_token_id(&mut rng);
 
-    let mut storage = InMemoryTokensAccounting::new();
-    let mut cache = TokensAccountingCache::new(&mut storage);
+    let storage = InMemoryTokensAccounting::new();
+    let db = TokensAccountingDB::new(&storage);
+    let mut cache = TokensAccountingCache::new(&db);
+
     let _ = cache.issue_token(token_id, token_data).unwrap();
 
     assert_eq!(
@@ -668,11 +679,12 @@ fn freeze_token_and_undo(#[case] seed: Seed) {
     let token_data = TokenData::FungibleToken(token_issuance.into());
     let token_id = make_token_id(&mut rng);
 
-    let mut storage = InMemoryTokensAccounting::from_values(
+    let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::from_iter([(token_id, Amount::from_atoms(1000))]),
     );
-    let mut cache = TokensAccountingCache::new(&mut storage);
+    let db = TokensAccountingDB::new(&storage);
+    let mut cache = TokensAccountingCache::new(&db);
 
     let undo_freeze = cache.freeze_token(token_id, IsTokenUnfreezable::No).unwrap();
 
@@ -735,13 +747,14 @@ fn unfreeze_token_and_undo(#[case] seed: Seed) {
     let token_data = TokenData::FungibleToken(token_issuance.into());
     let token_id = make_token_id(&mut rng);
 
-    let mut storage = InMemoryTokensAccounting::from_values(
+    let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::from_iter([(token_id, Amount::from_atoms(1000))]),
     );
-    let mut cache = TokensAccountingCache::new(&mut storage);
-    let _ = cache.freeze_token(token_id, IsTokenUnfreezable::Yes).unwrap();
+    let db = TokensAccountingDB::new(&storage);
+    let mut cache = TokensAccountingCache::new(&db);
 
+    let _ = cache.freeze_token(token_id, IsTokenUnfreezable::Yes).unwrap();
     let undo_unfreeze = cache.unfreeze_token(token_id).unwrap();
 
     assert_eq!(
@@ -774,11 +787,12 @@ fn freeze_unfreeze_freeze(#[case] seed: Seed) {
     let token_data = TokenData::FungibleToken(token_issuance.into());
     let token_id = make_token_id(&mut rng);
 
-    let mut storage = InMemoryTokensAccounting::from_values(
+    let storage = InMemoryTokensAccounting::from_values(
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::from_iter([(token_id, Amount::from_atoms(1000))]),
     );
-    let mut cache = TokensAccountingCache::new(&mut storage);
+    let db = TokensAccountingDB::new(&storage);
+    let mut cache = TokensAccountingCache::new(&db);
 
     // Freeze the token
     let _ = cache.freeze_token(token_id, IsTokenUnfreezable::Yes).unwrap();
@@ -837,11 +851,11 @@ fn change_authority_flush_undo(#[case] seed: Seed) {
     let original_storage = storage.clone();
 
     // Change authority
-    let mut cache = TokensAccountingCache::new(&mut storage);
+    let mut db = TokensAccountingDB::new(&mut storage);
+    let mut cache = TokensAccountingCache::new(&mut db);
     let undo = cache.change_authority(token_id, new_authority).unwrap();
 
     let consumed_data = cache.consume();
-    let mut db = TokensAccountingDB::new(&mut storage);
     db.batch_write_tokens_data(consumed_data).unwrap();
 
     let expected_storage = InMemoryTokensAccounting::from_values(
@@ -851,11 +865,11 @@ fn change_authority_flush_undo(#[case] seed: Seed) {
     assert_eq!(storage, expected_storage);
 
     // undo
-    let mut cache = TokensAccountingCache::new(&mut storage);
+    let mut db = TokensAccountingDB::new(&mut storage);
+    let mut cache = TokensAccountingCache::new(&mut db);
     cache.undo(undo).unwrap();
 
     let consumed_data = cache.consume();
-    let mut db = TokensAccountingDB::new(&mut storage);
     db.batch_write_tokens_data(consumed_data).unwrap();
 
     assert_eq!(storage, original_storage);
@@ -885,14 +899,14 @@ fn change_authority_twice(#[case] seed: Seed) {
         BTreeMap::from_iter([(token_id, token_data_1.clone())]),
         BTreeMap::new(),
     );
+    let mut db = TokensAccountingDB::new(&mut storage);
 
     // Change authority
-    let mut cache = TokensAccountingCache::new(&mut storage);
+    let mut cache = TokensAccountingCache::new(&mut db);
     let _ = cache.change_authority(token_id, new_authority_1).unwrap();
     let _ = cache.change_authority(token_id, new_authority_2).unwrap();
 
     let consumed_data = cache.consume();
-    let mut db = TokensAccountingDB::new(&mut storage);
     db.batch_write_tokens_data(consumed_data).unwrap();
 
     let expected_storage = InMemoryTokensAccounting::from_values(
@@ -917,7 +931,8 @@ fn try_change_authority_for_freezed_token(#[case] seed: Seed) {
         BTreeMap::from_iter([(token_id, token_data.clone())]),
         BTreeMap::new(),
     );
-    let mut cache = TokensAccountingCache::new(&mut storage);
+    let mut db = TokensAccountingDB::new(&mut storage);
+    let mut cache = TokensAccountingCache::new(&mut db);
 
     // Freeze the token
     let _ = cache.freeze_token(token_id, IsTokenUnfreezable::Yes).unwrap();
@@ -944,7 +959,6 @@ fn try_change_authority_for_freezed_token(#[case] seed: Seed) {
     let _ = cache.change_authority(token_id, new_authority).unwrap();
 
     let consumed_data = cache.consume();
-    let mut db = TokensAccountingDB::new(&mut storage);
     db.batch_write_tokens_data(consumed_data).unwrap();
 
     let expected_storage = InMemoryTokensAccounting::from_values(

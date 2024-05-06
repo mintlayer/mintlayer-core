@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use common::{chain::tokens::TokenId, primitives::Amount};
 
-use crate::{TokenData, TokensAccountingView};
+use crate::TokenData;
 
 use super::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
 
@@ -86,17 +86,5 @@ impl TokensAccountingStorageWrite for InMemoryTokensAccounting {
     fn del_circulating_supply(&mut self, id: &TokenId) -> Result<(), Self::Error> {
         self.circulating_supply.remove(id);
         Ok(())
-    }
-}
-
-impl TokensAccountingView for InMemoryTokensAccounting {
-    type Error = chainstate_types::storage_result::Error;
-
-    fn get_token_data(&self, id: &TokenId) -> Result<Option<TokenData>, Self::Error> {
-        Ok(self.tokens_data.get(id).cloned())
-    }
-
-    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
-        Ok(self.circulating_supply.get(id).cloned())
     }
 }
