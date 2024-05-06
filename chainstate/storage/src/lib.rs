@@ -261,13 +261,13 @@ pub trait BlockchainStorageWrite:
 }
 
 /// Operations on read-only transactions
-pub trait TransactionRo: BlockchainStorageRead {
+pub trait TransactionRo: is_transaction_seal::Seal + BlockchainStorageRead {
     /// Close the transaction
     fn close(self);
 }
 
 /// Operations on read-write transactions
-pub trait TransactionRw: BlockchainStorageWrite {
+pub trait TransactionRw: is_transaction_seal::Seal + BlockchainStorageWrite {
     /// Abort the transaction
     fn abort(self);
 
