@@ -25,7 +25,8 @@ use crate::{
         tx_verification_strategy::TransactionVerificationStrategy,
         BlockSource, OrphanBlocksRef,
     },
-    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator, NonZeroPoolBalances,
+    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
+    NonZeroPoolBalances,
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};

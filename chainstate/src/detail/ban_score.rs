@@ -79,8 +79,8 @@ impl BanScore for BlockError {
             BlockError::InvariantErrorAttemptToConnectInvalidBlock(_) => 0,
             BlockError::InvariantErrorDisconnectedHeaders => 0,
             BlockError::InvariantErrorTotalPoolBalanceLessThanStakers { .. } => 0,
-            BlockError::InvariantErrorPoolBalancePresentDataMissing(_) => 0,
-            BlockError::InvariantErrorPoolDataPresentBalanceMissing(_) => 0,
+            BlockError::InvariantErrorPoolBalancePresentDataMissing(_, _) => 0,
+            BlockError::InvariantErrorPoolDataPresentBalanceMissing(_, _) => 0,
 
             BlockError::UnexpectedHeightRange(_, _) => 0,
 

@@ -98,8 +98,8 @@ impl BlockProcessingErrorClassification for BlockError {
             | BlockError::InvariantErrorAttemptToConnectInvalidBlock(_)
             | BlockError::InvariantErrorDisconnectedHeaders
             | BlockError::InvariantErrorTotalPoolBalanceLessThanStakers { .. }
-            | BlockError::InvariantErrorPoolBalancePresentDataMissing(_)
-            | BlockError::InvariantErrorPoolDataPresentBalanceMissing(_)
+            | BlockError::InvariantErrorPoolBalancePresentDataMissing(_, _)
+            | BlockError::InvariantErrorPoolDataPresentBalanceMissing(_, _)
             | BlockError::UnexpectedHeightRange(_, _)
             | BlockError::DbCommitError(_, _, _)
             | BlockError::BlockAlreadyExists(_)

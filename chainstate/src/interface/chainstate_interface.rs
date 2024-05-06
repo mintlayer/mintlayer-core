@@ -15,7 +15,10 @@
 
 use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
 
-use crate::{detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, NonZeroPoolBalances};
+use crate::{
+    detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent,
+    NonZeroPoolBalances,
+};
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 use common::{
     chain::{

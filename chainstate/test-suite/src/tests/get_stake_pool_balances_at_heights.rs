@@ -39,6 +39,9 @@ use crate::tests::helpers::{
     pos::create_stake_pool_data_with_all_reward_to_staker,
 };
 
+// TODO: the tests below should use PoS instead of IgnoreConsensus, so that the staker's balance
+// can also change.
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -57,7 +60,7 @@ fn basic_test(#[case] seed: Seed) {
 
         let (pool1, pool1_pledge) = test_data.make_new_pool(&mut tf, &mut rng);
 
-        let expected_balances_at_1 = [(pool1, pool1_pledge)];
+        let expected_balances_at_1 = [(pool1, Balances::new_same(pool1_pledge))];
 
         let check1 = |tf: &TestFramework| {
             let balances_at_0_0 = get_balances_at_heights(tf, &[pool1], Some(0), Some(0));
@@ -75,7 +78,10 @@ fn basic_test(#[case] seed: Seed) {
 
         let (pool2, pool2_pledge) = test_data.make_new_pool(&mut tf, &mut rng);
 
-        let expected_balances_at_2 = [(pool1, pool1_pledge), (pool2, pool2_pledge)];
+        let expected_balances_at_2 = [
+            (pool1, Balances::new_same(pool1_pledge)),
+            (pool2, Balances::new_same(pool2_pledge)),
+        ];
 
         let check2 = |tf: &TestFramework| {
             check1(tf);
@@ -99,7 +105,7 @@ fn basic_test(#[case] seed: Seed) {
 
         test_data.decommission_pool(&mut tf, &mut rng, &pool1);
 
-        let expected_balances_at_3 = [(pool2, pool2_pledge)];
+        let expected_balances_at_3 = [(pool2, Balances::new_same(pool2_pledge))];
 
         let check3 = |tf: &TestFramework| {
             check2(tf);
@@ -137,7 +143,7 @@ fn basic_test(#[case] seed: Seed) {
         let (delegation, delegated_anount) = test_data.create_delegation(&mut tf, &mut rng, &pool2);
 
         let pool2_balance = (pool2_pledge + delegated_anount).unwrap();
-        let expected_balances_at_4 = [(pool2, pool2_balance)];
+        let expected_balances_at_4 = [(pool2, Balances::new(pool2_balance, pool2_pledge))];
 
         let check4 = |tf: &TestFramework| {
             check3(tf);
@@ -180,7 +186,7 @@ fn basic_test(#[case] seed: Seed) {
             test_data.withdraw_from_delegation(&mut tf, &mut rng, &pool2, &delegation);
 
         let pool2_balance = (pool2_balance - withdraw_amount).unwrap();
-        let expected_balances_at_5 = [(pool2, pool2_balance)];
+        let expected_balances_at_5 = [(pool2, Balances::new(pool2_balance, pool2_pledge))];
 
         let check5 = |tf: &TestFramework| {
             check4(tf);
@@ -237,7 +243,7 @@ fn basic_test(#[case] seed: Seed) {
         check5(&tf);
 
         let pool2_balance = (pool2_balance + added_amount).unwrap();
-        let expected_balances_at_6 = [(pool2, pool2_balance)];
+        let expected_balances_at_6 = [(pool2, Balances::new(pool2_balance, pool2_pledge))];
 
         let balances_at_0_7 = get_balances_at_heights(&tf, &[pool1, pool2], Some(0), Some(7));
         let expected_balances_at_0_7 = make_expected_balances(&[
@@ -345,7 +351,7 @@ fn get_balances_at_heights(
     pool_ids: &[PoolId],
     min_height: Option<u32>,
     max_height: Option<u32>,
-) -> BTreeMap<BlockHeight, BTreeMap<PoolId, Amount>> {
+) -> BTreeMap<BlockHeight, BTreeMap<PoolId, Balances>> {
     let min_height = BlockHeight::new(min_height.unwrap_or(0).into());
     let bb_height = tf.best_block_index().block_height();
     let max_height = max_height.map_or(bb_height, |h| BlockHeight::new(h.into()));
@@ -355,7 +361,6 @@ fn get_balances_at_heights(
         .get_stake_pool_balances_at_heights(pool_ids, min_height, max_height)
         .unwrap();
 
-    // FIXME test the staker's balance
     balances
         .iter()
         .map(|(height, pool_to_balances_map)| {
@@ -363,19 +368,36 @@ fn get_balances_at_heights(
                 *height,
                 pool_to_balances_map
                     .iter()
-                    .map(|(pool_id, balances)| (*pool_id, balances.total_balance()))
+                    .map(|(pool_id, balances)| {
+                        (
+                            *pool_id,
+                            Balances::new(balances.total_balance(), balances.staker_balance()),
+                        )
+                    })
                     .collect::<BTreeMap<_, _>>(),
             )
         })
         .collect::<BTreeMap<_, _>>()
 }
 
-fn get_cur_balances(tf: &TestFramework, pool_ids: &[PoolId]) -> BTreeMap<PoolId, Amount> {
+fn get_cur_balances(tf: &TestFramework, pool_ids: &[PoolId]) -> BTreeMap<PoolId, Balances> {
     let mut result = BTreeMap::new();
 
     for pool_id in pool_ids {
-        if let Some(balance) = tf.chainstate.get_stake_pool_balance(*pool_id).unwrap() {
-            result.insert(*pool_id, balance);
+        let pool_balance = tf.chainstate.get_stake_pool_balance(*pool_id).unwrap();
+        let pool_data = tf.chainstate.get_stake_pool_data(*pool_id).unwrap();
+
+        match (pool_balance, pool_data) {
+            (Some(balance), Some(data)) => {
+                result.insert(
+                    *pool_id,
+                    Balances::new(balance, data.staker_balance().unwrap()),
+                );
+            }
+            (None, None) => {}
+            (Some(_), None) | (None, Some(_)) => {
+                panic!("Pool balance presence is inconsistent with pool data's")
+            }
         }
     }
 
@@ -383,15 +405,34 @@ fn get_cur_balances(tf: &TestFramework, pool_ids: &[PoolId]) -> BTreeMap<PoolId,
 }
 
 fn make_expected_balances(
-    balances: &[(u32, &[(PoolId, Amount)])],
-) -> BTreeMap<BlockHeight, BTreeMap<PoolId, Amount>> {
+    balances: &[(u32, &[(PoolId, Balances)])],
+) -> BTreeMap<BlockHeight, BTreeMap<PoolId, Balances>> {
     balances
         .iter()
         .map(|(height, pool_to_amount_map)| {
-            let pool_to_amount_map = pool_to_amount_map.iter().copied().collect::<BTreeMap<_, _>>();
+            let pool_to_amount_map = pool_to_amount_map.iter().cloned().collect::<BTreeMap<_, _>>();
             (BlockHeight::new((*height).into()), pool_to_amount_map)
         })
         .collect::<BTreeMap<_, _>>()
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Balances {
+    total_balance: Amount,
+    staker_balance: Amount,
+}
+
+impl Balances {
+    fn new(total_balance: Amount, staker_balance: Amount) -> Self {
+        Self {
+            total_balance,
+            staker_balance,
+        }
+    }
+
+    fn new_same(balance: Amount) -> Self {
+        Self::new(balance, balance)
+    }
 }
 
 struct TestPoolInfo {
@@ -403,7 +444,7 @@ struct TestData {
     pools: BTreeMap<PoolId, TestPoolInfo>,
     decommissioned_pools: BTreeSet<PoolId>,
     delegations: BTreeMap<DelegationId, /*next_nonce:*/ AccountNonce>,
-    expected_balances: BTreeMap<BlockHeight, BTreeMap<PoolId, Amount>>,
+    expected_balances: BTreeMap<BlockHeight, BTreeMap<PoolId, Balances>>,
 }
 
 impl TestData {
@@ -455,7 +496,7 @@ impl TestData {
             },
         );
 
-        self.push_new_height(tf).insert(pool_id, pledge);
+        self.push_new_height(tf).insert(pool_id, Balances::new_same(pledge));
 
         self.assert_balances(tf);
 
@@ -654,10 +695,13 @@ impl TestData {
         balance_change: SignedAmount,
     ) {
         let new_height_data = self.push_new_height(tf);
-        let cur_balance = new_height_data.entry(*pool_id).or_insert(Amount::ZERO);
-        *cur_balance =
-            Amount::from_signed((cur_balance.into_signed().unwrap() + balance_change).unwrap())
-                .unwrap();
+        let cur_balance =
+            new_height_data.entry(*pool_id).or_insert(Balances::new_same(Amount::ZERO));
+        let new_total_balance = Amount::from_signed(
+            (cur_balance.total_balance.into_signed().unwrap() + balance_change).unwrap(),
+        )
+        .unwrap();
+        *cur_balance = Balances::new(new_total_balance, cur_balance.staker_balance);
     }
 
     fn random_pool_id(&self, rng: &mut impl Rng) -> Option<PoolId> {
@@ -672,7 +716,7 @@ impl TestData {
         delegation_id.map(|delegation_id| (pool_id, delegation_id))
     }
 
-    fn push_new_height(&mut self, tf: &TestFramework) -> &mut BTreeMap<PoolId, Amount> {
+    fn push_new_height(&mut self, tf: &TestFramework) -> &mut BTreeMap<PoolId, Balances> {
         let bb_height = tf.best_block_index().block_height();
         assert!(bb_height.into_int() > 0);
         let prev_balances = if bb_height.into_int() == 1 {
@@ -708,10 +752,7 @@ impl TestData {
 
         let expected_balances = {
             let mut expected_balances = self.expected_balances.clone();
-            expected_balances.retain(|_, pool_to_amount_map| {
-                pool_to_amount_map.retain(|_, amount| *amount != Amount::ZERO);
-                !pool_to_amount_map.is_empty()
-            });
+            expected_balances.retain(|_, pool_to_amount_map| !pool_to_amount_map.is_empty());
 
             expected_balances
         };

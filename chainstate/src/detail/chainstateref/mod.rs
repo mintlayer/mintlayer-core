@@ -1020,7 +1020,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let mut height_map = BTreeMap::new();
 
         let max_height = if max_height == best_block_height {
-            let balances_at_tip = Self::collect_pool_balances(pool_ids.iter(), self)?;
+            let balances_at_tip =
+                Self::collect_pool_balances(pool_ids.iter(), self, best_block_height)?;
             if !balances_at_tip.is_empty() {
                 height_map.insert(best_block_height, balances_at_tip);
             }
@@ -1047,7 +1048,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     .expect("Genesis can't be disconnected");
                 assert!(cur_height >= min_height);
 
-                let balances = Self::collect_pool_balances(pool_ids.iter(), &tx_verifier)?;
+                let balances =
+                    Self::collect_pool_balances(pool_ids.iter(), &tx_verifier, cur_height)?;
 
                 pool_ids.retain(|pool_id| {
                     // We didn't see this pool having balance yet.
@@ -1078,11 +1080,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     fn collect_pool_balances<'b>(
         pool_ids: impl Iterator<Item = &'b PoolId>,
         pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
+        assumed_bb_height: BlockHeight,
     ) -> Result<BTreeMap<PoolId, NonZeroPoolBalances>, BlockError> {
         let mut balances = BTreeMap::new();
 
         for pool_id in pool_ids {
-            if let Some(pool_balance) = NonZeroPoolBalances::obtain(pool_id, pos_accounting_view)? {
+            if let Some(pool_balance) =
+                NonZeroPoolBalances::obtain(pool_id, pos_accounting_view, assumed_bb_height)?
+            {
                 balances.insert(*pool_id, pool_balance);
             }
         }
@@ -1470,8 +1475,11 @@ impl NonZeroPoolBalances {
     pub fn obtain(
         pool_id: &PoolId,
         pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
+        assumed_bb_height: BlockHeight,
     ) -> Result<Option<Self>, BlockError> {
-        let total_balance = pos_accounting_view.get_pool_balance(*pool_id)?;
+        let total_balance = pos_accounting_view
+            .get_pool_balance(*pool_id)?
+            .and_then(|balance| (balance != Amount::ZERO).then_some(balance));
         let pool_data = pos_accounting_view.get_pool_data(*pool_id)?;
 
         match (total_balance, pool_data) {
@@ -1484,10 +1492,11 @@ impl NonZeroPoolBalances {
                         total_balance,
                         staker_balance,
                         pool_id: *pool_id,
+                        best_block_height: assumed_bb_height,
                     }
                 );
 
-                if total_balance != Amount::ZERO {
+                if staker_balance != Amount::ZERO {
                     Ok(Some(Self {
                         total_balance,
                         staker_balance,
@@ -1499,9 +1508,11 @@ impl NonZeroPoolBalances {
             (None, None) => Ok(None),
             (Some(_), None) => Err(BlockError::InvariantErrorPoolBalancePresentDataMissing(
                 *pool_id,
+                assumed_bb_height,
             )),
             (None, Some(_)) => Err(BlockError::InvariantErrorPoolDataPresentBalanceMissing(
                 *pool_id,
+                assumed_bb_height,
             )),
         }
     }
