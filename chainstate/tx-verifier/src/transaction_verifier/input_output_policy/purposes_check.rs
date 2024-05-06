@@ -186,41 +186,20 @@ pub fn check_tx_inputs_outputs_purposes(
     );
 
     // Check outputs
-    let mut produce_block_outputs_count = 0;
-    let mut stake_pool_outputs_count = 0;
-    let mut create_delegation_output_count = 0;
-
-    tx.outputs().iter().for_each(|output| match output {
+    let produce_block_in_tx = tx.outputs().iter().any(|output| match output {
         TxOutput::Transfer(..)
         | TxOutput::LockThenTransfer(..)
         | TxOutput::Burn(..)
         | TxOutput::DelegateStaking(..)
         | TxOutput::IssueFungibleToken(..)
         | TxOutput::IssueNft(..)
-        | TxOutput::DataDeposit(..) => { /* do nothing */ }
-        TxOutput::CreateStakePool(..) => {
-            stake_pool_outputs_count += 1;
-        }
-        TxOutput::ProduceBlockFromStake(..) => {
-            produce_block_outputs_count += 1;
-        }
-        TxOutput::CreateDelegationId(..) => {
-            create_delegation_output_count += 1;
-        }
+        | TxOutput::DataDeposit(..)
+        | TxOutput::CreateDelegationId(..)
+        | TxOutput::CreateStakePool(..) => false,
+        TxOutput::ProduceBlockFromStake(..) => true,
     });
 
-    ensure!(
-        produce_block_outputs_count == 0,
-        IOPolicyError::ProduceBlockInTx
-    );
-    ensure!(
-        stake_pool_outputs_count <= 1,
-        IOPolicyError::MultiplePoolCreated
-    );
-    ensure!(
-        create_delegation_output_count <= 1,
-        IOPolicyError::MultipleDelegationCreated
-    );
+    ensure!(!produce_block_in_tx, IOPolicyError::ProduceBlockInTx);
 
     Ok(())
 }

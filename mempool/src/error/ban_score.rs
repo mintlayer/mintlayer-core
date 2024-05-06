@@ -342,8 +342,6 @@ impl MempoolBanScore for IOPolicyError {
             IOPolicyError::InvalidInputTypeInReward => 100,
             IOPolicyError::InvalidOutputTypeInReward => 100,
             IOPolicyError::InvalidInputTypeInTx => 100,
-            IOPolicyError::MultiplePoolCreated => 100,
-            IOPolicyError::MultipleDelegationCreated => 100,
             IOPolicyError::MultipleAccountCommands => 100,
             IOPolicyError::ProduceBlockInTx => 100,
             IOPolicyError::AttemptToUseAccountInputInReward => 100,

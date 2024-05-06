@@ -33,91 +33,13 @@ use crate::error::SpendStakeError;
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn tx_stake_multiple_pools(#[case] seed: Seed) {
-    let mut rng = make_seedable_rng(seed);
-
-    let source_inputs = super::outputs_utils::valid_tx_inputs_utxos();
-    let source_valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
-    let source_invalid_outputs = [stake_pool()];
-
-    let inputs = get_random_outputs_combination(&mut rng, &source_inputs, 1);
-
-    let number_of_valid_outputs = rng.gen_range(0..10);
-    let number_of_invalid_outputs = rng.gen_range(2..10);
-    let outputs =
-        get_random_outputs_combination(&mut rng, &source_valid_outputs, number_of_valid_outputs)
-            .into_iter()
-            .chain(
-                get_random_outputs_combination(
-                    &mut rng,
-                    &source_invalid_outputs,
-                    number_of_invalid_outputs,
-                )
-                .into_iter(),
-            )
-            .collect();
-
-    let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, inputs, outputs);
-
-    let inputs_utxos = collect_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
-    let result = check_tx_inputs_outputs_purposes(&tx, &inputs_utxos).unwrap_err();
-    assert_eq!(result, IOPolicyError::MultiplePoolCreated);
-}
-
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn tx_create_multiple_delegations(#[case] seed: Seed) {
-    let mut rng = make_seedable_rng(seed);
-
-    let source_inputs = super::outputs_utils::valid_tx_inputs_utxos();
-    let source_valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
-    let source_invalid_outputs = [create_delegation()];
-
-    let inputs = get_random_outputs_combination(&mut rng, &source_inputs, 1);
-
-    let number_of_valid_outputs = rng.gen_range(0..10);
-    let number_of_invalid_outputs = rng.gen_range(2..10);
-    let outputs =
-        get_random_outputs_combination(&mut rng, &source_valid_outputs, number_of_valid_outputs)
-            .into_iter()
-            .chain(
-                get_random_outputs_combination(
-                    &mut rng,
-                    &source_invalid_outputs,
-                    number_of_invalid_outputs,
-                )
-                .into_iter(),
-            )
-            .collect();
-
-    let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, inputs, outputs);
-
-    let inputs_utxos = collect_inputs_utxos(&utxo_db, tx.inputs()).unwrap();
-    let result = check_tx_inputs_outputs_purposes(&tx, &inputs_utxos).unwrap_err();
-    assert_eq!(result, IOPolicyError::MultipleDelegationCreated);
-}
-
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
 fn tx_many_to_many_valid(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let number_of_inputs = rng.gen_range(1..10);
     let number_of_outputs = rng.gen_range(1..10);
 
     let valid_inputs = valid_tx_inputs_utxos();
-    // stake pool and create delegation are skipped to avoid dealing with uniqueness
-    let valid_outputs = [
-        lock_then_transfer(),
-        transfer(),
-        burn(),
-        delegate_staking(),
-        issue_tokens(),
-        issue_nft(),
-        data_deposit(),
-    ];
-
+    let valid_outputs = valid_tx_outputs();
     let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
         &mut rng,
         &valid_inputs,

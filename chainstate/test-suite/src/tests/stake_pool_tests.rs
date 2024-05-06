@@ -15,7 +15,7 @@
 
 use super::helpers::pos::create_stake_pool_data_with_all_reward_to_staker;
 
-use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
+use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate::{BlockSource, CheckBlockError};
 use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
@@ -300,16 +300,13 @@ fn stake_pool_twice(#[case] seed: Seed) {
                 Box::new(stake_pool_data),
             ))
             .build();
-        let tx_id = tx.transaction().get_id();
-
         let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::IOPolicyError(
-                    IOPolicyError::MultiplePoolCreated,
-                    tx_id.into()
+                ConnectTransactionError::PoSAccountingError(
+                    pos_accounting::Error::InvariantErrorPoolBalanceAlreadyExists
                 )
             ))
         );
