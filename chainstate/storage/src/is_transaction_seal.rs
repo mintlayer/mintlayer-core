@@ -13,8 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// Prevent more types from implementing the [crate::IsTransaction] trait
-#[allow(dead_code)]
+/// Prevent more types from implementing [crate::TransactionRo] and [crate::TransactionRw]
 pub trait Seal {}
 
 impl<'st, B: storage::Backend> Seal for crate::internal::StoreTxRo<'st, B> {}
