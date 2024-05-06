@@ -61,10 +61,7 @@ enum StringOrUint {
 }
 
 impl<'de> serde::Deserialize<'de> for MempoolMaxSize {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         use serde::de::Error;
 
         match StringOrUint::deserialize(deserializer)? {

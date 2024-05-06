@@ -72,13 +72,14 @@ where
     Ok(())
 }
 
-pub async fn set_get<S: ApiServerStorage, Fut, F: Fn() -> Fut>(
+pub async fn set_get<S, Fut, F>(
     storage_maker: Arc<F>,
     seed_maker: Box<dyn Fn() -> Seed + Send>,
 ) -> Result<(), Failed>
 where
     S: ApiServerStorage,
     Fut: Future<Output = S> + Send + 'static,
+    F: Fn() -> Fut,
 {
     let seed = seed_maker();
 

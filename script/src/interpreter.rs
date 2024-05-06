@@ -359,8 +359,8 @@ pub fn run_script<'a, Ctx: Context>(
 /// Some pubkeys may not have signatures to go with them.
 fn check_multisig<'a, Ctx: Context>(
     ctx: &Ctx,
-    mut sigs: impl Iterator<Item = &'a [u8]> + ExactSizeIterator,
-    mut pubkeys: impl Iterator<Item = &'a [u8]> + ExactSizeIterator,
+    mut sigs: impl ExactSizeIterator<Item = &'a [u8]>,
+    mut pubkeys: impl ExactSizeIterator<Item = &'a [u8]>,
     subscript: &[u8],
     codesep_idx: u32,
 ) -> crate::Result<bool> {

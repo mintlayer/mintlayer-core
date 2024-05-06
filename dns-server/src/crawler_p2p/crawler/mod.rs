@@ -609,7 +609,7 @@ impl Crawler {
             .iter_mut()
             .filter(|(address, address_data)| {
                 address_data.connect_now(self.now)
-                    && self.banned_addresses.get(&address.as_bannable()).is_none()
+                    && !self.banned_addresses.contains_key(&address.as_bannable())
             })
             .choose_multiple(rng, MAX_CONNECTS_PER_HEARTBEAT);
 

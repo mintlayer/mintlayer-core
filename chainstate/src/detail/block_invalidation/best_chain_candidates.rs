@@ -204,6 +204,7 @@ pub trait ChainstateAccessor {
 pub trait BlockInfo: Clone {
     fn id(&self) -> Id<Block>;
     fn parent_id(&self) -> Id<GenBlock>;
+    #[allow(dead_code)]
     fn height(&self) -> BlockHeight;
     fn chain_trust(&self) -> Uint256;
     fn status(&self) -> BlockStatus;
