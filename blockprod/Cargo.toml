@@ -26,8 +26,10 @@ async-trait.workspace = true
 hex.workspace = true
 futures.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }
+itertools.workspace = true
 mockall.workspace = true
 parity-scale-codec.workspace = true
+rayon.workspace = true
 slave-pool.workspace = true
 serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true

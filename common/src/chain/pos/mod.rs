@@ -15,7 +15,7 @@
 
 use std::str::FromStr;
 
-use serialization::{DecodeAll, Encode};
+use serialization::{Decode, DecodeAll, Encode};
 use typename::TypeName;
 
 use crate::{
@@ -41,7 +41,7 @@ pub type PoolId = Id<Pool>;
 pub enum Delegation {}
 pub type DelegationId = Id<Delegation>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct PoSConsensusVersion(u32);
 
 impl PoSConsensusVersion {

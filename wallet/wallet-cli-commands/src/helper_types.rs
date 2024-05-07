@@ -372,3 +372,18 @@ impl CliIsUnfreezable {
 pub enum CliForceReduce {
     IKnowWhatIAmDoing,
 }
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum YesNo {
+    Yes,
+    No,
+}
+
+impl YesNo {
+    pub fn to_bool(self) -> bool {
+        match self {
+            Self::Yes => true,
+            Self::No => false,
+        }
+    }
+}

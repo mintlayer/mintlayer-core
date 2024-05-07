@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{future::pending, num::NonZeroUsize, path::PathBuf};
+use std::{collections::BTreeMap, future::pending, num::NonZeroUsize, path::PathBuf};
 
 use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, WalletInterface};
 
@@ -21,7 +21,10 @@ use super::{ClientWalletRpc, WalletRpcError};
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
+    chain::{
+        block::timestamp::BlockTimestamp, Block, GenBlock, SignedTransaction, Transaction,
+        TxOutput, UtxoOutPoint,
+    },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
 use crypto::key::{hdkd::u31::U31, PrivateKey};
@@ -1197,6 +1200,26 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::node_generate_blocks(&self.http_client, account_index.into(), block_count)
             .await
             .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn node_find_timestamps_for_staking(
+        &self,
+        pool_id: String,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        check_all_timestamps_between_blocks: bool,
+    ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, Self::Error> {
+        WalletRpcClient::node_find_timestamps_for_staking(
+            &self.http_client,
+            pool_id.into(),
+            min_height,
+            max_height,
+            seconds_to_check_for_height,
+            check_all_timestamps_between_blocks,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn node_block(&self, block_id: String) -> Result<Option<String>, Self::Error> {

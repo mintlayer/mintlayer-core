@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, num::NonZeroUsize, path::PathBuf, str::FromStr};
+use std::{collections::BTreeMap, fmt::Debug, num::NonZeroUsize, path::PathBuf, str::FromStr};
 
 use chainstate::ChainInfo;
 use common::{
     address::{dehexify::dehexify_all_addresses, AddressError},
     chain::{
-        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        block::timestamp::BlockTimestamp, tokens::IsTokenUnfreezable, Block, GenBlock,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -1256,6 +1256,26 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
     ) -> Result<(), Self::Error> {
         self.wallet_rpc
             .generate_blocks(account_index, block_count)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn node_find_timestamps_for_staking(
+        &self,
+        pool_id: String,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        check_all_timestamps_between_blocks: bool,
+    ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, Self::Error> {
+        self.wallet_rpc
+            .find_timestamps_for_staking(
+                pool_id.into(),
+                min_height,
+                max_height,
+                seconds_to_check_for_height,
+                check_all_timestamps_between_blocks,
+            )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }

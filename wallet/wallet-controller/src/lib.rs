@@ -24,6 +24,7 @@ pub mod types;
 const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
 
+use blockprod::BlockProductionError;
 use futures::{
     never::Never,
     stream::{FuturesOrdered, FuturesUnordered},
@@ -50,6 +51,7 @@ use synced_controller::SyncedController;
 use common::{
     address::AddressError,
     chain::{
+        block::timestamp::BlockTimestamp,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::signature_hash,
@@ -65,7 +67,7 @@ use common::{
         Amount, BlockHeight, Id, Idable,
     },
 };
-use consensus::GenerateBlockInputData;
+use consensus::{GenerateBlockInputData, PoSTimestampSearchInputData};
 use crypto::{ephemeral_e2e::EndToEndPrivateKey, key::hdkd::u31::U31};
 use logging::log;
 use mempool::tx_accumulator::PackingStrategy;
@@ -126,6 +128,8 @@ pub enum ControllerError<T: NodeInterface> {
     WalletFileAlreadyOpen,
     #[error("Please open or create wallet file first")]
     NoWallet,
+    #[error("Search for timestamps failed: {0}")]
+    SearchForTimestampsFailed(BlockProductionError),
 }
 
 #[derive(Clone, Copy)]
@@ -434,7 +438,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
         let public_key = self
             .rpc_client
-            .generate_block_e2e_public_key()
+            .blockprod_e2e_public_key()
             .await
             .map_err(ControllerError::NodeCallError)?;
 
@@ -516,6 +520,56 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         }
 
         self.sync_once().await
+    }
+
+    pub async fn find_timestamps_for_staking(
+        &self,
+        pool_id: PoolId,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        check_all_timestamps_between_blocks: bool,
+    ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, ControllerError<T>> {
+        let pos_data = self
+            .wallet
+            .get_pos_gen_block_data_by_pool_id(pool_id)
+            .map_err(ControllerError::WalletError)?;
+
+        let input_data =
+            PoSTimestampSearchInputData::new(pool_id, pos_data.vrf_private_key().clone());
+
+        let public_key = self
+            .rpc_client
+            .blockprod_e2e_public_key()
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        let mut rng = make_true_rng();
+        let ephemeral_private_key = EndToEndPrivateKey::new_from_rng(&mut rng);
+        let ephemeral_public_key = ephemeral_private_key.public_key();
+        let shared_secret = ephemeral_private_key.shared_secret(&public_key);
+        let encrypted_input_data = shared_secret.encode_then_encrypt(&input_data, &mut rng)?;
+
+        let search_data = self
+            .rpc_client
+            .collect_timestamp_search_data_e2e(
+                encrypted_input_data,
+                ephemeral_public_key,
+                min_height,
+                max_height,
+                seconds_to_check_for_height,
+                check_all_timestamps_between_blocks,
+            )
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        blockprod::find_timestamps_for_staking(
+            Arc::clone(&self.chain_config),
+            input_data,
+            search_data,
+        )
+        .await
+        .map_err(|err| ControllerError::SearchForTimestampsFailed(err))
     }
 
     pub fn create_account(

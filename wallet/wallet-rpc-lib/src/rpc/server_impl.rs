@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, num::NonZeroUsize, str::FromStr, time::Duration};
+use std::{collections::BTreeMap, fmt::Debug, num::NonZeroUsize, str::FromStr, time::Duration};
 
 use common::{
     address::dehexify::dehexify_all_addresses,
     chain::{
+        block::timestamp::BlockTimestamp,
         tokens::{IsTokenUnfreezable, TokenId},
         Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
         TxOutput,
@@ -1158,6 +1159,26 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
     ) -> rpc::RpcResult<()> {
         rpc::handle_result(
             self.generate_blocks(account_arg.index::<N>()?, block_count).await.map(|_| {}),
+        )
+    }
+
+    async fn node_find_timestamps_for_staking(
+        &self,
+        pool_id: RpcAddress<PoolId>,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        check_all_timestamps_between_blocks: bool,
+    ) -> rpc::RpcResult<BTreeMap<BlockHeight, Vec<BlockTimestamp>>> {
+        rpc::handle_result(
+            self.find_timestamps_for_staking(
+                pool_id,
+                min_height,
+                max_height,
+                seconds_to_check_for_height,
+                check_all_timestamps_between_blocks,
+            )
+            .await,
         )
     }
 

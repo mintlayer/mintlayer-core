@@ -15,6 +15,7 @@
 
 use std::{num::NonZeroUsize, time::Duration};
 
+use blockprod::TimestampSearchData;
 use chainstate::ChainInfo;
 use common::{
     chain::{
@@ -132,7 +133,7 @@ impl NodeInterface for ColdWalletClient {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
-    async fn generate_block_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error> {
+    async fn blockprod_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
@@ -144,6 +145,18 @@ impl NodeInterface for ColdWalletClient {
         _transaction_ids: Vec<Id<Transaction>>,
         _packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn collect_timestamp_search_data_e2e(
+        &self,
+        _encrypted_input_data: Vec<u8>,
+        _public_key: EndToEndPublicKey,
+        _min_height: BlockHeight,
+        _max_height: Option<BlockHeight>,
+        _seconds_to_check_for_height: u64,
+        _all_timestamps_between_blocks: bool,
+    ) -> Result<TimestampSearchData, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 

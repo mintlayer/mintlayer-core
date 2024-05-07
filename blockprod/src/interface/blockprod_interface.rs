@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{detail::job_manager::JobKey, BlockProductionError};
+use crate::{detail::job_manager::JobKey, BlockProductionError, TimestampSearchData};
 use common::{
     chain::{Block, SignedTransaction, Transaction},
-    primitives::Id,
+    primitives::{BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e;
@@ -55,9 +55,23 @@ pub trait BlockProductionInterface: Send + Sync {
     async fn generate_block_e2e(
         &mut self,
         encrypted_input_data: Vec<u8>,
-        public_key: ephemeral_e2e::EndToEndPublicKey,
+        e2e_public_key: ephemeral_e2e::EndToEndPublicKey,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, BlockProductionError>;
+
+    /// Collect the search data needed by the `timestamp_searcher` module.
+    ///
+    /// See `timestamp_searcher::collect_timestamp_search_data` for the details about
+    /// the parameters.
+    async fn collect_timestamp_search_data_e2e(
+        &self,
+        encrypted_secret_input_data: Vec<u8>,
+        e2e_public_key: ephemeral_e2e::EndToEndPublicKey,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        check_all_timestamps_between_blocks: bool,
+    ) -> Result<TimestampSearchData, BlockProductionError>;
 }

@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::NonZeroUsize;
+use std::{collections::BTreeMap, num::NonZeroUsize};
 
 use common::{
     address::RpcAddress,
     chain::{
-        tokens::TokenId, Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction, TxOutput,
+        block::timestamp::BlockTimestamp, tokens::TokenId, Block, DelegationId, Destination,
+        GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -798,6 +798,16 @@ trait WalletRpc {
         account: AccountArg,
         block_count: u32,
     ) -> rpc::RpcResult<()>;
+
+    #[method(name = "node_find_timestamps_for_staking")]
+    async fn node_find_timestamps_for_staking(
+        &self,
+        pool_id: RpcAddress<PoolId>,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        check_all_timestamps_between_blocks: bool,
+    ) -> rpc::RpcResult<BTreeMap<BlockHeight, Vec<BlockTimestamp>>>;
 
     /// Get a block by its hash, represented with hex encoded bytes
     #[method(name = "node_get_block")]

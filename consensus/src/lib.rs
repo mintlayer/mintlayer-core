@@ -56,7 +56,9 @@ pub use crate::{
         error::ConsensusPoSError,
         find_timestamp_for_staking,
         hash_check::calc_and_check_pos_hash,
-        input_data::{PoSFinalizeBlockInputData, PoSGenerateBlockInputData},
+        input_data::{
+            PoSFinalizeBlockInputData, PoSGenerateBlockInputData, PoSTimestampSearchInputData,
+        },
         kernel::get_kernel_output,
         stake,
         target::{calculate_target_required, calculate_target_required_from_block_index},
@@ -94,8 +96,12 @@ pub enum ChainstateError {
     FailedToObtainEpochData { epoch_index: u64, error: String },
     #[error("Failed to calculate median time past starting from block {0}: {1}")]
     FailedToCalculateMedianTimePast(Id<GenBlock>, String),
+    #[error("Failed to obtain block index for block {0}: {1}")]
+    FailedToObtainBlockIndex(Id<GenBlock>, String),
     #[error("Failed to obtain best block index: {0}")]
     FailedToObtainBestBlockIndex(String),
+    #[error("Failed to obtain block id from height {0}: {1}")]
+    FailedToObtainBlockIdFromHeight(BlockHeight, String),
     #[error("Failed to obtain ancestor of block {0} at height {1}: {2}")]
     FailedToObtainAncestor(Id<Block>, BlockHeight, String),
     #[error("Failed to read data of pool {0}: {1}")]

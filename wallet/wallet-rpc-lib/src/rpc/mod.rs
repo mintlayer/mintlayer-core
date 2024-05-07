@@ -45,6 +45,7 @@ use wallet::{
 use common::{
     address::Address,
     chain::{
+        block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
@@ -217,6 +218,33 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         self.wallet
             .call_async(move |w| {
                 Box::pin(async move { w.generate_blocks(account_index, block_count).await })
+            })
+            .await?
+    }
+
+    pub async fn find_timestamps_for_staking(
+        &self,
+        pool_id: RpcAddress<PoolId>,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        check_all_timestamps_between_blocks: bool,
+    ) -> WRpcResult<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, N> {
+        let pool_id =
+            pool_id.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidPoolId)?;
+
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    w.find_timestamps_for_staking(
+                        pool_id,
+                        min_height,
+                        max_height,
+                        seconds_to_check_for_height,
+                        check_all_timestamps_between_blocks,
+                    )
+                    .await
+                })
             })
             .await?
     }

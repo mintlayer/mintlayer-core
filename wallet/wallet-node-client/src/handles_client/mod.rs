@@ -15,7 +15,7 @@
 
 use std::{num::NonZeroUsize, time::Duration};
 
-use blockprod::{BlockProductionError, BlockProductionHandle};
+use blockprod::{BlockProductionError, BlockProductionHandle, TimestampSearchData};
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{
@@ -213,7 +213,7 @@ impl NodeInterface for WalletHandlesClient {
         Ok(result)
     }
 
-    async fn generate_block_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error> {
+    async fn blockprod_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error> {
         let result = self.block_prod.call_async_mut(move |this| this.e2e_public_key()).await?;
 
         Ok(result)
@@ -241,6 +241,32 @@ impl NodeInterface for WalletHandlesClient {
             .await??;
 
         Ok(block)
+    }
+
+    async fn collect_timestamp_search_data_e2e(
+        &self,
+        encrypted_input_data: Vec<u8>,
+        public_key: EndToEndPublicKey,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        all_timestamps_between_blocks: bool,
+    ) -> Result<TimestampSearchData, Self::Error> {
+        let search_data = self
+            .block_prod
+            .call_async_mut(move |this| {
+                this.collect_timestamp_search_data_e2e(
+                    encrypted_input_data,
+                    public_key,
+                    min_height,
+                    max_height,
+                    seconds_to_check_for_height,
+                    all_timestamps_between_blocks,
+                )
+            })
+            .await??;
+
+        Ok(search_data)
     }
 
     async fn generate_block(

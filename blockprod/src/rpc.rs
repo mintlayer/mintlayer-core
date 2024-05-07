@@ -16,9 +16,8 @@
 //! Block production subsystem RPC handler
 
 use common::{
-    chain::Block,
-    chain::{SignedTransaction, Transaction},
-    primitives::Id,
+    chain::{Block, SignedTransaction, Transaction},
+    primitives::{BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::{self, EndToEndPublicKey};
@@ -26,7 +25,7 @@ use mempool::tx_accumulator::PackingStrategy;
 use rpc::RpcResult;
 use serialization::hex_encoded::HexEncoded;
 
-use crate::detail::job_manager::JobKey;
+use crate::{detail::job_manager::JobKey, TimestampSearchData};
 
 #[rpc::describe]
 #[rpc::rpc(server, client, namespace = "blockprod")]
@@ -79,6 +78,21 @@ trait BlockProductionRpc {
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> RpcResult<HexEncoded<Block>>;
+
+    /// Collect the search data needed by the `timestamp_searcher` module.
+    ///
+    /// See `timestamp_searcher::collect_timestamp_search_data` for the details about
+    /// the parameters.
+    #[method(name = "collect_timestamp_search_data_e2e")]
+    async fn collect_timestamp_search_data_e2e(
+        &self,
+        encrypted_secret_input_data: Vec<u8>,
+        e2e_public_key: HexEncoded<EndToEndPublicKey>,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        all_timestamps_between_blocks: bool,
+    ) -> RpcResult<HexEncoded<TimestampSearchData>>;
 }
 
 #[async_trait::async_trait]
@@ -152,5 +166,33 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
         )?;
 
         Ok(block.into())
+    }
+
+    async fn collect_timestamp_search_data_e2e(
+        &self,
+        encrypted_secret_input_data: Vec<u8>,
+        e2e_public_key: HexEncoded<EndToEndPublicKey>,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        all_timestamps_between_blocks: bool,
+    ) -> RpcResult<HexEncoded<TimestampSearchData>> {
+        let e2e_public_key = e2e_public_key.take();
+
+        let search_data: TimestampSearchData = rpc::handle_result(
+            self.call_async_mut(move |this| {
+                this.collect_timestamp_search_data_e2e(
+                    encrypted_secret_input_data,
+                    e2e_public_key,
+                    min_height,
+                    max_height,
+                    seconds_to_check_for_height,
+                    all_timestamps_between_blocks,
+                )
+            })
+            .await,
+        )?;
+
+        Ok(search_data.into())
     }
 }

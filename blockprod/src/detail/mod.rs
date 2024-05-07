@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod job_manager;
+pub mod timestamp_searcher;
 pub mod utils;
 
 use std::{
@@ -38,7 +39,7 @@ use common::{
 };
 use consensus::{
     generate_consensus_data_and_reward, FinalizeBlockInputData, GenerateBlockInputData,
-    PoSFinalizeBlockInputData, PoSGenerateBlockInputData,
+    PoSFinalizeBlockInputData, PoSGenerateBlockInputData, PoSTimestampSearchInputData,
 };
 use crypto::ephemeral_e2e::{self, EndToEndPrivateKey};
 use logging::log;
@@ -61,9 +62,13 @@ use crate::{
     BlockProductionError,
 };
 
-use self::utils::{
-    get_best_block_index, get_pool_balances_at_height, get_pool_staker_balance,
-    get_pool_total_balance, get_sealed_epoch_randomness, make_ancestor_getter, timestamp_add_secs,
+use self::{
+    timestamp_searcher::TimestampSearchData,
+    utils::{
+        get_best_block_index, get_pool_balances_at_height, get_pool_staker_balance,
+        get_pool_total_balance, get_sealed_epoch_randomness, make_ancestor_getter,
+        timestamp_add_secs,
+    },
 };
 
 pub const JOBKEY_DEFAULT_LEN: usize = 32;
@@ -582,6 +587,26 @@ impl BlockProduction {
 
     pub fn e2e_private_key(&self) -> &ephemeral_e2e::EndToEndPrivateKey {
         &self.e2e_encryption_key
+    }
+
+    pub async fn collect_timestamp_search_data(
+        &self,
+        secret_input_data: PoSTimestampSearchInputData,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        check_all_timestamps_between_blocks: bool,
+    ) -> Result<TimestampSearchData, BlockProductionError> {
+        timestamp_searcher::collect_timestamp_search_data(
+            &self.chainstate_handle,
+            Arc::clone(&self.chain_config),
+            secret_input_data,
+            min_height,
+            max_height,
+            seconds_to_check_for_height,
+            check_all_timestamps_between_blocks,
+        )
+        .await
     }
 }
 

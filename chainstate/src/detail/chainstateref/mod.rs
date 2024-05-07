@@ -20,6 +20,7 @@ mod in_memory_reorg;
 mod tx_verifier_storage;
 
 use itertools::Itertools;
+use serialization::{Decode, Encode};
 use std::{
     cmp::max,
     collections::{BTreeMap, BTreeSet},
@@ -1464,7 +1465,7 @@ pub enum ReorgError {
     OtherError(#[from] BlockError),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct NonZeroPoolBalances {
     total_balance: Amount,
     staker_balance: Amount,

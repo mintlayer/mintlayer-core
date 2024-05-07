@@ -709,6 +709,27 @@ where
                 Ok(ConsoleCommand::Print("Success".to_owned()))
             }
 
+            WalletCommand::FindTimestampsForStaking {
+                pool_id,
+                min_height,
+                max_height,
+                seconds_to_check_for_height,
+                check_all_timestamps_between_blocks,
+            } => {
+                let timestamp_map = self
+                    .wallet()
+                    .await?
+                    .node_find_timestamps_for_staking(
+                        pool_id,
+                        min_height,
+                        Some(max_height),
+                        seconds_to_check_for_height,
+                        check_all_timestamps_between_blocks.to_bool(),
+                    )
+                    .await?;
+                Ok(ConsoleCommand::Print(format!("{timestamp_map:#?}")))
+            }
+
             WalletCommand::GetBlockIdsAsCheckpoints {
                 start_height,
                 end_height,

@@ -1643,6 +1643,26 @@ Returns:
 nothing
 ```
 
+### Method `node_find_timestamps_for_staking`
+
+Parameters:
+```
+{
+    "pool_id": bech32 string,
+    "min_height": number,
+    "max_height": EITHER OF
+         1) number
+         2) null,
+    "seconds_to_check_for_height": number,
+    "check_all_timestamps_between_blocks": bool,
+}
+```
+
+Returns:
+```
+{ number: [ { "timestamp": number }, .. ], .. }
+```
+
 ### Method `node_get_block`
 
 Get a block by its hash, represented with hex encoded bytes
