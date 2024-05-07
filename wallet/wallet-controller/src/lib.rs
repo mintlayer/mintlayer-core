@@ -24,7 +24,7 @@ pub mod types;
 const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
 
-use blockprod::BlockProductionError;
+use blockprod::TimestampSearchData;
 use futures::{
     never::Never,
     stream::{FuturesOrdered, FuturesUnordered},
@@ -51,7 +51,6 @@ use synced_controller::SyncedController;
 use common::{
     address::AddressError,
     chain::{
-        block::timestamp::BlockTimestamp,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::signature_hash,
@@ -128,8 +127,6 @@ pub enum ControllerError<T: NodeInterface> {
     WalletFileAlreadyOpen,
     #[error("Please open or create wallet file first")]
     NoWallet,
-    #[error("Search for timestamps failed: {0}")]
-    SearchForTimestampsFailed(BlockProductionError),
 }
 
 #[derive(Clone, Copy)]
@@ -522,24 +519,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         self.sync_once().await
     }
 
-    /// For each block height in the specified range, find timestamps where staking is/was possible
-    /// for the given pool.
-    ///
-    /// `min_height` must not be zero; `max_height` must not exceed the best block height plus one.
-    ///
-    /// If `check_all_timestamps_between_blocks` is `false`, `seconds_to_check_for_height + 1` is the number
-    /// of seconds that will be checked at each height in the range.
-    /// If `check_all_timestamps_between_blocks` is `true`, `seconds_to_check_for_height` only applies to the
-    /// last height in the range; for all other heights the maximum timestamp is the timestamp
-    /// of the next block.
-    pub async fn find_timestamps_for_staking(
+    pub fn get_timestamp_search_input_data(
         &self,
         pool_id: PoolId,
-        min_height: BlockHeight,
-        max_height: Option<BlockHeight>,
-        seconds_to_check_for_height: u64,
-        check_all_timestamps_between_blocks: bool,
-    ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, ControllerError<T>> {
+    ) -> Result<PoSTimestampSearchInputData, ControllerError<T>> {
         let pos_data = self
             .wallet
             .get_pos_gen_block_data_by_pool_id(pool_id)
@@ -548,6 +531,17 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let input_data =
             PoSTimestampSearchInputData::new(pool_id, pos_data.vrf_private_key().clone());
 
+        Ok(input_data)
+    }
+
+    pub async fn collect_timestamp_search_data(
+        &self,
+        search_input_data: PoSTimestampSearchInputData,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        check_all_timestamps_between_blocks: bool,
+    ) -> Result<TimestampSearchData, ControllerError<T>> {
         let public_key = self
             .rpc_client
             .blockprod_e2e_public_key()
@@ -558,10 +552,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let ephemeral_private_key = EndToEndPrivateKey::new_from_rng(&mut rng);
         let ephemeral_public_key = ephemeral_private_key.public_key();
         let shared_secret = ephemeral_private_key.shared_secret(&public_key);
-        let encrypted_input_data = shared_secret.encode_then_encrypt(&input_data, &mut rng)?;
+        let encrypted_input_data =
+            shared_secret.encode_then_encrypt(&search_input_data, &mut rng)?;
 
-        let search_data = self
-            .rpc_client
+        self.rpc_client
             .collect_timestamp_search_data_e2e(
                 encrypted_input_data,
                 ephemeral_public_key,
@@ -571,15 +565,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 check_all_timestamps_between_blocks,
             )
             .await
-            .map_err(ControllerError::NodeCallError)?;
-
-        blockprod::find_timestamps_for_staking(
-            Arc::clone(&self.chain_config),
-            input_data,
-            search_data,
-        )
-        .await
-        .map_err(|err| ControllerError::SearchForTimestampsFailed(err))
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub fn create_account(

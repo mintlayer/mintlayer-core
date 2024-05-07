@@ -28,6 +28,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
 };
 use crypto::{
+    ephemeral_e2e,
     key::{
         hdkd::{child_number::ChildNumber, u31::U31},
         PublicKey,
@@ -128,6 +129,9 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error(transparent)]
     Address(#[from] AddressError),
+
+    #[error(transparent)]
+    E2eError(#[from] ephemeral_e2e::error::Error),
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {

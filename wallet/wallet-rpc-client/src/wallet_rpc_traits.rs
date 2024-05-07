@@ -13,17 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, num::NonZeroUsize, path::PathBuf};
+use std::{num::NonZeroUsize, path::PathBuf};
 
+use blockprod::TimestampSearchData;
 use chainstate::ChainInfo;
 use common::{
-    chain::{
-        block::timestamp::BlockTimestamp, Block, GenBlock, SignedTransaction, Transaction,
-        TxOutput, UtxoOutPoint,
-    },
+    chain::{Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
     primitives::{BlockHeight, DecimalAmount, Id},
 };
-use crypto::key::{hdkd::u31::U31, PrivateKey};
+use crypto::{
+    ephemeral_e2e::EndToEndPublicKey,
+    key::{hdkd::u31::U31, PrivateKey},
+};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
@@ -548,14 +549,23 @@ pub trait WalletInterface {
         block_count: u32,
     ) -> Result<(), Self::Error>;
 
-    async fn node_find_timestamps_for_staking(
+    async fn e2e_public_key(&self) -> Result<HexEncoded<EndToEndPublicKey>, Self::Error>;
+
+    async fn get_timestamp_search_input_data(
         &self,
+        caller_public_key: HexEncoded<EndToEndPublicKey>,
         pool_id: String,
+    ) -> Result</*PoSTimestampSearchInputData*/ Vec<u8>, Self::Error>;
+
+    async fn node_collect_timestamp_search_data(
+        &self,
+        caller_public_key: HexEncoded<EndToEndPublicKey>,
+        encrypted_input_data: /*PoSTimestampSearchInputData*/ Vec<u8>,
         min_height: BlockHeight,
         max_height: Option<BlockHeight>,
         seconds_to_check_for_height: u64,
         check_all_timestamps_between_blocks: bool,
-    ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, Self::Error>;
+    ) -> Result<HexEncoded<TimestampSearchData>, Self::Error>;
 
     async fn node_block(&self, block_id: String) -> Result<Option<String>, Self::Error>;
 

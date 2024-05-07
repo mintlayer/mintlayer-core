@@ -26,11 +26,17 @@ use std::{
     time::Duration,
 };
 
+use blockprod::TimestampSearchData;
 use chainstate::{tx_verifier::check_transaction, ChainInfo, TokenIssuanceError};
-use crypto::key::{hdkd::u31::U31, PrivateKey, PublicKey};
+use consensus::PoSTimestampSearchInputData;
+use crypto::{
+    ephemeral_e2e::{EndToEndPrivateKey, EndToEndPublicKey},
+    key::{hdkd::u31::U31, PrivateKey, PublicKey},
+};
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
+use randomness::make_true_rng;
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
@@ -45,7 +51,6 @@ use wallet::{
 use common::{
     address::Address,
     chain::{
-        block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
@@ -92,6 +97,9 @@ pub struct WalletRpc<N: Clone> {
     wallet: WalletHandle<N>,
     node: N,
     chain_config: Arc<ChainConfig>,
+    /// The private key to encrypt sensitive data when passing it through the wallet rpc.
+    /// Need to use `Arc`, because `EndToEndPrivateKey` is not `Clone`.
+    e2e_private_key: Arc<EndToEndPrivateKey>,
 }
 
 type WRpcResult<T, N> = Result<T, RpcError<N>>;
@@ -102,6 +110,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             wallet,
             node,
             chain_config,
+            e2e_private_key: Arc::new(EndToEndPrivateKey::new_from_rng(&mut make_true_rng())),
         }
     }
 
@@ -222,22 +231,46 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
     }
 
-    pub async fn find_timestamps_for_staking(
+    pub fn e2e_public_key(&self) -> EndToEndPublicKey {
+        self.e2e_private_key.public_key()
+    }
+
+    pub async fn get_timestamp_search_input_data(
         &self,
+        caller_public_key: EndToEndPublicKey,
         pool_id: RpcAddress<PoolId>,
+    ) -> WRpcResult</*PoSTimestampSearchInputData*/ Vec<u8>, N> {
+        let pool_id =
+            pool_id.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidPoolId)?;
+
+        let search_input_data =
+            self.wallet.call(move |w| w.get_timestamp_search_input_data(pool_id)).await??;
+
+        let shared_secret = self.e2e_private_key.shared_secret(&caller_public_key);
+        let encrypted_data =
+            shared_secret.encode_then_encrypt(&search_input_data, &mut make_true_rng())?;
+
+        Ok(encrypted_data)
+    }
+
+    pub async fn collect_timestamp_search_data(
+        &self,
+        caller_public_key: EndToEndPublicKey,
+        encrypted_input_data: /*PoSTimestampSearchInputData*/ Vec<u8>,
         min_height: BlockHeight,
         max_height: Option<BlockHeight>,
         seconds_to_check_for_height: u64,
         check_all_timestamps_between_blocks: bool,
-    ) -> WRpcResult<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, N> {
-        let pool_id =
-            pool_id.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidPoolId)?;
+    ) -> WRpcResult<TimestampSearchData, N> {
+        let shared_secret = self.e2e_private_key.shared_secret(&caller_public_key);
+        let input_data = shared_secret
+            .decrypt_then_decode::<PoSTimestampSearchInputData>(&encrypted_input_data)?;
 
         self.wallet
             .call_async(move |w| {
                 Box::pin(async move {
-                    w.find_timestamps_for_staking(
-                        pool_id,
+                    w.collect_timestamp_search_data(
+                        input_data,
                         min_height,
                         max_height,
                         seconds_to_check_for_height,

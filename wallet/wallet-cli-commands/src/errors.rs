@@ -13,7 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::key::hdkd::u31::U31;
+use blockprod::BlockProductionError;
+use crypto::{ephemeral_e2e, key::hdkd::u31::U31};
 use node_comm::node_traits::NodeInterface;
 use utils::qrcode::QrCodeError;
 use wallet_rpc_client::{handles_client::WalletRpcHandlesClientError, rpc_client::WalletRpcError};
@@ -47,4 +48,8 @@ pub enum WalletCliCommandError<N: NodeInterface> {
     DifferentWalletWasOpened,
     #[error("The wallet has been closed between commands")]
     ExistingWalletWasClosed,
+    #[error("Search for timestamps failed: {0}")]
+    SearchForTimestampsFailed(BlockProductionError),
+    #[error(transparent)]
+    E2eError(#[from] ephemeral_e2e::error::Error),
 }

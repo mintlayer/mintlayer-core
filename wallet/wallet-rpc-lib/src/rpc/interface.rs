@@ -13,17 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, num::NonZeroUsize};
+use std::num::NonZeroUsize;
 
+use blockprod::TimestampSearchData;
 use common::{
     address::RpcAddress,
     chain::{
-        block::timestamp::BlockTimestamp, tokens::TokenId, Block, DelegationId, Destination,
-        GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
+        tokens::TokenId, Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
+        Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
-use crypto::key::PrivateKey;
+use crypto::{ephemeral_e2e::EndToEndPublicKey, key::PrivateKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use rpc::types::RpcHexString;
 use wallet::account::{PartiallySignedTransaction, TxInfo};
@@ -799,25 +800,26 @@ trait WalletRpc {
         block_count: u32,
     ) -> rpc::RpcResult<()>;
 
-    /// For each block height in the specified range, find timestamps where staking is/was possible
-    /// for the given pool.
-    ///
-    /// `min_height` must not be zero; `max_height` must not exceed the best block height plus one.
-    ///
-    /// If `check_all_timestamps_between_blocks` is `false`, `seconds_to_check_for_height + 1` is the number
-    /// of seconds that will be checked at each height in the range.
-    /// If `check_all_timestamps_between_blocks` is `true`, `seconds_to_check_for_height` only applies to the
-    /// last height in the range; for all other heights the maximum timestamp is the timestamp
-    /// of the next block.
-    #[method(name = "node_find_timestamps_for_staking")]
-    async fn node_find_timestamps_for_staking(
+    #[method(name = "e2e_public_key")]
+    async fn e2e_public_key(&self) -> rpc::RpcResult<HexEncoded<EndToEndPublicKey>>;
+
+    #[method(name = "get_timestamp_search_input_data")]
+    async fn get_timestamp_search_input_data(
         &self,
+        caller_public_key: HexEncoded<EndToEndPublicKey>,
         pool_id: RpcAddress<PoolId>,
+    ) -> rpc::RpcResult</*PoSTimestampSearchInputData*/ Vec<u8>>;
+
+    #[method(name = "node_collect_timestamp_search_data")]
+    async fn node_collect_timestamp_search_data(
+        &self,
+        caller_public_key: HexEncoded<EndToEndPublicKey>,
+        encrypted_input_data: /*PoSTimestampSearchInputData*/ Vec<u8>,
         min_height: BlockHeight,
         max_height: Option<BlockHeight>,
         seconds_to_check_for_height: u64,
         check_all_timestamps_between_blocks: bool,
-    ) -> rpc::RpcResult<BTreeMap<BlockHeight, Vec<BlockTimestamp>>>;
+    ) -> rpc::RpcResult<HexEncoded<TimestampSearchData>>;
 
     /// Get a block by its hash, represented with hex encoded bytes
     #[method(name = "node_get_block")]

@@ -1341,7 +1341,7 @@ async fn select_acc_and_execute_cmd<N>(
     c: &mut CommandHandler<WalletRpcHandlesClient<N>>,
     account_id: AccountId,
     command: ManageableWalletCommand,
-    chain_config: &ChainConfig,
+    chain_config: &Arc<ChainConfig>,
 ) -> Result<ConsoleCommand, BackendError>
 where
     N: NodeInterface + Clone + Send + Sync + 'static + Debug,

@@ -1643,12 +1643,40 @@ Returns:
 nothing
 ```
 
-### Method `node_find_timestamps_for_staking`
+### Method `e2e_public_key`
+
+Parameters:
+```
+{}
+```
+
+Returns:
+```
+hex string
+```
+
+### Method `get_timestamp_search_input_data`
 
 Parameters:
 ```
 {
+    "caller_public_key": hex string,
     "pool_id": bech32 string,
+}
+```
+
+Returns:
+```
+[ number, .. ]
+```
+
+### Method `node_collect_timestamp_search_data`
+
+Parameters:
+```
+{
+    "caller_public_key": hex string,
+    "encrypted_input_data": [ number, .. ],
     "min_height": number,
     "max_height": EITHER OF
          1) number
@@ -1660,7 +1688,7 @@ Parameters:
 
 Returns:
 ```
-{ number: [ { "timestamp": number }, .. ], .. }
+hex string
 ```
 
 ### Method `node_get_block`

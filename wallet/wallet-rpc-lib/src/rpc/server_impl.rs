@@ -13,19 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, fmt::Debug, num::NonZeroUsize, str::FromStr, time::Duration};
+use std::{fmt::Debug, num::NonZeroUsize, str::FromStr, time::Duration};
 
+use blockprod::TimestampSearchData;
 use common::{
     address::dehexify::dehexify_all_addresses,
     chain::{
-        block::timestamp::BlockTimestamp,
         tokens::{IsTokenUnfreezable, TokenId},
         Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
         TxOutput,
     },
     primitives::{time::Time, BlockHeight, Id, Idable},
 };
-use crypto::key::PrivateKey;
+use crypto::{ephemeral_e2e::EndToEndPublicKey, key::PrivateKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use utils_networking::IpOrSocketAddress;
@@ -1162,23 +1162,40 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer f
         )
     }
 
-    async fn node_find_timestamps_for_staking(
+    async fn e2e_public_key(&self) -> rpc::RpcResult<HexEncoded<EndToEndPublicKey>> {
+        Ok(HexEncoded::new(self.e2e_public_key()))
+    }
+
+    async fn get_timestamp_search_input_data(
         &self,
+        caller_public_key: HexEncoded<EndToEndPublicKey>,
         pool_id: RpcAddress<PoolId>,
+    ) -> rpc::RpcResult</*PoSTimestampSearchInputData*/ Vec<u8>> {
+        rpc::handle_result(
+            self.get_timestamp_search_input_data(caller_public_key.take(), pool_id).await,
+        )
+    }
+
+    async fn node_collect_timestamp_search_data(
+        &self,
+        caller_public_key: HexEncoded<EndToEndPublicKey>,
+        encrypted_input_data: /*PoSTimestampSearchInputData*/ Vec<u8>,
         min_height: BlockHeight,
         max_height: Option<BlockHeight>,
         seconds_to_check_for_height: u64,
         check_all_timestamps_between_blocks: bool,
-    ) -> rpc::RpcResult<BTreeMap<BlockHeight, Vec<BlockTimestamp>>> {
+    ) -> rpc::RpcResult<HexEncoded<TimestampSearchData>> {
         rpc::handle_result(
-            self.find_timestamps_for_staking(
-                pool_id,
+            self.collect_timestamp_search_data(
+                caller_public_key.take(),
+                encrypted_input_data,
                 min_height,
                 max_height,
                 seconds_to_check_for_height,
                 check_all_timestamps_between_blocks,
             )
-            .await,
+            .await
+            .map(HexEncoded::new),
         )
     }
 

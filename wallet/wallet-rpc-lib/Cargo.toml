@@ -6,8 +6,9 @@ version.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-
+blockprod = { path = "../../blockprod" }
 common = { path = "../../common" }
+consensus = { path = "../../consensus" }
 chainstate = { path = "../../chainstate" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }

@@ -13,21 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, future::pending, num::NonZeroUsize, path::PathBuf};
+use std::{future::pending, num::NonZeroUsize, path::PathBuf};
 
 use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, WalletInterface};
 
 use super::{ClientWalletRpc, WalletRpcError};
 
+use blockprod::TimestampSearchData;
 use chainstate::ChainInfo;
 use common::{
-    chain::{
-        block::timestamp::BlockTimestamp, Block, GenBlock, SignedTransaction, Transaction,
-        TxOutput, UtxoOutPoint,
-    },
+    chain::{Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
     primitives::{BlockHeight, DecimalAmount, Id},
 };
-use crypto::key::{hdkd::u31::U31, PrivateKey};
+use crypto::{
+    ephemeral_e2e::EndToEndPublicKey,
+    key::{hdkd::u31::U31, PrivateKey},
+};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::hex_encoded::HexEncoded;
 use serialization::DecodeAll;
@@ -1202,17 +1203,39 @@ impl WalletInterface for ClientWalletRpc {
             .map_err(WalletRpcError::ResponseError)
     }
 
-    async fn node_find_timestamps_for_staking(
+    async fn e2e_public_key(&self) -> Result<HexEncoded<EndToEndPublicKey>, Self::Error> {
+        WalletRpcClient::e2e_public_key(&self.http_client)
+            .await
+            .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn get_timestamp_search_input_data(
         &self,
+        caller_public_key: HexEncoded<EndToEndPublicKey>,
         pool_id: String,
+    ) -> Result</*PoSTimestampSearchInputData*/ Vec<u8>, Self::Error> {
+        WalletRpcClient::get_timestamp_search_input_data(
+            &self.http_client,
+            caller_public_key,
+            pool_id.into(),
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn node_collect_timestamp_search_data(
+        &self,
+        caller_public_key: HexEncoded<EndToEndPublicKey>,
+        encrypted_input_data: /*PoSTimestampSearchInputData*/ Vec<u8>,
         min_height: BlockHeight,
         max_height: Option<BlockHeight>,
         seconds_to_check_for_height: u64,
         check_all_timestamps_between_blocks: bool,
-    ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, Self::Error> {
-        WalletRpcClient::node_find_timestamps_for_staking(
+    ) -> Result<HexEncoded<TimestampSearchData>, Self::Error> {
+        WalletRpcClient::node_collect_timestamp_search_data(
             &self.http_client,
-            pool_id.into(),
+            caller_public_key,
+            encrypted_input_data,
             min_height,
             max_height,
             seconds_to_check_for_height,

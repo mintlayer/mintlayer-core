@@ -8437,6 +8437,7 @@ version = "0.4.2"
 dependencies = [
  "async-trait",
  "base64 0.22.0",
+ "blockprod",
  "chainstate",
  "chainstate-storage",
  "common",
@@ -8482,6 +8483,7 @@ version = "0.4.2"
 dependencies = [
  "anyhow",
  "async-trait",
+ "blockprod",
  "chainstate",
  "clap",
  "common",

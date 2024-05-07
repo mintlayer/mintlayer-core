@@ -15,7 +15,7 @@
 
 mod local_state;
 
-use std::{fmt::Write, str::FromStr};
+use std::{fmt::Write, str::FromStr, sync::Arc};
 
 use common::{
     address::Address,
@@ -26,10 +26,12 @@ use common::{
     primitives::H256,
     text_summary::TextSummary,
 };
-use crypto::key::hdkd::u31::U31;
+use consensus::PoSTimestampSearchInputData;
+use crypto::{ephemeral_e2e::EndToEndPrivateKey, key::hdkd::u31::U31};
 use itertools::Itertools;
 use mempool::tx_options::TxOptionsOverrides;
 use node_comm::node_traits::NodeInterface;
+use randomness::make_true_rng;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::{QrCode, QrCodeError};
 use wallet::{account::PartiallySignedTransaction, version::get_version};
@@ -646,7 +648,7 @@ where
 
     pub async fn handle_wallet_command<N: NodeInterface>(
         &mut self,
-        chain_config: &ChainConfig,
+        chain_config: &Arc<ChainConfig>,
         command: WalletCommand,
     ) -> Result<ConsoleCommand, WalletCliCommandError<N>>
     where
@@ -716,17 +718,43 @@ where
                 seconds_to_check_for_height,
                 check_all_timestamps_between_blocks,
             } => {
-                let timestamp_map = self
-                    .wallet()
-                    .await?
-                    .node_find_timestamps_for_staking(
+                let mut rng = make_true_rng();
+                let our_private_key = EndToEndPrivateKey::new_from_rng(&mut rng);
+                let our_public_key = our_private_key.public_key();
+
+                let wallet = self.wallet().await?;
+
+                let callee_public_key = wallet.e2e_public_key().await?.take();
+
+                let encrypted_input_data = wallet
+                    .get_timestamp_search_input_data(
+                        HexEncoded::new(our_public_key.clone()),
                         pool_id,
+                    )
+                    .await?;
+                let shared_secret = our_private_key.shared_secret(&callee_public_key);
+                let secret_input_data = shared_secret
+                    .decrypt_then_decode::<PoSTimestampSearchInputData>(&encrypted_input_data)?;
+
+                let search_data = wallet
+                    .node_collect_timestamp_search_data(
+                        HexEncoded::new(our_public_key),
+                        encrypted_input_data,
                         min_height,
                         Some(max_height),
                         seconds_to_check_for_height,
                         check_all_timestamps_between_blocks.to_bool(),
                     )
-                    .await?;
+                    .await?
+                    .take();
+
+                let timestamp_map = blockprod::find_timestamps_for_staking(
+                    Arc::clone(chain_config),
+                    secret_input_data,
+                    search_data,
+                )
+                .await
+                .map_err(|err| WalletCliCommandError::SearchForTimestampsFailed(err))?;
                 Ok(ConsoleCommand::Print(format!("{timestamp_map:#?}")))
             }
 
@@ -1637,7 +1665,7 @@ where
 
     pub async fn handle_manageable_wallet_command<N: NodeInterface>(
         &mut self,
-        chain_config: &ChainConfig,
+        chain_config: &Arc<ChainConfig>,
         command: ManageableWalletCommand,
     ) -> Result<ConsoleCommand, WalletCliCommandError<N>>
     where
