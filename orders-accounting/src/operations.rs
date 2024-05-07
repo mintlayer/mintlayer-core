@@ -32,7 +32,7 @@ pub struct CreateOrderUndo {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub struct WithdrawOrderUndo {
+pub struct CancelOrderUndo {
     pub(crate) id: OrderId,
     pub(crate) undo_data: DataDeltaUndo<OrderData>,
     pub(crate) ask_balance: Amount,
@@ -51,13 +51,13 @@ pub struct FillOrderUndo {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, VariantCount)]
 pub enum OrdersAccountingUndo {
     CreateOrder(CreateOrderUndo),
-    WithdrawOrder(WithdrawOrderUndo),
+    CancelOrder(CancelOrderUndo),
     FillOrder(FillOrderUndo),
 }
 
 pub trait OrdersAccountingOperations {
     fn create_order(&mut self, id: OrderId, data: OrderData) -> Result<OrdersAccountingUndo>;
-    fn withdraw_order(&mut self, id: OrderId) -> Result<OrdersAccountingUndo>;
+    fn cancel_order(&mut self, id: OrderId) -> Result<OrdersAccountingUndo>;
     fn fill_order(&mut self, id: OrderId, value: OutputValue) -> Result<OrdersAccountingUndo>;
 
     fn undo(&mut self, undo_data: OrdersAccountingUndo) -> Result<()>;

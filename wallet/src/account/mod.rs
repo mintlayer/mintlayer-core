@@ -1348,7 +1348,7 @@ impl Account {
                             .map(|data| (None, Some(data.authority.clone())))
                             .ok_or(WalletError::UnknownTokenId(*token_id)),
                         // TODO: support orders
-                        AccountCommand::WithdrawOrder(_) => unimplemented!(),
+                        AccountCommand::CancelOrder(_) => unimplemented!(),
                         AccountCommand::FillOrder(_, _, _) => unimplemented!(),
                     }
                 }
@@ -1829,7 +1829,7 @@ impl Account {
                         || self.is_destination_mine_or_watched(address)
                 }
                 // TODO: support orders
-                AccountCommand::WithdrawOrder(_) => unimplemented!(),
+                AccountCommand::CancelOrder(_) => unimplemented!(),
                 AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
         });
@@ -2240,7 +2240,7 @@ fn group_preselected_inputs(
                     )?;
                 }
                 // TODO: support orders
-                AccountCommand::WithdrawOrder(_) => unimplemented!(),
+                AccountCommand::CancelOrder(_) => unimplemented!(),
                 AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
         }

@@ -154,7 +154,7 @@ pub fn all_account_inputs() -> [TxInput; 9] {
         ),
         TxInput::from_command(
             AccountNonce::new(0),
-            AccountCommand::WithdrawOrder(OrderId::zero()),
+            AccountCommand::CancelOrder(OrderId::zero()),
         ),
         TxInput::from_command(
             AccountNonce::new(0),

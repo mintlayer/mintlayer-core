@@ -200,7 +200,7 @@ pub fn txoutput_to_json(
         TxOutput::AnyoneCanTake(data) => {
             json!({
                 "type": "AnyoneCanTake",
-                "withdraw_key": Address::new(chain_config, data.withdraw_key().clone()).expect("no error").as_str(),
+                "cancel_key": Address::new(chain_config, data.cancel_key().clone()).expect("no error").as_str(),
                 "ask_value": outputvalue_to_json(data.ask(), chain_config, token_decimals),
                 "give_value": outputvalue_to_json(data.give(), chain_config, token_decimals),
             })
@@ -345,10 +345,10 @@ pub fn tx_input_to_json(
                     "nonce": nonce,
                 })
             }
-            AccountCommand::WithdrawOrder(order_id) => {
+            AccountCommand::CancelOrder(order_id) => {
                 json!({
                     "input_type": "AccountCommand",
-                    "command": "WithdrawOrder",
+                    "command": "CancelOrder",
                     "order_id": Address::new(chain_config, *order_id).expect("addressable").to_string(),
                 })
             }

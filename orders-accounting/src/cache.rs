@@ -25,8 +25,8 @@ use crate::{
     data::OrdersAccountingDeltaData,
     error::{Error, Result},
     operations::{
-        CreateOrderUndo, FillOrderUndo, OrdersAccountingOperations, OrdersAccountingUndo,
-        WithdrawOrderUndo,
+        CancelOrderUndo, CreateOrderUndo, FillOrderUndo, OrdersAccountingOperations,
+        OrdersAccountingUndo,
     },
     view::OrdersAccountingView,
     FlushableOrdersAccountingView, OrdersAccountingDeltaUndoData,
@@ -83,22 +83,22 @@ impl<P: OrdersAccountingView> OrdersAccountingCache<P> {
         Ok(())
     }
 
-    fn undo_withdraw_order(&mut self, undo: WithdrawOrderUndo) -> Result<()> {
+    fn undo_withdraw_order(&mut self, undo: CancelOrderUndo) -> Result<()> {
         ensure!(
             self.get_order_data(&undo.id)?.is_none(),
-            Error::InvariantOrderDataExistForWithdrawUndo(undo.id)
+            Error::InvariantOrderDataExistForCancelUndo(undo.id)
         );
         self.data.order_data.undo_merge_delta_data_element(undo.id, undo.undo_data)?;
 
         ensure!(
             self.get_ask_balance(&undo.id)?.unwrap_or(Amount::ZERO) == Amount::ZERO,
-            Error::InvariantOrderAskBalanceExistForWithdrawUndo(undo.id)
+            Error::InvariantOrderAskBalanceExistForCancelUndo(undo.id)
         );
         self.data.ask_balances.add_unsigned(undo.id, undo.ask_balance)?;
 
         ensure!(
             self.get_give_balance(&undo.id)?.unwrap_or(Amount::ZERO) == Amount::ZERO,
-            Error::InvariantOrderGiveBalanceExistForWithdrawUndo(undo.id)
+            Error::InvariantOrderGiveBalanceExistForCancelUndo(undo.id)
         );
         self.data.give_balances.add_unsigned(undo.id, undo.give_balance)?;
 
@@ -109,7 +109,7 @@ impl<P: OrdersAccountingView> OrdersAccountingCache<P> {
         if let Some(undo_data) = undo.undo_data {
             ensure!(
                 self.get_order_data(&undo.id)?.is_none(),
-                Error::InvariantOrderDataExistForWithdrawUndo(undo.id)
+                Error::InvariantOrderDataExistForCancelUndo(undo.id)
             );
             self.data.order_data.undo_merge_delta_data_element(undo.id, undo_data)?;
         }
@@ -175,16 +175,16 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
         }))
     }
 
-    fn withdraw_order(&mut self, id: OrderId) -> Result<OrdersAccountingUndo> {
+    fn cancel_order(&mut self, id: OrderId) -> Result<OrdersAccountingUndo> {
         let order_data = self
             .get_order_data(&id)?
-            .ok_or(Error::AttemptedWithdrawNonexistingOrderData(id))?;
+            .ok_or(Error::AttemptedCancelNonexistingOrderData(id))?;
         let ask_balance = self
             .get_ask_balance(&id)?
-            .ok_or(Error::AttemptedWithdrawNonexistingAskBalance(id))?;
+            .ok_or(Error::AttemptedCancelNonexistingAskBalance(id))?;
         let give_balance = self
             .get_give_balance(&id)?
-            .ok_or(Error::AttemptedWithdrawNonexistingGiveBalance(id))?;
+            .ok_or(Error::AttemptedCancelNonexistingGiveBalance(id))?;
 
         let undo_data = self
             .data
@@ -194,7 +194,7 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
         self.data.ask_balances.sub_unsigned(id, ask_balance)?;
         self.data.give_balances.sub_unsigned(id, give_balance)?;
 
-        Ok(OrdersAccountingUndo::WithdrawOrder(WithdrawOrderUndo {
+        Ok(OrdersAccountingUndo::CancelOrder(CancelOrderUndo {
             id,
             undo_data,
             ask_balance,
@@ -240,7 +240,7 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
     fn undo(&mut self, undo_data: OrdersAccountingUndo) -> Result<()> {
         match undo_data {
             OrdersAccountingUndo::CreateOrder(undo) => self.undo_create_order(undo),
-            OrdersAccountingUndo::WithdrawOrder(undo) => self.undo_withdraw_order(undo),
+            OrdersAccountingUndo::CancelOrder(undo) => self.undo_withdraw_order(undo),
             OrdersAccountingUndo::FillOrder(undo) => self.undo_fill_order(undo),
         }
     }

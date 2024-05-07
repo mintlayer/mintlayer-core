@@ -40,11 +40,11 @@ pub enum Error {
     #[error("Give balance for order {0}` changed for undo")]
     InvariantOrderGiveBalanceChangedForUndo(OrderId),
     #[error("Data for order {0}` still exist on withdraw undo")]
-    InvariantOrderDataExistForWithdrawUndo(OrderId),
+    InvariantOrderDataExistForCancelUndo(OrderId),
     #[error("Ask balance for order {0}` still exist on withdraw undo")]
-    InvariantOrderAskBalanceExistForWithdrawUndo(OrderId),
+    InvariantOrderAskBalanceExistForCancelUndo(OrderId),
     #[error("Give balance for order {0}` still exist on withdraw undo")]
-    InvariantOrderGiveBalanceExistForWithdrawUndo(OrderId),
+    InvariantOrderGiveBalanceExistForCancelUndo(OrderId),
     #[error("Fill operation for order {0}` left a change")]
     FillOrderChangeLeft(OrderId),
     #[error("Coin type mismatch")]
@@ -52,11 +52,11 @@ pub enum Error {
     #[error("Order overflow: `{0}`")]
     OrderOverflow(OrderId),
     #[error("Attempt to withdraw non-existing order data `{0}`")]
-    AttemptedWithdrawNonexistingOrderData(OrderId),
+    AttemptedCancelNonexistingOrderData(OrderId),
     #[error("Attempt to withdraw non-existing ask balance `{0}`")]
-    AttemptedWithdrawNonexistingAskBalance(OrderId),
+    AttemptedCancelNonexistingAskBalance(OrderId),
     #[error("Attempt to withdraw non-existing give balance `{0}`")]
-    AttemptedWithdrawNonexistingGiveBalance(OrderId),
+    AttemptedCancelNonexistingGiveBalance(OrderId),
 
     // TODO Need a more granular error reporting in the following
     //      https://github.com/mintlayer/mintlayer-core/issues/811

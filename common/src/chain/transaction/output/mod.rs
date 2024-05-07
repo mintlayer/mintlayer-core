@@ -331,8 +331,8 @@ impl TextSummary for TxOutput {
                 )
             }
             TxOutput::AnyoneCanTake(order) => format!(
-                "AnyoneCanTake(WithdrawKey({}), AskValue({}), GiveValue({}))",
-                fmt_dest(order.withdraw_key()),
+                "AnyoneCanTake(CancelKey({}), AskValue({}), GiveValue({}))",
+                fmt_dest(order.cancel_key()),
                 fmt_val(order.ask()),
                 fmt_val(order.give()),
             ),

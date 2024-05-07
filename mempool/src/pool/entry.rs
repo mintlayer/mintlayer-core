@@ -75,7 +75,7 @@ impl TxDependency {
             | AccountCommand::ChangeTokenAuthority(_, _) => {
                 Self::TokenSupplyAccount(TxAccountDependency::new(acct.clone().into(), nonce))
             }
-            AccountCommand::WithdrawOrder(_) | AccountCommand::FillOrder(_, _, _) => {
+            AccountCommand::CancelOrder(_) | AccountCommand::FillOrder(_, _, _) => {
                 Self::OrderAccount(TxAccountDependency::new(acct.clone().into(), nonce))
             }
         }

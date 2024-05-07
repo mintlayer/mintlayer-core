@@ -161,14 +161,14 @@ fn withdraw_order_and_flush(#[case] seed: Seed) {
     // try to withdraw non-existing order
     {
         let random_order = OrderId::random_using(&mut rng);
-        let result = cache.withdraw_order(random_order);
+        let result = cache.cancel_order(random_order);
         assert_eq!(
             result.unwrap_err(),
-            Error::AttemptedWithdrawNonexistingOrderData(random_order)
+            Error::AttemptedCancelNonexistingOrderData(random_order)
         );
     }
 
-    let _ = cache.withdraw_order(order_id).unwrap();
+    let _ = cache.cancel_order(order_id).unwrap();
 
     db.batch_write_orders_data(cache.consume()).unwrap();
 
@@ -192,11 +192,11 @@ fn withdraw_order_twice(#[case] seed: Seed) {
     let db = OrdersAccountingDB::new(&storage);
     let mut cache = OrdersAccountingCache::new(&db);
 
-    let _ = cache.withdraw_order(order_id).unwrap();
+    let _ = cache.cancel_order(order_id).unwrap();
 
     assert_eq!(
-        cache.withdraw_order(order_id,),
-        Err(Error::AttemptedWithdrawNonexistingOrderData(order_id))
+        cache.cancel_order(order_id,),
+        Err(Error::AttemptedCancelNonexistingOrderData(order_id))
     );
 }
 
@@ -218,7 +218,7 @@ fn withdraw_order_and_undo(#[case] seed: Seed) {
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
 
-    let undo = cache.withdraw_order(order_id).unwrap();
+    let undo = cache.cancel_order(order_id).unwrap();
 
     assert_eq!(None, cache.get_order_data(&order_id).unwrap().as_ref());
     assert_eq!(
@@ -508,7 +508,7 @@ fn fill_order_partially_and_withdraw(#[case] seed: Seed) {
         cache.get_give_balance(&order_id).unwrap()
     );
 
-    let _ = cache.withdraw_order(order_id).unwrap();
+    let _ = cache.cancel_order(order_id).unwrap();
 
     db.batch_write_orders_data(cache.consume()).unwrap();
 

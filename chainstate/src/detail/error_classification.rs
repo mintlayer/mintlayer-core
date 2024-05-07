@@ -904,15 +904,15 @@ impl BlockProcessingErrorClassification for orders_accounting::Error {
             | Error::InvariantOrderAskBalanceChangedForUndo(_)
             | Error::InvariantOrderGiveBalanceNotFoundForUndo(_)
             | Error::InvariantOrderGiveBalanceChangedForUndo(_)
-            | Error::InvariantOrderDataExistForWithdrawUndo(_)
-            | Error::InvariantOrderAskBalanceExistForWithdrawUndo(_)
-            | Error::InvariantOrderGiveBalanceExistForWithdrawUndo(_)
+            | Error::InvariantOrderDataExistForCancelUndo(_)
+            | Error::InvariantOrderAskBalanceExistForCancelUndo(_)
+            | Error::InvariantOrderGiveBalanceExistForCancelUndo(_)
             | Error::FillOrderChangeLeft(_)
             | Error::CurrencyMismatch
             | Error::OrderOverflow(_)
-            | Error::AttemptedWithdrawNonexistingOrderData(_)
-            | Error::AttemptedWithdrawNonexistingAskBalance(_)
-            | Error::AttemptedWithdrawNonexistingGiveBalance(_) => {
+            | Error::AttemptedCancelNonexistingOrderData(_)
+            | Error::AttemptedCancelNonexistingAskBalance(_)
+            | Error::AttemptedCancelNonexistingGiveBalance(_) => {
                 BlockProcessingErrorClass::BadBlock
             }
 

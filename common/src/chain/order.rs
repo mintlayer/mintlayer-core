@@ -78,24 +78,30 @@ pub fn make_order_id(input0_outpoint: &UtxoOutPoint) -> OrderId {
     OrderId::new(hash_encoded(input0_outpoint))
 }
 
+/// Order data provides unified data structure to represent an order.
+/// There are no buy or sell types of orders per se but rather exchanges.
+/// The fields represent currencies and amounts to be exchanged and the trading pair can be deducted from it.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct OrderData {
-    withdraw_key: Destination,
+    /// The key that can authorize cancellation of an order
+    cancel_key: Destination,
+    /// `Ask` and `give` fields represent amounts of currencies
+    /// that an order maker wants to exchange, e.g. 5 coins for 10 tokens
     ask: OutputValue,
     give: OutputValue,
 }
 
 impl OrderData {
-    pub fn new(withdraw_key: Destination, ask: OutputValue, give: OutputValue) -> Self {
+    pub fn new(cancel_key: Destination, ask: OutputValue, give: OutputValue) -> Self {
         Self {
-            withdraw_key,
+            cancel_key,
             ask,
             give,
         }
     }
 
-    pub fn withdraw_key(&self) -> &Destination {
-        &self.withdraw_key
+    pub fn cancel_key(&self) -> &Destination {
+        &self.cancel_key
     }
 
     pub fn ask(&self) -> &OutputValue {

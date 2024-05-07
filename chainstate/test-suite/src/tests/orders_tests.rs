@@ -299,7 +299,7 @@ fn create_order_tokens_for_tokens(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn withdraw_order_check_storage(#[case] seed: Seed) {
+fn cancel_order_check_storage(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -325,7 +325,7 @@ fn withdraw_order_check_storage(#[case] seed: Seed) {
             .add_input(
                 TxInput::AccountCommand(
                     AccountNonce::new(0),
-                    AccountCommand::WithdrawOrder(order_id),
+                    AccountCommand::CancelOrder(order_id),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -461,7 +461,7 @@ fn fill_order_check_storage(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn withdraw_order_check_signature(#[case] seed: Seed) {
+fn cancel_order_check_signature(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -485,13 +485,13 @@ fn withdraw_order_check_signature(#[case] seed: Seed) {
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        // try withdraw without signature
+        // try cancel without signature
         {
             let tx = TransactionBuilder::new()
                 .add_input(
                     TxInput::AccountCommand(
                         AccountNonce::new(0),
-                        AccountCommand::WithdrawOrder(order_id),
+                        AccountCommand::CancelOrder(order_id),
                     ),
                     InputWitness::NoSignature(None),
                 )
@@ -515,13 +515,13 @@ fn withdraw_order_check_signature(#[case] seed: Seed) {
             )
         }
 
-        // try withdraw with wrong signature
+        // try cancel with wrong signature
         {
             let tx = TransactionBuilder::new()
                 .add_input(
                     TxInput::AccountCommand(
                         AccountNonce::new(0),
-                        AccountCommand::WithdrawOrder(order_id),
+                        AccountCommand::CancelOrder(order_id),
                     ),
                     InputWitness::NoSignature(None),
                 )
@@ -573,7 +573,7 @@ fn withdraw_order_check_signature(#[case] seed: Seed) {
             .add_input(
                 TxInput::AccountCommand(
                     AccountNonce::new(0),
-                    AccountCommand::WithdrawOrder(order_id),
+                    AccountCommand::CancelOrder(order_id),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -694,7 +694,7 @@ fn reorg_before_create(#[case] seed: Seed) {
     });
 }
 
-// Create a chain with an order which is filled partially and then withdrawn.
+// Create a chain with an order which is filled partially and then canceled.
 // Reorg from a point after the order was created, so that after reorg storage has original information on the order
 #[rstest]
 #[trace]
@@ -773,7 +773,7 @@ fn reorg_after_create(#[case] seed: Seed) {
                     .add_input(
                         TxInput::AccountCommand(
                             AccountNonce::new(1),
-                            AccountCommand::WithdrawOrder(order_id),
+                            AccountCommand::CancelOrder(order_id),
                         ),
                         InputWitness::NoSignature(None),
                     )

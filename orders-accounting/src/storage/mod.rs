@@ -25,8 +25,25 @@ pub mod in_memory;
 pub trait OrdersAccountingStorageRead {
     type Error: std::error::Error;
 
+    /// Provides access to auxiliary data of an order.
     fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error>;
+
+    /// Provides access to current ask balance. The data represents the remaining amount
+    /// that is left to satisfy for an order and can be filled by a taker.
+    ///
+    /// For example, if an order give 10 coins for 5 tokens this method would return 5. If the order is partially
+    /// filled and 2 tokens were bought this method would return 3.
+    ///
+    /// It's represented by `Amount` to simplify accounting math and the currency can be enquired from OrderData.
     fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error>;
+
+    /// Provides access to current give balance. The data represents the remaining amount
+    /// that can be taken from an order if filled by a taker.
+    ///
+    /// For example, if an order gives 10 coins for 5 tokens this method would return 10. If the order is partially
+    /// filled and 2 tokens were bought this method would return 6.
+    ///
+    /// It's represented by `Amount` to simplify accounting math and the currency can be enquired from OrderData.
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error>;
 }
 

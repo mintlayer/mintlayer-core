@@ -670,7 +670,7 @@ impl OutputCache {
                 | AccountCommand::LockTokenSupply(_)
                 | AccountCommand::ChangeTokenAuthority(_, _)
                 | AccountCommand::UnfreezeToken(_)
-                | AccountCommand::WithdrawOrder(_)
+                | AccountCommand::CancelOrder(_)
                 | AccountCommand::FillOrder(_, _, _) => None,
                 AccountCommand::FreezeToken(frozen_token_id, _) => Some(frozen_token_id),
             },
@@ -733,7 +733,7 @@ impl OutputCache {
                 | AccountCommand::ChangeTokenAuthority(token_id, _)
                 | AccountCommand::UnmintTokens(token_id) => frozen_token_id == token_id,
                 // TODO: support orders
-                AccountCommand::WithdrawOrder(_) => unimplemented!(),
+                AccountCommand::CancelOrder(_) => unimplemented!(),
                 AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
             TxInput::Account(_) => false,
@@ -928,7 +928,7 @@ impl OutputCache {
                         }
                     }
                     // TODO: support orders
-                    AccountCommand::WithdrawOrder(_) => unimplemented!(),
+                    AccountCommand::CancelOrder(_) => unimplemented!(),
                     AccountCommand::FillOrder(_, _, _) => unimplemented!(),
                 },
             }
@@ -1031,7 +1031,7 @@ impl OutputCache {
                             }
                         }
                         // TODO: support orders
-                        AccountCommand::WithdrawOrder(_) => unimplemented!(),
+                        AccountCommand::CancelOrder(_) => unimplemented!(),
                         AccountCommand::FillOrder(_, _, _) => unimplemented!(),
                     },
                 }
@@ -1324,7 +1324,7 @@ impl OutputCache {
                                             }
                                         }
                                         // TODO: support orders
-                                        AccountCommand::WithdrawOrder(_) => unimplemented!(),
+                                        AccountCommand::CancelOrder(_) => unimplemented!(),
                                         AccountCommand::FillOrder(_, _, _) => unimplemented!(),
                                     },
                                 }
@@ -1533,7 +1533,7 @@ fn apply_freeze_mutations_from_tx(
                 | AccountCommand::LockTokenSupply(_)
                 | AccountCommand::ChangeTokenAuthority(_, _) => {}
                 // TODO: support orders
-                AccountCommand::WithdrawOrder(_) => unimplemented!(),
+                AccountCommand::CancelOrder(_) => unimplemented!(),
                 AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
         }
@@ -1575,7 +1575,7 @@ fn apply_total_supply_mutations_from_tx(
                 | AccountCommand::UnfreezeToken(_)
                 | AccountCommand::ChangeTokenAuthority(_, _) => {}
                 // TODO: support orders
-                AccountCommand::WithdrawOrder(_) => unimplemented!(),
+                AccountCommand::CancelOrder(_) => unimplemented!(),
                 AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
         }

@@ -53,7 +53,7 @@ impl From<AccountCommand> for AccountType {
             | AccountCommand::FreezeToken(id, _)
             | AccountCommand::UnfreezeToken(id)
             | AccountCommand::ChangeTokenAuthority(id, _) => AccountType::Token(id),
-            AccountCommand::WithdrawOrder(id) | AccountCommand::FillOrder(id, _, _) => {
+            AccountCommand::CancelOrder(id) | AccountCommand::FillOrder(id, _, _) => {
                 AccountType::Order(id)
             }
         }
@@ -116,7 +116,7 @@ pub enum AccountCommand {
     #[codec(index = 5)]
     ChangeTokenAuthority(TokenId, Destination),
     #[codec(index = 6)]
-    WithdrawOrder(OrderId),
+    CancelOrder(OrderId),
     #[codec(index = 7)]
     FillOrder(OrderId, OutputValue, Destination),
 }

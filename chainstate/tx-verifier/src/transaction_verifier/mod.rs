@@ -610,7 +610,7 @@ where
                             });
                         Some(res)
                     }
-                    AccountCommand::WithdrawOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
+                    AccountCommand::CancelOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
                 },
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -751,12 +751,12 @@ where
                     | AccountCommand::FreezeToken(..)
                     | AccountCommand::UnfreezeToken(..)
                     | AccountCommand::ChangeTokenAuthority(..) => None,
-                    AccountCommand::WithdrawOrder(order_id) => {
+                    AccountCommand::CancelOrder(order_id) => {
                         let res = self
                             .spend_input_from_account(*nonce, account_op.clone().into())
                             .and_then(|_| {
                                 self.orders_accounting_cache
-                                    .withdraw_order(*order_id)
+                                    .cancel_order(*order_id)
                                     .map_err(ConnectTransactionError::OrdersAccountingError)
                             });
                         Some(res)
