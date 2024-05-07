@@ -33,7 +33,7 @@ use common::{
             make_token_id, IsTokenFreezable, TokenIssuance, TokenIssuanceV0, TokenIssuanceV1,
             TokenTotalSupply,
         },
-        ChainConfig, ChainstateUpgrade, Destination, HtlcActivated, NetUpgrades,
+        ChainConfig, ChainstateUpgrade, Destination, HtlcActivated, NetUpgrades, OrdersActivated,
         TokenIssuanceVersion, TokensFeeVersion, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Fee, Idable},
@@ -577,6 +577,7 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
                                 RewardDistributionVersion::V1,
                                 TokensFeeVersion::V1,
                                 HtlcActivated::Yes,
+                                OrdersActivated::Yes,
                             ),
                         )])
                         .unwrap(),

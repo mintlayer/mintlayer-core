@@ -51,8 +51,10 @@ use self::checkpoints::Checkpoints;
 use self::emission_schedule::DEFAULT_INITIAL_MINT;
 use super::output_value::OutputValue;
 use super::{stakelock::StakePoolData, RequiredConsensus};
-use super::{ChainstateUpgrade, ConsensusUpgrade, HtlcActivated};
-use super::{RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion};
+use super::{
+    ChainstateUpgrade, ConsensusUpgrade, HtlcActivated, OrdersActivated, RewardDistributionVersion,
+    TokenIssuanceVersion, TokensFeeVersion,
+};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
@@ -875,6 +877,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                     RewardDistributionVersion::V1,
                     TokensFeeVersion::V1,
                     HtlcActivated::Yes,
+                    OrdersActivated::Yes,
                 ),
             )])
             .expect("cannot fail"),

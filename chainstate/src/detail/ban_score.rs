@@ -359,6 +359,8 @@ impl BanScore for CheckTransactionError {
             CheckTransactionError::TxSizeTooLarge(_, _, _) => 100,
             CheckTransactionError::DeprecatedTokenOperationVersion(_, _) => 100,
             CheckTransactionError::HtlcsAreNotActivated => 100,
+            CheckTransactionError::OrdersAreNotActivated(_) => 100,
+            CheckTransactionError::OrdersCurrenciesMustBeDifferent(_) => 100,
         }
     }
 }

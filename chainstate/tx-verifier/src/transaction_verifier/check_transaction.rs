@@ -24,7 +24,7 @@ use common::{
         ChainConfig, HtlcActivated, SignedTransaction, TokenIssuanceVersion, Transaction,
         TransactionSize, TxOutput,
     },
-    primitives::{BlockHeight, Id, Idable},
+    primitives::{BlockHeight, CoinOrTokenId, Id, Idable},
 };
 use thiserror::Error;
 use utils::ensure;
@@ -58,6 +58,10 @@ pub enum CheckTransactionError {
     DeprecatedTokenOperationVersion(TokenIssuanceVersion, Id<Transaction>),
     #[error("Htlcs are not activated yet")]
     HtlcsAreNotActivated,
+    #[error("Orders from tx {0} are not yet activated")]
+    OrdersAreNotActivated(Id<Transaction>),
+    #[error("Orders currencies from tx {0} are the same")]
+    OrdersCurrenciesMustBeDifferent(Id<Transaction>),
 }
 
 pub fn check_transaction(
@@ -72,6 +76,7 @@ pub fn check_transaction(
     check_no_signature_size(chain_config, tx)?;
     check_data_deposit_outputs(chain_config, tx)?;
     check_htlc_outputs(chain_config, block_height, tx)?;
+    check_order_outputs(chain_config, block_height, tx)?;
     Ok(())
 }
 
@@ -284,7 +289,6 @@ fn check_data_deposit_outputs(
     Ok(())
 }
 
-// FIXME: orders here as well
 fn check_htlc_outputs(
     chain_config: &ChainConfig,
     block_height: BlockHeight,
@@ -317,5 +321,52 @@ fn check_htlc_outputs(
             ensure!(!htlc_output, CheckTransactionError::HtlcsAreNotActivated);
         }
     };
+    Ok(())
+}
+
+fn check_order_outputs(
+    chain_config: &ChainConfig,
+    block_height: BlockHeight,
+    tx: &SignedTransaction,
+) -> Result<(), CheckTransactionError> {
+    for output in tx.outputs() {
+        match output {
+            TxOutput::Transfer(..)
+            | TxOutput::LockThenTransfer(..)
+            | TxOutput::Burn(..)
+            | TxOutput::CreateStakePool(..)
+            | TxOutput::ProduceBlockFromStake(..)
+            | TxOutput::CreateDelegationId(..)
+            | TxOutput::DelegateStaking(..)
+            | TxOutput::IssueFungibleToken(..)
+            | TxOutput::IssueNft(..)
+            | TxOutput::DataDeposit(..)
+            | TxOutput::Htlc(..) => { /* Do nothing */ }
+            TxOutput::AnyoneCanTake(data) => {
+                let orders_activated = chain_config
+                    .chainstate_upgrades()
+                    .version_at_height(block_height)
+                    .1
+                    .orders_activated();
+                match orders_activated {
+                    common::chain::OrdersActivated::Yes => {
+                        ensure!(
+                            CoinOrTokenId::from_output_value(data.ask())
+                                != CoinOrTokenId::from_output_value(data.give()),
+                            CheckTransactionError::OrdersCurrenciesMustBeDifferent(
+                                tx.transaction().get_id()
+                            )
+                        )
+                    }
+                    common::chain::OrdersActivated::No => {
+                        return Err(CheckTransactionError::OrdersAreNotActivated(
+                            tx.transaction().get_id(),
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
 }

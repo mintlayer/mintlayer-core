@@ -28,8 +28,8 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{make_token_id, TokenData, TokenId},
-        ChainstateUpgrade, Destination, HtlcActivated, OutPointSourceId, TokenIssuanceVersion,
-        TokensFeeVersion, TxInput, TxOutput,
+        ChainstateUpgrade, Destination, HtlcActivated, OrdersActivated, OutPointSourceId,
+        TokenIssuanceVersion, TokensFeeVersion, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -57,6 +57,7 @@ fn make_test_framework_with_v0(rng: &mut (impl Rng + CryptoRng)) -> TestFramewor
                             RewardDistributionVersion::V1,
                             TokensFeeVersion::V1,
                             HtlcActivated::Yes,
+                            OrdersActivated::Yes,
                         ),
                     )])
                     .unwrap(),
@@ -961,6 +962,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                                 RewardDistributionVersion::V1,
                                 TokensFeeVersion::V1,
                                 HtlcActivated::Yes,
+                                OrdersActivated::Yes,
                             ),
                         )])
                         .unwrap(),
@@ -1024,6 +1026,7 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
                                     RewardDistributionVersion::V1,
                                     TokensFeeVersion::V1,
                                     HtlcActivated::Yes,
+                                    OrdersActivated::Yes,
                                 ),
                             ),
                             (
@@ -1033,6 +1036,7 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
                                     RewardDistributionVersion::V1,
                                     TokensFeeVersion::V1,
                                     HtlcActivated::Yes,
+                                    OrdersActivated::Yes,
                                 ),
                             ),
                         ])

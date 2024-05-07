@@ -25,10 +25,10 @@ use common::{
             DestinationSigError,
         },
         tokens::{TokenId, TokenIssuance},
-        AccountCommand, AccountNonce, Destination, OrderData, SignedTransaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        AccountCommand, AccountNonce, ChainstateUpgrade, Destination, OrderData, SignedTransaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, Idable},
+    primitives::{Amount, BlockHeight, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
 use orders_accounting::OrdersAccountingDB;
@@ -42,23 +42,29 @@ use tx_verifier::error::{InputCheckError, ScriptError};
 
 use crate::tests::helpers::{issue_token_from_block, mint_tokens_in_block};
 
-fn issue_and_mint_token(
+fn issue_and_mint_token_from_genesis(
     rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
 ) -> (TokenId, UtxoOutPoint, UtxoOutPoint) {
-    let genesis_block_id = tf.best_block_id();
+    let genesis_block_id = tf.genesis().get_id();
+    let utxo = UtxoOutPoint::new(genesis_block_id.into(), 0);
+
+    issue_and_mint_token_from_best_block(rng, tf, utxo)
+}
+
+fn issue_and_mint_token_from_best_block(
+    rng: &mut (impl Rng + CryptoRng),
+    tf: &mut TestFramework,
+    utxo_outpoint: UtxoOutPoint,
+) -> (TokenId, UtxoOutPoint, UtxoOutPoint) {
+    let best_block_id = tf.best_block_id();
     let issuance = TokenIssuance::V1(random_token_issuance_v1(
         tf.chain_config(),
         Destination::AnyoneCanSpend,
         rng,
     ));
-    let (token_id, _, utxo_with_change) = issue_token_from_block(
-        rng,
-        tf,
-        genesis_block_id,
-        UtxoOutPoint::new(genesis_block_id.into(), 0),
-        issuance,
-    );
+    let (token_id, _, utxo_with_change) =
+        issue_token_from_block(rng, tf, best_block_id, utxo_outpoint, issuance);
 
     let best_block_id = tf.best_block_id();
     let (_, mint_tx_id) = mint_tokens_in_block(
@@ -86,7 +92,7 @@ fn create_order_check_storage(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (token_id, tokens_outpoint, _) = issue_and_mint_token(&mut rng, &mut tf);
+        let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
@@ -126,7 +132,7 @@ fn create_two_orders_same_tx(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (token_id, tokens_outpoint, _) = issue_and_mint_token(&mut rng, &mut tf);
+        let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
@@ -160,12 +166,145 @@ fn create_two_orders_same_tx(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn create_order_check_currencies(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+
+        let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+
+        // Check coins for coins trade
+        {
+            let order_data = OrderData::new(
+                Destination::AnyoneCanSpend,
+                OutputValue::Coin(ask_amount),
+                OutputValue::Coin(give_amount),
+            );
+
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    tokens_outpoint.clone().into(),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::AnyoneCanTake(order_data))
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            assert_eq!(
+                result.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(
+                    chainstate::BlockError::CheckBlockFailed(
+                        chainstate::CheckBlockError::CheckTransactionFailed(
+                            chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                                tx_verifier::CheckTransactionError::OrdersCurrenciesMustBeDifferent(
+                                    tx_id
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        // Check tokens for tokens trade
+        {
+            let order_data = OrderData::new(
+                Destination::AnyoneCanSpend,
+                OutputValue::TokenV1(token_id, ask_amount),
+                OutputValue::TokenV1(token_id, give_amount),
+            );
+
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    tokens_outpoint.clone().into(),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::AnyoneCanTake(order_data))
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            assert_eq!(
+                result.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(
+                    chainstate::BlockError::CheckBlockFailed(
+                        chainstate::CheckBlockError::CheckTransactionFailed(
+                            chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                                tx_verifier::CheckTransactionError::OrdersCurrenciesMustBeDifferent(
+                                    tx_id
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        // Trade tokens for coins
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(ask_amount),
+            OutputValue::TokenV1(token_id, give_amount),
+        );
+
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+                    .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_order_tokens_for_tokens(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (token_id_1, _, coins_outpoint) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+
+        let (token_id_2, tokens_outpoint_2, _) =
+            issue_and_mint_token_from_best_block(&mut rng, &mut tf, coins_outpoint);
+
+        let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+
+        // Trade tokens for coins
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::TokenV1(token_id_1, ask_amount),
+            OutputValue::TokenV1(token_id_2, give_amount),
+        );
+
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(tokens_outpoint_2.into(), InputWitness::NoSignature(None))
+                    .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn withdraw_order_check_storage(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (token_id, tokens_outpoint, _) = issue_and_mint_token(&mut rng, &mut tf);
+        let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
@@ -217,7 +356,8 @@ fn fill_order_check_storage(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (token_id, tokens_outpoint, coins_outpoint) = issue_and_mint_token(&mut rng, &mut tf);
+        let (token_id, tokens_outpoint, coins_outpoint) =
+            issue_and_mint_token_from_genesis(&mut rng, &mut tf);
 
         let ask_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
         let give_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
@@ -328,7 +468,7 @@ fn withdraw_order_check_signature(#[case] seed: Seed) {
 
         let (order_sk, order_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-        let (token_id, tokens_outpoint, _) = issue_and_mint_token(&mut rng, &mut tf);
+        let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
         let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
@@ -475,7 +615,8 @@ fn reorg_before_create(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (token_id, tokens_outpoint, coins_outpoint) = issue_and_mint_token(&mut rng, &mut tf);
+        let (token_id, tokens_outpoint, coins_outpoint) =
+            issue_and_mint_token_from_genesis(&mut rng, &mut tf);
         let reorg_common_ancestor = tf.best_block_id();
 
         let ask_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
@@ -563,7 +704,8 @@ fn reorg_after_create(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (token_id, tokens_outpoint, coins_outpoint) = issue_and_mint_token(&mut rng, &mut tf);
+        let (token_id, tokens_outpoint, coins_outpoint) =
+            issue_and_mint_token_from_genesis(&mut rng, &mut tf);
 
         let ask_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
         let give_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
@@ -666,5 +808,93 @@ fn reorg_after_create(#[case] seed: Seed) {
             Some(order_data.give().amount()),
             tf.chainstate.get_order_give_balance(&order_id).unwrap()
         );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_activation(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+        // activate orders at height 4 (genesis + issue block + mint block + empty block)
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                common::chain::config::Builder::test_chain()
+                    .chainstate_upgrades(
+                        common::chain::NetUpgrades::initialize(vec![
+                            (
+                                BlockHeight::zero(),
+                                ChainstateUpgrade::new(
+                                    common::chain::TokenIssuanceVersion::V1,
+                                    common::chain::RewardDistributionVersion::V1,
+                                    common::chain::TokensFeeVersion::V1,
+                                    common::chain::HtlcActivated::No,
+                                    common::chain::OrdersActivated::No,
+                                ),
+                            ),
+                            (
+                                BlockHeight::new(4),
+                                ChainstateUpgrade::new(
+                                    common::chain::TokenIssuanceVersion::V1,
+                                    common::chain::RewardDistributionVersion::V1,
+                                    common::chain::TokensFeeVersion::V1,
+                                    common::chain::HtlcActivated::No,
+                                    common::chain::OrdersActivated::Yes,
+                                ),
+                            ),
+                        ])
+                        .unwrap(),
+                    )
+                    .genesis_unittest(Destination::AnyoneCanSpend)
+                    .build(),
+            )
+            .build();
+
+        let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(Amount::from_atoms(rng.gen_range(1u128..1000))),
+            OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen_range(1u128..1000))),
+        );
+
+        // Try to produce order output before activation, check an error
+        let tx = TransactionBuilder::new()
+            .add_input(
+                tokens_outpoint.clone().into(),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+
+        assert_eq!(
+            result.unwrap_err(),
+            chainstate::ChainstateError::ProcessBlockError(
+                chainstate::BlockError::CheckBlockFailed(
+                    chainstate::CheckBlockError::CheckTransactionFailed(
+                        chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                            tx_verifier::CheckTransactionError::OrdersAreNotActivated(tx_id)
+                        )
+                    )
+                )
+            )
+        );
+
+        // produce an empty block
+        tf.make_block_builder().build_and_process(&mut rng).unwrap();
+
+        // now it should be possible to use order output
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+                    .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
     });
 }
