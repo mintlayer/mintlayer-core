@@ -389,9 +389,7 @@ async fn timelocked(#[case] seed: Seed, #[case] timelock: OutputTimeLock, #[case
         .await
         .unwrap()
         .expect("block1");
-    mempool
-        .on_new_tip(block1_id, BlockHeight::new(1), &mut WorkQueue::new())
-        .unwrap();
+    mempool.on_new_tip(block1_id, BlockHeight::new(1)).unwrap();
 
     let in_mempool = if !in_mempool_at0 {
         mempool.add_transaction_test(tx1.clone()).is_ok()

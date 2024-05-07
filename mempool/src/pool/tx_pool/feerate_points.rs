@@ -95,7 +95,7 @@ mod tests {
     use rstest::rstest;
     pub use test_utils::random::{make_seedable_rng, Rng, Seed};
 
-    use crate::pool::store::DescendantScore;
+    use crate::pool::tx_pool::DescendantScore;
 
     use super::*;
 

@@ -51,7 +51,7 @@ fn peer_queue_perform_one(#[case] seed: Seed) {
     let len_before = pq.queue.len();
 
     let mut num_iters = 0;
-    let result = pq.perform(|w| {
+    let result = pq.pick(|w| {
         num_iters += 1;
         assert_eq!(w, first);
         Some("foo")
@@ -71,7 +71,7 @@ fn peer_queue_perform_fail(#[case] seed: Seed) {
     let len_before = pq.queue.len();
 
     let mut num_iters = 0;
-    let result: Option<&str> = pq.perform(|_| {
+    let result: Option<&str> = pq.pick(|_| {
         num_iters += 1;
         None
     });
@@ -142,7 +142,7 @@ fn simulation(#[case] seed: Seed) {
             4..=5 => {
                 log::debug!("Scheduled: {:?}", wq.scheduled);
 
-                match wq.perform(|peer, work| Some((peer, work))) {
+                match wq.pick(|peer, work| Some((peer, work))) {
                     Some((peer, work)) => {
                         log::debug!("Performed peer{peer}'s work: {work:03}");
                         assert!(processed.insert(work), "Item {work} processed twice");
@@ -169,7 +169,7 @@ fn simulation(#[case] seed: Seed) {
 
     // Finish the processing of the queue
     let mut iter = 0;
-    while let Some(work) = wq.perform(|_peer, work| Some(work)) {
+    while let Some(work) = wq.pick(|_peer, work| Some(work)) {
         assert!(processed.insert(work), "Item {work} processed twice");
         assert!(
             iter < next_item,
@@ -228,7 +228,7 @@ fn scheduling_fairness_full_queues(#[case] seed: Seed) {
         }
 
         // Perform a unit of work
-        let peer = wq.perform(|peer, _work| Some(peer)).unwrap();
+        let peer = wq.pick(|peer, _work| Some(peer)).unwrap();
         log::trace!("Served peer{peer}");
         peer_trace.push(peer);
         wq.check_integrity();

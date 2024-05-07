@@ -490,7 +490,7 @@ impl TestPeer {
 
 pub struct TestNodeBuilder {
     chain_config: Arc<ChainConfig>,
-    mempool_config: Arc<MempoolConfig>,
+    mempool_config: MempoolConfig,
     p2p_config: Arc<P2pConfig>,
     chainstate_config: Option<ChainstateConfig>,
     chainstate: Option<Box<dyn ChainstateInterface>>,
@@ -503,7 +503,7 @@ impl TestNodeBuilder {
     pub fn new(protocol_version: ProtocolVersion) -> Self {
         Self {
             chain_config: Arc::new(create_unit_test_config()),
-            mempool_config: Arc::new(MempoolConfig::new()),
+            mempool_config: MempoolConfig::new(),
             p2p_config: Arc::new(test_p2p_config()),
             chainstate_config: None,
             chainstate: None,
@@ -528,7 +528,7 @@ impl TestNodeBuilder {
         self
     }
 
-    pub fn with_mempool_config(mut self, mempool_config: Arc<MempoolConfig>) -> Self {
+    pub fn with_mempool_config(mut self, mempool_config: MempoolConfig) -> Self {
         self.mempool_config = mempool_config;
         self
     }

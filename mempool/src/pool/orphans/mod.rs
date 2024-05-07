@@ -170,11 +170,6 @@ impl TxOrphanPool {
         self.transactions.len()
     }
 
-    /// Convert into transaction entries (in arbitrary order)
-    pub fn into_transactions(self) -> impl Iterator<Item = TxEntry> {
-        self.transactions.into_iter()
-    }
-
     /// Insert a transaction entry
     pub fn insert(&mut self, entry: TxEntry) -> Result<TxStatus, OrphanPoolError> {
         let tx_id = *entry.tx_id();

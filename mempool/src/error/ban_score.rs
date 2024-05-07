@@ -41,6 +41,8 @@ impl MempoolBanScore for Error {
             Error::Policy(err) => err.mempool_ban_score(),
             // Orphan errors may be race / out of sync errors, allowed
             Error::Orphan(_) => 0,
+            // Tip moved during validation
+            Error::TipMoved => 0,
         }
     }
 }
@@ -88,12 +90,11 @@ impl MempoolBanScore for TxValidationError {
             TxValidationError::ChainstateError(err) => err.mempool_ban_score(),
             TxValidationError::TxValidation(err) => err.mempool_ban_score(),
 
-            // Unsolicited transaction sent during IBD
+            // Transaction is not necessarily invalid in this case
             TxValidationError::AddedDuringIBD => 0,
 
             // Internal errors
             TxValidationError::CallError(_) => 0,
-            TxValidationError::TipMoved => 0,
         }
     }
 }

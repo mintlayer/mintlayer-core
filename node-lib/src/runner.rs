@@ -97,7 +97,7 @@ async fn initialize(
     // Mempool subsystem
     let mempool = mempool::make_mempool(
         Arc::clone(&chain_config),
-        Arc::new(node_config.mempool.unwrap_or_default().into()),
+        node_config.mempool.unwrap_or_default().into(),
         subsystem::Handle::clone(&chainstate),
         Default::default(),
     );

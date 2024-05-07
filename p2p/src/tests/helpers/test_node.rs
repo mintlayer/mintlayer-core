@@ -138,7 +138,7 @@ where
         )
         .unwrap();
 
-        let mempool_config = Arc::new(MempoolConfig::new());
+        let mempool_config = MempoolConfig::new();
 
         let (chainstate, mempool, shutdown_trigger, subsystem_mgr_join_handle) =
             p2p_test_utils::start_subsystems_generic(

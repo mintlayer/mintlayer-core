@@ -19,32 +19,15 @@ use std::collections::BTreeSet;
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
-    chain::{Block, GenBlock, SignedTransaction},
-    primitives::{Id, Idable},
+    chain::{Block, GenBlock},
+    primitives::{time::Time, Id, Idable},
 };
 use logging::log;
-use utils::tap_log::TapLog;
+use utils::ensure;
 use utxo::UtxosStorageRead;
 
-use super::{MemoryUsageEstimator, Mempool, WorkQueue};
-use crate::tx_origin::LocalTxOrigin;
-
-/// An error that can happen in mempool on chain reorg
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-pub enum ReorgError {
-    #[error(transparent)]
-    Chainstate(#[from] chainstate::ChainstateError),
-    #[error("Could not obtain the best block for utxos")]
-    BestBlockForUtxos,
-    #[error("Could not find the previous tip index")]
-    OldTipIndex,
-    #[error("Could not find the new tip index")]
-    NewTipIndex,
-    #[error("Block {0:?} not found while traversing history")]
-    BlockNotFound(Id<Block>),
-    #[error("Chainstate call: {0}")]
-    ChainstateCall(#[from] subsystem::error::CallError),
-}
+use super::{MemoryUsageEstimator, TxAdditionOutcome, TxEntry, TxPool};
+use crate::error::ReorgError;
 
 /// Collect blocks between the given two points
 fn collect_blocks<C: ChainstateInterface + ?Sized>(
@@ -100,7 +83,7 @@ impl ReorgData {
     }
 
     /// Get transactions that have been disconnected and not reconnected
-    fn into_disconnected_transactions(self) -> impl Iterator<Item = SignedTransaction> {
+    fn into_disconnected_transactions(self, now: Time) -> impl Iterator<Item = TxEntry> {
         let connected_txs: BTreeSet<_> = self
             .connected
             .into_iter()
@@ -115,35 +98,43 @@ impl ReorgData {
             .into_iter()
             .rev()
             .flat_map(|block| block.into_transactions())
-            .filter(move |tx| !connected_txs.contains(&tx.transaction().get_id()))
+            .filter_map(move |tx| {
+                let origin = crate::tx_origin::LocalTxOrigin::PastBlock.into();
+                let options = crate::tx_options::TxOptions::default_for(origin);
+                let tx = TxEntry::new(tx, now, origin, options);
+                ensure!(!connected_txs.contains(tx.tx_id()));
+                Some(tx)
+            })
     }
 }
 
 fn fetch_disconnected_txs<M>(
-    mempool: &Mempool<M>,
+    tx_pool: &TxPool<M>,
     new_tip: Id<Block>,
-) -> Result<impl Iterator<Item = SignedTransaction>, ReorgError> {
-    let old_tip = mempool
+) -> Result<impl Iterator<Item = TxEntry>, ReorgError> {
+    let old_tip = tx_pool
         .tx_verifier
         .get_best_block_for_utxos()
         .map_err(|_| ReorgError::BestBlockForUtxos)?;
 
     log::debug!("Fetching disconnected txs, old_tip = {old_tip:?}");
 
-    mempool
+    let now = tx_pool.clock.get_time();
+
+    tx_pool
         .blocking_chainstate_handle()
         .call(move |c| ReorgData::from_chainstate(c, old_tip, new_tip.into()))?
-        .map(ReorgData::into_disconnected_transactions)
+        .map(|data| data.into_disconnected_transactions(now))
 }
 
 pub fn handle_new_tip<M: MemoryUsageEstimator>(
-    mempool: &mut Mempool<M>,
+    tx_pool: &mut TxPool<M>,
     new_tip: Id<Block>,
-    work_queue: &mut WorkQueue,
+    finalizer: impl FnMut(TxAdditionOutcome, &TxPool<M>),
 ) -> Result<(), ReorgError> {
-    mempool.rolling_fee_rate.get_mut().set_block_since_last_rolling_fee_bump(true);
+    tx_pool.rolling_fee_rate.get_mut().set_block_since_last_rolling_fee_bump(true);
 
-    let (is_ibd, actual_tip) = mempool.blocking_chainstate_handle().call(|cs| {
+    let (is_ibd, actual_tip) = tx_pool.blocking_chainstate_handle().call(|cs| {
         let is_ibd = cs.is_initial_block_download();
         let actual_tip = cs.get_best_block_id()?;
         Ok::<_, chainstate::ChainstateError>((is_ibd, actual_tip))
@@ -169,8 +160,8 @@ pub fn handle_new_tip<M: MemoryUsageEstimator>(
             // which will also change its "best block for utxos". This is not really needed here,
             // but some existing functional tests, namely blockprod_ibd.py and mempool_ibd.py,
             // use this fact to detect that the corresponding new tip event has already reached
-            // the mempool. TODO: refactor the tests, remove this call of "mempool.reset()".
-            let mut old_transactions = mempool.reset();
+            // the mempool. TODO: refactor the tests, remove this call of "tx_pool.reset()".
+            let mut old_transactions = tx_pool.reset();
             if old_transactions.next().is_some() {
                 // Note: actually, this should never happen during ibd.
                 log::warn!("Discarding mempool transactions during IBD");
@@ -179,34 +170,34 @@ pub fn handle_new_tip<M: MemoryUsageEstimator>(
         return Ok(());
     }
 
-    let disconnected_txs = fetch_disconnected_txs(mempool, new_tip)
-        .log_err_pfx("Fetching disconnected transactions on a reorg");
-
-    match disconnected_txs {
-        Ok(to_insert) => reorg_mempool_transactions(mempool, to_insert, work_queue),
-        Err(_) => refresh_mempool(mempool),
+    match fetch_disconnected_txs(tx_pool, new_tip) {
+        Ok(to_insert) => reorg_mempool_transactions(tx_pool, to_insert, finalizer),
+        Err(err) => {
+            log::error!("Error fetching disconnected transactions after reorg: {err}");
+            refresh_mempool(tx_pool, finalizer)
+        }
     }
 }
 
 fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
-    mempool: &mut Mempool<M>,
-    txs_to_insert: impl Iterator<Item = SignedTransaction>,
-    work_queue: &mut WorkQueue,
+    tx_pool: &mut TxPool<M>,
+    txs_to_insert: impl Iterator<Item = TxEntry>,
+    mut finalizer: impl FnMut(TxAdditionOutcome, &TxPool<M>),
 ) -> Result<(), ReorgError> {
-    let old_transactions = mempool.reset();
+    let old_transactions = tx_pool.reset();
 
     log::debug!(
         "Reorging mempool txs, tx_verifier's best block for utxos after mempool reset: {:?}",
-        mempool
+        tx_pool
             .tx_verifier
             .get_best_block_for_utxos()
             .map_err(|_| ReorgError::BestBlockForUtxos)?
     );
 
     for tx in txs_to_insert {
-        let tx_id = tx.transaction().get_id();
-        let origin = LocalTxOrigin::PastBlock.into();
-        if let Err(e) = mempool.add_transaction(tx, origin, work_queue) {
+        let tx_id = *tx.tx_id();
+        log::trace!("Adding {tx_id} after reorg");
+        if let Err(e) = tx_pool.add_transaction(tx, &mut finalizer) {
             log::debug!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
         }
     }
@@ -214,7 +205,8 @@ fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
     // Re-populate the verifier with transactions from mempool
     for tx in old_transactions {
         let tx_id = *tx.tx_id();
-        if let Err(e) = mempool.add_transaction_entry(tx) {
+        log::trace!("Adding {tx_id} after reorg");
+        if let Err(e) = tx_pool.add_transaction(tx, &mut finalizer) {
             log::debug!("Evicting {tx_id:?} from mempool: {e:?}")
         }
     }
@@ -223,7 +215,8 @@ fn reorg_mempool_transactions<M: MemoryUsageEstimator>(
 }
 
 pub fn refresh_mempool<M: MemoryUsageEstimator>(
-    mempool: &mut Mempool<M>,
+    tx_pool: &mut TxPool<M>,
+    finalizer: impl FnMut(TxAdditionOutcome, &TxPool<M>),
 ) -> Result<(), ReorgError> {
-    reorg_mempool_transactions(mempool, std::iter::empty(), &mut WorkQueue::new())
+    reorg_mempool_transactions(tx_pool, std::iter::empty(), finalizer)
 }

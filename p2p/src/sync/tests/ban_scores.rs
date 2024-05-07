@@ -25,7 +25,7 @@ use common::{
     Uint256,
 };
 use consensus::{ConsensusPoSError, ConsensusVerificationError};
-use mempool::error::{MempoolPolicyError, TxValidationError};
+use mempool::error::MempoolPolicyError;
 use p2p_test_utils::create_n_blocks;
 use randomness::Rng;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -79,7 +79,7 @@ async fn peer_handle_result() {
         P2pError::MempoolError(mempool::error::Error::Policy(
             MempoolPolicyError::MempoolFull,
         )),
-        P2pError::MempoolError(mempool::error::Error::Validity(TxValidationError::TipMoved)),
+        P2pError::MempoolError(mempool::error::Error::TipMoved),
     ] {
         let handle_res = peer_common::handle_message_processing_result(
             &peer_mgr_event_sender,

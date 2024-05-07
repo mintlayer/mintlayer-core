@@ -192,7 +192,7 @@ pub async fn start_node(chain_config: Arc<ChainConfig>) -> (subsystem::Manager, 
         chainstate_config.max_tip_age = Duration::from_secs(60 * 60 * 24 * 365 * 100).into();
         chainstate_config
     };
-    let mempool_config = Arc::new(MempoolConfig::new());
+    let mempool_config = MempoolConfig::new();
 
     let chainstate = make_chainstate(
         Arc::clone(&chain_config),

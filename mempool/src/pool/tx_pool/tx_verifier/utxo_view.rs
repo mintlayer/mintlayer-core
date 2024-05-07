@@ -16,7 +16,7 @@
 use common::chain::UtxoOutPoint;
 use utxo::{Utxo, UtxosView};
 
-use crate::pool::Mempool;
+use super::TxPool;
 
 #[derive(Eq, PartialEq, Debug, thiserror::Error)]
 pub enum Error<P> {
@@ -35,12 +35,12 @@ pub enum Error<P> {
 /// check transactions to be included in the next block for time locks.
 /// However, it also means double spending has to be checked separately.
 pub struct MempoolUtxoView<'m, M, P> {
-    mempool: &'m Mempool<M>,
+    mempool: &'m TxPool<M>,
     parent: P,
 }
 
 impl<'m, M, P> MempoolUtxoView<'m, M, P> {
-    pub fn new(mempool: &'m Mempool<M>, parent: P) -> Self {
+    pub fn new(mempool: &'m TxPool<M>, parent: P) -> Self {
         Self { mempool, parent }
     }
 }

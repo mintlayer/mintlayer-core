@@ -59,7 +59,7 @@ pub fn start_subsystems(
         time_getter.clone(),
     )
     .unwrap();
-    let mempool_config = Arc::new(MempoolConfig::new());
+    let mempool_config = MempoolConfig::new();
     start_subsystems_generic(
         chainstate,
         chain_config,
@@ -72,7 +72,7 @@ pub fn start_subsystems(
 pub fn start_subsystems_generic(
     chainstate: ChainstateSubsystem,
     chain_config: Arc<ChainConfig>,
-    mempool_config: Arc<MempoolConfig>,
+    mempool_config: MempoolConfig,
     time_getter: TimeGetter,
     tracing_span: tracing::Span,
 ) -> (

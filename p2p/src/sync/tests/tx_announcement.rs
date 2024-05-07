@@ -442,9 +442,9 @@ async fn valid_transaction_with_fee_below_minimum(#[case] seed: Seed) {
         tf.process_block(block2, BlockSource::Local).unwrap();
 
         let p2p_config = Arc::new(test_p2p_config());
-        let mempool_config = Arc::new(MempoolConfig {
+        let mempool_config = MempoolConfig {
             min_tx_relay_fee_rate: min_fee_rate.into(),
-        });
+        };
         let mut node = TestNode::builder(protocol_version)
             .with_p2p_config(Arc::clone(&p2p_config))
             .with_mempool_config(mempool_config)

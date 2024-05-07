@@ -70,7 +70,7 @@ pub async fn start_subsystems(
         peer_manager_config: Default::default(),
         protocol_config: Default::default(),
     };
-    let mempool_config = Arc::new(MempoolConfig::new());
+    let mempool_config = MempoolConfig::new();
 
     let chainstate = make_chainstate(
         Arc::clone(&chain_config),
