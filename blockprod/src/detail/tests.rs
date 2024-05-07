@@ -26,15 +26,15 @@ use chainstate::{ChainstateError, ChainstateHandle, GenBlockIndex, PropertyQuery
 use chainstate_test_framework::TransactionBuilder;
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockCreationError},
+        block::timestamp::BlockTimestamp,
         config::{create_testnet, create_unit_test_config, Builder, ChainType},
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         transaction::TxInput,
-        CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId,
-        PoolId, RequiredConsensus, TxOutput,
+        CoinUnit, ConsensusUpgrade, Destination, Genesis, NetUpgrades, OutPointSourceId, PoolId,
+        RequiredConsensus, TxOutput,
     },
     primitives::{per_thousand::PerThousand, time, Amount, BlockHeight, Id, Idable, H256},
     time_getter::TimeGetter,
@@ -252,6 +252,7 @@ mod collect_transactions {
 
 mod produce_block {
     use common::chain::{ChainConfig, PoSChainConfigBuilder};
+    use test_utils::assert_matches;
     use utils::atomics::SeqCstAtomicU64;
 
     use super::*;
@@ -412,8 +413,8 @@ mod produce_block {
                     .await;
 
                 match result {
-                    Err(BlockProductionError::FailedToConstructBlock(
-                        BlockCreationError::CurrentTipRetrievalError,
+                    Err(BlockProductionError::ChainstateError(
+                        consensus::ChainstateError::FailedToObtainBestBlockIndex(_),
                     )) => {}
                     _ => panic!("Unexpected return value"),
                 }
@@ -522,12 +523,7 @@ mod produce_block {
                     )
                     .await;
 
-                match result {
-                    Err(BlockProductionError::FailedConsensusInitialization(
-                        ConsensusCreationError::TimestampOverflow(_, 1),
-                    )) => {}
-                    _ => panic!("Expected timestamp overflow"),
-                };
+                assert_matches!(result, Err(BlockProductionError::TimestampOverflow(_, 1)));
 
                 assert_job_count(&block_production, 0).await;
             }
@@ -574,12 +570,7 @@ mod produce_block {
                     )
                     .await;
 
-                match result {
-                    Err(BlockProductionError::FailedConsensusInitialization(
-                        ConsensusCreationError::TimestampOverflow(_, _),
-                    )) => {}
-                    _ => panic!("Expected timestamp overflow"),
-                };
+                assert_matches!(result, Err(BlockProductionError::TimestampOverflow(_, _)));
 
                 assert_job_count(&block_production, 0).await;
             }
@@ -649,12 +640,7 @@ mod produce_block {
                     .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
                     .await;
 
-                match result {
-                    Err(BlockProductionError::FailedConsensusInitialization(
-                        ConsensusCreationError::TimestampOverflow(_, _),
-                    )) => {}
-                    _ => panic!("Expected timestamp overflow"),
-                };
+                assert_matches!(result, Err(BlockProductionError::TimestampOverflow(_, _)));
 
                 assert_job_count(&block_production, 0).await;
             }
@@ -721,10 +707,7 @@ mod produce_block {
                     )
                     .await;
 
-                match result {
-                    Err(BlockProductionError::TryAgainLater) => {}
-                    _ => panic!("Expected timestamp overflow"),
-                };
+                assert_matches!(result, Err(BlockProductionError::TryAgainLater));
 
                 assert_job_count(&block_production, 0).await;
             }
@@ -791,8 +774,8 @@ mod produce_block {
                     .await;
 
                 match result {
-                    Err(BlockProductionError::FailedConsensusInitialization(
-                        ConsensusCreationError::BestBlockIndexNotFound,
+                    Err(BlockProductionError::ChainstateError(
+                        consensus::ChainstateError::FailedToObtainBestBlockIndex(_),
                     )) => {}
                     _ => panic!("Unexpected return value"),
                 }
@@ -1068,10 +1051,7 @@ mod produce_block {
                 mock_job_manager.expect_add_job().times(1).returning(move |_, _| {
                     let (_, cancel_receiver) = unbounded_channel::<()>();
                     let mut rng = make_seedable_rng(seed);
-                    let job_key = JobKey::new(
-                        CustomId::new_from_entropy(),
-                        Id::<GenBlock>::new(H256::random_using(&mut rng)),
-                    );
+                    let job_key = JobKey::new(CustomId::new_from_rng(&mut rng));
                     Ok((job_key, None, cancel_receiver))
                 });
 
@@ -2122,20 +2102,14 @@ mod stop_all_jobs {
         let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
             block_production
                 .job_manager_handle
-                .add_job(
-                    CustomId::new_from_entropy(),
-                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
-                )
+                .add_job(CustomId::new_from_rng(&mut rng), None)
                 .await
                 .unwrap();
 
         let (_stop_job_key, _stop_last_used_block_timestamp, _stop_job_cancel_receiver) =
             block_production
                 .job_manager_handle
-                .add_job(
-                    CustomId::new_from_entropy(),
-                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
-                )
+                .add_job(CustomId::new_from_rng(&mut rng), None)
                 .await
                 .unwrap();
 
@@ -2214,10 +2188,7 @@ mod stop_job {
         block_production.set_job_manager(mock_job_manager);
 
         let mut rng = make_seedable_rng(seed);
-        let job_key = JobKey::new(
-            CustomId::new_from_entropy(),
-            Id::<GenBlock>::new(H256::random_using(&mut rng)),
-        );
+        let job_key = JobKey::new(CustomId::new_from_rng(&mut rng));
 
         let result = block_production.stop_job(job_key).await;
 
@@ -2251,20 +2222,14 @@ mod stop_job {
         let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
             block_production
                 .job_manager_handle
-                .add_job(
-                    CustomId::new_from_entropy(),
-                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
-                )
+                .add_job(CustomId::new_from_rng(&mut rng), None)
                 .await
                 .unwrap();
 
         let (stop_job_key, _stop_last_used_block_timestamp, _stop_job_cancel_receiver) =
             block_production
                 .job_manager_handle
-                .add_job(
-                    CustomId::new_from_entropy(),
-                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
-                )
+                .add_job(CustomId::new_from_rng(&mut rng), None)
                 .await
                 .unwrap();
 
@@ -2303,10 +2268,7 @@ mod stop_job {
             let (job_key, _stop_last_used_block_timestamp, _stop_job_cancel_receiver) =
                 block_production
                     .job_manager_handle
-                    .add_job(
-                        CustomId::new_from_entropy(),
-                        Id::<GenBlock>::new(H256::random_using(&mut rng)),
-                    )
+                    .add_job(CustomId::new_from_rng(&mut rng), None)
                     .await
                     .unwrap();
 
@@ -2359,17 +2321,11 @@ mod stop_job {
         let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
             block_production
                 .job_manager_handle
-                .add_job(
-                    CustomId::new_from_entropy(),
-                    Id::<GenBlock>::new(H256::random_using(&mut rng)),
-                )
+                .add_job(CustomId::new_from_rng(&mut rng), None)
                 .await
                 .unwrap();
 
-        let stop_job_key = JobKey::new(
-            CustomId::new_from_entropy(),
-            Id::<GenBlock>::new(H256::random_using(&mut rng)),
-        );
+        let stop_job_key = JobKey::new(CustomId::new_from_rng(&mut rng));
 
         let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
         assert!(!job_stopped, "Stopped a non-existent job");
@@ -2404,10 +2360,7 @@ mod stop_job {
         block_production.set_job_manager(mock_job_manager);
 
         let mut rng = make_seedable_rng(seed);
-        let job_key = JobKey::new(
-            CustomId::new_from_entropy(),
-            Id::<GenBlock>::new(H256::random_using(&mut rng)),
-        );
+        let job_key = JobKey::new(CustomId::new_from_rng(&mut rng));
 
         let result = block_production.stop_job(job_key).await;
 

@@ -21,13 +21,13 @@ use common::{
     primitives::Id,
 };
 use logging::log;
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc::UnboundedSender, oneshot};
 
-use super::{JobHandle, JobKey, JobManagerError, NewJobEvent};
+use super::{JobKey, JobManagerError, NewJobEvent};
 
 #[derive(Default)]
 pub struct JobsContainer {
-    jobs: BTreeMap<JobKey, JobHandle>,
+    jobs: BTreeMap<JobKey, JobData>,
     last_used_block_timestamps: BTreeMap<CustomId, BlockTimestamp>,
 }
 
@@ -39,19 +39,25 @@ impl JobsContainer {
     pub fn handle_add_job(&mut self, event: NewJobEvent) {
         let NewJobEvent {
             custom_id,
-            current_tip_id,
+            expected_tip_id,
             cancel_sender,
             result_sender,
         } = event;
 
-        let job_key = JobKey::new(custom_id.clone(), current_tip_id);
+        let job_key = JobKey::new(custom_id.clone());
 
         if self.jobs.contains_key(&job_key) {
             if let Err(e) = result_sender.send(Err(JobManagerError::JobAlreadyExists)) {
                 log::error!("Error sending new job exists error: {e:?}");
             }
         } else {
-            self.jobs.insert(job_key.clone(), JobHandle { cancel_sender });
+            self.jobs.insert(
+                job_key.clone(),
+                JobData {
+                    cancel_sender,
+                    expected_tip_id,
+                },
+            );
 
             let last_used_block_timestamp =
                 self.last_used_block_timestamps.get(&custom_id).copied();
@@ -66,8 +72,11 @@ impl JobsContainer {
         let jobs_to_stop: Vec<JobKey> = self
             .jobs
             .iter()
-            .filter(|(job_key, _)| job_key.current_tip_id() != new_tip_id)
-            .map(|(job_key, _)| job_key.clone())
+            .filter_map(|(job_key, job_data)| {
+                job_data.expected_tip_id.and_then(|expected_tip_id| {
+                    (expected_tip_id != new_tip_id).then(|| job_key.clone())
+                })
+            })
             .collect();
 
         for job_key in jobs_to_stop {
@@ -144,6 +153,11 @@ impl JobsContainer {
 
         _ = result_sender.send(());
     }
+}
+
+struct JobData {
+    cancel_sender: UnboundedSender<()>,
+    expected_tip_id: Option<Id<GenBlock>>,
 }
 
 // TODO: tests

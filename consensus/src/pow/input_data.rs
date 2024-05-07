@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::pow::{calculate_work_required, error::ConsensusPoWError};
-use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     chain::{
         block::{consensus_data::PoWData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
@@ -52,7 +52,7 @@ pub fn generate_pow_consensus_data_and_reward<G>(
     block_height: BlockHeight,
 ) -> Result<(ConsensusData, BlockReward), ConsensusPoWError>
 where
-    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
 {
     let work_required = calculate_work_required(
         chain_config,

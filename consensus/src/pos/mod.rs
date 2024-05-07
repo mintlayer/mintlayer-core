@@ -21,8 +21,6 @@ pub mod kernel;
 pub mod target;
 
 mod effective_pool_balance;
-pub use effective_pool_balance::effective_pool_balance as calculate_effective_pool_balance;
-pub use effective_pool_balance::EffectivePoolBalanceError;
 
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
@@ -36,23 +34,28 @@ use common::{
             consensus_data::PoSData, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockHeader, ConsensusData,
         },
-        ChainConfig, PoSChainConfig, PoSStatus, TxOutput,
+        config::EpochIndex,
+        ChainConfig, CoinUnit, PoSChainConfig, PoSStatus, TxOutput,
     },
-    primitives::{BlockHeight, Idable},
+    primitives::{Amount, BlockHeight, Compact, Idable},
+    Uint256,
 };
+use crypto::vrf::{VRFPrivateKey, VRFPublicKey, VRFReturn};
 use logging::log;
 use pos_accounting::PoSAccountingView;
-use std::sync::Arc;
-use utils::{
-    atomics::{AcqRelAtomicU64, RelaxedAtomicBool},
-    ensure,
-};
+use randomness::{CryptoRng, Rng};
+use utils::ensure;
 use utxo::UtxosView;
 
 use crate::{
     pos::{block_sig::check_block_signature, error::ConsensusPoSError, kernel::get_kernel_output},
     PoSFinalizeBlockInputData,
 };
+
+pub use effective_pool_balance::{
+    effective_pool_balance as calculate_effective_pool_balance, EffectivePoolBalanceError,
+};
+pub use hash_check::check_pos_hash;
 
 #[must_use]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,6 +88,13 @@ fn randomness_of_sealed_epoch<S: EpochStorageRead>(
     };
 
     Ok(random_seed)
+}
+
+pub fn compact_target_to_target(compact_target: Compact) -> Result<Uint256, ConsensusPoSError> {
+    let target: Uint256 = compact_target
+        .try_into()
+        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(compact_target))?;
+    Ok(target)
 }
 
 /// Proof of stake cannot have timestamp equal to previous block, since stake hash would be the same
@@ -181,11 +191,12 @@ where
         .final_supply()
         .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
 
-    hash_check::check_pos_hash(
+    hash_check::calc_and_check_pos_hash(
         pos_status.get_chain_config().consensus_version(),
         current_epoch_index,
         &random_seed,
-        pos_data,
+        &compact_target_to_target(pos_data.compact_target())?,
+        pos_data.vrf_data(),
         &vrf_pub_key,
         header.timestamp(),
         staker_balance,
@@ -199,79 +210,150 @@ where
 pub fn stake(
     chain_config: &ChainConfig,
     pos_config: &PoSChainConfig,
-    pos_data: &mut Box<PoSData>,
+    pos_data: PoSData,
     block_header: &mut BlockHeader,
-    block_timestamp_seconds: Arc<AcqRelAtomicU64>,
+    block_timestamp: &mut BlockTimestamp,
+    max_block_timestamp: BlockTimestamp,
     finalize_pos_data: PoSFinalizeBlockInputData,
-    stop_flag: Arc<RelaxedAtomicBool>,
 ) -> Result<StakeResult, ConsensusPoSError> {
-    let sealed_epoch_randomness = finalize_pos_data.sealed_epoch_randomness();
-    let vrf_pk = finalize_pos_data.vrf_public_key();
     let final_supply = chain_config
         .final_supply()
         .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
 
-    let mut block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
-
-    ensure!(
-        block_timestamp <= finalize_pos_data.max_block_timestamp(),
-        ConsensusPoSError::FutureTimestampInThePast
-    );
+    let first_timestamp = *block_timestamp;
 
     log::debug!(
         "Search for a valid block ({}..{}), pool_id: {}",
-        block_timestamp,
-        finalize_pos_data.max_block_timestamp(),
+        first_timestamp,
+        max_block_timestamp,
         Address::new(chain_config, *pos_data.stake_pool_id())
             .expect("Pool id to address cannot fail")
     );
 
-    while block_timestamp <= finalize_pos_data.max_block_timestamp() {
-        let vrf_data = {
-            let transcript = construct_transcript(
-                finalize_pos_data.epoch_index(),
-                &sealed_epoch_randomness.value(),
-                block_timestamp,
-            );
+    if let Some((found_timestamp, vrf_data)) = find_timestamp_for_staking(
+        final_supply,
+        pos_config,
+        pos_data.compact_target(),
+        first_timestamp,
+        max_block_timestamp,
+        finalize_pos_data.sealed_epoch_randomness(),
+        finalize_pos_data.epoch_index(),
+        finalize_pos_data.pledge_amount(),
+        finalize_pos_data.pool_balance(),
+        finalize_pos_data.vrf_private_key(),
+        &mut randomness::make_true_rng(),
+    )? {
+        log::info!(
+            "Valid block found, timestamp: {}, pool_id: {}",
+            found_timestamp,
+            pos_data.stake_pool_id()
+        );
 
-            finalize_pos_data.vrf_private_key().produce_vrf_data(transcript)
-        };
-
+        let mut pos_data = pos_data;
         pos_data.update_vrf_data(vrf_data);
+        block_header.update_consensus_data(ConsensusData::PoS(Box::new(pos_data)));
+        block_header.update_timestamp(found_timestamp);
 
-        if hash_check::check_pos_hash(
-            pos_config.consensus_version(),
-            finalize_pos_data.epoch_index(),
+        *block_timestamp = found_timestamp;
+
+        Ok(StakeResult::Success)
+    } else {
+        *block_timestamp = max_block_timestamp;
+        Ok(StakeResult::Failed)
+    }
+}
+
+pub fn calc_pos_hash_from_prv_key(
+    epoch_index: EpochIndex,
+    sealed_epoch_randomness: &PoSRandomness,
+    block_timestamp: BlockTimestamp,
+    vrf_pub_key: &VRFPublicKey,
+    vrf_prv_key: &VRFPrivateKey,
+    rng: &mut (impl Rng + CryptoRng),
+) -> Result<Uint256, ConsensusPoSError> {
+    let vrf_data = produce_vrf_data(
+        epoch_index,
+        sealed_epoch_randomness,
+        block_timestamp,
+        vrf_prv_key,
+        rng,
+    );
+
+    let hash: Uint256 = PoSRandomness::from_block(
+        epoch_index,
+        block_timestamp,
+        sealed_epoch_randomness,
+        &vrf_data,
+        vrf_pub_key,
+    )?
+    .value()
+    .into();
+
+    Ok(hash)
+}
+
+pub fn produce_vrf_data(
+    epoch_index: EpochIndex,
+    sealed_epoch_randomness: &PoSRandomness,
+    timestamp: BlockTimestamp,
+    vrf_prv_key: &VRFPrivateKey,
+    rng: &mut (impl Rng + CryptoRng),
+) -> VRFReturn {
+    let transcript = construct_transcript(epoch_index, &sealed_epoch_randomness.value(), timestamp)
+        .with_rng(&mut *rng);
+
+    vrf_prv_key.produce_vrf_data(transcript)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn find_timestamp_for_staking(
+    final_supply: CoinUnit,
+    pos_config: &PoSChainConfig,
+    target: Compact,
+    first_timestamp: BlockTimestamp,
+    max_timestamp: BlockTimestamp,
+    sealed_epoch_randomness: &PoSRandomness,
+    epoch_index: EpochIndex,
+    pledge_amount: Amount,
+    pool_balance: Amount,
+    vrf_prv_key: &VRFPrivateKey,
+    rng: &mut (impl Rng + CryptoRng),
+) -> Result<Option<(BlockTimestamp, VRFReturn)>, ConsensusPoSError> {
+    let vrf_pub_key = VRFPublicKey::from_private_key(vrf_prv_key);
+    let target = compact_target_to_target(target)?;
+    let final_supply = final_supply.to_amount_atoms();
+
+    ensure!(
+        first_timestamp <= max_timestamp,
+        ConsensusPoSError::FutureTimestampInThePast
+    );
+
+    for timestamp in first_timestamp.iter_up_to_including(max_timestamp) {
+        let vrf_data = produce_vrf_data(
+            epoch_index,
             sealed_epoch_randomness,
-            pos_data,
-            &vrf_pk,
-            block_timestamp,
-            finalize_pos_data.pledge_amount(),
-            finalize_pos_data.pool_balance(),
-            final_supply.to_amount_atoms(),
+            timestamp,
+            vrf_prv_key,
+            rng,
+        );
+
+        if hash_check::calc_and_check_pos_hash(
+            pos_config.consensus_version(),
+            epoch_index,
+            sealed_epoch_randomness,
+            &target,
+            &vrf_data,
+            &vrf_pub_key,
+            timestamp,
+            pledge_amount,
+            pool_balance,
+            final_supply,
         )
         .is_ok()
         {
-            log::info!(
-                "Valid block found, timestamp: {}, pool_id: {}",
-                block_timestamp,
-                pos_data.stake_pool_id()
-            );
-
-            block_header.update_consensus_data(ConsensusData::PoS(pos_data.clone()));
-            block_header.update_timestamp(block_timestamp);
-            return Ok(StakeResult::Success);
+            return Ok(Some((timestamp, vrf_data)));
         }
-
-        if stop_flag.load() {
-            return Ok(StakeResult::Stopped);
-        }
-
-        block_timestamp =
-            block_timestamp.add_int_seconds(1).ok_or(ConsensusPoSError::TimestampOverflow)?;
-
-        block_timestamp_seconds.store(block_timestamp.as_int_seconds());
     }
 
-    Ok(StakeResult::Failed)
+    Ok(None)
 }

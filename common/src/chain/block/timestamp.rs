@@ -78,6 +78,13 @@ impl BlockTimestamp {
     pub fn add_int_seconds(&self, seconds: BlockTimestampInternalType) -> Option<BlockTimestamp> {
         self.timestamp.checked_add(seconds).map(|ts| Self { timestamp: ts })
     }
+
+    pub fn iter_up_to_including(
+        &self,
+        other: BlockTimestamp,
+    ) -> impl Iterator<Item = BlockTimestamp> {
+        (self.timestamp..=other.timestamp).map(BlockTimestamp::from_int_seconds)
+    }
 }
 
 #[cfg(test)]
@@ -89,5 +96,18 @@ mod tests {
         let timestamp = BlockTimestamp::from_int_seconds(u64::MAX);
         let timestamp_next = timestamp.add_int_seconds(1);
         assert!(timestamp_next.is_none());
+    }
+
+    #[test]
+    fn iteration() {
+        let timestamps = BlockTimestamp::from_int_seconds(1)
+            .iter_up_to_including(BlockTimestamp::from_int_seconds(3))
+            .collect::<Vec<_>>();
+        let expected_timestamps = vec![
+            BlockTimestamp::from_int_seconds(1),
+            BlockTimestamp::from_int_seconds(2),
+            BlockTimestamp::from_int_seconds(3),
+        ];
+        assert_eq!(timestamps, expected_timestamps);
     }
 }

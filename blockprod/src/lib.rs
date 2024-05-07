@@ -14,7 +14,7 @@
 // limitations under the License.
 
 pub mod config;
-pub mod detail;
+mod detail;
 pub mod interface;
 pub mod rpc;
 
@@ -22,7 +22,10 @@ use std::sync::Arc;
 
 use chainstate::ChainstateHandle;
 use common::{
-    chain::{block::BlockCreationError, ChainConfig, GenBlock, Transaction},
+    chain::{
+        block::{timestamp::BlockTimestamp, BlockCreationError},
+        ChainConfig, GenBlock, PoolId, Transaction,
+    },
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
@@ -70,6 +73,16 @@ pub enum BlockProductionError {
     MempoolBlockConstruction(#[from] mempool::error::BlockConstructionError),
     #[error("Failed to decrypt generate-block input data: {0}")]
     E2eError(#[from] ephemeral_e2e::error::Error),
+    #[error("Overflowed when calculating a block timestamp: {0} + {1}")]
+    TimestampOverflow(BlockTimestamp, u64),
+    #[error("Chainstate error: `{0}`")]
+    ChainstateError(#[from] consensus::ChainstateError),
+    #[error("Pool data for pool {0} not found")]
+    PoolDataNotFound(PoolId),
+    #[error("Balance for pool {0} not found")]
+    PoolBalanceNotFound(PoolId),
+    #[error("PoS accounting error: {0}")]
+    PoSAccountingError(#[from] detail::utils::PoSAccountingError),
 }
 
 pub type BlockProductionSubsystem = Box<dyn BlockProductionInterface>;

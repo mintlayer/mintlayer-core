@@ -15,7 +15,7 @@
 
 use std::num::NonZeroU64;
 
-use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     chain::block::timestamp::BlockTimestamp,
     primitives::{BlockHeight, Compact},
@@ -38,7 +38,7 @@ pub fn get_starting_block_time<F>(
     get_ancestor: F,
 ) -> Result<BlockTimestamp, ConsensusPoWError>
 where
-    F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+    F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
 {
     let retarget_height = {
         let height: u64 = block_index.block_height().into();
@@ -47,9 +47,7 @@ where
         BlockHeight::new(old_block_height)
     };
 
-    let retarget_block_index = get_ancestor(block_index, retarget_height).map_err(|err| {
-        ConsensusPoWError::AncestorAtHeightNotFound(*block_index.block_id(), retarget_height, err)
-    })?;
+    let retarget_block_index = get_ancestor(block_index, retarget_height)?;
 
     Ok(retarget_block_index.block_timestamp())
 }
