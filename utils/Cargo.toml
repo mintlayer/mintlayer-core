@@ -29,7 +29,8 @@ zeroize.workspace = true
 test-utils = { path = "../test-utils" }
 
 criterion.workspace = true
-regex.workspace = true
+# regex.workspace = true
+regex = "1.10"
 rstest.workspace = true
 static_assertions.workspace = true
 tracing.workspace = true

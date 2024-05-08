@@ -38,7 +38,8 @@ static_assertions.workspace = true
 thiserror.workspace = true
 variant_count.workspace = true
 paste.workspace = true
-regex.workspace = true
+# regex.workspace = true
+regex = "1.10"
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
