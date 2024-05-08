@@ -140,7 +140,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
             let block = tf2
                 .make_pos_block_builder()
                 .with_parent(prev_block_id)
-                .with_stake_pool(genesis_pool_id)
+                .with_stake_pool_id(genesis_pool_id)
                 .with_stake_spending_key(staking_sk.clone())
                 .with_vrf_key(vrf_sk.clone())
                 .build(&mut rng);

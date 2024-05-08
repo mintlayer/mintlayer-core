@@ -370,3 +370,20 @@ pub fn sign_witnesses(
         .collect();
     witnesses
 }
+
+pub fn find_create_pool_tx_in_genesis(genesis: &Genesis, pool_id: &PoolId) -> Option<UtxoOutPoint> {
+    let output_index_opt = genesis.utxos().iter().position(|output| match output {
+        TxOutput::Transfer(..)
+        | TxOutput::LockThenTransfer(..)
+        | TxOutput::Burn(..)
+        | TxOutput::ProduceBlockFromStake(..)
+        | TxOutput::CreateDelegationId(..)
+        | TxOutput::DelegateStaking(..)
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::IssueNft(_, _, _)
+        | TxOutput::DataDeposit(_) => false,
+        TxOutput::CreateStakePool(genesis_pool_id, _) => genesis_pool_id == pool_id,
+    });
+
+    output_index_opt.map(|idx| UtxoOutPoint::new(genesis.get_id().into(), idx as u32))
+}

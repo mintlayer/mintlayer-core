@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     random_tx_maker::StakingPoolsObserver,
-    utils::{pos_mine, produce_kernel_signature, sign_witnesses},
+    utils::{find_create_pool_tx_in_genesis, pos_mine, produce_kernel_signature, sign_witnesses},
     TestFramework,
 };
 use chainstate::{BlockSource, ChainstateError};
@@ -156,7 +156,7 @@ impl<'f> PoSBlockBuilder<'f> {
         self
     }
 
-    pub fn with_stake_pool(mut self, pool_id: PoolId) -> Self {
+    pub fn with_stake_pool_id(mut self, pool_id: PoolId) -> Self {
         debug_assert!(self.staking_pool.is_none());
         self.staking_pool = Some(pool_id);
         self
@@ -183,7 +183,20 @@ impl<'f> PoSBlockBuilder<'f> {
                  .choose(rng)
                  .expect("if pool is not provided it should be available for random selection in TestFramework");
 
-        self.with_stake_pool(staking_pool)
+        self.with_stake_pool_id(staking_pool)
+            .with_stake_spending_key(staker_sk)
+            .with_vrf_key(staker_vrf_sk)
+            .with_kernel_input(kernel_input_outpoint)
+    }
+
+    pub fn with_specific_staking_pool(self, pool_id: &PoolId) -> Self {
+        let (staker_sk, staker_vrf_sk, kernel_input_outpoint) =
+            self.framework.staking_pools.staking_pools().get(pool_id).unwrap();
+        let staker_sk = staker_sk.clone();
+        let staker_vrf_sk = staker_vrf_sk.clone();
+        let kernel_input_outpoint = kernel_input_outpoint.clone();
+
+        self.with_stake_pool_id(*pool_id)
             .with_stake_spending_key(staker_sk)
             .with_vrf_key(staker_vrf_sk)
             .with_kernel_input(kernel_input_outpoint)
@@ -273,25 +286,7 @@ impl<'f> PoSBlockBuilder<'f> {
                     }
                 }
                 chainstate_types::GenBlockIndex::Genesis(genesis) => {
-                    let output_index = genesis
-                        .utxos()
-                        .iter()
-                        .position(|output| match output {
-                            TxOutput::Transfer(..)
-                            | TxOutput::LockThenTransfer(..)
-                            | TxOutput::Burn(..)
-                            | TxOutput::ProduceBlockFromStake(..)
-                            | TxOutput::CreateDelegationId(..)
-                            | TxOutput::DelegateStaking(..)
-                            | TxOutput::IssueFungibleToken(_)
-                            | TxOutput::IssueNft(_, _, _)
-                            | TxOutput::DataDeposit(_) => false,
-                            TxOutput::CreateStakePool(pool_id, _) => {
-                                *pool_id == self.staking_pool.unwrap()
-                            }
-                        })
-                        .unwrap();
-                    UtxoOutPoint::new(genesis.get_id().into(), output_index as u32)
+                    find_create_pool_tx_in_genesis(genesis, &self.staking_pool.unwrap()).unwrap()
                 }
             }
         });

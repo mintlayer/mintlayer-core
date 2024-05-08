@@ -23,10 +23,12 @@ use rstest::rstest;
 use crate::{
     key_manager::KeyManager,
     pos_block_builder::PoSBlockBuilder,
+    random_tx_maker::StakingPoolsObserver,
     staking_pools::StakingPools,
     utils::{
         assert_block_index_opt_identical_to, assert_gen_block_index_identical_to,
-        assert_gen_block_index_opt_identical_to, outputs_from_block, outputs_from_genesis,
+        assert_gen_block_index_opt_identical_to, find_create_pool_tx_in_genesis,
+        outputs_from_block, outputs_from_genesis,
     },
     BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
@@ -35,6 +37,7 @@ use chainstate_types::{BlockIndex, BlockStatus, GenBlockIndex};
 use common::{
     chain::{
         Block, ChainConfig, GenBlock, GenBlockId, Genesis, OutPointSourceId, PoolId, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{id::WithId, time::Time, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -294,7 +297,7 @@ impl TestFramework {
                 let block = self
                     .make_pos_block_builder()
                     .with_parent(prev_block_id)
-                    .with_stake_pool(staking_pool)
+                    .with_stake_pool_id(staking_pool)
                     .with_stake_spending_key(staking_sk.clone())
                     .with_vrf_key(staking_vrf_sk.clone())
                     .build(&mut *rng);
@@ -504,6 +507,30 @@ impl TestFramework {
         tx_rw.del_block(*block_id).unwrap();
         tx_rw.del_block_index(*block_id).unwrap();
         tx_rw.commit().unwrap();
+    }
+
+    pub fn on_pool_created(
+        &mut self,
+        pool_id: PoolId,
+        staker_key: PrivateKey,
+        vrf_sk: VRFPrivateKey,
+        outpoint: UtxoOutPoint,
+    ) {
+        self.staking_pools.on_pool_created(pool_id, staker_key, vrf_sk, outpoint);
+    }
+
+    pub fn set_genesis_pool_keys(
+        &mut self,
+        pool_id: &PoolId,
+        staker_key: PrivateKey,
+        vrf_sk: VRFPrivateKey,
+    ) {
+        let outpoint = find_create_pool_tx_in_genesis(
+            self.chainstate.get_chain_config().genesis_block(),
+            pool_id,
+        )
+        .unwrap();
+        self.on_pool_created(*pool_id, staker_key, vrf_sk, outpoint);
     }
 }
 

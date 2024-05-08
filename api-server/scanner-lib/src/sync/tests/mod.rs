@@ -588,7 +588,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
         .with_parent(prev_block_hash.into())
         .with_stake_spending_key(new_staking_sk)
         .with_vrf_key(new_vrf_sk.clone())
-        .with_stake_pool(new_pool_id)
+        .with_stake_pool_id(new_pool_id)
         .with_kernel_input(UtxoOutPoint::new(
             OutPointSourceId::Transaction(new_pool_tx_id),
             1,
@@ -1009,7 +1009,7 @@ fn create_block(
         .with_parent(prev_block_hash)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk.clone())
-        .with_stake_pool(pool_id)
+        .with_stake_pool_id(pool_id)
         .with_transactions(transactions)
         .build(&mut *rng);
     block
