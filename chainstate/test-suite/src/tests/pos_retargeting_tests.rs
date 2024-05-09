@@ -54,7 +54,7 @@ fn stable_block_time(#[case] seed: Seed) {
 
     for _i in 0..50 {
         tf.make_pos_block_builder()
-            .with_stake_pool(genesis_pool_id)
+            .with_stake_pool_id(genesis_pool_id)
             .with_stake_spending_key(staking_sk.clone())
             .with_vrf_key(vrf_sk.clone())
             .build_and_process(&mut rng)

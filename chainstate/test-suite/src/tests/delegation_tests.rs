@@ -1594,7 +1594,7 @@ fn delegate_same_pool_as_staking(#[case] seed: Seed) {
 
     // Create block with delegation to genesis pool
     tf.make_pos_block_builder()
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staker_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .with_transactions(vec![create_delegation_tx, delegate_staking_tx])

@@ -18,7 +18,7 @@ use thiserror::Error;
 
 use super::{
     block_invalidation::BestChainCandidatesError,
-    chainstateref::EpochSealError,
+    chainstateref::{EpochSealError, InMemoryReorgError},
     orphan_blocks::OrphanAddError,
     transaction_verifier::{
         error::ConnectTransactionError, storage::TransactionVerifierStorageError,
@@ -30,9 +30,9 @@ use common::{
     chain::{
         block::{block_body::BlockMerkleTreeError, timestamp::BlockTimestamp},
         config::MagicBytes,
-        Block, GenBlock,
+        Block, GenBlock, PoolId,
     },
-    primitives::{BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
 use consensus::ConsensusVerificationError;
 
@@ -72,6 +72,8 @@ pub enum BlockError {
     BestChainCandidatesAccessorError(BestChainCandidatesError),
     #[error("Tokens accounting error: {0}")]
     TokensAccountingError(#[from] tokens_accounting::Error),
+    #[error("In-memory reorg failed: {0}")]
+    InMemoryReorgFailed(#[from] InMemoryReorgError),
 
     #[error("Failed to obtain best block id: {0}")]
     BestBlockIdQueryError(PropertyQueryError),
@@ -95,6 +97,20 @@ pub enum BlockError {
     InvariantErrorAttemptToConnectInvalidBlock(Id<GenBlock>),
     #[error("Disconnected headers")]
     InvariantErrorDisconnectedHeaders,
+    #[error("Total pool {pool_id} balance {total_balance:?} is less than the staker's balance {staker_balance:?}; best block height = {best_block_height}")]
+    InvariantErrorTotalPoolBalanceLessThanStakers {
+        total_balance: Amount,
+        staker_balance: Amount,
+        pool_id: PoolId,
+        best_block_height: BlockHeight,
+    },
+    #[error("Pool {0} data missing while balance is present; best block height =  {1}")]
+    InvariantErrorPoolBalancePresentDataMissing(PoolId, BlockHeight),
+    #[error("Pool {0} balance missing while pool data is present; best block height =  {1}")]
+    InvariantErrorPoolDataPresentBalanceMissing(PoolId, BlockHeight),
+
+    #[error("Unexpected block height range: first = {0}, second = {1}")]
+    UnexpectedHeightRange(BlockHeight, BlockHeight),
 }
 
 // Note: this enum isn't supposed to represent a complete error; this is why its elements
@@ -112,12 +128,10 @@ pub enum DbCommittingContext {
 pub enum CheckBlockError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] chainstate_storage::Error),
-    #[error("Blockchain storage error: {0}")]
+    #[error("Property query error: {0}")]
     PropertyQueryError(#[from] PropertyQueryError),
     #[error("Block merkle root calculation failed for block {0} with error: {1}")]
     MerkleRootCalculationFailed(Id<Block>, BlockMerkleTreeError),
-    #[error("Failed to update the internal blockchain state: {0}")]
-    StateUpdateFailed(#[from] ConnectTransactionError),
     #[error("Block has an invalid merkle root")]
     MerkleRootMismatch,
     #[error("Parent block {parent_block_id} of block {block_id} not found in database")]
@@ -125,8 +139,6 @@ pub enum CheckBlockError {
         block_id: Id<Block>,
         parent_block_id: Id<GenBlock>,
     },
-    #[error("Block {0} not found in database during in-memory reorg")]
-    BlockNotFoundDuringInMemoryReorg(Id<GenBlock>),
     #[error("Block time ({0:?}) must be equal or higher than the median of its ancestors ({1:?})")]
     BlockTimeOrderInvalid(BlockTimestamp, BlockTimestamp),
     #[error("Block {0} time too far into the future")]
@@ -158,6 +170,8 @@ pub enum CheckBlockError {
         block_id: Id<Block>,
         parent_block_id: Id<GenBlock>,
     },
+    #[error("In-memory reorg failed: {0}")]
+    InMemoryReorgFailed(#[from] InMemoryReorgError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

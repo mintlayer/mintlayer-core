@@ -42,5 +42,6 @@ pub use {
     block_builder::BlockBuilder,
     framework::TestFramework,
     framework_builder::{OrphanErrorHandler, TestFrameworkBuilder, TxVerificationStrategy},
+    pos_block_builder::PoSBlockBuilder,
     transaction_builder::TransactionBuilder,
 };

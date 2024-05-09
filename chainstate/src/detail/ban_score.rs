@@ -27,7 +27,7 @@ use tx_verifier::{
 };
 
 use super::{
-    chainstateref::EpochSealError,
+    chainstateref::{EpochSealError, InMemoryReorgError},
     transaction_verifier::{
         error::{ConnectTransactionError, TokensError},
         storage::TransactionVerifierStorageError,
@@ -72,11 +72,17 @@ impl BanScore for BlockError {
             BlockError::IsBlockInMainChainQueryError(_, _) => 0,
             BlockError::MinHeightForReorgQueryError(_) => 0,
             BlockError::PropertyQueryError(_) => 0,
+            BlockError::InMemoryReorgFailed(err) => err.ban_score(),
 
             BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => 0,
             BlockError::InvariantErrorInvalidTip(_) => 0,
             BlockError::InvariantErrorAttemptToConnectInvalidBlock(_) => 0,
             BlockError::InvariantErrorDisconnectedHeaders => 0,
+            BlockError::InvariantErrorTotalPoolBalanceLessThanStakers { .. } => 0,
+            BlockError::InvariantErrorPoolBalancePresentDataMissing(_, _) => 0,
+            BlockError::InvariantErrorPoolDataPresentBalanceMissing(_, _) => 0,
+
+            BlockError::UnexpectedHeightRange(_, _) => 0,
 
             BlockError::TokensAccountingError(err) => err.ban_score(),
         }
@@ -221,7 +227,6 @@ impl BanScore for CheckBlockError {
             // even though this may be an invariant error, we treat it strictly
             CheckBlockError::ParentBlockMissing { .. } => 100,
             CheckBlockError::TransactionVerifierError(err) => err.ban_score(),
-            CheckBlockError::BlockNotFoundDuringInMemoryReorg(_) => 100,
             CheckBlockError::BlockTimeOrderInvalid(_, _) => 100,
             CheckBlockError::BlockFromTheFuture(_) => 100,
             CheckBlockError::BlockSizeError(err) => err.ban_score(),
@@ -235,9 +240,28 @@ impl BanScore for CheckBlockError {
             CheckBlockError::ParentCheckpointMismatch(_, _, _) => 100,
             CheckBlockError::GetAncestorError(_) => 100,
             CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(_, _, _) => 100,
-            CheckBlockError::StateUpdateFailed(err) => err.ban_score(),
             CheckBlockError::EpochSealError(err) => err.ban_score(),
             CheckBlockError::InvalidParent { .. } => 100,
+            CheckBlockError::InMemoryReorgFailed(err) => err.ban_score(),
+        }
+    }
+}
+
+impl BanScore for InMemoryReorgError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            InMemoryReorgError::StorageError(_) => 0,
+            InMemoryReorgError::PropertyQueryError(_) => 0,
+            InMemoryReorgError::StateUpdateFailed(err) => err.ban_score(),
+            InMemoryReorgError::TransactionVerifierError(err) => err.ban_score(),
+            InMemoryReorgError::EpochSealError(err) => err.ban_score(),
+            InMemoryReorgError::BlockNotFound(_) => 0,
+            InMemoryReorgError::MainchainBlockExpected(_) => 0,
+            InMemoryReorgError::StepHandlerFailedWhenDisconnectingBlocks {
+                error: _,
+                error_class: _,
+                ban_score,
+            } => *ban_score,
         }
     }
 }

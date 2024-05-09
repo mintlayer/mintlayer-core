@@ -26,6 +26,7 @@ use crate::{
         BlockSource, OrphanBlocksRef,
     },
     ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
+    NonZeroPoolBalances,
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
@@ -637,6 +638,20 @@ where
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_pool_balance(pool_id)
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn get_stake_pool_balances_at_heights(
+        &self,
+        pool_ids: &[PoolId],
+        min_height: BlockHeight,
+        max_height: BlockHeight,
+    ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, NonZeroPoolBalances>>, ChainstateError> {
+        self.chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
+            .get_stake_pool_balances_at_heights(pool_ids, min_height, max_height)
+            .map_err(ChainstateError::ProcessBlockError)
     }
 
     #[tracing::instrument(skip_all, fields(pool_id = %pool_id))]

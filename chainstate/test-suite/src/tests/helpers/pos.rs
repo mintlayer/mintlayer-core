@@ -87,10 +87,24 @@ pub fn create_custom_genesis_with_stake_pool(
 ) -> Genesis {
     let initial_amount = CoinUnit::from_coins(100_000_000).to_amount_atoms();
     let initial_pool_amount = (initial_amount / 3).unwrap();
-    let mint_output_amount = (initial_amount - initial_pool_amount).unwrap();
+    let initial_mint_amount = (initial_amount - initial_pool_amount).unwrap();
 
+    create_custom_genesis_with_stake_pool_specify_amounts(
+        staker_pk,
+        vrf_pk,
+        initial_mint_amount,
+        initial_pool_amount,
+    )
+}
+
+pub fn create_custom_genesis_with_stake_pool_specify_amounts(
+    staker_pk: PublicKey,
+    vrf_pk: VRFPublicKey,
+    initial_mint_amount: Amount,
+    initial_pool_amount: Amount,
+) -> Genesis {
     let mint_output = TxOutput::Transfer(
-        OutputValue::Coin(mint_output_amount),
+        OutputValue::Coin(initial_mint_amount),
         Destination::AnyoneCanSpend,
     );
 

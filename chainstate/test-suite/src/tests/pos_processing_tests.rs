@@ -1282,7 +1282,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
 
     let block_a_id = *tf
         .make_pos_block_builder()
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process(&mut rng)
@@ -1292,7 +1292,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
 
     // prepare and process block_b from block_a
     tf.make_pos_block_builder()
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process(&mut rng)
@@ -1301,7 +1301,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
     // prepare and process block_c from block_b
     let block_c_id = *tf
         .make_pos_block_builder()
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .with_randomness(initial_randomness) // no epoch is sealed yet while constructing this block
@@ -1314,7 +1314,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
     let block_d = tf
         .make_pos_block_builder()
         .with_parent(block_a_id.into())
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build(&mut rng);
@@ -1325,7 +1325,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
     let block_e = tf
         .make_pos_block_builder()
         .with_parent(block_d_id.into())
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_randomness(initial_randomness) // no epoch is sealed yet while constructing this block
         .with_vrf_key(vrf_sk.clone())
@@ -1355,7 +1355,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
     let block_f_id = *tf
         .make_pos_block_builder()
         .with_parent(block_e_id.into())
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk)
         .with_randomness(block_e_randomness)
@@ -1851,7 +1851,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
 
     tf.make_pos_block_builder()
         .with_transactions(vec![tx1, tx2])
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process(&mut rng)
@@ -1859,7 +1859,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
 
     // Process block_2: distribute some reward
     tf.make_pos_block_builder()
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process(&mut rng)
@@ -1881,7 +1881,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .build();
 
     tf.make_pos_block_builder()
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .add_transaction(tx)
@@ -1911,7 +1911,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
 
         let res = tf
             .make_pos_block_builder()
-            .with_stake_pool(genesis_pool_id)
+            .with_stake_pool_id(genesis_pool_id)
             .with_stake_spending_key(staking_sk.clone())
             .with_vrf_key(vrf_sk.clone())
             .add_transaction(tx)
@@ -1944,7 +1944,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .build();
 
     tf.make_pos_block_builder()
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk)
         .add_transaction(tx)

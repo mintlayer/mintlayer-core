@@ -20,7 +20,10 @@ mod in_memory_reorg;
 mod tx_verifier_storage;
 
 use itertools::Itertools;
-use std::{cmp::max, collections::BTreeSet};
+use std::{
+    cmp::max,
+    collections::{BTreeMap, BTreeSet},
+};
 use thiserror::Error;
 
 use chainstate_storage::{
@@ -39,10 +42,12 @@ use common::{
         },
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, Transaction, TxOutput,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, ChainConfig, GenBlock, GenBlockId, PoolId, Transaction,
+        TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, time::Time, BlockCount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{
+        id::WithId, time::Time, Amount, BlockCount, BlockDistance, BlockHeight, Id, Idable,
+    },
     time_getter::TimeGetter,
     Uint256,
 };
@@ -66,6 +71,7 @@ use super::{
 };
 
 pub use epoch_seal::EpochSealError;
+pub use in_memory_reorg::InMemoryReorgError;
 
 pub struct ChainstateRef<'a, S, V> {
     chain_config: &'a ChainConfig,
@@ -609,9 +615,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             // Validating PoS blocks in branches requires utxo set, accounting info and epoch data
             // that should be updated by doing a reorg beforehand.
             // It will be a no-op for attaching a block to the tip.
-            let best_block_id = self.get_best_block_id()?;
             let (verifier_delta, consumed_epoch_data) =
-                self.reorganize_in_memory(header.header(), best_block_id)?;
+                self.reorganize_in_memory(header.header().prev_block_id())?;
             let (consumed_utxos, consumed_deltas) = verifier_delta.consume();
 
             let utxos_cache =
@@ -987,6 +992,109 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(block_index)
     }
 
+    #[log_error]
+    pub fn get_stake_pool_balances_at_heights(
+        &self,
+        pool_ids: &[PoolId],
+        min_height: BlockHeight,
+        max_height: BlockHeight,
+    ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, NonZeroPoolBalances>>, BlockError> {
+        let best_block_index =
+            self.get_best_block_index().map_err(BlockError::PropertyQueryError)?;
+        let best_block_height = best_block_index.block_height();
+
+        ensure!(
+            min_height <= max_height && max_height <= best_block_height,
+            BlockError::UnexpectedHeightRange(min_height, max_height)
+        );
+
+        // This will track ids of pools that have non-zero balance above the current height.
+        let mut pool_ids_that_had_balance = BTreeSet::new();
+        // If a pool has no balance at a certain height but it's known to have one
+        // at a bigger height, it means that it is created above that height,
+        // so there is no point in checking its balance below it.
+        // Such pool ids will be removed from the set; if the set becomes empty, we'll stop
+        // iterating, to avoid performing useless reorgs.
+        let mut pool_ids = pool_ids.iter().copied().collect::<BTreeSet<_>>();
+
+        let mut height_map = BTreeMap::new();
+
+        let max_height = if max_height == best_block_height {
+            let balances_at_tip =
+                Self::collect_pool_balances(pool_ids.iter(), self, best_block_height)?;
+            if !balances_at_tip.is_empty() {
+                height_map.insert(best_block_height, balances_at_tip);
+            }
+
+            if max_height == min_height {
+                return Ok(height_map);
+            }
+
+            max_height.prev_height().expect("max_height can't be zero at this point")
+        } else {
+            max_height
+        };
+
+        let lowest_block_id = self
+            .get_existing_block_id_by_height(&min_height)
+            .map_err(BlockError::PropertyQueryError)?;
+
+        self.disconnect_tip_in_memory_until(
+            &lowest_block_id,
+            |disconnected_block_index, tx_verifier, _| -> Result<_, BlockError> {
+                let cur_height = disconnected_block_index
+                    .block_height()
+                    .prev_height()
+                    .expect("Genesis can't be disconnected");
+                assert!(cur_height >= min_height);
+
+                let balances =
+                    Self::collect_pool_balances(pool_ids.iter(), &tx_verifier, cur_height)?;
+
+                pool_ids.retain(|pool_id| {
+                    // We didn't see this pool having balance yet.
+                    !pool_ids_that_had_balance.contains(pool_id) ||
+                    // We did see this pool having balance and it still does.
+                    balances.contains_key(pool_id)
+                });
+
+                pool_ids_that_had_balance.extend(balances.keys().copied());
+
+                if cur_height <= max_height && !balances.is_empty() {
+                    height_map.insert(cur_height, balances);
+                }
+
+                if pool_ids.is_empty() {
+                    log::debug!("Stopping iteration early at height {cur_height}");
+                    Ok(false)
+                } else {
+                    Ok(true)
+                }
+            },
+        )?;
+
+        Ok(height_map)
+    }
+
+    #[log_error]
+    fn collect_pool_balances<'b>(
+        pool_ids: impl Iterator<Item = &'b PoolId>,
+        pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
+        assumed_bb_height: BlockHeight,
+    ) -> Result<BTreeMap<PoolId, NonZeroPoolBalances>, BlockError> {
+        let mut balances = BTreeMap::new();
+
+        for pool_id in pool_ids {
+            if let Some(pool_balance) =
+                NonZeroPoolBalances::obtain(pool_id, pos_accounting_view, assumed_bb_height)?
+            {
+                balances.insert(*pool_id, pool_balance);
+            }
+        }
+
+        Ok(balances)
+    }
+
     /// Panic if block index consistency is violated.
     /// An error is only returned if the checks couldn't be performed for some reason.
     #[log_error]
@@ -1354,4 +1462,66 @@ pub enum ReorgError {
     ConnectTipFailed(Id<Block>, BlockError),
     #[error("Generic error during reorg: {0}")]
     OtherError(#[from] BlockError),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NonZeroPoolBalances {
+    total_balance: Amount,
+    staker_balance: Amount,
+}
+
+impl NonZeroPoolBalances {
+    #[log_error]
+    pub fn obtain(
+        pool_id: &PoolId,
+        pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
+        assumed_bb_height: BlockHeight,
+    ) -> Result<Option<Self>, BlockError> {
+        let total_balance = pos_accounting_view
+            .get_pool_balance(*pool_id)?
+            .and_then(|balance| (balance != Amount::ZERO).then_some(balance));
+        let pool_data = pos_accounting_view.get_pool_data(*pool_id)?;
+
+        match (total_balance, pool_data) {
+            (Some(total_balance), Some(pool_data)) => {
+                let staker_balance = pool_data.staker_balance()?;
+
+                ensure!(
+                    total_balance >= staker_balance,
+                    BlockError::InvariantErrorTotalPoolBalanceLessThanStakers {
+                        total_balance,
+                        staker_balance,
+                        pool_id: *pool_id,
+                        best_block_height: assumed_bb_height,
+                    }
+                );
+
+                if staker_balance != Amount::ZERO {
+                    Ok(Some(Self {
+                        total_balance,
+                        staker_balance,
+                    }))
+                } else {
+                    Ok(None)
+                }
+            }
+            (None, None) => Ok(None),
+            (Some(_), None) => Err(BlockError::InvariantErrorPoolBalancePresentDataMissing(
+                *pool_id,
+                assumed_bb_height,
+            )),
+            (None, Some(_)) => Err(BlockError::InvariantErrorPoolDataPresentBalanceMissing(
+                *pool_id,
+                assumed_bb_height,
+            )),
+        }
+    }
+
+    pub fn total_balance(&self) -> Amount {
+        self.total_balance
+    }
+
+    pub fn staker_balance(&self) -> Amount {
+        self.staker_balance
+    }
 }

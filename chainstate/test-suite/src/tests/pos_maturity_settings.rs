@@ -106,7 +106,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
 
     tf.make_pos_block_builder()
         .with_transactions(vec![tx])
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process(&mut rng)
@@ -131,7 +131,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     let result = tf
         .make_pos_block_builder()
         .with_transactions(vec![decommission_tx.clone()])
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process(&mut rng)
@@ -152,7 +152,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     // produce some block at height 2 just to move to the next NetUpgrade
     //
     tf.make_pos_block_builder()
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process(&mut rng)
@@ -163,7 +163,7 @@ fn decommission_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     //
     tf.make_pos_block_builder()
         .with_transactions(vec![decommission_tx])
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk)
         .build_and_process(&mut rng)
@@ -247,7 +247,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
 
     tf.make_pos_block_builder()
         .with_transactions(vec![tx1, tx2])
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process(&mut rng)
@@ -274,7 +274,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     let result = tf
         .make_pos_block_builder()
         .with_transactions(vec![spend_share_tx.clone()])
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process(&mut rng)
@@ -295,7 +295,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     // produce some block at height 2 just to move to the next NetUpgrade
     //
     tf.make_pos_block_builder()
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process(&mut rng)
@@ -306,7 +306,7 @@ fn spend_share_maturity_setting_follows_netupgrade(#[case] seed: Seed) {
     //
     tf.make_pos_block_builder()
         .with_transactions(vec![spend_share_tx])
-        .with_stake_pool(genesis_pool_id)
+        .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk)
         .build_and_process(&mut rng)

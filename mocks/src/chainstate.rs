@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
 
 use chainstate::{
     BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, Locator,
@@ -169,6 +169,12 @@ mockall::mock! {
         fn is_initial_block_download(&self) -> bool;
         fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
         fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
+        fn get_stake_pool_balances_at_heights(
+            &self,
+            pool_ids: &[PoolId],
+            min_height: BlockHeight,
+            max_height: BlockHeight,
+        ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, chainstate::NonZeroPoolBalances>>, ChainstateError>;
         fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
         fn get_stake_pool_delegations_shares(
             &self,

@@ -35,16 +35,20 @@ pub fn build_block(
     tf.make_block_builder()
         .add_test_transaction_with_parent(*parent_block, rng)
         .with_parent(*parent_block)
-        .with_reward(make_block_reward())
+        .with_reward(make_some_block_reward())
         .build(rng)
 }
 
-pub fn make_block_reward() -> Vec<TxOutput> {
+pub fn make_block_reward(amount: Amount) -> Vec<TxOutput> {
     vec![TxOutput::LockThenTransfer(
-        coins(1_000_000),
+        OutputValue::Coin(amount),
         anyonecanspend_address(),
         OutputTimeLock::ForBlockCount(0),
     )]
+}
+
+pub fn make_some_block_reward() -> Vec<TxOutput> {
+    make_block_reward(Amount::from_atoms(1_000_000))
 }
 
 // Process a block that spends some outputs of its parent.
@@ -106,7 +110,7 @@ pub fn build_block_burn_or_spend_parent_reward(
         .make_block_builder()
         .with_transactions(vec![tx.clone()])
         .with_parent(*parent_block)
-        .with_reward(make_block_reward())
+        .with_reward(make_some_block_reward())
         .build(rng);
 
     (block, tx)
@@ -170,7 +174,7 @@ pub fn build_block_split_parent_reward(
         .make_block_builder()
         .with_transactions(vec![tx.clone()])
         .with_parent(*parent_block)
-        .with_reward(make_block_reward())
+        .with_reward(make_some_block_reward())
         .build(rng);
 
     (block, tx)
@@ -213,7 +217,7 @@ pub fn build_block_spend_tx(
     tf.make_block_builder()
         .with_transactions(vec![tx])
         .with_parent(*parent_block)
-        .with_reward(make_block_reward())
+        .with_reward(make_some_block_reward())
         .build(rng)
 }
 

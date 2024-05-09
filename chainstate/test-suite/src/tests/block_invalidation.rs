@@ -795,7 +795,7 @@ fn test_invalidation_with_reorg_attempt_to_chain_with_lower_chain_trust(#[case] 
             .make_block_builder()
             .add_test_transaction_with_parent(a0_id.into(), &mut rng)
             .with_parent(a0_id.into())
-            .with_reward(make_block_reward())
+            .with_reward(make_some_block_reward())
             .with_consensus_data(ConsensusData::PoW(Box::new(PoWData::new(
                 Uint256::from_u64(123).into(),
                 0,

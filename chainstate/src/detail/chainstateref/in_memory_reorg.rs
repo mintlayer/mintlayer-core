@@ -13,102 +13,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::error::Error;
+
 use chainstate_storage::BlockchainStorageRead;
-use chainstate_types::{ConsumedEpochDataCache, EpochDataCache, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{
+    BlockIndex, ConsumedEpochDataCache, EpochDataCache, GenBlockIndex, PropertyQueryError,
+};
 use common::{
-    chain::{block::BlockHeader, Block, GenBlock, GenBlockId},
+    chain::{Block, ChainConfig, GenBlock, GenBlockId},
     primitives::{id::WithId, Id},
 };
+use thiserror::Error;
+use tokens_accounting::TokensAccountingDB;
 use tx_verifier::{
-    flush_to_storage, transaction_verifier::TransactionVerifierDelta, TransactionVerifier,
+    error::ConnectTransactionError, flush_to_storage,
+    transaction_verifier::TransactionVerifierDelta, TransactionVerifier,
+    TransactionVerifierStorageError,
 };
-use utils::{log_error, tap_log::TapLog};
+use utils::{ensure, log_error, tap_log::TapLog};
+use utxo::UtxosDB;
 
-use crate::{calculate_median_time_past, CheckBlockError, TransactionVerificationStrategy};
+use crate::{
+    ban_score::BanScore, calculate_median_time_past, BlockProcessingErrorClass,
+    BlockProcessingErrorClassification, TransactionVerificationStrategy,
+};
 
-use super::{epoch_seal, ChainstateRef};
+use super::{epoch_seal, ChainstateRef, EpochSealError};
 
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> ChainstateRef<'a, S, V> {
-    // Disconnect all blocks from the mainchain up until common ancestor of provided block
-    // and then connect all block in the new branch.
-    // All these operations are performed via `TransactionVerifier` without db modifications
-    // and the resulting delta is returned.
+    /// Disconnect all blocks from mainchain until the first mainchain ancestor of
+    /// the provided block is met and then connect all blocks from the new branch.
+    /// All operations are performed via `TransactionVerifier` without db modifications
+    /// and the resulting delta is returned.
     #[log_error]
     pub fn reorganize_in_memory(
         &self,
-        new_block_header: &BlockHeader,
-        best_block_id: Id<GenBlock>,
-    ) -> Result<(TransactionVerifierDelta, ConsumedEpochDataCache), CheckBlockError> {
-        let prev_block_id = new_block_header.prev_block_id();
-        let new_chain =
-            match self.get_gen_block_index(prev_block_id).log_err()?.ok_or_else(|| {
-                PropertyQueryError::PrevBlockIndexNotFound {
-                    block_id: new_block_header.block_id(),
-                    prev_block_id: *prev_block_id,
-                }
-            })? {
-                GenBlockIndex::Block(block_index) => self.get_new_chain(&block_index).log_err()?,
-                GenBlockIndex::Genesis(_) => Vec::new(),
-            };
+        new_tip: &Id<GenBlock>,
+    ) -> Result<(TransactionVerifierDelta, ConsumedEpochDataCache), InMemoryReorgError> {
+        let new_chain = match self.get_existing_gen_block_index(new_tip)? {
+            GenBlockIndex::Block(block_index) => self.get_new_chain(&block_index)?,
+            GenBlockIndex::Genesis(_) => Vec::new(),
+        };
 
         let common_ancestor_id = match new_chain.first() {
             Some(block_index) => block_index.prev_block_id(),
-            None => prev_block_id,
+            None => new_tip,
         };
 
-        let mut tx_verifier = TransactionVerifier::new(self, self.chain_config);
-
-        // during reorg epoch seal can change so it needs to be tracked as well
-        let mut epoch_data_cache = EpochDataCache::new(&self.db_tx);
-
-        // Disconnect the current chain if it is not a genesis
-        if let GenBlockId::Block(best_block_id) = best_block_id.classify(self.chain_config) {
-            let mainchain_tip = self.get_existing_block_index(&best_block_id)?;
-
-            let mut to_disconnect = GenBlockIndex::Block(mainchain_tip);
-            while to_disconnect.block_id() != *common_ancestor_id {
-                let to_disconnect_block = match to_disconnect {
-                    GenBlockIndex::Genesis(_) => panic!("Attempt to disconnect genesis"),
-                    GenBlockIndex::Block(block_index) => block_index,
-                };
-
-                let block = self
-                    .get_block_from_index(&to_disconnect_block)
-                    .log_err()?
-                    .expect("Inconsistent DB");
-
-                // Disconnect transactions
-                let cached_inputs = self
-                    .tx_verification_strategy
-                    .disconnect_block(
-                        TransactionVerifier::new,
-                        &tx_verifier,
-                        self.chain_config,
-                        &block.into(),
-                    )?
-                    .consume()?;
-
-                flush_to_storage(&mut tx_verifier, cached_inputs)?;
-
-                to_disconnect = self
-                    .get_previous_block_index(&to_disconnect_block)
-                    .expect("Previous block index retrieval failed");
-
-                epoch_seal::update_epoch_data(
-                    &mut epoch_data_cache,
-                    &tx_verifier,
-                    self.chain_config,
-                    epoch_seal::BlockStateEventWithIndex::Disconnect(to_disconnect.block_height()),
-                )?;
-            }
-        }
+        let (mut tx_verifier, mut epoch_data_cache) = self
+            .disconnect_tip_in_memory_until(common_ancestor_id, |_, _, _| {
+                Ok::<_, InMemoryReorgError>(true)
+            })?;
 
         // Connect the new chain
         for new_tip_block_index in new_chain {
             let new_tip: WithId<Block> = self
-                .get_block_from_index(&new_tip_block_index)
-                .log_err()?
-                .ok_or(CheckBlockError::BlockNotFoundDuringInMemoryReorg(
+                .get_block_from_index(&new_tip_block_index)?
+                .ok_or(InMemoryReorgError::BlockNotFound(
                     (*new_tip_block_index.block_id()).into(),
                 ))?
                 .into();
@@ -146,4 +107,118 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let consumed_epoch_data = epoch_data_cache.consume();
         Ok((consumed_verifier, consumed_epoch_data))
     }
+
+    /// Disconnect all blocks from mainchain until the specified block is met and return
+    /// the accumulated `TransactionVerifier` and `EpochDataCache`.
+    /// On each step, call `step_handler`, passing to it references to block index of the block
+    /// that has just been disconnected, the current `TransactionVerifier` and `EpochDataCache`.
+    /// If `step_handler` returns false, exit the loop immediately.
+    #[log_error]
+    pub fn disconnect_tip_in_memory_until<StepHandler, StepHandlerError>(
+        &self,
+        new_mainchain_tip: &Id<GenBlock>,
+        mut step_handler: StepHandler,
+    ) -> Result<(TxVerifier<'a, '_, S, V>, EpochDataCache<&S>), InMemoryReorgError>
+    where
+        StepHandler: FnMut(
+            &BlockIndex,
+            &TxVerifier<'a, '_, S, V>,
+            &EpochDataCache<&S>,
+        ) -> Result<bool, StepHandlerError>,
+        StepHandlerError: Error + BanScore + BlockProcessingErrorClassification,
+    {
+        ensure!(
+            self.is_block_in_main_chain(new_mainchain_tip)?,
+            InMemoryReorgError::MainchainBlockExpected(*new_mainchain_tip)
+        );
+
+        let cur_tip = self.get_best_block_id()?;
+        let mut tx_verifier = TransactionVerifier::new(self, self.chain_config);
+        let mut epoch_data_cache = EpochDataCache::new(&self.db_tx);
+
+        // Disconnect the current chain if it is not a genesis
+        if let GenBlockId::Block(cur_tip) = cur_tip.classify(self.chain_config) {
+            let cur_tip_index = self.get_existing_block_index(&cur_tip)?;
+
+            let mut next_gen_index_to_disconnect = GenBlockIndex::Block(cur_tip_index);
+            while next_gen_index_to_disconnect.block_id() != *new_mainchain_tip {
+                let cur_index = match next_gen_index_to_disconnect {
+                    GenBlockIndex::Genesis(_) => panic!("Attempt to disconnect genesis"),
+                    GenBlockIndex::Block(block_index) => block_index,
+                };
+
+                let block = self.get_block_from_index(&cur_index)?.expect("Inconsistent DB");
+
+                // Disconnect transactions
+                let cached_inputs = self
+                    .tx_verification_strategy
+                    .disconnect_block(
+                        TransactionVerifier::new,
+                        &tx_verifier,
+                        self.chain_config,
+                        &block.into(),
+                    )?
+                    .consume()?;
+
+                flush_to_storage(&mut tx_verifier, cached_inputs)?;
+
+                next_gen_index_to_disconnect = self
+                    .get_previous_block_index(&cur_index)
+                    .expect("Previous block index retrieval failed");
+
+                epoch_seal::update_epoch_data(
+                    &mut epoch_data_cache,
+                    &tx_verifier,
+                    self.chain_config,
+                    epoch_seal::BlockStateEventWithIndex::Disconnect(
+                        next_gen_index_to_disconnect.block_height(),
+                    ),
+                )?;
+
+                if !step_handler(&cur_index, &tx_verifier, &epoch_data_cache).map_err(|err| {
+                    InMemoryReorgError::StepHandlerFailedWhenDisconnectingBlocks {
+                        error: err.to_string(),
+                        error_class: err.classify(),
+                        ban_score: err.ban_score(),
+                    }
+                })? {
+                    break;
+                }
+            }
+        }
+
+        Ok((tx_verifier, epoch_data_cache))
+    }
+}
+
+type TxVerifier<'a, 'b, S, V> = TransactionVerifier<
+    &'a ChainConfig,
+    &'b ChainstateRef<'a, S, V>,
+    UtxosDB<&'b ChainstateRef<'a, S, V>>,
+    &'b ChainstateRef<'a, S, V>,
+    TokensAccountingDB<&'b ChainstateRef<'a, S, V>>,
+>;
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum InMemoryReorgError {
+    #[error("Blockchain storage error: {0}")]
+    StorageError(#[from] chainstate_storage::Error),
+    #[error("Property query error: {0}")]
+    PropertyQueryError(#[from] PropertyQueryError),
+    #[error("Failed to update the internal blockchain state: {0}")]
+    StateUpdateFailed(#[from] ConnectTransactionError),
+    #[error("TransactionVerifier error: {0}")]
+    TransactionVerifierError(#[from] TransactionVerifierStorageError),
+    #[error("Error during sealing an epoch: {0}")]
+    EpochSealError(#[from] EpochSealError),
+    #[error("Block {0} not found in the db")]
+    BlockNotFound(Id<GenBlock>),
+    #[error("The specified block {0} is not on the main chain")]
+    MainchainBlockExpected(Id<GenBlock>),
+    #[error("Step handler failed when disconnecting blocks: {error}")]
+    StepHandlerFailedWhenDisconnectingBlocks {
+        error: String,
+        error_class: BlockProcessingErrorClass,
+        ban_score: u32,
+    },
 }

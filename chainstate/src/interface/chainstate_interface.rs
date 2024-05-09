@@ -15,7 +15,10 @@
 
 use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
 
-use crate::{detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
+use crate::{
+    detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent,
+    NonZeroPoolBalances,
+};
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 use common::{
     chain::{
@@ -257,6 +260,18 @@ pub trait ChainstateInterface: Send + Sync {
 
     /// Get stake pool balance. See [pos_accounting::PoSAccountingView::get_pool_balance].
     fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
+
+    /// Get balances of the specified stake pools at the specified heights (i.e. at the points
+    /// when the mainchain tip had that particular height).
+    ///
+    /// `min_height` must be less or equal to `max_height`;
+    /// `max_height` must be less or equal to the best block height.
+    fn get_stake_pool_balances_at_heights(
+        &self,
+        pool_ids: &[PoolId],
+        min_height: BlockHeight,
+        max_height: BlockHeight,
+    ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, NonZeroPoolBalances>>, ChainstateError>;
 
     /// Get stake pool data. See [pos_accounting::PoSAccountingView::get_pool_data].
     fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
