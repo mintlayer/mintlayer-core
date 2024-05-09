@@ -881,7 +881,8 @@ impl BlockProcessingErrorClassification for constraints_value_accumulator::Error
             | Error::MissingOutputOrSpent(_)
             | Error::PledgeAmountNotFound(_)
             | Error::SpendingNonSpendableOutput(_)
-            | Error::NegativeAccountBalance(_) => BlockProcessingErrorClass::BadBlock,
+            | Error::NegativeAccountBalance(_)
+            | Error::UnsupportedTokenVersion => BlockProcessingErrorClass::BadBlock,
 
             Error::PoSAccountingError(err) => err.classify(),
             Error::OrdersAccountingError(err) => err.classify(),
@@ -912,9 +913,8 @@ impl BlockProcessingErrorClassification for orders_accounting::Error {
             | Error::OrderOverflow(_)
             | Error::AttemptedCancelNonexistingOrderData(_)
             | Error::AttemptedCancelNonexistingAskBalance(_)
-            | Error::AttemptedCancelNonexistingGiveBalance(_) => {
-                BlockProcessingErrorClass::BadBlock
-            }
+            | Error::AttemptedCancelNonexistingGiveBalance(_)
+            | Error::UnsupportedTokenVersion => BlockProcessingErrorClass::BadBlock,
 
             Error::StorageError(err) => err.classify(),
             Error::AccountingError(err) => err.classify(),

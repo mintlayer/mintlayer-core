@@ -28,6 +28,7 @@ use crate::{
         CancelOrderUndo, CreateOrderUndo, FillOrderUndo, OrdersAccountingOperations,
         OrdersAccountingUndo,
     },
+    output_value_amount,
     view::OrdersAccountingView,
     FlushableOrdersAccountingView, OrdersAccountingDeltaUndoData,
 };
@@ -157,21 +158,21 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
             return Err(Error::OrderAlreadyExists(id));
         }
 
-        let ask_value = data.ask().clone();
-        let give_value = data.give().clone();
+        let ask_amount = output_value_amount(data.ask())?;
+        let give_amount = output_value_amount(data.give())?;
         let undo_data = self
             .data
             .order_data
             .merge_delta_data_element(id, accounting::DataDelta::new(None, Some(data)))?;
 
-        self.data.ask_balances.add_unsigned(id, ask_value.amount())?;
-        self.data.give_balances.add_unsigned(id, give_value.amount())?;
+        self.data.ask_balances.add_unsigned(id, ask_amount)?;
+        self.data.give_balances.add_unsigned(id, give_amount)?;
 
         Ok(OrdersAccountingUndo::CreateOrder(CreateOrderUndo {
             id,
             undo_data,
-            ask_balance: ask_value.amount(),
-            give_balance: give_value.amount(),
+            ask_balance: ask_amount,
+            give_balance: give_amount,
         }))
     }
 
@@ -203,6 +204,7 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
     }
 
     fn fill_order(&mut self, id: OrderId, fill_value: OutputValue) -> Result<OrdersAccountingUndo> {
+        let fill_amount = output_value_amount(&fill_value)?;
         let filled_amount = calculate_fill_order(self, id, &fill_value)?;
 
         let ask_balance = self.get_ask_balance(&id)?.ok_or(Error::OrderAskBalanceNotFound(id))?;
@@ -210,7 +212,7 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
             self.get_give_balance(&id)?.ok_or(Error::OrderGiveBalanceNotFound(id))?;
 
         // in case the order is completely filled it can be removed
-        let undo_data = if fill_value.amount() == ask_balance {
+        let undo_data = if fill_amount == ask_balance {
             ensure!(
                 filled_amount == give_balance,
                 Error::FillOrderChangeLeft(id)
@@ -227,12 +229,12 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
         };
 
         self.data.give_balances.sub_unsigned(id, filled_amount)?;
-        self.data.ask_balances.sub_unsigned(id, fill_value.amount())?;
+        self.data.ask_balances.sub_unsigned(id, fill_amount)?;
 
         Ok(OrdersAccountingUndo::FillOrder(FillOrderUndo {
             id,
             undo_data,
-            ask_balance: fill_value.amount(),
+            ask_balance: fill_amount,
             give_balance: filled_amount,
         }))
     }

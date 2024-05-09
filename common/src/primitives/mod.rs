@@ -51,11 +51,11 @@ pub enum CoinOrTokenId {
 }
 
 impl CoinOrTokenId {
-    pub fn from_output_value(value: &OutputValue) -> Self {
+    pub fn from_output_value(value: &OutputValue) -> Option<Self> {
         match value {
-            OutputValue::Coin(_) => Self::Coin,
-            OutputValue::TokenV0(_) => panic!("deprecated token version"),
-            OutputValue::TokenV1(id, _) => Self::TokenId(*id),
+            OutputValue::Coin(_) => Some(Self::Coin),
+            OutputValue::TokenV0(_) => None,
+            OutputValue::TokenV1(id, _) => Some(Self::TokenId(*id)),
         }
     }
 }

@@ -48,13 +48,6 @@ impl OutputValue {
             OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => None,
         }
     }
-
-    pub fn amount(&self) -> Amount {
-        match self {
-            OutputValue::Coin(v) | OutputValue::TokenV1(_, v) => *v,
-            OutputValue::TokenV0(_) => panic!("deprecated token version"),
-        }
-    }
 }
 
 impl From<TokenData> for OutputValue {

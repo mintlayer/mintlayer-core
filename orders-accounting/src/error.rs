@@ -57,6 +57,8 @@ pub enum Error {
     AttemptedCancelNonexistingAskBalance(OrderId),
     #[error("Attempt to withdraw non-existing give balance `{0}`")]
     AttemptedCancelNonexistingGiveBalance(OrderId),
+    #[error("Unsupported token version")]
+    UnsupportedTokenVersion,
 
     // TODO Need a more granular error reporting in the following
     //      https://github.com/mintlayer/mintlayer-core/issues/811

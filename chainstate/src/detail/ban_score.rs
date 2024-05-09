@@ -591,6 +591,7 @@ impl BanScore for constraints_value_accumulator::Error {
             constraints_value_accumulator::Error::DelegationBalanceNotFound(_) => 0,
             constraints_value_accumulator::Error::AccountBalanceNotFound(_) => 0,
             constraints_value_accumulator::Error::NegativeAccountBalance(_) => 100,
+            constraints_value_accumulator::Error::UnsupportedTokenVersion => 100,
             constraints_value_accumulator::Error::OrdersAccountingError(err) => err.ban_score(),
         }
     }
@@ -677,6 +678,7 @@ impl BanScore for orders_accounting::Error {
             Error::AttemptedCancelNonexistingOrderData(_) => 100,
             Error::AttemptedCancelNonexistingAskBalance(_) => 100,
             Error::AttemptedCancelNonexistingGiveBalance(_) => 100,
+            Error::UnsupportedTokenVersion => 100,
             Error::ViewFail => 0,
             Error::StorageWrite => 0,
         }

@@ -50,4 +50,6 @@ pub enum Error {
     AccountBalanceNotFound(AccountType),
     #[error("Negative account balance for `{0:?}`")]
     NegativeAccountBalance(AccountType),
+    #[error("Unsupported token version")]
+    UnsupportedTokenVersion,
 }

@@ -24,7 +24,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
-    cache::OrdersAccountingCache, operations::OrdersAccountingOperations,
+    cache::OrdersAccountingCache, operations::OrdersAccountingOperations, output_value_amount,
     view::FlushableOrdersAccountingView, Error, InMemoryOrdersAccounting, OrdersAccountingDB,
     OrdersAccountingView,
 };
@@ -57,8 +57,8 @@ fn create_order_and_flush(#[case] seed: Seed) {
 
     let expected_storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
-        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
     );
 
     assert_eq!(expected_storage, storage);
@@ -89,8 +89,8 @@ fn create_order_twice(#[case] seed: Seed) {
     {
         let storage = InMemoryOrdersAccounting::from_values(
             BTreeMap::from_iter([(order_id, order_data.clone())]),
-            BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
-            BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+            BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
+            BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
         );
         let db = OrdersAccountingDB::new(&storage);
         let mut cache = OrdersAccountingCache::new(&db);
@@ -122,11 +122,11 @@ fn create_order_and_undo(#[case] seed: Seed) {
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
     assert_eq!(
-        Some(order_data.ask().amount()),
+        Some(output_value_amount(order_data.ask()).unwrap()),
         cache.get_ask_balance(&order_id).unwrap()
     );
     assert_eq!(
-        Some(order_data.give().amount()),
+        Some(output_value_amount(order_data.give()).unwrap()),
         cache.get_give_balance(&order_id).unwrap()
     );
 
@@ -152,8 +152,8 @@ fn withdraw_order_and_flush(#[case] seed: Seed) {
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
-        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
     );
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
@@ -186,8 +186,8 @@ fn withdraw_order_twice(#[case] seed: Seed) {
 
     let storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
-        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
     );
     let db = OrdersAccountingDB::new(&storage);
     let mut cache = OrdersAccountingCache::new(&db);
@@ -211,8 +211,8 @@ fn withdraw_order_and_undo(#[case] seed: Seed) {
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
-        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
     );
     let original_storage = storage.clone();
     let mut db = OrdersAccountingDB::new(&mut storage);
@@ -237,11 +237,11 @@ fn withdraw_order_and_undo(#[case] seed: Seed) {
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
     assert_eq!(
-        Some(order_data.ask().amount()),
+        Some(output_value_amount(order_data.ask()).unwrap()),
         cache.get_ask_balance(&order_id).unwrap()
     );
     assert_eq!(
-        Some(order_data.give().amount()),
+        Some(output_value_amount(order_data.give()).unwrap()),
         cache.get_give_balance(&order_id).unwrap()
     );
 
@@ -261,8 +261,8 @@ fn fill_entire_order_and_flush(#[case] seed: Seed) {
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
-        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
     );
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
@@ -276,7 +276,9 @@ fn fill_entire_order_and_flush(#[case] seed: Seed) {
 
     // try to overfill
     {
-        let fill = OutputValue::Coin((order_data.ask().amount() + Amount::from_atoms(1)).unwrap());
+        let fill = OutputValue::Coin(
+            (output_value_amount(order_data.ask()).unwrap() + Amount::from_atoms(1)).unwrap(),
+        );
         let result = cache.fill_order(order_id, fill);
         assert_eq!(result.unwrap_err(), Error::OrderOverflow(order_id));
     }
@@ -304,8 +306,8 @@ fn fill_order_partially_and_flush(#[case] seed: Seed) {
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
-        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
     );
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
@@ -378,8 +380,8 @@ fn fill_order_partially_and_undo(#[case] seed: Seed) {
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
-        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
     );
     let original_storage = storage.clone();
     let mut db = OrdersAccountingDB::new(&mut storage);
@@ -482,8 +484,8 @@ fn fill_order_partially_and_withdraw(#[case] seed: Seed) {
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, order_data.ask().amount())]),
-        BTreeMap::from_iter([(order_id, order_data.give().amount())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
     );
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
@@ -523,19 +525,19 @@ fn fill_order_partially_and_withdraw(#[case] seed: Seed) {
 fn fill_order_must_converge(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let ask = rng.gen_range(1u128..1000);
-    let give = rng.gen_range(1u128..1000);
-    let fill_orders = test_utils::split_value(&mut rng, ask);
+    let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+    let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+    let fill_orders = test_utils::split_value(&mut rng, ask_amount.into_atoms());
 
-    let ask = OutputValue::Coin(Amount::from_atoms(ask));
-    let give = OutputValue::Coin(Amount::from_atoms(give));
+    let ask = OutputValue::Coin(ask_amount);
+    let give = OutputValue::Coin(give_amount);
 
     let order_id = OrderId::random_using(&mut rng);
     let order_data = OrderData::new(Destination::AnyoneCanSpend, ask.clone(), give.clone());
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, ask.amount())]),
-        BTreeMap::from_iter([(order_id, give.amount())]),
+        BTreeMap::from_iter([(order_id, ask_amount)]),
+        BTreeMap::from_iter([(order_id, give_amount)]),
     );
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);

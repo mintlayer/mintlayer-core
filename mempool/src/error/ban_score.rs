@@ -516,6 +516,7 @@ impl MempoolBanScore for orders_accounting::Error {
             Error::AttemptedCancelNonexistingOrderData(_) => 0,
             Error::AttemptedCancelNonexistingAskBalance(_) => 0,
             Error::AttemptedCancelNonexistingGiveBalance(_) => 0,
+            Error::UnsupportedTokenVersion => 100,
             Error::ViewFail => 0,
             Error::StorageWrite => 0,
         }

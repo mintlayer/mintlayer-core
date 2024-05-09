@@ -19,7 +19,7 @@ use common::{
 };
 use utils::ensure;
 
-use crate::{error::Result, Error, OrdersAccountingView};
+use crate::{error::Result, output_value_amount, Error, OrdersAccountingView};
 
 pub fn calculate_fill_order(
     view: &impl OrdersAccountingView,
@@ -42,14 +42,14 @@ pub fn calculate_fill_order(
     {
         let ask_balance = match order_data.ask() {
             OutputValue::Coin(_) => OutputValue::Coin(ask_balance),
-            OutputValue::TokenV0(_) => unreachable!(),
+            OutputValue::TokenV0(_) => return Err(Error::UnsupportedTokenVersion),
             OutputValue::TokenV1(token_id, _) => OutputValue::TokenV1(*token_id, ask_balance),
         };
 
         ensure_currencies_and_amounts_match(order_id, &ask_balance, fill_value)?;
     }
 
-    calculate_filled_amount_impl(ask_balance, give_balance, fill_value.amount())
+    calculate_filled_amount_impl(ask_balance, give_balance, output_value_amount(fill_value)?)
         .ok_or(Error::OrderOverflow(order_id))
 }
 
@@ -153,8 +153,8 @@ mod tests {
                 order_id,
                 OrderData::new(Destination::AnyoneCanSpend, ask.clone(), give.clone()),
             )]),
-            BTreeMap::from_iter([(order_id, ask.amount())]),
-            BTreeMap::from_iter([(order_id, give.amount())]),
+            BTreeMap::from_iter([(order_id, output_value_amount(&ask).unwrap())]),
+            BTreeMap::from_iter([(order_id, output_value_amount(&give).unwrap())]),
         );
         let orders_db = OrdersAccountingDB::new(&orders_store);
 
@@ -184,8 +184,8 @@ mod tests {
                 order_id,
                 OrderData::new(Destination::AnyoneCanSpend, ask.clone(), give.clone()),
             )]),
-            BTreeMap::from_iter([(order_id, ask.amount())]),
-            BTreeMap::from_iter([(order_id, give.amount())]),
+            BTreeMap::from_iter([(order_id, output_value_amount(&ask).unwrap())]),
+            BTreeMap::from_iter([(order_id, output_value_amount(&give).unwrap())]),
         );
         let orders_db = OrdersAccountingDB::new(&orders_store);
 

@@ -280,14 +280,16 @@ impl ConstrainedValueAccumulator {
                     .map_err(|_| orders_accounting::Error::ViewFail)?
                     .ok_or(orders_accounting::Error::OrderGiveBalanceNotFound(*id))?;
 
-                let initially_asked = order_data.ask().amount();
+                let initially_asked = output_value_amount(order_data.ask())?;
                 let ask_amount = (initially_asked - ask_balance)
                     .ok_or(Error::NegativeAccountBalance(AccountType::Order(*id)))?;
 
-                let ask_currency = CoinOrTokenId::from_output_value(order_data.ask());
+                let ask_currency = CoinOrTokenId::from_output_value(order_data.ask())
+                    .ok_or(Error::UnsupportedTokenVersion)?;
                 insert_or_increase(&mut self.unconstrained_value, ask_currency, ask_amount)?;
 
-                let give_currency = CoinOrTokenId::from_output_value(order_data.give());
+                let give_currency = CoinOrTokenId::from_output_value(order_data.give())
+                    .ok_or(Error::UnsupportedTokenVersion)?;
                 insert_or_increase(&mut self.unconstrained_value, give_currency, give_balance)?;
                 Ok((CoinOrTokenId::Coin, Amount::ZERO))
             }
@@ -302,11 +304,13 @@ impl ConstrainedValueAccumulator {
                     .get_order_data(order_id)
                     .map_err(|_| orders_accounting::Error::ViewFail)?
                     .ok_or(orders_accounting::Error::OrderDataNotFound(*order_id))?;
-                let give_currency = CoinOrTokenId::from_output_value(order_data.give());
+                let give_currency = CoinOrTokenId::from_output_value(order_data.give())
+                    .ok_or(Error::UnsupportedTokenVersion)?;
                 insert_or_increase(&mut self.unconstrained_value, give_currency, filled_amount)?;
 
-                let ask_currency = CoinOrTokenId::from_output_value(fill_value);
-                Ok((ask_currency, fill_value.amount()))
+                let ask_currency = CoinOrTokenId::from_output_value(fill_value)
+                    .ok_or(Error::UnsupportedTokenVersion)?;
+                Ok((ask_currency, output_value_amount(fill_value)?))
             }
         }
     }
@@ -375,11 +379,12 @@ impl ConstrainedValueAccumulator {
                     chain_config.nft_issuance_fee(block_height),
                 )?,
                 TxOutput::AnyoneCanTake(order_data) => {
-                    let id = CoinOrTokenId::from_output_value(order_data.give());
+                    let id = CoinOrTokenId::from_output_value(order_data.give())
+                        .ok_or(Error::UnsupportedTokenVersion)?;
                     insert_or_increase(
                         &mut accumulator.unconstrained_value,
                         id,
-                        order_data.give().amount(),
+                        output_value_amount(order_data.give())?,
                     )?;
                 }
             };
@@ -494,4 +499,11 @@ fn decrease_or(
         }
     }
     Ok(())
+}
+
+fn output_value_amount(value: &OutputValue) -> Result<Amount, Error> {
+    match value {
+        OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => Ok(*amount),
+        OutputValue::TokenV0(_) => Err(Error::UnsupportedTokenVersion),
+    }
 }

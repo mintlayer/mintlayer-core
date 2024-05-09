@@ -42,6 +42,13 @@ use tx_verifier::error::{InputCheckError, ScriptError};
 
 use crate::tests::helpers::{issue_token_from_block, mint_tokens_in_block};
 
+fn output_value_amount(value: &OutputValue) -> Amount {
+    match value {
+        OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => *amount,
+        OutputValue::TokenV0(_) => unreachable!(),
+    }
+}
+
 fn issue_and_mint_token_from_genesis(
     rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
@@ -127,7 +134,7 @@ fn create_order_check_storage(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_two_orders_same_tx(#[case] seed: Seed) {
+fn create_two_2_orders_same_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -146,7 +153,7 @@ fn create_two_orders_same_tx(#[case] seed: Seed) {
         let tx = TransactionBuilder::new()
             .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
             .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
-            .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
+            .add_output(TxOutput::AnyoneCanTake(order_data))
             .build();
         let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
@@ -156,6 +163,52 @@ fn create_two_orders_same_tx(#[case] seed: Seed) {
                 chainstate::BlockError::StateUpdateFailed(
                     chainstate::ConnectTransactionError::OrdersAccountingError(
                         orders_accounting::Error::OrderAlreadyExists(order_id)
+                    )
+                )
+            )
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_two_2_orders_same_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+
+        let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(ask_amount),
+            OutputValue::TokenV1(token_id, give_amount),
+        );
+
+        let tx1 = TransactionBuilder::new()
+            .add_input(
+                tokens_outpoint.clone().into(),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
+            .build();
+        let tx2 = TransactionBuilder::new()
+            .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::AnyoneCanTake(order_data))
+            .build();
+        let block = tf.make_block_builder().with_transactions(vec![tx1, tx2]).build(&mut rng);
+        let block_id = block.get_id();
+        let result = tf.process_block(block, chainstate::BlockSource::Local);
+
+        assert_eq!(
+            result.unwrap_err(),
+            chainstate::ChainstateError::ProcessBlockError(
+                chainstate::BlockError::CheckBlockFailed(
+                    chainstate::CheckBlockError::CheckTransactionFailed(
+                        chainstate::CheckBlockTransactionsError::DuplicateInputInBlock(block_id)
                     )
                 )
             )
@@ -383,7 +436,7 @@ fn fill_order_check_storage(#[case] seed: Seed) {
             let orders_db = OrdersAccountingDB::new(&db_tx);
             orders_accounting::calculate_fill_order(&orders_db, order_id, &fill_value).unwrap()
         };
-        let left_to_fill = (ask_amount - fill_value.amount()).unwrap();
+        let left_to_fill = (ask_amount - output_value_amount(&fill_value)).unwrap();
 
         let tx = TransactionBuilder::new()
             .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
@@ -643,7 +696,7 @@ fn reorg_before_create(#[case] seed: Seed) {
             let orders_db = OrdersAccountingDB::new(&db_tx);
             orders_accounting::calculate_fill_order(&orders_db, order_id, &fill_value).unwrap()
         };
-        let left_to_fill = (ask_amount - fill_value.amount()).unwrap();
+        let left_to_fill = (ask_amount - output_value_amount(&fill_value)).unwrap();
 
         let tx = TransactionBuilder::new()
             .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
@@ -737,7 +790,7 @@ fn reorg_after_create(#[case] seed: Seed) {
             let orders_db = OrdersAccountingDB::new(&db_tx);
             orders_accounting::calculate_fill_order(&orders_db, order_id, &fill_value).unwrap()
         };
-        let left_to_fill = (ask_amount - fill_value.amount()).unwrap();
+        let left_to_fill = (ask_amount - output_value_amount(&fill_value)).unwrap();
 
         tf.make_block_builder()
             .add_transaction(
@@ -801,11 +854,11 @@ fn reorg_after_create(#[case] seed: Seed) {
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
-            Some(order_data.ask().amount()),
+            Some(output_value_amount(order_data.ask())),
             tf.chainstate.get_order_ask_balance(&order_id).unwrap()
         );
         assert_eq!(
-            Some(order_data.give().amount()),
+            Some(output_value_amount(order_data.give())),
             tf.chainstate.get_order_give_balance(&order_id).unwrap()
         );
     });
