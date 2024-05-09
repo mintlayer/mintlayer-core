@@ -522,6 +522,16 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         self.sync_once().await
     }
 
+    /// For each block height in the specified range, find timestamps where staking is/was possible
+    /// for the given pool.
+    ///
+    /// `min_height` must not be zero; `max_height` must not exceed the best block height plus one.
+    ///
+    /// If `check_all_timestamps_between_blocks` is `false`, `seconds_to_check_for_height + 1` is the number
+    /// of seconds that will be checked at each height in the range.
+    /// If `check_all_timestamps_between_blocks` is `true`, `seconds_to_check_for_height` only applies to the
+    /// last height in the range; for all other heights the maximum timestamp is the timestamp
+    /// of the next block.
     pub async fn find_timestamps_for_staking(
         &self,
         pool_id: PoolId,
