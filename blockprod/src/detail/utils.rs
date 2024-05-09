@@ -199,8 +199,8 @@ pub fn get_best_block_index<CS: ChainstateInterface + ?Sized>(
     })
 }
 
-pub fn get_existing_block_index(
-    chainstate: &dyn ChainstateInterface,
+pub fn get_existing_block_index<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
     block_id: &Id<Block>,
 ) -> Result<BlockIndex, BlockProductionError> {
     let block_index = chainstate
@@ -220,8 +220,8 @@ pub fn get_existing_block_index(
     Ok(block_index)
 }
 
-pub fn get_existing_gen_block_index(
-    chainstate: &dyn ChainstateInterface,
+pub fn get_existing_gen_block_index<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
     block_id: &Id<GenBlock>,
 ) -> Result<GenBlockIndex, BlockProductionError> {
     let block_index = chainstate
@@ -238,8 +238,8 @@ pub fn get_existing_gen_block_index(
     Ok(block_index)
 }
 
-pub fn get_block_id_from_height(
-    chainstate: &dyn ChainstateInterface,
+pub fn get_block_id_from_height<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
     height: BlockHeight,
 ) -> Result<Id<GenBlock>, BlockProductionError> {
     let block_id = chainstate

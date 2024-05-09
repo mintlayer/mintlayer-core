@@ -105,6 +105,7 @@ impl TimestampSearchData {
                 max_height.prev_height().expect("The height is known to be non-zero"),
                 secret_input_data.pool_id(),
             )?
+            .collect::<BTreeMap<_, _>>()
         };
 
         let min_height = if let Some((first_height, _)) = pool_balances.first_key_value() {
