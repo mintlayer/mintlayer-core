@@ -56,7 +56,10 @@ use common::{
     Uint256,
 };
 use logging::log;
-use pos_accounting::{PoSAccountingDB, PoSAccountingOperations, PoSAccountingUndo};
+use pos_accounting::{
+    FlushablePoSAccountingView, PoSAccountingDB, PoSAccountingDelta, PoSAccountingOperations,
+    PoSAccountingUndo,
+};
 use tx_verifier::transaction_verifier;
 use utils::{
     const_value::ConstValue,
@@ -674,10 +677,20 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         UtxosDB::initialize_db(&mut db_tx, &self.chain_config);
 
         // initialize the pos accounting db by adding genesis pool to it
-        let mut pos_db_tip = PoSAccountingDB::<_, TipStorageTag>::new(&mut db_tx);
-        self.create_pool_in_storage(&mut pos_db_tip)?;
-        let mut pos_db_sealed = PoSAccountingDB::<_, SealedStorageTag>::new(&mut db_tx);
-        self.create_pool_in_storage(&mut pos_db_sealed)?;
+        {
+            let mut pos_db_tip = PoSAccountingDB::<_, TipStorageTag>::new(&mut db_tx);
+            let mut delta = PoSAccountingDelta::new(&mut pos_db_tip);
+            self.create_pool_in_storage(&mut delta)?;
+            let consumed = delta.consume();
+            pos_db_tip.batch_write_delta(consumed)?;
+        }
+        {
+            let mut pos_db_sealed = PoSAccountingDB::<_, SealedStorageTag>::new(&mut db_tx);
+            let mut delta = PoSAccountingDelta::new(&mut pos_db_sealed);
+            self.create_pool_in_storage(&mut delta)?;
+            let consumed = delta.consume();
+            pos_db_sealed.batch_write_delta(consumed)?;
+        }
 
         db_tx.commit().expect("Genesis database initialization failed");
         Ok(())

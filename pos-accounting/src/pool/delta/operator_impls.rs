@@ -26,8 +26,8 @@ use crate::{
         helpers::make_delegation_id,
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            DelegationDataUndo, DeleteDelegationIdUndo, IncreaseStakerRewardsUndo,
-            PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo, SpendFromShareUndo,
+            DeleteDelegationIdUndo, IncreaseStakerRewardsUndo, PoSAccountingOperations,
+            PoSAccountingUndo, SpendFromShareUndo,
         },
         pool_data::PoolData,
         view::PoSAccountingView,
@@ -56,7 +56,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
 
         self.data.pool_balances.add_unsigned(pool_id, pledge_amount)?;
 
-        let undo_data = self
+        let data_undo = self
             .data
             .pool_data
             .merge_delta_data_element(pool_id, DataDelta::new(None, Some(pool_data)))?;
@@ -64,7 +64,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
         Ok(PoSAccountingUndo::CreatePool(CreatePoolUndo {
             pool_id,
             pledge_amount,
-            data_undo: PoolDataUndo::DataDelta(Box::new(undo_data)),
+            data_undo,
         }))
     }
 
@@ -86,7 +86,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
             pool_id,
             pool_balance: last_amount,
-            data_undo: PoolDataUndo::DataDelta(Box::new(data_undo)),
+            data_undo,
         }))
     }
 
@@ -111,7 +111,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
             IncreaseStakerRewardsUndo {
                 pool_id,
                 amount_added: amount_to_add,
-                data_undo: PoolDataUndo::DataDelta(Box::new(data_undo)),
+                data_undo,
             },
         ))
     }
@@ -144,7 +144,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
             delegation_id,
             PoSAccountingUndo::CreateDelegationId(CreateDelegationIdUndo {
                 delegation_id,
-                data_undo: DelegationDataUndo::DataDelta(Box::new(data_undo)),
+                data_undo,
             }),
         ))
     }
@@ -181,7 +181,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
         Ok(PoSAccountingUndo::DeleteDelegationId(
             DeleteDelegationIdUndo {
                 delegation_id,
-                data_undo: DelegationDataUndo::DataDelta(Box::new(data_undo)),
+                data_undo,
             },
         ))
     }
@@ -254,11 +254,6 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
 
 impl<P: PoSAccountingView> PoSAccountingDelta<P> {
     fn undo_create_pool(&mut self, undo: CreatePoolUndo) -> Result<(), Error> {
-        let undo_data = match undo.data_undo {
-            PoolDataUndo::DataDelta(v) => *v,
-            PoolDataUndo::Data(_) => panic!("incompatible PoolDataUndo supplied"),
-        };
-
         match self.get_pool_balance(undo.pool_id)? {
             Some(pool_balance) => {
                 if pool_balance != undo.pledge_amount {
@@ -273,17 +268,14 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
         self.get_pool_data(undo.pool_id)?
             .ok_or(Error::InvariantErrorPoolCreationReversalFailedDataNotFound)?;
 
-        self.data.pool_data.undo_merge_delta_data_element(undo.pool_id, undo_data)?;
+        self.data
+            .pool_data
+            .undo_merge_delta_data_element(undo.pool_id, undo.data_undo)?;
 
         Ok(())
     }
 
     fn undo_decommission_pool(&mut self, undo: DecommissionPoolUndo) -> Result<(), Error> {
-        let undo_data = match undo.data_undo {
-            PoolDataUndo::DataDelta(v) => *v,
-            PoolDataUndo::Data(_) => panic!("incompatible PoolDataUndo supplied"),
-        };
-
         if self.get_pool_balance(undo.pool_id)?.unwrap_or(Amount::ZERO) != Amount::ZERO {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists);
         }
@@ -293,40 +285,32 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
         }
 
         self.data.pool_balances.add_unsigned(undo.pool_id, undo.pool_balance)?;
-        self.data.pool_data.undo_merge_delta_data_element(undo.pool_id, undo_data)?;
+        self.data
+            .pool_data
+            .undo_merge_delta_data_element(undo.pool_id, undo.data_undo)?;
 
         Ok(())
     }
 
     fn undo_create_delegation_id(&mut self, undo: CreateDelegationIdUndo) -> Result<(), Error> {
-        let undo_data = match undo.data_undo {
-            DelegationDataUndo::DataDelta(v) => v,
-            DelegationDataUndo::Data(_) => panic!("incompatible DelegationDataUndo supplied"),
-        };
-
         self.get_delegation_data(undo.delegation_id)?
             .ok_or(Error::InvariantErrorDelegationIdUndoFailedNotFound)?;
 
         self.data
             .delegation_data
-            .undo_merge_delta_data_element(undo.delegation_id, *undo_data)?;
+            .undo_merge_delta_data_element(undo.delegation_id, undo.data_undo)?;
 
         Ok(())
     }
 
     fn undo_delete_delegation_id(&mut self, undo: DeleteDelegationIdUndo) -> Result<(), Error> {
-        let undo_data = match undo.data_undo {
-            DelegationDataUndo::DataDelta(v) => *v,
-            DelegationDataUndo::Data(_) => panic!("incompatible PoolDataUndo supplied"),
-        };
-
         if self.get_delegation_balance(undo.delegation_id)?.is_some() {
             return Err(Error::DelegationDeletionFailedBalanceNonZero);
         }
 
         self.data
             .delegation_data
-            .undo_merge_delta_data_element(undo.delegation_id, undo_data)?;
+            .undo_merge_delta_data_element(undo.delegation_id, undo.data_undo)?;
 
         Ok(())
     }
@@ -380,12 +364,9 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
         &mut self,
         undo: IncreaseStakerRewardsUndo,
     ) -> Result<(), Error> {
-        let undo_data = match undo.data_undo {
-            PoolDataUndo::DataDelta(v) => *v,
-            PoolDataUndo::Data(_) => panic!("incompatible PoolDataUndo supplied"),
-        };
-
-        self.data.pool_data.undo_merge_delta_data_element(undo.pool_id, undo_data)?;
+        self.data
+            .pool_data
+            .undo_merge_delta_data_element(undo.pool_id, undo.data_undo)?;
         self.sub_balance_from_pool(undo.pool_id, undo.amount_added)?;
 
         Ok(())

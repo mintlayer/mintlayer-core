@@ -17,8 +17,8 @@ use api_server_common::storage::storage_api::Delegation;
 use common::chain::{DelegationId, Destination, PoolId, UtxoOutPoint};
 use common::primitives::Amount;
 use pos_accounting::{
-    DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoSAccountingOperations,
-    PoSAccountingView, PoolData,
+    DelegationData, FlushablePoSAccountingView, InMemoryPoSAccounting, PoSAccountingDB,
+    PoSAccountingDelta, PoSAccountingOperations, PoSAccountingView, PoolData,
 };
 use std::collections::BTreeMap;
 
@@ -148,7 +148,12 @@ impl PoSAccountingOperations<()> for PoSAdapter {
         amount_to_delegate: Amount,
     ) -> Result<(), pos_accounting::Error> {
         let mut db = PoSAccountingDB::new(&mut self.storage);
-        let _ = db.delegate_staking(delegation_target, amount_to_delegate)?;
+        let mut delta = PoSAccountingDelta::new(&mut db);
+
+        let _ = delta.delegate_staking(delegation_target, amount_to_delegate)?;
+
+        let consumed = delta.consume();
+        db.batch_write_delta(consumed)?;
 
         self.delegation_rewards.push((delegation_target, amount_to_delegate));
 
@@ -181,7 +186,12 @@ impl PoSAccountingOperations<()> for PoSAdapter {
         amount_to_add: Amount,
     ) -> Result<(), pos_accounting::Error> {
         let mut db = PoSAccountingDB::new(&mut self.storage);
-        let _ = db.increase_staker_rewards(pool_id, amount_to_add)?;
+        let mut delta = PoSAccountingDelta::new(&mut db);
+
+        let _ = delta.increase_staker_rewards(pool_id, amount_to_add)?;
+
+        let consumed = delta.consume();
+        db.batch_write_delta(consumed)?;
 
         self.pool_rewards.insert(pool_id, amount_to_add);
 
