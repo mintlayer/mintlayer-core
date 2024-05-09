@@ -548,23 +548,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         let input_data =
             PoSTimestampSearchInputData::new(pool_id, pos_data.vrf_private_key().clone());
 
-        let public_key = self
-            .rpc_client
-            .blockprod_e2e_public_key()
-            .await
-            .map_err(ControllerError::NodeCallError)?;
-
-        let mut rng = make_true_rng();
-        let ephemeral_private_key = EndToEndPrivateKey::new_from_rng(&mut rng);
-        let ephemeral_public_key = ephemeral_private_key.public_key();
-        let shared_secret = ephemeral_private_key.shared_secret(&public_key);
-        let encrypted_input_data = shared_secret.encode_then_encrypt(&input_data, &mut rng)?;
-
         let search_data = self
             .rpc_client
-            .collect_timestamp_search_data_e2e(
-                encrypted_input_data,
-                ephemeral_public_key,
+            .collect_timestamp_search_data(
+                pool_id,
                 min_height,
                 max_height,
                 seconds_to_check_for_height,

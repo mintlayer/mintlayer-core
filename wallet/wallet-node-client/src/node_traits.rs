@@ -87,10 +87,9 @@ pub trait NodeInterface {
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error>;
-    async fn collect_timestamp_search_data_e2e(
+    async fn collect_timestamp_search_data(
         &self,
-        encrypted_secret_input_data: Vec<u8>,
-        public_key: EndToEndPublicKey,
+        pool_id: PoolId,
         min_height: BlockHeight,
         max_height: Option<BlockHeight>,
         seconds_to_check_for_height: u64,

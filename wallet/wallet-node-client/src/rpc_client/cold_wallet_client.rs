@@ -148,10 +148,9 @@ impl NodeInterface for ColdWalletClient {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
-    async fn collect_timestamp_search_data_e2e(
+    async fn collect_timestamp_search_data(
         &self,
-        _encrypted_input_data: Vec<u8>,
-        _public_key: EndToEndPublicKey,
+        _pool_id: PoolId,
         _min_height: BlockHeight,
         _max_height: Option<BlockHeight>,
         _seconds_to_check_for_height: u64,

@@ -243,10 +243,9 @@ impl NodeInterface for WalletHandlesClient {
         Ok(block)
     }
 
-    async fn collect_timestamp_search_data_e2e(
+    async fn collect_timestamp_search_data(
         &self,
-        encrypted_input_data: Vec<u8>,
-        public_key: EndToEndPublicKey,
+        pool_id: PoolId,
         min_height: BlockHeight,
         max_height: Option<BlockHeight>,
         seconds_to_check_for_height: u64,
@@ -255,9 +254,8 @@ impl NodeInterface for WalletHandlesClient {
         let search_data = self
             .block_prod
             .call_async_mut(move |this| {
-                this.collect_timestamp_search_data_e2e(
-                    encrypted_input_data,
-                    public_key,
+                this.collect_timestamp_search_data(
+                    pool_id,
                     min_height,
                     max_height,
                     seconds_to_check_for_height,

@@ -32,14 +32,14 @@ use common::{
             block_body::BlockBody, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        Block, ChainConfig, GenBlock, SignedTransaction, Transaction,
+        Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
 use consensus::{
     generate_consensus_data_and_reward, FinalizeBlockInputData, GenerateBlockInputData,
-    PoSFinalizeBlockInputData, PoSGenerateBlockInputData, PoSTimestampSearchInputData,
+    PoSFinalizeBlockInputData, PoSGenerateBlockInputData,
 };
 use crypto::ephemeral_e2e::{self, EndToEndPrivateKey};
 use logging::log;
@@ -589,9 +589,9 @@ impl BlockProduction {
         &self.e2e_encryption_key
     }
 
-    pub async fn collect_timestamp_search_data(
+    pub async fn collect_timestamp_search_data_impl(
         &self,
-        secret_input_data: PoSTimestampSearchInputData,
+        pool_id: &PoolId,
         min_height: BlockHeight,
         max_height: Option<BlockHeight>,
         seconds_to_check_for_height: u64,
@@ -600,7 +600,7 @@ impl BlockProduction {
         timestamp_searcher::collect_timestamp_search_data(
             &self.chainstate_handle,
             Arc::clone(&self.chain_config),
-            secret_input_data,
+            pool_id,
             min_height,
             max_height,
             seconds_to_check_for_height,

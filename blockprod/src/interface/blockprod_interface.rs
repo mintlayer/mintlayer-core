@@ -15,7 +15,7 @@
 
 use crate::{detail::job_manager::JobKey, BlockProductionError, TimestampSearchData};
 use common::{
-    chain::{Block, SignedTransaction, Transaction},
+    chain::{Block, PoolId, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
@@ -65,10 +65,9 @@ pub trait BlockProductionInterface: Send + Sync {
     ///
     /// See `timestamp_searcher::collect_timestamp_search_data` for the details about
     /// the parameters.
-    async fn collect_timestamp_search_data_e2e(
+    async fn collect_timestamp_search_data(
         &self,
-        encrypted_secret_input_data: Vec<u8>,
-        e2e_public_key: ephemeral_e2e::EndToEndPublicKey,
+        pool_id: PoolId,
         min_height: BlockHeight,
         max_height: Option<BlockHeight>,
         seconds_to_check_for_height: u64,

@@ -1146,8 +1146,7 @@ the parameters.
 Parameters:
 ```
 {
-    "encrypted_secret_input_data": [ number, .. ],
-    "e2e_public_key": hex string,
+    "pool_id": hex string,
     "min_height": number,
     "max_height": EITHER OF
          1) number

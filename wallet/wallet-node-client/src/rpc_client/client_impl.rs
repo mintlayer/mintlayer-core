@@ -189,19 +189,17 @@ impl NodeInterface for NodeRpcClient {
         .map_err(NodeRpcError::ResponseError)
     }
 
-    async fn collect_timestamp_search_data_e2e(
+    async fn collect_timestamp_search_data(
         &self,
-        encrypted_input_data: Vec<u8>,
-        public_key: EndToEndPublicKey,
+        pool_id: PoolId,
         min_height: BlockHeight,
         max_height: Option<BlockHeight>,
         seconds_to_check_for_height: u64,
         all_timestamps_between_blocks: bool,
     ) -> Result<TimestampSearchData, Self::Error> {
-        BlockProductionRpcClient::collect_timestamp_search_data_e2e(
+        BlockProductionRpcClient::collect_timestamp_search_data(
             &self.http_client,
-            encrypted_input_data,
-            public_key.into(),
+            pool_id,
             min_height,
             max_height,
             seconds_to_check_for_height,

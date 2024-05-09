@@ -27,6 +27,7 @@ use chainstate_types::pos_randomness::PoSRandomness;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, config::EpochIndex, ChainConfig, PoSConsensusVersion,
+        PoolId,
     },
     primitives::{BlockHeight, Compact},
     Uint256,
@@ -73,13 +74,13 @@ impl TimestampSearchData {
     pub fn new(
         chainstate: &dyn ChainstateInterface,
         chain_config: &ChainConfig,
-        secret_input_data: &PoSTimestampSearchInputData,
+        pool_id: &PoolId,
         min_height: BlockHeight,
         max_height: Option<BlockHeight>,
         seconds_to_check_for_height: u64,
         check_all_timestamps_between_blocks: bool,
     ) -> Result<Self, BlockProductionError> {
-        // Note: the passes min_height/max_height specify heights at which a new block could
+        // Note: the passed min_height/max_height specify heights at which a new block could
         // be produced. On the other hand, heights that are passed to and returned from
         // `get_pool_balances_at_heights` are the height that the best block had when those
         // balances were calculated. In order to convert from the former to the latter,
@@ -103,7 +104,7 @@ impl TimestampSearchData {
                 chainstate,
                 min_height.prev_height().expect("The height is known to be non-zero"),
                 max_height.prev_height().expect("The height is known to be non-zero"),
-                secret_input_data.pool_id(),
+                pool_id,
             )?
             .collect::<BTreeMap<_, _>>()
         };
@@ -226,12 +227,13 @@ impl TimestampSearchData {
 pub async fn collect_timestamp_search_data(
     chainstate_handle: &ChainstateHandle,
     chain_config: Arc<ChainConfig>,
-    secret_input_data: PoSTimestampSearchInputData,
+    pool_id: &PoolId,
     min_height: BlockHeight,
     max_height: Option<BlockHeight>,
     seconds_to_check_for_height: u64,
     check_all_timestamps_between_blocks: bool,
 ) -> Result<TimestampSearchData, BlockProductionError> {
+    let pool_id = *pool_id;
     let search_data = chainstate_handle
         .call({
             move |chainstate| -> Result<_, BlockProductionError> {
@@ -240,7 +242,7 @@ pub async fn collect_timestamp_search_data(
                 TimestampSearchData::new(
                     chainstate,
                     &chain_config,
-                    &secret_input_data,
+                    &pool_id,
                     min_height,
                     max_height,
                     seconds_to_check_for_height,
