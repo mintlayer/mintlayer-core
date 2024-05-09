@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockIndex, GenBlockIndex, NonZeroPoolBalances,
 };
@@ -35,8 +33,8 @@ pub enum PoSAccountingError {
     StakerBalanceRetrievalError(String),
 }
 
-pub fn get_pool_staker_balance(
-    chainstate: &dyn ChainstateInterface,
+pub fn get_pool_staker_balance<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
     pool_id: &PoolId,
 ) -> Result<Amount, BlockProductionError> {
     let balance = chainstate
@@ -53,8 +51,8 @@ pub fn get_pool_staker_balance(
     Ok(balance)
 }
 
-pub fn get_pool_total_balance(
-    chainstate: &dyn ChainstateInterface,
+pub fn get_pool_total_balance<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
     pool_id: &PoolId,
 ) -> Result<Amount, BlockProductionError> {
     let pool_balance = chainstate
@@ -70,12 +68,12 @@ pub fn get_pool_total_balance(
     Ok(pool_balance)
 }
 
-pub fn get_pool_balances_at_heights(
-    chainstate: &dyn ChainstateInterface,
+pub fn get_pool_balances_at_heights<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
     min_height: BlockHeight,
     max_height: BlockHeight,
     pool_id: &PoolId,
-) -> Result<BTreeMap<BlockHeight, NonZeroPoolBalances>, BlockProductionError> {
+) -> Result<impl Iterator<Item = (BlockHeight, NonZeroPoolBalances)>, BlockProductionError> {
     let balances = chainstate
         .get_stake_pool_balances_at_heights(&[*pool_id], min_height, max_height)
         .map_err(|err| {
@@ -85,32 +83,30 @@ pub fn get_pool_balances_at_heights(
             ))
         })?;
 
-    let balances = balances
-        .iter()
-        .filter_map(|(height, balances)| {
-            balances.get(pool_id).map(|balance| (*height, balance.clone()))
-        })
-        .collect::<BTreeMap<_, _>>();
+    let pool_id = *pool_id;
+    let balances_iter = balances.into_iter().filter_map(move |(height, balances)| {
+        balances.get(&pool_id).map(|balance| (height, balance.clone()))
+    });
 
-    Ok(balances)
+    Ok(balances_iter)
 }
 
-pub fn get_pool_balances_at_height(
-    chainstate: &dyn ChainstateInterface,
+pub fn get_pool_balances_at_height<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
     height: BlockHeight,
     pool_id: &PoolId,
 ) -> Result<NonZeroPoolBalances, BlockProductionError> {
-    let mut height_map = get_pool_balances_at_heights(chainstate, height, height, pool_id)?;
+    let mut iter = get_pool_balances_at_heights(chainstate, height, height, pool_id)?;
 
-    let balances = height_map
-        .remove(&height)
+    let (_, balances) = iter
+        .find(|(h, _)| *h == height)
         .ok_or(BlockProductionError::PoolBalanceNotFound(*pool_id))?;
 
     Ok(balances)
 }
 
-pub fn get_epoch_data(
-    chainstate: &dyn ChainstateInterface,
+pub fn get_epoch_data<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
     epoch_index: u64,
 ) -> Result<Option<EpochData>, BlockProductionError> {
     chainstate.get_epoch_data(epoch_index).map_err(|err| {
@@ -121,9 +117,9 @@ pub fn get_epoch_data(
     })
 }
 
-pub fn get_sealed_epoch_randomness(
+pub fn get_sealed_epoch_randomness<CS: ChainstateInterface + ?Sized>(
     chain_config: &ChainConfig,
-    chainstate: &dyn ChainstateInterface,
+    chainstate: &CS,
     block_height: BlockHeight,
 ) -> Result<PoSRandomness, BlockProductionError> {
     let sealed_epoch_index = chain_config.sealed_epoch_index(&block_height);
@@ -134,9 +130,9 @@ pub fn get_sealed_epoch_randomness(
     )
 }
 
-pub fn get_sealed_epoch_randomness_from_sealed_epoch_index(
+pub fn get_sealed_epoch_randomness_from_sealed_epoch_index<CS: ChainstateInterface + ?Sized>(
     chain_config: &ChainConfig,
-    chainstate: &dyn ChainstateInterface,
+    chainstate: &CS,
     sealed_epoch_index: Option<u64>,
 ) -> Result<PoSRandomness, BlockProductionError> {
     let sealed_epoch_randomness = sealed_epoch_index
@@ -149,8 +145,8 @@ pub fn get_sealed_epoch_randomness_from_sealed_epoch_index(
     Ok(sealed_epoch_randomness)
 }
 
-pub fn make_ancestor_getter(
-    cs: &dyn ChainstateInterface,
+pub fn make_ancestor_getter<CS: ChainstateInterface + ?Sized>(
+    cs: &CS,
 ) -> impl Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, consensus::ChainstateError> + '_ {
     |block_index: &BlockIndex, ancestor_height: BlockHeight| {
         cs.get_ancestor(&block_index.clone().into_gen_block_index(), ancestor_height)
@@ -164,8 +160,8 @@ pub fn make_ancestor_getter(
     }
 }
 
-pub fn get_best_block_index(
-    chainstate: &dyn ChainstateInterface,
+pub fn get_best_block_index<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
 ) -> Result<GenBlockIndex, BlockProductionError> {
     chainstate.get_best_block_index().map_err(|err| {
         BlockProductionError::ChainstateError(
