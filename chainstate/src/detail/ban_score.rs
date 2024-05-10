@@ -675,6 +675,7 @@ impl BanScore for orders_accounting::Error {
             Error::FillOrderChangeLeft(_) => 100,
             Error::CurrencyMismatch => 100,
             Error::OrderOverflow(_) => 100,
+            Error::OrderOverbid(_, _, _) => 100,
             Error::AttemptedCancelNonexistingOrderData(_) => 100,
             Error::AttemptedCancelNonexistingAskBalance(_) => 100,
             Error::AttemptedCancelNonexistingGiveBalance(_) => 100,

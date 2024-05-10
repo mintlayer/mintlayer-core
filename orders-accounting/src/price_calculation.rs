@@ -64,11 +64,17 @@ fn ensure_currencies_and_amounts_match(
 ) -> Result<()> {
     match (left, right) {
         (OutputValue::Coin(amount1), OutputValue::Coin(amount2)) => {
-            ensure!(amount1 >= amount2, Error::OrderOverflow(order_id));
+            ensure!(
+                amount1 >= amount2,
+                Error::OrderOverbid(order_id, *amount1, *amount2)
+            );
             Ok(())
         }
         (OutputValue::TokenV1(id1, amount1), OutputValue::TokenV1(id2, amount2)) => {
-            ensure!(amount1 >= amount2, Error::OrderOverflow(order_id));
+            ensure!(
+                amount1 >= amount2,
+                Error::OrderOverbid(order_id, *amount1, *amount2)
+            );
             ensure!(id1 == id2, Error::CurrencyMismatch);
             Ok(())
         }
@@ -166,9 +172,10 @@ mod tests {
 
     #[rstest]
     #[case(token!(0), coin!(1), token!(0), Error::OrderOverflow(OrderId::zero()))]
-    #[case(token!(0), coin!(1), token!(1), Error::OrderOverflow(OrderId::zero()))]
-    #[case(coin!(1), token!(1), coin!(2), Error::OrderOverflow(OrderId::zero()))]
-    #[case(coin!(1), token!(u128::MAX), coin!(2), Error::OrderOverflow(OrderId::zero()))]
+    #[case(token!(0), coin!(1), token!(1), Error::OrderOverbid(OrderId::zero(), Amount::from_atoms(0), Amount::from_atoms(1)))]
+    #[case(coin!(1), token!(1), coin!(2), Error::OrderOverbid(OrderId::zero(), Amount::from_atoms(1), Amount::from_atoms(2)))]
+    #[case(coin!(1), token!(u128::MAX), coin!(2), Error::OrderOverbid(OrderId::zero(), Amount::from_atoms(1), Amount::from_atoms(2)))]
+    #[case(coin!(2), token!(u128::MAX), coin!(2), Error::OrderOverflow(OrderId::zero()))]
     #[case(coin!(1), token!(1), token!(1), Error::CurrencyMismatch)]
     #[case(coin!(1), token!(1), token!(1), Error::CurrencyMismatch)]
     #[case(token!(1), token2!(1), token2!(1), Error::CurrencyMismatch)]

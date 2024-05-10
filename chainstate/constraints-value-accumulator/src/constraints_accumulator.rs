@@ -281,12 +281,12 @@ impl ConstrainedValueAccumulator {
                     .ok_or(orders_accounting::Error::OrderGiveBalanceNotFound(*id))?;
 
                 let initially_asked = output_value_amount(order_data.ask())?;
-                let ask_amount = (initially_asked - ask_balance)
+                let filled_amount = (initially_asked - ask_balance)
                     .ok_or(Error::NegativeAccountBalance(AccountType::Order(*id)))?;
 
                 let ask_currency = CoinOrTokenId::from_output_value(order_data.ask())
                     .ok_or(Error::UnsupportedTokenVersion)?;
-                insert_or_increase(&mut self.unconstrained_value, ask_currency, ask_amount)?;
+                insert_or_increase(&mut self.unconstrained_value, ask_currency, filled_amount)?;
 
                 let give_currency = CoinOrTokenId::from_output_value(order_data.give())
                     .ok_or(Error::UnsupportedTokenVersion)?;

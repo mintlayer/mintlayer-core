@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::OrderId;
+use common::{chain::OrderId, primitives::Amount};
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum Error {
@@ -39,11 +39,11 @@ pub enum Error {
     InvariantOrderGiveBalanceNotFoundForUndo(OrderId),
     #[error("Give balance for order {0}` changed for undo")]
     InvariantOrderGiveBalanceChangedForUndo(OrderId),
-    #[error("Data for order {0}` still exist on withdraw undo")]
+    #[error("Data for order {0}` still exist on cancel undo")]
     InvariantOrderDataExistForCancelUndo(OrderId),
-    #[error("Ask balance for order {0}` still exist on withdraw undo")]
+    #[error("Ask balance for order {0}` still exist on cancel undo")]
     InvariantOrderAskBalanceExistForCancelUndo(OrderId),
-    #[error("Give balance for order {0}` still exist on withdraw undo")]
+    #[error("Give balance for order {0}` still exist on cancel undo")]
     InvariantOrderGiveBalanceExistForCancelUndo(OrderId),
     #[error("Fill operation for order {0}` left a change")]
     FillOrderChangeLeft(OrderId),
@@ -51,11 +51,13 @@ pub enum Error {
     CurrencyMismatch,
     #[error("Order overflow: `{0}`")]
     OrderOverflow(OrderId),
-    #[error("Attempt to withdraw non-existing order data `{0}`")]
+    #[error("Order `{0}` can provide `{1:?}` amount; but attempted to fill `{2:?}`")]
+    OrderOverbid(OrderId, Amount, Amount),
+    #[error("Attempt to cancel non-existing order data `{0}`")]
     AttemptedCancelNonexistingOrderData(OrderId),
-    #[error("Attempt to withdraw non-existing ask balance `{0}`")]
+    #[error("Attempt to cancel non-existing ask balance `{0}`")]
     AttemptedCancelNonexistingAskBalance(OrderId),
-    #[error("Attempt to withdraw non-existing give balance `{0}`")]
+    #[error("Attempt to cancel non-existing give balance `{0}`")]
     AttemptedCancelNonexistingGiveBalance(OrderId),
     #[error("Unsupported token version")]
     UnsupportedTokenVersion,

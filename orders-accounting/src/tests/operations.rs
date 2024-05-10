@@ -144,7 +144,7 @@ fn create_order_and_undo(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn withdraw_order_and_flush(#[case] seed: Seed) {
+fn cancel_order_and_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let order_id = OrderId::random_using(&mut rng);
@@ -158,7 +158,7 @@ fn withdraw_order_and_flush(#[case] seed: Seed) {
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
 
-    // try to withdraw non-existing order
+    // try to cancel non-existing order
     {
         let random_order = OrderId::random_using(&mut rng);
         let result = cache.cancel_order(random_order);
@@ -178,7 +178,7 @@ fn withdraw_order_and_flush(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn withdraw_order_twice(#[case] seed: Seed) {
+fn cancel_order_twice(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let order_id = OrderId::random_using(&mut rng);
@@ -203,7 +203,7 @@ fn withdraw_order_twice(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn withdraw_order_and_undo(#[case] seed: Seed) {
+fn cancel_order_and_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let order_id = OrderId::random_using(&mut rng);
@@ -276,11 +276,17 @@ fn fill_entire_order_and_flush(#[case] seed: Seed) {
 
     // try to overfill
     {
-        let fill = OutputValue::Coin(
-            (output_value_amount(order_data.ask()).unwrap() + Amount::from_atoms(1)).unwrap(),
-        );
+        let ask_amount = output_value_amount(order_data.ask()).unwrap();
+        let fill = OutputValue::Coin((ask_amount + Amount::from_atoms(1)).unwrap());
         let result = cache.fill_order(order_id, fill);
-        assert_eq!(result.unwrap_err(), Error::OrderOverflow(order_id));
+        assert_eq!(
+            result.unwrap_err(),
+            Error::OrderOverbid(
+                order_id,
+                ask_amount,
+                (ask_amount + Amount::from_atoms(1)).unwrap()
+            )
+        );
     }
 
     let _ = cache.fill_order(order_id, order_data.ask().clone()).unwrap();
@@ -471,7 +477,7 @@ fn fill_order_partially_and_undo(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn fill_order_partially_and_withdraw(#[case] seed: Seed) {
+fn fill_order_partially_and_cancel(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let order_id = OrderId::random_using(&mut rng);

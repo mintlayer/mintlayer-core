@@ -911,6 +911,7 @@ impl BlockProcessingErrorClassification for orders_accounting::Error {
             | Error::FillOrderChangeLeft(_)
             | Error::CurrencyMismatch
             | Error::OrderOverflow(_)
+            | Error::OrderOverbid(_, _, _)
             | Error::AttemptedCancelNonexistingOrderData(_)
             | Error::AttemptedCancelNonexistingAskBalance(_)
             | Error::AttemptedCancelNonexistingGiveBalance(_)

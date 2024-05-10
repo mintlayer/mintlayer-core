@@ -84,7 +84,7 @@ impl<P: OrdersAccountingView> OrdersAccountingCache<P> {
         Ok(())
     }
 
-    fn undo_withdraw_order(&mut self, undo: CancelOrderUndo) -> Result<()> {
+    fn undo_cancel_order(&mut self, undo: CancelOrderUndo) -> Result<()> {
         ensure!(
             self.get_order_data(&undo.id)?.is_none(),
             Error::InvariantOrderDataExistForCancelUndo(undo.id)
@@ -242,7 +242,7 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
     fn undo(&mut self, undo_data: OrdersAccountingUndo) -> Result<()> {
         match undo_data {
             OrdersAccountingUndo::CreateOrder(undo) => self.undo_create_order(undo),
-            OrdersAccountingUndo::CancelOrder(undo) => self.undo_withdraw_order(undo),
+            OrdersAccountingUndo::CancelOrder(undo) => self.undo_cancel_order(undo),
             OrdersAccountingUndo::FillOrder(undo) => self.undo_fill_order(undo),
         }
     }

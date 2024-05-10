@@ -17,6 +17,7 @@ use chainstate::ConnectTransactionError;
 use chainstate_storage::Transactional;
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
+    address::pubkeyhash::PublicKeyHash,
     chain::{
         make_order_id,
         output_value::OutputValue,
@@ -134,7 +135,7 @@ fn create_order_check_storage(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_two_2_orders_same_tx(#[case] seed: Seed) {
+fn create_two_same_orders_in_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -173,7 +174,52 @@ fn create_two_2_orders_same_tx(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_two_2_orders_same_block(#[case] seed: Seed) {
+fn create_two_orders_same_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+
+        let amount1 = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let amount2 = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let order_data_1 = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(amount1),
+            OutputValue::TokenV1(token_id, amount2),
+        );
+
+        let order_data_2 = OrderData::new(
+            Destination::PublicKeyHash(PublicKeyHash::random()),
+            OutputValue::Coin(amount2),
+            OutputValue::TokenV1(token_id, amount1),
+        );
+
+        let order_id = make_order_id(&tokens_outpoint);
+        let tx = TransactionBuilder::new()
+            .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::AnyoneCanTake(order_data_1))
+            .add_output(TxOutput::AnyoneCanTake(order_data_2))
+            .build();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+
+        assert_eq!(
+            result.unwrap_err(),
+            chainstate::ChainstateError::ProcessBlockError(
+                chainstate::BlockError::StateUpdateFailed(
+                    chainstate::ConnectTransactionError::OrdersAccountingError(
+                        orders_accounting::Error::OrderAlreadyExists(order_id)
+                    )
+                )
+            )
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_two_orders_same_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -494,6 +540,94 @@ fn fill_order_check_storage(#[case] seed: Seed) {
             )
             .add_output(TxOutput::Transfer(
                 OutputValue::TokenV1(token_id, filled_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        assert_eq!(None, tf.chainstate.get_order_data(&order_id).unwrap());
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
+        );
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn fill_partially_then_cancel(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (token_id, tokens_outpoint, coins_outpoint) =
+            issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+
+        let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(ask_amount),
+            OutputValue::TokenV1(token_id, give_amount),
+        );
+
+        let order_id = make_order_id(&tokens_outpoint);
+        let tx = TransactionBuilder::new()
+            .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::AnyoneCanTake(order_data.clone()))
+            .build();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        // Fill the order partially
+        let fill_value = OutputValue::Coin(Amount::from_atoms(
+            rng.gen_range(1..ask_amount.into_atoms()),
+        ));
+        let filled_amount = {
+            let db_tx = tf.storage.transaction_ro().unwrap();
+            let orders_db = OrdersAccountingDB::new(&db_tx);
+            orders_accounting::calculate_fill_order(&orders_db, order_id, &fill_value).unwrap()
+        };
+
+        let tx = TransactionBuilder::new()
+            .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
+            .add_input(
+                TxInput::AccountCommand(
+                    AccountNonce::new(0),
+                    AccountCommand::FillOrder(
+                        order_id,
+                        fill_value.clone(),
+                        Destination::AnyoneCanSpend,
+                    ),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, filled_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        // cancel the order
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::AccountCommand(
+                    AccountNonce::new(1),
+                    AccountCommand::CancelOrder(order_id),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, (give_amount - filled_amount).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(output_value_amount(&fill_value)),
                 Destination::AnyoneCanSpend,
             ))
             .build();

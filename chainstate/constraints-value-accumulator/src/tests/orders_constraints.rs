@@ -307,7 +307,11 @@ fn fill_order_constraints(#[case] seed: Seed) {
 
         assert_eq!(
             result.unwrap_err(),
-            Error::OrdersAccountingError(orders_accounting::Error::OrderOverflow(order_id))
+            Error::OrdersAccountingError(orders_accounting::Error::OrderOverbid(
+                order_id,
+                ask_amount,
+                (ask_amount + Amount::from_atoms(1)).unwrap()
+            ))
         );
     }
 

@@ -513,6 +513,7 @@ impl MempoolBanScore for orders_accounting::Error {
             Error::FillOrderChangeLeft(_) => 100,
             Error::CurrencyMismatch => 100,
             Error::OrderOverflow(_) => 100,
+            Error::OrderOverbid(_, _, _) => 100,
             Error::AttemptedCancelNonexistingOrderData(_) => 0,
             Error::AttemptedCancelNonexistingAskBalance(_) => 0,
             Error::AttemptedCancelNonexistingGiveBalance(_) => 0,
