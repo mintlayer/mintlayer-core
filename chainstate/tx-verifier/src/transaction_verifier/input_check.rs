@@ -100,10 +100,69 @@ struct UtxoInputSpendingInfo {
     height: BlockHeight,
 }
 
+impl UtxoInputSpendingInfo {
+    pub fn load<U: utxo::UtxosView, S: TransactionVerifierStorageRef>(
+        block_ctx: &BlockVerificationContext,
+        utxo_view: &U,
+        storage: &S,
+        outpoint: &UtxoOutPoint,
+    ) -> Result<(TxOutput, Self), ConnectTransactionError> {
+        let utxo = utxo_view.utxo(outpoint).map_err(|_| utxo::Error::ViewRead)?.ok_or(
+            ConnectTransactionError::MissingOutputOrSpent(outpoint.clone()),
+        )?;
+
+        let (height, timestamp) = match utxo.source() {
+            utxo::UtxoSource::Blockchain(height) => {
+                let block_index_getter =
+                    |db_tx: &S, _: &ChainConfig, id: &Id<GenBlock>| db_tx.get_gen_block_index(id);
+
+                let source_block_index = block_index_ancestor_getter(
+                    block_index_getter,
+                    storage,
+                    block_ctx.chain_config,
+                    (&block_ctx.tip).into(),
+                    *height,
+                )
+                .map_err(|e| {
+                    ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(
+                        e, *height,
+                    )
+                })?;
+
+                (*height, source_block_index.block_timestamp())
+            }
+            utxo::UtxoSource::Mempool => (block_ctx.spending_height, block_ctx.spending_time),
+        };
+
+        let info = UtxoInputSpendingInfo { timestamp, height };
+        Ok((utxo.take_output(), info))
+    }
+}
+
 enum InputSpendingInfo {
     Utxo(UtxoInputSpendingInfo),
     Account,
     AccountCommand,
+}
+
+impl InputSpendingInfo {
+    pub fn load<U: utxo::UtxosView, S: TransactionVerifierStorageRef>(
+        block_ctx: &BlockVerificationContext,
+        utxo_view: &U,
+        storage: &S,
+        input: &TxInput,
+    ) -> Result<(Option<TxOutput>, InputSpendingInfo), ConnectTransactionError> {
+        let utxo_and_info = match input {
+            TxInput::Utxo(outpoint) => {
+                let (input, info) =
+                    UtxoInputSpendingInfo::load(block_ctx, utxo_view, storage, outpoint)?;
+                (Some(input), InputSpendingInfo::Utxo(info))
+            }
+            TxInput::Account(..) => (None, InputSpendingInfo::Account),
+            TxInput::AccountCommand(..) => (None, InputSpendingInfo::AccountCommand),
+        };
+        Ok(utxo_and_info)
+    }
 }
 
 impl InputSpendingInfo {
@@ -133,49 +192,10 @@ impl<'a, T: Signable + Transactable> TransactionVerificationContext<'a, T> {
 
         let (spent_outputs, spent_infos): (Vec<_>, Vec<_>) = inputs
             .iter()
-            .map(|input| {
-                let utxo_and_info = match input {
-                    TxInput::Utxo(outpoint) => {
-                        let utxo =
-                            utxo_view.utxo(outpoint).map_err(|_| utxo::Error::ViewRead)?.ok_or(
-                                ConnectTransactionError::MissingOutputOrSpent(outpoint.clone()),
-                            )?;
-
-                        let (height, timestamp) = match utxo.source() {
-                            utxo::UtxoSource::Blockchain(height) => {
-                                let block_index_getter = |db_tx: &S, _cc: &ChainConfig, id: &Id<GenBlock>| {
-                                    db_tx.get_gen_block_index(id)
-                                };
-
-                                let source_block_index = block_index_ancestor_getter(
-                                    block_index_getter,
-                                    storage,
-                                    block_ctx.chain_config,
-                                    (&block_ctx.tip).into(),
-                                    *height,
-                                )
-                                .map_err(|e| {
-                                    ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(
-                                        e, *height,
-                                    )
-                                })?;
-
-                                (*height, source_block_index.block_timestamp())
-                            }
-                            utxo::UtxoSource::Mempool => {
-                                (block_ctx.spending_height, block_ctx.spending_time)
-                            }
-                        };
-
-                        let info = UtxoInputSpendingInfo { timestamp, height };
-                        (Some(utxo.take_output()), InputSpendingInfo::Utxo(info))
-                    }
-                    TxInput::Account(..) => (None, InputSpendingInfo::Account),
-                    TxInput::AccountCommand(..) => (None, InputSpendingInfo::AccountCommand),
-                };
-                Ok(utxo_and_info)
-            })
-            .collect::<Result<Vec<_>, ConnectTransactionError>>()?.into_iter().unzip();
+            .map(|inp| InputSpendingInfo::load(block_ctx, utxo_view, storage, inp))
+            .collect::<Result<Vec<_>, ConnectTransactionError>>()?
+            .into_iter()
+            .unzip();
 
         Ok(Self {
             block_ctx,
