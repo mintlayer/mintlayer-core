@@ -179,11 +179,11 @@ impl BanScore for SignatureDestinationGetterError {
             SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput => 100,
             SignatureDestinationGetterError::PoolDataNotFound(_) => 100,
             SignatureDestinationGetterError::DelegationDataNotFound(_) => 100,
-            SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
+            SignatureDestinationGetterError::PoSAccountingViewError(_) => 100,
             SignatureDestinationGetterError::UtxoOutputNotFound(_) => 100,
             SignatureDestinationGetterError::UtxoViewError(_) => 100,
             SignatureDestinationGetterError::TokenDataNotFound(_) => 100,
-            SignatureDestinationGetterError::SigVerifyTokensAccountingError(_) => 100,
+            SignatureDestinationGetterError::TokensAccountingViewError(_) => 100,
         }
     }
 }

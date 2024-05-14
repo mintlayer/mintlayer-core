@@ -47,6 +47,7 @@ use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
 use randomness::{seq::IteratorRandom, CryptoRng, Rng};
 use serialization::Encode;
 use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
+use tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetter;
 
 /// The block builder that allows construction and processing of a block.
 pub struct PoSBlockBuilder<'f> {
@@ -379,7 +380,7 @@ impl<'f> PoSBlockBuilder<'f> {
             })
         });
 
-        let (tx, input_destinations, new_tokens_delta, new_pos_accounting_delta) =
+        let (tx, new_tokens_delta, new_pos_accounting_delta) =
             super::random_tx_maker::RandomTxMaker::new(
                 &self.framework.chainstate,
                 &utxo_set,
@@ -394,9 +395,23 @@ impl<'f> PoSBlockBuilder<'f> {
                 &mut self.framework.key_manager,
             );
 
-        println!("\n------------ {:?}", tx);
-
         if !tx.inputs().is_empty() && !tx.outputs().is_empty() {
+            // First we must sign inputs because after accounting deltas are flushed
+            // spending destinations could change
+            let tokens_db = TokensAccountingDB::new(&self.tokens_accounting_store);
+            let pos_db = PoSAccountingDB::new(&self.pos_accounting_store);
+            let destination_getter =
+                SignatureDestinationGetter::new_for_transaction(&tokens_db, &pos_db, &utxo_set);
+            let witnesses = sign_witnesses(
+                rng,
+                &self.framework.key_manager,
+                self.framework.chainstate.get_chain_config(),
+                &tx,
+                &utxo_set,
+                destination_getter,
+            );
+            let tx = SignedTransaction::new(tx, witnesses).expect("invalid witness count");
+
             // flush new tokens info to the in-memory store
             let mut tokens_db = TokensAccountingDB::new(&mut self.tokens_accounting_store);
             tokens_db.merge_with_delta(new_tokens_delta).unwrap();
@@ -406,7 +421,7 @@ impl<'f> PoSBlockBuilder<'f> {
             pos_db.merge_with_delta(new_pos_accounting_delta).unwrap();
 
             // update used utxo set because this function can be called multiple times without flushing data to storage
-            tx.inputs().iter().for_each(|input| {
+            tx.transaction().inputs().iter().for_each(|input| {
                 match input {
                     TxInput::Utxo(utxo_outpoint) => {
                         self.used_utxo.insert(utxo_outpoint.clone());
@@ -420,16 +435,6 @@ impl<'f> PoSBlockBuilder<'f> {
                     }
                 };
             });
-
-            let witnesses = sign_witnesses(
-                rng,
-                &self.framework.key_manager,
-                self.framework.chainstate.get_chain_config(),
-                &tx,
-                &utxo_set,
-                &input_destinations,
-            );
-            let tx = SignedTransaction::new(tx, witnesses).expect("invalid witness count");
 
             self.add_transaction(tx)
         } else {

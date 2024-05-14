@@ -43,9 +43,9 @@ pub enum SignatureDestinationGetterError {
     #[error("Error accessing utxo set")]
     UtxoViewError(utxo::Error),
     #[error("During destination getting for signature verification: PoS accounting error {0}")]
-    SigVerifyPoSAccountingError(#[from] pos_accounting::Error),
+    PoSAccountingViewError(#[from] pos_accounting::Error),
     #[error("During destination getting for signature verification: Tokens accounting error {0}")]
-    SigVerifyTokensAccountingError(#[from] tokens_accounting::Error),
+    TokensAccountingViewError(#[from] tokens_accounting::Error),
 }
 
 /// Given a signed transaction input, which spends an output of some type,
@@ -69,11 +69,7 @@ pub struct SignatureDestinationGetter<'a> {
 }
 
 impl<'a> SignatureDestinationGetter<'a> {
-    pub fn new_for_transaction<
-        T: TokensAccountingView<Error = tokens_accounting::Error>,
-        P: PoSAccountingView<Error = pos_accounting::Error>,
-        U: UtxosView,
-    >(
+    pub fn new_for_transaction<T: TokensAccountingView, P: PoSAccountingView, U: UtxosView>(
         tokens_view: &'a T,
         accounting_view: &'a P,
         utxos_view: &'a U,
@@ -105,7 +101,12 @@ impl<'a> SignatureDestinationGetter<'a> {
                                 Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
                             }
                             TxOutput::DelegateStaking(_, delegation_id) => Ok(accounting_view
-                                .get_delegation_data(*delegation_id)?
+                                .get_delegation_data(*delegation_id)
+                                .map_err(|_| {
+                                    SignatureDestinationGetterError::PoSAccountingViewError(
+                                        pos_accounting::Error::ViewFail,
+                                    )
+                                })?
                                 .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(
                                     *delegation_id,
                                 ))?
@@ -123,7 +124,12 @@ impl<'a> SignatureDestinationGetter<'a> {
                                 // The only way we can spend this output in a transaction
                                 // (as opposed to block reward), is if we're decommissioning a pool.
                                 Ok(accounting_view
-                                    .get_pool_data(*pool_id)?
+                                    .get_pool_data(*pool_id)
+                                    .map_err(|_| {
+                                        SignatureDestinationGetterError::PoSAccountingViewError(
+                                            pos_accounting::Error::ViewFail,
+                                        )
+                                    })?
                                     .ok_or(SignatureDestinationGetterError::PoolDataNotFound(
                                         *pool_id,
                                     ))?
@@ -140,7 +146,12 @@ impl<'a> SignatureDestinationGetter<'a> {
                     }
                     TxInput::Account(outpoint) => match outpoint.account() {
                         AccountSpending::DelegationBalance(delegation_id, _) => Ok(accounting_view
-                            .get_delegation_data(*delegation_id)?
+                            .get_delegation_data(*delegation_id)
+                            .map_err(|_| {
+                                SignatureDestinationGetterError::PoSAccountingViewError(
+                                    pos_accounting::Error::ViewFail,
+                                )
+                            })?
                             .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(
                                 *delegation_id,
                             ))?
@@ -154,9 +165,16 @@ impl<'a> SignatureDestinationGetter<'a> {
                         | AccountCommand::FreezeToken(token_id, _)
                         | AccountCommand::UnfreezeToken(token_id)
                         | AccountCommand::ChangeTokenAuthority(token_id, _) => {
-                            let token_data = tokens_view.get_token_data(token_id)?.ok_or(
-                                SignatureDestinationGetterError::TokenDataNotFound(*token_id),
-                            )?;
+                            let token_data = tokens_view
+                                .get_token_data(token_id)
+                                .map_err(|_| {
+                                    SignatureDestinationGetterError::TokensAccountingViewError(
+                                        tokens_accounting::Error::ViewFail,
+                                    )
+                                })?
+                                .ok_or(SignatureDestinationGetterError::TokenDataNotFound(
+                                    *token_id,
+                                ))?;
                             let destination = match token_data {
                                 tokens_accounting::TokenData::FungibleToken(data) => {
                                     data.authority().clone()

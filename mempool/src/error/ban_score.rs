@@ -192,11 +192,11 @@ impl MempoolBanScore for SignatureDestinationGetterError {
             SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput => 100,
             SignatureDestinationGetterError::PoolDataNotFound(_) => 0,
             SignatureDestinationGetterError::DelegationDataNotFound(_) => 0,
-            SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
+            SignatureDestinationGetterError::PoSAccountingViewError(_) => 100,
             SignatureDestinationGetterError::UtxoOutputNotFound(_) => 0,
             SignatureDestinationGetterError::UtxoViewError(_) => 0,
             SignatureDestinationGetterError::TokenDataNotFound(_) => 0,
-            SignatureDestinationGetterError::SigVerifyTokensAccountingError(_) => 100,
+            SignatureDestinationGetterError::TokensAccountingViewError(_) => 100,
         }
     }
 }

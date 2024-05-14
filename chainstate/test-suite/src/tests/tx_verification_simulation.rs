@@ -28,8 +28,7 @@ use crypto::{
 
 #[rstest]
 #[trace]
-//#[case(Seed::from_entropy(), 20, 50)]
-#[case(414950556106312389.into(), 20, 50)]
+#[case(Seed::from_entropy(), 20, 50)]
 fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_block: usize) {
     utils::concurrency::model(move || {
         logging::init_logging();
@@ -96,7 +95,6 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
         // Generate a random chain
         let mut all_blocks = Vec::new();
         for _ in 0..rng.gen_range((max_blocks / 2)..max_blocks) {
-            println!("*** new block ***");
             let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
             for _ in 0..rng.gen_range(10..max_tx_per_block) {

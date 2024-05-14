@@ -478,8 +478,8 @@ impl BlockProcessingErrorClassification for SignatureDestinationGetterError {
             }
 
             SignatureDestinationGetterError::UtxoViewError(err) => err.classify(),
-            SignatureDestinationGetterError::SigVerifyPoSAccountingError(err) => err.classify(),
-            SignatureDestinationGetterError::SigVerifyTokensAccountingError(err) => err.classify(),
+            SignatureDestinationGetterError::PoSAccountingViewError(err) => err.classify(),
+            SignatureDestinationGetterError::TokensAccountingViewError(err) => err.classify(),
         }
     }
 }

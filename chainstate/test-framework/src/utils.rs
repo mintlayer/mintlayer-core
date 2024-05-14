@@ -41,6 +41,7 @@ use crypto::{
 };
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
 use randomness::{CryptoRng, Rng};
+use tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetter;
 use utxo::UtxosView;
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
@@ -341,7 +342,7 @@ pub fn sign_witnesses(
     chain_config: &ChainConfig,
     tx: &common::chain::Transaction,
     utxo_view: &impl UtxosView,
-    input_destinations: &[Destination],
+    destination_getter: SignatureDestinationGetter,
 ) -> Vec<InputWitness> {
     let inputs_utxos = tx
         .inputs()
@@ -359,8 +360,8 @@ pub fn sign_witnesses(
         .inputs()
         .iter()
         .enumerate()
-        .map(|(idx, _)| {
-            let dest = &input_destinations[idx];
+        .map(|(idx, input)| {
+            let dest = destination_getter.call(input).unwrap();
             key_manager
                 .get_signature(rng, &dest, chain_config, tx, &input_utxos_refs, idx)
                 .unwrap()
