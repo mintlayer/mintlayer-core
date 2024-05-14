@@ -56,6 +56,7 @@ where
     inputs.iter().enumerate().try_for_each(|(input_idx, input)| {
         // TODO: ensure that signature verification is tested in the test-suite, they seem to be tested only internally
         let destination = destination_getter.call(input)?;
+        println!("actual destination: {:?}", destination);
         verify_signature(
             chain_config,
             &destination,

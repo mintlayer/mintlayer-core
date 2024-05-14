@@ -48,7 +48,7 @@ use tokens_accounting::{
     InMemoryTokensAccounting, TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
     TokensAccountingOperations, TokensAccountingView,
 };
-use utxo::Utxo;
+use utxo::UtxosDBInMemoryImpl;
 
 // TODO: currently this returns random pool from store but only if it exists in delta. This gives None more often.
 //       There should be a way to return random result after delta is accounted.
@@ -91,18 +91,18 @@ pub trait StakingPoolsObserver {
 
 pub struct RandomTxMaker<'a> {
     chainstate: &'a TestChainstate,
-    utxo_set: &'a BTreeMap<UtxoOutPoint, Utxo>,
+    utxo_set: &'a UtxosDBInMemoryImpl,
     tokens_store: &'a InMemoryTokensAccounting,
     pos_accounting_store: &'a InMemoryPoSAccounting,
 
-    // Pool used to for staking cannot be spent
+    // Pool used for staking cannot be spent
     staking_pool: Option<PoolId>,
 
     account_nonce_getter: Box<dyn Fn(AccountType) -> Option<AccountNonce> + 'a>,
     account_nonce_tracker: BTreeMap<AccountType, AccountNonce>,
 
     // Transaction is composed of multiple inputs and outputs
-    // but pools, delegations and tokens can be created only using input0 so following flags are required
+    // but pools, delegations and tokens can be created only once per transaction
     token_can_be_issued: bool,
     stake_pool_can_be_created: bool,
     delegation_can_be_created: bool,
@@ -114,12 +114,14 @@ pub struct RandomTxMaker<'a> {
     // so we have to collect all burns for all tokens just in case.
     unmint_for: Option<TokenId>,
     total_tokens_burned: BTreeMap<TokenId, Amount>,
+
+    fee_input: Option<(TxInput, Destination, Amount)>,
 }
 
 impl<'a> RandomTxMaker<'a> {
     pub fn new(
         chainstate: &'a TestChainstate,
-        utxo_set: &'a BTreeMap<UtxoOutPoint, Utxo>,
+        utxo_set: &'a UtxosDBInMemoryImpl,
         tokens_store: &'a InMemoryTokensAccounting,
         pos_accounting_store: &'a InMemoryPoSAccounting,
         staking_pool: Option<PoolId>,
@@ -133,12 +135,13 @@ impl<'a> RandomTxMaker<'a> {
             staking_pool,
             account_nonce_getter,
             account_nonce_tracker: BTreeMap::new(),
-            token_can_be_issued: false,
+            token_can_be_issued: true,
             stake_pool_can_be_created: true,
             delegation_can_be_created: true,
-            account_command_used: true,
+            account_command_used: false,
             unmint_for: None,
             total_tokens_burned: BTreeMap::new(),
+            fee_input: None,
         }
     }
 
@@ -149,7 +152,7 @@ impl<'a> RandomTxMaker<'a> {
         key_manager: &mut KeyManager,
     ) -> (
         Transaction,
-        Vec<(Option<TxOutput>, Destination)>,
+        Vec<Destination>,
         TokensAccountingDeltaData,
         PoSAccountingDeltaData,
     ) {
@@ -160,7 +163,36 @@ impl<'a> RandomTxMaker<'a> {
         let mut pos_delta = PoSAccountingDelta::new(&pos_db);
 
         // Select random number of utxos to spend
-        let inputs_with_utxos = self.select_utxos(rng);
+        let inputs_with_utxos = {
+            let mut inputs_with_utxos = self.select_utxos(rng);
+
+            // Spending from a token account requires paying fee. Find sufficient utxo and put it aside.
+            if inputs_with_utxos.len() > 1 {
+                let fee = std::cmp::max(
+                    self.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero()),
+                    self.chainstate
+                        .get_chain_config()
+                        .token_change_authority_fee(BlockHeight::zero()),
+                );
+                let fee_input_position = inputs_with_utxos.iter().position(|(_, input_utxo)| {
+                    super::get_output_value(input_utxo)
+                        .map(|v| v.coin_amount().unwrap_or(Amount::ZERO) >= fee)
+                        .unwrap_or(false)
+                });
+
+                if let Some(index) = fee_input_position {
+                    self.fee_input = Some(inputs_with_utxos.remove(index)).map(|v| {
+                        (
+                            v.0,
+                            self.get_destination_for_utxo(&v.1),
+                            super::get_output_value(&v.1).unwrap().coin_amount().unwrap(),
+                        )
+                    })
+                }
+            }
+
+            inputs_with_utxos
+        };
 
         // Spend selected utxos
         let (inputs, mut outputs) = self.create_utxo_spending(
@@ -175,40 +207,17 @@ impl<'a> RandomTxMaker<'a> {
         // Select random number of accounts to spend from
         let account_inputs = self.select_accounts(rng);
 
-        // Spending from a token account requires paying fee. Find sufficient utxo per account input.
-        let fee = self.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
-        let fee_inputs = inputs
-            .iter()
-            .filter_map(|(inp, inp_utxo)| {
-                inp_utxo
-                    .as_ref()
-                    .and_then(super::get_output_value)
-                    .map(|v| v.coin_amount().unwrap_or(Amount::ZERO) >= fee)
-                    .and(Some((
-                        inp.clone(),
-                        self.utxo_to_spend_destination(inp_utxo.as_ref().unwrap()),
-                    )))
-            })
-            .collect::<Vec<(TxInput, Destination)>>();
-
         let (account_inputs, account_outputs) = self.create_account_spending(
             rng,
             &mut tokens_cache,
             &pos_db,
             &mut pos_delta,
             &account_inputs,
-            fee_inputs,
             key_manager,
         );
 
-        let mut inputs: Vec<_> = inputs
-            .into_iter()
-            .map(|(inp, utxo)| {
-                let dest = self.utxo_to_spend_destination(utxo.as_ref().unwrap());
-                (inp, (utxo, dest))
-            })
-            .chain(account_inputs.into_iter().map(|(inp, dest)| (inp, (None, dest))))
-            .collect();
+        //println!("---\ninputs {:?}", inputs);
+        let mut inputs: Vec<_> = inputs.into_iter().chain(account_inputs).collect();
 
         outputs.extend(account_outputs);
 
@@ -218,7 +227,7 @@ impl<'a> RandomTxMaker<'a> {
         }
         outputs.shuffle(rng);
 
-        let (inputs, input_utxos): (Vec<_>, Vec<_>) = inputs.into_iter().unzip();
+        let (inputs, input_destinations): (Vec<_>, Vec<_>) = inputs.into_iter().unzip();
 
         // now that the inputs are in place calculate the ids and replace dummy values
         let (outputs, new_staking_pools) =
@@ -249,16 +258,22 @@ impl<'a> RandomTxMaker<'a> {
             }
         });
 
-        (tx, input_utxos, tokens_cache.consume(), pos_delta.consume())
+        (
+            tx,
+            input_destinations,
+            tokens_cache.consume(),
+            pos_delta.consume(),
+        )
     }
 
-    fn select_utxos(&self, rng: &mut impl Rng) -> Vec<(UtxoOutPoint, TxOutput)> {
+    fn select_utxos(&self, rng: &mut impl Rng) -> Vec<(TxInput, TxOutput)> {
         let number_of_inputs = rng.gen_range(1..5);
         self.utxo_set
+            .utxos()
             .iter()
             .choose_multiple(rng, number_of_inputs)
             .iter()
-            .map(|(outpoint, utxo)| ((*outpoint).clone(), utxo.output().clone()))
+            .map(|(outpoint, utxo)| (TxInput::Utxo((*outpoint).clone()), utxo.output().clone()))
             .collect()
     }
 
@@ -316,7 +331,6 @@ impl<'a> RandomTxMaker<'a> {
         pos_accounting_latest: &mut (impl PoSAccountingView
                   + PoSAccountingOperations<PoSAccountingUndo>),
         accounts: &[AccountType],
-        mut fee_inputs: Vec<(TxInput, Destination)>,
         key_manager: &mut KeyManager,
     ) -> (Vec<(TxInput, Destination)>, Vec<TxOutput>) {
         let mut result_inputs = Vec::new();
@@ -364,25 +378,15 @@ impl<'a> RandomTxMaker<'a> {
                     }
                 }
                 AccountType::Token(token_id) => {
-                    if let Some(fee_input) = fee_inputs.pop() {
-                        let (inputs, outputs) = self.create_token_account_spending(
-                            rng,
-                            tokens_cache,
-                            token_id,
-                            &fee_input,
-                            key_manager,
-                        );
+                    let (inputs, outputs) = self.create_token_account_spending(
+                        rng,
+                        tokens_cache,
+                        token_id,
+                        key_manager,
+                    );
 
-                        if !inputs.is_empty() {
-                            // no inputs were created meaning fee input was not used and can be put back
-                            fee_inputs.push(fee_input)
-
-                            // TODO: transfer the change from fee inputs
-                        }
-
-                        result_inputs.extend(inputs);
-                        result_outputs.extend(outputs);
-                    }
+                    result_inputs.extend(inputs);
+                    result_outputs.extend(outputs);
                 }
             }
         }
@@ -395,12 +399,13 @@ impl<'a> RandomTxMaker<'a> {
         rng: &mut (impl Rng + CryptoRng),
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         token_id: TokenId,
-        fee_input: &(TxInput, Destination),
         key_manager: &mut KeyManager,
     ) -> (Vec<(TxInput, Destination)>, Vec<TxOutput>) {
         if !self.account_command_used {
             return (Vec::new(), Vec::new());
         }
+
+        let (fee_input, fee_destination, fee_available_amount) = self.fee_input.clone().unwrap();
 
         let token_data = tokens_cache.get_token_data(&token_id).unwrap().unwrap();
         let tokens_accounting::TokenData::FungibleToken(token_data) = token_data;
@@ -415,10 +420,18 @@ impl<'a> RandomTxMaker<'a> {
 
                 let _ = tokens_cache.unfreeze_token(token_id).unwrap();
                 self.account_command_used = true;
+                self.fee_input = None;
+
+                let required_fee =
+                    self.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
+                let fee_change_output = TxOutput::Transfer(
+                    OutputValue::Coin((fee_available_amount - required_fee).unwrap()),
+                    Destination::AnyoneCanSpend,
+                );
 
                 (
-                    vec![(account_input, token_authority), fee_input.clone()],
-                    Vec::new(),
+                    vec![(account_input, token_authority), (fee_input, fee_destination)],
+                    vec![fee_change_output],
                 )
             } else {
                 (Vec::new(), Vec::new())
@@ -439,10 +452,18 @@ impl<'a> RandomTxMaker<'a> {
 
                 let _ = tokens_cache.freeze_token(token_id, unfreezable).unwrap();
                 self.account_command_used = true;
+                self.fee_input = None;
+
+                let required_fee =
+                    self.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
+                let fee_change_output = TxOutput::Transfer(
+                    OutputValue::Coin((fee_available_amount - required_fee).unwrap()),
+                    Destination::AnyoneCanSpend,
+                );
 
                 (
-                    vec![(account_input, token_authority), fee_input.clone()],
-                    Vec::new(),
+                    vec![(account_input, token_authority), (fee_input, fee_destination)],
+                    vec![fee_change_output],
                 )
             } else {
                 (Vec::new(), Vec::new())
@@ -450,18 +471,29 @@ impl<'a> RandomTxMaker<'a> {
         } else if rng.gen_bool(0.1) {
             // Change token authority
             let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
-            let destination = key_manager.new_destination(self.chainstate.get_chain_config(), rng);
+            let new_authority =
+                key_manager.new_destination(self.chainstate.get_chain_config(), rng);
             let account_input = TxInput::AccountCommand(
                 new_nonce,
-                AccountCommand::ChangeTokenAuthority(token_id, destination.clone()),
+                AccountCommand::ChangeTokenAuthority(token_id, new_authority.clone()),
             );
 
-            let _ = tokens_cache.change_authority(token_id, destination).unwrap();
+            let _ = tokens_cache.change_authority(token_id, new_authority).unwrap();
             self.account_command_used = true;
+            self.fee_input = None;
+
+            let required_fee = self
+                .chainstate
+                .get_chain_config()
+                .token_change_authority_fee(BlockHeight::zero());
+            let fee_change_output = TxOutput::Transfer(
+                OutputValue::Coin((fee_available_amount - required_fee).unwrap()),
+                Destination::AnyoneCanSpend,
+            );
 
             (
-                vec![(account_input, token_authority), fee_input.clone()],
-                Vec::new(),
+                vec![(account_input, token_authority), (fee_input, fee_destination)],
+                vec![fee_change_output],
             )
         } else if !token_data.is_locked() {
             if rng.gen_bool(0.9) {
@@ -484,16 +516,27 @@ impl<'a> RandomTxMaker<'a> {
                     AccountCommand::MintTokens(token_id, to_mint),
                 );
 
-                let outputs = vec![TxOutput::Transfer(
-                    OutputValue::TokenV1(token_id, to_mint),
-                    key_manager.new_destination(self.chainstate.get_chain_config(), rng),
-                )];
+                let required_fee =
+                    self.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
+                let fee_change_output = TxOutput::Transfer(
+                    OutputValue::Coin((fee_available_amount - required_fee).unwrap()),
+                    Destination::AnyoneCanSpend,
+                );
+
+                let outputs = vec![
+                    TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, to_mint),
+                        key_manager.new_destination(self.chainstate.get_chain_config(), rng),
+                    ),
+                    fee_change_output,
+                ];
 
                 let _ = tokens_cache.mint_tokens(token_id, to_mint).unwrap();
                 self.account_command_used = true;
+                self.fee_input = None;
 
                 (
-                    vec![(account_input, token_authority), fee_input.clone()],
+                    vec![(account_input, token_authority), (fee_input, fee_destination)],
                     outputs,
                 )
             } else {
@@ -510,10 +553,20 @@ impl<'a> RandomTxMaker<'a> {
 
                     let _ = tokens_cache.lock_circulating_supply(token_id).unwrap();
                     self.account_command_used = true;
+                    self.fee_input = None;
+
+                    let required_fee = self
+                        .chainstate
+                        .get_chain_config()
+                        .token_supply_change_fee(BlockHeight::zero());
+                    let fee_change_output = TxOutput::Transfer(
+                        OutputValue::Coin((fee_available_amount - required_fee).unwrap()),
+                        Destination::AnyoneCanSpend,
+                    );
 
                     (
-                        vec![(account_input, token_authority), fee_input.clone()],
-                        Vec::new(),
+                        vec![(account_input, token_authority), (fee_input, fee_destination)],
+                        vec![fee_change_output],
                     )
                 } else {
                     (Vec::new(), Vec::new())
@@ -532,29 +585,26 @@ impl<'a> RandomTxMaker<'a> {
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
         key_manager: &mut KeyManager,
-        inputs: Vec<(UtxoOutPoint, TxOutput)>,
-    ) -> (Vec<(TxInput, Option<TxOutput>)>, Vec<TxOutput>) {
+        inputs: Vec<(TxInput, TxOutput)>,
+    ) -> (Vec<(TxInput, Destination)>, Vec<TxOutput>) {
         let mut result_inputs = Vec::new();
         let mut result_outputs = Vec::new();
-        let mut fee_input_to_change_supply: Option<TxInput> = None;
 
-        for (outpoint, input_utxo) in inputs.iter() {
-            let (new_inputs, new_outputs) = match input_utxo {
+        for (input, input_utxo) in inputs.into_iter() {
+            let (new_inputs, new_outputs) = match &input_utxo {
                 TxOutput::Transfer(v, _) => self.spend_output_value(
                     rng,
                     tokens_cache,
                     pos_accounting_cache,
-                    &mut fee_input_to_change_supply,
-                    outpoint.clone(),
+                    input,
+                    &input_utxo,
                     v,
-                    inputs.len(),
-                    input_utxo.clone(),
                     key_manager,
                 ),
                 TxOutput::LockThenTransfer(v, _, timelock) => {
                     let utxo_block_height = self
                         .chainstate
-                        .utxo(outpoint)
+                        .utxo(input.utxo_outpoint().unwrap())
                         .unwrap()
                         .unwrap()
                         .source()
@@ -585,10 +635,10 @@ impl<'a> RandomTxMaker<'a> {
                     let timelock_passed = tx_verifier::timelock_check::check_timelock(
                         &utxo_block_height,
                         &time_of_tx,
-                        timelock,
+                        &timelock,
                         &current_height,
                         &current_time,
-                        outpoint,
+                        input.utxo_outpoint().unwrap(),
                     )
                     .is_ok();
 
@@ -597,11 +647,9 @@ impl<'a> RandomTxMaker<'a> {
                             rng,
                             tokens_cache,
                             pos_accounting_cache,
-                            &mut fee_input_to_change_supply,
-                            outpoint.clone(),
+                            input,
+                            &input_utxo,
                             v,
-                            inputs.len(),
-                            input_utxo.clone(),
                             key_manager,
                         )
                     } else {
@@ -611,12 +659,9 @@ impl<'a> RandomTxMaker<'a> {
                 TxOutput::CreateStakePool(pool_id, _)
                 | TxOutput::ProduceBlockFromStake(_, pool_id) => {
                     if !self.staking_pool.is_some_and(|id| id == *pool_id) && rng.gen_bool(0.1) {
-                        let staker_balance = pos_accounting_cache
-                            .get_pool_data(*pool_id)
-                            .unwrap()
-                            .unwrap()
-                            .staker_balance()
-                            .unwrap();
+                        let pool_data =
+                            pos_accounting_cache.get_pool_data(*pool_id).unwrap().unwrap();
+                        let staker_balance = pool_data.staker_balance().unwrap();
                         let _ = pos_accounting_cache.decommission_pool(*pool_id).unwrap();
                         staking_pools_observer.on_pool_decommissioned(*pool_id);
 
@@ -627,7 +672,7 @@ impl<'a> RandomTxMaker<'a> {
                                 self.chainstate.get_best_block_height().unwrap(),
                             );
                         (
-                            vec![(TxInput::Utxo(outpoint.clone()), Some(input_utxo.clone()))],
+                            vec![(input, pool_data.decommission_destination().clone())],
                             vec![TxOutput::LockThenTransfer(
                                 OutputValue::Coin(staker_balance),
                                 key_manager
@@ -640,15 +685,13 @@ impl<'a> RandomTxMaker<'a> {
                     }
                 }
                 TxOutput::IssueNft(token_id, _, _) => {
-                    let (mut new_inputs, new_outputs) = self.spend_tokens_v1(
+                    let (new_inputs, new_outputs) = self.spend_tokens_v1(
                         rng,
                         tokens_cache,
                         *token_id,
                         Amount::from_atoms(1),
-                        &mut fee_input_to_change_supply,
                         key_manager,
                     );
-                    new_inputs.push((TxInput::Utxo(outpoint.clone()), Some(input_utxo.clone())));
                     (new_inputs, new_outputs)
                 }
                 TxOutput::Burn(_)
@@ -859,34 +902,19 @@ impl<'a> RandomTxMaker<'a> {
         rng: &mut (impl Rng + CryptoRng),
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
-        fee_input_to_change_supply: &mut Option<TxInput>,
-        utxo_outpoint: UtxoOutPoint,
-        output_value: &OutputValue,
-        num_inputs: usize,
-        input_utxo: TxOutput,
+        input: TxInput,
+        input_utxo: &TxOutput,
+        input_utxo_value: &OutputValue,
         key_manager: &mut KeyManager,
-    ) -> (Vec<(TxInput, Option<TxOutput>)>, Vec<TxOutput>) {
-        let mut result_inputs = Vec::new();
+    ) -> (Vec<(TxInput, Destination)>, Vec<TxOutput>) {
+        let input_destination = self.get_destination_for_utxo(input_utxo);
+        let mut result_inputs = vec![(input, input_destination)];
         let mut result_outputs = Vec::new();
 
-        match output_value {
+        match input_utxo_value {
             OutputValue::Coin(coins) => {
-                // save utxo for a potential token supply change fee
-                if *coins
-                    >= self
-                        .chainstate
-                        .get_chain_config()
-                        .token_supply_change_fee(BlockHeight::zero())
-                    && fee_input_to_change_supply.is_none()
-                    && num_inputs > 1
-                {
-                    *fee_input_to_change_supply = Some(TxInput::Utxo(utxo_outpoint.clone()));
-                } else {
-                    let new_outputs =
-                        self.spend_coins(rng, *coins, pos_accounting_cache, key_manager);
-                    result_inputs.push((TxInput::Utxo(utxo_outpoint), Some(input_utxo)));
-                    result_outputs.extend(new_outputs);
-                }
+                let new_outputs = self.spend_coins(rng, *coins, pos_accounting_cache, key_manager);
+                result_outputs.extend(new_outputs);
             }
             OutputValue::TokenV0(_) => {
                 unimplemented!("deprecated tokens version")
@@ -901,10 +929,8 @@ impl<'a> RandomTxMaker<'a> {
                             tokens_cache,
                             *token_id,
                             *amount,
-                            fee_input_to_change_supply,
                             key_manager,
                         );
-                        result_inputs.push((TxInput::Utxo(utxo_outpoint), Some(input_utxo)));
                         result_inputs.extend(new_inputs);
                         result_outputs.extend(new_outputs);
                     }
@@ -921,9 +947,8 @@ impl<'a> RandomTxMaker<'a> {
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         token_id: TokenId,
         amount: Amount,
-        fee_input: &mut Option<TxInput>,
         key_manager: &mut KeyManager,
-    ) -> (Vec<(TxInput, Option<TxOutput>)>, Vec<TxOutput>) {
+    ) -> (Vec<(TxInput, Destination)>, Vec<TxOutput>) {
         let atoms_vec = test_utils::split_value(rng, amount.into_atoms());
         let mut result_inputs = Vec::new();
         let mut result_outputs = Vec::new();
@@ -940,9 +965,12 @@ impl<'a> RandomTxMaker<'a> {
                 let token_data = tokens_cache.get_token_data(&token_id).unwrap();
 
                 // check token_data as well because it can be an nft
-                if let (Some(fee_tx_input), Some(token_data)) = (&fee_input, token_data) {
+                if let Some(token_data) = token_data {
                     let tokens_accounting::TokenData::FungibleToken(token_data) = token_data;
-                    if !token_data.is_locked() && !token_data.is_frozen() {
+                    if !token_data.is_locked()
+                        && !token_data.is_frozen()
+                        && self.fee_input.is_some()
+                    {
                         let to_unmint = Amount::from_atoms(atoms);
 
                         let circulating_supply =
@@ -954,17 +982,33 @@ impl<'a> RandomTxMaker<'a> {
                             new_nonce,
                             AccountCommand::UnmintTokens(token_id),
                         );
-                        result_inputs
-                            .extend(vec![(account_input, None), (fee_tx_input.clone(), None)]);
 
-                        let outputs =
-                            vec![TxOutput::Burn(OutputValue::TokenV1(token_id, to_unmint))];
+                        let (fee_input, fee_destination, fee_available_amount) =
+                            self.fee_input.take().unwrap();
+
+                        result_inputs.extend(vec![
+                            (account_input, token_data.authority().clone()),
+                            (fee_input, fee_destination),
+                        ]);
+
+                        let required_fee = self
+                            .chainstate
+                            .get_chain_config()
+                            .token_supply_change_fee(BlockHeight::zero());
+                        let fee_change_output = TxOutput::Transfer(
+                            OutputValue::Coin((fee_available_amount - required_fee).unwrap()),
+                            Destination::AnyoneCanSpend,
+                        );
+
+                        let outputs = vec![
+                            TxOutput::Burn(OutputValue::TokenV1(token_id, to_unmint)),
+                            fee_change_output,
+                        ];
                         result_outputs.extend(outputs);
 
                         self.unmint_for = Some(token_id);
                         self.account_command_used = true;
                     }
-                    *fee_input = None;
                 }
             } else {
                 // burn
@@ -1048,7 +1092,7 @@ impl<'a> RandomTxMaker<'a> {
         (outputs, new_staking_pools)
     }
 
-    fn utxo_to_spend_destination(&self, utxo: &TxOutput) -> Destination {
+    fn get_destination_for_utxo(&self, utxo: &TxOutput) -> Destination {
         match utxo {
             TxOutput::Transfer(_, d)
             | TxOutput::LockThenTransfer(_, d, _)

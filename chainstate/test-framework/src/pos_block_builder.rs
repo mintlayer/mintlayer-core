@@ -370,6 +370,7 @@ impl<'f> PoSBlockBuilder<'f> {
             .into_iter()
             .filter(|(outpoint, _)| !self.used_utxo.contains(outpoint))
             .collect();
+        let utxo_set = utxo::UtxosDBInMemoryImpl::new(self.prev_block_hash, utxo_set);
 
         let account_nonce_getter = Box::new(|account: AccountType| -> Option<AccountNonce> {
             self.account_nonce_tracker.get(&account).copied().or_else(|| {
@@ -378,7 +379,7 @@ impl<'f> PoSBlockBuilder<'f> {
             })
         });
 
-        let (tx, input_utxos, new_tokens_delta, new_pos_accounting_delta) =
+        let (tx, input_destinations, new_tokens_delta, new_pos_accounting_delta) =
             super::random_tx_maker::RandomTxMaker::new(
                 &self.framework.chainstate,
                 &utxo_set,
@@ -392,6 +393,8 @@ impl<'f> PoSBlockBuilder<'f> {
                 &mut self.framework.staking_pools,
                 &mut self.framework.key_manager,
             );
+
+        println!("\n------------ {:?}", tx);
 
         if !tx.inputs().is_empty() && !tx.outputs().is_empty() {
             // flush new tokens info to the in-memory store
@@ -423,7 +426,8 @@ impl<'f> PoSBlockBuilder<'f> {
                 &self.framework.key_manager,
                 self.framework.chainstate.get_chain_config(),
                 &tx,
-                input_utxos,
+                &utxo_set,
+                &input_destinations,
             );
             let tx = SignedTransaction::new(tx, witnesses).expect("invalid witness count");
 

@@ -39,9 +39,9 @@ use crypto::{
     key::{PrivateKey, PublicKey},
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
-use itertools::Itertools;
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
 use randomness::{CryptoRng, Rng};
+use utxo::UtxosView;
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
     use randomness::SliceRandom;
@@ -340,18 +340,33 @@ pub fn sign_witnesses(
     key_manager: &KeyManager,
     chain_config: &ChainConfig,
     tx: &common::chain::Transaction,
-    input_utxos: Vec<(Option<TxOutput>, Destination)>,
+    utxo_view: &impl UtxosView,
+    input_destinations: &[Destination],
 ) -> Vec<InputWitness> {
-    let input_utxos_refs = input_utxos.iter().map(|(utxo, _)| utxo.as_ref()).collect_vec();
-    let witnesses = input_utxos
+    let inputs_utxos = tx
+        .inputs()
+        .iter()
+        .map(|input| match input {
+            TxInput::Utxo(outpoint) => {
+                Some(utxo_view.utxo(outpoint).unwrap().unwrap().output().clone())
+            }
+            TxInput::Account(..) | TxInput::AccountCommand(..) => None,
+        })
+        .collect::<Vec<_>>();
+    let input_utxos_refs = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
+
+    let witnesses = tx
+        .inputs()
         .iter()
         .enumerate()
-        .map(|(idx, (_, dest))| {
+        .map(|(idx, _)| {
+            let dest = &input_destinations[idx];
             key_manager
-                .get_signature(rng, dest, chain_config, tx, &input_utxos_refs, idx)
+                .get_signature(rng, &dest, chain_config, tx, &input_utxos_refs, idx)
                 .unwrap()
         })
         .collect();
+
     witnesses
 }
 
