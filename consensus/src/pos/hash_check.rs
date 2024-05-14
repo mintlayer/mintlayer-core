@@ -15,15 +15,11 @@
 
 use chainstate_types::pos_randomness::PoSRandomness;
 use common::{
-    chain::{
-        block::{consensus_data::PoSData, timestamp::BlockTimestamp},
-        config::EpochIndex,
-        PoSConsensusVersion,
-    },
+    chain::{block::timestamp::BlockTimestamp, config::EpochIndex, PoSConsensusVersion},
     primitives::Amount,
     Uint256, Uint512,
 };
-use crypto::vrf::VRFPublicKey;
+use crypto::vrf::{VRFPublicKey, VRFReturn};
 use utils::ensure;
 
 use crate::pos::error::ConsensusPoSError;
@@ -31,33 +27,15 @@ use crate::pos::error::ConsensusPoSError;
 use super::effective_pool_balance::effective_pool_balance;
 
 fn check_pos_hash_v0(
-    epoch_index: EpochIndex,
-    random_seed: &PoSRandomness,
-    pos_data: &PoSData,
-    vrf_pub_key: &VRFPublicKey,
-    block_timestamp: BlockTimestamp,
+    hash: &Uint256,
+    target: &Uint256,
     pool_balance: Amount,
 ) -> Result<(), ConsensusPoSError> {
-    let target: Uint256 = pos_data
-        .compact_target()
-        .try_into()
-        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(pos_data.compact_target()))?;
-
-    let hash: Uint256 = PoSRandomness::from_block(
-        epoch_index,
-        block_timestamp,
-        random_seed,
-        pos_data,
-        vrf_pub_key,
-    )?
-    .value()
-    .into();
-
-    let hash: Uint512 = hash.into();
+    let hash: Uint512 = (*hash).into();
     let pool_balance: Uint512 = pool_balance.into();
 
     ensure!(
-        hash <= (pool_balance * target.into())
+        hash <= (pool_balance * (*target).into())
             .expect("Cannot fail because both were converted from smaller type"),
         ConsensusPoSError::StakeKernelHashTooHigh
     );
@@ -67,36 +45,19 @@ fn check_pos_hash_v0(
 
 #[allow(clippy::too_many_arguments)]
 fn check_pos_hash_v1(
-    epoch_index: EpochIndex,
-    random_seed: &PoSRandomness,
-    pos_data: &PoSData,
-    vrf_pub_key: &VRFPublicKey,
-    block_timestamp: BlockTimestamp,
+    hash: &Uint256,
+    target: &Uint256,
     pledge_amount: Amount,
     pool_balance: Amount,
     final_supply: Amount,
 ) -> Result<(), ConsensusPoSError> {
-    let target: Uint256 = pos_data
-        .compact_target()
-        .try_into()
-        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(pos_data.compact_target()))?;
-
-    let hash: Uint256 = PoSRandomness::from_block(
-        epoch_index,
-        block_timestamp,
-        random_seed,
-        pos_data,
-        vrf_pub_key,
-    )?
-    .value()
-    .into();
-    let hash: Uint512 = hash.into();
+    let hash: Uint512 = (*hash).into();
 
     let effective_balance = effective_pool_balance(pledge_amount, pool_balance, final_supply)?;
     let effective_balance: Uint512 = effective_balance.into();
 
     ensure!(
-        hash <= (effective_balance * target.into())
+        hash <= (effective_balance * (*target).into())
             .expect("Cannot fail because both were converted from smaller type"),
         ConsensusPoSError::StakeKernelHashTooHigh
     );
@@ -104,37 +65,52 @@ fn check_pos_hash_v1(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn check_pos_hash(
+    consensus_version: PoSConsensusVersion,
+    hash: &Uint256,
+    target: &Uint256,
+    pledge_amount: Amount,
+    pool_balance: Amount,
+    final_supply: Amount,
+) -> Result<(), ConsensusPoSError> {
+    match consensus_version {
+        PoSConsensusVersion::V0 => check_pos_hash_v0(hash, target, pool_balance),
+        PoSConsensusVersion::V1 => {
+            check_pos_hash_v1(hash, target, pledge_amount, pool_balance, final_supply)
+        }
+        _ => Err(ConsensusPoSError::UnsupportedConsensusVersion),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn calc_and_check_pos_hash(
     consensus_version: PoSConsensusVersion,
     epoch_index: EpochIndex,
     random_seed: &PoSRandomness,
-    pos_data: &PoSData,
+    target: &Uint256,
+    vrf_data: &VRFReturn,
     vrf_pub_key: &VRFPublicKey,
     block_timestamp: BlockTimestamp,
     pledge_amount: Amount,
     pool_balance: Amount,
     final_supply: Amount,
 ) -> Result<(), ConsensusPoSError> {
-    match consensus_version {
-        PoSConsensusVersion::V0 => check_pos_hash_v0(
-            epoch_index,
-            random_seed,
-            pos_data,
-            vrf_pub_key,
-            block_timestamp,
-            pool_balance,
-        ),
-        PoSConsensusVersion::V1 => check_pos_hash_v1(
-            epoch_index,
-            random_seed,
-            pos_data,
-            vrf_pub_key,
-            block_timestamp,
-            pledge_amount,
-            pool_balance,
-            final_supply,
-        ),
-        _ => Err(ConsensusPoSError::UnsupportedConsensusVersion),
-    }
+    let hash: Uint256 = PoSRandomness::from_block(
+        epoch_index,
+        block_timestamp,
+        random_seed,
+        vrf_data,
+        vrf_pub_key,
+    )?
+    .value()
+    .into();
+
+    check_pos_hash(
+        consensus_version,
+        &hash,
+        target,
+        pledge_amount,
+        pool_balance,
+        final_supply,
+    )
 }

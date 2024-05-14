@@ -19,7 +19,6 @@ use crate::{
 };
 use chainstate_types::{
     pos_randomness::PoSRandomness, vrf_tools::construct_transcript, BlockIndex, GenBlockIndex,
-    PropertyQueryError,
 };
 use common::{
     chain::block::{
@@ -135,8 +134,6 @@ pub struct PoSFinalizeBlockInputData {
     epoch_index: EpochIndex,
     /// The sealed epoch randomness (i.e used in producing VRF data)
     sealed_epoch_randomness: PoSRandomness,
-    /// The maximum timestamp to try and staking with
-    max_block_timestamp: BlockTimestamp,
     /// The amount pledged to the pool
     pledge_amount: Amount,
     /// The current pool balance of the stake pool
@@ -149,7 +146,6 @@ impl PoSFinalizeBlockInputData {
         vrf_private_key: VRFPrivateKey,
         epoch_index: EpochIndex,
         sealed_epoch_randomness: PoSRandomness,
-        max_block_timestamp: BlockTimestamp,
         pledge_amount: Amount,
         pool_balance: Amount,
     ) -> Self {
@@ -158,7 +154,6 @@ impl PoSFinalizeBlockInputData {
             vrf_private_key,
             epoch_index,
             sealed_epoch_randomness,
-            max_block_timestamp,
             pledge_amount,
             pool_balance,
         }
@@ -166,10 +161,6 @@ impl PoSFinalizeBlockInputData {
 
     pub fn epoch_index(&self) -> EpochIndex {
         self.epoch_index
-    }
-
-    pub fn max_block_timestamp(&self) -> BlockTimestamp {
-        self.max_block_timestamp
     }
 
     pub fn pool_balance(&self) -> Amount {
@@ -210,7 +201,7 @@ pub fn generate_pos_consensus_data_and_reward<G, R: Rng + CryptoRng>(
     rng: R,
 ) -> Result<(ConsensusData, BlockReward), ConsensusCreationError>
 where
-    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
 {
     let reward_destination = Destination::PublicKey(pos_input_data.stake_public_key());
 

@@ -14,16 +14,17 @@
 // limitations under the License.
 
 pub mod job_manager;
+pub mod utils;
 
 use std::{
     cmp,
     sync::{mpsc, Arc},
 };
 
-use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle, PropertyQueryError};
-use chainstate_types::{
-    pos_randomness::PoSRandomness, BlockIndex, GenBlockIndex, GetAncestorError,
-};
+use tokio::sync::oneshot;
+
+use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
+use chainstate_types::{pos_randomness::PoSRandomness, GenBlockIndex};
 use common::{
     chain::{
         block::{
@@ -36,8 +37,8 @@ use common::{
     time_getter::TimeGetter,
 };
 use consensus::{
-    generate_consensus_data_and_reward, ConsensusCreationError, ConsensusPoSError,
-    FinalizeBlockInputData, GenerateBlockInputData, PoSFinalizeBlockInputData,
+    generate_consensus_data_and_reward, FinalizeBlockInputData, GenerateBlockInputData,
+    PoSFinalizeBlockInputData, PoSGenerateBlockInputData,
 };
 use crypto::ephemeral_e2e::{self, EndToEndPrivateKey};
 use logging::log;
@@ -48,9 +49,11 @@ use mempool::{
 use p2p::P2pHandle;
 use randomness::{make_true_rng, Rng};
 use serialization::{Decode, Encode};
-use tokio::sync::oneshot;
-use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
-use utils::once_destructor::OnceDestructor;
+
+use ::utils::{
+    atomics::{AcqRelAtomicU64, RelaxedAtomicBool},
+    once_destructor::OnceDestructor,
+};
 
 use crate::{
     config::BlockProdConfig,
@@ -58,11 +61,10 @@ use crate::{
     BlockProductionError,
 };
 
-#[derive(Debug, Clone)]
-pub enum TransactionsSource {
-    Mempool,
-    Provided(Vec<SignedTransaction>),
-}
+use self::utils::{
+    get_best_block_index, get_pool_balances_at_height, get_pool_staker_balance,
+    get_pool_total_balance, get_sealed_epoch_randomness, make_ancestor_getter, timestamp_add_secs,
+};
 
 pub const JOBKEY_DEFAULT_LEN: usize = 32;
 
@@ -84,8 +86,10 @@ pub struct CustomId {
 
 impl CustomId {
     pub fn new_from_entropy() -> Self {
-        let mut rng = make_true_rng();
+        Self::new_from_rng(&mut make_true_rng())
+    }
 
+    pub fn new_from_rng(rng: &mut impl Rng) -> Self {
         Self {
             data: rng.gen::<[u8; JOBKEY_DEFAULT_LEN]>().into(),
         }
@@ -235,56 +239,22 @@ impl BlockProduction {
             .call({
                 let chain_config = Arc::clone(&self.chain_config);
 
-                let current_timestamp = BlockTimestamp::from_time(self.time_getter().get_time());
-
-                move |this| {
-                    let best_block_index = this
-                        .get_best_block_index()
-                        .map_err(|_| ConsensusCreationError::BestBlockIndexNotFound)?;
-
-                    let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
-                        this.get_ancestor(
-                            &block_index.clone().into_gen_block_index(),
-                            ancestor_height,
-                        )
-                        .map_err(|_| {
-                            PropertyQueryError::GetAncestorError(
-                                GetAncestorError::InvalidAncestorHeight {
-                                    block_height: block_index.block_height(),
-                                    ancestor_height,
-                                },
-                            )
-                        })
-                    };
+                move |cs| -> Result<_, BlockProductionError> {
+                    let best_block_index = get_best_block_index(cs)?;
 
                     let best_block_id = best_block_index.block_id();
                     let current_tip_median_time_past =
-                        this.calculate_median_time_past(&best_block_id).map_err(|err| {
-                            ConsensusPoSError::ChainstateError(
+                        cs.calculate_median_time_past(&best_block_id).map_err(|err| {
+                            BlockProductionError::ChainstateError(
                                 consensus::ChainstateError::FailedToCalculateMedianTimePast(
                                     best_block_id,
                                     err.to_string(),
                                 ),
                             )
                         })?;
-                    let block_height = best_block_index.block_height().next_height();
-                    let sealed_epoch_index = chain_config.sealed_epoch_index(&block_height);
-
-                    let sealed_epoch_randomness = sealed_epoch_index
-                        .map(|index| this.get_epoch_data(index))
-                        .transpose()
-                        .map_err(|err| {
-                            ConsensusPoSError::ChainstateError(
-                                consensus::ChainstateError::FailedToObtainEpochData(
-                                    block_height,
-                                    err.to_string(),
-                                ),
-                            )
-                        })?
-                        .flatten()
-                        .map_or(PoSRandomness::at_genesis(&chain_config), |epoch_data| {
-                            *epoch_data.randomness()
-                        });
+                    let new_block_height = best_block_index.block_height().next_height();
+                    let sealed_epoch_randomness =
+                        get_sealed_epoch_randomness(&chain_config, cs, new_block_height)?;
 
                     let (consensus_data, block_reward) = generate_consensus_data_and_reward(
                         &chain_config,
@@ -292,15 +262,15 @@ impl BlockProduction {
                         sealed_epoch_randomness,
                         input_data.clone(),
                         BlockTimestamp::from_time(time_getter.get_time()),
-                        block_height,
-                        get_ancestor,
-                    )?;
+                        new_block_height,
+                        make_ancestor_getter(cs),
+                    )
+                    .map_err(BlockProductionError::FailedConsensusInitialization)?;
 
                     let finalize_block_data = generate_finalize_block_data(
                         &chain_config,
-                        this,
-                        block_height,
-                        current_timestamp,
+                        cs,
+                        new_block_height,
                         sealed_epoch_randomness,
                         input_data,
                     )?;
@@ -314,29 +284,22 @@ impl BlockProduction {
                     ))
                 }
             })
-            .await?
-            .map_err(BlockProductionError::FailedConsensusInitialization)?;
+            .await??;
 
         Ok(consensus_data)
     }
 
     async fn pull_best_block_index(&self) -> Result<GenBlockIndex, BlockProductionError> {
-        let best_block_index = self
-            .chainstate_handle
-            .call(move |this| {
-                let best_block_index = this
-                    .get_best_block_index()
-                    .map_err(|_| BlockCreationError::CurrentTipRetrievalError)?;
-
-                Ok(best_block_index)
-            })
-            .await?
-            .map_err(BlockProductionError::FailedToConstructBlock)?;
+        // Clippy insists that this closure is redundant, however the compiler doesn't
+        // like the simple "chainstate_handle.call(get_best_block_index)", complaining about
+        // lifetime issues.
+        #[allow(clippy::redundant_closure)]
+        let best_block_index = self.chainstate_handle.call(|cs| get_best_block_index(cs)).await??;
 
         Ok(best_block_index)
     }
 
-    /// The function the creates a new block.
+    /// The function that creates a new block.
     ///
     /// Returns the block and a oneshot receiver that will be notified when
     /// the internal job is finished. Generally this can be used to ensure
@@ -370,7 +333,7 @@ impl BlockProduction {
         if !self.blockprod_config.skip_ibd_check {
             let is_initial_block_download = self
                 .chainstate_handle
-                .call(|this| this.is_initial_block_download())
+                .call(|cs| cs.is_initial_block_download())
                 .await
                 .map_err(|_| BlockProductionError::ChainstateInfoRetrievalError)?;
 
@@ -381,7 +344,7 @@ impl BlockProduction {
 
         let current_peer_count = self
             .p2p_handle
-            .call_async_mut(move |this| this.get_peer_count())
+            .call_async_mut(move |p2p| p2p.get_peer_count())
             .await?
             .map_err(|_| BlockProductionError::PeerCountRetrievalError)?;
 
@@ -401,7 +364,7 @@ impl BlockProduction {
 
         let (job_key, previous_last_used_block_timestamp, mut cancel_receiver) = self
             .job_manager_handle
-            .add_job(custom_id.clone(), tip_at_start.block_id())
+            .add_job(custom_id.clone(), Some(tip_at_start.block_id()))
             .await?;
 
         // This destructor ensures that the job manager cleans up its
@@ -430,9 +393,7 @@ impl BlockProduction {
                 tip_at_start.block_timestamp(),
             );
 
-            let tip_plus_one = tip_timestamp
-                .add_int_seconds(1)
-                .ok_or(ConsensusCreationError::TimestampOverflow(tip_timestamp, 1))?;
+            let tip_plus_one = timestamp_add_secs(tip_timestamp, 1)?;
 
             Arc::new(AcqRelAtomicU64::new(tip_plus_one.as_int_seconds()))
         };
@@ -440,12 +401,10 @@ impl BlockProduction {
         // Range of timestamps for the block we attempt to construct.
         let min_constructed_block_timestamp =
             BlockTimestamp::from_time(self.time_getter().get_time());
-        let max_constructed_block_timestamp = min_constructed_block_timestamp
-            .add_int_seconds(self.chain_config.max_future_block_time_offset().as_secs())
-            .ok_or(ConsensusCreationError::TimestampOverflow(
-                min_constructed_block_timestamp,
-                self.chain_config.max_future_block_time_offset().as_secs(),
-            ))?;
+        let max_constructed_block_timestamp = timestamp_add_secs(
+            min_constructed_block_timestamp,
+            self.chain_config.max_future_block_time_offset().as_secs(),
+        )?;
 
         loop {
             {
@@ -553,18 +512,7 @@ impl BlockProduction {
         }
     }
 
-    // TODO: here, `block_timestamp_seconds` is a scary thing because, by being AcqRel, it might
-    // imply that we perform thread synchronization through it. Which would be a bad thing
-    // to do, because thread synchronization via atomics is too low-level and non-trivial
-    // to implement correctly. Normally, it should be properly encapsulated, but here we
-    // share the variable across packages, passing it to `consensus::finalize_consensus_data`.
-    // So it's better to get rid of it ASAP.
-    // (Note that we don't really do any thread synchronization through it currently; we made
-    // it "AcqRel" just in case, for extra peace of mind.)
-    // One way of removing it would be to pass the initial value via a non-atomic parameter and
-    // return the updated value back; in `finalize_consensus_data` and its callees it can
-    // be done simply via the functions' return values. And here in `spawn_block_solver` we
-    // already have a one-shot `result_sender`, which may be used for that purpose.
+    // TODO: get rid of the "block_timestamp_seconds" atomic.
     #[allow(clippy::too_many_arguments)]
     fn spawn_block_solver(
         &self,
@@ -577,6 +525,12 @@ impl BlockProduction {
         ended_sender: mpsc::Sender<()>,
         result_sender: oneshot::Sender<Result<SignedBlockHeader, BlockProductionError>>,
     ) -> Result<(), BlockProductionError> {
+        let max_block_timestamp_for_pos = {
+            let current_timestamp = BlockTimestamp::from_time(self.time_getter().get_time());
+            let max_offset = self.chain_config.max_future_block_time_offset().as_secs();
+            timestamp_add_secs(current_timestamp, max_offset)?
+        };
+
         self.mining_thread_pool.spawn({
             let chain_config = Arc::clone(&self.chain_config);
             let current_tip_height = current_tip_index.block_height();
@@ -596,15 +550,21 @@ impl BlockProduction {
             );
 
             move || {
-                let signed_block_header = consensus::finalize_consensus_data(
+                let mut block_timestamp_for_pos =
+                    BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
+
+                let finalize_consensus_result = consensus::finalize_consensus_data(
                     &chain_config,
                     &mut block_header,
                     current_tip_height,
-                    block_timestamp_seconds,
+                    &mut block_timestamp_for_pos,
+                    max_block_timestamp_for_pos,
                     stop_flag,
                     finalize_block_data,
                 )
                 .map_err(BlockProductionError::FailedConsensusInitialization);
+
+                block_timestamp_seconds.store(block_timestamp_for_pos.as_int_seconds());
 
                 let _ended_sender = OnceDestructor::new(move || {
                     // This can fail if the function exited before the mining thread finished
@@ -612,7 +572,7 @@ impl BlockProduction {
                 });
 
                 result_sender
-                    .send(signed_block_header)
+                    .send(finalize_consensus_result)
                     .expect("Failed to send block header back to main thread");
             }
         });
@@ -628,66 +588,58 @@ impl BlockProduction {
 fn generate_finalize_block_data(
     chain_config: &ChainConfig,
     chainstate_handle: &dyn ChainstateInterface,
-    block_height: BlockHeight,
-    current_timestamp: BlockTimestamp,
+    new_block_height: BlockHeight,
     sealed_epoch_randomness: PoSRandomness,
     input_data: GenerateBlockInputData,
-) -> Result<FinalizeBlockInputData, ConsensusPoSError> {
+) -> Result<FinalizeBlockInputData, BlockProductionError> {
     match input_data {
-        GenerateBlockInputData::PoS(pos_input_data) => {
-            let max_block_timestamp = current_timestamp
-                .add_int_seconds(chain_config.max_future_block_time_offset().as_secs())
-                .ok_or(ConsensusPoSError::TimestampOverflow)?;
-
-            let pledge_amount = chainstate_handle
-                .get_stake_pool_data(pos_input_data.pool_id())
-                .map_err(|err| {
-                    ConsensusPoSError::ChainstateError(
-                        consensus::ChainstateError::StakePoolDataReadError(
-                            pos_input_data.pool_id(),
-                            err.to_string(),
-                        ),
-                    )
-                })?
-                .ok_or(ConsensusPoSError::PropertyQueryError(
-                    PropertyQueryError::StakePoolDataNotFound(pos_input_data.pool_id()),
-                ))?
-                .staker_balance()
-                .map_err(|_| {
-                    ConsensusPoSError::PropertyQueryError(
-                        PropertyQueryError::StakerBalanceOverflow(pos_input_data.pool_id()),
-                    )
-                })?;
-
-            let pool_balance = chainstate_handle
-                .get_stake_pool_balance(pos_input_data.pool_id())
-                .map_err(|err| {
-                    ConsensusPoSError::ChainstateError(
-                        consensus::ChainstateError::PoolBalanceReadError(
-                            pos_input_data.pool_id(),
-                            err.to_string(),
-                        ),
-                    )
-                })?
-                .ok_or(ConsensusPoSError::PropertyQueryError(
-                    PropertyQueryError::PoolBalanceNotFound(pos_input_data.pool_id()),
-                ))?;
-
-            let epoch_index = chain_config.epoch_index_from_height(&block_height);
-
-            Ok(FinalizeBlockInputData::PoS(PoSFinalizeBlockInputData::new(
-                pos_input_data.stake_private_key().clone(),
-                pos_input_data.vrf_private_key().clone(),
-                epoch_index,
+        GenerateBlockInputData::PoS(pos_input_data) => Ok(FinalizeBlockInputData::PoS(
+            generate_finalize_block_data_pos(
+                chain_config,
+                chainstate_handle,
+                new_block_height,
                 sealed_epoch_randomness,
-                max_block_timestamp,
-                pledge_amount,
-                pool_balance,
-            )))
-        }
+                *pos_input_data,
+            )?,
+        )),
         GenerateBlockInputData::PoW(_) => Ok(FinalizeBlockInputData::PoW),
         GenerateBlockInputData::None => Ok(FinalizeBlockInputData::None),
     }
+}
+
+fn generate_finalize_block_data_pos(
+    chain_config: &ChainConfig,
+    chainstate: &dyn ChainstateInterface,
+    new_block_height: BlockHeight,
+    sealed_epoch_randomness: PoSRandomness,
+    pos_input_data: PoSGenerateBlockInputData,
+) -> Result<PoSFinalizeBlockInputData, BlockProductionError> {
+    let pool_id = pos_input_data.pool_id();
+    let total_balance = get_pool_total_balance(chainstate, &pool_id)?;
+    let staker_balance = get_pool_staker_balance(chainstate, &pool_id)?;
+
+    #[cfg(debug_assertions)]
+    {
+        let pool_balances = get_pool_balances_at_height(
+            chainstate,
+            new_block_height.prev_height().expect("new block height can't be zero"),
+            &pool_id,
+        )?;
+
+        assert_eq!(total_balance, pool_balances.total_balance());
+        assert_eq!(staker_balance, pool_balances.staker_balance());
+    }
+
+    let epoch_index = chain_config.epoch_index_from_height(&new_block_height);
+
+    Ok(PoSFinalizeBlockInputData::new(
+        pos_input_data.stake_private_key().clone(),
+        pos_input_data.vrf_private_key().clone(),
+        epoch_index,
+        sealed_epoch_randomness,
+        staker_balance,
+        total_balance,
+    ))
 }
 
 #[cfg(test)]

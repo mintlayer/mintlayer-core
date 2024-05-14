@@ -163,6 +163,10 @@ impl BlockHeight {
     pub const fn into_int(self) -> HeightIntType {
         self.0
     }
+
+    pub fn iter_up_to_including(&self, other: BlockHeight) -> impl Iterator<Item = BlockHeight> {
+        (self.0..=other.0).map(BlockHeight::new)
+    }
 }
 
 /////////////////////////////
@@ -334,5 +338,14 @@ mod tests {
         check(BlockHeight::new(u32::MAX as u64 + 1));
         check(BlockHeight::new(u64::MAX - 1));
         check(BlockHeight::new(u64::MAX));
+    }
+
+    #[test]
+    fn iteration() {
+        let heights = BlockHeight::new(1)
+            .iter_up_to_including(BlockHeight::new(3))
+            .collect::<Vec<_>>();
+        let expected_heights = vec![BlockHeight::new(1), BlockHeight::new(2), BlockHeight::new(3)];
+        assert_eq!(heights, expected_heights);
     }
 }

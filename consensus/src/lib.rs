@@ -22,25 +22,28 @@ mod validator;
 
 pub use pos::calculate_effective_pool_balance;
 
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 use chainstate_types::{
-    pos_randomness::PoSRandomness, BlockIndex, GenBlockIndex, PropertyQueryError,
+    pos_randomness::PoSRandomness, BlockIndex, BlockIndexHandle, GenBlockIndex,
 };
 use common::{
-    chain::block::{
-        signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData, SignedBlockHeader},
-        timestamp::BlockTimestamp,
-        BlockHeader, BlockReward, ConsensusData,
-    },
     chain::{
-        output_value::OutputValue, timelock::OutputTimeLock, ChainConfig, Destination,
-        RequiredConsensus, TxOutput,
+        block::{
+            signed_block_header::{
+                BlockHeaderSignature, BlockHeaderSignatureData, SignedBlockHeader,
+            },
+            timestamp::BlockTimestamp,
+            BlockHeader, BlockReward, ConsensusData,
+        },
+        output_value::OutputValue,
+        timelock::OutputTimeLock,
+        Block, ChainConfig, Destination, GenBlock, PoolId, RequiredConsensus, TxOutput,
     },
-    primitives::BlockHeight,
+    primitives::{BlockHeight, Id},
 };
 use serialization::{Decode, Encode};
-use utils::atomics::{AcqRelAtomicU64, RelaxedAtomicBool};
+use utils::atomics::RelaxedAtomicBool;
 
 use crate::pos::input_data::generate_pos_consensus_data_and_reward;
 use crate::pow::input_data::generate_pow_consensus_data_and_reward;
@@ -49,13 +52,14 @@ pub use crate::{
     error::ConsensusVerificationError,
     pos::{
         block_sig::BlockSignatureError,
-        error::{ChainstateError, ConsensusPoSError},
-        hash_check::check_pos_hash,
+        calc_pos_hash_from_prv_key, check_pos_hash, compact_target_to_target,
+        error::ConsensusPoSError,
+        find_timestamp_for_staking,
+        hash_check::calc_and_check_pos_hash,
         input_data::{PoSFinalizeBlockInputData, PoSGenerateBlockInputData},
         kernel::get_kernel_output,
         stake,
-        target::calculate_target_required,
-        target::calculate_target_required_from_block_index,
+        target::{calculate_target_required, calculate_target_required_from_block_index},
         EffectivePoolBalanceError, StakeResult,
     },
     pow::{
@@ -67,8 +71,6 @@ pub use crate::{
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusCreationError {
-    #[error("Best block index not found")]
-    BestBlockIndexNotFound,
     #[error("Mining error: {0}")]
     MiningError(#[from] ConsensusPoWError),
     #[error("Mining stopped")]
@@ -83,6 +85,23 @@ pub enum ConsensusCreationError {
     StakingStopped,
     #[error("Overflowed when calculating a block timestamp: {0} + {1}")]
     TimestampOverflow(BlockTimestamp, u64),
+}
+
+// TODO: include the original chainstate::ChainstateError in each error below.
+#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
+pub enum ChainstateError {
+    #[error("Failed to obtain epoch data for epoch {epoch_index}: {error}")]
+    FailedToObtainEpochData { epoch_index: u64, error: String },
+    #[error("Failed to calculate median time past starting from block {0}: {1}")]
+    FailedToCalculateMedianTimePast(Id<GenBlock>, String),
+    #[error("Failed to obtain best block index: {0}")]
+    FailedToObtainBestBlockIndex(String),
+    #[error("Failed to obtain ancestor of block {0} at height {1}: {2}")]
+    FailedToObtainAncestor(Id<Block>, BlockHeight, String),
+    #[error("Failed to read data of pool {0}: {1}")]
+    StakePoolDataReadError(PoolId, String),
+    #[error("Failed to read balance of pool {0}: {1}")]
+    PoolBalanceReadError(PoolId, String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
@@ -112,7 +131,7 @@ pub fn generate_consensus_data_and_reward<G>(
     get_ancestor: G,
 ) -> Result<(ConsensusData, BlockReward), ConsensusCreationError>
 where
-    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
 {
     match chain_config.consensus_upgrades().consensus_status(block_height) {
         RequiredConsensus::IgnoreConsensus => {
@@ -171,7 +190,8 @@ pub fn finalize_consensus_data(
     chain_config: &ChainConfig,
     block_header: &mut BlockHeader,
     block_height: BlockHeight,
-    block_timestamp_seconds: Arc<AcqRelAtomicU64>,
+    block_timestamp_for_pos: &mut BlockTimestamp,
+    max_block_timestamp_for_pos: BlockTimestamp,
     stop_flag: Arc<RelaxedAtomicBool>,
     finalize_data: FinalizeBlockInputData,
 ) -> Result<SignedBlockHeader, ConsensusCreationError> {
@@ -197,11 +217,11 @@ pub fn finalize_consensus_data(
                     let stake_result = stake(
                         chain_config,
                         pos_status.get_chain_config(),
-                        &mut pos_data.clone(),
+                        pos_data.deref().clone(),
                         block_header,
-                        Arc::clone(&block_timestamp_seconds),
+                        block_timestamp_for_pos,
+                        max_block_timestamp_for_pos,
                         finalize_pos_data,
-                        stop_flag,
                     )?;
 
                     let signed_block_header = stake_private_key
@@ -241,4 +261,18 @@ pub fn finalize_consensus_data(
             }
         },
     }
+}
+
+fn get_ancestor_from_block_index_handle(
+    block_handle: &impl BlockIndexHandle,
+    block_index: &BlockIndex,
+    ancestor_height: BlockHeight,
+) -> Result<GenBlockIndex, crate::ChainstateError> {
+    block_handle.get_ancestor(block_index, ancestor_height).map_err(|err| {
+        crate::ChainstateError::FailedToObtainAncestor(
+            *block_index.block_id(),
+            ancestor_height,
+            err.to_string(),
+        )
+    })
 }

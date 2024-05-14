@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 
-use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex};
 use common::{
     chain::{
         block::consensus_data::PoWData,
@@ -30,10 +30,13 @@ use common::{
 };
 use utils::atomics::RelaxedAtomicBool;
 
-use crate::pow::{
-    error::ConsensusPoWError,
-    helpers::{calculate_new_target, due_for_retarget, get_starting_block_time, special_rules},
-    PoW,
+use crate::{
+    get_ancestor_from_block_index_handle,
+    pow::{
+        error::ConsensusPoWError,
+        helpers::{calculate_new_target, due_for_retarget, get_starting_block_time, special_rules},
+        PoW,
+    },
 };
 
 pub fn check_proof_of_work(
@@ -57,7 +60,7 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
     block_index_handle: &H,
 ) -> Result<(), ConsensusPoWError> {
     let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
-        block_index_handle.get_ancestor(block_index, ancestor_height)
+        get_ancestor_from_block_index_handle(block_index_handle, block_index, ancestor_height)
     };
 
     let work_required = match pow_status {
@@ -114,7 +117,7 @@ pub fn calculate_work_required<G>(
     get_ancestor: G,
 ) -> Result<Compact, ConsensusPoWError>
 where
-    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
 {
     match pow_status {
         PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
@@ -149,7 +152,7 @@ impl PoW {
         get_ancestor: F,
     ) -> Result<Compact, ConsensusPoWError>
     where
-        F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+        F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
     {
         let prev_block_consensus_data = prev_block_index.block_header().consensus_data();
         // this function should only be called when consensus status is PoW::Ongoing, i.e. previous

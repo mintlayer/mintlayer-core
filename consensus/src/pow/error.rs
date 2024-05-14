@@ -18,20 +18,20 @@ use thiserror::Error;
 use chainstate_types::PropertyQueryError;
 use common::{
     chain::block::Block,
-    primitives::{BlockHeight, Compact, Id},
+    primitives::{Compact, Id},
 };
 
 /// A proof of work consensus error.
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusPoWError {
+    #[error("Chainstate error: `{0}`")]
+    ChainstateError(#[from] crate::ChainstateError),
     #[error("Invalid Proof of Work for block {0}")]
     InvalidPoW(Id<Block>),
     #[error("Error while loading previous block with id {0} with error {1}")]
     PrevBlockLoadError(Id<Block>, PropertyQueryError),
     #[error("Previous block {0} not found in database")]
     PrevBlockNotFound(Id<Block>),
-    #[error("Error while loading ancestor of block {0} at height {1} with error {2}")]
-    AncestorAtHeightNotFound(Id<Block>, BlockHeight, PropertyQueryError),
     #[error("No PoW data for block for block")]
     NoPowDataInPreviousBlock,
     #[error("Decoding bits of block failed: `{0:?}`")]

@@ -192,6 +192,7 @@ qrcodegen = "1.8"
 quote = "1.0"
 rand = "0.8"
 rand_chacha = "0.3"
+rayon = "1.10"
 reedline = "0.31"
 ref-cast = "1.0"
 regex = "1.10"
@@ -261,6 +262,11 @@ panic = "abort" # prevent panic catching (mostly for the tokio runtime)
 [profile.release]
 panic = "abort" # prevent panic catching (mostly for the tokio runtime)
 overflow-checks = true
+
+# "Release" profile with debug info enabled.
+[profile.release-with-debug-info]
+inherits = "release"
+debug = true
 
 # "Release" profile with debug info and debug assertions enabled.
 [profile.release-with-debug]

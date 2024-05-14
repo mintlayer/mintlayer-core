@@ -48,14 +48,10 @@ pub enum JobManagerError {
     FailedToStopJobs,
     #[error("Error sending stop job event")]
     FailedToSendStopJobEvent,
-    #[error("Error sending update last timestamp secconds used event")]
+    #[error("Error sending update last timestamp seconds used event")]
     FailedToSendUpdateLastTimestampSecondsUsed,
-    #[error("Error updating last timestamp secconds used")]
+    #[error("Error updating last timestamp seconds used")]
     FailedToUpdateLastTimestampSecondsUsed,
-}
-
-pub struct JobHandle {
-    cancel_sender: UnboundedSender<()>,
 }
 
 #[derive(
@@ -72,33 +68,21 @@ pub struct JobHandle {
 )]
 pub struct JobKey {
     /// The job key is provided in tests to make it possible to run
-    /// multiple block productions in parallel
+    /// multiple block productions in parallel.
+    /// In PoS this will be generated based on staker's `stake_public_key` to avoid
+    /// staking twice with the same key.
     custom_id: CustomId,
-    /// The current tip, which will be the "previous block" for the
-    /// block that will be produced
-    current_tip_id: Id<GenBlock>,
-    // TODO: in proof of stake, we also add some identifier of the
-    // current key so that we don't stake twice from the same key.
-    // This is because in PoS, there could be penalties for creating
-    // multiple blocks by the same staker.
 }
 
 impl JobKey {
-    pub fn new(custom_id: CustomId, current_tip_id: Id<GenBlock>) -> Self {
-        JobKey {
-            custom_id,
-            current_tip_id,
-        }
-    }
-
-    pub fn current_tip_id(&self) -> Id<GenBlock> {
-        self.current_tip_id
+    pub fn new(custom_id: CustomId) -> Self {
+        JobKey { custom_id }
     }
 }
 
 pub struct NewJobEvent {
     custom_id: CustomId,
-    current_tip_id: Id<GenBlock>,
+    expected_tip_id: Option<Id<GenBlock>>,
     cancel_sender: UnboundedSender<()>,
     result_sender: oneshot::Sender<Result<(JobKey, Option<BlockTimestamp>), JobManagerError>>,
 }
@@ -115,12 +99,15 @@ pub struct JobManager {
 
 #[async_trait]
 pub trait JobManagerInterface: Send + Sync {
+    #[allow(dead_code)]
     async fn get_job_count(&self) -> Result<usize, JobManagerError>;
 
+    /// Add a new job
+    /// If `expected_tip_id` is `Some`, the job will be cancelled once the current tip changes to something else.
     async fn add_job(
         &self,
         custom_id: CustomId,
-        block_id: Id<GenBlock>,
+        expected_tip_id: Option<Id<GenBlock>>,
     ) -> Result<(JobKey, Option<BlockTimestamp>, UnboundedReceiver<()>), JobManagerError>;
 
     async fn stop_all_jobs(&mut self) -> Result<usize, JobManagerError>;
@@ -166,9 +153,9 @@ impl JobManagerInterface for JobManagerImpl {
     async fn add_job(
         &self,
         custom_id: CustomId,
-        block_id: Id<GenBlock>,
+        expected_tip_id: Option<Id<GenBlock>>,
     ) -> Result<(JobKey, Option<BlockTimestamp>, UnboundedReceiver<()>), JobManagerError> {
-        self.job_manager.add_job(custom_id, block_id).await
+        self.job_manager.add_job(custom_id, expected_tip_id).await
     }
 
     async fn stop_all_jobs(&mut self) -> Result<usize, JobManagerError> {
@@ -320,14 +307,14 @@ impl JobManager {
     pub async fn add_job(
         &self,
         custom_id: CustomId,
-        block_id: Id<GenBlock>,
+        expected_tip_id: Option<Id<GenBlock>>,
     ) -> Result<(JobKey, Option<BlockTimestamp>, UnboundedReceiver<()>), JobManagerError> {
         let (result_sender, result_receiver) = oneshot::channel();
         let (cancel_sender, cancel_receiver) = unbounded_channel::<()>();
 
         let job = NewJobEvent {
             custom_id,
-            current_tip_id: block_id,
+            expected_tip_id,
             cancel_sender,
             result_sender,
         };
@@ -434,7 +421,7 @@ pub mod tests {
             async fn add_job(
                 &self,
                 custom_id: CustomId,
-                block_id: Id<GenBlock>,
+                expected_tip_id: Option<Id<GenBlock>>,
             ) -> Result<(JobKey, Option<BlockTimestamp>, UnboundedReceiver<()>), JobManagerError>;
 
             async fn stop_all_jobs(&mut self) -> Result<usize, JobManagerError>;

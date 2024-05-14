@@ -325,12 +325,12 @@ impl BanScore for ConsensusVerificationError {
 impl BanScore for ConsensusPoWError {
     fn ban_score(&self) -> u32 {
         match self {
+            ConsensusPoWError::ChainstateError(_) => 0,
             ConsensusPoWError::InvalidPoW(_) => 100,
             ConsensusPoWError::NoInputDataProvided => 100,
             ConsensusPoWError::PoSInputDataProvided => 100,
             ConsensusPoWError::PrevBlockLoadError(_, _) => 0,
             ConsensusPoWError::PrevBlockNotFound(_) => 100,
-            ConsensusPoWError::AncestorAtHeightNotFound(_, _, _) => 0,
             ConsensusPoWError::NoPowDataInPreviousBlock => 100,
             ConsensusPoWError::DecodingBitsFailed(_) => 100,
             ConsensusPoWError::PreviousBitsDecodingFailed(_) => 0,
