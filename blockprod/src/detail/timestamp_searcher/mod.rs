@@ -381,14 +381,8 @@ fn find_timestamps_for_staking_impl(
                     .expect("The height is known to be below the maximum");
 
                 let timestamps = find_timestamps(
-                    item.consensus_version,
-                    item.target_required,
+                    item,
                     search_data.final_supply,
-                    item.min_timestamp,
-                    item.max_timestamp,
-                    &item.sealed_epoch_randomness,
-                    item.epoch_index,
-                    &item.pool_balances,
                     &vrf_pub_key,
                     secret_input_data.vrf_private_key(),
                     rng,
@@ -418,48 +412,45 @@ fn find_timestamps_for_staking_impl(
     Ok(timestamps_map.into_inner().expect("poisoned mutex"))
 }
 
-#[allow(clippy::too_many_arguments)]
+type PrecomputedHashes = BTreeMap<
+    (
+        BlockTimestamp,
+        EpochIndex,
+        /*sealed_epoch_randomness:*/ PoSRandomness,
+    ),
+    Uint256,
+>;
+
 fn find_timestamps(
-    consensus_version: PoSConsensusVersion,
-    target: Compact,
+    search_data: &SearchDataForHeight,
     final_supply: Amount,
-    first_timestamp: BlockTimestamp,
-    max_timestamp: BlockTimestamp,
-    sealed_epoch_randomness: &PoSRandomness,
-    epoch_index: EpochIndex,
-    pool_balances: &NonZeroPoolBalances,
     vrf_pub_key: &VRFPublicKey,
     vrf_prv_key: &VRFPrivateKey,
     rng: &mut (impl Rng + CryptoRng),
-    precomputed_hashes: Option<
-        &BTreeMap<
-            (
-                BlockTimestamp,
-                EpochIndex,
-                /*sealed_epoch_randomness:*/ PoSRandomness,
-            ),
-            Uint256,
-        >,
-    >,
+    precomputed_hashes: Option<&PrecomputedHashes>,
 ) -> Result<Vec<BlockTimestamp>, ConsensusPoSError> {
-    let target = compact_target_to_target(target)?;
+    let target = compact_target_to_target(search_data.target_required)?;
 
     ensure!(
-        first_timestamp <= max_timestamp,
+        search_data.min_timestamp <= search_data.max_timestamp,
         ConsensusPoSError::FutureTimestampInThePast
     );
 
     let mut timestamps = Vec::new();
 
-    for cur_timestamp in first_timestamp.iter_up_to_including(max_timestamp) {
+    for cur_timestamp in search_data.min_timestamp.iter_up_to_including(search_data.max_timestamp) {
         let hash = if let Some(precomputed_hashes) = precomputed_hashes {
             *precomputed_hashes
-                .get(&(cur_timestamp, epoch_index, *sealed_epoch_randomness))
+                .get(&(
+                    cur_timestamp,
+                    search_data.epoch_index,
+                    search_data.sealed_epoch_randomness,
+                ))
                 .expect("all hashes are pre-computed")
         } else {
             calc_pos_hash_from_prv_key(
-                epoch_index,
-                sealed_epoch_randomness,
+                search_data.epoch_index,
+                &search_data.sealed_epoch_randomness,
                 cur_timestamp,
                 vrf_pub_key,
                 vrf_prv_key,
@@ -468,11 +459,11 @@ fn find_timestamps(
         };
 
         if check_pos_hash(
-            consensus_version,
+            search_data.consensus_version,
             &hash,
             &target,
-            pool_balances.staker_balance(),
-            pool_balances.total_balance(),
+            search_data.pool_balances.staker_balance(),
+            search_data.pool_balances.total_balance(),
             final_supply,
         )
         .is_ok()
