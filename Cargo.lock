@@ -920,6 +920,7 @@ dependencies = [
  "mocks",
  "p2p",
  "parity-scale-codec",
+ "pos-accounting",
  "randomness",
  "rayon",
  "rpc",

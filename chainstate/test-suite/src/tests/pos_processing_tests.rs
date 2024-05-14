@@ -15,10 +15,7 @@
 
 use std::{num::NonZeroU64, time::Duration};
 
-use super::helpers::pos::{
-    calculate_new_target, create_custom_genesis_with_stake_pool,
-    create_stake_pool_data_with_all_reward_to_staker,
-};
+use super::helpers::pos::{calculate_new_target, create_custom_genesis_with_stake_pool};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, BlockSource, ChainstateError,
@@ -26,7 +23,8 @@ use chainstate::{
 };
 use chainstate_storage::{TipStorageTag, Transactional};
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+    anyonecanspend_address, create_stake_pool_data_with_all_reward_to_staker, empty_witness,
+    TestFramework, TransactionBuilder,
 };
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},

@@ -16,18 +16,11 @@
 use chainstate_storage::Transactional;
 use chainstate_test_framework::TestFramework;
 use common::{
-    chain::{
-        block::timestamp::BlockTimestamp, output_value::OutputValue, stakelock::StakePoolData,
-        CoinUnit, Destination, Genesis, RequiredConsensus, TxOutput,
-    },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, H256},
+    chain::{CoinUnit, Genesis, RequiredConsensus},
+    primitives::{BlockHeight, Compact},
 };
 use consensus::ConsensusPoSError;
-use crypto::{
-    key::{KeyKind, PrivateKey, PublicKey},
-    vrf::VRFPublicKey,
-};
-use randomness::{CryptoRng, Rng};
+use crypto::{key::PublicKey, vrf::VRFPublicKey};
 
 use super::block_index_handle_impl::TestBlockIndexHandle;
 
@@ -59,28 +52,6 @@ pub fn calculate_new_target(
     )
 }
 
-// Alongside `StakePoolData` also returns `PrivateKey` that allows to sign a block that spends a kernel
-// with this pool data
-pub fn create_stake_pool_data_with_all_reward_to_staker(
-    rng: &mut (impl Rng + CryptoRng),
-    amount: Amount,
-    vrf_pk: VRFPublicKey,
-) -> (StakePoolData, PrivateKey) {
-    let (sk, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-
-    (
-        StakePoolData::new(
-            amount,
-            Destination::PublicKey(pk),
-            vrf_pk,
-            Destination::AnyoneCanSpend,
-            PerThousand::new(1000).unwrap(), // give all reward to the staker
-            Amount::ZERO,
-        ),
-        sk,
-    )
-}
-
 pub fn create_custom_genesis_with_stake_pool(
     staker_pk: PublicKey,
     vrf_pk: VRFPublicKey,
@@ -89,40 +60,10 @@ pub fn create_custom_genesis_with_stake_pool(
     let initial_pool_amount = (initial_amount / 3).unwrap();
     let initial_mint_amount = (initial_amount - initial_pool_amount).unwrap();
 
-    create_custom_genesis_with_stake_pool_specify_amounts(
+    chainstate_test_framework::create_custom_genesis_with_stake_pool(
         staker_pk,
         vrf_pk,
         initial_mint_amount,
         initial_pool_amount,
-    )
-}
-
-pub fn create_custom_genesis_with_stake_pool_specify_amounts(
-    staker_pk: PublicKey,
-    vrf_pk: VRFPublicKey,
-    initial_mint_amount: Amount,
-    initial_pool_amount: Amount,
-) -> Genesis {
-    let mint_output = TxOutput::Transfer(
-        OutputValue::Coin(initial_mint_amount),
-        Destination::AnyoneCanSpend,
-    );
-
-    let initial_pool = TxOutput::CreateStakePool(
-        H256::zero().into(),
-        Box::new(StakePoolData::new(
-            initial_pool_amount,
-            Destination::PublicKey(staker_pk.clone()),
-            vrf_pk,
-            Destination::PublicKey(staker_pk),
-            PerThousand::new(10).expect("Per thousand should be valid"),
-            Amount::from_atoms(100),
-        )),
-    );
-
-    Genesis::new(
-        "Genesis message".to_string(),
-        BlockTimestamp::from_int_seconds(1685025323),
-        vec![mint_output, initial_pool],
     )
 }

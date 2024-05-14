@@ -95,6 +95,7 @@ pub fn get_pool_balances_at_heights<CS: ChainstateInterface + ?Sized>(
     Ok(balances_iter)
 }
 
+#[allow(dead_code)]
 pub fn get_pool_balances_at_height<CS: ChainstateInterface + ?Sized>(
     chainstate: &CS,
     height: BlockHeight,

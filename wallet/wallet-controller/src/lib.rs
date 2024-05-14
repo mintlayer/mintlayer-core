@@ -560,13 +560,9 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .await
             .map_err(ControllerError::NodeCallError)?;
 
-        blockprod::find_timestamps_for_staking(
-            Arc::clone(&self.chain_config),
-            input_data,
-            search_data,
-        )
-        .await
-        .map_err(|err| ControllerError::SearchForTimestampsFailed(err))
+        blockprod::find_timestamps_for_staking(input_data, search_data)
+            .await
+            .map_err(|err| ControllerError::SearchForTimestampsFailed(err))
     }
 
     pub fn create_account(

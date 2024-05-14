@@ -1472,6 +1472,19 @@ pub struct NonZeroPoolBalances {
 }
 
 impl NonZeroPoolBalances {
+    pub fn new(total_balance: Amount, staker_balance: Amount) -> Option<Self> {
+        assert!(total_balance >= staker_balance);
+
+        if staker_balance != Amount::ZERO {
+            Some(Self {
+                total_balance,
+                staker_balance,
+            })
+        } else {
+            None
+        }
+    }
+
     #[log_error]
     pub fn obtain(
         pool_id: &PoolId,
@@ -1497,14 +1510,7 @@ impl NonZeroPoolBalances {
                     }
                 );
 
-                if staker_balance != Amount::ZERO {
-                    Ok(Some(Self {
-                        total_balance,
-                        staker_balance,
-                    }))
-                } else {
-                    Ok(None)
-                }
+                Ok(NonZeroPoolBalances::new(total_balance, staker_balance))
             }
             (None, None) => Ok(None),
             (Some(_), None) => Err(BlockError::InvariantErrorPoolBalancePresentDataMissing(

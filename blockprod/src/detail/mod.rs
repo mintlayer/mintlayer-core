@@ -65,9 +65,8 @@ use crate::{
 use self::{
     timestamp_searcher::TimestampSearchData,
     utils::{
-        get_best_block_index, get_pool_balances_at_height, get_pool_staker_balance,
-        get_pool_total_balance, get_sealed_epoch_randomness, make_ancestor_getter,
-        timestamp_add_secs,
+        get_best_block_index, get_pool_staker_balance, get_pool_total_balance,
+        get_sealed_epoch_randomness, make_ancestor_getter, timestamp_add_secs,
     },
 };
 
@@ -599,7 +598,6 @@ impl BlockProduction {
     ) -> Result<TimestampSearchData, BlockProductionError> {
         timestamp_searcher::collect_timestamp_search_data(
             &self.chainstate_handle,
-            Arc::clone(&self.chain_config),
             pool_id,
             min_height,
             max_height,
@@ -645,7 +643,7 @@ fn generate_finalize_block_data_pos(
 
     #[cfg(debug_assertions)]
     {
-        let pool_balances = get_pool_balances_at_height(
+        let pool_balances = utils::get_pool_balances_at_height(
             chainstate,
             new_block_height.prev_height().expect("new block height can't be zero"),
             &pool_id,

@@ -15,15 +15,14 @@
 
 use std::num::NonZeroU64;
 
-use super::helpers::{
-    new_pub_key_destination, pos::create_stake_pool_data_with_all_reward_to_staker,
-};
+use super::helpers::new_pub_key_destination;
 
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use chainstate::BlockSource;
 use chainstate_storage::{BlockchainStorageWrite, TransactionRw, Transactional};
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
+    anyonecanspend_address, create_stake_pool_data_with_all_reward_to_staker, empty_witness,
+    TestFramework, TestStore, TransactionBuilder,
 };
 use common::{
     chain::{

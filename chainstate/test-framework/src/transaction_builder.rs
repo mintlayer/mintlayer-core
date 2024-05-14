@@ -71,6 +71,10 @@ impl TransactionBuilder {
         self
     }
 
+    pub fn outputs(&self) -> &[TxOutput] {
+        &self.outputs
+    }
+
     /// Adds an output with the "anyone can spend" destination.
     pub fn add_anyone_can_spend_output(self, amount: u128) -> Self {
         self.add_output(TxOutput::Transfer(

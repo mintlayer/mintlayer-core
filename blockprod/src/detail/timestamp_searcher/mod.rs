@@ -15,7 +15,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{Arc, Mutex},
+    sync::Mutex,
 };
 
 use rayon::prelude::*;
@@ -25,11 +25,8 @@ use chainstate::{
 };
 use chainstate_types::pos_randomness::PoSRandomness;
 use common::{
-    chain::{
-        block::timestamp::BlockTimestamp, config::EpochIndex, ChainConfig, PoSConsensusVersion,
-        PoolId,
-    },
-    primitives::{BlockHeight, Compact},
+    chain::{block::timestamp::BlockTimestamp, config::EpochIndex, PoSConsensusVersion, PoolId},
+    primitives::{Amount, BlockHeight, Compact},
     Uint256,
 };
 use consensus::{
@@ -52,7 +49,7 @@ use crate::{
     BlockProductionError,
 };
 
-#[derive(Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
 struct SearchDataForHeight {
     sealed_epoch_randomness: PoSRandomness,
     epoch_index: u64,
@@ -63,31 +60,58 @@ struct SearchDataForHeight {
     consensus_version: PoSConsensusVersion,
 }
 
-#[derive(Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
 pub struct TimestampSearchData {
     start_height: BlockHeight,
     data: Vec<SearchDataForHeight>,
-    check_all_timestamps_between_blocks: bool,
+    final_supply: Amount,
+    /// If this is true, timestamp ranges for different heights are not supposed to overlap.
+    /// This is used as a hint to enable/disable caching of hashes; it should not affect the
+    /// search result.
+    assume_distinct_timestamps: bool,
 }
 
 impl TimestampSearchData {
-    pub fn new(
+    #[allow(dead_code)]
+    fn new(
+        start_height: BlockHeight,
+        data: Vec<SearchDataForHeight>,
+        final_supply: Amount,
+        assume_distinct_timestamps: bool,
+    ) -> Self {
+        Self {
+            start_height,
+            data,
+            final_supply,
+            assume_distinct_timestamps,
+        }
+    }
+
+    fn obtain(
         chainstate: &dyn ChainstateInterface,
-        chain_config: &ChainConfig,
         pool_id: &PoolId,
         min_height: BlockHeight,
         max_height: Option<BlockHeight>,
         seconds_to_check_for_height: u64,
         check_all_timestamps_between_blocks: bool,
     ) -> Result<Self, BlockProductionError> {
+        let chain_config = chainstate.get_chain_config();
+
+        let assume_distinct_timestamps = check_all_timestamps_between_blocks;
+        let final_supply = chain_config
+            .final_supply()
+            .ok_or(ConsensusCreationError::StakingError(
+                ConsensusPoSError::FiniteTotalSupplyIsRequired,
+            ))?
+            .to_amount_atoms();
+
         // Note: the passed min_height/max_height specify heights at which a new block could
         // be produced. On the other hand, heights that are passed to and returned from
-        // `get_pool_balances_at_heights` are the height that the best block had when those
+        // `get_pool_balances_at_heights` are the heights that the best block had when those
         // balances were calculated. In order to convert from the former to the latter,
         // we must subtract one, which is done below.
 
         let best_block_index = get_best_block_index(chainstate)?;
-
         let best_height_plus_one = best_block_index.block_height().next_height();
         let max_height = max_height.unwrap_or(best_height_plus_one);
         let max_height = std::cmp::min(max_height, best_height_plus_one);
@@ -115,7 +139,8 @@ impl TimestampSearchData {
             return Ok(Self {
                 start_height: min_height,
                 data: Vec::new(),
-                check_all_timestamps_between_blocks,
+                final_supply,
+                assume_distinct_timestamps,
             });
         };
 
@@ -205,7 +230,8 @@ impl TimestampSearchData {
         Ok(Self {
             start_height: min_height,
             data: search_data,
-            check_all_timestamps_between_blocks,
+            final_supply,
+            assume_distinct_timestamps,
         })
     }
 }
@@ -226,7 +252,6 @@ impl TimestampSearchData {
 /// of the next block.
 pub async fn collect_timestamp_search_data(
     chainstate_handle: &ChainstateHandle,
-    chain_config: Arc<ChainConfig>,
     pool_id: &PoolId,
     min_height: BlockHeight,
     max_height: Option<BlockHeight>,
@@ -239,9 +264,8 @@ pub async fn collect_timestamp_search_data(
             move |chainstate| -> Result<_, BlockProductionError> {
                 let _on_scope_exit = log_scope_exec_time("Creating search data");
 
-                TimestampSearchData::new(
+                TimestampSearchData::obtain(
                     chainstate,
-                    &chain_config,
                     &pool_id,
                     min_height,
                     max_height,
@@ -262,12 +286,11 @@ pub async fn collect_timestamp_search_data(
 /// height range and the number of timestamps that must be checked. So it's not a good idea
 /// to perform this call across an RPC boundary, because it will time out.
 pub async fn find_timestamps_for_staking(
-    chain_config: Arc<ChainConfig>,
     secret_input_data: PoSTimestampSearchInputData,
     search_data: TimestampSearchData,
 ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, BlockProductionError> {
     let task_join_result = tokio::task::spawn_blocking({
-        move || find_timestamps_for_staking_impl(&search_data, &chain_config, &secret_input_data)
+        move || find_timestamps_for_staking_impl(&search_data, &secret_input_data)
     })
     .await;
 
@@ -287,7 +310,6 @@ pub async fn find_timestamps_for_staking(
 
 fn find_timestamps_for_staking_impl(
     search_data: &TimestampSearchData,
-    chain_config: &ChainConfig,
     secret_input_data: &PoSTimestampSearchInputData,
 ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, BlockProductionError> {
     let _on_scope_exit = log_scope_exec_time("Total timestamps searching");
@@ -296,7 +318,7 @@ fn find_timestamps_for_staking_impl(
 
     let vrf_pub_key = VRFPublicKey::from_private_key(secret_input_data.vrf_private_key());
 
-    let precomputed_hashes = if search_data.check_all_timestamps_between_blocks {
+    let precomputed_hashes = if search_data.assume_distinct_timestamps {
         // In this case, timestamps will never overlap, so precomputing the hashes
         // will just add an overhead of extra allocations.
         None
@@ -359,9 +381,9 @@ fn find_timestamps_for_staking_impl(
                     .expect("The height is known to be below the maximum");
 
                 let timestamps = find_timestamps(
-                    chain_config,
                     item.consensus_version,
                     item.target_required,
+                    search_data.final_supply,
                     item.min_timestamp,
                     item.max_timestamp,
                     &item.sealed_epoch_randomness,
@@ -398,9 +420,9 @@ fn find_timestamps_for_staking_impl(
 
 #[allow(clippy::too_many_arguments)]
 fn find_timestamps(
-    chain_config: &ChainConfig,
     consensus_version: PoSConsensusVersion,
     target: Compact,
+    final_supply: Amount,
     first_timestamp: BlockTimestamp,
     max_timestamp: BlockTimestamp,
     sealed_epoch_randomness: &PoSRandomness,
@@ -420,12 +442,7 @@ fn find_timestamps(
         >,
     >,
 ) -> Result<Vec<BlockTimestamp>, ConsensusPoSError> {
-    let final_supply = chain_config
-        .final_supply()
-        .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
-
     let target = compact_target_to_target(target)?;
-    let final_supply = final_supply.to_amount_atoms();
 
     ensure!(
         first_timestamp <= max_timestamp,
@@ -488,3 +505,6 @@ fn log_scope_exec_time(scope_name: &'_ str) -> OnceDestructor<impl FnOnce() + '_
         log::debug!("{scope_name} took {:?}", start_time.elapsed());
     })
 }
+
+#[cfg(test)]
+mod tests;

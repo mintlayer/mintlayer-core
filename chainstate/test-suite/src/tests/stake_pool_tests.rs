@@ -13,13 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::helpers::pos::create_stake_pool_data_with_all_reward_to_staker;
-
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
 use chainstate::{BlockSource, CheckBlockError};
 use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, get_output_value, TestFramework, TransactionBuilder,
+    anyonecanspend_address, create_stake_pool_data_with_all_reward_to_staker, empty_witness,
+    get_output_value, TestFramework, TransactionBuilder,
 };
 use common::primitives::BlockHeight;
 use common::{

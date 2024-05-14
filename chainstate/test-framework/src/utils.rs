@@ -36,7 +36,7 @@ use common::{
 };
 use consensus::find_timestamp_for_staking;
 use crypto::{
-    key::{PrivateKey, PublicKey},
+    key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
 use itertools::Itertools;
@@ -370,4 +370,57 @@ pub fn find_create_pool_tx_in_genesis(genesis: &Genesis, pool_id: &PoolId) -> Op
     });
 
     output_index_opt.map(|idx| UtxoOutPoint::new(genesis.get_id().into(), idx as u32))
+}
+
+// Alongside `StakePoolData` also returns `PrivateKey` that allows to sign a block that spends a kernel
+// with this pool data
+pub fn create_stake_pool_data_with_all_reward_to_staker(
+    rng: &mut (impl Rng + CryptoRng),
+    amount: Amount,
+    vrf_pk: VRFPublicKey,
+) -> (StakePoolData, PrivateKey) {
+    let (sk, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+
+    (
+        StakePoolData::new(
+            amount,
+            Destination::PublicKey(pk),
+            vrf_pk,
+            Destination::AnyoneCanSpend,
+            PerThousand::new(1000).unwrap(), // give all reward to the staker
+            Amount::ZERO,
+        ),
+        sk,
+    )
+}
+
+pub fn create_custom_genesis_with_stake_pool(
+    staker_pk: PublicKey,
+    vrf_pk: VRFPublicKey,
+    initial_mint_amount: Amount,
+    initial_pool_amount: Amount,
+) -> Genesis {
+    let mint_output = TxOutput::Transfer(
+        OutputValue::Coin(initial_mint_amount),
+        Destination::AnyoneCanSpend,
+    );
+
+    let initial_pool = TxOutput::CreateStakePool(
+        H256::zero().into(),
+        Box::new(StakePoolData::new(
+            initial_pool_amount,
+            Destination::PublicKey(staker_pk.clone()),
+            vrf_pk,
+            Destination::PublicKey(staker_pk),
+            PerThousand::new(10).expect("Per thousand should be valid"),
+            Amount::from_atoms(100),
+        )),
+    );
+
+    Genesis::new(
+        "Genesis message".to_string(),
+        // Some arbitrary time, namely "2023-05-25 14:35:23 UTC"
+        BlockTimestamp::from_int_seconds(1685025323),
+        vec![mint_output, initial_pool],
+    )
 }
