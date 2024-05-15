@@ -252,7 +252,7 @@ async fn update_locked_amounts_for_current_block<T: ApiServerStorageWrite>(
                             db_tx,
                             address,
                             amount,
-                            CoinOrTokenId::Coin,
+                            CoinOrTokenId::TokenId(*token_id),
                             block_height,
                         )
                         .await;
@@ -1060,7 +1060,20 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 };
                 db_tx.set_fungible_token_issuance(token_id, block_height, issuance).await?;
             }
-            TxOutput::IssueNft(token_id, issuance, _) => {
+            TxOutput::IssueNft(token_id, issuance, destination) => {
+                let address = Address::<Destination>::new(&chain_config, destination.clone())
+                    .expect("Unable to encode destination");
+                address_transactions.entry(address.clone()).or_default().insert(transaction_id);
+
+                increase_address_amount(
+                    db_tx,
+                    &address,
+                    &Amount::from_atoms(1),
+                    CoinOrTokenId::TokenId(*token_id),
+                    block_height,
+                )
+                .await;
+
                 db_tx.set_nft_token_issuance(*token_id, block_height, *issuance.clone()).await?;
                 set_utxo(
                     OutPointSourceId::Transaction(transaction_id),
