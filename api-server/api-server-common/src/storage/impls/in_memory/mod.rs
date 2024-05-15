@@ -42,9 +42,8 @@ use super::CURRENT_STORAGE_VERSION;
 struct ApiServerInMemoryStorage {
     block_table: BTreeMap<Id<Block>, BlockWithExtraData>,
     block_aux_data_table: BTreeMap<Id<Block>, BlockAuxData>,
-    address_balance_table: BTreeMap<String, BTreeMap<BlockHeight, BTreeMap<CoinOrTokenId, Amount>>>,
-    address_locked_balance_table:
-        BTreeMap<String, BTreeMap<BlockHeight, BTreeMap<CoinOrTokenId, Amount>>>,
+    address_balance_table: BTreeMap<String, BTreeMap<(CoinOrTokenId, BlockHeight), Amount>>,
+    address_locked_balance_table: BTreeMap<String, BTreeMap<(CoinOrTokenId, BlockHeight), Amount>>,
     address_transactions_table: BTreeMap<String, BTreeMap<BlockHeight, Vec<Id<Transaction>>>>,
     delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
@@ -105,7 +104,10 @@ impl ApiServerInMemoryStorage {
         self.address_balance_table.get(address).map_or_else(
             || Ok(None),
             |balance| {
-                Ok(balance.last_key_value().and_then(|(_, v)| v.get(&coin_or_token_id).copied()))
+                let range_begin = (coin_or_token_id, BlockHeight::zero());
+                let range_end = (coin_or_token_id, BlockHeight::max());
+                let range = balance.range(range_begin..=range_end);
+                Ok(range.last().map(|(_, v)| *v))
             },
         )
     }
@@ -118,7 +120,10 @@ impl ApiServerInMemoryStorage {
         self.address_locked_balance_table.get(address).map_or_else(
             || Ok(None),
             |balance| {
-                Ok(balance.last_key_value().and_then(|(_, v)| v.get(&coin_or_token_id).copied()))
+                let range_begin = (coin_or_token_id, BlockHeight::zero());
+                let range_end = (coin_or_token_id, BlockHeight::max());
+                let range = balance.range(range_begin..=range_end);
+                Ok(range.last().map(|(_, v)| *v))
             },
         )
     }
@@ -573,12 +578,13 @@ impl ApiServerInMemoryStorage {
 
         self.address_balance_table.iter_mut().for_each(|(_, balance)| {
             balance
-                .range((Excluded(block_height), Unbounded))
-                .map(|b| b.0.into_int())
+                .iter()
+                .filter(|((_, height), _)| *height > block_height)
+                .map(|(key, _)| *key)
                 .collect::<Vec<_>>()
                 .iter()
-                .for_each(|&b| {
-                    balance.remove(&BlockHeight::new(b));
+                .for_each(|key| {
+                    balance.remove(key);
                 })
         });
 
@@ -593,12 +599,13 @@ impl ApiServerInMemoryStorage {
 
         self.address_locked_balance_table.iter_mut().for_each(|(_, balance)| {
             balance
-                .range((Excluded(block_height), Unbounded))
-                .map(|b| b.0.into_int())
+                .iter()
+                .filter(|((_, height), _)| *height > block_height)
+                .map(|(key, _)| *key)
                 .collect::<Vec<_>>()
                 .iter()
-                .for_each(|&b| {
-                    balance.remove(&BlockHeight::new(b));
+                .for_each(|key| {
+                    balance.remove(key);
                 })
         });
 
@@ -635,9 +642,9 @@ impl ApiServerInMemoryStorage {
         self.address_balance_table
             .entry(address.to_string())
             .or_default()
-            .entry(block_height)
-            .or_default()
-            .insert(coin_or_token_id, amount);
+            .entry((coin_or_token_id, block_height))
+            .and_modify(|e| *e = amount)
+            .or_insert(amount);
 
         Ok(())
     }
@@ -652,9 +659,9 @@ impl ApiServerInMemoryStorage {
         self.address_locked_balance_table
             .entry(address.to_string())
             .or_default()
-            .entry(block_height)
-            .or_default()
-            .insert(coin_or_token_id, amount);
+            .entry((coin_or_token_id, block_height))
+            .and_modify(|e| *e = amount)
+            .or_insert(amount);
 
         Ok(())
     }
