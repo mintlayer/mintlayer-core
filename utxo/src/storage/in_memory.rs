@@ -35,6 +35,10 @@ impl UtxosDBInMemoryImpl {
             best_block_id: best_block,
         }
     }
+
+    pub fn utxos(&self) -> &BTreeMap<UtxoOutPoint, Utxo> {
+        &self.store
+    }
 }
 
 impl UtxosStorageRead for UtxosDBInMemoryImpl {

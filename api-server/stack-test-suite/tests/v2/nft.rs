@@ -15,10 +15,9 @@
 
 use api_web_server::api::json_helpers::nft_issuance_data_to_json;
 use common::{
-    chain::tokens::{make_token_id, NftIssuance, NftIssuanceV0, TokenId},
+    chain::tokens::{make_token_id, NftIssuance, TokenId},
     primitives::H256,
 };
-use serialization::extras::non_empty_vec::DataOrNoVec;
 
 use crate::DummyRPC;
 
@@ -83,22 +82,12 @@ async fn ok(#[case] seed: Seed) {
 
                 // generate addresses
 
-                let (_, alice_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+                let (alice_sk, alice_pk) =
+                    PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
                 let alice_destination = Destination::PublicKeyHash(PublicKeyHash::from(&alice_pk));
 
-                let nft = NftIssuanceV0 {
-                    metadata: common::chain::tokens::Metadata {
-                        creator: None,
-                        name: "Name".as_bytes().to_vec(),
-                        description: "SomeNFT".as_bytes().to_vec(),
-                        ticker: "XXXX".as_bytes().to_vec(),
-                        icon_uri: DataOrNoVec::from(None),
-                        additional_metadata_uri: DataOrNoVec::from(None),
-                        media_uri: DataOrNoVec::from(None),
-                        media_hash: "123456".as_bytes().to_vec(),
-                    },
-                };
+                let nft = test_utils::nft_utils::random_nft_issuance(&chain_config, &mut rng);
 
                 let input = TxInput::from_utxo(
                     OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
@@ -107,18 +96,48 @@ async fn ok(#[case] seed: Seed) {
 
                 let token_id = make_token_id(&[input.clone()]).unwrap();
 
-                let transaction = TransactionBuilder::new()
+                // issue NFT
+                let issue_nft_tx = TransactionBuilder::new()
                     .add_input(input, InputWitness::NoSignature(None))
                     .add_output(TxOutput::IssueNft(
                         token_id,
                         Box::new(NftIssuance::V0(nft.clone())),
-                        alice_destination,
+                        alice_destination.clone(),
                     ))
                     .build();
+                let issue_nft_tx_id = issue_nft_tx.transaction().get_id();
+
+                // transfer NFT
+                let transfer_nft_tx = {
+                    let tx = TransactionBuilder::new()
+                        .add_input(
+                            TxInput::from_utxo(issue_nft_tx_id.into(), 0),
+                            InputWitness::NoSignature(None),
+                        )
+                        .add_output(TxOutput::Transfer(
+                            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+                            alice_destination.clone(),
+                        ))
+                        .build();
+
+                    let sig = InputWitness::Standard(
+                        StandardInputSignature::produce_uniparty_signature_for_input(
+                            &alice_sk,
+                            SigHashType::try_from(SigHashType::ALL).unwrap(),
+                            alice_destination,
+                            &tx,
+                            &[issue_nft_tx.outputs().first()],
+                            0,
+                            &mut rng,
+                        )
+                        .unwrap(),
+                    );
+                    SignedTransaction::new(tx.take_transaction(), vec![sig]).unwrap()
+                };
 
                 let chainstate_block_ids = [*tf
                     .make_block_builder()
-                    .add_transaction(transaction.clone())
+                    .with_transactions(vec![issue_nft_tx, transfer_nft_tx])
                     .build_and_process(&mut rng)
                     .unwrap()
                     .unwrap()
