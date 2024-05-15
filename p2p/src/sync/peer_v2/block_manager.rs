@@ -485,8 +485,7 @@ where
         // Check that all the blocks are known and haven't been already requested.
         // First check self.outgoing.blocks_queue
         let already_requested_blocks: BTreeSet<_> = self.outgoing.blocks_queue.iter().collect();
-        let doubly_requested_id =
-            block_ids.iter().find(|id| already_requested_blocks.get(id).is_some());
+        let doubly_requested_id = block_ids.iter().find(|id| already_requested_blocks.contains(id));
         if let Some(id) = doubly_requested_id {
             return Err(P2pError::ProtocolError(
                 ProtocolError::DuplicatedBlockRequest(*id),

@@ -73,7 +73,7 @@ impl UtxosView for UtxosDBInMemoryImpl {
     }
 
     fn has_utxo(&self, outpoint: &UtxoOutPoint) -> Result<bool, Self::Error> {
-        Ok(self.store.get(outpoint).is_some())
+        Ok(self.store.contains_key(outpoint))
     }
 
     fn best_block_hash(&self) -> Result<Id<GenBlock>, Self::Error> {

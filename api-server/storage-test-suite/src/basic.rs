@@ -77,7 +77,6 @@ pub async fn set_get<S: ApiServerStorage, Fut, F: Fn() -> Fut>(
     seed_maker: Box<dyn Fn() -> Seed + Send>,
 ) -> Result<(), Failed>
 where
-    S: ApiServerStorage,
     Fut: Future<Output = S> + Send + 'static,
 {
     let seed = seed_maker();

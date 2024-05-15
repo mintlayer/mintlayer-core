@@ -15,10 +15,9 @@
 
 use api_web_server::api::json_helpers::nft_issuance_data_to_json;
 use common::{
-    chain::tokens::{make_token_id, NftIssuance, NftIssuanceV0, TokenId},
+    chain::tokens::{make_token_id, NftIssuance, TokenId},
     primitives::H256,
 };
-use serialization::extras::non_empty_vec::DataOrNoVec;
 
 use crate::DummyRPC;
 

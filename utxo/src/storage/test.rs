@@ -235,7 +235,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         let mut cache = UtxosCache::new(&db).unwrap();
 
         // get the block tx inputs, and add them to the view.
-        block.transactions().iter().enumerate().for_each(|(_idx, tx)| {
+        block.transactions().iter().for_each(|tx| {
             // use the undo to get the utxos
             let undo = block_undo.tx_undos().get(&tx.transaction().get_id()).unwrap();
             let undos = undo.inner();

@@ -25,6 +25,7 @@ pub trait OrphanBlocksRef {
 }
 
 pub trait OrphanBlocksMut: OrphanBlocksRef {
+    #[allow(dead_code)]
     fn clear(&mut self);
     fn add_block(&mut self, block: WithId<Block>) -> Result<(), Box<OrphanAddError>>;
     fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<WithId<Block>>;

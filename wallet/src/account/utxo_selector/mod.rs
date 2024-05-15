@@ -537,7 +537,7 @@ fn select_coins_bnb(
             // value. Adding any more UTXOs will be just burning the UTXO; it will go entirely to fees. Thus we aren't going to
             // explore any more UTXOs to avoid burning money like that.
             if curr_waste <= best_waste {
-                best_selection = curr_selection.clone();
+                best_selection.clone_from(&curr_selection);
                 best_waste = curr_waste;
             }
             true

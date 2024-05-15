@@ -225,7 +225,7 @@ async fn inbound_connection_invalid_magic_noise() {
 }
 
 // try to connect to an address that no one listening on and verify it fails
-async fn test_peer_manager_connect<T: NetworkingService>(
+async fn test_peer_manager_connect<T>(
     transport: T::Transport,
     bind_addr: SocketAddress,
     remote_addr: SocketAddress,

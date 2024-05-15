@@ -376,7 +376,8 @@ impl<S: PeerDbStorage> PeerDb<S> {
 
     /// Add a new peer address
     pub fn peer_discovered(&mut self, address: SocketAddress) {
-        if self.addresses.get(&address).is_none() {
+        #[allow(clippy::map_entry)]
+        if !self.addresses.contains_key(&address) {
             log::debug!("New address discovered: {}", address.to_string());
 
             debug_assert!(

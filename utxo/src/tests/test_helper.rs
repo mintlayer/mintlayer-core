@@ -40,7 +40,7 @@ pub trait UnwrapInfallible {
 impl<T> UnwrapInfallible for Result<T, Infallible> {
     type Output = T;
     fn unwrap_infallible(self) -> Self::Output {
-        self.map_or_else(|inf| match inf {}, |x| x)
+        self.unwrap_or_else(|inf| match inf {})
     }
 }
 
