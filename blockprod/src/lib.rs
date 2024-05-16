@@ -99,6 +99,8 @@ pub enum BlockProductionError {
     PoSInputDataProvidedWhenIgnoringConsensus,
     #[error("PoW data provided when consensus is supposed to be ignored")]
     PoWInputDataProvidedWhenIgnoringConsensus,
+    #[error("Recoverable mempool error")]
+    RecoverableMempoolError,
 }
 
 pub type BlockProductionSubsystem = Box<dyn BlockProductionInterface>;

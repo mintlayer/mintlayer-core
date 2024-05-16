@@ -24,9 +24,14 @@ use common::{
             timestamp::{BlockTimestamp, BlockTimestampInternalType},
             BlockHeader, ConsensusData,
         },
-        Block, ChainConfig, GenBlock, PoSStatus, PoolId, RequiredConsensus,
+        Block, ChainConfig, GenBlock, PoSStatus, PoolId, RequiredConsensus, SignedTransaction,
+        Transaction,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id, Idable},
+};
+use mempool::{
+    tx_accumulator::{DefaultTxAccumulator, PackingStrategy, TransactionAccumulator},
+    MempoolHandle,
 };
 
 use crate::BlockProductionError;
@@ -280,4 +285,37 @@ pub fn timestamp_add_secs(
         .add_int_seconds(secs)
         .ok_or(BlockProductionError::TimestampOverflow(timestamp, secs))?;
     Ok(timestamp)
+}
+
+pub async fn collect_transactions(
+    mempool_handle: &MempoolHandle,
+    chain_config: &ChainConfig,
+    current_tip: Id<GenBlock>,
+    current_tip_median_time_past: BlockTimestamp,
+    transactions: Vec<SignedTransaction>,
+    transaction_ids: Vec<Id<Transaction>>,
+    packing_strategy: PackingStrategy,
+) -> Result<Vec<SignedTransaction>, BlockProductionError> {
+    let mut accumulator = Box::new(DefaultTxAccumulator::new(
+        chain_config.max_block_size_from_std_scripts(),
+        current_tip,
+        current_tip_median_time_past,
+    ));
+
+    for transaction in transactions.into_iter() {
+        let transaction_id = transaction.transaction().get_id();
+
+        accumulator
+            .add_tx(transaction, Amount::ZERO.into())
+            .map_err(|err| BlockProductionError::FailedToAddTransaction(transaction_id, err))?
+    }
+
+    let returned_accumulator = mempool_handle
+        .call(move |mempool| mempool.collect_txs(accumulator, transaction_ids, packing_strategy))
+        .await??;
+
+    let returned_accumulator =
+        returned_accumulator.ok_or(BlockProductionError::RecoverableMempoolError)?;
+
+    Ok(returned_accumulator.transactions().to_vec())
 }

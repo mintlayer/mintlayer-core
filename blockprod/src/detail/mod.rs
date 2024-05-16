@@ -32,9 +32,9 @@ use common::{
             block_body::BlockBody, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        Block, ChainConfig, GenBlock, PoolId, RequiredConsensus, SignedTransaction, Transaction,
+        Block, ChainConfig, PoolId, RequiredConsensus, SignedTransaction, Transaction,
     },
-    primitives::{Amount, BlockHeight, Id, Idable},
+    primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
 use consensus::{
@@ -45,10 +45,7 @@ use consensus::{
 };
 use crypto::ephemeral_e2e::{self, EndToEndPrivateKey};
 use logging::log;
-use mempool::{
-    tx_accumulator::{DefaultTxAccumulator, PackingStrategy, TransactionAccumulator},
-    MempoolHandle,
-};
+use mempool::{tx_accumulator::PackingStrategy, MempoolHandle};
 use p2p::P2pHandle;
 use randomness::{make_true_rng, Rng};
 use serialization::{Decode, Encode};
@@ -60,7 +57,10 @@ use ::utils::{
 
 use crate::{
     config::BlockProdConfig,
-    detail::job_manager::{JobKey, JobManagerHandle, JobManagerImpl},
+    detail::{
+        job_manager::{JobKey, JobManagerHandle, JobManagerImpl},
+        utils::collect_transactions,
+    },
     BlockProductionError,
 };
 
@@ -190,41 +190,6 @@ impl BlockProduction {
             .await?;
 
         Ok(())
-    }
-
-    /// Collect transactions from the mempool
-    /// Returns the accumulator that is filled with transactions from the mempool
-    /// Ok(None) means that a recoverable error happened (such as that the mempool tip moved).
-    pub async fn collect_transactions(
-        &self,
-        current_tip: Id<GenBlock>,
-        current_tip_median_time_past: BlockTimestamp,
-        transactions: Vec<SignedTransaction>,
-        transaction_ids: Vec<Id<Transaction>>,
-        packing_strategy: PackingStrategy,
-    ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockProductionError> {
-        let mut accumulator = Box::new(DefaultTxAccumulator::new(
-            self.chain_config.max_block_size_from_std_scripts(),
-            current_tip,
-            current_tip_median_time_past,
-        ));
-
-        for transaction in transactions.into_iter() {
-            let transaction_id = transaction.transaction().get_id();
-
-            accumulator
-                .add_tx(transaction, Amount::ZERO.into())
-                .map_err(|err| BlockProductionError::FailedToAddTransaction(transaction_id, err))?
-        }
-
-        let returned_accumulator = self
-            .mempool_handle
-            .call(move |mempool| {
-                mempool.collect_txs(accumulator, transaction_ids, packing_strategy)
-            })
-            .await??;
-
-        Ok(returned_accumulator)
     }
 
     async fn pull_consensus_data(
@@ -388,6 +353,9 @@ impl BlockProduction {
     /// the internal job is finished. Generally this can be used to ensure
     /// that the block production process has ended and that there's no
     /// remnants in the job manager.
+    /// 
+    /// Note: the function may exit early, e.g. in case of recoverable mempool error.
+    /// TODO: recoverable mempool errors should not affect PoS.
     pub async fn produce_block(
         &self,
         input_data: GenerateBlockInputData,
@@ -551,20 +519,16 @@ impl BlockProduction {
                 ));
             }
 
-            let accumulator = self
-                .collect_transactions(
-                    current_tip_index.block_id(),
-                    current_tip_median_time_past,
-                    transactions.clone(),
-                    transaction_ids.clone(),
-                    packing_strategy,
-                )
-                .await?;
-
-            let collected_transactions = match accumulator {
-                Some(acc) => acc.transactions().to_vec(),
-                None => continue,
-            };
+            let collected_transactions = collect_transactions(
+                &self.mempool_handle,
+                &self.chain_config,
+                current_tip_index.block_id(),
+                current_tip_median_time_past,
+                transactions.clone(),
+                transaction_ids.clone(),
+                packing_strategy,
+            )
+            .await?;
 
             let block_body = BlockBody::new(block_reward, collected_transactions);
 

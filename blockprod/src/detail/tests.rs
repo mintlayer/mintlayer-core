@@ -65,6 +65,7 @@ use utils::once_destructor::OnceDestructor;
 
 use crate::{
     detail::{
+        collect_transactions,
         job_manager::{tests::MockJobManager, JobManagerError, JobManagerImpl},
         CustomId, GenerateBlockInputData,
     },
@@ -83,7 +84,7 @@ mod collect_transactions {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn collect_txs_failed() {
-        let (mut manager, chain_config, chainstate, _mempool, p2p) =
+        let (mut manager, chain_config, _chainstate, _mempool, _p2p) =
             setup_blockprod_test(None, TimeGetter::default());
 
         let mut mock_mempool = MockMempoolInterface::default();
@@ -99,26 +100,16 @@ mod collect_transactions {
 
         let shutdown = manager.make_shutdown_trigger();
         let tester = tokio::spawn(async move {
-            let block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate,
-                mock_mempool_subsystem,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
+            let accumulator = collect_transactions(
+                &mock_mempool_subsystem,
+                &chain_config,
+                current_tip,
+                DUMMY_TIMESTAMP,
+                vec![],
+                vec![],
+                PackingStrategy::FillSpaceFromMempool,
             )
-            .expect("Error initializing blockprod");
-
-            let accumulator = block_production
-                .collect_transactions(
-                    current_tip,
-                    DUMMY_TIMESTAMP,
-                    vec![],
-                    vec![],
-                    PackingStrategy::FillSpaceFromMempool,
-                )
-                .await;
+            .await;
 
             match accumulator {
                 Err(BlockProductionError::MempoolBlockConstruction(
@@ -135,7 +126,7 @@ mod collect_transactions {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn subsystem_error() {
-        let (mut manager, chain_config, chainstate, _mempool, p2p) =
+        let (mut manager, chain_config, _chainstate, _mempool, _p2p) =
             setup_blockprod_test(None, TimeGetter::default());
 
         let mock_mempool = MockMempoolInterface::default();
@@ -156,26 +147,16 @@ mod collect_transactions {
 
         // spawn rather than adding a subsystem as manager is moved into main() above
         tokio::spawn(async move {
-            let block_production = BlockProduction::new(
-                chain_config,
-                Arc::new(test_blockprod_config()),
-                chainstate,
-                mock_mempool_subsystem,
-                p2p,
-                Default::default(),
-                prepare_thread_pool(1),
+            let accumulator = collect_transactions(
+                &mock_mempool_subsystem,
+                &chain_config,
+                current_tip,
+                DUMMY_TIMESTAMP,
+                vec![],
+                vec![],
+                PackingStrategy::LeaveEmptySpace,
             )
-            .expect("Error initializing blockprod");
-
-            let accumulator = block_production
-                .collect_transactions(
-                    current_tip,
-                    DUMMY_TIMESTAMP,
-                    vec![],
-                    vec![],
-                    PackingStrategy::LeaveEmptySpace,
-                )
-                .await;
+            .await;
 
             match accumulator {
                 Ok(_) => panic!("Expected an error"),
@@ -189,7 +170,7 @@ mod collect_transactions {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn succeeded() {
-        let (mut manager, chain_config, chainstate, _mempool, p2p) =
+        let (mut manager, chain_config, _chainstate, _mempool, _p2p) =
             setup_blockprod_test(None, TimeGetter::default());
 
         let mut mock_mempool = MockMempoolInterface::default();
@@ -209,17 +190,6 @@ mod collect_transactions {
 
         let current_tip = Id::new(H256::zero());
 
-        let block_production = BlockProduction::new(
-            chain_config,
-            Arc::new(test_blockprod_config()),
-            chainstate,
-            mock_mempool_subsystem,
-            p2p,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
-
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
             async move {
@@ -228,15 +198,16 @@ mod collect_transactions {
                     shutdown_trigger.initiate();
                 });
 
-                let accumulator = block_production
-                    .collect_transactions(
-                        current_tip,
-                        DUMMY_TIMESTAMP,
-                        vec![],
-                        vec![],
-                        PackingStrategy::FillSpaceFromMempool,
-                    )
-                    .await;
+                let accumulator = collect_transactions(
+                    &mock_mempool_subsystem,
+                    &chain_config,
+                    current_tip,
+                    DUMMY_TIMESTAMP,
+                    vec![],
+                    vec![],
+                    PackingStrategy::FillSpaceFromMempool,
+                )
+                .await;
 
                 assert!(
                     accumulator.is_ok(),
