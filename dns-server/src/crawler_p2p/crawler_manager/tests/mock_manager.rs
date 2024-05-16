@@ -75,6 +75,7 @@ pub struct TestNode {
 
 #[derive(Clone)]
 pub struct MockStateRef {
+    #[allow(dead_code)]
     pub crawler_mgr_config: CrawlerManagerConfig,
     pub online: Arc<Mutex<BTreeMap<SocketAddress, TestNode>>>,
     pub connected: Arc<Mutex<BTreeMap<SocketAddress, PeerId>>>,

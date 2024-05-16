@@ -118,10 +118,10 @@ impl PoolData {
 }
 
 pub enum TokenCurrentSupplyState {
-    Fixed(Amount, Amount), // fixed to a certain amount
-    Lockable(Amount),      // not known in advance but can be locked once at some point in time
-    Locked(Amount),        // Locked
-    Unlimited(Amount),     // limited only by the Amount data type
+    Fixed(Amount, Amount),              // fixed to a certain amount
+    Lockable(Amount), // not known in advance but can be locked once at some point in time
+    Locked(#[allow(dead_code)] Amount), // Locked
+    Unlimited(Amount), // limited only by the Amount data type
 }
 
 impl From<TokenTotalSupply> for TokenCurrentSupplyState {
