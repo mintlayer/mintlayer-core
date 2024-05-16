@@ -353,7 +353,7 @@ impl BlockProduction {
     /// the internal job is finished. Generally this can be used to ensure
     /// that the block production process has ended and that there's no
     /// remnants in the job manager.
-    /// 
+    ///
     /// Note: the function may exit early, e.g. in case of recoverable mempool error.
     /// TODO: recoverable mempool errors should not affect PoS.
     pub async fn produce_block(
@@ -466,114 +466,89 @@ impl BlockProduction {
             Arc::new(AcqRelAtomicU64::new(prev_plus_one.as_int_seconds()))
         };
 
-        // Range of timestamps for the block we attempt to construct.
-        let min_constructed_block_timestamp =
-            BlockTimestamp::from_time(self.time_getter().get_time());
-        let max_constructed_block_timestamp = timestamp_add_secs(
-            min_constructed_block_timestamp,
-            self.chain_config.max_future_block_time_offset().as_secs(),
+        let (
+            consensus_data,
+            block_reward,
+            current_tip_index,
+            // The so-called "median time past" timestamp calculated from the current tip.
+            // Note: when validating a block, the lock-time constraints of its transactions
+            // are validated against the "median time past" of the block's parent, rather than
+            // the timestamp of the block itself.
+            // So when constructing a new block we must make sure that transactions with locks
+            // after this point are not included, otherwise the block will be incorrect.
+            current_tip_median_time_past,
+            finalize_block_data,
+        ) = self.pull_consensus_data(input_data.clone(), self.time_getter.clone()).await?;
+
+        if current_tip_index.block_id() != tip_at_start.block_id() {
+            log::info!(
+                "Current tip changed from {} with height {} to {} with height {} while mining, cancelling",
+                tip_at_start.block_id(),
+                tip_at_start.block_height(),
+                current_tip_index.block_id(),
+                current_tip_index.block_height(),
+            );
+            return Err(BlockProductionError::TipChanged(
+                tip_at_start.block_id(),
+                tip_at_start.block_height(),
+                current_tip_index.block_id(),
+                current_tip_index.block_height(),
+            ));
+        }
+
+        let collected_transactions = collect_transactions(
+            &self.mempool_handle,
+            &self.chain_config,
+            current_tip_index.block_id(),
+            current_tip_median_time_past,
+            transactions.clone(),
+            transaction_ids.clone(),
+            packing_strategy,
+        )
+        .await?;
+
+        let block_body = BlockBody::new(block_reward, collected_transactions);
+
+        // A synchronous channel that sends only when the mining/staking is done
+        let (ended_sender, ended_receiver) = mpsc::channel::<()>();
+
+        // Return the result of mining
+        let (result_sender, mut result_receiver) = oneshot::channel();
+
+        self.spawn_block_solver(
+            &current_tip_index,
+            Arc::clone(&stop_flag),
+            &block_body,
+            Arc::clone(&last_timestamp_seconds_used),
+            finalize_block_data,
+            consensus_data,
+            ended_sender,
+            result_sender,
         )?;
 
-        loop {
-            {
-                // If the last timestamp we tried on a block is larger than the max range allowed, no point in continuing
-                let last_used_block_timestamp =
-                    BlockTimestamp::from_int_seconds(last_timestamp_seconds_used.load());
+        let solver_result = tokio::select! {
+            _ = cancel_receiver.recv() => {
+                stop_flag.store(true);
 
-                if last_used_block_timestamp >= max_constructed_block_timestamp {
-                    stop_flag.store(true);
-                    return Err(BlockProductionError::TryAgainLater);
-                }
+                // This can fail if the mining thread has already finished
+                let _ended = ended_receiver.recv();
 
-                self.update_last_used_block_timestamp(custom_id.clone(), last_used_block_timestamp)
-                    .await?;
+                return Err(BlockProductionError::Cancelled);
             }
-
-            let (
-                consensus_data,
-                block_reward,
-                current_tip_index,
-                // The so-called "median time past" timestamp calculated from the current tip.
-                // Note: when validating a block, the lock-time constraints of its transactions
-                // are validated against the "median time past" of the block's parent, rather than
-                // the timestamp of the block itself.
-                // So when constructing a new block we must make sure that transactions with locks
-                // after this point are not included, otherwise the block will be incorrect.
-                current_tip_median_time_past,
-                finalize_block_data,
-            ) = self.pull_consensus_data(input_data.clone(), self.time_getter.clone()).await?;
-
-            if current_tip_index.block_id() != tip_at_start.block_id() {
-                log::info!(
-                    "Current tip changed from {} with height {} to {} with height {} while mining, cancelling",
-                    tip_at_start.block_id(),
-                    tip_at_start.block_height(),
-                    current_tip_index.block_id(),
-                    current_tip_index.block_height(),
-                );
-                return Err(BlockProductionError::TipChanged(
-                    tip_at_start.block_id(),
-                    tip_at_start.block_height(),
-                    current_tip_index.block_id(),
-                    current_tip_index.block_height(),
-                ));
+            solver_result = &mut result_receiver => {
+                solver_result.map_err(|_| BlockProductionError::TaskExitedPrematurely)?
             }
+        };
 
-            let collected_transactions = collect_transactions(
-                &self.mempool_handle,
-                &self.chain_config,
-                current_tip_index.block_id(),
-                current_tip_median_time_past,
-                transactions.clone(),
-                transaction_ids.clone(),
-                packing_strategy,
-            )
+        let last_used_block_timestamp =
+            BlockTimestamp::from_int_seconds(last_timestamp_seconds_used.load());
+
+        self.update_last_used_block_timestamp(custom_id.clone(), last_used_block_timestamp)
             .await?;
 
-            let block_body = BlockBody::new(block_reward, collected_transactions);
-
-            // A synchronous channel that sends only when the mining/staking is done
-            let (ended_sender, ended_receiver) = mpsc::channel::<()>();
-
-            // Return the result of mining
-            let (result_sender, mut result_receiver) = oneshot::channel();
-
-            self.spawn_block_solver(
-                &current_tip_index,
-                Arc::clone(&stop_flag),
-                &block_body,
-                Arc::clone(&last_timestamp_seconds_used),
-                finalize_block_data,
-                consensus_data,
-                ended_sender,
-                result_sender,
-            )?;
-
-            tokio::select! {
-                _ = cancel_receiver.recv() => {
-                    stop_flag.store(true);
-
-                    // This can fail if the mining thread has already finished
-                    let _ended = ended_receiver.recv();
-
-                    return Err(BlockProductionError::Cancelled);
-                }
-                solve_receive_result = &mut result_receiver => {
-                    let mining_result = match solve_receive_result {
-                        Ok(mining_result) => mining_result,
-                        Err(_) => continue,
-                    };
-
-                    let signed_block_header = match mining_result {
-                        Ok(header) => header,
-                        Err(_) => continue,
-                    };
-
-                    let block = Block::new_from_header(signed_block_header, block_body.clone())?;
-                    return Ok((block, job_finished_receiver));
-                }
-            }
-        }
+        let signed_block_header = solver_result?;
+        let block = Block::new_from_header(signed_block_header, block_body.clone())?;
+        return Ok((block, job_finished_receiver));
     }
 
     // TODO: get rid of the "block_timestamp_seconds" atomic.
@@ -595,6 +570,13 @@ impl BlockProduction {
             timestamp_add_secs(current_timestamp, max_offset)?
         };
 
+        let min_block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
+
+        // FIXME should be PoS only.
+        if min_block_timestamp > max_block_timestamp_for_pos {
+            return Err(BlockProductionError::TryAgainLater);
+        }
+
         self.mining_thread_pool.spawn({
             let chain_config = Arc::clone(&self.chain_config);
             let current_tip_height = current_tip_index.block_height();
@@ -603,13 +585,11 @@ impl BlockProduction {
             let merkle_proxy =
                 block_body.merkle_tree_proxy().map_err(BlockCreationError::MerkleTreeError)?;
 
-            let block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
-
             let mut block_header = BlockHeader::new(
                 current_tip_index.block_id(),
                 merkle_proxy.merkle_tree().root(),
                 merkle_proxy.witness_merkle_tree().root(),
-                block_timestamp,
+                min_block_timestamp,
                 consensus_data,
             );
 

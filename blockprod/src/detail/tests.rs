@@ -36,7 +36,7 @@ use common::{
         CoinUnit, ConsensusUpgrade, Destination, Genesis, NetUpgrades, OutPointSourceId, PoolId,
         RequiredConsensus, TxOutput,
     },
-    primitives::{per_thousand::PerThousand, time, Amount, BlockHeight, Id, Idable, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
     time_getter::TimeGetter,
     Uint256,
 };
@@ -70,7 +70,10 @@ use crate::{
         CustomId, GenerateBlockInputData,
     },
     prepare_thread_pool, test_blockprod_config,
-    tests::{assert_process_block, make_genesis_timestamp, setup_blockprod_test, setup_pos},
+    tests::{
+        assert_process_block, build_chain_config_for_pos, make_genesis_timestamp,
+        setup_blockprod_test, setup_pos, setup_pos_with_genesis_timestamp,
+    },
     BlockProduction, BlockProductionError, JobKey,
 };
 
@@ -504,14 +507,25 @@ mod produce_block {
         join_handle.await.unwrap();
     }
 
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn overflow_max_blocktimestamp() {
-        let override_chain_config = Builder::new(ChainType::Regtest)
-            .max_future_block_time_offset(Duration::MAX)
-            .build();
+    async fn overflow_max_blocktimestamp(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let time_getter = TimeGetter::default();
+        let (
+            chain_config_builder,
+            genesis_stake_private_key,
+            genesis_vrf_private_key,
+            create_genesis_pool_txoutput,
+        ) = setup_pos(&time_getter, BlockHeight::new(1), &[], &mut rng);
+        let chain_config = build_chain_config_for_pos(
+            chain_config_builder.max_future_block_time_offset(Duration::MAX),
+        );
 
         let (manager, chain_config, chainstate, mempool, p2p) =
-            setup_blockprod_test(Some(override_chain_config), TimeGetter::default());
+            setup_blockprod_test(Some(chain_config), TimeGetter::default());
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -522,7 +536,7 @@ mod produce_block {
                 });
 
                 let block_production = BlockProduction::new(
-                    chain_config,
+                    Arc::clone(&chain_config),
                     Arc::new(test_blockprod_config()),
                     chainstate.clone(),
                     mempool,
@@ -532,13 +546,20 @@ mod produce_block {
                 )
                 .expect("Error initializing blockprod");
 
+                let input_data =
+                    GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
+                        genesis_stake_private_key,
+                        genesis_vrf_private_key,
+                        PoolId::new(H256::zero()),
+                        vec![TxInput::from_utxo(
+                            OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                            0,
+                        )],
+                        vec![create_genesis_pool_txoutput],
+                    )));
+
                 let result = block_production
-                    .produce_block(
-                        GenerateBlockInputData::None,
-                        vec![],
-                        vec![],
-                        PackingStrategy::LeaveEmptySpace,
-                    )
+                    .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
                     .await;
 
                 assert_matches!(result, Err(BlockProductionError::TimestampOverflow(_, _)));
@@ -559,14 +580,16 @@ mod produce_block {
         let mut rng = make_seedable_rng(seed);
         let time_getter = TimeGetter::default();
         let (
-            pos_chain_config,
+            chain_config_builder,
             genesis_stake_private_key,
             genesis_vrf_private_key,
             create_genesis_pool_txoutput,
         ) = setup_pos(&time_getter, BlockHeight::new(1), &[], &mut rng);
 
-        let (manager, chain_config, chainstate, mempool, p2p) =
-            setup_blockprod_test(Some(pos_chain_config), time_getter);
+        let (manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(
+            Some(build_chain_config_for_pos(chain_config_builder)),
+            time_getter,
+        );
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -621,34 +644,39 @@ mod produce_block {
         join_handle.await.unwrap();
     }
 
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn try_again_later() {
-        // Ensure we reset the global mock time on exit
-        let _reset_time_destructor = OnceDestructor::new(time::reset);
+    async fn try_again_later(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
 
-        let ((manager, chain_config, chainstate, mempool, p2p), time_getter) = {
-            let last_used_block_timestamp = TimeGetter::default().get_time();
+        let default_time_getter = TimeGetter::default();
+        let genesis_time = default_time_getter.get_time();
 
-            let genesis_block = Genesis::new(
-                "blockprod-testing".into(),
-                BlockTimestamp::from_time(last_used_block_timestamp),
-                vec![],
-            );
+        let (
+            chain_config_builder,
+            genesis_stake_private_key,
+            genesis_vrf_private_key,
+            create_genesis_pool_txoutput,
+        ) = setup_pos_with_genesis_timestamp(
+            BlockTimestamp::from_time(genesis_time),
+            BlockHeight::new(1),
+            &[],
+            &mut rng,
+        );
 
-            let override_chain_config =
-                Builder::new(ChainType::Regtest).genesis_custom(genesis_block).build();
-
-            let time_value_secs = last_used_block_timestamp
-                .saturating_duration_sub(*override_chain_config.max_future_block_time_offset())
+        let chain_config = build_chain_config_for_pos(chain_config_builder);
+        let time_getter = {
+            let cur_time_secs = genesis_time
+                .saturating_duration_sub(*chain_config.max_future_block_time_offset())
                 .as_secs_since_epoch();
-            let time_value = Arc::new(SeqCstAtomicU64::new(time_value_secs));
-            let time_getter = mocked_time_getter_seconds(time_value);
-
-            (
-                setup_blockprod_test(Some(override_chain_config), time_getter.clone()),
-                time_getter,
-            )
+            let time_value = Arc::new(SeqCstAtomicU64::new(cur_time_secs));
+            mocked_time_getter_seconds(time_value)
         };
+
+        let (manager, chain_config, chainstate, mempool, p2p) =
+            setup_blockprod_test(Some(chain_config), time_getter.clone());
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -659,7 +687,7 @@ mod produce_block {
                 });
 
                 let block_production = BlockProduction::new(
-                    chain_config,
+                    Arc::clone(&chain_config),
                     Arc::new(test_blockprod_config()),
                     chainstate.clone(),
                     mempool,
@@ -669,13 +697,20 @@ mod produce_block {
                 )
                 .expect("Error initializing blockprod");
 
+                let input_data =
+                    GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
+                        genesis_stake_private_key,
+                        genesis_vrf_private_key,
+                        PoolId::new(H256::zero()),
+                        vec![TxInput::from_utxo(
+                            OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                            0,
+                        )],
+                        vec![create_genesis_pool_txoutput],
+                    )));
+
                 let result = block_production
-                    .produce_block(
-                        GenerateBlockInputData::None,
-                        vec![],
-                        vec![],
-                        PackingStrategy::LeaveEmptySpace,
-                    )
+                    .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
                     .await;
 
                 assert_matches!(result, Err(BlockProductionError::TryAgainLater));
@@ -1172,14 +1207,16 @@ mod produce_block {
         let mut rng = make_seedable_rng(seed);
         let time_getter = TimeGetter::default();
         let (
-            pos_chain_config,
+            chain_config_builder,
             genesis_stake_private_key,
             genesis_vrf_private_key,
             create_genesis_pool_txoutput,
         ) = setup_pos(&time_getter, BlockHeight::new(1), &[], &mut rng);
 
-        let (manager, chain_config, chainstate, mempool, p2p) =
-            setup_blockprod_test(Some(pos_chain_config), time_getter);
+        let (manager, chain_config, chainstate, mempool, p2p) = setup_blockprod_test(
+            Some(build_chain_config_for_pos(chain_config_builder)),
+            time_getter,
+        );
 
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
@@ -1437,7 +1474,7 @@ mod produce_block {
         )];
 
         let (
-            chain_config,
+            chain_config_builder,
             genesis_stake_private_key,
             genesis_vrf_private_key,
             create_genesis_pool_txoutput,
@@ -1447,6 +1484,7 @@ mod produce_block {
             &extra_genesis_txs,
             &mut rng,
         );
+        let chain_config = build_chain_config_for_pos(chain_config_builder);
 
         let input_data = GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
             genesis_stake_private_key,
