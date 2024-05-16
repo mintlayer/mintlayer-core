@@ -129,7 +129,7 @@ pub struct BlockProduction {
     mining_thread_pool: Arc<slave_pool::ThreadPool>,
     p2p_handle: P2pHandle,
     e2e_encryption_key: ephemeral_e2e::EndToEndPrivateKey,
-    last_used_block_timespamps: Mutex<BTreeMap<PoolId, BlockTimestamp>>,
+    last_used_block_timespamps_for_pos: Mutex<BTreeMap<PoolId, BlockTimestamp>>,
 }
 
 impl BlockProduction {
@@ -156,7 +156,7 @@ impl BlockProduction {
             job_manager_handle,
             mining_thread_pool,
             e2e_encryption_key: EndToEndPrivateKey::new_from_rng(&mut rng),
-            last_used_block_timespamps: Mutex::new(BTreeMap::new()),
+            last_used_block_timespamps_for_pos: Mutex::new(BTreeMap::new()),
         };
 
         Ok(block_production)
@@ -182,14 +182,14 @@ impl BlockProduction {
         Ok(self.job_manager_handle.stop_job(job_key).await? == 1)
     }
 
-    fn get_last_used_block_timestamp(
+    fn get_last_used_block_timestamp_for_pos(
         &self,
         input_data: &GenerateBlockInputData,
     ) -> Option<BlockTimestamp> {
         match input_data {
             GenerateBlockInputData::PoS(pos_data) => {
                 let pool_id = pos_data.pool_id();
-                self.last_used_block_timespamps
+                self.last_used_block_timespamps_for_pos
                     .lock()
                     .expect("poisoned mutex")
                     .get(&pool_id)
@@ -200,7 +200,7 @@ impl BlockProduction {
         }
     }
 
-    fn update_last_used_block_timestamp(
+    fn update_last_used_block_timestamp_for_pos(
         &self,
         input_data: &GenerateBlockInputData,
         last_used_block_timestamp: BlockTimestamp,
@@ -208,12 +208,12 @@ impl BlockProduction {
         match input_data {
             GenerateBlockInputData::PoS(pos_data) => {
                 let pool_id = pos_data.pool_id();
-                let mut last_used_block_timespamps =
-                    self.last_used_block_timespamps.lock().expect("poisoned mutex");
+                let mut timespamps =
+                    self.last_used_block_timespamps_for_pos.lock().expect("poisoned mutex");
 
                 // TODO: need a way to clean the map from pools that no longer exist
                 // (probably, it's better to just remove timestamps that are too old).
-                last_used_block_timespamps.insert(pool_id, last_used_block_timestamp);
+                timespamps.insert(pool_id, last_used_block_timestamp);
             }
 
             GenerateBlockInputData::PoW(_) | GenerateBlockInputData::None => {}
@@ -449,7 +449,8 @@ impl BlockProduction {
             .add_job(custom_id.clone(), Some(tip_at_start.block_id()))
             .await?;
 
-        let previous_last_used_block_timestamp = self.get_last_used_block_timestamp(&input_data);
+        let last_used_block_timestamp_for_pos =
+            self.get_last_used_block_timestamp_for_pos(&input_data);
 
         // This destructor ensures that the job manager cleans up its
         // housekeeping for the job when this current function returns
@@ -473,7 +474,7 @@ impl BlockProduction {
         // calls, given the same tip
         let last_timestamp_seconds_used = {
             let prev_timestamp = cmp::max(
-                previous_last_used_block_timestamp.unwrap_or(BlockTimestamp::from_int_seconds(0)),
+                last_used_block_timestamp_for_pos.unwrap_or(BlockTimestamp::from_int_seconds(0)),
                 tip_at_start.block_timestamp(),
             );
 
@@ -558,7 +559,7 @@ impl BlockProduction {
         let last_used_block_timestamp =
             BlockTimestamp::from_int_seconds(last_timestamp_seconds_used.load());
 
-        self.update_last_used_block_timestamp(&input_data, last_used_block_timestamp);
+        self.update_last_used_block_timestamp_for_pos(&input_data, last_used_block_timestamp);
 
         let signed_block_header = solver_result?;
         let block = Block::new_from_header(signed_block_header, block_body.clone())?;
