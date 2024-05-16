@@ -119,6 +119,33 @@ impl PoSGenerateBlockInputData {
     }
 }
 
+/// Input data for the timestamp searching
+///
+/// Note: since the struct contains the vrf private key, it must be
+/// encrypted when transmitting it over rpc.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct PoSTimestampSearchInputData {
+    pool_id: PoolId,
+    vrf_private_key: VRFPrivateKey,
+}
+
+impl PoSTimestampSearchInputData {
+    pub fn new(pool_id: PoolId, vrf_private_key: VRFPrivateKey) -> Self {
+        Self {
+            pool_id,
+            vrf_private_key,
+        }
+    }
+
+    pub fn pool_id(&self) -> &PoolId {
+        &self.pool_id
+    }
+
+    pub fn vrf_private_key(&self) -> &VRFPrivateKey {
+        &self.vrf_private_key
+    }
+}
+
 /// Input needed to finalize PoS consensus data
 ///
 /// This struct is an internal data structure that will be created by

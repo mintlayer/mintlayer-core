@@ -1135,3 +1135,29 @@ Returns:
 hex string
 ```
 
+### Method `blockprod_collect_timestamp_search_data_e2e`
+
+Collect the search data needed by the `timestamp_searcher` module.
+
+See `timestamp_searcher::collect_timestamp_search_data` for the details about
+the parameters.
+
+
+Parameters:
+```
+{
+    "pool_id": hex string,
+    "min_height": number,
+    "max_height": EITHER OF
+         1) number
+         2) null,
+    "seconds_to_check_for_height": number,
+    "all_timestamps_between_blocks": bool,
+}
+```
+
+Returns:
+```
+hex string
+```
+

@@ -1274,6 +1274,10 @@ impl Account {
         Ok(tx)
     }
 
+    pub fn pool_exists(&self, pool_id: PoolId) -> bool {
+        self.output_cache.pool_data(pool_id).is_ok()
+    }
+
     pub fn get_pos_gen_block_data(
         &self,
         db_tx: &impl WalletStorageReadUnlocked,

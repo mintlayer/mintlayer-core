@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod job_manager;
+pub mod timestamp_searcher;
 pub mod utils;
 
 use std::{
@@ -31,7 +32,7 @@ use common::{
             block_body::BlockBody, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        Block, ChainConfig, GenBlock, SignedTransaction, Transaction,
+        Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -61,9 +62,12 @@ use crate::{
     BlockProductionError,
 };
 
-use self::utils::{
-    get_best_block_index, get_pool_balances_at_height, get_pool_staker_balance,
-    get_pool_total_balance, get_sealed_epoch_randomness, make_ancestor_getter, timestamp_add_secs,
+use self::{
+    timestamp_searcher::TimestampSearchData,
+    utils::{
+        get_best_block_index, get_pool_staker_balance, get_pool_total_balance,
+        get_sealed_epoch_randomness, make_ancestor_getter, timestamp_add_secs,
+    },
 };
 
 pub const JOBKEY_DEFAULT_LEN: usize = 32;
@@ -583,6 +587,25 @@ impl BlockProduction {
     pub fn e2e_private_key(&self) -> &ephemeral_e2e::EndToEndPrivateKey {
         &self.e2e_encryption_key
     }
+
+    pub async fn collect_timestamp_search_data_impl(
+        &self,
+        pool_id: &PoolId,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        check_all_timestamps_between_blocks: bool,
+    ) -> Result<TimestampSearchData, BlockProductionError> {
+        timestamp_searcher::collect_timestamp_search_data(
+            &self.chainstate_handle,
+            pool_id,
+            min_height,
+            max_height,
+            seconds_to_check_for_height,
+            check_all_timestamps_between_blocks,
+        )
+        .await
+    }
 }
 
 fn generate_finalize_block_data(
@@ -620,7 +643,7 @@ fn generate_finalize_block_data_pos(
 
     #[cfg(debug_assertions)]
     {
-        let pool_balances = get_pool_balances_at_height(
+        let pool_balances = utils::get_pool_balances_at_height(
             chainstate,
             new_block_height.prev_height().expect("new block height can't be zero"),
             &pool_id,

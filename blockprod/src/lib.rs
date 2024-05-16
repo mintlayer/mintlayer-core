@@ -41,6 +41,8 @@ use mempool::{tx_accumulator::TxAccumulatorError, MempoolHandle};
 use p2p::P2pHandle;
 use subsystem::error::CallError;
 
+pub use detail::timestamp_searcher::{find_timestamps_for_staking, TimestampSearchData};
+
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum BlockProductionError {
     #[error("Failed to retrieve chainstate info")]
@@ -77,6 +79,16 @@ pub enum BlockProductionError {
     TimestampOverflow(BlockTimestamp, u64),
     #[error("Chainstate error: `{0}`")]
     ChainstateError(#[from] consensus::ChainstateError),
+    #[error("Wrong height range: {0}, {1}")]
+    WrongHeightRange(BlockHeight, BlockHeight),
+    #[error("Block at height {0} doesn't exist")]
+    NoBlockForHeight(BlockHeight),
+    #[error("Block index missing for block {0}")]
+    InconsistentDbMissingBlockIndex(Id<GenBlock>),
+    #[error("Unexpected consensus type: None")]
+    UnexpectedConsensusTypeNone,
+    #[error("Unexpected consensus type: PoW")]
+    UnexpectedConsensusTypePoW,
     #[error("Pool data for pool {0} not found")]
     PoolDataNotFound(PoolId),
     #[error("Balance for pool {0} not found")]

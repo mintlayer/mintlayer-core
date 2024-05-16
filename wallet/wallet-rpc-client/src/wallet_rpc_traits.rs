@@ -13,11 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{num::NonZeroUsize, path::PathBuf};
+use std::{collections::BTreeMap, num::NonZeroUsize, path::PathBuf};
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint},
+    chain::{
+        block::timestamp::BlockTimestamp, Block, GenBlock, SignedTransaction, Transaction,
+        TxOutput, UtxoOutPoint,
+    },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
 use crypto::key::{hdkd::u31::U31, PrivateKey};
@@ -544,6 +547,15 @@ pub trait WalletInterface {
         account_index: U31,
         block_count: u32,
     ) -> Result<(), Self::Error>;
+
+    async fn node_find_timestamps_for_staking(
+        &self,
+        pool_id: String,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        check_all_timestamps_between_blocks: bool,
+    ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, Self::Error>;
 
     async fn node_block(&self, block_id: String) -> Result<Option<String>, Self::Error>;
 

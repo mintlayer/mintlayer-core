@@ -16,8 +16,8 @@
 use super::*;
 use chainstate_storage::Transactional;
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
-    TxVerificationStrategy,
+    anyonecanspend_address, create_stake_pool_data_with_all_reward_to_staker, empty_witness,
+    TestFramework, TestStore, TransactionBuilder, TxVerificationStrategy,
 };
 use common::{
     chain::{
@@ -286,7 +286,7 @@ fn pos_accounting_homomorphism(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let min_stake_pool_pledge = tf.chainstate.get_chain_config().min_stake_pool_pledge();
-        let (stake_pool_data, _) = helpers::pos::create_stake_pool_data_with_all_reward_to_staker(
+        let (stake_pool_data, _) = create_stake_pool_data_with_all_reward_to_staker(
             &mut rng,
             min_stake_pool_pledge,
             vrf_pk,

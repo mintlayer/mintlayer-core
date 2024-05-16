@@ -13,15 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::helpers::{
-    in_memory_storage_wrapper::InMemoryStorageWrapper,
-    pos::create_stake_pool_data_with_all_reward_to_staker,
-};
+use super::helpers::in_memory_storage_wrapper::InMemoryStorageWrapper;
 use super::*;
 
-use chainstate_test_framework::{empty_witness, TestFramework, TestStore, TransactionBuilder};
-use common::chain::config::create_unit_test_config;
-use common::chain::{AccountCommand, AccountNonce, AccountSpending, RewardDistributionVersion};
+use chainstate_test_framework::{
+    create_stake_pool_data_with_all_reward_to_staker, empty_witness, TestFramework, TestStore,
+    TransactionBuilder,
+};
+use common::chain::{
+    config::create_unit_test_config, AccountCommand, AccountNonce, AccountSpending,
+    RewardDistributionVersion,
+};
 use common::{
     chain::{
         config::ChainType,

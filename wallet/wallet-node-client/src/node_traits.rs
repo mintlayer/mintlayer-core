@@ -71,7 +71,7 @@ pub trait NodeInterface {
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error>;
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error>;
-    async fn generate_block_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error>;
+    async fn blockprod_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error>;
     async fn generate_block(
         &self,
         input_data: GenerateBlockInputData,
@@ -87,6 +87,14 @@ pub trait NodeInterface {
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, Self::Error>;
+    async fn collect_timestamp_search_data(
+        &self,
+        pool_id: PoolId,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        check_all_timestamps_between_blocks: bool,
+    ) -> Result<blockprod::TimestampSearchData, Self::Error>;
     async fn submit_block(&self, block: Block) -> Result<(), Self::Error>;
     async fn submit_transaction(
         &self,

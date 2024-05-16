@@ -15,7 +15,7 @@
 
 use std::{num::NonZeroUsize, time::Duration};
 
-use blockprod::rpc::BlockProductionRpcClient;
+use blockprod::{rpc::BlockProductionRpcClient, TimestampSearchData};
 use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
 use common::{
     address::Address,
@@ -160,7 +160,7 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
 
-    async fn generate_block_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error> {
+    async fn blockprod_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error> {
         BlockProductionRpcClient::e2e_public_key(&self.http_client)
             .await
             .map(HexEncoded::take)
@@ -183,6 +183,27 @@ impl NodeInterface for NodeRpcClient {
             transactions,
             transaction_ids,
             packing_strategy,
+        )
+        .await
+        .map(HexEncoded::take)
+        .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn collect_timestamp_search_data(
+        &self,
+        pool_id: PoolId,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        all_timestamps_between_blocks: bool,
+    ) -> Result<TimestampSearchData, Self::Error> {
+        BlockProductionRpcClient::collect_timestamp_search_data(
+            &self.http_client,
+            pool_id,
+            min_height,
+            max_height,
+            seconds_to_check_for_height,
+            all_timestamps_between_blocks,
         )
         .await
         .map(HexEncoded::take)

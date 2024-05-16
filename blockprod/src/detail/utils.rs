@@ -19,10 +19,14 @@ use chainstate::{
 use chainstate_types::{pos_randomness::PoSRandomness, EpochData};
 use common::{
     chain::{
-        block::timestamp::{BlockTimestamp, BlockTimestampInternalType},
-        ChainConfig, PoolId,
+        block::{
+            consensus_data::PoSData,
+            timestamp::{BlockTimestamp, BlockTimestampInternalType},
+            BlockHeader, ConsensusData,
+        },
+        Block, ChainConfig, GenBlock, PoSStatus, PoolId, RequiredConsensus,
     },
-    primitives::{Amount, BlockHeight},
+    primitives::{Amount, BlockHeight, Id},
 };
 
 use crate::BlockProductionError;
@@ -91,6 +95,7 @@ pub fn get_pool_balances_at_heights<CS: ChainstateInterface + ?Sized>(
     Ok(balances_iter)
 }
 
+#[allow(dead_code)]
 pub fn get_pool_balances_at_height<CS: ChainstateInterface + ?Sized>(
     chainstate: &CS,
     height: BlockHeight,
@@ -145,6 +150,31 @@ pub fn get_sealed_epoch_randomness_from_sealed_epoch_index<CS: ChainstateInterfa
     Ok(sealed_epoch_randomness)
 }
 
+pub fn pos_data_from_header(
+    block_header: &BlockHeader,
+) -> Result<&'_ PoSData, BlockProductionError> {
+    match block_header.consensus_data() {
+        ConsensusData::PoS(pos_data) => Ok(pos_data),
+
+        ConsensusData::PoW(_) => Err(BlockProductionError::UnexpectedConsensusTypePoW),
+        ConsensusData::None => Err(BlockProductionError::UnexpectedConsensusTypeNone),
+    }
+}
+
+pub fn pos_status_from_height(
+    chain_config: &ChainConfig,
+    height: BlockHeight,
+) -> Result<PoSStatus, BlockProductionError> {
+    match chain_config.consensus_upgrades().consensus_status(height) {
+        RequiredConsensus::PoS(pos_status) => Ok(pos_status),
+
+        RequiredConsensus::PoW(_) => Err(BlockProductionError::UnexpectedConsensusTypePoW),
+        RequiredConsensus::IgnoreConsensus => {
+            Err(BlockProductionError::UnexpectedConsensusTypeNone)
+        }
+    }
+}
+
 pub fn make_ancestor_getter<CS: ChainstateInterface + ?Sized>(
     cs: &CS,
 ) -> impl Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, consensus::ChainstateError> + '_ {
@@ -168,6 +198,64 @@ pub fn get_best_block_index<CS: ChainstateInterface + ?Sized>(
             consensus::ChainstateError::FailedToObtainBestBlockIndex(err.to_string()),
         )
     })
+}
+
+pub fn get_existing_block_index<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
+    block_id: &Id<Block>,
+) -> Result<BlockIndex, BlockProductionError> {
+    let block_index = chainstate
+        .get_block_index_for_persisted_block(block_id)
+        .map_err(|err| {
+            BlockProductionError::ChainstateError(
+                consensus::ChainstateError::FailedToObtainBlockIndex(
+                    (*block_id).into(),
+                    err.to_string(),
+                ),
+            )
+        })?
+        .ok_or(BlockProductionError::InconsistentDbMissingBlockIndex(
+            (*block_id).into(),
+        ))?;
+
+    Ok(block_index)
+}
+
+pub fn get_existing_gen_block_index<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
+    block_id: &Id<GenBlock>,
+) -> Result<GenBlockIndex, BlockProductionError> {
+    let block_index = chainstate
+        .get_gen_block_index_for_persisted_block(block_id)
+        .map_err(|err| {
+            BlockProductionError::ChainstateError(
+                consensus::ChainstateError::FailedToObtainBlockIndex(*block_id, err.to_string()),
+            )
+        })?
+        .ok_or(BlockProductionError::InconsistentDbMissingBlockIndex(
+            *block_id,
+        ))?;
+
+    Ok(block_index)
+}
+
+pub fn get_block_id_from_height<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
+    height: BlockHeight,
+) -> Result<Id<GenBlock>, BlockProductionError> {
+    let block_id = chainstate
+        .get_block_id_from_height(&height)
+        .map_err(|err| {
+            BlockProductionError::ChainstateError(
+                consensus::ChainstateError::FailedToObtainBlockIdFromHeight(
+                    height,
+                    err.to_string(),
+                ),
+            )
+        })?
+        .ok_or(BlockProductionError::NoBlockForHeight(height))?;
+
+    Ok(block_id)
 }
 
 pub fn timestamp_add_secs(

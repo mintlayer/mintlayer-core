@@ -20,7 +20,8 @@ use rstest::rstest;
 use chainstate::ChainstateConfig;
 use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
-    empty_witness, PoSBlockBuilder, TestFramework, TransactionBuilder,
+    create_custom_genesis_with_stake_pool, create_stake_pool_data_with_all_reward_to_staker,
+    empty_witness, PoSBlockBuilder, TestFramework, TransactionBuilder, UtxoForSpending,
 };
 use common::{
     chain::{
@@ -39,10 +40,6 @@ use logging::log;
 use pos_accounting::PoSAccountingStorageRead;
 use randomness::{seq::IteratorRandom, CryptoRng, Rng};
 use test_utils::random::{make_seedable_rng, Seed};
-
-use crate::tests::helpers::pos::create_stake_pool_data_with_all_reward_to_staker;
-
-use super::helpers::pos::create_custom_genesis_with_stake_pool_specify_amounts;
 
 #[rstest]
 #[trace]
@@ -250,7 +247,7 @@ fn make_test_framework(rng: &mut (impl Rng + CryptoRng)) -> TestFramework {
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).unwrap();
-    let genesis = create_custom_genesis_with_stake_pool_specify_amounts(
+    let genesis = create_custom_genesis_with_stake_pool(
         staking_pk,
         vrf_pk,
         INITIAL_MINT_AMOUNT,
@@ -380,8 +377,7 @@ struct TestData {
     decommissioned_pools: BTreeSet<PoolId>,
     delegations: BTreeMap<DelegationId, /*next_nonce:*/ AccountNonce>,
     expected_balances: BTreeMap<BlockHeight, BTreeMap<PoolId, Balances>>,
-    outpoint_for_spending: UtxoOutPoint,
-    amount_available_for_spending: Amount,
+    utxo_for_spending: UtxoForSpending,
 }
 
 impl TestData {
@@ -391,11 +387,13 @@ impl TestData {
             decommissioned_pools: BTreeSet::new(),
             delegations: BTreeMap::new(),
             expected_balances: BTreeMap::new(),
-            outpoint_for_spending: UtxoOutPoint::new(
-                OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                0,
+            utxo_for_spending: UtxoForSpending::new(
+                UtxoOutPoint::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                INITIAL_MINT_AMOUNT,
             ),
-            amount_available_for_spending: INITIAL_MINT_AMOUNT,
         }
     }
 
@@ -409,35 +407,24 @@ impl TestData {
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let pledge =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
-        let change = (self.amount_available_for_spending - pledge).unwrap();
         let (stake_pool_data, staker_key) =
             create_stake_pool_data_with_all_reward_to_staker(rng, pledge, vrf_pk);
-        let pool_id = pos_accounting::make_pool_id(&self.outpoint_for_spending);
+        let pool_id = pos_accounting::make_pool_id(self.utxo_for_spending.outpoint());
 
-        let tx = TransactionBuilder::new()
-            .add_input(
-                self.outpoint_for_spending.clone().into(),
-                empty_witness(rng),
-            )
-            .add_output(TxOutput::CreateStakePool(
-                pool_id,
-                Box::new(stake_pool_data),
-            ))
-            .add_output(TxOutput::Transfer(
-                OutputValue::Coin(change),
-                Destination::AnyoneCanSpend,
-            ))
-            .build();
+        let tx_builder = TransactionBuilder::new().add_output(TxOutput::CreateStakePool(
+            pool_id,
+            Box::new(stake_pool_data),
+        ));
+        let tx =
+            self.utxo_for_spending
+                .add_input_and_build_tx(tx_builder, pledge, Amount::ZERO, rng);
+
         let tx_id = tx.transaction().get_id();
         let stake_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), 0);
-        let change_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), 1);
         make_block_builder_with_pool(tf, &genesis_pool_id())
             .add_transaction(tx)
             .build_and_process(rng)
             .unwrap();
-
-        self.outpoint_for_spending = change_outpoint;
-        self.amount_available_for_spending = change;
 
         log::debug!(
             "New pool {pool_id} created with pledge {}",
@@ -512,14 +499,9 @@ impl TestData {
             tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
         let amount_to_delegate =
             Amount::from_atoms(rng.gen_range(min_stake_pool_pledge / 2..min_stake_pool_pledge * 2));
-        let change = (self.amount_available_for_spending - amount_to_delegate).unwrap();
 
-        let delegation_id = pos_accounting::make_delegation_id(&self.outpoint_for_spending);
-        let tx1 = TransactionBuilder::new()
-            .add_input(
-                self.outpoint_for_spending.clone().into(),
-                empty_witness(rng),
-            )
+        let delegation_id = pos_accounting::make_delegation_id(self.utxo_for_spending.outpoint());
+        let tx1_builder = TransactionBuilder::new()
             .add_output(TxOutput::CreateDelegationId(
                 Destination::AnyoneCanSpend,
                 *pool_id,
@@ -527,18 +509,15 @@ impl TestData {
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(amount_to_delegate),
                 Destination::AnyoneCanSpend,
-            ))
-            .add_output(TxOutput::Transfer(
-                OutputValue::Coin(change),
-                Destination::AnyoneCanSpend,
-            ))
-            .build();
+            ));
+        let tx1 = self.utxo_for_spending.add_input_and_build_tx(
+            tx1_builder,
+            amount_to_delegate,
+            Amount::ZERO,
+            rng,
+        );
         let tx1_id = tx1.transaction().get_id();
         let transfer_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx1_id), 1);
-        let change_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(tx1_id), 2);
-
-        self.outpoint_for_spending = change_outpoint;
-        self.amount_available_for_spending = change;
 
         let tx2 = TransactionBuilder::new()
             .add_input(transfer_outpoint.into(), empty_witness(rng))
@@ -627,25 +606,15 @@ impl TestData {
         delegation_id: &DelegationId,
     ) -> Amount {
         let amount_to_add = Amount::from_atoms(rng.gen_range(1000..10_000));
-        let change = (self.amount_available_for_spending - amount_to_add).unwrap();
 
-        let tx = TransactionBuilder::new()
-            .add_input(
-                self.outpoint_for_spending.clone().into(),
-                empty_witness(rng),
-            )
-            .add_output(TxOutput::DelegateStaking(amount_to_add, *delegation_id))
-            .add_output(TxOutput::Transfer(
-                OutputValue::Coin(change),
-                Destination::AnyoneCanSpend,
-            ))
-            .build();
-
-        let change_outpoint =
-            UtxoOutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 1);
-
-        self.outpoint_for_spending = change_outpoint;
-        self.amount_available_for_spending = change;
+        let tx_builder = TransactionBuilder::new()
+            .add_output(TxOutput::DelegateStaking(amount_to_add, *delegation_id));
+        let tx = self.utxo_for_spending.add_input_and_build_tx(
+            tx_builder,
+            amount_to_add,
+            Amount::ZERO,
+            rng,
+        );
 
         make_block_builder_with_pool(tf, &genesis_pool_id())
             .add_transaction(tx)

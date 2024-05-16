@@ -24,6 +24,7 @@ pub mod types;
 const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
 
+use blockprod::BlockProductionError;
 use futures::{
     never::Never,
     stream::{FuturesOrdered, FuturesUnordered},
@@ -50,6 +51,7 @@ use synced_controller::SyncedController;
 use common::{
     address::AddressError,
     chain::{
+        block::timestamp::BlockTimestamp,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::signature_hash,
@@ -65,7 +67,7 @@ use common::{
         Amount, BlockHeight, Id, Idable,
     },
 };
-use consensus::GenerateBlockInputData;
+use consensus::{GenerateBlockInputData, PoSTimestampSearchInputData};
 use crypto::{ephemeral_e2e::EndToEndPrivateKey, key::hdkd::u31::U31};
 use logging::log;
 use mempool::tx_accumulator::PackingStrategy;
@@ -126,6 +128,8 @@ pub enum ControllerError<T: NodeInterface> {
     WalletFileAlreadyOpen,
     #[error("Please open or create wallet file first")]
     NoWallet,
+    #[error("Search for timestamps failed: {0}")]
+    SearchForTimestampsFailed(BlockProductionError),
 }
 
 #[derive(Clone, Copy)]
@@ -434,7 +438,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
         let public_key = self
             .rpc_client
-            .generate_block_e2e_public_key()
+            .blockprod_e2e_public_key()
             .await
             .map_err(ControllerError::NodeCallError)?;
 
@@ -516,6 +520,49 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         }
 
         self.sync_once().await
+    }
+
+    /// For each block height in the specified range, find timestamps where staking is/was possible
+    /// for the given pool.
+    ///
+    /// `min_height` must not be zero; `max_height` must not exceed the best block height plus one.
+    ///
+    /// If `check_all_timestamps_between_blocks` is `false`, `seconds_to_check_for_height + 1` is the number
+    /// of seconds that will be checked at each height in the range.
+    /// If `check_all_timestamps_between_blocks` is `true`, `seconds_to_check_for_height` only applies to the
+    /// last height in the range; for all other heights the maximum timestamp is the timestamp
+    /// of the next block.
+    pub async fn find_timestamps_for_staking(
+        &self,
+        pool_id: PoolId,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        check_all_timestamps_between_blocks: bool,
+    ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, ControllerError<T>> {
+        let pos_data = self
+            .wallet
+            .get_pos_gen_block_data_by_pool_id(pool_id)
+            .map_err(ControllerError::WalletError)?;
+
+        let input_data =
+            PoSTimestampSearchInputData::new(pool_id, pos_data.vrf_private_key().clone());
+
+        let search_data = self
+            .rpc_client
+            .collect_timestamp_search_data(
+                pool_id,
+                min_height,
+                max_height,
+                seconds_to_check_for_height,
+                check_all_timestamps_between_blocks,
+            )
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+
+        blockprod::find_timestamps_for_staking(input_data, search_data)
+            .await
+            .map_err(|err| ControllerError::SearchForTimestampsFailed(err))
     }
 
     pub fn create_account(

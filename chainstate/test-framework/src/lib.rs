@@ -26,6 +26,7 @@ pub mod storage;
 mod transaction_builder;
 mod tx_verification_strategy;
 mod utils;
+mod utxo_for_spending;
 
 /// Storage backend used for testing (the in-memory backend with simulated failures)
 pub use storage::TestStore;
@@ -36,12 +37,14 @@ pub type TestChainstate = Box<dyn chainstate::chainstate_interface::ChainstateIn
 pub use {
     crate::utils::{
         anyonecanspend_address, create_chain_config_with_default_staking_pool,
-        create_chain_config_with_staking_pool, empty_witness, get_output_value, pos_mine,
-        produce_kernel_signature,
+        create_chain_config_with_staking_pool, create_custom_genesis_with_stake_pool,
+        create_stake_pool_data_with_all_reward_to_staker, empty_witness, get_output_value,
+        pos_mine, produce_kernel_signature,
     },
     block_builder::BlockBuilder,
     framework::TestFramework,
     framework_builder::{OrphanErrorHandler, TestFrameworkBuilder, TxVerificationStrategy},
     pos_block_builder::PoSBlockBuilder,
     transaction_builder::TransactionBuilder,
+    utxo_for_spending::UtxoForSpending,
 };

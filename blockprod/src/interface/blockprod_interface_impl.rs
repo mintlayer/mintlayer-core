@@ -15,11 +15,11 @@
 
 use crate::{
     detail::{job_manager::JobKey, BlockProduction},
-    BlockProductionError,
+    BlockProductionError, TimestampSearchData,
 };
 use common::{
-    chain::{Block, SignedTransaction, Transaction},
-    primitives::Id,
+    chain::{Block, PoolId, SignedTransaction, Transaction},
+    primitives::{BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e;
@@ -61,16 +61,34 @@ impl BlockProductionInterface for BlockProduction {
     async fn generate_block_e2e(
         &mut self,
         encrypted_input_data: Vec<u8>,
-        public_key: ephemeral_e2e::EndToEndPublicKey,
+        e2e_public_key: ephemeral_e2e::EndToEndPublicKey,
         transactions: Vec<SignedTransaction>,
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, BlockProductionError> {
-        let shared_secret = self.e2e_private_key().shared_secret(&public_key);
+        let shared_secret = self.e2e_private_key().shared_secret(&e2e_public_key);
         let input_data =
             shared_secret.decrypt_then_decode::<GenerateBlockInputData>(&encrypted_input_data)?;
         self.generate_block(input_data, transactions, transaction_ids, packing_strategy)
             .await
+    }
+
+    async fn collect_timestamp_search_data(
+        &self,
+        pool_id: PoolId,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        all_timestamps_between_blocks: bool,
+    ) -> Result<TimestampSearchData, BlockProductionError> {
+        self.collect_timestamp_search_data_impl(
+            &pool_id,
+            min_height,
+            max_height,
+            seconds_to_check_for_height,
+            all_timestamps_between_blocks,
+        )
+        .await
     }
 }
 

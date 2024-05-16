@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::NonZeroUsize;
+use std::{collections::BTreeMap, num::NonZeroUsize};
 
 use common::{
     address::RpcAddress,
     chain::{
-        tokens::TokenId, Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction, TxOutput,
+        block::timestamp::BlockTimestamp, tokens::TokenId, Block, DelegationId, Destination,
+        GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -798,6 +798,26 @@ trait WalletRpc {
         account: AccountArg,
         block_count: u32,
     ) -> rpc::RpcResult<()>;
+
+    /// For each block height in the specified range, find timestamps where staking is/was possible
+    /// for the given pool.
+    ///
+    /// `min_height` must not be zero; `max_height` must not exceed the best block height plus one.
+    ///
+    /// If `check_all_timestamps_between_blocks` is `false`, `seconds_to_check_for_height + 1` is the number
+    /// of seconds that will be checked at each height in the range.
+    /// If `check_all_timestamps_between_blocks` is `true`, `seconds_to_check_for_height` only applies to the
+    /// last height in the range; for all other heights the maximum timestamp is the timestamp
+    /// of the next block.
+    #[method(name = "node_find_timestamps_for_staking")]
+    async fn node_find_timestamps_for_staking(
+        &self,
+        pool_id: RpcAddress<PoolId>,
+        min_height: BlockHeight,
+        max_height: Option<BlockHeight>,
+        seconds_to_check_for_height: u64,
+        check_all_timestamps_between_blocks: bool,
+    ) -> rpc::RpcResult<BTreeMap<BlockHeight, Vec<BlockTimestamp>>>;
 
     /// Get a block by its hash, represented with hex encoded bytes
     #[method(name = "node_get_block")]

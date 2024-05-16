@@ -1719,6 +1719,21 @@ impl<B: storage::Backend> Wallet<B> {
         self.get_account(account_index)?.get_pos_gen_block_data(&db_tx, pool_id)
     }
 
+    pub fn get_pos_gen_block_data_by_pool_id(
+        &self,
+        pool_id: PoolId,
+    ) -> WalletResult<PoSGenerateBlockInputData> {
+        let db_tx = self.db.transaction_ro_unlocked()?;
+
+        for acc in self.accounts.values() {
+            if acc.pool_exists(pool_id) {
+                return acc.get_pos_gen_block_data(&db_tx, pool_id);
+            }
+        }
+
+        Err(WalletError::UnknownPoolId(pool_id))
+    }
+
     /// Returns the last scanned block hash and height for all accounts.
     /// Returns genesis block when the wallet is just created.
     pub fn get_best_block(&self) -> BTreeMap<U31, (Id<GenBlock>, BlockHeight)> {

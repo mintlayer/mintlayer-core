@@ -595,7 +595,9 @@ impl BlockProcessingErrorClassification for consensus::ChainstateError {
                 error: _err,
             }
             | ChainstateError::FailedToCalculateMedianTimePast(_, _err)
+            | ChainstateError::FailedToObtainBlockIndex(_, _err)
             | ChainstateError::FailedToObtainBestBlockIndex(_err)
+            | ChainstateError::FailedToObtainBlockIdFromHeight(_, _err)
             | ChainstateError::FailedToObtainAncestor(_, _, _err)
             | ChainstateError::StakePoolDataReadError(_, _err)
             | ChainstateError::PoolBalanceReadError(_, _err) => BlockProcessingErrorClass::General,
