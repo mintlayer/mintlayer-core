@@ -602,14 +602,8 @@ where
 
             // should return only once the first utxo and also the locked utxo
             let utxos = db_tx.get_address_all_utxos(bob_address.as_str()).await.unwrap();
-            assert_eq!(utxos.len(), 2);
-            assert_eq!(
-                utxos.iter().find(|utxo| utxo.0 == outpoint),
-                Some(&(
-                    outpoint.clone(),
-                    UtxoWithExtraInfo::new(output.clone(), None)
-                ))
-            );
+            assert_eq!(utxos.len(), 1);
+            assert_eq!(utxos.iter().find(|utxo| utxo.0 == outpoint), None,);
             assert_eq!(
                 utxos.iter().find(|utxo| utxo.0 == locked_outpoint),
                 Some(&(locked_outpoint, UtxoWithExtraInfo::new(locked_output, None)))
@@ -930,6 +924,7 @@ where
             let random_nonce2 = AccountNonce::new(rng.gen::<u64>());
 
             let random_delegation = Delegation::new(
+                random_block_height,
                 Destination::PublicKey(pk.clone()),
                 random_pool_id,
                 random_balance,
@@ -937,6 +932,7 @@ where
             );
 
             let random_delegation2 = Delegation::new(
+                random_block_height2,
                 Destination::PublicKey(pk.clone()),
                 random_pool_id2,
                 random_balance2,
@@ -986,6 +982,7 @@ where
             let random_nonce = AccountNonce::new(rng.gen::<u64>());
 
             let random_delegation_new = Delegation::new(
+                random_block_height,
                 Destination::PublicKey(pk),
                 random_pool_id,
                 random_balance,
