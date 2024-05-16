@@ -20,8 +20,8 @@ use common::{
         block::timestamp::BlockTimestamp,
         timelock::OutputTimeLock,
         tokens::{
-            IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, TokenId,
-            TokenTotalSupply,
+            IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, RPCFungibleTokenInfo,
+            TokenId, TokenTotalSupply,
         },
         AccountNonce, Block, ChainConfig, DelegationId, Destination, PoolId, SignedTransaction,
         Transaction, TxOutput, UtxoOutPoint,
@@ -66,6 +66,7 @@ pub enum ApiServerStorageError {
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct Delegation {
+    creation_block_height: BlockHeight,
     spend_destination: Destination,
     pool_id: PoolId,
     balance: Amount,
@@ -74,17 +75,23 @@ pub struct Delegation {
 
 impl Delegation {
     pub fn new(
+        creation_block_height: BlockHeight,
         spend_destination: Destination,
         pool_id: PoolId,
         balance: Amount,
         next_nonce: AccountNonce,
     ) -> Self {
         Self {
+            creation_block_height,
             spend_destination,
             pool_id,
             balance,
             next_nonce,
         }
+    }
+
+    pub fn creation_block_height(&self) -> BlockHeight {
+        self.creation_block_height
     }
 
     pub fn spend_destination(&self) -> &Destination {
@@ -109,6 +116,7 @@ impl Delegation {
             pool_id: self.pool_id,
             balance: (self.balance + rewards).expect("no overflow"),
             next_nonce: self.next_nonce,
+            creation_block_height: self.creation_block_height,
         }
     }
 
@@ -118,6 +126,7 @@ impl Delegation {
             pool_id: self.pool_id,
             balance: (self.balance - amount).expect("not underflow"),
             next_nonce: nonce.increment().expect("no overflow"),
+            creation_block_height: self.creation_block_height,
         }
     }
 }
@@ -286,6 +295,20 @@ impl FungibleTokenData {
     pub fn change_authority(mut self, authority: Destination) -> Self {
         self.authority = authority;
         self
+    }
+
+    pub fn into_rpc_token_info(self, token_id: TokenId) -> RPCFungibleTokenInfo {
+        RPCFungibleTokenInfo {
+            token_id,
+            token_ticker: self.token_ticker.into(),
+            number_of_decimals: self.number_of_decimals,
+            metadata_uri: self.metadata_uri.into(),
+            circulating_supply: self.circulating_supply,
+            total_supply: self.total_supply.into(),
+            is_locked: self.is_locked,
+            frozen: common::chain::tokens::RPCIsTokenFrozen::new(self.frozen),
+            authority: self.authority,
+        }
     }
 }
 
