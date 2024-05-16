@@ -23,7 +23,7 @@ use std::{
     sync::{mpsc, Arc, Mutex},
 };
 
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, watch};
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
 use chainstate_types::{pos_randomness::PoSRandomness, GenBlockIndex};
@@ -50,10 +50,7 @@ use p2p::P2pHandle;
 use randomness::{make_true_rng, Rng};
 use serialization::{Decode, Encode};
 
-use ::utils::{
-    atomics::{AcqRelAtomicU64, RelaxedAtomicBool},
-    once_destructor::OnceDestructor,
-};
+use ::utils::{atomics::RelaxedAtomicBool, once_destructor::OnceDestructor};
 
 use crate::{
     config::BlockProdConfig,
@@ -461,18 +458,7 @@ impl BlockProduction {
             OnceDestructor::new(move || job_stopper_function(job_key))
         };
 
-        // Unlike Proof of Work, which can vary any header field when
-        // searching for a valid block, Proof of Stake can only vary
-        // the header timestamp. Its search space starts at the
-        // previous block's timestamp + 1 second, and ends at the
-        // current timestamp + some distance in time defined by the
-        // blockchain.
-        //
-        // This variable keeps track of the last timestamp that was
-        // attempted, and during Proof of Stake, will prevent
-        // searching over the same search space, across multiple
-        // calls, given the same tip
-        let last_timestamp_seconds_used = {
+        let first_timestamp = {
             let prev_timestamp = cmp::max(
                 last_used_block_timestamp_for_pos.unwrap_or(BlockTimestamp::from_int_seconds(0)),
                 tip_at_start.block_timestamp(),
@@ -493,9 +479,12 @@ impl BlockProduction {
                     );
                 }
             }
-
-            Arc::new(AcqRelAtomicU64::new(prev_plus_one.as_int_seconds()))
+            
+            prev_plus_one
         };
+
+        let (last_used_block_timestamp_for_pos_sender, last_used_block_timestamp_for_pos_receiver) =
+            watch::channel(first_timestamp);
 
         let (
             consensus_data,
@@ -535,7 +524,8 @@ impl BlockProduction {
             &current_tip_index,
             Arc::clone(&stop_flag),
             &block_body,
-            Arc::clone(&last_timestamp_seconds_used),
+            first_timestamp,
+            last_used_block_timestamp_for_pos_sender,
             finalize_block_data,
             consensus_data,
             ended_sender,
@@ -556,24 +546,28 @@ impl BlockProduction {
             }
         };
 
-        let last_used_block_timestamp =
-            BlockTimestamp::from_int_seconds(last_timestamp_seconds_used.load());
+        let last_used_block_timestamp_for_pos =
+            *last_used_block_timestamp_for_pos_receiver.borrow();
 
-        self.update_last_used_block_timestamp_for_pos(&input_data, last_used_block_timestamp);
+        self.update_last_used_block_timestamp_for_pos(
+            &input_data,
+            last_used_block_timestamp_for_pos,
+        );
 
         let signed_block_header = solver_result?;
         let block = Block::new_from_header(signed_block_header, block_body.clone())?;
         Ok((block, job_finished_receiver))
     }
 
-    // TODO: get rid of the "block_timestamp_seconds" atomic.
     #[allow(clippy::too_many_arguments)]
     fn spawn_block_solver(
         &self,
         current_tip_index: &GenBlockIndex,
         stop_flag: Arc<RelaxedAtomicBool>,
         block_body: &BlockBody,
-        block_timestamp_seconds: Arc<AcqRelAtomicU64>,
+        // For PoS, this is the first timestamp to check.
+        block_timestamp: BlockTimestamp,
+        last_used_block_timestamp_for_pos_sender: watch::Sender<BlockTimestamp>,
         finalize_block_data: FinalizeBlockInputData,
         consensus_data: ConsensusData,
         ended_sender: mpsc::Sender<()>,
@@ -584,8 +578,6 @@ impl BlockProduction {
             let max_offset = self.chain_config.max_future_block_time_offset().as_secs();
             timestamp_add_secs(current_timestamp, max_offset)?
         };
-
-        let block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
 
         // TODO: this should be PoS only.
         if block_timestamp > max_block_timestamp_for_pos {
@@ -609,8 +601,7 @@ impl BlockProduction {
             );
 
             move || {
-                let mut block_timestamp_for_pos =
-                    BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
+                let mut block_timestamp_for_pos = block_timestamp;
 
                 let finalize_consensus_result = consensus::finalize_consensus_data(
                     &chain_config,
@@ -623,7 +614,7 @@ impl BlockProduction {
                 )
                 .map_err(BlockProductionError::FailedConsensusInitialization);
 
-                block_timestamp_seconds.store(block_timestamp_for_pos.as_int_seconds());
+                let _ = last_used_block_timestamp_for_pos_sender.send(block_timestamp_for_pos);
 
                 let _ended_sender = OnceDestructor::new(move || {
                     // This can fail if the function exited before the mining thread finished
