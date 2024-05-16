@@ -32,14 +32,16 @@ use common::{
             block_body::BlockBody, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction,
+        Block, ChainConfig, GenBlock, PoolId, RequiredConsensus, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
 use consensus::{
-    generate_consensus_data_and_reward, FinalizeBlockInputData, GenerateBlockInputData,
-    PoSFinalizeBlockInputData, PoSGenerateBlockInputData,
+    generate_consensus_data_and_reward_ignore_consensus, generate_pos_consensus_data_and_reward,
+    generate_pow_consensus_data_and_reward, ConsensusCreationError, ConsensusPoSError,
+    ConsensusPoWError, FinalizeBlockInputData, GenerateBlockInputData, PoSFinalizeBlockInputData,
+    PoSGenerateBlockInputData,
 };
 use crypto::ephemeral_e2e::{self, EndToEndPrivateKey};
 use logging::log;
@@ -65,8 +67,9 @@ use crate::{
 use self::{
     timestamp_searcher::TimestampSearchData,
     utils::{
-        get_best_block_index, get_pool_staker_balance, get_pool_total_balance,
-        get_sealed_epoch_randomness, make_ancestor_getter, timestamp_add_secs,
+        calculate_median_time_past, get_best_block_index, get_pool_staker_balance,
+        get_pool_total_balance, get_sealed_epoch_randomness, make_ancestor_getter,
+        timestamp_add_secs,
     },
 };
 
@@ -248,36 +251,112 @@ impl BlockProduction {
 
                     let best_block_id = best_block_index.block_id();
                     let current_tip_median_time_past =
-                        cs.calculate_median_time_past(&best_block_id).map_err(|err| {
-                            BlockProductionError::ChainstateError(
-                                consensus::ChainstateError::FailedToCalculateMedianTimePast(
-                                    best_block_id,
-                                    err.to_string(),
-                                ),
-                            )
-                        })?;
-                    let new_block_height = best_block_index.block_height().next_height();
+                        calculate_median_time_past(cs, &best_block_id)?;
+
+                    let block_height = best_block_index.block_height().next_height();
                     let sealed_epoch_randomness =
-                        get_sealed_epoch_randomness(&chain_config, cs, new_block_height)?;
+                        get_sealed_epoch_randomness(&chain_config, cs, block_height)?;
+                    let required_consensus =
+                        chain_config.consensus_upgrades().consensus_status(block_height);
+                    let block_timestamp = BlockTimestamp::from_time(time_getter.get_time());
 
-                    let (consensus_data, block_reward) = generate_consensus_data_and_reward(
-                        &chain_config,
-                        &best_block_index,
-                        sealed_epoch_randomness,
-                        input_data.clone(),
-                        BlockTimestamp::from_time(time_getter.get_time()),
-                        new_block_height,
-                        make_ancestor_getter(cs),
-                    )
-                    .map_err(BlockProductionError::FailedConsensusInitialization)?;
+                    let (consensus_data, block_reward, finalize_block_data) =
+                        match (required_consensus, input_data) {
+                            (
+                                RequiredConsensus::PoS(pos_status),
+                                GenerateBlockInputData::PoS(pos_input_data),
+                            ) => {
+                                let (consensus_data, block_reward) =
+                                    generate_pos_consensus_data_and_reward(
+                                        &chain_config,
+                                        &best_block_index,
+                                        &pos_input_data,
+                                        &pos_status,
+                                        sealed_epoch_randomness,
+                                        // FIXME this block_timestamp and the vrf_data inside PoSData make no sense here,
+                                        // because they'll be overwritten during staking.
+                                        block_timestamp,
+                                        block_height,
+                                        make_ancestor_getter(cs),
+                                        randomness::make_true_rng(),
+                                    )?;
+                                let consensus_data = ConsensusData::PoS(Box::new(consensus_data));
 
-                    let finalize_block_data = generate_finalize_block_data(
-                        &chain_config,
-                        cs,
-                        new_block_height,
-                        sealed_epoch_randomness,
-                        input_data,
-                    )?;
+                                let finalize_block_data =
+                                    FinalizeBlockInputData::PoS(generate_finalize_block_data_pos(
+                                        &chain_config,
+                                        cs,
+                                        block_height,
+                                        sealed_epoch_randomness,
+                                        &pos_input_data,
+                                    )?);
+
+                                (consensus_data, block_reward, finalize_block_data)
+                            }
+                            (
+                                RequiredConsensus::PoW(pow_status),
+                                GenerateBlockInputData::PoW(pow_input_data),
+                            ) => {
+                                let (consensus_data, block_reward) =
+                                    generate_pow_consensus_data_and_reward(
+                                        &chain_config,
+                                        &best_block_index,
+                                        block_timestamp,
+                                        &pow_status,
+                                        make_ancestor_getter(cs),
+                                        *pow_input_data,
+                                        block_height,
+                                    )
+                                    .map_err(ConsensusCreationError::MiningError)?;
+                                let consensus_data = ConsensusData::PoW(Box::new(consensus_data));
+
+                                let finalize_block_data = FinalizeBlockInputData::PoW;
+
+                                (consensus_data, block_reward, finalize_block_data)
+                            }
+                            (RequiredConsensus::IgnoreConsensus, GenerateBlockInputData::None) => {
+                                let (consensus_data, block_reward) =
+                                    generate_consensus_data_and_reward_ignore_consensus(
+                                        &chain_config,
+                                        block_height,
+                                    )?;
+                                let finalize_block_data = FinalizeBlockInputData::None;
+
+                                (consensus_data, block_reward, finalize_block_data)
+                            }
+                            (RequiredConsensus::PoS(_), GenerateBlockInputData::PoW(_)) => {
+                                Err(ConsensusCreationError::StakingError(
+                                    ConsensusPoSError::PoWInputDataProvided,
+                                ))?
+                            }
+                            (RequiredConsensus::PoS(_), GenerateBlockInputData::None) => {
+                                Err(ConsensusCreationError::StakingError(
+                                    ConsensusPoSError::NoInputDataProvided,
+                                ))?
+                            }
+                            (RequiredConsensus::PoW(_), GenerateBlockInputData::PoS(_)) => {
+                                Err(ConsensusCreationError::MiningError(
+                                    ConsensusPoWError::PoSInputDataProvided,
+                                ))?
+                            }
+                            (RequiredConsensus::PoW(_), GenerateBlockInputData::None) => {
+                                Err(ConsensusCreationError::MiningError(
+                                    ConsensusPoWError::NoInputDataProvided,
+                                ))?
+                            }
+                            (
+                                RequiredConsensus::IgnoreConsensus,
+                                GenerateBlockInputData::PoS(_),
+                            ) => Err(
+                                BlockProductionError::PoSInputDataProvidedWhenIgnoringConsensus,
+                            )?,
+                            (
+                                RequiredConsensus::IgnoreConsensus,
+                                GenerateBlockInputData::PoW(_),
+                            ) => Err(
+                                BlockProductionError::PoWInputDataProvidedWhenIgnoringConsensus,
+                            )?,
+                        };
 
                     Ok((
                         consensus_data,
@@ -326,20 +405,10 @@ impl BlockProduction {
         .await
     }
 
-    async fn produce_block_with_custom_id(
-        &self,
-        input_data: GenerateBlockInputData,
-        transactions: Vec<SignedTransaction>,
-        transaction_ids: Vec<Id<Transaction>>,
-        packing_strategy: PackingStrategy,
-        custom_id_maybe: Option<Vec<u8>>,
-    ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
+    async fn ensure_can_produce_block(&self) -> Result<(), BlockProductionError> {
         if !self.blockprod_config.skip_ibd_check {
-            let is_initial_block_download = self
-                .chainstate_handle
-                .call(|cs| cs.is_initial_block_download())
-                .await
-                .map_err(|_| BlockProductionError::ChainstateInfoRetrievalError)?;
+            let is_initial_block_download =
+                self.chainstate_handle.call(|cs| cs.is_initial_block_download()).await?;
 
             if is_initial_block_download {
                 return Err(BlockProductionError::ChainstateWaitForSync);
@@ -350,7 +419,7 @@ impl BlockProduction {
             .p2p_handle
             .call_async_mut(move |p2p| p2p.get_peer_count())
             .await?
-            .map_err(|_| BlockProductionError::PeerCountRetrievalError)?;
+            .map_err(|err| BlockProductionError::PeerCountRetrievalError(err.to_string()))?;
 
         if current_peer_count < self.blockprod_config.min_peers_to_produce_blocks {
             return Err(BlockProductionError::PeerCountBelowRequiredThreshold(
@@ -358,6 +427,19 @@ impl BlockProduction {
                 self.blockprod_config.min_peers_to_produce_blocks,
             ));
         }
+
+        Ok(())
+    }
+
+    async fn produce_block_with_custom_id(
+        &self,
+        input_data: GenerateBlockInputData,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+        custom_id_maybe: Option<Vec<u8>>,
+    ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
+        self.ensure_can_produce_block().await?;
 
         let stop_flag = Arc::new(RelaxedAtomicBool::new(false));
         let tip_at_start = self.pull_best_block_index().await?;
@@ -622,34 +704,12 @@ impl BlockProduction {
     }
 }
 
-fn generate_finalize_block_data(
-    chain_config: &ChainConfig,
-    chainstate_handle: &dyn ChainstateInterface,
-    new_block_height: BlockHeight,
-    sealed_epoch_randomness: PoSRandomness,
-    input_data: GenerateBlockInputData,
-) -> Result<FinalizeBlockInputData, BlockProductionError> {
-    match input_data {
-        GenerateBlockInputData::PoS(pos_input_data) => Ok(FinalizeBlockInputData::PoS(
-            generate_finalize_block_data_pos(
-                chain_config,
-                chainstate_handle,
-                new_block_height,
-                sealed_epoch_randomness,
-                *pos_input_data,
-            )?,
-        )),
-        GenerateBlockInputData::PoW(_) => Ok(FinalizeBlockInputData::PoW),
-        GenerateBlockInputData::None => Ok(FinalizeBlockInputData::None),
-    }
-}
-
 fn generate_finalize_block_data_pos(
     chain_config: &ChainConfig,
     chainstate: &dyn ChainstateInterface,
     new_block_height: BlockHeight,
     sealed_epoch_randomness: PoSRandomness,
-    pos_input_data: PoSGenerateBlockInputData,
+    pos_input_data: &PoSGenerateBlockInputData,
 ) -> Result<PoSFinalizeBlockInputData, BlockProductionError> {
     let pool_id = pos_input_data.pool_id();
     let total_balance = get_pool_total_balance(chainstate, &pool_id)?;

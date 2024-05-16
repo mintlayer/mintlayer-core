@@ -59,8 +59,8 @@ pub enum BlockProductionError {
     FailedConsensusInitialization(#[from] ConsensusCreationError),
     #[error("Block production cancelled")]
     Cancelled,
-    #[error("Failed to retrieve peer count")]
-    PeerCountRetrievalError,
+    #[error("Failed to retrieve peer count: {0}")]
+    PeerCountRetrievalError(String),
     #[error("Connected peers {0} is below the required peer threshold {0}")]
     PeerCountBelowRequiredThreshold(usize, usize),
     #[error("Block not found in this round")]
@@ -95,6 +95,10 @@ pub enum BlockProductionError {
     PoolBalanceNotFound(PoolId),
     #[error("PoS accounting error: {0}")]
     PoSAccountingError(#[from] detail::utils::PoSAccountingError),
+    #[error("PoS data provided when consensus is supposed to be ignored")]
+    PoSInputDataProvidedWhenIgnoringConsensus,
+    #[error("PoW data provided when consensus is supposed to be ignored")]
+    PoWInputDataProvidedWhenIgnoringConsensus,
 }
 
 pub type BlockProductionSubsystem = Box<dyn BlockProductionInterface>;

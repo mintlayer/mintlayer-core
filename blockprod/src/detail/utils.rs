@@ -150,6 +150,20 @@ pub fn get_sealed_epoch_randomness_from_sealed_epoch_index<CS: ChainstateInterfa
     Ok(sealed_epoch_randomness)
 }
 
+pub fn calculate_median_time_past<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
+    starting_block: &Id<GenBlock>,
+) -> Result<BlockTimestamp, BlockProductionError> {
+    chainstate.calculate_median_time_past(starting_block).map_err(|err| {
+        BlockProductionError::ChainstateError(
+            consensus::ChainstateError::FailedToCalculateMedianTimePast(
+                *starting_block,
+                err.to_string(),
+            ),
+        )
+    })
+}
+
 pub fn pos_data_from_header(
     block_header: &BlockHeader,
 ) -> Result<&'_ PoSData, BlockProductionError> {

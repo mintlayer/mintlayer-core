@@ -21,11 +21,11 @@ use chainstate_types::{
     pos_randomness::PoSRandomness, vrf_tools::construct_transcript, BlockIndex, GenBlockIndex,
 };
 use common::{
-    chain::block::{
-        consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, BlockRewardTransactable,
-        ConsensusData,
-    },
     chain::{
+        block::{
+            consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward,
+            BlockRewardTransactable,
+        },
         config::EpochIndex,
         signature::{
             inputsig::{
@@ -219,14 +219,14 @@ impl PoSFinalizeBlockInputData {
 pub fn generate_pos_consensus_data_and_reward<G, R: Rng + CryptoRng>(
     chain_config: &ChainConfig,
     prev_block_index: &GenBlockIndex,
-    pos_input_data: PoSGenerateBlockInputData,
-    pos_status: PoSStatus,
+    pos_input_data: &PoSGenerateBlockInputData,
+    pos_status: &PoSStatus,
     sealed_epoch_randomness: PoSRandomness,
     block_timestamp: BlockTimestamp,
     block_height: BlockHeight,
     get_ancestor: G,
     rng: R,
-) -> Result<(ConsensusData, BlockReward), ConsensusCreationError>
+) -> Result<(PoSData, BlockReward), ConsensusCreationError>
 where
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
 {
@@ -274,18 +274,18 @@ where
 
     let target_required = calculate_target_required_from_block_index(
         chain_config,
-        &pos_status,
+        pos_status,
         prev_block_index,
         get_ancestor,
     )?;
 
-    let consensus_data = ConsensusData::PoS(Box::new(PoSData::new(
+    let consensus_data = PoSData::new(
         pos_input_data.kernel_inputs().clone(),
         vec![input_witness],
         pos_input_data.pool_id(),
         vrf_data,
         target_required,
-    )));
+    );
 
     let block_reward = BlockReward::new(kernel_output);
 
