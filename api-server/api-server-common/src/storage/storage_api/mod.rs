@@ -20,8 +20,8 @@ use common::{
         block::timestamp::BlockTimestamp,
         timelock::OutputTimeLock,
         tokens::{
-            IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, TokenId,
-            TokenTotalSupply,
+            IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, RPCFungibleTokenInfo,
+            TokenId, TokenTotalSupply,
         },
         AccountNonce, Block, ChainConfig, DelegationId, Destination, PoolId, SignedTransaction,
         Transaction, TxOutput, UtxoOutPoint,
@@ -295,6 +295,20 @@ impl FungibleTokenData {
     pub fn change_authority(mut self, authority: Destination) -> Self {
         self.authority = authority;
         self
+    }
+
+    pub fn into_rpc_token_info(self, token_id: TokenId) -> RPCFungibleTokenInfo {
+        RPCFungibleTokenInfo {
+            token_id,
+            token_ticker: self.token_ticker.into(),
+            number_of_decimals: self.number_of_decimals,
+            metadata_uri: self.metadata_uri.into(),
+            circulating_supply: self.circulating_supply,
+            total_supply: self.total_supply.into(),
+            is_locked: self.is_locked,
+            frozen: common::chain::tokens::RPCIsTokenFrozen::new(self.frozen),
+            authority: self.authority,
+        }
     }
 }
 
