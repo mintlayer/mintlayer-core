@@ -595,11 +595,12 @@ mod produce_block {
         join_handle.await.unwrap();
     }
 
+    // Produce two blocks using PoS; the timestamp of the second block must be bigger than the first's.
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn update_last_used_block_timestamp(#[case] seed: Seed) {
+    async fn last_used_timestamp_update(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let time_getter = TimeGetter::default();
         let (
@@ -626,7 +627,7 @@ mod produce_block {
                     chain_config.clone(),
                     Arc::new(test_blockprod_config()),
                     chainstate.clone(),
-                    mempool,
+                    mempool.clone(),
                     p2p,
                     Default::default(),
                     prepare_thread_pool(1),
@@ -645,21 +646,28 @@ mod produce_block {
                         vec![create_genesis_pool_txoutput],
                     )));
 
-                let _ = block_production
-                    .job_manager_handle
-                    .update_last_used_block_timestamp(
-                        CustomId::new_from_input_data(&input_data),
-                        BlockTimestamp::from_int_seconds(u64::MAX),
+                let (new_block1, job_finished_receiver) = block_production
+                    .produce_block(
+                        input_data.clone(),
+                        vec![],
+                        vec![],
+                        PackingStrategy::LeaveEmptySpace,
                     )
-                    .await;
+                    .await
+                    .unwrap();
 
-                let result = block_production
-                    .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
-                    .await;
-
-                assert_matches!(result, Err(BlockProductionError::TimestampOverflow(_, _)));
-
+                job_finished_receiver.await.expect("Job finished receiver closed");
                 assert_job_count(&block_production, 0).await;
+
+                let (new_block2, job_finished_receiver) = block_production
+                    .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
+                    .await
+                    .unwrap();
+
+                job_finished_receiver.await.expect("Job finished receiver closed");
+                assert_job_count(&block_production, 0).await;
+
+                assert!(new_block2.timestamp() > new_block1.timestamp());
             }
         });
 
@@ -1011,18 +1019,13 @@ mod produce_block {
                     let (_, cancel_receiver) = unbounded_channel::<()>();
                     let mut rng = make_seedable_rng(seed);
                     let job_key = JobKey::new(CustomId::new_from_rng(&mut rng));
-                    Ok((job_key, None, cancel_receiver))
+                    Ok((job_key, cancel_receiver))
                 });
 
                 mock_job_manager.expect_make_job_stopper_function().times(1).returning(|| {
                     let (_, result_receiver) = oneshot::channel::<usize>();
                     (Box::new(|_| {}), result_receiver)
                 });
-
-                mock_job_manager
-                    .expect_update_last_used_block_timestamp()
-                    .times(..=1)
-                    .returning(|_, _| Ok(()));
 
                 block_production.set_job_manager(mock_job_manager);
 
@@ -2061,19 +2064,17 @@ mod stop_all_jobs {
         )
         .expect("Error initializing blockprod");
 
-        let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
-            block_production
-                .job_manager_handle
-                .add_job(CustomId::new_from_rng(&mut rng), None)
-                .await
-                .unwrap();
+        let (_other_job_key, _other_job_cancel_receiver) = block_production
+            .job_manager_handle
+            .add_job(CustomId::new_from_rng(&mut rng), None)
+            .await
+            .unwrap();
 
-        let (_stop_job_key, _stop_last_used_block_timestamp, _stop_job_cancel_receiver) =
-            block_production
-                .job_manager_handle
-                .add_job(CustomId::new_from_rng(&mut rng), None)
-                .await
-                .unwrap();
+        let (_stop_job_key, _stop_job_cancel_receiver) = block_production
+            .job_manager_handle
+            .add_job(CustomId::new_from_rng(&mut rng), None)
+            .await
+            .unwrap();
 
         let jobs_stopped = block_production.stop_all_jobs().await.unwrap();
         assert_eq!(jobs_stopped, 2, "Incorrect number of jobs stopped");
@@ -2181,19 +2182,17 @@ mod stop_job {
         )
         .expect("Error initializing blockprod");
 
-        let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
-            block_production
-                .job_manager_handle
-                .add_job(CustomId::new_from_rng(&mut rng), None)
-                .await
-                .unwrap();
+        let (_other_job_key, _other_job_cancel_receiver) = block_production
+            .job_manager_handle
+            .add_job(CustomId::new_from_rng(&mut rng), None)
+            .await
+            .unwrap();
 
-        let (stop_job_key, _stop_last_used_block_timestamp, _stop_job_cancel_receiver) =
-            block_production
-                .job_manager_handle
-                .add_job(CustomId::new_from_rng(&mut rng), None)
-                .await
-                .unwrap();
+        let (stop_job_key, _stop_job_cancel_receiver) = block_production
+            .job_manager_handle
+            .add_job(CustomId::new_from_rng(&mut rng), None)
+            .await
+            .unwrap();
 
         let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
         assert!(job_stopped, "Failed to stop job");
@@ -2227,12 +2226,11 @@ mod stop_job {
         let jobs_to_create = rng.gen::<usize>() % 20 + 1;
 
         for _ in 1..=jobs_to_create {
-            let (job_key, _stop_last_used_block_timestamp, _stop_job_cancel_receiver) =
-                block_production
-                    .job_manager_handle
-                    .add_job(CustomId::new_from_rng(&mut rng), None)
-                    .await
-                    .unwrap();
+            let (job_key, _stop_job_cancel_receiver) = block_production
+                .job_manager_handle
+                .add_job(CustomId::new_from_rng(&mut rng), None)
+                .await
+                .unwrap();
 
             job_keys.push(job_key)
         }
@@ -2280,12 +2278,11 @@ mod stop_job {
         )
         .expect("Error initializing blockprod");
 
-        let (_other_job_key, _other_last_used_block_timestamp, _other_job_cancel_receiver) =
-            block_production
-                .job_manager_handle
-                .add_job(CustomId::new_from_rng(&mut rng), None)
-                .await
-                .unwrap();
+        let (_other_job_key, _other_job_cancel_receiver) = block_production
+            .job_manager_handle
+            .add_job(CustomId::new_from_rng(&mut rng), None)
+            .await
+            .unwrap();
 
         let stop_job_key = JobKey::new(CustomId::new_from_rng(&mut rng));
 

@@ -19,7 +19,8 @@ pub mod utils;
 
 use std::{
     cmp,
-    sync::{mpsc, Arc},
+    collections::BTreeMap,
+    sync::{mpsc, Arc, Mutex},
 };
 
 use tokio::sync::oneshot;
@@ -128,6 +129,7 @@ pub struct BlockProduction {
     mining_thread_pool: Arc<slave_pool::ThreadPool>,
     p2p_handle: P2pHandle,
     e2e_encryption_key: ephemeral_e2e::EndToEndPrivateKey,
+    last_used_block_timespamps: Mutex<BTreeMap<PoolId, BlockTimestamp>>,
 }
 
 impl BlockProduction {
@@ -154,6 +156,7 @@ impl BlockProduction {
             job_manager_handle,
             mining_thread_pool,
             e2e_encryption_key: EndToEndPrivateKey::new_from_rng(&mut rng),
+            last_used_block_timespamps: Mutex::new(BTreeMap::new()),
         };
 
         Ok(block_production)
@@ -179,16 +182,42 @@ impl BlockProduction {
         Ok(self.job_manager_handle.stop_job(job_key).await? == 1)
     }
 
-    pub async fn update_last_used_block_timestamp(
+    fn get_last_used_block_timestamp(
         &self,
-        custom_id: CustomId,
-        last_used_block_timestamp: BlockTimestamp,
-    ) -> Result<(), BlockProductionError> {
-        self.job_manager_handle
-            .update_last_used_block_timestamp(custom_id, last_used_block_timestamp)
-            .await?;
+        input_data: &GenerateBlockInputData,
+    ) -> Option<BlockTimestamp> {
+        match input_data {
+            GenerateBlockInputData::PoS(pos_data) => {
+                let pool_id = pos_data.pool_id();
+                self.last_used_block_timespamps
+                    .lock()
+                    .expect("poisoned mutex")
+                    .get(&pool_id)
+                    .copied()
+            }
 
-        Ok(())
+            GenerateBlockInputData::PoW(_) | GenerateBlockInputData::None => None,
+        }
+    }
+
+    fn update_last_used_block_timestamp(
+        &self,
+        input_data: &GenerateBlockInputData,
+        last_used_block_timestamp: BlockTimestamp,
+    ) {
+        match input_data {
+            GenerateBlockInputData::PoS(pos_data) => {
+                let pool_id = pos_data.pool_id();
+                let mut last_used_block_timespamps =
+                    self.last_used_block_timespamps.lock().expect("poisoned mutex");
+
+                // TODO: need a way to clean the map from pools that no longer exist
+                // (probably, it's better to just remove timestamps that are too old).
+                last_used_block_timespamps.insert(pool_id, last_used_block_timestamp);
+            }
+
+            GenerateBlockInputData::PoW(_) | GenerateBlockInputData::None => {}
+        }
     }
 
     async fn pull_consensus_data(
@@ -415,10 +444,12 @@ impl BlockProduction {
             CustomId::new_from_value,
         );
 
-        let (job_key, previous_last_used_block_timestamp, mut cancel_receiver) = self
+        let (job_key, mut cancel_receiver) = self
             .job_manager_handle
             .add_job(custom_id.clone(), Some(tip_at_start.block_id()))
             .await?;
+
+        let previous_last_used_block_timestamp = self.get_last_used_block_timestamp(&input_data);
 
         // This destructor ensures that the job manager cleans up its
         // housekeeping for the job when this current function returns
@@ -527,8 +558,7 @@ impl BlockProduction {
         let last_used_block_timestamp =
             BlockTimestamp::from_int_seconds(last_timestamp_seconds_used.load());
 
-        self.update_last_used_block_timestamp(custom_id.clone(), last_used_block_timestamp)
-            .await?;
+        self.update_last_used_block_timestamp(&input_data, last_used_block_timestamp);
 
         let signed_block_header = solver_result?;
         let block = Block::new_from_header(signed_block_header, block_body.clone())?;
@@ -554,10 +584,10 @@ impl BlockProduction {
             timestamp_add_secs(current_timestamp, max_offset)?
         };
 
-        let min_block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
+        let block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
 
         // TODO: this should be PoS only.
-        if min_block_timestamp > max_block_timestamp_for_pos {
+        if block_timestamp > max_block_timestamp_for_pos {
             return Err(BlockProductionError::TryAgainLater);
         }
 
@@ -573,7 +603,7 @@ impl BlockProduction {
                 current_tip_index.block_id(),
                 merkle_proxy.merkle_tree().root(),
                 merkle_proxy.witness_merkle_tree().root(),
-                min_block_timestamp,
+                block_timestamp,
                 consensus_data,
             );
 

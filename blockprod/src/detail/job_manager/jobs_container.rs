@@ -15,11 +15,7 @@
 
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use crate::detail::CustomId;
-use common::{
-    chain::{block::timestamp::BlockTimestamp, GenBlock},
-    primitives::Id,
-};
+use common::{chain::GenBlock, primitives::Id};
 use logging::log;
 use tokio::sync::{mpsc::UnboundedSender, oneshot};
 
@@ -28,7 +24,6 @@ use super::{JobKey, JobManagerError, NewJobEvent};
 #[derive(Default)]
 pub struct JobsContainer {
     jobs: BTreeMap<JobKey, JobData>,
-    last_used_block_timestamps: BTreeMap<CustomId, BlockTimestamp>,
 }
 
 impl JobsContainer {
@@ -59,10 +54,7 @@ impl JobsContainer {
                 },
             );
 
-            let last_used_block_timestamp =
-                self.last_used_block_timestamps.get(&custom_id).copied();
-
-            if let Err(e) = result_sender.send(Ok((job_key, last_used_block_timestamp))) {
+            if let Err(e) = result_sender.send(Ok(job_key)) {
                 log::error!("Error sending new job event: {e:?}");
             }
         }
@@ -82,8 +74,6 @@ impl JobsContainer {
         for job_key in jobs_to_stop {
             self.remove_job(job_key, true);
         }
-
-        self.last_used_block_timestamps = BTreeMap::new();
     }
 
     /// Remove a job by its key
@@ -142,16 +132,6 @@ impl JobsContainer {
     pub fn handle_shutdown(&mut self, result_sender: oneshot::Sender<usize>) {
         log::info!("Stopping block production job manager");
         self.handle_stop_job((None, result_sender));
-    }
-
-    pub fn handle_update_last_used_block_timestamp(
-        &mut self,
-        event: (CustomId, BlockTimestamp, oneshot::Sender<()>),
-    ) {
-        let (custom_id, last_used_block_timestamp, result_sender) = event;
-        self.last_used_block_timestamps.insert(custom_id, last_used_block_timestamp);
-
-        _ = result_sender.send(());
     }
 }
 
