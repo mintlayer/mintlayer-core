@@ -277,6 +277,7 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             // Use "General" for consistency with the zero ban score.
             ConnectTransactionError::TxNumWrongInBlockOnDisconnect(_, _)
             | ConnectTransactionError::InvariantBrokenAlreadyUnspent
+            | ConnectTransactionError::InvariantBrokenUtxoRequested
             | ConnectTransactionError::MissingBlockUndo(_)
             | ConnectTransactionError::MissingBlockRewardUndo(_)
             | ConnectTransactionError::MissingTxUndo(_)
@@ -302,7 +303,7 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             | ConnectTransactionError::BlockIndexCouldNotBeLoaded(_)
             | ConnectTransactionError::FailedToAddAllFeesOfBlock(_)
             | ConnectTransactionError::RewardAdditionError(_)
-            | ConnectTransactionError::TimeLockViolation(_)
+            | ConnectTransactionError::TimeLockViolation
             | ConnectTransactionError::BurnAmountSumError(_)
             | ConnectTransactionError::AttemptToSpendBurnedAmount
             | ConnectTransactionError::PoolBalanceNotFound(_)
@@ -315,6 +316,7 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             | ConnectTransactionError::IOPolicyError(_, _)
             | ConnectTransactionError::TotalFeeRequiredOverflow
             | ConnectTransactionError::InsufficientCoinsFee(_, _)
+            | ConnectTransactionError::Threshold(_)
             | ConnectTransactionError::AttemptToSpendFrozenToken(_) => {
                 BlockProcessingErrorClass::BadBlock
             }

@@ -13,163 +13,220 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod error;
+mod verify;
 
-use common::{
-    chain::{
-        signature::{
-            inputsig::standard_signature::StandardInputSignature, sighash::signature_hash,
-            Transactable,
-        },
-        timelock::OutputTimeLock,
-        ChainConfig, Destination, TxOutput,
-    },
-    primitives::H256,
-};
-use pos_accounting::PoSAccountingView;
-use utxo::UtxosView;
+use common::chain::{signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination};
+use utils::ensure;
 
-use crate::{
-    helpers::{BlockchainState, SourceBlockState},
-    timelock_check::check_timelock,
-};
+pub use verify::{ScriptError, ScriptErrorOf, ScriptResult, ScriptVisitor};
 
-use self::error::Error;
-
-#[derive(Debug)]
-pub enum MintScript {
-    Bool(bool),
-    Threshold(usize, Vec<MintScript>),
-    CheckSig(H256, StandardInputSignature, Destination),
-    CheckTimelock(OutputTimeLock),
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+pub enum ScriptConstructionError {
+    #[error("Threshold requires {0} conditions but contains only {1}")]
+    InvalidThreshold(usize, usize),
 }
 
-impl MintScript {
-    pub fn try_into_bool(
-        &self,
-        chain_config: &ChainConfig,
-        source_block_info: &SourceBlockState,
-        blockchain_state: &BlockchainState,
-    ) -> Option<bool> {
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Threshold {
+    required: usize,
+    conditions: Vec<ScriptCondition>,
+}
+
+#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
+pub enum ThresholdError {
+    #[error("Not enough conditions satisfied")]
+    Insufficient,
+
+    #[error("Too many conditions declared satisfied")]
+    Excessive,
+}
+
+impl Threshold {
+    /// Trivially satisfied threshold condition (represented as 0-of-0 threshold)
+    pub const TRUE: Self = Self::new_unchecked(0, Vec::new());
+
+    /// Construct a threshold.
+    ///
+    /// Like [Self::new] but panics instead of failing if an invalid threshold is created.
+    const fn new_unchecked(required: usize, conditions: Vec<ScriptCondition>) -> Self {
+        Self {
+            required,
+            conditions,
+        }
+    }
+
+    /// Construct a threshold.
+    ///
+    /// Creates an N-of-K threshold construct where N out of K conditions have to be satisfied.
+    /// Fails if N > K.
+    pub fn new(
+        required: usize,
+        conditions: Vec<ScriptCondition>,
+    ) -> Result<Self, ScriptConstructionError> {
+        ensure!(
+            required <= conditions.len(),
+            ScriptConstructionError::InvalidThreshold(required, conditions.len()),
+        );
+        Ok(Self::new_unchecked(required, conditions))
+    }
+
+    /// A [WitnessScript] consisting of only this threshold.
+    pub const fn into_script(self) -> WitnessScript {
+        WitnessScriptInner::Threshold(self).into_script()
+    }
+
+    /// Get all the conditions in this threshold construct.
+    pub fn conditions(&self) -> &[ScriptCondition] {
+        &self.conditions
+    }
+
+    /// Number of conditions that need to be satisfied in order for the threshold to be valid.
+    pub fn required(&self) -> usize {
+        self.required
+    }
+
+    /// Number of conditions that need to be dissatisfied in order for the threshold to be valid.
+    pub fn required_dissat(&self) -> usize {
+        self.conditions().len() - self.required()
+    }
+
+    /// Collect conditions that the prover claims to satisfy.
+    pub fn collect_satisfied_unchecked(&self) -> Vec<&WitnessScript> {
+        self.conditions.iter().filter_map(ScriptCondition::as_satisfied).collect()
+    }
+
+    /// Collect conditions that the prover claims to satisfy and check the number of these meets
+    /// the threshold requirements.
+    pub fn collect_satisfied(&self) -> Result<Vec<&WitnessScript>, ThresholdError> {
+        // Track how many conditions are there to be left satisfied and dissatisfied
+        let mut left_sat = self.required();
+        let mut left_dissat = self.required_dissat();
+        let mut satisfied = Vec::with_capacity(left_sat);
+
+        for cond in self.conditions() {
+            match cond {
+                ScriptCondition::Satisfied(ws) => {
+                    left_sat = left_sat.checked_sub(1).ok_or(ThresholdError::Excessive)?;
+                    satisfied.push(ws);
+                }
+                ScriptCondition::Dissatisfied(_) => {
+                    left_dissat = left_dissat.checked_sub(1).ok_or(ThresholdError::Insufficient)?;
+                }
+            }
+        }
+
+        assert_eq!(left_dissat, 0);
+        assert_eq!(left_sat, 0);
+
+        Ok(satisfied)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+enum WitnessScriptInner {
+    Threshold(Threshold),
+    Signature(Destination, InputWitness),
+    Timelock(OutputTimeLock),
+}
+
+impl WitnessScriptInner {
+    const fn into_script(self) -> WitnessScript {
+        WitnessScript(self)
+    }
+}
+
+/// Script together with witness data presumably satisfying the script.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct WitnessScript(WitnessScriptInner);
+
+impl WitnessScript {
+    /// Trivially satisfied script (represented as 0-of-0 threshold)
+    pub const TRUE: Self = Threshold::TRUE.into_script();
+
+    /// Construct a public key / signature lock
+    pub const fn signature(dest: Destination, sig: InputWitness) -> Self {
+        WitnessScriptInner::Signature(dest, sig).into_script()
+    }
+
+    /// Construct a timelock condition
+    pub const fn timelock(tl: OutputTimeLock) -> Self {
+        WitnessScriptInner::Timelock(tl).into_script()
+    }
+
+    /// Construct a threshold. See [Threshold::new_unchecked].
+    fn threshold_unchecked(required: usize, conds: Vec<ScriptCondition>) -> Self {
+        assert!(required <= conds.len());
+        Threshold::new_unchecked(required, conds).into_script()
+    }
+
+    /// Construct a threshold. See [Threshold::new].
+    pub fn threshold(
+        required: usize,
+        conds: Vec<ScriptCondition>,
+    ) -> Result<Self, ScriptConstructionError> {
+        Threshold::new(required, conds).map(Threshold::into_script)
+    }
+
+    /// Construct a disjunction of multiple conditions.
+    pub fn disjunction(conds: Vec<ScriptCondition>) -> Result<Self, ScriptConstructionError> {
+        Self::threshold(1, conds)
+    }
+
+    /// Construct a conjunction of multiple conditions.
+    pub fn conjunction(conds: Vec<ScriptCondition>) -> Self {
+        Self::threshold_unchecked(conds.len(), conds)
+    }
+
+    /// Construct a conjunction of multiple satisfied conditions.
+    pub fn satisfied_conjunction(conds: impl IntoIterator<Item = WitnessScript>) -> Self {
+        Self::conjunction(conds.into_iter().map(ScriptCondition::Satisfied).collect())
+    }
+
+    const fn inner(&self) -> &WitnessScriptInner {
+        &self.0
+    }
+}
+
+/// A script portion the user chose to not satisfy.
+///
+/// This should eventually be turned into a spending condition commitment so we can verify the
+/// condition is the same one as one agreed upon in the contract. Only needed if the script ends up
+/// on chain which is a future development.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum DissatisfiedScript {
+    False,
+}
+
+/// A script that can be either satisfied or dissatisfied, as determined by the user.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum ScriptCondition {
+    Satisfied(WitnessScript),
+    Dissatisfied(DissatisfiedScript),
+}
+
+impl ScriptCondition {
+    /// Trivially dissatisfied script condition
+    pub const FALSE: Self = Self::Dissatisfied(DissatisfiedScript::False);
+
+    /// Trivially satisfied script condition
+    pub const TRUE: Self = Self::Satisfied(WitnessScript::TRUE);
+
+    /// Create a trivial script condition from a bool.
+    pub const fn from_bool(b: bool) -> Self {
+        match b {
+            true => Self::TRUE,
+            false => Self::FALSE,
+        }
+    }
+
+    /// Get the satisfied script, if any.
+    pub fn as_satisfied(&self) -> Option<&WitnessScript> {
         match self {
-            MintScript::Bool(b) => Some(*b),
-            MintScript::Threshold(count, v) => Some(
-                v.iter()
-                    .map(|el| {
-                        el.try_into_bool(chain_config, source_block_info, blockchain_state)
-                            .unwrap_or(false)
-                    })
-                    .filter(|v| *v)
-                    .count()
-                    >= *count,
-            ),
-            MintScript::CheckSig(sighash, sig, d) => {
-                Some(sig.verify_signature(chain_config, d, sighash).ok().is_some())
-            }
-            MintScript::CheckTimelock(tl) => Some(
-                check_timelock(
-                    &source_block_info.block_height,
-                    &source_block_info.block_timestamp,
-                    tl,
-                    &blockchain_state.current_block_height,
-                    &blockchain_state.tip_block_timestamp,
-                )
-                .ok()
-                .is_some(),
-            ),
-        }
-    }
-
-    pub fn from_output_for_tx<
-        'a,
-        T: Transactable,
-        U: UtxosView,
-        P: PoSAccountingView<Error = pos_accounting::Error>,
-    >(
-        _chain_config: &ChainConfig,
-        input_utxo: TxOutput,
-        tx: &T,
-        inputs_utxos: &[Option<&TxOutput>],
-        input_num: usize,
-        _utxos_view: &'a U,
-        accounting_view: &'a P,
-    ) -> Option<MintScript> {
-        // TODO(PR): Check that the branches make sense
-        match input_utxo {
-            TxOutput::Transfer(_val, dest) => {
-                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
-                let sighash =
-                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
-
-                Some(MintScript::CheckSig(sighash, witness.clone(), dest))
-            }
-            TxOutput::LockThenTransfer(_val, dest, tl) => {
-                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
-                let sighash =
-                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
-
-                Some(MintScript::Threshold(
-                    2,
-                    vec![
-                        MintScript::CheckSig(sighash, witness.clone(), dest),
-                        MintScript::CheckTimelock(tl),
-                    ],
-                ))
-            }
-            TxOutput::CreateStakePool(_id, pos_data) => {
-                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
-                let sighash =
-                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
-
-                Some(MintScript::CheckSig(
-                    sighash,
-                    witness.clone(),
-                    pos_data.decommission_key().clone(),
-                ))
-            }
-            TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                let pos_data = accounting_view
-                    .get_pool_data(pool_id)
-                    .ok()?
-                    .ok_or(Error::PoolDataNotFound(pool_id))
-                    .ok()?;
-
-                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
-                let sighash =
-                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
-
-                Some(MintScript::CheckSig(
-                    sighash,
-                    witness.clone(),
-                    pos_data.decommission_destination().clone(),
-                ))
-            }
-            TxOutput::CreateDelegationId(_, _) => None,
-            TxOutput::DelegateStaking(_, delegation_id) => {
-                let dest = accounting_view
-                    .get_delegation_data(delegation_id)
-                    .ok()?
-                    .ok_or(Error::DelegationDataNotFound(delegation_id))
-                    .ok()?
-                    .spend_destination()
-                    .clone();
-
-                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
-                let sighash =
-                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
-
-                Some(MintScript::CheckSig(sighash, witness.clone(), dest))
-            }
-            TxOutput::IssueFungibleToken(_) => None,
-            TxOutput::IssueNft(_, _, d) => {
-                let witness = tx.signatures()?.get(input_num)?.as_standard_signature()?;
-                let sighash =
-                    signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num).ok()?;
-
-                Some(MintScript::CheckSig(sighash, witness.clone(), d))
-            }
-            TxOutput::DataDeposit(_) => None,
-            TxOutput::Burn(_) => None,
+            Self::Satisfied(ws) => Some(ws),
+            Self::Dissatisfied(_) => None,
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

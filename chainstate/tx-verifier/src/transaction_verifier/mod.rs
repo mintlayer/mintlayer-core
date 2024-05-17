@@ -734,25 +734,16 @@ where
         )?;
 
         {
-            let accounting_adapter = &self.pos_accounting_adapter.accounting_delta();
-            let destination_getter = SignatureDestinationGetter::new_for_transaction(
-                &self.tokens_accounting_cache,
-                &accounting_adapter,
-                &self.utxo_cache,
-            );
             let block_ctx = input_check::BlockVerificationContext::from_source(
                 self.chain_config.as_ref(),
-                destination_getter,
                 *median_time_past,
                 tx_source,
-            );
-            input_check::TransactionVerificationContext::new(
-                &block_ctx,
-                &self.utxo_cache,
-                tx,
                 &self.storage,
-            )?
-            .verify_inputs()?;
+                self.pos_accounting_adapter.accounting_delta(),
+            );
+            let tx_ctx =
+                input_check::TransactionVerificationContext::new(&block_ctx, &self.utxo_cache, tx)?;
+            input_check::CachedInputList::new(&tx_ctx).verify_inputs()?;
         }
 
         self.connect_pos_accounting_outputs(tx_source, tx.transaction())?;

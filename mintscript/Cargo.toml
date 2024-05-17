@@ -10,7 +10,13 @@ license.workspace = true
 [dependencies]
 common = { path = "../common" }
 pos-accounting = { path = "../pos-accounting" }
+tokens-accounting = { path = "../tokens-accounting" }
 utils = { path = "../utils" }
 utxo = { path = "../utxo" }
 
+static_assertions.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+
+rstest.workspace = true

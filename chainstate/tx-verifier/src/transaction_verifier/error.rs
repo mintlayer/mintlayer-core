@@ -77,8 +77,8 @@ pub enum ConnectTransactionError {
     FailedToAddAllFeesOfBlock(Id<Block>),
     #[error("Block reward addition error for block {0}")]
     RewardAdditionError(Id<Block>),
-    #[error("Timelock rules violated in output {0:?}")]
-    TimeLockViolation(UtxoOutPoint),
+    #[error("Timelock rules violated")]
+    TimeLockViolation,
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
     #[error("Tokens error: {0}")]
@@ -147,6 +147,10 @@ pub enum ConnectTransactionError {
     RewardDistributionError(#[from] reward_distribution::RewardDistributionError),
     #[error("Check transaction error: {0}")]
     CheckTransactionError(#[from] CheckTransactionError),
+    #[error("Utxo requested for input that does not need one")]
+    InvariantBrokenUtxoRequested,
+    #[error("Threshold condition not met: {0}")]
+    Threshold(#[from] mintscript::script::ThresholdError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
@@ -154,6 +158,50 @@ impl From<chainstate_storage::Error> for ConnectTransactionError {
         // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
         // We don't need to cause panic here
         ConnectTransactionError::StorageError(err)
+    }
+}
+
+impl From<mintscript::translate::TranslationError> for ConnectTransactionError {
+    fn from(value: mintscript::translate::TranslationError) -> Self {
+        todo!("Translation error: {value}")
+    }
+}
+
+impl From<mintscript::checker::TimelockError<ConnectTransactionError>> for ConnectTransactionError {
+    fn from(value: mintscript::checker::TimelockError<ConnectTransactionError>) -> Self {
+        use mintscript::checker::TimelockError as E;
+        match value {
+            E::Context(e) => e.into(),
+            E::HeightArith => Self::BlockHeightArithmeticError,
+            E::TimestampArith => Self::BlockTimestampArithmeticError,
+            E::HeightLocked(_, _) => Self::TimeLockViolation,
+            E::TimestampLocked(_, _) => Self::TimeLockViolation,
+        }
+    }
+}
+
+impl<SE, TE> From<mintscript::script::ScriptError<SE, TE>> for ConnectTransactionError
+where
+    Self: From<SE> + From<TE>,
+{
+    fn from(value: mintscript::script::ScriptError<SE, TE>) -> Self {
+        match value {
+            mintscript::script::ScriptError::Signature(e) => e.into(),
+            mintscript::script::ScriptError::Timelock(e) => e.into(),
+            mintscript::script::ScriptError::Threshold(e) => e.into(),
+        }
+    }
+}
+
+impl<SE> From<mintscript::VerificationError<SE>> for ConnectTransactionError
+where
+    Self: From<SE>,
+{
+    fn from(value: mintscript::VerificationError<SE>) -> Self {
+        match value {
+            mintscript::VerificationError::Translation(e) => e.into(),
+            mintscript::VerificationError::Evaluation(e) => e.into(),
+        }
     }
 }
 

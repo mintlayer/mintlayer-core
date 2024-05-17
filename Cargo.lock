@@ -4203,11 +4203,14 @@ dependencies = [
 
 [[package]]
 name = "mintscript"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "common",
  "pos-accounting",
+ "rstest",
+ "static_assertions",
  "thiserror",
+ "tokens-accounting",
  "utils",
  "utxo",
 ]
@@ -7965,6 +7968,7 @@ dependencies = [
  "fallible-iterator 0.3.0",
  "itertools 0.12.1",
  "logging",
+ "mintscript",
  "mockall",
  "pos-accounting",
  "randomness",

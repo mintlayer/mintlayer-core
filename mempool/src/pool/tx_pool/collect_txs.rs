@@ -104,6 +104,7 @@ pub fn collect_txs<M>(
         unlock_timestamp,
         best_index.block_height().next_height(),
         mempool_tip,
+        &chainstate,
     );
 
     // Use transactions already in the Accumulator to check for uniqueness and to update the
@@ -159,7 +160,6 @@ pub fn collect_txs<M>(
                 &block_verification_ctx,
                 &utxo_view,
                 tx.transaction(),
-                &chainstate,
             )
             .and_then(|tx_ctx| tx_ctx.verify_input_timelocks());
             ensure!(timelock_check.is_ok());

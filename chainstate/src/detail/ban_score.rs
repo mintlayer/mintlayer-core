@@ -118,7 +118,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::FailedToAddAllFeesOfBlock(_) => 100,
             ConnectTransactionError::RewardAdditionError(_) => 100,
-            ConnectTransactionError::TimeLockViolation(_) => 100,
+            ConnectTransactionError::TimeLockViolation => 100,
             ConnectTransactionError::MissingBlockUndo(_) => 0,
             ConnectTransactionError::MissingBlockRewardUndo(_) => 0,
             ConnectTransactionError::MissingTxUndo(_) => 0,
@@ -158,6 +158,8 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::PoolBalanceNotFound(_) => 100,
             ConnectTransactionError::RewardDistributionError(err) => err.ban_score(),
             ConnectTransactionError::CheckTransactionError(err) => err.ban_score(),
+            ConnectTransactionError::InvariantBrokenUtxoRequested => 0,
+            ConnectTransactionError::Threshold(_) => 100,
         }
     }
 }

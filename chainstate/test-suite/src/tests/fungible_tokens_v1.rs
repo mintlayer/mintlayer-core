@@ -3834,7 +3834,7 @@ fn mint_with_timelock(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation(token_mint_outpoint.clone()),
+                ConnectTransactionError::TimeLockViolation,
             ))
         );
 

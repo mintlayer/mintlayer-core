@@ -30,6 +30,7 @@ pub enum OutputMaturityError {
     InvalidOutputMaturityDistance(UtxoOutPoint, BlockCount, BlockCount),
 }
 
+// TODO(PR) Replace this helper (used in wallet, api server
 pub fn check_timelock(
     source_block_height: &BlockHeight,
     source_block_time: &BlockTimestamp,
@@ -58,10 +59,7 @@ pub fn check_timelock(
         }
     };
 
-    ensure!(
-        past_lock,
-        ConnectTransactionError::TimeLockViolation(outpoint.clone())
-    );
+    ensure!(past_lock, ConnectTransactionError::TimeLockViolation);
 
     Ok(())
 }

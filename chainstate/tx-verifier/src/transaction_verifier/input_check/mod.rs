@@ -17,47 +17,34 @@ use chainstate_types::block_index_ancestor_getter;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
-        signature::{verify_signature, Signable, Transactable},
-        ChainConfig, GenBlock, TxInput, TxOutput, UtxoOutPoint,
+        signature::{inputsig::InputWitness, Signable, Transactable},
+        ChainConfig, GenBlock, TxInput, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
-use itertools::Itertools;
+use mintscript::{InputInfo, SignatureContext, TimelockContext};
 
 use crate::TransactionVerifierStorageRef;
 
-use super::{
-    error::ConnectTransactionError, signature_destination_getter::SignatureDestinationGetter,
-    TransactionSourceForConnect,
-};
+use super::{error::ConnectTransactionError, TransactionSourceForConnect};
 
-pub struct BlockVerificationContext<'a> {
+// TODO(PR): Maybe fuse block and transaction contexts into one
+pub struct BlockVerificationContext<'a, S, AW> {
     chain_config: &'a ChainConfig,
-    destination_getter: SignatureDestinationGetter<'a>,
     spending_time: BlockTimestamp,
     spending_height: BlockHeight,
     tip: Id<GenBlock>,
+    storage: &'a S,
+    pos_accounting: &'a AW,
 }
 
-impl<'a> BlockVerificationContext<'a> {
-    // TODO(PR): Make the timelock-only property compile time checked
-    pub fn for_timelock_check_only(
-        chain_config: &'a ChainConfig,
-        spend_time: BlockTimestamp,
-        spend_height: BlockHeight,
-        tip: Id<GenBlock>,
-    ) -> Self {
-        let dest_getter = SignatureDestinationGetter::new_custom(Box::new(|_| {
-            panic!("Signature getter called from timelock-only context")
-        }));
-        Self::custom(chain_config, dest_getter, spend_time, spend_height, tip)
-    }
-
+impl<'a, S, AW> BlockVerificationContext<'a, S, AW> {
     pub fn from_source(
         chain_config: &'a ChainConfig,
-        destination_getter: SignatureDestinationGetter<'a>,
         spending_time: BlockTimestamp,
         tx_source: &TransactionSourceForConnect,
+        storage: &'a S,
+        pos_accounting: &'a AW,
     ) -> Self {
         let tip = match tx_source {
             TransactionSourceForConnect::Chain { new_block_index } => {
@@ -71,251 +58,245 @@ impl<'a> BlockVerificationContext<'a> {
 
         Self::custom(
             chain_config,
-            destination_getter,
             spending_time,
             tx_source.expected_block_height(),
             tip,
+            storage,
+            pos_accounting,
         )
     }
 
     pub fn custom(
         chain_config: &'a ChainConfig,
-        destination_getter: SignatureDestinationGetter<'a>,
         spending_time: BlockTimestamp,
         spending_height: BlockHeight,
         tip: Id<GenBlock>,
+        storage: &'a S,
+        pos_accounting: &'a AW,
     ) -> Self {
         Self {
             chain_config,
-            destination_getter,
             spending_time,
             spending_height,
             tip,
+            storage,
+            pos_accounting,
         }
     }
 }
 
-struct UtxoInputSpendingInfo {
-    timestamp: BlockTimestamp,
-    height: BlockHeight,
-}
-
-impl UtxoInputSpendingInfo {
-    pub fn load<U: utxo::UtxosView, S: TransactionVerifierStorageRef>(
-        block_ctx: &BlockVerificationContext,
-        utxo_view: &U,
-        storage: &S,
-        outpoint: &UtxoOutPoint,
-    ) -> Result<(TxOutput, Self), ConnectTransactionError> {
-        let utxo = utxo_view.utxo(outpoint).map_err(|_| utxo::Error::ViewRead)?.ok_or(
-            ConnectTransactionError::MissingOutputOrSpent(outpoint.clone()),
-        )?;
-
-        let (height, timestamp) = match utxo.source() {
-            utxo::UtxoSource::Blockchain(height) => {
-                let block_index_getter =
-                    |db_tx: &S, _: &ChainConfig, id: &Id<GenBlock>| db_tx.get_gen_block_index(id);
-
-                let source_block_index = block_index_ancestor_getter(
-                    block_index_getter,
-                    storage,
-                    block_ctx.chain_config,
-                    (&block_ctx.tip).into(),
-                    *height,
-                )
-                .map_err(|e| {
-                    ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(
-                        e, *height,
-                    )
-                })?;
-
-                (*height, source_block_index.block_timestamp())
-            }
-            utxo::UtxoSource::Mempool => (block_ctx.spending_height, block_ctx.spending_time),
-        };
-
-        let info = UtxoInputSpendingInfo { timestamp, height };
-        Ok((utxo.take_output(), info))
-    }
-}
-
-enum InputSpendingInfo {
-    Utxo(UtxoInputSpendingInfo),
-    Account,
-    AccountCommand,
-}
-
-impl InputSpendingInfo {
-    pub fn load<U: utxo::UtxosView, S: TransactionVerifierStorageRef>(
-        block_ctx: &BlockVerificationContext,
-        utxo_view: &U,
-        storage: &S,
-        input: &TxInput,
-    ) -> Result<(Option<TxOutput>, InputSpendingInfo), ConnectTransactionError> {
-        let utxo_and_info = match input {
-            TxInput::Utxo(outpoint) => {
-                let (input, info) =
-                    UtxoInputSpendingInfo::load(block_ctx, utxo_view, storage, outpoint)?;
-                (Some(input), InputSpendingInfo::Utxo(info))
-            }
-            TxInput::Account(..) => (None, InputSpendingInfo::Account),
-            TxInput::AccountCommand(..) => (None, InputSpendingInfo::AccountCommand),
-        };
-        Ok(utxo_and_info)
-    }
-}
-
-impl InputSpendingInfo {
-    fn as_utxo(&self) -> Option<&UtxoInputSpendingInfo> {
-        match self {
-            Self::Utxo(info) => Some(info),
-            Self::AccountCommand | Self::Account => None,
-        }
-    }
-}
-
-pub struct TransactionVerificationContext<'a, T> {
-    block_ctx: &'a BlockVerificationContext<'a>,
+pub struct TransactionVerificationContext<'a, T, S, AW> {
+    block_ctx: &'a BlockVerificationContext<'a, S, AW>,
     transactable: &'a T,
-    spent_outputs: Vec<Option<TxOutput>>,
-    spent_infos: Vec<InputSpendingInfo>,
+    inputs_and_sigs: Vec<(InputInfo<'a>, &'a InputWitness)>,
 }
 
-impl<'a, T: Signable + Transactable> TransactionVerificationContext<'a, T> {
-    pub fn new<U: utxo::UtxosView, S: TransactionVerifierStorageRef>(
-        block_ctx: &'a BlockVerificationContext<'a>,
-        utxo_view: &U,
+impl<'a, T: Signable + Transactable, S, AW> TransactionVerificationContext<'a, T, S, AW> {
+    pub fn new<UW: utxo::UtxosView>(
+        block_ctx: &'a BlockVerificationContext<'a, S, AW>,
+        utxo_view: &UW,
         transactable: &'a T,
-        storage: &S,
     ) -> Result<Self, ConnectTransactionError> {
-        let inputs = transactable.inputs().unwrap_or(&[]);
+        let inputs = transactable.inputs().unwrap_or_default();
+        let sigs = transactable.signatures().unwrap_or_default();
 
-        let (spent_outputs, spent_infos): (Vec<_>, Vec<_>) = inputs
+        // TODO(PR): Should this be a proper check rather than an assertion? Is it correct?
+        assert_eq!(inputs.len(), sigs.len());
+
+        let inputs_and_sigs = inputs
             .iter()
-            .map(|inp| InputSpendingInfo::load(block_ctx, utxo_view, storage, inp))
-            .collect::<Result<Vec<_>, ConnectTransactionError>>()?
-            .into_iter()
-            .unzip();
+            .zip(sigs.iter())
+            .map(|(input, sig)| {
+                let info = match input {
+                    TxInput::Utxo(outpoint) => {
+                        let err_f =
+                            || ConnectTransactionError::MissingOutputOrSpent(outpoint.clone());
+                        let utxo = utxo_view
+                            .utxo(outpoint)
+                            .map_err(|_| utxo::Error::ViewRead)?
+                            .ok_or_else(err_f)?;
+                        InputInfo::Utxo { outpoint, utxo }
+                    }
+                    TxInput::Account(outpoint) => InputInfo::Account { outpoint },
+                    TxInput::AccountCommand(_, command) => InputInfo::AccountCommand { command },
+                };
+                Ok((info, sig))
+            })
+            .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
 
         Ok(Self {
             block_ctx,
             transactable,
-            spent_outputs,
-            spent_infos,
+            inputs_and_sigs,
         })
     }
+}
 
-    pub fn inputs(&self) -> &[TxInput] {
-        self.transactable.inputs().unwrap_or(&[])
+pub struct CachedInputList<'a, T, S, AW> {
+    tx_ctx: &'a TransactionVerificationContext<'a, T, S, AW>,
+    spent_outputs: Vec<Option<&'a TxOutput>>,
+}
+
+impl<'a, T, S, A> CachedInputList<'a, T, S, A> {
+    pub fn new(tx_ctx: &'a TransactionVerificationContext<'a, T, S, A>) -> Self {
+        CachedInputList {
+            tx_ctx,
+            spent_outputs: tx_ctx.inputs_and_sigs.iter().map(|(i, _)| i.as_utxo_output()).collect(),
+        }
     }
 
     fn try_for_each_input<E>(
         &self,
-        mut func: impl FnMut(InputVerificationContext<T>) -> Result<(), E>,
+        mut func: impl FnMut(InputVerificationContext<T, S, A>) -> Result<(), E>,
     ) -> Result<(), E> {
-        (0..self.spent_outputs.len())
-            .try_for_each(|input_index| func(InputVerificationContext::new(self, input_index)))
+        let mut ins = self.tx_ctx.inputs_and_sigs.iter().enumerate();
+        ins.try_for_each(|(n, (inp, wit))| func(InputVerificationContext::new(self, n, inp, wit)))
     }
+}
 
+impl<'a, T, S, AW> CachedInputList<'a, T, S, AW>
+where
+    T: Signable + Transactable + mintscript::TranslateInput,
+    S: TransactionVerifierStorageRef,
+    AW: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
+{
     pub fn verify_inputs(&self) -> Result<(), ConnectTransactionError> {
-        self.try_for_each_input(|input_ctx| input_ctx.verify_input())
-    }
-
-    pub fn verify_input_timelocks(&self) -> Result<(), ConnectTransactionError> {
-        self.try_for_each_input(|input_ctx| input_ctx.check_timelock())
+        self.try_for_each_input(|ctx| Ok(mintscript::verify(ctx)?))
     }
 }
 
-struct InputVerificationContext<'a, T> {
-    transaction_ctx: &'a TransactionVerificationContext<'a, T>,
-    input_index: usize,
-    info: InputVerificationInfo<'a>,
+struct InputVerificationContext<'a, T, S, AW> {
+    tx_ctx_with_cache: &'a CachedInputList<'a, T, S, AW>,
+    input_num: usize,
+    info: &'a InputInfo<'a>,
+    witness: &'a InputWitness,
 }
 
-enum InputVerificationInfo<'a> {
-    Utxo(UtxoInputVerificationInfo<'a>),
-    Account,
-    AccountCommand,
-}
-
-struct UtxoInputVerificationInfo<'a> {
-    output: &'a TxOutput,
-    spending_info: &'a UtxoInputSpendingInfo,
-    outpoint: &'a UtxoOutPoint,
-}
-
-impl<'a, T: Signable + Transactable> InputVerificationContext<'a, T> {
-    fn new(transaction_ctx: &'a TransactionVerificationContext<'a, T>, input_index: usize) -> Self {
-        assert!(input_index < transaction_ctx.spent_infos.len());
-
-        let info = match &transaction_ctx.inputs()[input_index] {
-            TxInput::Utxo(outpoint) => {
-                let output = &transaction_ctx.spent_outputs[input_index]
-                    .as_ref()
-                    .expect("Already checked on construction");
-                let spending_info = transaction_ctx.spent_infos[input_index]
-                    .as_utxo()
-                    .expect("Already checked on construction");
-                let info = UtxoInputVerificationInfo {
-                    output,
-                    spending_info,
-                    outpoint,
-                };
-                InputVerificationInfo::Utxo(info)
-            }
-            TxInput::Account(_outpoint) => InputVerificationInfo::Account,
-            TxInput::AccountCommand(_nonce, _command) => InputVerificationInfo::AccountCommand,
-        };
-
+impl<'a, T, S, AW> InputVerificationContext<'a, T, S, AW> {
+    fn new(
+        tx_ctx_with_cache: &'a CachedInputList<'a, T, S, AW>,
+        input_num: usize,
+        info: &'a InputInfo<'a>,
+        witness: &'a InputWitness,
+    ) -> Self {
         Self {
-            transaction_ctx,
-            input_index,
+            tx_ctx_with_cache,
+            input_num,
             info,
+            witness,
         }
     }
 
-    fn input(&self) -> &TxInput {
-        &self.transaction_ctx.inputs()[self.input_index]
+    fn tx_ctx(&self) -> &TransactionVerificationContext<'a, T, S, AW> {
+        self.tx_ctx_with_cache.tx_ctx
     }
 
-    fn verify_input(&self) -> Result<(), ConnectTransactionError> {
-        self.check_timelock()?;
-        self.check_signatures()?;
-        Ok(())
+    fn block_ctx(&self) -> &BlockVerificationContext<'a, S, AW> {
+        self.tx_ctx().block_ctx
+    }
+}
+
+impl<T, S: TransactionVerifierStorageRef, AW> TimelockContext
+    for InputVerificationContext<'_, T, S, AW>
+{
+    type Error = ConnectTransactionError;
+
+    fn spending_height(&self) -> BlockHeight {
+        self.block_ctx().spending_height
     }
 
-    fn check_timelock(&self) -> Result<(), ConnectTransactionError> {
-        match &self.info {
-            InputVerificationInfo::Utxo(info) => {
-                let timelock = match info.output.timelock() {
-                    Some(timelock) => timelock,
-                    None => return Ok(()),
-                };
-                super::timelock_check::check_timelock(
-                    &info.spending_info.height,
-                    &info.spending_info.timestamp,
-                    timelock,
-                    &self.transaction_ctx.block_ctx.spending_height,
-                    &self.transaction_ctx.block_ctx.spending_time,
-                    info.outpoint,
-                )
+    fn spending_time(&self) -> BlockTimestamp {
+        self.block_ctx().spending_time
+    }
+
+    fn source_height(&self) -> Result<BlockHeight, Self::Error> {
+        match self.info {
+            InputInfo::Utxo { outpoint: _, utxo } => match utxo.source() {
+                utxo::UtxoSource::Blockchain(height) => Ok(*height),
+                utxo::UtxoSource::Mempool => Ok(self.block_ctx().spending_height),
+            },
+            InputInfo::Account { .. } | InputInfo::AccountCommand { .. } => {
+                todo!("account timelock height")
             }
-            InputVerificationInfo::Account => Ok(()),
-            InputVerificationInfo::AccountCommand => Ok(()),
         }
     }
 
-    fn check_signatures(&self) -> Result<(), ConnectTransactionError> {
-        let block_ctx = self.transaction_ctx.block_ctx;
-        let spent_inputs =
-            self.transaction_ctx.spent_outputs.iter().map(|o| o.as_ref()).collect_vec();
-        verify_signature(
-            block_ctx.chain_config,
-            &block_ctx.destination_getter.call(self.input())?,
-            self.transaction_ctx.transactable,
-            &spent_inputs,
-            self.input_index,
-        )
-        .map_err(ConnectTransactionError::SignatureVerificationFailed)
+    fn source_time(&self) -> Result<BlockTimestamp, Self::Error> {
+        match self.info {
+            InputInfo::Utxo { outpoint: _, utxo } => match utxo.source() {
+                utxo::UtxoSource::Blockchain(height) => {
+                    let block_index_getter = |db_tx: &S, _: &ChainConfig, id: &Id<GenBlock>| {
+                        db_tx.get_gen_block_index(id)
+                    };
+
+                    let source_block_index = block_index_ancestor_getter(
+                        block_index_getter,
+                        self.block_ctx().storage,
+                        self.block_ctx().chain_config,
+                        (&self.block_ctx().tip).into(),
+                        *height,
+                    )
+                    .map_err(|e| {
+                        ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(
+                            e, *height,
+                        )
+                    })?;
+
+                    Ok(source_block_index.block_timestamp())
+                }
+                utxo::UtxoSource::Mempool => Ok(self.block_ctx().spending_time),
+            },
+            InputInfo::Account { .. } | InputInfo::AccountCommand { .. } => {
+                todo!("account timelock timestamp")
+            }
+        }
+    }
+}
+
+impl<T: Signable + Transactable, S, AW> SignatureContext
+    for InputVerificationContext<'_, T, S, AW>
+{
+    type Tx = T;
+
+    fn chain_config(&self) -> &ChainConfig {
+        self.block_ctx().chain_config
+    }
+
+    fn transaction(&self) -> &Self::Tx {
+        self.tx_ctx().transactable
+    }
+
+    fn input_utxos(&self) -> &[Option<&common::chain::TxOutput>] {
+        &self.tx_ctx_with_cache.spent_outputs
+    }
+
+    fn input_num(&self) -> usize {
+        self.input_num
+    }
+}
+
+impl<'a, T, S, AW> mintscript::translate::TranslationContext
+    for InputVerificationContext<'a, T, S, AW>
+where
+    AW: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
+{
+    type Accounting = &'a AW;
+
+    type Tokens = ();
+
+    fn pos_accounting(&self) -> Self::Accounting {
+        self.block_ctx().pos_accounting
+    }
+
+    fn tokens(&self) -> Self::Tokens {
+        todo!("get tokens accounting")
+    }
+
+    fn input_info(&self) -> &InputInfo {
+        &self.info
+    }
+
+    fn witness(&self) -> &InputWitness {
+        &self.witness
     }
 }

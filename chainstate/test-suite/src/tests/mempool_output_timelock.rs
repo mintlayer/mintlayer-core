@@ -74,7 +74,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
                     &spend_locked_tx,
                     &BlockTimestamp::from_time(tf.current_time()),
                 ),
-                Err(ConnectTransactionError::TimeLockViolation(_))
+                Err(ConnectTransactionError::TimeLockViolation)
             ));
 
             tf.make_block_builder().build_and_process(&mut rng).unwrap();
@@ -132,7 +132,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                     &spend_locked_tx,
                     &BlockTimestamp::from_time(tf.current_time()),
                 ),
-                Err(ConnectTransactionError::TimeLockViolation(_))
+                Err(ConnectTransactionError::TimeLockViolation)
             ));
 
             // create another block, with no transactions, and get the blockchain to progress
@@ -214,7 +214,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
                     &spend_locked_tx,
                     &mtp,
                 ),
-                Err(ConnectTransactionError::TimeLockViolation(_))
+                Err(ConnectTransactionError::TimeLockViolation)
             ));
 
             // Create another block, with no transactions, and get the blockchain to progress.
@@ -298,7 +298,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                     &spend_locked_tx,
                     &mtp,
                 ),
-                Err(ConnectTransactionError::TimeLockViolation(_))
+                Err(ConnectTransactionError::TimeLockViolation)
             ));
 
             assert_eq!(

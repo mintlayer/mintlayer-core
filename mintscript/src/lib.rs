@@ -13,29 +13,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common::chain::ChainConfig;
-use helpers::{BlockchainState, SourceBlockState};
-use script::MintScript;
-
-pub mod helpers;
+pub mod checker;
 pub mod script;
-mod timelock_check;
+pub mod translate;
 
-pub struct ScriptEvaluator {
-    chain_config: Arc<ChainConfig>,
-    script: MintScript,
+pub use checker::{ScriptChecker, SignatureContext, TimelockContext};
+pub use script::{ScriptResult, WitnessScript};
+pub use translate::{InputInfo, TranslateInput};
+
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+pub enum VerificationError<SE> {
+    #[error(transparent)]
+    Translation(translate::TranslationError),
+
+    #[error(transparent)]
+    Evaluation(SE),
 }
 
-impl ScriptEvaluator {
-    pub fn execute(
-        &self,
-        source_block_info: &SourceBlockState,
-        blochchain_state: &BlockchainState,
-    ) -> bool {
-        self.script
-            .try_into_bool(&self.chain_config, source_block_info, blochchain_state)
-            .unwrap_or(false)
-    }
+pub type VerificationErrorOf<C> = VerificationError<script::ScriptErrorOf<C>>;
+pub type VerificationResultOf<C> = Result<(), VerificationErrorOf<C>>;
+
+pub fn verify<C>(ctx: C) -> VerificationResultOf<checker::FullScriptChecker<C>>
+where
+    C: SignatureContext + TimelockContext + translate::TranslationContext,
+    C::Tx: TranslateInput,
+{
+    <C::Tx as translate::TranslateInput>::translate_input(&ctx)
+        .map_err(VerificationError::Translation)?
+        .verify(&mut ScriptChecker::full(ctx))
+        .map_err(VerificationError::Evaluation)
 }
