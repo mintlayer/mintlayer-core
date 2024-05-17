@@ -205,6 +205,7 @@ pub struct RandomTxMaker<'a> {
 }
 
 impl<'a> RandomTxMaker<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         chainstate: &'a TestChainstate,
         utxo_set: &'a UtxosDBInMemoryImpl,
@@ -213,7 +214,8 @@ impl<'a> RandomTxMaker<'a> {
         orders_store: &'a InMemoryOrdersAccounting,
         staking_pool: Option<PoolId>,
         account_nonce_getter: Box<dyn Fn(AccountType) -> Option<AccountNonce> + 'a>,
-        support_htlc: bool,
+        support_htlc: bool, // TODO: remove this when api-server supports orders
+        with_orders: bool,  // TODO: remove this when api-server supports orders
     ) -> Self {
         Self {
             chainstate,
@@ -225,7 +227,7 @@ impl<'a> RandomTxMaker<'a> {
             account_nonce_getter,
             account_nonce_tracker: BTreeMap::new(),
             token_can_be_issued: true,
-            order_can_be_created: true,
+            order_can_be_created: with_orders,
             stake_pool_can_be_created: true,
             delegation_can_be_created: true,
             account_command_used: false,

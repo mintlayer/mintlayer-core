@@ -115,7 +115,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
             let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
             for _ in 0..rng.gen_range(10..max_tx_per_block) {
-                block_builder = block_builder.add_test_transaction(&mut rng, true);
+                block_builder = block_builder.add_test_transaction(&mut rng, true, true);
             }
 
             let block = block_builder.build(&mut rng);
@@ -151,7 +151,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
             let mut block_builder = tf2.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
             for _ in 0..rng.gen_range(10..max_tx_per_block) {
-                block_builder = block_builder.add_test_transaction(&mut rng, true);
+                block_builder = block_builder.add_test_transaction(&mut rng, true, true);
             }
 
             let block = block_builder.build(&mut rng);
