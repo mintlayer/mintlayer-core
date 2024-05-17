@@ -1276,20 +1276,6 @@ impl Backend {
         }
     }
 
-    async fn wallet_sync(&mut self) {
-        let wallet_tasks: Vec<_> = self
-            .wallets
-            .values_mut()
-            .filter_map(|wallet| wallet.hot_wallet().map(|c| c.sync()))
-            .collect();
-
-        if wallet_tasks.is_empty() {
-            std::future::pending::<()>().await;
-        }
-
-        futures::future::join_all(wallet_tasks).await;
-    }
-
     fn wallet_updated(&mut self, wallet_id: WalletId) {
         if let Some(wallet) = self.wallets.get_mut(&wallet_id) {
             wallet.updated = true;
@@ -1397,9 +1383,6 @@ pub async fn run(
                 log::debug!("P2P channel closed, looks like the node has stopped");
                 return
             }
-
-            // Start wallet sync as last
-            _ = backend.wallet_sync() => {},
         }
 
         // Process all pending messages so that `update_wallets` is not needlessly called multiple times
