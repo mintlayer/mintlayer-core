@@ -664,6 +664,7 @@ impl BanScore for orders_accounting::Error {
             Error::OrderDataNotFound(_) => 100,
             Error::OrderAskBalanceNotFound(_) => 100,
             Error::OrderGiveBalanceNotFound(_) => 100,
+            Error::OrderWithZeroValue(_) => 100,
             Error::InvariantOrderDataNotFoundForUndo(_) => 100,
             Error::InvariantOrderAskBalanceNotFoundForUndo(_) => 100,
             Error::InvariantOrderAskBalanceChangedForUndo(_) => 100,

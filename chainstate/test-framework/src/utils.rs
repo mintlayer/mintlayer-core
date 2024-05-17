@@ -76,6 +76,21 @@ pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
     }
 }
 
+pub fn output_value_amount(value: &OutputValue) -> Amount {
+    match value {
+        OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => *amount,
+        OutputValue::TokenV0(_) => panic!("deprecated token version"),
+    }
+}
+
+pub fn output_value_with_amount(value: &OutputValue, amount: Amount) -> OutputValue {
+    match value {
+        OutputValue::Coin(_) => OutputValue::Coin(amount),
+        OutputValue::TokenV1(token_id, _) => OutputValue::TokenV1(*token_id, amount),
+        OutputValue::TokenV0(_) => panic!("deprecated token version"),
+    }
+}
+
 pub fn create_new_outputs(
     srcid: OutPointSourceId,
     outs: &[TxOutput],

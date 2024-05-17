@@ -900,6 +900,7 @@ impl BlockProcessingErrorClassification for orders_accounting::Error {
             | Error::OrderDataNotFound(_)
             | Error::OrderAskBalanceNotFound(_)
             | Error::OrderGiveBalanceNotFound(_)
+            | Error::OrderWithZeroValue(_)
             | Error::InvariantOrderDataNotFoundForUndo(_)
             | Error::InvariantOrderAskBalanceNotFoundForUndo(_)
             | Error::InvariantOrderAskBalanceChangedForUndo(_)

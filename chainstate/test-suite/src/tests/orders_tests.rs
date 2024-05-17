@@ -15,7 +15,7 @@
 
 use chainstate::ConnectTransactionError;
 use chainstate_storage::Transactional;
-use chainstate_test_framework::{TestFramework, TransactionBuilder};
+use chainstate_test_framework::{output_value_amount, TestFramework, TransactionBuilder};
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
@@ -42,13 +42,6 @@ use test_utils::{
 use tx_verifier::error::{InputCheckError, ScriptError};
 
 use crate::tests::helpers::{issue_token_from_block, mint_tokens_in_block};
-
-fn output_value_amount(value: &OutputValue) -> Amount {
-    match value {
-        OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => *amount,
-        OutputValue::TokenV0(_) => unreachable!(),
-    }
-}
 
 fn issue_and_mint_token_from_genesis(
     rng: &mut (impl Rng + CryptoRng),

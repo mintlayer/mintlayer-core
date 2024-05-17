@@ -150,16 +150,24 @@ impl<P: OrdersAccountingView> OrdersAccountingView for OrdersAccountingCache<P> 
 
 impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCache<P> {
     fn create_order(&mut self, id: OrderId, data: OrderData) -> Result<OrdersAccountingUndo> {
-        if self.get_order_data(&id)?.is_some() {
-            return Err(Error::OrderAlreadyExists(id));
-        }
+        ensure!(
+            self.get_order_data(&id)?.is_none(),
+            Error::OrderAlreadyExists(id)
+        );
 
-        if self.get_ask_balance(&id)?.is_some() {
-            return Err(Error::OrderAlreadyExists(id));
-        }
+        ensure!(
+            self.get_ask_balance(&id)?.is_none(),
+            Error::OrderAlreadyExists(id)
+        );
 
         let ask_amount = output_value_amount(data.ask())?;
         let give_amount = output_value_amount(data.give())?;
+
+        ensure!(
+            ask_amount > Amount::ZERO && give_amount > Amount::ZERO,
+            Error::OrderWithZeroValue(id)
+        );
+
         let undo_data = self
             .data
             .order_data

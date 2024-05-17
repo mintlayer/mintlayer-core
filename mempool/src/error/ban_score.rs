@@ -502,6 +502,7 @@ impl MempoolBanScore for orders_accounting::Error {
             Error::OrderDataNotFound(_) => 0,
             Error::OrderAskBalanceNotFound(_) => 0,
             Error::OrderGiveBalanceNotFound(_) => 0,
+            Error::OrderWithZeroValue(_) => 100,
             Error::InvariantOrderDataNotFoundForUndo(_) => 100,
             Error::InvariantOrderAskBalanceNotFoundForUndo(_) => 100,
             Error::InvariantOrderAskBalanceChangedForUndo(_) => 100,

@@ -39,7 +39,7 @@ pub enum TokenTotalSupply {
     Unlimited, // limited only by the Amount data type
 }
 
-// Indicates whether a token an be frozen
+/// Indicates whether a token can be frozen
 #[derive(
     Debug,
     Copy,
@@ -69,7 +69,7 @@ impl IsTokenFreezable {
     }
 }
 
-// Indicates whether a token an be unfrozen after being frozen
+/// Indicates whether a token can be unfrozen after being frozen
 #[derive(
     Debug,
     Copy,
@@ -99,9 +99,9 @@ impl IsTokenUnfreezable {
     }
 }
 
-// Indicates whether a token is frozen at the moment or not. If it is then no operations wish this token can be performed.
-// Meaning transfers, burns, minting, unminting, supply locks etc. Frozen token can only be unfrozen
-// is such an option was provided while freezing.
+/// Indicates whether a token is frozen at the moment or not. If it is then no operations with this token can be performed.
+/// Meaning transfers, burns, minting, unminting, supply locks etc. Frozen token can only be unfrozen
+/// is such an option was provided while freezing.
 #[derive(
     Debug,
     Copy,

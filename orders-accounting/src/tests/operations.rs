@@ -274,7 +274,7 @@ fn fill_entire_order_and_flush(#[case] seed: Seed) {
         assert_eq!(result.unwrap_err(), Error::OrderDataNotFound(random_order));
     }
 
-    // try to overfill
+    // try to overbid
     {
         let ask_amount = output_value_amount(order_data.ask()).unwrap();
         let fill = OutputValue::Coin((ask_amount + Amount::from_atoms(1)).unwrap());
