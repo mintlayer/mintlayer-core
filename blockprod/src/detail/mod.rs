@@ -505,7 +505,8 @@ impl BlockProduction {
             transaction_ids.clone(),
             packing_strategy,
         )
-        .await?;
+        .await?
+        .ok_or(BlockProductionError::RecoverableMempoolError)?;
 
         let block_body = BlockBody::new(block_reward, collected_transactions);
 

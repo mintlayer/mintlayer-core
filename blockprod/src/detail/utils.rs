@@ -287,6 +287,8 @@ pub fn timestamp_add_secs(
     Ok(timestamp)
 }
 
+/// Collect transactions from the mempool.
+/// Ok(None) means that a recoverable error happened (such as that the mempool tip moved).
 pub async fn collect_transactions(
     mempool_handle: &MempoolHandle,
     chain_config: &ChainConfig,
@@ -295,7 +297,7 @@ pub async fn collect_transactions(
     transactions: Vec<SignedTransaction>,
     transaction_ids: Vec<Id<Transaction>>,
     packing_strategy: PackingStrategy,
-) -> Result<Vec<SignedTransaction>, BlockProductionError> {
+) -> Result<Option<Vec<SignedTransaction>>, BlockProductionError> {
     let mut accumulator = Box::new(DefaultTxAccumulator::new(
         chain_config.max_block_size_from_std_scripts(),
         current_tip,
@@ -314,8 +316,8 @@ pub async fn collect_transactions(
         .call(move |mempool| mempool.collect_txs(accumulator, transaction_ids, packing_strategy))
         .await??;
 
-    let returned_accumulator =
-        returned_accumulator.ok_or(BlockProductionError::RecoverableMempoolError)?;
+    let transactions = returned_accumulator
+        .map(|returned_accumulator| returned_accumulator.transactions().to_vec());
 
-    Ok(returned_accumulator.transactions().to_vec())
+    Ok(transactions)
 }

@@ -103,7 +103,7 @@ mod collect_transactions {
 
         let shutdown = manager.make_shutdown_trigger();
         let tester = tokio::spawn(async move {
-            let accumulator = collect_transactions(
+            let transactions = collect_transactions(
                 &mock_mempool_subsystem,
                 &chain_config,
                 current_tip,
@@ -114,7 +114,7 @@ mod collect_transactions {
             )
             .await;
 
-            match accumulator {
+            match transactions {
                 Err(BlockProductionError::MempoolBlockConstruction(
                     BlockConstructionError::Validity(TxValidationError::CallError(_)),
                 )) => {}
@@ -150,7 +150,7 @@ mod collect_transactions {
 
         // spawn rather than adding a subsystem as manager is moved into main() above
         tokio::spawn(async move {
-            let accumulator = collect_transactions(
+            let transactions = collect_transactions(
                 &mock_mempool_subsystem,
                 &chain_config,
                 current_tip,
@@ -161,7 +161,7 @@ mod collect_transactions {
             )
             .await;
 
-            match accumulator {
+            match transactions {
                 Ok(_) => panic!("Expected an error"),
                 Err(BlockProductionError::SubsystemCallError(_)) => {}
                 Err(err) => panic!("Expected a subsystem error, got {err:?}"),
@@ -201,7 +201,7 @@ mod collect_transactions {
                     shutdown_trigger.initiate();
                 });
 
-                let accumulator = collect_transactions(
+                let transactions = collect_transactions(
                     &mock_mempool_subsystem,
                     &chain_config,
                     current_tip,
@@ -213,8 +213,13 @@ mod collect_transactions {
                 .await;
 
                 assert!(
-                    accumulator.is_ok(),
+                    transactions.is_ok(),
                     "Expected collect_transactions() to succeed"
+                );
+
+                assert!(
+                    transactions.unwrap().is_some(),
+                    "Expected collect_transactions() to return Some"
                 );
             }
         });
