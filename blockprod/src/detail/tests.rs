@@ -27,7 +27,7 @@ use chainstate_test_framework::TransactionBuilder;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
-        config::{create_testnet, create_unit_test_config, Builder, ChainType},
+        config::{create_unit_test_config, Builder, ChainType},
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
@@ -788,76 +788,6 @@ mod produce_block {
                     Err(BlockProductionError::ChainstateError(
                         consensus::ChainstateError::FailedToObtainBestBlockIndex(_),
                     )) => {}
-                    _ => panic!("Unexpected return value"),
-                }
-            }
-        });
-
-        manager.main().await;
-        join_handle.await.unwrap();
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn tip_changed() {
-        let (mut manager, chain_config, _, mempool, p2p) =
-            setup_blockprod_test(None, TimeGetter::default());
-
-        let chainstate_subsystem: ChainstateHandle = {
-            let mut mock_chainstate = MockChainstateInterface::new();
-            mock_chainstate
-                .expect_subscribe_to_subsystem_events()
-                .times(..=1)
-                .returning(|_| ());
-            mock_chainstate.expect_is_initial_block_download().returning(|| false);
-
-            let mut expected_return_values = vec![
-                Ok(GenBlockIndex::genesis(&chain_config)),
-                Ok(GenBlockIndex::genesis(&create_testnet())),
-            ];
-
-            mock_chainstate
-                .expect_get_best_block_index()
-                .times(expected_return_values.len())
-                .returning(move || expected_return_values.remove(0));
-
-            // Doesn't matter for this test.
-            mock_chainstate
-                .expect_calculate_median_time_past()
-                .returning(|_| Ok(BlockTimestamp::from_int_seconds(0)));
-
-            manager.add_subsystem("mock-chainstate", mock_chainstate)
-        };
-
-        let join_handle = tokio::spawn({
-            let shutdown_trigger = manager.make_shutdown_trigger();
-            async move {
-                // Ensure a shutdown signal will be sent by the end of the scope
-                let _shutdown_signal = OnceDestructor::new(move || {
-                    shutdown_trigger.initiate();
-                });
-
-                let block_production = BlockProduction::new(
-                    chain_config,
-                    Arc::new(test_blockprod_config()),
-                    chainstate_subsystem,
-                    mempool,
-                    p2p,
-                    Default::default(),
-                    prepare_thread_pool(1),
-                )
-                .expect("Error initializing blockprod");
-
-                let result = block_production
-                    .produce_block(
-                        GenerateBlockInputData::None,
-                        vec![],
-                        vec![],
-                        PackingStrategy::LeaveEmptySpace,
-                    )
-                    .await;
-
-                match result {
-                    Err(BlockProductionError::TipChanged(_, _, _, _)) => {}
                     _ => panic!("Unexpected return value"),
                 }
             }

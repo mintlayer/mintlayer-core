@@ -44,7 +44,6 @@ use consensus::{
     PoSGenerateBlockInputData,
 };
 use crypto::ephemeral_e2e::{self, EndToEndPrivateKey};
-use logging::log;
 use mempool::{tx_accumulator::PackingStrategy, MempoolHandle};
 use p2p::P2pHandle;
 use randomness::{make_true_rng, Rng};
@@ -479,22 +478,6 @@ impl BlockProduction {
             current_tip_median_time_past,
             finalize_block_data,
         ) = self.pull_consensus_data(input_data.clone(), self.time_getter.clone()).await?;
-
-        if current_tip_index.block_id() != tip_at_start.block_id() {
-            log::info!(
-                "Current tip changed from {} with height {} to {} with height {} while mining, cancelling",
-                tip_at_start.block_id(),
-                tip_at_start.block_height(),
-                current_tip_index.block_id(),
-                current_tip_index.block_height(),
-            );
-            return Err(BlockProductionError::TipChanged(
-                tip_at_start.block_id(),
-                tip_at_start.block_height(),
-                current_tip_index.block_id(),
-                current_tip_index.block_height(),
-            ));
-        }
 
         let collected_transactions = collect_transactions(
             &self.mempool_handle,

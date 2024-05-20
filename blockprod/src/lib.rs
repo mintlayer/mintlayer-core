@@ -65,8 +65,6 @@ pub enum BlockProductionError {
     PeerCountBelowRequiredThreshold(usize, usize),
     #[error("Block not found in this round")]
     TryAgainLater,
-    #[error("Tip has changed. Stopping block production for previous tip {0} with height {1} to new tip {2} with height {3}")]
-    TipChanged(Id<GenBlock>, BlockHeight, Id<GenBlock>, BlockHeight),
     #[error("Job already exists")]
     JobAlreadyExists(JobKey),
     #[error("Job manager error: {0}")]
