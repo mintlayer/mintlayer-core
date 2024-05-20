@@ -25,7 +25,7 @@ use common::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             DestinationSigError,
         },
-        tokens::{TokenId, TokenIssuance},
+        tokens::{TokenId, TokenIssuance, TokenTotalSupply},
         AccountCommand, AccountNonce, ChainstateUpgrade, Destination, OrderData, SignedTransaction,
         TxInput, TxOutput, UtxoOutPoint,
     },
@@ -64,8 +64,20 @@ fn issue_and_mint_token_from_best_block(
         Destination::AnyoneCanSpend,
         rng,
     ));
+
+    let mint_limit = match &issuance {
+        TokenIssuance::V1(issuance) => match issuance.total_supply {
+            TokenTotalSupply::Fixed(supply) => supply,
+            TokenTotalSupply::Lockable | TokenTotalSupply::Unlimited => {
+                Amount::from_atoms(100_000_000)
+            }
+        },
+    };
+
     let (token_id, _, utxo_with_change) =
         issue_token_from_block(rng, tf, best_block_id, utxo_outpoint, issuance);
+
+    let to_mint = Amount::from_atoms(rng.gen_range(1..mint_limit.into_atoms()));
 
     let best_block_id = tf.best_block_id();
     let (_, mint_tx_id) = mint_tokens_in_block(
@@ -74,7 +86,7 @@ fn issue_and_mint_token_from_best_block(
         best_block_id,
         utxo_with_change,
         token_id,
-        Amount::from_atoms(100_000),
+        to_mint,
         true,
     );
 
