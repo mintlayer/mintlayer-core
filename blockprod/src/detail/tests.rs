@@ -459,19 +459,30 @@ mod produce_block {
         join_handle.await.unwrap();
     }
 
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn overflow_tip_plus_one() {
+    async fn overflow_tip_plus_one(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let (
+            chain_config_builder,
+            genesis_stake_private_key,
+            genesis_vrf_private_key,
+            create_genesis_pool_txoutput,
+        ) = setup_pos_with_genesis_timestamp(
+            BlockTimestamp::from_int_seconds(u64::MAX),
+            BlockHeight::new(1),
+            &[],
+            &mut rng,
+        );
+
         let (manager, chain_config, chainstate, mempool, p2p) = {
-            let genesis_block = Genesis::new(
-                "blockprod-testing".into(),
-                BlockTimestamp::from_int_seconds(u64::MAX),
-                vec![],
-            );
-
-            let override_chain_config =
-                Builder::new(ChainType::Regtest).genesis_custom(genesis_block).build();
-
-            setup_blockprod_test(Some(override_chain_config), TimeGetter::default())
+            setup_blockprod_test(
+                Some(build_chain_config_for_pos(chain_config_builder)),
+                TimeGetter::default(),
+            )
         };
 
         let join_handle = tokio::spawn({
@@ -483,7 +494,7 @@ mod produce_block {
                 });
 
                 let block_production = BlockProduction::new(
-                    chain_config,
+                    Arc::clone(&chain_config),
                     Arc::new(test_blockprod_config()),
                     chainstate.clone(),
                     mempool,
@@ -493,13 +504,20 @@ mod produce_block {
                 )
                 .expect("Error initializing blockprod");
 
+                let input_data =
+                    GenerateBlockInputData::PoS(Box::new(PoSGenerateBlockInputData::new(
+                        genesis_stake_private_key,
+                        genesis_vrf_private_key,
+                        PoolId::new(H256::zero()),
+                        vec![TxInput::from_utxo(
+                            OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                            0,
+                        )],
+                        vec![create_genesis_pool_txoutput],
+                    )));
+
                 let result = block_production
-                    .produce_block(
-                        GenerateBlockInputData::None,
-                        vec![],
-                        vec![],
-                        PackingStrategy::LeaveEmptySpace,
-                    )
+                    .produce_block(input_data, vec![], vec![], PackingStrategy::LeaveEmptySpace)
                     .await;
 
                 assert_matches!(result, Err(BlockProductionError::TimestampOverflow(_, 1)));
@@ -784,12 +802,12 @@ mod produce_block {
                     )
                     .await;
 
-                match result {
+                assert_matches!(
+                    result,
                     Err(BlockProductionError::ChainstateError(
                         consensus::ChainstateError::FailedToObtainBestBlockIndex(_),
-                    )) => {}
-                    _ => panic!("Unexpected return value"),
-                }
+                    ))
+                );
             }
         });
 

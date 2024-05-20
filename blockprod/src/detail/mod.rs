@@ -237,7 +237,7 @@ impl BlockProduction {
                                         &pos_input_data,
                                         &pos_status,
                                         sealed_epoch_randomness,
-                                        // FIXME this block_timestamp and the vrf_data inside PoSData make no sense here,
+                                        // TODO: this block_timestamp and the vrf_data inside PoSData make no sense here,
                                         // because they'll be overwritten during staking.
                                         block_timestamp,
                                         block_height,
@@ -532,7 +532,7 @@ impl BlockProduction {
 
         let signed_block_header = solver_result?;
         let block = Block::new_from_header(signed_block_header, block_body.clone())?;
-        return Ok((block, job_finished_receiver));
+        Ok((block, job_finished_receiver))
     }
 
     // TODO: get rid of the "block_timestamp_seconds" atomic.
@@ -556,7 +556,7 @@ impl BlockProduction {
 
         let min_block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
 
-        // FIXME should be PoS only.
+        // TODO: this should be PoS only.
         if min_block_timestamp > max_block_timestamp_for_pos {
             return Err(BlockProductionError::TryAgainLater);
         }
