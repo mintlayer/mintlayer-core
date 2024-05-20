@@ -17,8 +17,8 @@ pub mod transactional;
 
 use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
-    ApiServerStorageError, BlockInfo, Delegation, FungibleTokenData, LockedUtxo, PoolBlockStats,
-    TransactionInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+    ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
+    LockedUtxo, PoolBlockStats, TransactionInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
 };
 use common::{
     chain::{
@@ -55,6 +55,8 @@ struct ApiServerInMemoryStorage {
     address_locked_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
     fungible_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, FungibleTokenData>>,
     nft_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, NftIssuance>>,
+    statistics:
+        BTreeMap<CoinOrTokenStatistic, BTreeMap<CoinOrTokenId, BTreeMap<BlockHeight, Amount>>>,
     best_block: BlockAuxData,
     genesis_block: Arc<WithId<Genesis>>,
     storage_version: u32,
@@ -78,6 +80,7 @@ impl ApiServerInMemoryStorage {
             address_locked_utxos: BTreeMap::new(),
             fungible_token_issuances: BTreeMap::new(),
             nft_token_issuances: BTreeMap::new(),
+            statistics: BTreeMap::new(),
             genesis_block: chain_config.genesis_block().clone(),
             best_block: BlockAuxData::new(
                 chain_config.genesis_block_id(),
@@ -536,6 +539,48 @@ impl ApiServerInMemoryStorage {
             .get(&token_id)
             .map(|data| data.values().last().expect("not empty").number_of_decimals)
             .or_else(|| self.nft_token_issuances.get(&token_id).map(|_| 0)))
+    }
+
+    fn get_statistic(
+        &self,
+        statistic: CoinOrTokenStatistic,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        Ok(self
+            .statistics
+            .get(&statistic)
+            .and_then(|by_coin| by_coin.get(&coin_or_token_id))
+            .map(|data| data.values().last().expect("not empty"))
+            .copied())
+    }
+
+    fn set_statistic(
+        &mut self,
+        statistic: CoinOrTokenStatistic,
+        coin_or_token_id: CoinOrTokenId,
+        block_height: BlockHeight,
+        amount: Amount,
+    ) -> Result<(), ApiServerStorageError> {
+        self.statistics
+            .entry(statistic)
+            .or_default()
+            .entry(coin_or_token_id)
+            .or_default()
+            .insert(block_height, amount);
+        Ok(())
+    }
+
+    fn del_statistics_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.statistics.values_mut().for_each(|stat| {
+            stat.retain(|_, by_height| {
+                by_height.retain(|k, _| *k <= block_height);
+                !by_height.is_empty()
+            })
+        });
+        Ok(())
     }
 }
 

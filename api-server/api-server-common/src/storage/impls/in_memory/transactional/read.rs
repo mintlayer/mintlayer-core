@@ -27,7 +27,8 @@ use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
-    Delegation, FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
+    CoinOrTokenStatistic, Delegation, FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
+    UtxoWithExtraInfo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -225,5 +226,13 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         token_id: TokenId,
     ) -> Result<Option<u8>, ApiServerStorageError> {
         self.transaction.get_token_num_decimals(token_id)
+    }
+
+    async fn get_statistic(
+        &self,
+        statistic: CoinOrTokenStatistic,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        self.transaction.get_statistic(statistic, coin_or_token_id)
     }
 }

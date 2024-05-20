@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Display,
+};
 
 use common::{
     chain::{
@@ -62,6 +65,27 @@ pub enum ApiServerStorageError {
     AddressableError,
     #[error("Block timestamp to high {0}")]
     TimestampToHigh(BlockTimestamp),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub enum CoinOrTokenStatistic {
+    TotalSupply,
+    Staked,
+    Burned,
+    Preminted,
+}
+
+impl Display for CoinOrTokenStatistic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            Self::TotalSupply => "TotalSupply",
+            Self::Staked => "Staked",
+            Self::Burned => "Burned",
+            Self::Preminted => "Preminted",
+        };
+
+        f.write_str(str)
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
@@ -473,6 +497,12 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         token_id: TokenId,
     ) -> Result<Option<u8>, ApiServerStorageError>;
+
+    async fn get_statistic(
+        &self,
+        statistic: CoinOrTokenStatistic,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]
@@ -615,6 +645,19 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     ) -> Result<(), ApiServerStorageError>;
 
     async fn del_nft_issuance_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_statistic(
+        &mut self,
+        statistic: CoinOrTokenStatistic,
+        coin_or_token_id: CoinOrTokenId,
+        block_height: BlockHeight,
+        amount: Amount,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_statistics_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;

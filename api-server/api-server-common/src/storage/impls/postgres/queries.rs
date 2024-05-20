@@ -35,8 +35,8 @@ use crate::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
-        ApiServerStorageError, BlockInfo, Delegation, FungibleTokenData, LockedUtxo,
-        PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
+        ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
+        LockedUtxo, PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -622,6 +622,17 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     issuance bytea NOT NULL,
                     PRIMARY KEY (nft_id)
                 );",
+        )
+        .await?;
+
+        self.just_execute(
+            "CREATE TABLE ml.statistics (
+            statistic TEXT NOT NULL,
+            coin_or_token_id bytea NOT NULL,
+            block_height bigint NOT NULL,
+            amount bytea NOT NULL,
+            PRIMARY KEY (statistic, coin_or_token_id, block_height)
+        );",
         )
         .await?;
 
@@ -1775,6 +1786,79 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         }
 
         Ok(self.get_nft_token_issuance(token_id).await?.map(|_| 0))
+    }
+
+    pub async fn get_statistic(
+        &self,
+        statistic: CoinOrTokenStatistic,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        let row = self
+            .tx
+            .query_opt(
+                "SELECT amount FROM ml.statistics WHERE statistic = $1 AND coin_or_token_id = $2
+                    ORDER BY block_height DESC
+                    LIMIT 1;",
+                &[&statistic.to_string(), &coin_or_token_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let row = match row {
+            Some(d) => d,
+            None => return Ok(None),
+        };
+
+        let serialized_data: Vec<u8> = row.get(0);
+
+        let amount = Amount::decode_all(&mut serialized_data.as_slice()).map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Amount for statistic {} and coin or token id {:?} deserialization failed: {}",
+                statistic, coin_or_token_id, e
+            ))
+        })?;
+
+        Ok(Some(amount))
+    }
+
+    pub async fn set_statistic(
+        &mut self,
+        statistic: CoinOrTokenStatistic,
+        coin_or_token_id: CoinOrTokenId,
+        block_height: BlockHeight,
+        amount: Amount,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "INSERT INTO ml.statistics (statistic, coin_or_token_id, block_height, amount)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (statistic, coin_or_token_id, block_height) DO UPDATE
+                    SET amount = $4;",
+                &[&statistic.to_string(), &coin_or_token_id.encode(), &height, &amount.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn del_statistics_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute(
+                "DELETE FROM ml.statistics WHERE block_height > $1;",
+                &[&height],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
     }
 
     pub async fn get_nft_token_issuance(

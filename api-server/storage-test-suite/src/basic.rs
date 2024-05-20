@@ -25,8 +25,8 @@ use api_server_common::storage::{
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorage, ApiServerStorageRead, ApiServerStorageWrite, ApiServerTransactionRw,
-        BlockInfo, Delegation, FungibleTokenData, LockedUtxo, TransactionInfo, TxAdditionalInfo,
-        Utxo, UtxoLock, UtxoWithExtraInfo,
+        BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo,
+        TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
     },
 };
 use crypto::{
@@ -48,7 +48,7 @@ use common::{
         AccountNonce, Block, DelegationId, Destination, OutPointSourceId, PoolId,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
 use futures::Future;
 use libtest_mimic::Failed;
@@ -1172,6 +1172,79 @@ where
 
         let token = db_tx.get_fungible_token_issuance(random_token_id).await.unwrap();
         assert!(token.is_none());
+
+        db_tx.commit().await.unwrap();
+    }
+
+    // test coin and token statistics
+    {
+        let db_tx = storage.transaction_ro().await.unwrap();
+
+        let random_token_id = TokenId::new(H256::random_using(&mut rng));
+        let random_coin_or_token_id = CoinOrTokenId::TokenId(random_token_id);
+        let random_statistic = match rng.gen_range(0..4) {
+            0 => CoinOrTokenStatistic::TotalSupply,
+            1 => CoinOrTokenStatistic::Staked,
+            2 => CoinOrTokenStatistic::Burned,
+            _ => CoinOrTokenStatistic::Preminted,
+        };
+
+        let amount = db_tx.get_statistic(random_statistic, random_coin_or_token_id).await.unwrap();
+        assert!(amount.is_none());
+
+        drop(db_tx);
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        let random_block_height = BlockHeight::new(rng.gen_range(1..100));
+        let random_amount = Amount::from_atoms(rng.gen_range(0..100_000));
+        db_tx
+            .set_statistic(
+                random_statistic,
+                random_coin_or_token_id,
+                random_block_height,
+                random_amount,
+            )
+            .await
+            .unwrap();
+
+        let returned_amount =
+            db_tx.get_statistic(random_statistic, random_coin_or_token_id).await.unwrap();
+
+        assert_eq!(returned_amount, Some(random_amount));
+
+        let random_amount2 = Amount::from_atoms(rng.gen_range(0..100_000));
+
+        db_tx
+            .set_statistic(
+                random_statistic,
+                random_coin_or_token_id,
+                random_block_height.next_height(),
+                random_amount2,
+            )
+            .await
+            .unwrap();
+
+        let returned_amount =
+            db_tx.get_statistic(random_statistic, random_coin_or_token_id).await.unwrap();
+
+        assert_eq!(returned_amount, Some(random_amount2));
+
+        // after reorg go back to the previous token data
+        db_tx.del_statistics_above_height(random_block_height).await.unwrap();
+        let returned_amount =
+            db_tx.get_statistic(random_statistic, random_coin_or_token_id).await.unwrap();
+
+        assert_eq!(returned_amount, Some(random_amount));
+
+        db_tx
+            .del_statistics_above_height(random_block_height.prev_height().unwrap())
+            .await
+            .unwrap();
+
+        let returned_amount =
+            db_tx.get_statistic(random_statistic, random_coin_or_token_id).await.unwrap();
+        assert!(returned_amount.is_none());
 
         db_tx.commit().await.unwrap();
     }

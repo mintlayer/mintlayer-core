@@ -27,8 +27,9 @@ use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
-    ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo, Delegation,
-    FungibleTokenData, LockedUtxo, PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
+    ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo,
+    CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, PoolBlockStats,
+    TransactionInfo, Utxo, UtxoWithExtraInfo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRw;
@@ -235,6 +236,24 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.del_nft_issuance_above_height(block_height)
     }
+
+    async fn set_statistic(
+        &mut self,
+        statistic: CoinOrTokenStatistic,
+        coin_or_token_id: CoinOrTokenId,
+        block_height: BlockHeight,
+        amount: Amount,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction
+            .set_statistic(statistic, coin_or_token_id, block_height, amount)
+    }
+
+    async fn del_statistics_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.del_statistics_above_height(block_height)
+    }
 }
 
 #[async_trait::async_trait]
@@ -430,5 +449,13 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
         token_id: TokenId,
     ) -> Result<Option<u8>, ApiServerStorageError> {
         self.transaction.get_token_num_decimals(token_id)
+    }
+
+    async fn get_statistic(
+        &self,
+        statistic: CoinOrTokenStatistic,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        self.transaction.get_statistic(statistic, coin_or_token_id)
     }
 }
