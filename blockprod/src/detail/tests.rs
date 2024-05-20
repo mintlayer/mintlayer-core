@@ -22,7 +22,7 @@ use tokio::{
     time::sleep,
 };
 
-use chainstate::{ChainstateError, ChainstateHandle, GenBlockIndex, PropertyQueryError};
+use chainstate::{ChainstateError, ChainstateHandle, PropertyQueryError};
 use chainstate_test_framework::TransactionBuilder;
 use common::{
     chain::{
@@ -767,12 +767,9 @@ mod produce_block {
                 .returning(|_| ());
             mock_chainstate.expect_is_initial_block_download().returning(|| false);
 
-            let mut expected_return_values = vec![
-                Ok(GenBlockIndex::genesis(&chain_config)),
-                Err(ChainstateError::FailedToReadProperty(
-                    PropertyQueryError::BestBlockIndexNotFound,
-                )),
-            ];
+            let mut expected_return_values = vec![Err(ChainstateError::FailedToReadProperty(
+                PropertyQueryError::BestBlockIndexNotFound,
+            ))];
 
             mock_chainstate
                 .expect_get_best_block_index()

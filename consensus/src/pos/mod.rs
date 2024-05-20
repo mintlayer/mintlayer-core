@@ -28,11 +28,10 @@ use chainstate_types::{
     BlockIndexHandle, EpochStorageRead, GenBlockIndex,
 };
 use common::{
-    address::Address,
     chain::{
         block::{
             consensus_data::PoSData, signed_block_header::SignedBlockHeader,
-            timestamp::BlockTimestamp, BlockHeader, ConsensusData,
+            timestamp::BlockTimestamp,
         },
         config::EpochIndex,
         ChainConfig, CoinUnit, PoSChainConfig, PoSStatus, TxOutput,
@@ -41,15 +40,13 @@ use common::{
     Uint256,
 };
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey, VRFReturn};
-use logging::log;
 use pos_accounting::PoSAccountingView;
 use randomness::{CryptoRng, Rng};
 use utils::ensure;
 use utxo::UtxosView;
 
-use crate::{
-    pos::{block_sig::check_block_signature, error::ConsensusPoSError, kernel::get_kernel_output},
-    PoSFinalizeBlockInputData,
+use crate::pos::{
+    block_sig::check_block_signature, error::ConsensusPoSError, kernel::get_kernel_output,
 };
 
 pub use effective_pool_balance::{
@@ -58,9 +55,12 @@ pub use effective_pool_balance::{
 pub use hash_check::check_pos_hash;
 
 #[must_use]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StakeResult {
-    Success,
+    Success {
+        found_timestamp: BlockTimestamp,
+        vrf_data: VRFReturn,
+    },
     Failed,
     Stopped,
 }
@@ -205,62 +205,6 @@ where
     )?;
 
     Ok(())
-}
-
-pub fn stake(
-    chain_config: &ChainConfig,
-    pos_config: &PoSChainConfig,
-    pos_data: PoSData,
-    block_header: &mut BlockHeader,
-    block_timestamp: &mut BlockTimestamp,
-    max_block_timestamp: BlockTimestamp,
-    finalize_pos_data: PoSFinalizeBlockInputData,
-) -> Result<StakeResult, ConsensusPoSError> {
-    let final_supply = chain_config
-        .final_supply()
-        .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
-
-    let first_timestamp = *block_timestamp;
-
-    log::debug!(
-        "Search for a valid block ({}..{}), pool_id: {}",
-        first_timestamp,
-        max_block_timestamp,
-        Address::new(chain_config, *pos_data.stake_pool_id())
-            .expect("Pool id to address cannot fail")
-    );
-
-    if let Some((found_timestamp, vrf_data)) = find_timestamp_for_staking(
-        final_supply,
-        pos_config,
-        pos_data.compact_target(),
-        first_timestamp,
-        max_block_timestamp,
-        finalize_pos_data.sealed_epoch_randomness(),
-        finalize_pos_data.epoch_index(),
-        finalize_pos_data.pledge_amount(),
-        finalize_pos_data.pool_balance(),
-        finalize_pos_data.vrf_private_key(),
-        &mut randomness::make_true_rng(),
-    )? {
-        log::info!(
-            "Valid block found, timestamp: {}, pool_id: {}",
-            found_timestamp,
-            pos_data.stake_pool_id()
-        );
-
-        let mut pos_data = pos_data;
-        pos_data.update_vrf_data(vrf_data);
-        block_header.update_consensus_data(ConsensusData::PoS(Box::new(pos_data)));
-        block_header.update_timestamp(found_timestamp);
-
-        *block_timestamp = found_timestamp;
-
-        Ok(StakeResult::Success)
-    } else {
-        *block_timestamp = max_block_timestamp;
-        Ok(StakeResult::Failed)
-    }
 }
 
 pub fn calc_pos_hash_from_prv_key(

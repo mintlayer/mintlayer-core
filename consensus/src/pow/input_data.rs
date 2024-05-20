@@ -26,7 +26,6 @@ use common::{
 };
 use serialization::{Decode, Encode};
 
-// TODO see PoS equivalent
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct PoWGenerateBlockInputData {
     reward_destination: Destination,
