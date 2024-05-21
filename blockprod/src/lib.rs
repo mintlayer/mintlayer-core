@@ -101,6 +101,10 @@ pub enum BlockProductionError {
     RecoverableMempoolError,
     #[error("Task exited prematurely")]
     TaskExitedPrematurely,
+    #[error("Invariant broken: expecting PoS consensus type")]
+    InvariantBrokenExpectingPoSConsensusType,
+    #[error("Invariant broken: failed to determine parent blocks for staking with pool {0}")]
+    InvariantBrokenNoParentsForPoS(PoolId),
 }
 
 pub type BlockProductionSubsystem = Box<dyn BlockProductionInterface>;

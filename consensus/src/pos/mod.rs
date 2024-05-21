@@ -18,9 +18,12 @@ pub mod error;
 pub mod hash_check;
 pub mod input_data;
 pub mod kernel;
+pub mod pos_slot_info;
 pub mod target;
 
 mod effective_pool_balance;
+
+use std::sync::Arc;
 
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
@@ -28,25 +31,29 @@ use chainstate_types::{
     BlockIndexHandle, EpochStorageRead, GenBlockIndex,
 };
 use common::{
+    address::Address,
     chain::{
         block::{
             consensus_data::PoSData, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp,
         },
         config::EpochIndex,
-        ChainConfig, CoinUnit, PoSChainConfig, PoSStatus, TxOutput,
+        get_pos_block_proof, ChainConfig, CoinUnit, PoSChainConfig, PoSStatus, PoolId, TxOutput,
     },
     primitives::{Amount, BlockHeight, Compact, Idable},
     Uint256,
 };
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey, VRFReturn};
+use logging::log;
 use pos_accounting::PoSAccountingView;
 use randomness::{CryptoRng, Rng};
-use utils::ensure;
+use tokio::sync::watch;
+use utils::{atomics::RelaxedAtomicBool, ensure};
 use utxo::UtxosView;
 
-use crate::pos::{
-    block_sig::check_block_signature, error::ConsensusPoSError, kernel::get_kernel_output,
+use crate::{
+    calc_and_check_pos_hash,
+    pos::{block_sig::check_block_signature, error::ConsensusPoSError, kernel::get_kernel_output},
 };
 
 pub use effective_pool_balance::{
@@ -54,11 +61,14 @@ pub use effective_pool_balance::{
 };
 pub use hash_check::check_pos_hash;
 
+use self::pos_slot_info::{PoSSlotInfo, PoSSlotInfosByParentTS};
+
 #[must_use]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StakeResult {
+#[derive(Debug, Clone)]
+pub enum StakeResult<'a> {
     Success {
-        found_timestamp: BlockTimestamp,
+        slot_info: &'a PoSSlotInfo,
+        timestamp: BlockTimestamp,
         vrf_data: VRFReturn,
     },
     Failed,
@@ -300,4 +310,109 @@ pub fn find_timestamp_for_staking(
     }
 
     Ok(None)
+}
+
+pub fn stake<'a>(
+    chain_config: &ChainConfig,
+    pool_id: &PoolId,
+    vrf_prv_key: &VRFPrivateKey,
+    slot_infos: &'a PoSSlotInfosByParentTS,
+    min_timestamp: BlockTimestamp,
+    max_timestamp: BlockTimestamp,
+    last_used_block_timestamp_sender: &watch::Sender<BlockTimestamp>,
+    stop_flag: Arc<RelaxedAtomicBool>,
+) -> Result<StakeResult<'a>, ConsensusPoSError> {
+    let mut rng = randomness::make_true_rng();
+    let final_supply = chain_config
+        .final_supply()
+        .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?
+        .to_amount_atoms();
+    let vrf_pub_key = VRFPublicKey::from_private_key(vrf_prv_key);
+
+    ensure!(
+        min_timestamp <= max_timestamp,
+        ConsensusPoSError::FutureTimestampInThePast
+    );
+
+    log::debug!(
+        "Search for a valid block ({}..{}), pool_id: {}",
+        min_timestamp,
+        max_timestamp,
+        Address::new(chain_config, *pool_id).expect("Pool id to address cannot fail")
+    );
+
+    for timestamp in min_timestamp.iter_up_to_including(max_timestamp) {
+        let mut best_chain_trust_result = None;
+
+        for slot_info in slot_infos {
+            if slot_info.0.parent_timestamp >= timestamp {
+                break;
+            }
+
+            let vrf_data = produce_vrf_data(
+                slot_info.0.epoch_index,
+                &slot_info.0.sealed_epoch_randomness,
+                timestamp,
+                vrf_prv_key,
+                &mut rng,
+            );
+
+            if calc_and_check_pos_hash(
+                slot_info.0.pos_chain_config.consensus_version(),
+                slot_info.0.epoch_index,
+                &slot_info.0.sealed_epoch_randomness,
+                &slot_info.0.target,
+                &vrf_data,
+                &vrf_pub_key,
+                timestamp,
+                slot_info.0.staker_balance,
+                slot_info.0.total_balance,
+                final_supply,
+            )
+            .is_ok()
+            {
+                let block_proof = get_pos_block_proof(slot_info.0.parent_timestamp, timestamp)
+                    .ok_or(ConsensusPoSError::BlockProofCalculationError {
+                        parent_block_timestamp: slot_info.0.parent_timestamp,
+                        new_block_timestamp: timestamp,
+                    })?;
+                let chain_trust = (slot_info.0.parent_chain_trust + block_proof).ok_or(
+                    ConsensusPoSError::ChainTrustCalculationOverflow {
+                        parent_block_chain_trust: slot_info.0.parent_chain_trust,
+                        new_block_proof: block_proof,
+                    },
+                )?;
+
+                let prev_best_chain_trust = best_chain_trust_result
+                    .as_ref()
+                    .map_or(Uint256::ZERO, |(chain_trust, _, _)| *chain_trust);
+
+                if chain_trust > prev_best_chain_trust {
+                    best_chain_trust_result = Some((chain_trust, vrf_data, &slot_info.0));
+                }
+            }
+        }
+
+        let _ = last_used_block_timestamp_sender.send(timestamp);
+
+        if let Some((_, vrf_data, slot_info)) = best_chain_trust_result {
+            log::info!(
+                "Valid block found, timestamp: {}, pool_id: {}",
+                timestamp,
+                pool_id
+            );
+
+            return Ok(StakeResult::Success {
+                slot_info,
+                timestamp,
+                vrf_data,
+            });
+        }
+
+        if stop_flag.load() {
+            return Ok(StakeResult::Stopped);
+        }
+    }
+
+    Ok(StakeResult::Failed)
 }

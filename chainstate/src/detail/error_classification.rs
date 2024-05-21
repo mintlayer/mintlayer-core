@@ -610,7 +610,13 @@ impl BlockProcessingErrorClassification for ConsensusPoSError {
             | ConsensusPoSError::FailedToSignBlockHeader
             | ConsensusPoSError::FailedReadingBlock(_)
             | ConsensusPoSError::FutureTimestampInThePast
-            | ConsensusPoSError::FailedToSignKernel => BlockProcessingErrorClass::General,
+            | ConsensusPoSError::FailedToSignKernel
+            // This error happens during block production.
+            | ConsensusPoSError::BlockProofCalculationError { .. }
+            // This error happens during block production.
+            | ConsensusPoSError::ChainTrustCalculationOverflow { .. } => {
+                BlockProcessingErrorClass::General
+            }
 
             ConsensusPoSError::StakeKernelHashTooHigh
             | ConsensusPoSError::TimestampViolation(_, _)

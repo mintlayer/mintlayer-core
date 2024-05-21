@@ -19,7 +19,7 @@ use chainstate_types::pos_randomness::PoSRandomnessError;
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block, PoolId},
     primitives::{Compact, Id},
-    UintConversionError,
+    Uint256, UintConversionError,
 };
 
 use crate::ChainstateError;
@@ -108,4 +108,14 @@ pub enum ConsensusPoSError {
     EffectivePoolBalanceError(#[from] EffectivePoolBalanceError),
     #[error("Failed to calculate capped balance")]
     FailedToCalculateCappedBalance,
+    #[error("Failed to calculate block proof, prev_block_timestamp = {parent_block_timestamp}, new_block_timestamp = {new_block_timestamp}")]
+    BlockProofCalculationError {
+        parent_block_timestamp: BlockTimestamp,
+        new_block_timestamp: BlockTimestamp,
+    },
+    #[error("Overflow when calculating chain trust, parent_block_chain_trust = {parent_block_chain_trust:?}, new_block_proof = {new_block_proof:?}")]
+    ChainTrustCalculationOverflow {
+        parent_block_chain_trust: Uint256,
+        new_block_proof: Uint256,
+    },
 }

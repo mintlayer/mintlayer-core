@@ -13,6 +13,7 @@ logging = { path = "../logging" }
 pos-accounting = { path = "../pos-accounting" }
 randomness = { path = "../randomness" }
 serialization = { path = "../serialization" }
+tokio = { workspace = true, default-features = false, features = ["sync"] }
 utils = { path = "../utils" }
 utxo = { path = "../utxo" }
 

@@ -42,41 +42,6 @@ pub enum PoSAccountingError {
     StakerBalanceRetrievalError(String),
 }
 
-pub fn get_pool_staker_balance<CS: ChainstateInterface + ?Sized>(
-    chainstate: &CS,
-    pool_id: &PoolId,
-) -> Result<Amount, BlockProductionError> {
-    let balance = chainstate
-        .get_stake_pool_data(*pool_id)
-        .map_err(|err| {
-            BlockProductionError::ChainstateError(
-                consensus::ChainstateError::StakePoolDataReadError(*pool_id, err.to_string()),
-            )
-        })?
-        .ok_or(BlockProductionError::PoolDataNotFound(*pool_id))?
-        .staker_balance()
-        .map_err(|err| PoSAccountingError::StakerBalanceRetrievalError(err.to_string()))?;
-
-    Ok(balance)
-}
-
-pub fn get_pool_total_balance<CS: ChainstateInterface + ?Sized>(
-    chainstate: &CS,
-    pool_id: &PoolId,
-) -> Result<Amount, BlockProductionError> {
-    let pool_balance = chainstate
-        .get_stake_pool_balance(*pool_id)
-        .map_err(|err| {
-            BlockProductionError::ChainstateError(consensus::ChainstateError::PoolBalanceReadError(
-                *pool_id,
-                err.to_string(),
-            ))
-        })?
-        .ok_or(BlockProductionError::PoolBalanceNotFound(*pool_id))?;
-
-    Ok(pool_balance)
-}
-
 pub fn get_pool_balances_at_heights<CS: ChainstateInterface + ?Sized>(
     chainstate: &CS,
     min_height: BlockHeight,

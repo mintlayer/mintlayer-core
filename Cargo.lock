@@ -1565,6 +1565,7 @@ dependencies = [
  "serialization",
  "test-utils",
  "thiserror",
+ "tokio",
  "utils",
  "utxo",
 ]
