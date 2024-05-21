@@ -31,7 +31,7 @@ use api_server_common::storage::{
     },
 };
 
-use chainstate::{BlockSource, ChainstateConfig};
+use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateConfig};
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
@@ -49,10 +49,69 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use pos_accounting::make_delegation_id;
+use pos_accounting::{make_delegation_id, PoSAccountingView};
 use randomness::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+
+struct PoSAccountingAdapterToCheckFees<'a> {
+    chainstate: &'a dyn ChainstateInterface,
+}
+
+impl<'a> PoSAccountingAdapterToCheckFees<'a> {
+    pub fn new(chainstate: &'a dyn ChainstateInterface) -> Self {
+        Self { chainstate }
+    }
+}
+
+impl<'a> PoSAccountingView for PoSAccountingAdapterToCheckFees<'a> {
+    type Error = pos_accounting::Error;
+
+    fn pool_exists(&self, _pool_id: PoolId) -> Result<bool, Self::Error> {
+        unimplemented!()
+    }
+
+    fn get_pool_balance(&self, _pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        unimplemented!()
+    }
+
+    fn get_pool_data(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<pos_accounting::PoolData>, Self::Error> {
+        Ok(self.chainstate.get_stake_pool_data(pool_id).unwrap())
+    }
+
+    fn get_pool_delegations_shares(
+        &self,
+        _pool_id: PoolId,
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
+        unimplemented!()
+    }
+
+    fn get_delegation_balance(
+        &self,
+        _delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        // only used for checks for attempted to print money but we don't need to check that here
+        Ok(Some(Amount::MAX))
+    }
+
+    fn get_delegation_data(
+        &self,
+        _delegation_id: DelegationId,
+    ) -> Result<Option<pos_accounting::DelegationData>, Self::Error> {
+        unimplemented!()
+    }
+
+    fn get_pool_delegation_share(
+        &self,
+        _pool_id: PoolId,
+        _delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        unimplemented!()
+    }
+}
 
 #[rstest]
 #[trace]
@@ -425,28 +484,13 @@ async fn simulation(
                     })
                     .collect();
 
-                //let staker_balance_getter = |pool_id: PoolId| {
-                //    Ok(Some(
-                //        tf.chainstate
-                //            .get_stake_pool_data(pool_id)
-                //            .unwrap()
-                //            .unwrap()
-                //            .staker_balance()
-                //            .unwrap(),
-                //    ))
-                //};
-                // only used for checks for attempted to print money but we don't need to check that here
-                //let delegation_balance_getter =
-                //    |_delegation_id: DelegationId| Ok(Some(Amount::MAX));
-                // FIXME: proper impl
-                let pos_store = pos_accounting::InMemoryPoSAccounting::new();
-                let pos_db = pos_accounting::PoSAccountingDB::new(&pos_store);
+                let pos_store = PoSAccountingAdapterToCheckFees::new(tf.chainstate.as_ref());
 
                 let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
                     &chain_config,
                     block_height,
                     &orders_db,
-                    &pos_db,
+                    &pos_store,
                     tx.inputs(),
                     &inputs_utxos,
                 )

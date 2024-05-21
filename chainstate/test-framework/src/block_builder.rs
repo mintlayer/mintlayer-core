@@ -139,7 +139,7 @@ impl<'f> BlockBuilder<'f> {
         mut self,
         rng: &mut (impl Rng + CryptoRng),
         support_htlc: bool,
-        with_orders: bool,
+        support_orders: bool,
     ) -> Self {
         let utxo_set = self
             .framework
@@ -170,7 +170,7 @@ impl<'f> BlockBuilder<'f> {
                 None,
                 account_nonce_getter,
                 support_htlc,
-                with_orders,
+                support_orders,
             )
             .make(
                 rng,
