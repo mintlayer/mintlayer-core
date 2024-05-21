@@ -332,4 +332,14 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
 
         Ok(res)
     }
+
+    async fn get_all_statistic(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_all_statistic(coin_or_token_id).await?;
+
+        Ok(res)
+    }
 }

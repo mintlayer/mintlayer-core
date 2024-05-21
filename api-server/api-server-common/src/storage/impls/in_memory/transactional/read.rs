@@ -235,4 +235,11 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
     ) -> Result<Option<Amount>, ApiServerStorageError> {
         self.transaction.get_statistic(statistic, coin_or_token_id)
     }
+
+    async fn get_all_statistic(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError> {
+        self.transaction.get_all_statistic(coin_or_token_id)
+    }
 }

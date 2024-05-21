@@ -150,11 +150,9 @@ async fn ok(#[case] seed: Seed) {
                 );
 
                 let mut blocks = vec![];
-                tf.process_block(block.clone(), BlockSource::Local).unwrap();
                 blocks.push(block.clone());
                 for delegation in &delegations {
                     for block in &delegation.3 {
-                        tf.process_block(block.clone(), BlockSource::Local).unwrap();
                         blocks.push(block.clone());
                     }
                 }

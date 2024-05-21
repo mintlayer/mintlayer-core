@@ -16,6 +16,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Display,
+    str::FromStr,
 };
 
 use common::{
@@ -73,6 +74,26 @@ pub enum CoinOrTokenStatistic {
     Staked,
     Burned,
     Preminted,
+}
+
+impl FromStr for CoinOrTokenStatistic {
+    type Err = ApiServerStorageError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let statistic = match s {
+            "TotalSupply" => Self::TotalSupply,
+            "Staked" => Self::Staked,
+            "Burned" => Self::Burned,
+            "Preminted" => Self::Preminted,
+            _ => {
+                return Err(ApiServerStorageError::DeserializationError(format!(
+                    "invalid coin or token statistic type: {s}"
+                )))
+            }
+        };
+
+        Ok(statistic)
+    }
 }
 
 impl Display for CoinOrTokenStatistic {
@@ -503,6 +524,11 @@ pub trait ApiServerStorageRead: Sync {
         statistic: CoinOrTokenStatistic,
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<Option<Amount>, ApiServerStorageError>;
+
+    async fn get_all_statistic(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]

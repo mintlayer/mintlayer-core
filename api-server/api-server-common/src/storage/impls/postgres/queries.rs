@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    str::FromStr,
+};
 
 use bb8_postgres::{bb8::PooledConnection, PostgresConnectionManager};
 use pos_accounting::PoolData;
@@ -1819,6 +1822,45 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         })?;
 
         Ok(Some(amount))
+    }
+
+    pub async fn get_all_statistic(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError> {
+        let rows = self
+            .tx
+            .query(
+                r#"
+                SELECT sub.statistic, sub.amount
+                FROM (
+                    SELECT statistic, amount, ROW_NUMBER() OVER(PARTITION BY statistic ORDER BY block_height DESC) as newest
+                    FROM ml.statistics
+                    WHERE coin_or_token_id = $1
+                ) AS sub
+                WHERE newest = 1;
+                "#,
+                &[&coin_or_token_id.encode()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|row| {
+                let statistic: String = row.get(0);
+                let serialized_amount: Vec<u8> = row.get(1);
+
+                let amount =
+                    Amount::decode_all(&mut serialized_amount.as_slice()).map_err(|e| {
+                        ApiServerStorageError::DeserializationError(format!(
+                            "Amount for statistic {} and coin or token id {:?} deserialization failed: {}",
+                            statistic, coin_or_token_id, e
+                        ))
+                    })?;
+
+                Ok((CoinOrTokenStatistic::from_str(&statistic)?, amount))
+            })
+            .collect()
     }
 
     pub async fn set_statistic(

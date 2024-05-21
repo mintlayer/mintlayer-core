@@ -26,7 +26,7 @@ use crate::{
 };
 use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead, BlockInfo,
-    TransactionInfo,
+    CoinOrTokenStatistic, TransactionInfo,
 };
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
@@ -106,6 +106,10 @@ pub fn routes<
         .route("/pool/:id/delegations", get(pool_delegations));
 
     let router = router.route("/delegation/:id", get(delegation));
+
+    let router = router
+        .route("/statistics/coin", get(coin_statistics))
+        .route("/statistics/token/:id", get(token_statistics));
 
     router.route("/token/:id", get(token)).route("/nft/:id", get(nft))
 }
@@ -1110,4 +1114,69 @@ pub async fn nft<T: ApiServerStorage>(
         ))?;
 
     Ok(Json(nft_issuance_data_to_json(&nft, &state.chain_config)))
+}
+
+pub async fn coin_statistics<T: ApiServerStorage>(
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let mut statistics = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_all_statistic(CoinOrTokenId::Coin)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+    Ok(Json(json!({
+        "total_amount": amount_to_json(statistics.remove(&CoinOrTokenStatistic::TotalSupply).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
+        "preminted": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Preminted).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
+        "burned": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Burned).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
+        "staked": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Staked).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
+    })))
+}
+
+pub async fn token_statistics<T: ApiServerStorage>(
+    Path(delegation_id): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let token_id = Address::from_string(&state.chain_config, delegation_id)
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidTokenId)
+        })?
+        .into_object();
+
+    let tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let token_decimals = tx
+        .get_token_num_decimals(token_id)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::TokenNotFound,
+        ))?;
+
+    let mut statistics =
+        tx.get_all_statistic(CoinOrTokenId::TokenId(token_id)).await.map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    Ok(Json(json!({
+        "total_amount": amount_to_json(statistics.remove(&CoinOrTokenStatistic::TotalSupply).unwrap_or(Amount::ZERO), token_decimals),
+        "preminted": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Preminted).unwrap_or(Amount::ZERO), token_decimals),
+        "burned": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Burned).unwrap_or(Amount::ZERO), token_decimals),
+        "staked": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Staked).unwrap_or(Amount::ZERO), token_decimals),
+    })))
 }

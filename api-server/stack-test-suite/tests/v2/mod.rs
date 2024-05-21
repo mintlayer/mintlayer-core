@@ -29,6 +29,7 @@ mod nft;
 mod pool;
 mod pool_block_stats;
 mod pools;
+mod statistics;
 mod token;
 mod transaction;
 mod transaction_merkle_path;

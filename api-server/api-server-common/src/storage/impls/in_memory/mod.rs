@@ -554,6 +554,18 @@ impl ApiServerInMemoryStorage {
             .copied())
     }
 
+    fn get_all_statistic(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError> {
+        Ok(self
+            .statistics
+            .iter()
+            .filter_map(|(statistic, by_coin)| Some((statistic, by_coin.get(&coin_or_token_id)?)))
+            .map(|(statistic, data)| (*statistic, *data.values().last().expect("not empty")))
+            .collect())
+    }
+
     fn set_statistic(
         &mut self,
         statistic: CoinOrTokenStatistic,
