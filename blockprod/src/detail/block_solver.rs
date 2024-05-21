@@ -50,8 +50,8 @@ use consensus::{
     generate_pos_consensus_data_and_reward, generate_pow_consensus_data_and_reward,
     generate_reward_ignore_consensus, mine, stake, ConsensusCreationError, ConsensusPoSError,
     ConsensusPoWError, GenerateBlockInputData, MiningResult, PoSGenerateBlockInputData,
-    PoSPartialConsensusData, PoSSlotInfo, PoSSlotInfoCmpByParentTS, PoSSlotInfosByParentTS,
-    PoWGenerateBlockInputData, StakeResult,
+    PoSPartialConsensusData, PoSSlotInfo, PoSSlotInfoCmpByParentTS, PoWGenerateBlockInputData,
+    StakeResult,
 };
 
 use crate::BlockProductionError;
@@ -111,8 +111,8 @@ impl BlockProduction {
             })
             .await??;
 
-        let earliest_parent_timestamp =
-            slot_infos.first().expect("parents map must be non-empty").0.parent_timestamp;
+        let first_slot_info = slot_infos.first().expect("parents map must be non-empty");
+        let earliest_parent_timestamp = first_slot_info.0.slot_info.parent_timestamp;
         let min_possible_timestamp = timestamp_add_secs(earliest_parent_timestamp, 1)?;
         let min_timestamp = std::cmp::max(min_timestamp, min_possible_timestamp);
 
@@ -435,9 +435,9 @@ fn obtain_pos_slot_info(
     match required_consensus {
         RequiredConsensus::PoS(pos_status) => {
             let target = calculate_target_required_from_block_index(
-                &chain_config,
+                chain_config,
                 &pos_status,
-                &parent_index,
+                parent_index,
                 make_ancestor_getter(chainstate),
             )
             .and_then(compact_target_to_target)
@@ -445,7 +445,7 @@ fn obtain_pos_slot_info(
             let pos_chain_config = pos_status.get_chain_config().clone();
             let epoch_index = chain_config.epoch_index_from_height(&next_block_height);
             let sealed_epoch_randomness =
-                get_sealed_epoch_randomness(&chain_config, chainstate, next_block_height)?;
+                get_sealed_epoch_randomness(chain_config, chainstate, next_block_height)?;
 
             Ok(Some(PoSTmpSlotInfo {
                 parent_id: parent_index.block_id(),
@@ -530,16 +530,18 @@ fn collect_pos_slot_infos(
 
     for tmp_info in tmp_infos {
         if let Some(balances) = pool_balances.get(&tmp_info.parent_height) {
-            infos.insert(PoSSlotInfoCmpByParentTS(PoSSlotInfo {
+            infos.insert(PoSSlotInfoCmpByParentTS(PoSSlotInfoExt {
+                slot_info: PoSSlotInfo {
+                    parent_timestamp: tmp_info.parent_timestamp,
+                    parent_chain_trust: tmp_info.parent_chain_trust,
+                    target: tmp_info.target,
+                    pos_chain_config: tmp_info.pos_chain_config,
+                    epoch_index: tmp_info.epoch_index,
+                    sealed_epoch_randomness: tmp_info.sealed_epoch_randomness,
+                    staker_balance: balances.staker_balance(),
+                    total_balance: balances.total_balance(),
+                },
                 parent_id: tmp_info.parent_id,
-                parent_timestamp: tmp_info.parent_timestamp,
-                parent_chain_trust: tmp_info.parent_chain_trust,
-                target: tmp_info.target,
-                pos_chain_config: tmp_info.pos_chain_config,
-                epoch_index: tmp_info.epoch_index,
-                sealed_epoch_randomness: tmp_info.sealed_epoch_randomness,
-                staker_balance: balances.staker_balance(),
-                total_balance: balances.total_balance(),
             }));
         }
     }
@@ -556,6 +558,20 @@ fn collect_pos_slot_infos(
         Ok(infos)
     }
 }
+
+#[derive(Debug, Clone)]
+struct PoSSlotInfoExt {
+    slot_info: PoSSlotInfo,
+    parent_id: Id<GenBlock>,
+}
+
+impl AsRef<PoSSlotInfo> for PoSSlotInfoExt {
+    fn as_ref(&self) -> &PoSSlotInfo {
+        &self.slot_info
+    }
+}
+
+type PoSSlotInfosByParentTS = BTreeSet<PoSSlotInfoCmpByParentTS<PoSSlotInfoExt>>;
 
 #[derive(Debug, Clone)]
 pub struct PoSBlockSolverInputData {
@@ -607,11 +623,11 @@ pub fn solve_block(
                 chain_config,
                 &input_data.consensus_data.pool_id,
                 &input_data.vrf_private_key,
-                &input_data.slot_infos,
+                input_data.slot_infos.iter(),
                 input_data.min_timestamp,
                 input_data.max_timestamp,
-                &input_data.last_used_block_timestamp_sender,
-                stop_flag,
+                Some(&input_data.last_used_block_timestamp_sender),
+                Some(stop_flag),
             )?;
 
             match stake_result {
@@ -623,7 +639,7 @@ pub fn solve_block(
                     found_timestamp: timestamp,
                     vrf_data,
                     consensus_data: input_data.consensus_data,
-                    target: slot_info.target.into(),
+                    target: slot_info.slot_info.target.into(),
                     parent_id: slot_info.parent_id,
                     stake_private_key: input_data.stake_private_key,
                     block_reward: input_data.block_reward,

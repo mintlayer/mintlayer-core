@@ -13,19 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
-
 use chainstate_types::pos_randomness::PoSRandomness;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, config::EpochIndex, GenBlock, PoSChainConfig},
-    primitives::{Amount, Id},
+    chain::{block::timestamp::BlockTimestamp, config::EpochIndex, PoSChainConfig},
+    primitives::Amount,
     Uint256,
 };
 
-// FIXME accessors
 #[derive(Debug, Clone)]
 pub struct PoSSlotInfo {
-    pub parent_id: Id<GenBlock>,
     pub parent_timestamp: BlockTimestamp,
     pub parent_chain_trust: Uint256,
 
@@ -40,26 +36,30 @@ pub struct PoSSlotInfo {
 }
 
 #[derive(Debug, Clone)]
-pub struct PoSSlotInfoCmpByParentTS(pub PoSSlotInfo);
+pub struct PoSSlotInfoCmpByParentTS<T: AsRef<PoSSlotInfo>>(pub T);
 
-impl Ord for PoSSlotInfoCmpByParentTS {
+impl<T: AsRef<PoSSlotInfo>> Ord for PoSSlotInfoCmpByParentTS<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.parent_timestamp.cmp(&other.0.parent_timestamp)
+        self.0.as_ref().parent_timestamp.cmp(&other.0.as_ref().parent_timestamp)
     }
 }
 
-impl PartialOrd for PoSSlotInfoCmpByParentTS {
+impl<T: AsRef<PoSSlotInfo>> PartialOrd for PoSSlotInfoCmpByParentTS<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl PartialEq for PoSSlotInfoCmpByParentTS {
+impl<T: AsRef<PoSSlotInfo>> PartialEq for PoSSlotInfoCmpByParentTS<T> {
     fn eq(&self, other: &Self) -> bool {
         self.cmp(other) == std::cmp::Ordering::Equal
     }
 }
 
-impl Eq for PoSSlotInfoCmpByParentTS {}
+impl<T: AsRef<PoSSlotInfo>> Eq for PoSSlotInfoCmpByParentTS<T> {}
 
-pub type PoSSlotInfosByParentTS = BTreeSet<PoSSlotInfoCmpByParentTS>;
+impl AsRef<PoSSlotInfo> for PoSSlotInfo {
+    fn as_ref(&self) -> &PoSSlotInfo {
+        self
+    }
+}

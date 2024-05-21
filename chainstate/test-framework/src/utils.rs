@@ -37,7 +37,7 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
 };
-use consensus::find_timestamp_for_staking;
+use consensus::{compact_target_to_target, stake_impl, PoSSlotInfo, PoSSlotInfoCmpByParentTS};
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFPrivateKey, VRFPublicKey},
@@ -277,7 +277,7 @@ pub fn produce_kernel_signature(
 #[allow(clippy::too_many_arguments)]
 pub fn pos_mine(
     rng: &mut (impl Rng + CryptoRng),
-    pos_config: &PoSChainConfig,
+    pos_chain_config: &PoSChainConfig,
     initial_timestamp: BlockTimestamp,
     kernel_outpoint: UtxoOutPoint,
     kernel_witness: InputWitness,
@@ -289,31 +289,50 @@ pub fn pos_mine(
     target: Compact,
     pool_balances: PoolBalances,
 ) -> Option<(PoSData, BlockTimestamp)> {
-    find_timestamp_for_staking(
-        final_supply,
-        pos_config,
-        target,
-        initial_timestamp,
-        initial_timestamp.add_int_seconds(1000).unwrap(),
-        &sealed_epoch_randomness,
+    let slot_info = PoSSlotInfo {
+        // Note: it doesn't matter what timestamp is passed here, as long as it's less than initial_timestamp.
+        parent_timestamp: BlockTimestamp::from_int_seconds(0),
+        // Note: parent_chain_trust only matters when multiple parents are provided.
+        parent_chain_trust: Uint256::ZERO,
+        target: compact_target_to_target(target).unwrap(),
+        pos_chain_config: pos_chain_config.clone(),
         epoch_index,
+        sealed_epoch_randomness,
         pool_balances.staker_balance,
         pool_balances.total_balance,
+    };
+    let tmp_slot_info = PoSSlotInfoCmpByParentTS(&slot_info);
+
+    let stake_result = stake_impl(
+        final_supply,
         vrf_sk,
+        std::iter::once(&tmp_slot_info),
+        initial_timestamp,
+        initial_timestamp.add_int_seconds(1000).unwrap(),
+        None,
+        None,
         rng,
     )
-    .unwrap()
-    .map(|(timestamp, vrf_data)| {
-        let pos_data = PoSData::new(
-            vec![kernel_outpoint.clone().into()],
-            vec![kernel_witness.clone()],
-            pool_id,
-            vrf_data,
-            target,
-        );
+    .unwrap();
 
-        (pos_data, timestamp)
-    })
+    match stake_result {
+        consensus::StakeResult::Success {
+            slot_info: _slot_info,
+            timestamp,
+            vrf_data,
+        } => {
+            let pos_data = PoSData::new(
+                vec![kernel_outpoint.clone().into()],
+                vec![kernel_witness.clone()],
+                pool_id,
+                vrf_data,
+                target,
+            );
+
+            Some((pos_data, timestamp))
+        }
+        consensus::StakeResult::Failed | consensus::StakeResult::Stopped => None,
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

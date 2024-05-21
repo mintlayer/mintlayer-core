@@ -1563,6 +1563,7 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
+ "sorted-iter",
  "test-utils",
  "thiserror",
  "tokio",
@@ -7027,6 +7028,12 @@ dependencies = [
  "rand 0.8.5",
  "sha-1 0.9.8",
 ]
+
+[[package]]
+name = "sorted-iter"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bceb57dc07c92cdae60f5b27b3fa92ecaaa42fe36c55e22dbfb0b44893e0b1f7"
 
 [[package]]
 name = "spin"

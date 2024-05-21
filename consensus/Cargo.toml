@@ -20,6 +20,7 @@ utxo = { path = "../utxo" }
 itertools.workspace = true
 num.workspace = true
 parity-scale-codec.workspace = true
+sorted-iter.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
