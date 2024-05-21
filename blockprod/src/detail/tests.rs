@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, sync::Arc};
 
 use rstest::rstest;
 use static_assertions::const_assert;
@@ -535,17 +535,21 @@ mod produce_block {
     #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn overflow_max_blocktimestamp(#[case] seed: Seed) {
+        use common::chain::block::timestamp::BlockTimestampInternalType;
+
         let mut rng = make_seedable_rng(seed);
-        let time_getter = TimeGetter::default();
         let (
             chain_config_builder,
             genesis_stake_private_key,
             genesis_vrf_private_key,
             create_genesis_pool_txoutput,
-        ) = setup_pos(&time_getter, BlockHeight::new(1), &[], &mut rng);
-        let chain_config = build_chain_config_for_pos(
-            chain_config_builder.max_future_block_time_offset(Duration::MAX),
+        ) = setup_pos_with_genesis_timestamp(
+            BlockTimestamp::from_int_seconds(BlockTimestampInternalType::MAX),
+            BlockHeight::new(1),
+            &[],
+            &mut rng,
         );
+        let chain_config = build_chain_config_for_pos(chain_config_builder);
 
         let (manager, chain_config, chainstate, mempool, p2p) =
             setup_blockprod_test(Some(chain_config), TimeGetter::default());

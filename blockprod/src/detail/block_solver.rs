@@ -72,11 +72,9 @@ impl BlockProduction {
         transactions: TxData,
     ) -> Result<(PoSBlockSolverInputData, watch::Receiver<BlockTimestamp>), BlockProductionError>
     {
-        let chain_config = Arc::clone(&self.chain_config);
         let last_used_block_timestamp_for_pos =
             self.get_last_used_block_timestamp_for_pos_data(&input_data);
 
-        let current_timestamp = BlockTimestamp::from_time(self.time_getter.get_time());
         let min_timestamp = {
             let prev_timestamp = std::cmp::max(
                 last_used_block_timestamp_for_pos.unwrap_or(BlockTimestamp::from_int_seconds(0)),
@@ -85,10 +83,7 @@ impl BlockProduction {
 
             timestamp_add_secs(prev_timestamp, 1)?
         };
-        let max_timestamp = {
-            let max_offset = chain_config.max_future_block_time_offset().as_secs();
-            timestamp_add_secs(current_timestamp, max_offset)?
-        };
+        let max_timestamp = BlockTimestamp::from_time(self.time_getter.get_time());
 
         if min_timestamp > max_timestamp {
             return Err(BlockProductionError::TryAgainLater);
