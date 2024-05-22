@@ -316,17 +316,16 @@ impl BlockProduction {
             let chain_config = Arc::clone(&self.chain_config);
 
             move || {
+                let _ended_sender = OnceDestructor::new(move || {
+                    // This can fail if the caller exited before the solver thread finished
+                    let _ = ended_sender.send(());
+                });
+
                 let solver_result = solve_block(&chain_config, input_data, stop_flag)
                     .map_err(BlockProductionError::FailedConsensusInitialization);
 
-                let _ended_sender = OnceDestructor::new(move || {
-                    // This can fail if the function exited before the mining thread finished
-                    let _send_whether_ended = ended_sender.send(());
-                });
-
-                result_sender
-                    .send(solver_result)
-                    .expect("Failed to send block header back to main thread");
+                // This can fail if the caller exited before the solver thread finished
+                let _ = result_sender.send(solver_result);
             }
         });
 
@@ -577,16 +576,13 @@ type PoSSlotInfosByParentTS = BTreeSet<PoSSlotInfoCmpByParentTS<PoSSlotInfoExt>>
 
 #[derive(Debug, Clone)]
 pub struct PoSBlockSolverInputData {
-    /// The private key of the staker.
     stake_private_key: PrivateKey,
-    /// The VRF private key.
     vrf_private_key: VRFPrivateKey,
 
     consensus_data: PoSPartialConsensusData,
 
     slot_infos: PoSSlotInfosByParentTS,
 
-    // Note: target, pos_chain_config, the epoch data and balances depend on parent_id.
     min_timestamp: BlockTimestamp,
     max_timestamp: BlockTimestamp,
 

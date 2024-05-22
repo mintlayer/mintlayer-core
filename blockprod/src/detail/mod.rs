@@ -204,8 +204,7 @@ impl BlockProduction {
     /// that the block production process has ended and that there's no
     /// remnants in the job manager.
     ///
-    /// Note: the function may exit early, e.g. in case of recoverable mempool error.
-    /// TODO: recoverable mempool errors should not affect PoS.
+    /// Note: the function assumes it will be called in a loop, so it may exit early if a "soft" error happens.
     pub async fn produce_block(
         &self,
         input_data: GenerateBlockInputData,
@@ -382,7 +381,7 @@ impl BlockProduction {
             _ = cancel_receiver.recv() => {
                 stop_flag.store(true);
 
-                // This can fail if the mining thread has already finished
+                // This can fail if the solver thread has already finished
                 let _ended = ended_receiver.recv();
 
                 return Err(BlockProductionError::Cancelled);
