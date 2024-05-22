@@ -76,10 +76,17 @@ impl BlockProduction {
             self.get_last_used_block_timestamp_for_pos_data(&input_data);
 
         let min_timestamp = {
-            let prev_timestamp = std::cmp::max(
-                last_used_block_timestamp_for_pos.unwrap_or(BlockTimestamp::from_int_seconds(0)),
-                best_block_index.block_timestamp(),
-            );
+            // If last_used_block_timestamp_for_pos is None, the pool has just been created or the node has been restarted.
+            // In such a case, we just start from the tip.
+            // Note that though it might be tempting to start from some block in the recent past (where a reorg to the new block
+            // would still be probable, e.g. 1h in the past), it might not be a good idea because:
+            // 1) Though the later call to collect_pos_slot_infos validates the min timestamp, ensuring that we don't go below the
+            // point where we've already produced a block using this pool, it does so only for mainchain blocks.
+            // If we start from a block in the past here, we'll have to check stale chains too (so that we don't stake twice
+            // for the same timestamp); this won't work if the node has been restarted after deleting the chainstate db.
+            // 2) It doesn't look like we'd gain much by doing so.
+            let prev_timestamp =
+                last_used_block_timestamp_for_pos.unwrap_or(best_block_index.block_timestamp());
 
             timestamp_add_secs(prev_timestamp, 1)?
         };
