@@ -261,6 +261,12 @@ pub fn produce_vrf_data(
     vrf_prv_key.produce_vrf_data(transcript)
 }
 
+/// For each timestamp in the range, try to stake using all possible parent blocks that
+/// can be chosen for a block with that timestamp. The information about possible parents
+/// is provided via `slot_infos_iter`.
+/// If multiple parents can be chosen, use the one that gives the biggest chain trust.
+/// The function will only return `Success` if the resulting chain trust is strictly bigger than
+/// `cur_tip_chain_trust`.
 #[allow(clippy::too_many_arguments)]
 pub fn stake<'a, SlotInfo: AsRef<PoSSlotInfo> + 'a>(
     chain_config: &ChainConfig,
@@ -269,6 +275,7 @@ pub fn stake<'a, SlotInfo: AsRef<PoSSlotInfo> + 'a>(
     slot_infos_iter: impl SortedIterator<Item = &'a PoSSlotInfoCmpByParentTS<SlotInfo>> + Clone,
     min_timestamp: BlockTimestamp,
     max_timestamp: BlockTimestamp,
+    cur_tip_chain_trust: &Uint256,
     last_used_block_timestamp_sender: Option<&watch::Sender<BlockTimestamp>>,
     stop_flag: Option<Arc<RelaxedAtomicBool>>,
 ) -> Result<StakeResult<&'a SlotInfo>, ConsensusPoSError> {
@@ -289,6 +296,7 @@ pub fn stake<'a, SlotInfo: AsRef<PoSSlotInfo> + 'a>(
         slot_infos_iter,
         min_timestamp,
         max_timestamp,
+        cur_tip_chain_trust,
         last_used_block_timestamp_sender,
         stop_flag,
         &mut randomness::make_true_rng(),
@@ -310,6 +318,7 @@ pub fn stake<'a, SlotInfo: AsRef<PoSSlotInfo> + 'a>(
     Ok(stake_result)
 }
 
+/// A lower-level variant of `stake` to be called from tests.
 #[allow(clippy::too_many_arguments)]
 pub fn stake_impl<'a, SlotInfo: AsRef<PoSSlotInfo> + 'a>(
     final_supply: CoinUnit,
@@ -317,6 +326,7 @@ pub fn stake_impl<'a, SlotInfo: AsRef<PoSSlotInfo> + 'a>(
     slot_infos_iter: impl SortedIterator<Item = &'a PoSSlotInfoCmpByParentTS<SlotInfo>> + Clone,
     min_timestamp: BlockTimestamp,
     max_timestamp: BlockTimestamp,
+    cur_tip_chain_trust: &Uint256,
     last_used_block_timestamp_sender: Option<&watch::Sender<BlockTimestamp>>,
     stop_flag: Option<Arc<RelaxedAtomicBool>>,
     rng: &mut (impl Rng + CryptoRng),
@@ -330,7 +340,7 @@ pub fn stake_impl<'a, SlotInfo: AsRef<PoSSlotInfo> + 'a>(
     );
 
     for timestamp in min_timestamp.iter_up_to_including(max_timestamp) {
-        let mut best_chain_trust_result = None;
+        let mut best_result = None;
         let slot_infos_iter = slot_infos_iter.clone();
 
         for slot_info in slot_infos_iter {
@@ -374,12 +384,11 @@ pub fn stake_impl<'a, SlotInfo: AsRef<PoSSlotInfo> + 'a>(
                     },
                 )?;
 
-                let prev_best_chain_trust = best_chain_trust_result
-                    .as_ref()
-                    .map_or(Uint256::ZERO, |(chain_trust, _, _)| *chain_trust);
+                let prev_best_chain_trust =
+                    best_result.as_ref().map_or(Uint256::ZERO, |(chain_trust, _, _)| *chain_trust);
 
                 if chain_trust > prev_best_chain_trust {
-                    best_chain_trust_result = Some((chain_trust, vrf_data, ext_slot_info));
+                    best_result = Some((chain_trust, vrf_data, ext_slot_info));
                 }
             }
         }
@@ -388,12 +397,14 @@ pub fn stake_impl<'a, SlotInfo: AsRef<PoSSlotInfo> + 'a>(
             let _ = last_used_block_timestamp_sender.send(timestamp);
         }
 
-        if let Some((_, vrf_data, slot_info)) = best_chain_trust_result {
-            return Ok(StakeResult::Success {
-                slot_info,
-                timestamp,
-                vrf_data,
-            });
+        if let Some((chain_trust, vrf_data, slot_info)) = best_result {
+            if chain_trust > *cur_tip_chain_trust {
+                return Ok(StakeResult::Success {
+                    slot_info,
+                    timestamp,
+                    vrf_data,
+                });
+            }
         }
 
         if stop_flag.as_ref().is_some_and(|stop_flag| stop_flag.load()) {

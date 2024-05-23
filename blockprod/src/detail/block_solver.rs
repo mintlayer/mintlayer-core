@@ -99,6 +99,7 @@ impl BlockProduction {
         let (last_used_block_timestamp_sender, last_used_block_timestamp_receiver) =
             watch::channel(min_timestamp);
 
+        let cur_tip_chain_trust = best_block_index.chain_trust();
         let stake_private_key = input_data.stake_private_key().clone();
         let vrf_private_key = input_data.vrf_private_key().clone();
         let (consensus_data, block_reward) =
@@ -126,6 +127,7 @@ impl BlockProduction {
                 slot_infos,
                 min_timestamp,
                 max_timestamp,
+                cur_tip_chain_trust,
                 transactions,
                 block_reward,
                 last_used_block_timestamp_sender,
@@ -583,6 +585,8 @@ pub struct PoSBlockSolverInputData {
 
     slot_infos: PoSSlotInfosByParentTS,
 
+    cur_tip_chain_trust: Uint256,
+
     min_timestamp: BlockTimestamp,
     max_timestamp: BlockTimestamp,
 
@@ -624,6 +628,7 @@ pub fn solve_block(
                 input_data.slot_infos.iter(),
                 input_data.min_timestamp,
                 input_data.max_timestamp,
+                &input_data.cur_tip_chain_trust,
                 Some(&input_data.last_used_block_timestamp_sender),
                 Some(stop_flag),
             )?;

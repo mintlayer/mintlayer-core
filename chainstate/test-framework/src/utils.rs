@@ -309,6 +309,7 @@ pub fn pos_mine(
         std::iter::once(&tmp_slot_info),
         initial_timestamp,
         initial_timestamp.add_int_seconds(1000).unwrap(),
+        &Uint256::ZERO,
         None,
         None,
         rng,
