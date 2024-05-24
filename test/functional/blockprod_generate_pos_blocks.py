@@ -47,7 +47,7 @@ class GeneratePoSBlocksTest(BitcoinTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 1
         self.extra_args = [[
-            "--chain-pos-netupgrades=true",
+            "--chain-pos-netupgrades=1",
             "--blockprod-min-peers-to-produce-blocks=0",
         ]]
 

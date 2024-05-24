@@ -70,12 +70,12 @@ class WalletDecommissionGenesis(BitcoinTestFramework):
             GENESIS_VRF_PRIVATE_KEY,
         )
         self.wallet_extra_args = [
-            "--chain-pos-netupgrades", "true",
+            "--chain-pos-netupgrades", "1",
             "--chain-genesis-staking-settings", "{}".format(genesis_settings),
                 ]
 
         self.extra_args = [[
-            "--chain-pos-netupgrades=true",
+            "--chain-pos-netupgrades=1",
             "--blockprod-min-peers-to-produce-blocks=0",
             "--chain-genesis-staking-settings={}".format(genesis_settings),
         ]]

@@ -70,7 +70,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 1
         self.extra_args = [[
-            "--chain-pos-netupgrades=true",
+            "--chain-pos-netupgrades=1",
             "--blockprod-min-peers-to-produce-blocks=0",
         ]]
 
@@ -289,7 +289,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
     async def async_test(self):
         node = self.nodes[0]
         wallet_name = "wallet"
-        async with self.wallet_controller(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with self.wallet_controller(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "1"]) as wallet:
             # new wallet
             await wallet.create_wallet(wallet_name)
 
@@ -453,7 +453,7 @@ class WalletDelegationsCLI(BitcoinTestFramework):
 
         wallet_path = os.path.join(node.datadir, wallet_name)
         # check that we can start the wallet with staking enabled for account 0 and 1
-        async with self.wallet_controller(node, self.config, self.log, wallet_args=["--wallet-file", wallet_path, "--start-staking-for-account", "0", "--start-staking-for-account", "1"], chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with self.wallet_controller(node, self.config, self.log, wallet_args=["--wallet-file", wallet_path, "--start-staking-for-account", "0", "--start-staking-for-account", "1"], chain_config_args=["--chain-pos-netupgrades", "1"]) as wallet:
             # check both accounts have staking active
             assert_equal("Staking", (await wallet.staking_status()).splitlines()[-1])
             assert_in("Success", await wallet.select_account(1))

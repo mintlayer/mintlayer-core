@@ -77,9 +77,9 @@ pub struct ChainConfigOptions {
     #[clap(long)]
     pub chain_initial_difficulty: Option<u32>,
 
-    /// PoS NetUpgrade override after Genesis
+    /// If set, the consensus type will be switched to PoS at the specified height.
     #[clap(long)]
-    pub chain_pos_netupgrades: Option<bool>,
+    pub chain_pos_netupgrades: Option<u64>,
 
     /// PoS NetUpgrade override after Genesis with upgrade of consensus version from V0 to V1
     /// at specific height
@@ -156,14 +156,21 @@ pub fn regtest_chain_config_builder(options: &ChainConfigOptions) -> Result<Buil
     update_builder!(max_block_size_with_standard_txs);
     update_builder!(max_block_size_with_smart_contracts);
 
-    if chain_pos_netupgrades.unwrap_or(false) {
-        builder = builder.consensus_upgrades(NetUpgrades::regtest_with_pos()).genesis_custom(
-            create_regtest_pos_genesis(
+    let chain_initial_difficulty = chain_initial_difficulty
+        .map(primitives::Compact)
+        .unwrap_or(pos_initial_difficulty(ChainType::Regtest).into());
+
+    if let Some(upgrade_height) = chain_pos_netupgrades {
+        builder = builder
+            .consensus_upgrades(NetUpgrades::regtest_with_pos_generic(
+                BlockHeight::new(*upgrade_height),
+                chain_initial_difficulty,
+            ))
+            .genesis_custom(create_regtest_pos_genesis(
                 chain_genesis_staking_settings.clone(),
                 *chain_genesis_block_timestamp,
                 Destination::AnyoneCanSpend,
-            ),
-        );
+            ));
     } else {
         builder = builder.genesis_custom(create_regtest_pow_genesis(
             *chain_genesis_block_timestamp,
@@ -183,11 +190,7 @@ pub fn regtest_chain_config_builder(options: &ChainConfigOptions) -> Result<Buil
                     (
                         BlockHeight::new(1),
                         ConsensusUpgrade::PoS {
-                            initial_difficulty: Some(
-                                chain_initial_difficulty
-                                    .map(primitives::Compact)
-                                    .unwrap_or(pos_initial_difficulty(ChainType::Regtest).into()),
-                            ),
+                            initial_difficulty: Some(chain_initial_difficulty),
                             config: PoSChainConfig::new(
                                 target_limit,
                                 DEFAULT_MATURITY_BLOCK_COUNT_V0,
