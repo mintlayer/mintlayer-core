@@ -21,6 +21,8 @@ pub use checker::{ScriptChecker, SignatureContext, TimelockContext};
 pub use script::{ScriptResult, WitnessScript};
 pub use translate::{InputInfo, TranslateInput};
 
+// TODO(PR): Check the below stuff is still needed / useful
+
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum VerificationError<SE> {
     #[error(transparent)]
@@ -35,11 +37,22 @@ pub type VerificationResultOf<C> = Result<(), VerificationErrorOf<C>>;
 
 pub fn verify<C>(ctx: C) -> VerificationResultOf<checker::FullScriptChecker<C>>
 where
-    C: SignatureContext + TimelockContext + translate::TranslationContext,
-    C::Tx: TranslateInput,
+    C: SignatureContext + TimelockContext + translate::SignatureInfoProvider,
+    C::Tx: TranslateInput<C>,
 {
-    <C::Tx as translate::TranslateInput>::translate_input(&ctx)
+    <C::Tx as translate::TranslateInput<C>>::translate_input(&ctx)
         .map_err(VerificationError::Translation)?
         .verify(&mut ScriptChecker::full(ctx))
+        .map_err(VerificationError::Evaluation)
+}
+
+pub fn verify_timelocks<C>(ctx: C) -> VerificationResultOf<checker::TimelockOnlyScriptChecker<C>>
+where
+    C: TimelockContext,
+    translate::TimelockOnly: TranslateInput<C>,
+{
+    <translate::TimelockOnly as translate::TranslateInput<C>>::translate_input(&ctx)
+        .map_err(VerificationError::Translation)?
+        .verify(&mut ScriptChecker::timelock_only(ctx))
         .map_err(VerificationError::Evaluation)
 }

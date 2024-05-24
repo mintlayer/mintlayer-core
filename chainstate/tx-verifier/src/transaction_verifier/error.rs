@@ -153,6 +153,12 @@ pub enum ConnectTransactionError {
     Threshold(#[from] mintscript::script::ThresholdError),
 }
 
+impl From<std::convert::Infallible> for ConnectTransactionError {
+    fn from(value: std::convert::Infallible) -> Self {
+        match value {}
+    }
+}
+
 impl From<chainstate_storage::Error> for ConnectTransactionError {
     fn from(err: chainstate_storage::Error) -> Self {
         // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
@@ -163,7 +169,21 @@ impl From<chainstate_storage::Error> for ConnectTransactionError {
 
 impl From<mintscript::translate::TranslationError> for ConnectTransactionError {
     fn from(value: mintscript::translate::TranslationError) -> Self {
-        todo!("Translation error: {value}")
+        SignatureDestinationGetterError::from(value).into()
+    }
+}
+
+impl From<mintscript::translate::TranslationError> for SignatureDestinationGetterError {
+    fn from(value: mintscript::translate::TranslationError) -> Self {
+        use mintscript::translate::TranslationError as E;
+        match value {
+            E::Unspendable => Self::SigVerifyOfNotSpendableOutput,
+            E::PoSAccounting(e) => Self::from(e),
+            E::TokensAccounting(e) => Self::from(e),
+            E::PoolNotFound(id) => Self::PoolDataNotFound(id),
+            E::DelegationNotFound(id) => Self::DelegationDataNotFound(id),
+            E::TokenNotFound(id) => Self::TokenDataNotFound(id),
+        }
     }
 }
 

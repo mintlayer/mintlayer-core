@@ -99,14 +99,6 @@ pub fn collect_txs<M>(
         .expect("best index to exist");
     let tx_source = TransactionSourceForConnect::for_mempool(&best_index);
 
-    let block_verification_ctx = tx_verifier::BlockVerificationContext::for_timelock_check_only(
-        chain_config,
-        unlock_timestamp,
-        best_index.block_height().next_height(),
-        mempool_tip,
-        &chainstate,
-    );
-
     // Use transactions already in the Accumulator to check for uniqueness and to update the
     // verifier state to update UTXOs they consume / provide.
     let accum_ids = tx_accumulator
@@ -156,13 +148,17 @@ pub fn collect_txs<M>(
             // If the transaction with this ID has already been processed, skip it
             ensure!(processed.insert(tx_id));
             let tx = mempool.store.txs_by_id.get(tx_id).expect("already checked").deref();
-            let timelock_check = tx_verifier::TransactionVerificationContext::new(
-                &block_verification_ctx,
-                &utxo_view,
+
+            tx_verifier::input_check::verify_timelocks(
                 tx.transaction(),
+                chain_config,
+                &utxo_view,
+                &chainstate,
+                mempool_tip,
+                best_index.block_height().next_height(),
+                unlock_timestamp,
             )
-            .and_then(|tx_ctx| tx_ctx.verify_input_timelocks());
-            ensure!(timelock_check.is_ok());
+            .ok()?;
             Some(tx)
         })
         .fuse()

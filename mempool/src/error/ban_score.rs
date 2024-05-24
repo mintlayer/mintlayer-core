@@ -120,7 +120,7 @@ impl MempoolBanScore for ConnectTransactionError {
             // These depend on the current chainstate. Since it is not easy to determine whether
             // it is the transaction or the current tip that's wrong, we don't punish the peer.
             ConnectTransactionError::MissingOutputOrSpent(_) => 0,
-            ConnectTransactionError::TimeLockViolation(_) => 0,
+            ConnectTransactionError::TimeLockViolation => 0,
             ConnectTransactionError::NonceIsNotIncremental(..) => 0,
 
             // These are delegated to the inner error
@@ -148,6 +148,9 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
+            ConnectTransactionError::Threshold(_) => 100,
+
+            // Need to drill down deeper into the error in these cases
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
             ConnectTransactionError::ConstrainedValueAccumulatorError(err, _) => err.ban_score(),
@@ -180,6 +183,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::AttemptToSpendFrozenToken(_) => 0,
+            ConnectTransactionError::InvariantBrokenUtxoRequested => 0,
         }
     }
 }

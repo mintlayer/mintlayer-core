@@ -20,9 +20,7 @@ mod utxo_view;
 
 use std::sync::Arc;
 
-pub use chainstate::tx_verifier::{
-    flush_to_storage, BlockVerificationContext, TransactionVerificationContext,
-};
+pub use chainstate::tx_verifier::{flush_to_storage, input_check};
 use common::chain::ChainConfig;
 use utils::shallow_clone::ShallowClone;
 

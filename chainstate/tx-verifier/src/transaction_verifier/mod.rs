@@ -733,18 +733,16 @@ where
             &self.utxo_cache,
         )?;
 
-        {
-            let block_ctx = input_check::BlockVerificationContext::from_source(
-                self.chain_config.as_ref(),
-                *median_time_past,
-                tx_source,
-                &self.storage,
-                self.pos_accounting_adapter.accounting_delta(),
-            );
-            let tx_ctx =
-                input_check::TransactionVerificationContext::new(&block_ctx, &self.utxo_cache, tx)?;
-            input_check::CachedInputList::new(&tx_ctx).verify_inputs()?;
-        }
+        input_check::verify_full(
+            tx,
+            self.chain_config.as_ref(),
+            &self.utxo_cache,
+            self.pos_accounting_adapter.accounting_delta(),
+            &self.tokens_accounting_cache,
+            &self.storage,
+            tx_source,
+            *median_time_past,
+        )?;
 
         self.connect_pos_accounting_outputs(tx_source, tx.transaction())?;
 

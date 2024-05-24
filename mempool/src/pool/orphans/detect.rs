@@ -55,7 +55,7 @@ impl OrphanType {
             | CTE::BlockIndexCouldNotBeLoaded(_)
             | CTE::FailedToAddAllFeesOfBlock(_)
             | CTE::RewardAdditionError(_)
-            | CTE::TimeLockViolation(_)
+            | CTE::TimeLockViolation
             | CTE::UtxoError(_)
             | CTE::TokensError(_)
             | CTE::TransactionVerifierError(_)
@@ -85,6 +85,8 @@ impl OrphanType {
             | CTE::PoolBalanceNotFound(_)
             | CTE::RewardDistributionError(_)
             | CTE::CheckTransactionError(_)
+            | CTE::InvariantBrokenUtxoRequested
+            | CTE::Threshold(_)
             | CTE::IOPolicyError(_, _) => Err(err),
         }
     }

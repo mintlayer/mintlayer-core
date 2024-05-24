@@ -69,7 +69,7 @@ fn visit_order(#[case] script: WS) {
         fn visit_signature(
             &mut self,
             _destination: &Destination,
-            _signature: &StandardInputSignature,
+            _signature: &InputWitness,
         ) -> Result<(), Self::SignatureError> {
             unreachable!("Not used in this test")
         }

@@ -27,9 +27,6 @@ use crate::WitnessScript;
 /// An error that can happen during translation of an input to a script
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum TranslationError {
-    #[error("Cannot obtain signature")]
-    NoSignature,
-
     #[error("Attempt to spend an unspendable output")]
     Unspendable,
 
@@ -72,25 +69,27 @@ impl InputInfo<'_> {
     }
 }
 
-/// Provides information necessary to translate an input to a script.
-pub trait TranslationContext {
-    type Accounting: PoSAccountingView<Error = pos_accounting::Error>;
-    type Tokens: TokensAccountingView<Error = tokens_accounting::Error>;
-
-    fn pos_accounting(&self) -> Self::Accounting;
-    fn tokens(&self) -> Self::Tokens;
-
+pub trait InputInfoProvider {
     fn input_info(&self) -> &InputInfo;
     fn witness(&self) -> &InputWitness;
 }
 
-pub trait TranslateInput {
-    /// Translate transaction input to script.
-    fn translate_input<C: TranslationContext>(ctx: &C) -> Result<WitnessScript, TranslationError>;
+/// Provides information necessary to translate an input to a script.
+pub trait SignatureInfoProvider: InputInfoProvider {
+    type Accounting: PoSAccountingView<Error = pos_accounting::Error>;
+    type Tokens: TokensAccountingView<Error = tokens_accounting::Error>;
+
+    fn pos_accounting(&self) -> &Self::Accounting;
+    fn tokens(&self) -> &Self::Tokens;
 }
 
-impl TranslateInput for SignedTransaction {
-    fn translate_input<C: TranslationContext>(ctx: &C) -> Result<WitnessScript, TranslationError> {
+pub trait TranslateInput<C> {
+    /// Translate transaction input to script.
+    fn translate_input(ctx: &C) -> Result<WitnessScript, TranslationError>;
+}
+
+impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
+    fn translate_input(ctx: &C) -> Result<WitnessScript, TranslationError> {
         let pos_accounting = ctx.pos_accounting();
         let checksig =
             |dest: &Destination| WitnessScript::signature(dest.clone(), ctx.witness().clone());
@@ -154,8 +153,44 @@ impl TranslateInput for SignedTransaction {
     }
 }
 
-impl TranslateInput for BlockReward {
-    fn translate_input<C: TranslationContext>(ctx: &C) -> Result<WitnessScript, TranslationError> {
+impl<C: SignatureInfoProvider> TranslateInput<C> for BlockReward {
+    fn translate_input(ctx: &C) -> Result<WitnessScript, TranslationError> {
         todo!("translate block reward input to script")
+    }
+}
+
+pub struct TimelockOnly;
+
+impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
+    fn translate_input(ctx: &C) -> Result<WitnessScript, TranslationError> {
+        match ctx.input_info() {
+            InputInfo::Utxo { outpoint: _, utxo } => match utxo.output() {
+                TxOutput::LockThenTransfer(_val, _dest, timelock) => {
+                    Ok(WitnessScript::timelock(*timelock))
+                }
+                TxOutput::Transfer(_, _)
+                | TxOutput::CreateStakePool(_, _)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::IssueNft(_, _, _) => Ok(WitnessScript::TRUE),
+                TxOutput::CreateDelegationId(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::Burn(_)
+                | TxOutput::DataDeposit(_) => Err(TranslationError::Unspendable),
+            },
+            InputInfo::Account { outpoint } => match outpoint.account() {
+                AccountSpending::DelegationBalance(_deleg_id, _amt) => Ok(WitnessScript::TRUE),
+            },
+            InputInfo::AccountCommand { command } => match command {
+                AccountCommand::MintTokens(_token_id, _)
+                | AccountCommand::UnmintTokens(_token_id)
+                | AccountCommand::LockTokenSupply(_token_id)
+                | AccountCommand::FreezeToken(_token_id, _)
+                | AccountCommand::UnfreezeToken(_token_id)
+                | AccountCommand::ChangeTokenAuthority(_token_id, _) => {
+                    Ok(WitnessScript::TRUE)
+                }
+            },
+        }
     }
 }
