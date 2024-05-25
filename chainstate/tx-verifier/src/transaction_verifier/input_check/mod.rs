@@ -374,6 +374,16 @@ impl<T: Transactable, S> SignatureContext for InputVerifyContextFull<'_, T, S> {
     }
 }
 
+pub trait FullyVerifiable<AW, TW>:
+    Transactable + for<'a> TranslateInput<TranslationContextFull<'a, &'a AW, &'a TW>>
+{
+}
+
+impl<T, AW, TW> FullyVerifiable<AW, TW> for T where
+    T: Transactable + for<'a> TranslateInput<TranslationContextFull<'a, &'a AW, &'a TW>>
+{
+}
+
 pub fn verify_full<T, S, UW, AW, TW>(
     transaction: &T,
     chain_config: &ChainConfig,
@@ -385,8 +395,7 @@ pub fn verify_full<T, S, UW, AW, TW>(
     spending_time: BlockTimestamp,
 ) -> Result<(), ConnectTransactionError>
 where
-    T: Transactable,
-    T: for<'a> TranslateInput<TranslationContextFull<'a, &'a AW, &'a TW>>,
+    T: FullyVerifiable<AW, TW>,
     S: TransactionVerifierStorageRef,
     UW: utxo::UtxosView,
     AW: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,

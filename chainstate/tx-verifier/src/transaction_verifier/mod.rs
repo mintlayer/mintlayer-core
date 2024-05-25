@@ -733,16 +733,7 @@ where
             &self.utxo_cache,
         )?;
 
-        input_check::verify_full(
-            tx,
-            self.chain_config.as_ref(),
-            &self.utxo_cache,
-            self.pos_accounting_adapter.accounting_delta(),
-            &self.tokens_accounting_cache,
-            &self.storage,
-            tx_source,
-            *median_time_past,
-        )?;
+        self.verify_inputs(tx, tx_source, *median_time_past)?;
 
         self.connect_pos_accounting_outputs(tx_source, tx.transaction())?;
 
@@ -960,6 +951,27 @@ where
 
     pub fn set_best_block(&mut self, id: Id<GenBlock>) {
         self.utxo_cache.set_best_block(id);
+    }
+
+    pub fn verify_inputs<Tx>(
+        &self,
+        tx: &Tx,
+        tx_source: &TransactionSourceForConnect,
+        median_time_past: BlockTimestamp,
+    ) -> Result<(), ConnectTransactionError>
+    where
+        Tx: input_check::FullyVerifiable<PoSAccountingDelta<A>, TokensAccountingCache<T>>,
+    {
+        input_check::verify_full(
+            tx,
+            self.chain_config.as_ref(),
+            &self.utxo_cache,
+            self.pos_accounting_adapter.accounting_delta(),
+            &self.tokens_accounting_cache,
+            &self.storage,
+            tx_source,
+            median_time_past,
+        )
     }
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {
