@@ -85,5 +85,3 @@ fn visit_order(#[case] script: WS) {
     let expected = [1, 2, 3, 4].map(|n| OutputTimeLock::UntilHeight(BlockHeight::new(n)));
     assert_eq!(logger.0.as_slice(), expected.as_slice());
 }
-
-// TODO(PR) Evaluation tests

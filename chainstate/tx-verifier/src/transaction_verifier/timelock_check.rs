@@ -15,8 +15,9 @@
 
 use common::{
     chain::{block::timestamp::BlockTimestamp, timelock::OutputTimeLock, UtxoOutPoint},
-    primitives::{BlockCount, BlockDistance, BlockHeight},
+    primitives::{BlockCount, BlockHeight},
 };
+use mintscript::checker::TimelockChecker;
 use thiserror::Error;
 use utils::ensure;
 
@@ -30,37 +31,45 @@ pub enum OutputMaturityError {
     InvalidOutputMaturityDistance(UtxoOutPoint, BlockCount, BlockCount),
 }
 
-// TODO(PR) Replace this helper (used in wallet, api server
+struct TimelockData {
+    spending_height: BlockHeight,
+    spending_time: BlockTimestamp,
+    source_height: BlockHeight,
+    source_time: BlockTimestamp,
+}
+
+impl mintscript::checker::TimelockContext for TimelockData {
+    type Error = std::convert::Infallible;
+
+    fn spending_height(&self) -> BlockHeight {
+        self.spending_height
+    }
+    fn spending_time(&self) -> BlockTimestamp {
+        self.spending_time
+    }
+    fn source_height(&self) -> Result<BlockHeight, Self::Error> {
+        Ok(self.source_height)
+    }
+    fn source_time(&self) -> Result<BlockTimestamp, Self::Error> {
+        Ok(self.source_time)
+    }
+}
+
 pub fn check_timelock(
     source_block_height: &BlockHeight,
     source_block_time: &BlockTimestamp,
     timelock: &OutputTimeLock,
     spend_height: &BlockHeight,
     spending_time: &BlockTimestamp,
-    outpoint: &UtxoOutPoint,
+    _outpoint: &UtxoOutPoint,
 ) -> Result<(), ConnectTransactionError> {
-    let past_lock = match timelock {
-        OutputTimeLock::UntilHeight(h) => spend_height >= h,
-        OutputTimeLock::UntilTime(t) => spending_time >= t,
-        OutputTimeLock::ForBlockCount(d) => {
-            let d: i64 = (*d)
-                .try_into()
-                .map_err(|_| ConnectTransactionError::BlockHeightArithmeticError)?;
-            let d = BlockDistance::from(d);
-            *spend_height
-                >= (*source_block_height + d)
-                    .ok_or(ConnectTransactionError::BlockHeightArithmeticError)?
-        }
-        OutputTimeLock::ForSeconds(dt) => {
-            *spending_time
-                >= source_block_time
-                    .add_int_seconds(*dt)
-                    .ok_or(ConnectTransactionError::BlockTimestampArithmeticError)?
-        }
+    let mut data = TimelockData {
+        spending_height: *spend_height,
+        spending_time: *spending_time,
+        source_height: *source_block_height,
+        source_time: *source_block_time,
     };
-
-    ensure!(past_lock, ConnectTransactionError::TimeLockViolation);
-
+    mintscript::checker::StandardTimelockChecker.check_timelock(&mut data, timelock)?;
     Ok(())
 }
 

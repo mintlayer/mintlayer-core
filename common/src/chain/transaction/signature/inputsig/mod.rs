@@ -30,12 +30,3 @@ pub enum InputWitness {
     #[codec(index = 1)]
     Standard(StandardInputSignature),
 }
-
-impl InputWitness {
-    pub fn as_standard_signature(&self) -> Option<&StandardInputSignature> {
-        match self {
-            InputWitness::NoSignature(_) => None,
-            InputWitness::Standard(sig) => Some(sig),
-        }
-    }
-}

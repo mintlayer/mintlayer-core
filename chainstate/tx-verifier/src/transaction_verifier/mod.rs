@@ -16,7 +16,6 @@
 mod input_output_policy;
 mod pos_accounting_delta_adapter;
 mod reward_distribution;
-mod signature_check;
 mod token_issuance_cache;
 
 pub mod check_transaction;
@@ -55,7 +54,6 @@ use self::{
     accounting_undo_cache::{AccountingBlockUndoCache, CachedBlockUndoOp},
     error::{ConnectTransactionError, TokensError},
     pos_accounting_delta_adapter::PoSAccountingDeltaAdapter,
-    signature_destination_getter::SignatureDestinationGetter,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
     utxos_undo_cache::{CachedUtxoBlockUndoOp, UtxosBlockUndoCache},

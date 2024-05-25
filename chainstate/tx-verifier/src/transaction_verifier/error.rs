@@ -189,8 +189,11 @@ impl From<mintscript::translate::TranslationError> for SignatureDestinationGette
     }
 }
 
-impl From<mintscript::checker::TimelockError<ConnectTransactionError>> for ConnectTransactionError {
-    fn from(value: mintscript::checker::TimelockError<ConnectTransactionError>) -> Self {
+impl<CE> From<mintscript::checker::TimelockError<CE>> for ConnectTransactionError
+where
+    Self: From<CE>,
+{
+    fn from(value: mintscript::checker::TimelockError<CE>) -> Self {
         use mintscript::checker::TimelockError as E;
         match value {
             E::Context(e) => e.into(),
@@ -211,18 +214,6 @@ where
             mintscript::script::ScriptError::Signature(e) => e.into(),
             mintscript::script::ScriptError::Timelock(e) => e.into(),
             mintscript::script::ScriptError::Threshold(e) => e.into(),
-        }
-    }
-}
-
-impl<SE> From<mintscript::VerificationError<SE>> for ConnectTransactionError
-where
-    Self: From<SE>,
-{
-    fn from(value: mintscript::VerificationError<SE>) -> Self {
-        match value {
-            mintscript::VerificationError::Translation(e) => e.into(),
-            mintscript::VerificationError::Evaluation(e) => e.into(),
         }
     }
 }
