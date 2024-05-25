@@ -183,6 +183,8 @@ impl From<mintscript::translate::TranslationError> for SignatureDestinationGette
             E::PoolNotFound(id) => Self::PoolDataNotFound(id),
             E::DelegationNotFound(id) => Self::DelegationDataNotFound(id),
             E::TokenNotFound(id) => Self::TokenDataNotFound(id),
+            E::IllegalAccountSpend => Self::SpendingFromAccountInBlockReward,
+            E::IllegalOutputSpend => Self::SpendingOutputInBlockReward,
         }
     }
 }

@@ -760,16 +760,12 @@ where
         block_index: &BlockIndex,
         reward_transactable: BlockRewardTransactable,
         total_fees: Fee,
+        median_time_past: BlockTimestamp,
     ) -> Result<(), ConnectTransactionError> {
         // TODO: test spending block rewards from chains outside the mainchain
-        if let Some(_inputs) = reward_transactable.inputs() {
-            // verify input signatures
-            signature_check::verify_signatures(
-                self.chain_config.as_ref(),
-                &self.utxo_cache,
-                &reward_transactable,
-                SignatureDestinationGetter::new_for_block_reward(&self.utxo_cache),
-            )?;
+        if reward_transactable.inputs().is_some() {
+            let tx_source = TransactionSourceForConnect::for_chain(block_index);
+            self.verify_inputs(&reward_transactable, &tx_source, median_time_past)?;
         }
 
         let block_id = *block_index.block_id();

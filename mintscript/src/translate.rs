@@ -14,9 +14,9 @@
 // limitations under the License.
 
 use common::chain::{
-    block::BlockReward, signature::inputsig::InputWitness, tokens::TokenId, AccountCommand,
-    AccountOutPoint, AccountSpending, DelegationId, Destination, PoolId, SignedTransaction,
-    TxOutput, UtxoOutPoint,
+    block::BlockRewardTransactable, signature::inputsig::InputWitness, tokens::TokenId,
+    AccountCommand, AccountOutPoint, AccountSpending, DelegationId, Destination, PoolId,
+    SignedTransaction, TxOutput, UtxoOutPoint,
 };
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
@@ -29,6 +29,12 @@ use crate::WitnessScript;
 pub enum TranslationError {
     #[error("Attempt to spend an unspendable output")]
     Unspendable,
+
+    #[error("Illegal account spend")]
+    IllegalAccountSpend,
+
+    #[error("Illegal output spend")]
+    IllegalOutputSpend,
 
     #[error(transparent)]
     PoSAccounting(#[from] pos_accounting::Error),
@@ -153,9 +159,44 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
     }
 }
 
-impl<C: SignatureInfoProvider> TranslateInput<C> for BlockReward {
+impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_> {
     fn translate_input(ctx: &C) -> Result<WitnessScript, TranslationError> {
-        todo!("translate block reward input to script")
+        let checksig =
+            |dest: &Destination| WitnessScript::signature(dest.clone(), ctx.witness().clone());
+        match ctx.input_info() {
+            InputInfo::Utxo { outpoint: _, utxo } => {
+                match utxo.output() {
+                    TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::IssueNft(_, _, _) => {
+                        Err(TranslationError::IllegalOutputSpend)
+                    }
+                    TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::Burn(_)
+                    | TxOutput::DataDeposit(_)
+                    | TxOutput::IssueFungibleToken(_) => {
+                        Err(TranslationError::Unspendable)
+                    }
+
+                    TxOutput::ProduceBlockFromStake(d, _) => {
+                        // Spending an output of a block creation output is only allowed to
+                        // create another block, given that this is a block reward.
+                        Ok(checksig(d))
+                    }
+                    TxOutput::CreateStakePool(_, pool_data) => {
+                        // Spending an output of a pool creation output is only allowed when
+                        // creating a block (given it's in a block reward; otherwise it should
+                        // be a transaction for decommissioning the pool), hence the staker key
+                        // is checked.
+                        Ok(checksig(pool_data.staker()))
+                    }
+                }
+            }
+            InputInfo::Account {..} | InputInfo::AccountCommand {..} => {
+                Err(TranslationError::IllegalAccountSpend)
+            }
+        }
     }
 }
 
@@ -187,9 +228,7 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 | AccountCommand::LockTokenSupply(_token_id)
                 | AccountCommand::FreezeToken(_token_id, _)
                 | AccountCommand::UnfreezeToken(_token_id)
-                | AccountCommand::ChangeTokenAuthority(_token_id, _) => {
-                    Ok(WitnessScript::TRUE)
-                }
+                | AccountCommand::ChangeTokenAuthority(_token_id, _) => Ok(WitnessScript::TRUE),
             },
         }
     }
