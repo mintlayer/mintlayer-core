@@ -149,6 +149,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
             ConnectTransactionError::Threshold(_) => 100,
+            ConnectTransactionError::TimelockedAccount => 100,
 
             // Need to drill down deeper into the error in these cases
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),

@@ -56,6 +56,7 @@ impl OrphanType {
             | CTE::FailedToAddAllFeesOfBlock(_)
             | CTE::RewardAdditionError(_)
             | CTE::TimeLockViolation
+            | CTE::TimelockedAccount
             | CTE::UtxoError(_)
             | CTE::TokensError(_)
             | CTE::TransactionVerifierError(_)

@@ -82,10 +82,10 @@ pub trait InputInfoProvider {
 
 /// Provides information necessary to translate an input to a script.
 pub trait SignatureInfoProvider: InputInfoProvider {
-    type Accounting: PoSAccountingView<Error = pos_accounting::Error>;
+    type PoSAccounting: PoSAccountingView<Error = pos_accounting::Error>;
     type Tokens: TokensAccountingView<Error = tokens_accounting::Error>;
 
-    fn pos_accounting(&self) -> &Self::Accounting;
+    fn pos_accounting(&self) -> &Self::PoSAccounting;
     fn tokens(&self) -> &Self::Tokens;
 }
 
@@ -169,15 +169,11 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_>
                     TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::IssueNft(_, _, _) => {
-                        Err(TranslationError::IllegalOutputSpend)
-                    }
+                    | TxOutput::IssueNft(_, _, _) => Err(TranslationError::IllegalOutputSpend),
                     TxOutput::CreateDelegationId(_, _)
                     | TxOutput::Burn(_)
                     | TxOutput::DataDeposit(_)
-                    | TxOutput::IssueFungibleToken(_) => {
-                        Err(TranslationError::Unspendable)
-                    }
+                    | TxOutput::IssueFungibleToken(_) => Err(TranslationError::Unspendable),
 
                     TxOutput::ProduceBlockFromStake(d, _) => {
                         // Spending an output of a block creation output is only allowed to
@@ -193,7 +189,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_>
                     }
                 }
             }
-            InputInfo::Account {..} | InputInfo::AccountCommand {..} => {
+            InputInfo::Account { .. } | InputInfo::AccountCommand { .. } => {
                 Err(TranslationError::IllegalAccountSpend)
             }
         }

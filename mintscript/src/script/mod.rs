@@ -87,7 +87,8 @@ impl Threshold {
 
     /// Number of conditions that need to be dissatisfied in order for the threshold to be valid.
     pub fn required_dissat(&self) -> usize {
-        self.conditions().len() - self.required()
+        let num_conds = self.conditions().len();
+        num_conds.checked_sub(self.required()).expect("checked during construction")
     }
 
     /// Collect conditions that the prover claims to satisfy.

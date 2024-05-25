@@ -31,12 +31,9 @@ type WS = WitnessScript;
 fn threshold_construction(#[case] n: usize, #[case] k: usize, #[case] ok: bool) {
     let res = Threshold::new(n, vec![ScriptCondition::TRUE; k]);
     assert_eq!(res.is_ok(), ok);
-    match res {
-        Ok(thresh) => {
-            assert_eq!(thresh.required(), n);
-            assert_eq!(thresh.conditions().len(), k);
-        }
-        Err(ScriptConstructionError::InvalidThreshold(..)) => (),
+    if let Ok(thresh) = res {
+        assert_eq!(thresh.required(), n);
+        assert_eq!(thresh.conditions().len(), k);
     }
 }
 
@@ -75,7 +72,7 @@ fn visit_order(#[case] script: WS) {
         }
 
         fn visit_timelock(&mut self, lock: &OutputTimeLock) -> Result<(), Self::TimelockError> {
-            self.0.push(lock.clone());
+            self.0.push(*lock);
             Ok(())
         }
     }

@@ -79,6 +79,8 @@ pub enum ConnectTransactionError {
     RewardAdditionError(Id<Block>),
     #[error("Timelock rules violated")]
     TimeLockViolation,
+    #[error("Timelocks on accounts not supported")]
+    TimelockedAccount,
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
     #[error("Tokens error: {0}")]

@@ -304,6 +304,7 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             | ConnectTransactionError::FailedToAddAllFeesOfBlock(_)
             | ConnectTransactionError::RewardAdditionError(_)
             | ConnectTransactionError::TimeLockViolation
+            | ConnectTransactionError::TimelockedAccount
             | ConnectTransactionError::BurnAmountSumError(_)
             | ConnectTransactionError::AttemptToSpendBurnedAmount
             | ConnectTransactionError::PoolBalanceNotFound(_)

@@ -119,6 +119,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::FailedToAddAllFeesOfBlock(_) => 100,
             ConnectTransactionError::RewardAdditionError(_) => 100,
             ConnectTransactionError::TimeLockViolation => 100,
+            ConnectTransactionError::TimelockedAccount => 100,
             ConnectTransactionError::MissingBlockUndo(_) => 0,
             ConnectTransactionError::MissingBlockRewardUndo(_) => 0,
             ConnectTransactionError::MissingTxUndo(_) => 0,

@@ -68,7 +68,7 @@ impl mintscript::translate::InputInfoProvider for PerInputData<'_> {
     }
 
     fn witness(&self) -> &InputWitness {
-        &self.witness
+        self.witness
     }
 }
 
@@ -106,10 +106,10 @@ where
     AW: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
     TW: tokens_accounting::TokensAccountingView<Error = tokens_accounting::Error>,
 {
-    type Accounting = AW;
+    type PoSAccounting = AW;
     type Tokens = TW;
 
-    fn pos_accounting(&self) -> &Self::Accounting {
+    fn pos_accounting(&self) -> &Self::PoSAccounting {
         &self.pos_accounting
     }
 
@@ -156,7 +156,7 @@ impl<'a> CoreContext<'a> {
         &self.inputs_and_sigs[n]
     }
 
-    fn inputs_iter(&self) -> impl Iterator<Item = (usize, &PerInputData)> + ExactSizeIterator {
+    fn inputs_iter(&self) -> impl ExactSizeIterator<Item = (usize, &PerInputData)> {
         self.inputs_and_sigs.iter().enumerate()
     }
 }
@@ -238,7 +238,7 @@ impl<'a, S> InputVerifyContextTimelock<'a, S> {
     }
 
     fn info(&self) -> &InputInfo {
-        &self.ctx.core_ctx.input_data(self.input_num).input_info()
+        self.ctx.core_ctx.input_data(self.input_num).input_info()
     }
 }
 
@@ -260,7 +260,7 @@ impl<S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextTim
                 utxo::UtxoSource::Mempool => Ok(self.ctx.spending_height),
             },
             InputInfo::Account { .. } | InputInfo::AccountCommand { .. } => {
-                todo!("account timelock height")
+                Err(ConnectTransactionError::TimelockedAccount)
             }
         }
     }
@@ -291,7 +291,7 @@ impl<S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextTim
                 utxo::UtxoSource::Mempool => Ok(self.ctx.spending_time),
             },
             InputInfo::Account { .. } | InputInfo::AccountCommand { .. } => {
-                todo!("account timelock timestamp")
+                Err(ConnectTransactionError::TimelockedAccount)
             }
         }
     }
@@ -358,11 +358,11 @@ impl<T: Transactable, S> SignatureContext for InputVerifyContextFull<'_, T, S> {
     type Tx = T;
 
     fn chain_config(&self) -> &ChainConfig {
-        &self.ctx.sub_ctx.chain_config
+        self.ctx.sub_ctx.chain_config
     }
 
     fn transaction(&self) -> &Self::Tx {
-        &self.ctx.transaction
+        self.ctx.transaction
     }
 
     fn input_utxos(&self) -> &[Option<&TxOutput>] {
@@ -384,6 +384,7 @@ impl<T, AW, TW> FullyVerifiable<AW, TW> for T where
 {
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn verify_full<T, S, UW, AW, TW>(
     transaction: &T,
     chain_config: &ChainConfig,
