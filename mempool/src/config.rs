@@ -139,7 +139,7 @@ pub const INCREMENTAL_RELAY_THRESHOLD: FeeRate =
 make_config_setting!(
     MinTxRelayFeeRate,
     FeeRate,
-    FeeRate::from_amount_per_kb(Amount::from_atoms(100_000_000))
+    FeeRate::from_amount_per_kb(Amount::from_atoms(100_000_000_000))
 );
 
 #[derive(Debug, Clone, Default)]
