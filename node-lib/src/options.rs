@@ -94,6 +94,12 @@ pub struct RunOptions {
     #[clap(long, action = clap::ArgAction::SetTrue)]
     pub blockprod_skip_ibd_check: Option<bool>,
 
+    /// If true, blocks with non-PoS consensus types will always be created with timestamps
+    /// bigger than or equal to the current time.
+    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[arg(hide = true)]
+    pub blockprod_use_current_time_if_non_pos: Option<bool>,
+
     /// Storage backend to use.
     #[clap(long)]
     pub storage_backend: Option<StorageBackendConfigFile>,
