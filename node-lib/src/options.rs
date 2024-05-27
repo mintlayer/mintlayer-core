@@ -44,6 +44,11 @@ pub struct Options {
     #[clap(short, long = "datadir")]
     pub data_dir: Option<PathBuf>,
 
+    /// Create the data directory if it is missing; the default value depends on whether
+    /// a custom data directory is used (false for a custom directory, true for the default one).
+    #[clap(long = "create-datadir-if-missing", value_name = "VAL")]
+    pub create_data_dir_if_missing: Option<bool>,
+
     #[clap(subcommand)]
     pub command: Option<Command>,
 }
