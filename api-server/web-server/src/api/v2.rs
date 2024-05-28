@@ -26,7 +26,7 @@ use crate::{
 };
 use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead, BlockInfo,
-    TransactionInfo,
+    CoinOrTokenStatistic, TransactionInfo,
 };
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
@@ -107,7 +107,14 @@ pub fn routes<
 
     let router = router.route("/delegation/:id", get(delegation));
 
-    router.route("/token/:id", get(token)).route("/nft/:id", get(nft))
+    let router = router
+        .route("/statistics/coin", get(coin_statistics))
+        .route("/statistics/token/:id", get(token_statistics));
+
+    router
+        .route("/token", get(token_ids))
+        .route("/token/:id", get(token))
+        .route("/nft/:id", get(nft))
 }
 
 async fn forbidden_request() -> Result<(), ApiServerWebServerError> {
@@ -1110,4 +1117,124 @@ pub async fn nft<T: ApiServerStorage>(
         ))?;
 
     Ok(Json(nft_issuance_data_to_json(&nft, &state.chain_config)))
+}
+
+pub async fn coin_statistics<T: ApiServerStorage>(
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let mut statistics = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_all_statistic(CoinOrTokenId::Coin)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+    Ok(Json(json!({
+        "circulating_supply": amount_to_json(statistics.remove(&CoinOrTokenStatistic::CirculatingSupply).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
+        "preminted": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Preminted).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
+        "burned": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Burned).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
+        "staked": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Staked).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
+    })))
+}
+
+pub async fn token_statistics<T: ApiServerStorage>(
+    Path(delegation_id): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let token_id = Address::from_string(&state.chain_config, delegation_id)
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidTokenId)
+        })?
+        .into_object();
+
+    let tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let token_decimals = tx
+        .get_token_num_decimals(token_id)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::TokenNotFound,
+        ))?;
+
+    let mut statistics =
+        tx.get_all_statistic(CoinOrTokenId::TokenId(token_id)).await.map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    Ok(Json(json!({
+        "circulating_supply": amount_to_json(statistics.remove(&CoinOrTokenStatistic::CirculatingSupply).unwrap_or(Amount::ZERO), token_decimals),
+        "preminted": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Preminted).unwrap_or(Amount::ZERO), token_decimals),
+        "burned": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Burned).unwrap_or(Amount::ZERO), token_decimals),
+        "staked": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Staked).unwrap_or(Amount::ZERO), token_decimals),
+    })))
+}
+
+pub async fn token_ids<T: ApiServerStorage>(
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    const OFFSET: &str = "offset";
+    const ITEMS: &str = "items";
+    const DEFAULT_NUM_ITEMS: u32 = 10;
+    const MAX_NUM_ITEMS: u32 = 100;
+
+    let offset = params
+        .get(OFFSET)
+        .map(|offset| u32::from_str(offset))
+        .transpose()
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidOffset)
+        })?
+        .unwrap_or_default();
+
+    let items = params
+        .get(ITEMS)
+        .map(|items| u32::from_str(items))
+        .transpose()
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
+        })?
+        .unwrap_or(DEFAULT_NUM_ITEMS);
+    ensure!(
+        items <= MAX_NUM_ITEMS,
+        ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
+    );
+    let token_ids: Vec<_> = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_token_ids(items, offset)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .into_iter()
+        .map(|token_id| {
+            serde_json::Value::String(
+                Address::new(&state.chain_config, token_id).expect("addressable").into_string(),
+            )
+        })
+        .collect();
+
+    Ok(Json(serde_json::Value::Array(token_ids)))
 }

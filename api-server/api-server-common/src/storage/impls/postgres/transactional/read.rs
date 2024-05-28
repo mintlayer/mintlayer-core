@@ -26,7 +26,8 @@ use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
-        Delegation, FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
+        CoinOrTokenStatistic, Delegation, FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
+        UtxoWithExtraInfo,
     },
 };
 use std::collections::BTreeMap;
@@ -317,6 +318,38 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     ) -> Result<Option<u8>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_token_num_decimals(token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_token_ids(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_token_ids(len, offset).await?;
+
+        Ok(res)
+    }
+
+    async fn get_statistic(
+        &self,
+        statistic: CoinOrTokenStatistic,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_statistic(statistic, coin_or_token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_all_statistic(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_all_statistic(coin_or_token_id).await?;
 
         Ok(res)
     }

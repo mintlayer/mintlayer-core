@@ -29,8 +29,9 @@ use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
-        ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo, Delegation,
-        FungibleTokenData, LockedUtxo, PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
+        ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo,
+        CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, PoolBlockStats,
+        TransactionInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -296,6 +297,29 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         conn.del_nft_issuance_above_height(block_height).await?;
+
+        Ok(())
+    }
+
+    async fn set_statistic(
+        &mut self,
+        statistic: CoinOrTokenStatistic,
+        coin_or_token_id: CoinOrTokenId,
+        block_height: BlockHeight,
+        amount: Amount,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_statistic(statistic, coin_or_token_id, block_height, amount).await?;
+
+        Ok(())
+    }
+
+    async fn del_statistics_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.del_statistics_above_height(block_height).await?;
 
         Ok(())
     }
@@ -578,6 +602,38 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     ) -> Result<Option<u8>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_token_num_decimals(token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_token_ids(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_token_ids(len, offset).await?;
+
+        Ok(res)
+    }
+
+    async fn get_statistic(
+        &self,
+        statistic: CoinOrTokenStatistic,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<Option<Amount>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_statistic(statistic, coin_or_token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_all_statistic(
+        &self,
+        coin_or_token_id: CoinOrTokenId,
+    ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_all_statistic(coin_or_token_id).await?;
 
         Ok(res)
     }

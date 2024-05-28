@@ -73,6 +73,7 @@ pub fn prepare_stake_pool(
     );
 
     let block = tf.make_block_builder().add_transaction(stake_pool_transaction).build(rng);
+    tf.process_block(block.clone(), chainstate::BlockSource::Local).unwrap();
 
     (transfer_outpoint, stake_pool_data, pool_id, block)
 }
@@ -103,6 +104,7 @@ pub fn prepare_delegation(
     );
 
     let block = tf.make_block_builder().add_transaction(create_delegation_tx).build(rng);
+    tf.process_block(block.clone(), chainstate::BlockSource::Local).unwrap();
 
     (delegation_id, destination, transfer_outpoint, block)
 }
@@ -131,6 +133,7 @@ pub fn stake_delegation(
     );
 
     let block = tf.make_block_builder().add_transaction(stake_tx).build(rng);
+    tf.process_block(block.clone(), chainstate::BlockSource::Local).unwrap();
 
     (amount_to_delegate, transfer_outpoint, block)
 }
