@@ -136,6 +136,28 @@ impl BlockProduction {
         ))
     }
 
+    fn new_block_timestamp_for_non_pos(
+        &self,
+        prev_block_timestamp: BlockTimestamp,
+    ) -> Result<BlockTimestamp, BlockProductionError> {
+        // Note: here, the new block's timestamp is normally the parent's timestamp plus 1
+        // (this behavior is historical and some tests depend on it); this is fine, because
+        // PoW is not used outside of tests.
+        // But some other tests need timestamps that are not in the past, this is handled
+        // by the use_current_time_if_non_pos option.
+
+        let mut new_block_timestamp = timestamp_add_secs(prev_block_timestamp, 1)?;
+
+        if self.blockprod_config.use_current_time_if_non_pos {
+            new_block_timestamp = std::cmp::max(
+                new_block_timestamp,
+                BlockTimestamp::from_time(self.time_getter.get_time()),
+            );
+        }
+
+        Ok(new_block_timestamp)
+    }
+
     async fn pull_block_solver_input_data_pow(
         &self,
         input_data: PoWGenerateBlockInputData,
@@ -147,10 +169,8 @@ impl BlockProduction {
         let chain_config = Arc::clone(&self.chain_config);
         let next_block_height = best_block_index.block_height().next_height();
 
-        // Note: here, the new block's timestamp is always the parent's timestamp plus 1
-        // (this behavior is historical amd some tests depend on it); this is fine, because
-        // PoW is not used outside of tests.
-        let block_timestamp = timestamp_add_secs(best_block_index.block_timestamp(), 1)?;
+        let block_timestamp =
+            self.new_block_timestamp_for_non_pos(best_block_index.block_timestamp())?;
 
         let (consensus_data, block_reward) = self
             .chainstate_handle
@@ -196,10 +216,8 @@ impl BlockProduction {
     ) -> Result<IgnoreConsensusBlockSolverInputData, BlockProductionError> {
         let next_block_height = best_block_index.block_height().next_height();
 
-        // Note: here, the new block's timestamp is always the parent's timestamp plus 1
-        // (this behavior is historical amd some tests depend on it); this is fine, because
-        // this type of consensus is not used outside of tests.
-        let block_timestamp = timestamp_add_secs(best_block_index.block_timestamp(), 1)?;
+        let block_timestamp =
+            self.new_block_timestamp_for_non_pos(best_block_index.block_timestamp())?;
 
         let block_reward = generate_reward_ignore_consensus(&self.chain_config, next_block_height)?;
 
