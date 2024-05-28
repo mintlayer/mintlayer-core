@@ -94,33 +94,43 @@ impl Addressable for Destination {
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub enum TxOutput {
-    /// Transfer an output, giving the provided Destination the authority to spend it (no conditions)
+    /// Transfer an output, giving the provided Destination the authority to spend it (no conditions).
     #[codec(index = 0)]
     Transfer(OutputValue, Destination),
     /// Same as Transfer, but with the condition that an output can only be specified after some point in time.
     #[codec(index = 1)]
     LockThenTransfer(OutputValue, Destination, OutputTimeLock),
-    /// Burn an amount (whether coin or token)
+    /// Burn an amount (whether coin or token). The output is not spendable.
     #[codec(index = 2)]
     Burn(OutputValue),
-    /// Output type that is used to create a stake pool
+    /// Output type that is used to create a stake pool. Can be spent in two ways:
+    /// 1. In a block header to create a block, authorized through staker destination.
+    /// 2. In a transaction to decommission a pool, authorized through the decommission_key.
     #[codec(index = 3)]
     CreateStakePool(PoolId, Box<StakePoolData>),
     /// Output type that represents spending of a stake pool output in a block reward
-    /// in order to produce a block
+    /// in order to produce a block.
+    /// Spending conditions are the same as CreateStakePool, but the staker key can be changed.
     #[codec(index = 4)]
     ProduceBlockFromStake(Destination, PoolId),
-    /// Create a delegation; takes the owner destination (address authorized to withdraw from the delegation)
-    /// and a pool id
+    /// Create a delegation account to a specific pool, defined by its id.
+    /// Takes the owner destination, which is the address authorized to withdraw from the delegation.
+    /// After this output, an account is created, where delegating/sending coins to it will get them
+    /// automatically staked by a pool.
     #[codec(index = 5)]
     CreateDelegationId(Destination, PoolId),
-    /// Transfer an amount to a delegation that was previously created for staking
+    /// Transfer an amount to a delegation that was created using CreateDelegationId. The amount delegated
+    /// will be automatically staked by the pool that was specified in CreateDelegationId.
     #[codec(index = 6)]
     DelegateStaking(Amount, DelegationId),
+    /// Issues a token that doesn't exist. Once the issuance is done, an account is created,
+    /// from which minting tokens can be done. There are policies that govern what kind of minting is allowed.
     #[codec(index = 7)]
     IssueFungibleToken(Box<TokenIssuance>),
+    /// Create an NFT. This output can be spent.
     #[codec(index = 8)]
     IssueNft(TokenId, Box<NftIssuance>, Destination),
+    /// Deposit data into the blockchain. This output cannot be spent.
     #[codec(index = 9)]
     DataDeposit(Vec<u8>),
 }

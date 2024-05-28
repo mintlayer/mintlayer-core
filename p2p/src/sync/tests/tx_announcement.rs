@@ -539,6 +539,10 @@ async fn transaction_sequence_via_orphan_pool(#[case] seed: Seed) {
         let p2p_config = Arc::new(test_p2p_config());
         let mut node = TestNode::builder(protocol_version)
             .with_chain_config(Arc::clone(&chain_config))
+            .with_mempool_config(MempoolConfig {
+                min_tx_relay_fee_rate: FeeRate::from_amount_per_kb(Amount::from_atoms(100_000_000))
+                    .into(),
+            })
             .with_p2p_config(Arc::clone(&p2p_config))
             .with_chainstate(tf.into_chainstate())
             .build()

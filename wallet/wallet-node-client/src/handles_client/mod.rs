@@ -69,6 +69,8 @@ pub enum WalletHandlesClientError {
     Hex(#[from] HexError),
     #[error("Mempool error: {0}")]
     MempoolError(#[from] mempool::error::Error),
+    #[error("You cannot shutdown the node from this place")]
+    AttemptedExit,
 }
 
 impl WalletHandlesClient {
@@ -315,14 +317,14 @@ impl NodeInterface for WalletHandlesClient {
     }
 
     async fn node_shutdown(&self) -> Result<(), Self::Error> {
-        unimplemented!()
+        Err(WalletHandlesClientError::AttemptedExit)
     }
     async fn node_enable_networking(&self, enable: bool) -> Result<(), Self::Error> {
         self.p2p.call_async_mut(move |this| this.enable_networking(enable)).await??;
         Ok(())
     }
     async fn node_version(&self) -> Result<String, Self::Error> {
-        unimplemented!()
+        Ok(env!("CARGO_PKG_VERSION").into())
     }
 
     async fn p2p_connect(&self, address: IpOrSocketAddress) -> Result<(), Self::Error> {
