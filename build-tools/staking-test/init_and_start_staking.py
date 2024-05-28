@@ -20,12 +20,9 @@ import time
 
 SRC_ROOT_PATH = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 FUNC_TESTS_PATH = os.path.join(SRC_ROOT_PATH, "test", "functional")
-
 sys.path.append(FUNC_TESTS_PATH)
 
-from scalecodec.base import ScaleBytes, ScaleDecoder
 from test_framework.authproxy import (
-    AuthServiceProxy,
     JSONRPCException
 )
 from test_framework.mintlayer import (
@@ -33,45 +30,10 @@ from test_framework.mintlayer import (
     make_tx,
     reward_input,
     ATOMS_PER_COIN,
-    DEFAULT_INITIAL_MINT,
     MIN_POOL_PLEDGE,
 )
 
-NODES_COUNT = 9
-
-# The amount of coins to send to each node's wallet.
-COINS_PER_NODE = 10_000_000
-
-assert COINS_PER_NODE * NODES_COUNT < DEFAULT_INITIAL_MINT
-
-# Some nodes will stake this amount, others twice this amount, some other ones 3 times this amount.
-# The rest of the coins can be used for manual staking, if it's needed.
-BASE_COINS_AT_STAKE_PER_NODE = 3_000_000
-
-# Note: node index will be added to each of these numbers to form the actual port number,
-# so make sure the ranges don't overlap.
-# These values are also hard-coded in the .env file.
-NODE_RPC_PORT_BASE = 40000
-WALLET_RPC_PORT_BASE = 40100
-
-# RPC username and password for node-daemon and wallet-rpc-daemon".
-# These values are also hard-coded in the .env file.
-NODE_RPC_USER = "user"
-NODE_RPC_PWD = "password"
-WALLET_RPC_USER = "user"
-WALLET_RPC_PWD = "password"
-
-WALLET_MNEMONICS = [
-    "art " * 23 + "advance",
-    "bar " * 23 + "anxiety",
-    "cat " * 23 + "blanket",
-    "dog " * 23 + "cable",
-    "egg " * 23 + "area",
-    "fox " * 23 + "awake",
-    "gun " * 23 + "atom",
-    "hen " * 23 + "apology",
-    "ice " * 23 + "afford",
-]
+from common import *
 
 
 log = logging.getLogger("StakingTest")
@@ -125,7 +87,7 @@ class Node():
         open_or_create_wallet(wallet_rpc, wallet_name, mnemonic)
 
         (self.address, self.pub_key_hex) = get_or_create_address(wallet_rpc)
-    
+
     def tx_ids_to_signed_txs(self, tx_ids):
         txs = []
 
@@ -141,11 +103,11 @@ class Node():
         assert portion_to_pledge >= 0.0 and portion_to_pledge <= 1.0
         portion_to_pledge = int(portion_to_pledge * 1000) / 1000
         margin_ratio_per_thousand = portion_to_pledge
-        
+
         pledge_amount = int(amount * portion_to_pledge)
         if pledge_amount < MIN_POOL_PLEDGE:
             pledge_amount = MIN_POOL_PLEDGE
-        
+
         response = self.wallet.staking_create_pool(
             0, { "atoms": f"{pledge_amount}" }, { "atoms": "0" }, f"{margin_ratio_per_thousand}", self.address, { "in_top_x_mb" : None })
         tx_id = response["tx_id"]
@@ -153,8 +115,6 @@ class Node():
 
         tx_json = self.wallet.transaction_get(0, tx_id)
         pool_id = tx_json[0]["V1"]["outputs"][0]["CreateStakePool"][0]
-
-        log.info(f"Node {self.index}: pool {pool_id} created with pledge {pledge_amount}")
 
         delegate_amount = amount - pledge_amount
 
@@ -169,7 +129,7 @@ class Node():
             tx_id = response["tx_id"]
             tx_ids.append(tx_id)
 
-            log.info(f"Node {self.index}: delegation {delegation_id} created, delegated amount is {delegate_amount}")
+        log.info(f"Node {self.index}: pool {pool_id} created; pledge amount = {pledge_amount / ATOMS_PER_COIN}, delegation amount = {delegate_amount / ATOMS_PER_COIN}")
 
         return self.tx_ids_to_signed_txs(tx_ids)
 
@@ -179,13 +139,10 @@ class Helper():
         self.nodes = []
 
         for i in range(NODES_COUNT):
-            node_rpc_port = NODE_RPC_PORT_BASE + i
-            wallet_rpc_port = WALLET_RPC_PORT_BASE + i
+            log.info(f"Creating node {i}")
 
-            log.info(f"Creating node {i}, node_rpc_port = {node_rpc_port}, wallet_rpc_port = {wallet_rpc_port}")
-
-            node_rpc = AuthServiceProxy(f"http://{NODE_RPC_USER}:{NODE_RPC_PWD}@127.0.0.1:{node_rpc_port}")
-            wallet_rpc = AuthServiceProxy(f"http://{WALLET_RPC_USER}:{WALLET_RPC_PWD}@127.0.0.1:{wallet_rpc_port}")
+            node_rpc = make_node_rpc(i)
+            wallet_rpc = make_wallet_rpc(i)
 
             node = Node(i, node_rpc, wallet_rpc, f"wallet{i:02d}", WALLET_MNEMONICS[i])
             self.nodes.append(node)
