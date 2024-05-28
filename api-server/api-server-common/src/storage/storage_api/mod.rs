@@ -519,6 +519,12 @@ pub trait ApiServerStorageRead: Sync {
         token_id: TokenId,
     ) -> Result<Option<u8>, ApiServerStorageError>;
 
+    async fn get_token_ids(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<TokenId>, ApiServerStorageError>;
+
     async fn get_statistic(
         &self,
         statistic: CoinOrTokenStatistic,

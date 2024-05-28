@@ -111,7 +111,10 @@ pub fn routes<
         .route("/statistics/coin", get(coin_statistics))
         .route("/statistics/token/:id", get(token_statistics));
 
-    router.route("/token/:id", get(token)).route("/nft/:id", get(nft))
+    router
+        .route("/token", get(token_ids))
+        .route("/token/:id", get(token))
+        .route("/nft/:id", get(nft))
 }
 
 async fn forbidden_request() -> Result<(), ApiServerWebServerError> {
@@ -1179,4 +1182,59 @@ pub async fn token_statistics<T: ApiServerStorage>(
         "burned": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Burned).unwrap_or(Amount::ZERO), token_decimals),
         "staked": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Staked).unwrap_or(Amount::ZERO), token_decimals),
     })))
+}
+
+pub async fn token_ids<T: ApiServerStorage>(
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    const OFFSET: &str = "offset";
+    const ITEMS: &str = "items";
+    const DEFAULT_NUM_ITEMS: u32 = 10;
+    const MAX_NUM_ITEMS: u32 = 100;
+
+    let offset = params
+        .get(OFFSET)
+        .map(|offset| u32::from_str(offset))
+        .transpose()
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidOffset)
+        })?
+        .unwrap_or_default();
+
+    let items = params
+        .get(ITEMS)
+        .map(|items| u32::from_str(items))
+        .transpose()
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
+        })?
+        .unwrap_or(DEFAULT_NUM_ITEMS);
+    ensure!(
+        items <= MAX_NUM_ITEMS,
+        ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
+    );
+    let token_ids: Vec<_> = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_token_ids(items, offset)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .into_iter()
+        .map(|token_id| {
+            serde_json::Value::String(
+                Address::new(&state.chain_config, token_id).expect("addressable").into_string(),
+            )
+        })
+        .collect();
+
+    Ok(Json(serde_json::Value::Array(token_ids)))
 }

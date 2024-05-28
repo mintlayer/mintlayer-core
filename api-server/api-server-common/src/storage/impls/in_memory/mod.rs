@@ -541,6 +541,17 @@ impl ApiServerInMemoryStorage {
             .or_else(|| self.nft_token_issuances.get(&token_id).map(|_| 0)))
     }
 
+    fn get_token_ids(&self, len: u32, offset: u32) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        Ok(self
+            .fungible_token_issuances
+            .keys()
+            .chain(self.nft_token_issuances.keys())
+            .skip(offset as usize)
+            .take(len as usize)
+            .copied()
+            .collect())
+    }
+
     fn get_statistic(
         &self,
         statistic: CoinOrTokenStatistic,

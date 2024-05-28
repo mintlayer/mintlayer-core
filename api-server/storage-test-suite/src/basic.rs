@@ -1176,6 +1176,94 @@ where
         db_tx.commit().await.unwrap();
     }
 
+    {
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let random_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
+
+        let token_data = FungibleTokenData {
+            token_ticker: "XXXX".as_bytes().to_vec(),
+            number_of_decimals: rng.gen_range(1..18),
+            metadata_uri: "http://uri".as_bytes().to_vec(),
+            circulating_supply: Amount::ZERO,
+            total_supply: TokenTotalSupply::Unlimited,
+            is_locked: false,
+            frozen: IsTokenFrozen::No(IsTokenFreezable::Yes),
+            authority: random_destination,
+        };
+
+        let block_height = BlockHeight::new(rng.gen_range(1..100));
+        let random_token_id1 = TokenId::new(H256::random_using(&mut rng));
+        db_tx
+            .set_fungible_token_issuance(random_token_id1, block_height, token_data.clone())
+            .await
+            .unwrap();
+
+        let random_token_id2 = TokenId::new(H256::random_using(&mut rng));
+        db_tx
+            .set_fungible_token_issuance(random_token_id2, block_height, token_data.clone())
+            .await
+            .unwrap();
+
+        let random_token_id3 = TokenId::new(H256::random_using(&mut rng));
+        db_tx
+            .set_fungible_token_issuance(random_token_id3, block_height, token_data.clone())
+            .await
+            .unwrap();
+
+        let nft = NftIssuance::V0(NftIssuanceV0 {
+            metadata: common::chain::tokens::Metadata {
+                creator: None,
+                name: "Name".as_bytes().to_vec(),
+                description: "SomeNFT".as_bytes().to_vec(),
+                ticker: "XXXX".as_bytes().to_vec(),
+                icon_uri: DataOrNoVec::from(None),
+                additional_metadata_uri: DataOrNoVec::from(None),
+                media_uri: DataOrNoVec::from(None),
+                media_hash: "123456".as_bytes().to_vec(),
+            },
+        });
+
+        let random_token_id4 = TokenId::new(H256::random_using(&mut rng));
+        db_tx
+            .set_nft_token_issuance(random_token_id4, block_height, nft.clone())
+            .await
+            .unwrap();
+        let random_token_id5 = TokenId::new(H256::random_using(&mut rng));
+        db_tx
+            .set_nft_token_issuance(random_token_id5, block_height, nft.clone())
+            .await
+            .unwrap();
+        let random_token_id6 = TokenId::new(H256::random_using(&mut rng));
+        db_tx
+            .set_nft_token_issuance(random_token_id6, block_height, nft.clone())
+            .await
+            .unwrap();
+
+        // will return all token and nft ids
+        let ids = db_tx.get_token_ids(6, 0).await.unwrap();
+        assert!(ids.contains(&random_token_id1));
+        assert!(ids.contains(&random_token_id2));
+        assert!(ids.contains(&random_token_id3));
+
+        assert!(ids.contains(&random_token_id4));
+        assert!(ids.contains(&random_token_id5));
+        assert!(ids.contains(&random_token_id6));
+
+        // will return the tokens first
+        let ids = db_tx.get_token_ids(3, 0).await.unwrap();
+        assert!(ids.contains(&random_token_id1));
+        assert!(ids.contains(&random_token_id2));
+        assert!(ids.contains(&random_token_id3));
+
+        // will return the nft second
+        let ids = db_tx.get_token_ids(3, 3).await.unwrap();
+        assert!(ids.contains(&random_token_id4));
+        assert!(ids.contains(&random_token_id5));
+        assert!(ids.contains(&random_token_id6));
+    }
+
     // test coin and token statistics
     {
         let db_tx = storage.transaction_ro().await.unwrap();

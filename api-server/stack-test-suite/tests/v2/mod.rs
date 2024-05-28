@@ -31,6 +31,7 @@ mod pool_block_stats;
 mod pools;
 mod statistics;
 mod token;
+mod token_ids;
 mod transaction;
 mod transaction_merkle_path;
 mod transaction_submit;

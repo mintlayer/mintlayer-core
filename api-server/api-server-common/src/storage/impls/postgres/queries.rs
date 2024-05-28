@@ -1791,6 +1791,48 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         Ok(self.get_nft_token_issuance(token_id).await?.map(|_| 0))
     }
 
+    pub async fn get_token_ids(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        let len = len as i64;
+        let offset = offset as i64;
+        self.tx
+            .query(
+                r#"
+                WITH count_tokens AS (
+                    SELECT count(token_id) FROM ml.fungible_token
+                )
+                (SELECT token_id
+                 FROM ml.fungible_token
+                 ORDER BY token_id
+                 OFFSET $1
+                 LIMIT $2)
+                UNION ALL
+                (SELECT nft_id
+                 FROM ml.nft_issuance
+                 ORDER BY nft_id
+                 OFFSET GREATEST($1 - (SELECT * FROM count_tokens), 0)
+                 LIMIT CASE
+                       WHEN ($1 - (SELECT * FROM count_tokens) >= -$2)
+                           THEN ($2 + $1 - (SELECT * FROM count_tokens))
+                       ELSE 0 END);
+            "#,
+                &[&offset, &len],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            .into_iter()
+            .map(|row| -> Result<TokenId, ApiServerStorageError> {
+                let token_id: Vec<u8> = row.get(0);
+                let token_id = TokenId::decode_all(&mut token_id.as_slice())
+                    .map_err(|_| ApiServerStorageError::AddressableError)?;
+                Ok(token_id)
+            })
+            .collect()
+    }
+
     pub async fn get_statistic(
         &self,
         statistic: CoinOrTokenStatistic,

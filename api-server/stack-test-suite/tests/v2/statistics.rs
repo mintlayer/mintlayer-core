@@ -209,7 +209,7 @@ async fn ok_tokens(#[case] seed: Seed) {
                 _ = tx.send([(
                     token_id,
                     json!({
-                    "total_amount": amount_to_json((to_mint - to_burn).unwrap(), token_decimals),
+                    "circulating_supply": amount_to_json((to_mint - to_burn).unwrap(), token_decimals),
                     "preminted": amount_to_json(Amount::ZERO, token_decimals),
                     "staked": amount_to_json(Amount::ZERO, token_decimals),
                     "burned": amount_to_json(to_burn, token_decimals),
@@ -366,7 +366,7 @@ async fn ok_coins(#[case] seed: Seed) {
 
                 let decimals = chain_config.coin_decimals();
                 _ = tx.send([json!({
-                "total_amount": amount_to_json(total_amount, decimals),
+                "circulating_supply": amount_to_json(total_amount, decimals),
                 "preminted": amount_to_json(DEFAULT_INITIAL_MINT, decimals),
                 "staked": amount_to_json(staked, decimals),
                 "burned": amount_to_json(amount_to_burn, decimals),
