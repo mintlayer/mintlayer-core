@@ -342,6 +342,11 @@ async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
         .await
         .expect("Unable to disconnect block");
 
+    db_tx
+        .del_statistics_above_height(block_height)
+        .await
+        .expect("Unable to disconnect block");
+
     Ok(())
 }
 
@@ -430,7 +435,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                 .await;
                 increase_statistic_amount(
                     db_tx,
-                    CoinOrTokenStatistic::TotalSupply,
+                    CoinOrTokenStatistic::CirculatingSupply,
                     &pool_data.pledge_amount(),
                     CoinOrTokenId::Coin,
                     block_height,
@@ -470,7 +475,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                         .await;
                         increase_statistic_amount(
                             db_tx,
-                            CoinOrTokenStatistic::TotalSupply,
+                            CoinOrTokenStatistic::CirculatingSupply,
                             amount,
                             CoinOrTokenId::TokenId(*token_id),
                             block_height,
@@ -497,7 +502,7 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
                         .await;
                         increase_statistic_amount(
                             db_tx,
-                            CoinOrTokenStatistic::TotalSupply,
+                            CoinOrTokenStatistic::CirculatingSupply,
                             amount,
                             CoinOrTokenId::Coin,
                             block_height,
@@ -823,8 +828,8 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
             .await;
             increase_statistic_amount(
                 db_tx,
-                CoinOrTokenStatistic::TotalSupply,
-                &total_reward,
+                CoinOrTokenStatistic::CirculatingSupply,
+                &block_subsidy,
                 CoinOrTokenId::Coin,
                 block_height,
             )
@@ -899,7 +904,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
                     increase_statistic_amount(
                         db_tx,
-                        CoinOrTokenStatistic::TotalSupply,
+                        CoinOrTokenStatistic::CirculatingSupply,
                         amount,
                         CoinOrTokenId::TokenId(*token_id),
                         block_height,
@@ -916,7 +921,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     .await;
                     decrease_statistic_amount(
                         db_tx,
-                        CoinOrTokenStatistic::TotalSupply,
+                        CoinOrTokenStatistic::CirculatingSupply,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
@@ -943,7 +948,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     .await;
                     decrease_statistic_amount(
                         db_tx,
-                        CoinOrTokenStatistic::TotalSupply,
+                        CoinOrTokenStatistic::CirculatingSupply,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
@@ -967,7 +972,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     .await;
                     decrease_statistic_amount(
                         db_tx,
-                        CoinOrTokenStatistic::TotalSupply,
+                        CoinOrTokenStatistic::CirculatingSupply,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
@@ -991,7 +996,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     .await;
                     decrease_statistic_amount(
                         db_tx,
-                        CoinOrTokenStatistic::TotalSupply,
+                        CoinOrTokenStatistic::CirculatingSupply,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
@@ -1015,7 +1020,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     .await;
                     decrease_statistic_amount(
                         db_tx,
-                        CoinOrTokenStatistic::TotalSupply,
+                        CoinOrTokenStatistic::CirculatingSupply,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
@@ -1039,7 +1044,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     .await;
                     decrease_statistic_amount(
                         db_tx,
-                        CoinOrTokenStatistic::TotalSupply,
+                        CoinOrTokenStatistic::CirculatingSupply,
                         &amount,
                         CoinOrTokenId::Coin,
                         block_height,
@@ -1285,7 +1290,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 .await;
                 decrease_statistic_amount(
                     db_tx,
-                    CoinOrTokenStatistic::TotalSupply,
+                    CoinOrTokenStatistic::CirculatingSupply,
                     amount,
                     coin_or_token_id,
                     block_height,
@@ -1304,7 +1309,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 .await;
                 decrease_statistic_amount(
                     db_tx,
-                    CoinOrTokenStatistic::TotalSupply,
+                    CoinOrTokenStatistic::CirculatingSupply,
                     &amount,
                     CoinOrTokenId::Coin,
                     block_height,
@@ -1337,7 +1342,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 .await;
                 decrease_statistic_amount(
                     db_tx,
-                    CoinOrTokenStatistic::TotalSupply,
+                    CoinOrTokenStatistic::CirculatingSupply,
                     &amount,
                     CoinOrTokenId::Coin,
                     block_height,
@@ -1359,7 +1364,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 .await;
                 increase_statistic_amount(
                     db_tx,
-                    CoinOrTokenStatistic::TotalSupply,
+                    CoinOrTokenStatistic::CirculatingSupply,
                     &Amount::from_atoms(1),
                     CoinOrTokenId::TokenId(*token_id),
                     block_height,
@@ -1376,7 +1381,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 .await;
                 decrease_statistic_amount(
                     db_tx,
-                    CoinOrTokenStatistic::TotalSupply,
+                    CoinOrTokenStatistic::CirculatingSupply,
                     &amount,
                     CoinOrTokenId::Coin,
                     block_height,

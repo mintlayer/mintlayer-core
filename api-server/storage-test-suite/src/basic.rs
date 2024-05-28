@@ -1183,7 +1183,7 @@ where
         let random_token_id = TokenId::new(H256::random_using(&mut rng));
         let random_coin_or_token_id = CoinOrTokenId::TokenId(random_token_id);
         let random_statistic = match rng.gen_range(0..4) {
-            0 => CoinOrTokenStatistic::TotalSupply,
+            0 => CoinOrTokenStatistic::CirculatingSupply,
             1 => CoinOrTokenStatistic::Staked,
             2 => CoinOrTokenStatistic::Burned,
             _ => CoinOrTokenStatistic::Preminted,

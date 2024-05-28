@@ -70,7 +70,7 @@ pub enum ApiServerStorageError {
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum CoinOrTokenStatistic {
-    TotalSupply,
+    CirculatingSupply,
     Staked,
     Burned,
     Preminted,
@@ -81,7 +81,7 @@ impl FromStr for CoinOrTokenStatistic {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let statistic = match s {
-            "TotalSupply" => Self::TotalSupply,
+            "CirculatingSupply" => Self::CirculatingSupply,
             "Staked" => Self::Staked,
             "Burned" => Self::Burned,
             "Preminted" => Self::Preminted,
@@ -99,7 +99,7 @@ impl FromStr for CoinOrTokenStatistic {
 impl Display for CoinOrTokenStatistic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let str = match self {
-            Self::TotalSupply => "TotalSupply",
+            Self::CirculatingSupply => "CirculatingSupply",
             Self::Staked => "Staked",
             Self::Burned => "Burned",
             Self::Preminted => "Preminted",

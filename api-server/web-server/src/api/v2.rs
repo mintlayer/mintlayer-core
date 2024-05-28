@@ -1134,7 +1134,7 @@ pub async fn coin_statistics<T: ApiServerStorage>(
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
     Ok(Json(json!({
-        "total_amount": amount_to_json(statistics.remove(&CoinOrTokenStatistic::TotalSupply).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
+        "circulating_supply": amount_to_json(statistics.remove(&CoinOrTokenStatistic::CirculatingSupply).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
         "preminted": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Preminted).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
         "burned": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Burned).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
         "staked": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Staked).unwrap_or(Amount::ZERO), state.chain_config.coin_decimals()),
@@ -1174,7 +1174,7 @@ pub async fn token_statistics<T: ApiServerStorage>(
         })?;
 
     Ok(Json(json!({
-        "total_amount": amount_to_json(statistics.remove(&CoinOrTokenStatistic::TotalSupply).unwrap_or(Amount::ZERO), token_decimals),
+        "circulating_supply": amount_to_json(statistics.remove(&CoinOrTokenStatistic::CirculatingSupply).unwrap_or(Amount::ZERO), token_decimals),
         "preminted": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Preminted).unwrap_or(Amount::ZERO), token_decimals),
         "burned": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Burned).unwrap_or(Amount::ZERO), token_decimals),
         "staked": amount_to_json(statistics.remove(&CoinOrTokenStatistic::Staked).unwrap_or(Amount::ZERO), token_decimals),
