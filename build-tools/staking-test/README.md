@@ -32,4 +32,4 @@ whether the first node has any blocks above genesis); if so, it will create a co
 blocks where it will distribute some coins between nodes and create some pools and delegations.
 After that, it will start staking on all nodes.
 
-> 📌 Note: the provided `docker compose` files will start the required number of nodes using all the required arguments.
+> 📌 Note: the provided `docker compose` project will start the required number of nodes using all the required arguments.

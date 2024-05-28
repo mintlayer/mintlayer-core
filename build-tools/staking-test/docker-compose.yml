@@ -27,14 +27,14 @@ services:
     container_name: $BASE_NAME-node00
     command: bash -c "node_runner.sh 00"
     ports:
-      - '40000:$NODE_RPC_PORT'
+      - '$NODE_00_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
 
   wallet00:
     <<: *ml-wallet-common
     container_name: $BASE_NAME-wallet00
-    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node00:$NODE_RPC_PORT
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node00:$NODE_RPC_INTERNAL_PORT
     ports:
-      - '40100:$WALLET_RPC_DAEMON_PORT'
+      - '$WALLET_00_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
     depends_on:
       - node00
 
@@ -43,14 +43,14 @@ services:
     container_name: $BASE_NAME-node01
     command: bash -c "node_runner.sh 01"
     ports:
-      - '40001:$NODE_RPC_PORT'
+      - '$NODE_01_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
 
   wallet01:
     <<: *ml-wallet-common
     container_name: $BASE_NAME-wallet01
-    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node01:$NODE_RPC_PORT
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node01:$NODE_RPC_INTERNAL_PORT
     ports:
-      - '40101:$WALLET_RPC_DAEMON_PORT'
+      - '$WALLET_01_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
     depends_on:
       - node01
 
@@ -59,14 +59,14 @@ services:
     container_name: $BASE_NAME-node02
     command: bash -c "node_runner.sh 02"
     ports:
-      - '40002:$NODE_RPC_PORT'
+      - '$NODE_02_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
 
   wallet02:
     <<: *ml-wallet-common
     container_name: $BASE_NAME-wallet02
-    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node02:$NODE_RPC_PORT
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node02:$NODE_RPC_INTERNAL_PORT
     ports:
-      - '40102:$WALLET_RPC_DAEMON_PORT'
+      - '$WALLET_02_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
     depends_on:
       - node02
 
@@ -75,14 +75,14 @@ services:
     container_name: $BASE_NAME-node03
     command: bash -c "node_runner.sh 03"
     ports:
-      - '40003:$NODE_RPC_PORT'
+      - '$NODE_03_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
 
   wallet03:
     <<: *ml-wallet-common
     container_name: $BASE_NAME-wallet03
-    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node03:$NODE_RPC_PORT
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node03:$NODE_RPC_INTERNAL_PORT
     ports:
-      - '40103:$WALLET_RPC_DAEMON_PORT'
+      - '$WALLET_03_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
     depends_on:
       - node03
 
@@ -91,14 +91,14 @@ services:
     container_name: $BASE_NAME-node04
     command: bash -c "node_runner.sh 04"
     ports:
-      - '40004:$NODE_RPC_PORT'
+      - '$NODE_04_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
 
   wallet04:
     <<: *ml-wallet-common
     container_name: $BASE_NAME-wallet04
-    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node04:$NODE_RPC_PORT
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node04:$NODE_RPC_INTERNAL_PORT
     ports:
-      - '40104:$WALLET_RPC_DAEMON_PORT'
+      - '$WALLET_04_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
     depends_on:
       - node04
 
@@ -107,14 +107,14 @@ services:
     container_name: $BASE_NAME-node05
     command: bash -c "node_runner.sh 05"
     ports:
-      - '40005:$NODE_RPC_PORT'
+      - '$NODE_05_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
 
   wallet05:
     <<: *ml-wallet-common
     container_name: $BASE_NAME-wallet05
-    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node05:$NODE_RPC_PORT
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node05:$NODE_RPC_INTERNAL_PORT
     ports:
-      - '40105:$WALLET_RPC_DAEMON_PORT'
+      - '$WALLET_05_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
     depends_on:
       - node05
 
@@ -123,14 +123,14 @@ services:
     container_name: $BASE_NAME-node06
     command: bash -c "node_runner.sh 06"
     ports:
-      - '40006:$NODE_RPC_PORT'
+      - '$NODE_06_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
 
   wallet06:
     <<: *ml-wallet-common
     container_name: $BASE_NAME-wallet06
-    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node06:$NODE_RPC_PORT
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node06:$NODE_RPC_INTERNAL_PORT
     ports:
-      - '40106:$WALLET_RPC_DAEMON_PORT'
+      - '$WALLET_06_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
     depends_on:
       - node06
 
@@ -139,14 +139,14 @@ services:
     container_name: $BASE_NAME-node07
     command: bash -c "node_runner.sh 07"
     ports:
-      - '40007:$NODE_RPC_PORT'
+      - '$NODE_07_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
 
   wallet07:
     <<: *ml-wallet-common
     container_name: $BASE_NAME-wallet07
-    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node07:$NODE_RPC_PORT
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node07:$NODE_RPC_INTERNAL_PORT
     ports:
-      - '40107:$WALLET_RPC_DAEMON_PORT'
+      - '$WALLET_07_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
     depends_on:
       - node07
 
@@ -155,14 +155,14 @@ services:
     container_name: $BASE_NAME-node08
     command: bash -c "node_runner.sh 08"
     ports:
-      - '40008:$NODE_RPC_PORT'
+      - '$NODE_08_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
 
   wallet08:
     <<: *ml-wallet-common
     container_name: $BASE_NAME-wallet08
-    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node08:$NODE_RPC_PORT
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node08:$NODE_RPC_INTERNAL_PORT
     ports:
-      - '40108:$WALLET_RPC_DAEMON_PORT'
+      - '$WALLET_08_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
     depends_on:
       - node08
 

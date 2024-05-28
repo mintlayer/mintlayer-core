@@ -182,7 +182,7 @@ class Helper():
             node_rpc_port = NODE_RPC_PORT_BASE + i
             wallet_rpc_port = WALLET_RPC_PORT_BASE + i
 
-            log.info(f"Crating node {i}, node_rpc_port = {node_rpc_port}, wallet_rpc_port = {wallet_rpc_port}")
+            log.info(f"Creating node {i}, node_rpc_port = {node_rpc_port}, wallet_rpc_port = {wallet_rpc_port}")
 
             node_rpc = AuthServiceProxy(f"http://{NODE_RPC_USER}:{NODE_RPC_PWD}@127.0.0.1:{node_rpc_port}")
             wallet_rpc = AuthServiceProxy(f"http://{WALLET_RPC_USER}:{WALLET_RPC_PWD}@127.0.0.1:{wallet_rpc_port}")
