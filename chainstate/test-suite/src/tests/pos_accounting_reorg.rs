@@ -190,6 +190,7 @@ fn stake_pool_reorg(
                 let mut db_tx = storage.transaction_rw(None).unwrap();
                 db_tx.set_block_index(&block_a_index).unwrap();
                 db_tx.add_block(&block_a).unwrap();
+                db_tx.mark_as_leaf(&block_a.get_id(), true).unwrap();
 
                 // reorg leaves a trace in delta index
                 // because deltas are only removed on undo if the entire epoch is disconnected;

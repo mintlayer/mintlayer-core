@@ -500,15 +500,6 @@ impl TestFramework {
         tx_rw.commit().unwrap();
     }
 
-    // Delete the block and its index
-    pub fn purge_block(&mut self, block_id: &Id<Block>) {
-        let mut tx_rw = self.storage.transaction_rw(None).unwrap();
-
-        tx_rw.del_block(*block_id).unwrap();
-        tx_rw.del_block_index(*block_id).unwrap();
-        tx_rw.commit().unwrap();
-    }
-
     pub fn on_pool_created(
         &mut self,
         pool_id: PoolId,

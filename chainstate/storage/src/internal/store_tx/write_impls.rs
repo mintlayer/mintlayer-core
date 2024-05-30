@@ -96,6 +96,15 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     }
 
     #[log_error]
+    fn mark_as_leaf(&mut self, block_id: &Id<Block>, is_leaf: bool) -> crate::Result<()> {
+        if is_leaf {
+            self.write::<db::DBLeafBlockIds, _, _, _>(block_id, ())
+        } else {
+            self.del::<db::DBLeafBlockIds, _, _>(block_id)
+        }
+    }
+
+    #[log_error]
     fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()> {
         self.write::<db::DBUtxosBlockUndo, _, _, _>(id, undo)
     }

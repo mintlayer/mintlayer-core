@@ -139,10 +139,12 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
         // After reorg only blocks and block indexes are left from the original chain
         {
             let mut db_tx = reference_tf.storage.transaction_rw(None).unwrap();
-            for (block, block_index) in all_blocks {
-                db_tx.set_block_index(&block_index).unwrap();
-                db_tx.add_block(&block).unwrap();
+            for (block, block_index) in &all_blocks {
+                db_tx.set_block_index(block_index).unwrap();
+                db_tx.add_block(block).unwrap();
             }
+
+            db_tx.mark_as_leaf(&all_blocks.last().unwrap().0.get_id(), true).unwrap();
             db_tx.commit().unwrap();
         }
 

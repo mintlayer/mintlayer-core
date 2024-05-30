@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
+use std::collections::BTreeSet;
+
+use rstest::rstest;
+
 use common::chain::output_value::OutputValue;
 use common::chain::transaction::signed_transaction::SignedTransaction;
 use common::chain::{Block, Destination, OutPointSourceId, TxOutput, UtxoOutPoint};
@@ -21,13 +24,14 @@ use common::primitives::Id;
 use common::primitives::{Amount, BlockHeight, Idable, H256};
 use crypto::key::{KeyKind, PrivateKey};
 use randomness::{CryptoRng, Rng};
-use rstest::rstest;
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 use utxo::{
     Utxo, UtxosBlockRewardUndo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite,
     UtxosTxUndoWithSources,
 };
+
+use super::*;
 
 type TestStore = crate::inmemory::Store;
 
@@ -51,6 +55,22 @@ fn assert_block_exists<DbTx: BlockchainStorageRead>(db_tx: &DbTx, block: &Block)
 fn assert_no_block<DbTx: BlockchainStorageRead>(db_tx: &DbTx, block_id: Id<Block>) {
     assert_eq!(db_tx.get_block(block_id).unwrap().as_ref(), None);
     assert!(!db_tx.block_exists(block_id).unwrap());
+}
+
+fn assert_leaves<DbTx: BlockchainStorageRead>(db_tx: &DbTx, expected: &[Id<Block>]) {
+    let expected = expected.iter().copied().collect::<BTreeSet<_>>();
+    let actual = db_tx.get_leaf_block_ids().unwrap();
+    assert_eq!(actual, expected);
+
+    for leaf in expected {
+        assert!(db_tx.is_leaf_block(&leaf).unwrap());
+    }
+}
+
+fn assert_non_leaves<DbTx: BlockchainStorageRead>(db_tx: &DbTx, expected: &[Id<Block>]) {
+    for leaf in expected {
+        assert!(!db_tx.is_leaf_block(&leaf).unwrap());
+    }
 }
 
 #[test]
@@ -104,9 +124,18 @@ fn test_storage_manipulation() {
     // Store is now empty, the block is not there
     assert_no_block(&db_tx, block0.get_id());
 
+    // Neither of the blocks is a leaf.
+    assert_leaves(&db_tx, &[]);
+    assert_non_leaves(&db_tx, &[block0.get_id(), block1.get_id()]);
+
     // Insert the first block and check it is there
     assert_eq!(db_tx.add_block(&block0), Ok(()));
     assert_block_exists(&db_tx, &block0);
+
+    // Mark it as a leaf.
+    db_tx.mark_as_leaf(&block0.get_id(), true).unwrap();
+    assert_leaves(&db_tx, &[block0.get_id()]);
+    assert_non_leaves(&db_tx, &[block1.get_id()]);
 
     // Insert, remove, and reinsert the second block
     assert_no_block(&db_tx, block1.get_id());
@@ -122,6 +151,13 @@ fn test_storage_manipulation() {
     assert_eq!(db_tx.add_block(&block1), Ok(()));
     assert_block_exists(&db_tx, &block0);
     assert_block_exists(&db_tx, &block1);
+
+    // Mark block1 as a leaf, unmark block0.
+    db_tx.mark_as_leaf(&block1.get_id(), true).unwrap();
+    assert_leaves(&db_tx, &[block0.get_id(), block1.get_id()]);
+    db_tx.mark_as_leaf(&block0.get_id(), false).unwrap();
+    assert_leaves(&db_tx, &[block1.get_id()]);
+    assert_non_leaves(&db_tx, &[block0.get_id()]);
 
     // Test the transaction extraction from a block
     let enc_tx0 = tx0.encode();
@@ -154,6 +190,8 @@ fn test_storage_manipulation() {
     assert_block_exists(&db_tx, &block0);
     assert_block_exists(&db_tx, &block1);
     assert_eq!(db_tx.get_best_block_id(), Ok(Some(block1.get_id().into())));
+    assert_leaves(&db_tx, &[block1.get_id()]);
+    assert_non_leaves(&db_tx, &[block0.get_id()]);
 }
 
 #[test]

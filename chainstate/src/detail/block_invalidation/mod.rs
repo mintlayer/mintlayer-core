@@ -285,24 +285,25 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
 
         self.chainstate.with_rw_tx(
             |chainstate_ref| {
+                let mut non_persisted_block_indices = Vec::new();
+
                 for cur_index in &block_indices_to_clear {
-                    if !cur_index.is_persisted() {
-                        chainstate_ref
-                            .del_block_index_of_non_persisted_block(cur_index.block_id())
-                            .map_err(|err| {
-                                BlockInvalidatorError::DelBlockIndexError(
-                                    *cur_index.block_id(),
-                                    err,
-                                )
-                            })?;
-                    } else {
+                    if cur_index.is_persisted() {
                         update_block_status(
                             chainstate_ref,
                             cur_index.clone(),
                             cur_index.status().with_cleared_fail_bits(),
                         )?;
+                    } else {
+                        non_persisted_block_indices.push(cur_index);
                     }
                 }
+
+                chainstate_ref
+                    .del_block_indices_of_non_persisted_blocks(
+                        non_persisted_block_indices.into_iter().rev(),
+                    )
+                    .map_err(|err| BlockInvalidatorError::DelBlockIndicesError(err))?;
 
                 Ok(())
             },
@@ -354,8 +355,8 @@ pub enum BlockInvalidatorError {
     BestBlockIndexQueryError(PropertyQueryError),
     #[error("Failed to obtain block index for block {0}: {1}")]
     BlockIndexQueryError(Id<GenBlock>, PropertyQueryError),
-    #[error("Error deleting index for block {0}: {1}")]
-    DelBlockIndexError(Id<Block>, BlockError),
+    #[error("Error deleting block indices: {0}")]
+    DelBlockIndicesError(BlockError),
 }
 
 #[derive(Debug, Display, PartialEq, Eq, Clone)]

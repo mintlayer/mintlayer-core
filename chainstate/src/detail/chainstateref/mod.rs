@@ -893,7 +893,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     /// Return ids of all blocks with height bigger or equal to the specified one,
     /// sorted by height (lower first).
-    // TODO: this function iterates over all block indices in the DB, which is too expensive
+    // FIXME: this function iterates over all block indices in the DB, which is too expensive
     // for places where it's currently used (such as block invalidation or best chain selection).
     // We need either to optimize it or replace it with some other solution.
     // See https://github.com/mintlayer/mintlayer-core/issues/1033, item #5.
@@ -1257,7 +1257,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             let mut block_status = block_status;
             block_status.advance_validation_stage_to(BlockValidationStage::FullyChecked);
             let new_block_index = block_index.clone().with_status(block_status);
-            self.set_block_index(&new_block_index)?;
+            self.db_tx.set_block_index(&new_block_index)?;
         }
 
         self.post_connect_tip(block_index, block.as_ref())
@@ -1331,36 +1331,137 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     }
 
     #[log_error]
-    pub fn set_block_index(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
-        self.db_tx.set_block_index(block_index).map_err(BlockError::from)
-    }
-
-    #[log_error]
     pub fn set_new_block_index(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
         if self.db_tx.get_block_index(block_index.block_id())?.is_some() {
             return Err(BlockError::BlockIndexAlreadyExists(*block_index.block_id()));
         }
-        self.set_block_index(block_index)
+        self.db_tx.set_block_index(block_index)?;
+
+        self.db_tx.mark_as_leaf(block_index.block_id(), true)?;
+
+        if let Some(non_genesis_parent) =
+            block_index.prev_block_id().classify(&self.chain_config).chain_block_id()
+        {
+            self.db_tx.mark_as_leaf(&non_genesis_parent, false)?;
+        }
+
+        Ok(())
     }
 
-    /// Delete the block index for the specified block id.
-    /// Panic if the block is marked as persisted.
+    /// Delete the specified block indices.
+    /// Panic if one of the blocks is marked as persisted.
+    /// Note: the passed iterator must be sorted by height backwards.
+    /// FIXME use SortedIterator to enforce sorting.
     #[log_error]
-    pub fn del_block_index_of_non_persisted_block(
+    pub fn del_block_indices_of_non_persisted_blocks<'b>(
         &mut self,
-        block_id: &Id<Block>,
+        block_indices: impl Iterator<Item = &'b BlockIndex>,
     ) -> Result<(), BlockError> {
-        if let Some(existing_block_index) = self.db_tx.get_block_index(block_id)? {
-            // Note: here we're being extra-cautious about someone mis-using this function, so we only panic in
-            // debug mode.
+        let old_leaf_block_ids = self.db_tx.get_leaf_block_ids()?;
+        let mut leaf_block_ids_candidates = old_leaf_block_ids.clone();
+        let mut last_index_height = None;
+
+        for block_index in block_indices {
+            let block_id = *block_index.block_id();
+            let block_height = block_index.block_height();
+
+            // Ensure that we go from bigger heights to lower ones.
+            if let Some(last_index_height) = last_index_height {
+                debug_assert_or_log!(
+                    last_index_height >= block_height,
+                    "Block indices muts be sorted by height backwards"
+                );
+            }
+            last_index_height = Some(block_height);
+
             debug_assert_or_log!(
-                !existing_block_index.is_persisted(),
-                "Trying to delete a block index for a persisted block {block_id}"
+                !block_index.is_persisted(),
+                "Trying to delete a block index for a persisted block {block_id}",
             );
 
-            self.db_tx.del_block_index(*block_id)?;
+            self.db_tx.del_block_index(*block_index.block_id())?;
+
+            if leaf_block_ids_candidates.remove(&block_id) {
+                if let Some(non_genesis_parent) =
+                    block_index.prev_block_id().classify(&self.chain_config).chain_block_id()
+                {
+                    leaf_block_ids_candidates.insert(non_genesis_parent);
+                }
+            }
         }
+
+        // Unmark the removed leaves.
+        for removed_leaf in old_leaf_block_ids.difference(&leaf_block_ids_candidates) {
+            self.db_tx.mark_as_leaf(removed_leaf, false)?;
+        }
+
+        // Now we need to mark new leaves.
+        // A parent of a leaf block is not necessarily a leaf itself, so we need to check all the new candidates first.
+        let maybe_new_leaves = leaf_block_ids_candidates
+            .difference(&old_leaf_block_ids)
+            .copied()
+            .collect::<BTreeSet<_>>();
+
+        if !maybe_new_leaves.is_empty() {
+            let old_leaves_indices_iter = old_leaf_block_ids
+                .intersection(&leaf_block_ids_candidates)
+                .map(|id| self.get_existing_block_index(id));
+            let old_leaves_indices = itertools::process_results(old_leaves_indices_iter, |iter| {
+                iter.collect::<Vec<_>>()
+            })
+            .map_err(BlockError::PropertyQueryError)?;
+
+            for maybe_new_leaf in &maybe_new_leaves {
+                let is_parent = itertools::process_results(
+                    old_leaves_indices
+                        .iter()
+                        .map(|leaf_index| self.is_parent_of(leaf_index, maybe_new_leaf)),
+                    |mut iter| iter.any(|x| x),
+                )?;
+
+                if !is_parent {
+                    self.db_tx.mark_as_leaf(maybe_new_leaf, true)?;
+                }
+            }
+        }
+
         Ok(())
+    }
+
+    /// Check if the block specified by `potential_parent_id` is a (possibly indirect) parent of
+    /// the block specified by `child_index`.
+    #[log_error]
+    fn is_parent_of(
+        &self,
+        child_index: &BlockIndex,
+        potential_parent_id: &Id<Block>,
+    ) -> Result<bool, BlockError> {
+        let potential_parent_index = self
+            .get_existing_block_index(potential_parent_id)
+            .map_err(BlockError::PropertyQueryError)?;
+        let mut child_index = child_index;
+        let mut tmp_index = None;
+
+        loop {
+            let Some(immediate_parent_id) =
+                child_index.prev_block_id().classify(&self.chain_config).chain_block_id()
+            else {
+                return Ok(false);
+            };
+
+            if immediate_parent_id == *potential_parent_index.block_id() {
+                return Ok(true);
+            }
+
+            if child_index.block_height() <= potential_parent_index.block_height() {
+                return Ok(false);
+            }
+
+            child_index = tmp_index.insert(
+                self.get_existing_block_index(&immediate_parent_id)
+                    .map_err(BlockError::PropertyQueryError)?,
+            );
+        }
     }
 
     /// Update the status of the passed `block_index`.
@@ -1376,7 +1477,9 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             assert!(existing_block_index.is_identical_to(&block_index));
         }
 
-        self.set_block_index(&block_index.with_status(block_status))
+        self.db_tx.set_block_index(&block_index.with_status(block_status))?;
+
+        Ok(())
     }
 
     #[log_error]

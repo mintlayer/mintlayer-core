@@ -146,6 +146,18 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
     }
 
     #[log_error]
+    fn get_leaf_block_ids(&self) -> crate::Result<BTreeSet<Id<Block>>> {
+        let map = self.0.get::<db::DBLeafBlockIds, _>();
+        let items = map.prefix_iter_keys(&())?;
+        Ok(items.collect::<BTreeSet<_>>())
+    }
+
+    #[log_error]
+    fn is_leaf_block(&self, block_id: &Id<Block>) -> crate::Result<bool> {
+        Ok(self.read::<db::DBLeafBlockIds, _, _>(block_id)?.is_some())
+    }
+
+    #[log_error]
     fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
         self.read::<db::DBUtxosBlockUndo, _, _>(id)
     }
@@ -424,6 +436,18 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     #[log_error]
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>> {
         self.read::<db::DBBlockByHeight, _, _>(height)
+    }
+
+    #[log_error]
+    fn get_leaf_block_ids(&self) -> crate::Result<BTreeSet<Id<Block>>> {
+        let map = self.get_map::<db::DBLeafBlockIds, _>()?;
+        let items = map.prefix_iter_keys(&())?;
+        Ok(items.collect::<BTreeSet<_>>())
+    }
+
+    #[log_error]
+    fn is_leaf_block(&self, block_id: &Id<Block>) -> crate::Result<bool> {
+        Ok(self.read::<db::DBLeafBlockIds, _, _>(block_id)?.is_some())
     }
 
     #[log_error]

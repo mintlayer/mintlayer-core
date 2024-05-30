@@ -42,6 +42,11 @@ storage::decl_schema! {
         pub DBBlockIndex: Map<Id<Block>, BlockIndex>,
         /// Storage for block IDs indexed by block height.
         pub DBBlockByHeight: Map<BlockHeight, Id<GenBlock>>,
+        /// The set of ids of blocks (both valid and invalid) that don't have children.
+        /// If the set is empty, then genesis is the only leaf block.
+        /// Note that the set may or may not contain the current main chain tip - the tip
+        /// may have invalid children, in which case it won't be marked as a leaf.
+        pub DBLeafBlockIds: Map<Id<Block>, ()>,
         /// Store for Utxo Entries
         pub DBUtxo: Map<UtxoOutPoint, Utxo>,
         /// Store for utxo BlockUndo

@@ -42,6 +42,8 @@ pub struct ConsistencyChecker<'a, DbTx> {
     best_block_id: Id<GenBlock>,
     /// The min_height_with_allowed_reorg from the db.
     min_height_with_allowed_reorg: BlockHeight,
+    /// Ids of leaf blocks.
+    leaf_block_ids: BTreeSet<Id<Block>>,
 }
 
 impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
@@ -57,6 +59,7 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
         });
         let min_height_with_allowed_reorg =
             db_tx.get_min_height_with_allowed_reorg()?.unwrap_or(0.into());
+        let leaf_block_ids = db_tx.get_leaf_block_ids()?;
 
         Ok(Self {
             db_tx,
@@ -66,6 +69,7 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
             block_by_height_map,
             best_block_id,
             min_height_with_allowed_reorg,
+            leaf_block_ids,
         })
     }
 
@@ -83,8 +87,12 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
 
     /// Check the block map vs block index map consistency.
     fn check_block_index_consistency(&self) -> Result<(), chainstate_storage::Error> {
+        let mut visited_parent_ids = BTreeSet::new();
+        let mut actual_leaf_block_ids = BTreeSet::new();
+
         // Loop over block_map_keys and block_index_map simultaneously via merge_join_by, looking
         // for ids that are present in one of them and missing in the other.
+        // While looping, collect additional information, such as the set of actual leaf block ids.
         for merged in self
             .block_map_keys
             .iter()
@@ -151,6 +159,10 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
                 );
             }
 
+            if !visited_parent_ids.contains(block_id) {
+                actual_leaf_block_ids.insert(*block_id);
+            }
+
             // Check the parent, if it's not genesis.
             if let Some(parent_id) =
                 block_index.prev_block_id().classify(self.chain_config).chain_block_id()
@@ -181,8 +193,22 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
                         >= block_index.status().last_valid_stage(),
                     "{PANIC_MSG}: parent block {parent_id} is less valid than its child {block_id}"
                 );
+
+                visited_parent_ids.insert(parent_id);
+                actual_leaf_block_ids.remove(&parent_id);
             }
         }
+
+        // Sanity check: a leaf cannot be a parent and vice versa.
+        assert!(actual_leaf_block_ids.is_disjoint(&visited_parent_ids));
+        // Sanity check: all blocks have been classified either as a parent of as a leaf.
+        assert_eq!(
+            actual_leaf_block_ids.len() + visited_parent_ids.len(),
+            self.block_index_map.len()
+        );
+
+        // Now check that the collected leaves are the same as the stored ones.
+        assert_eq!(self.leaf_block_ids, actual_leaf_block_ids);
 
         Ok(())
     }
