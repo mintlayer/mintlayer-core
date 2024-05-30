@@ -85,8 +85,6 @@ impl BestChainCandidates {
     ) -> Result<BestChainCandidates, BestChainCandidatesError> {
         let min_height_with_allowed_reorg = chs.min_height_with_allowed_reorg()?;
 
-        // Note: currently, this call has linear complexity with respect to the total number of
-        // blocks, see the TODO near the function itself.
         let block_ids_by_height = chs
             .get_higher_block_ids_sorted_by_height(min_height_with_allowed_reorg)
             .log_err()?;

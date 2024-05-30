@@ -79,7 +79,7 @@ mockall::mock! {
             id: Id<Block>,
         ) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
 
-        fn get_block_tree_by_height(
+        fn get_block_tree_by_height_traversing_entire_index(
             &self,
             start_from: BlockHeight,
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
@@ -352,7 +352,7 @@ mockall::mock! {
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
-        fn get_block_tree_by_height(
+        fn get_block_tree_by_height_traversing_entire_index(
             &self,
             start_from: BlockHeight,
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
@@ -474,7 +474,7 @@ mockall::mock! {
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
         fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
-        fn get_block_tree_by_height(
+        fn get_block_tree_by_height_traversing_entire_index(
             &self,
             start_from: BlockHeight,
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;

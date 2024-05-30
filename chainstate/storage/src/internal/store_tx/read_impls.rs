@@ -181,7 +181,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
     }
 
     #[log_error]
-    fn get_block_tree_by_height(
+    fn get_block_tree_by_height_traversing_entire_index(
         &self,
         start_from: BlockHeight,
     ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>> {
@@ -474,7 +474,7 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     }
 
     #[log_error]
-    fn get_block_tree_by_height(
+    fn get_block_tree_by_height_traversing_entire_index(
         &self,
         start_from: BlockHeight,
     ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>> {

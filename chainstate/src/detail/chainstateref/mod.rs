@@ -76,7 +76,7 @@ pub use in_memory_reorg::InMemoryReorgError;
 
 pub struct ChainstateRef<'a, S, V> {
     chain_config: &'a ChainConfig,
-    _chainstate_config: &'a ChainstateConfig,
+    chainstate_config: &'a ChainstateConfig,
     tx_verification_strategy: &'a V,
     db_tx: S,
     time_getter: &'a TimeGetter,
@@ -141,7 +141,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> Self {
         ChainstateRef {
             chain_config,
-            _chainstate_config: chainstate_config,
+            chainstate_config,
             db_tx,
             tx_verification_strategy,
             time_getter,
@@ -157,7 +157,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> Self {
         ChainstateRef {
             chain_config,
-            _chainstate_config: chainstate_config,
+            chainstate_config,
             db_tx,
             tx_verification_strategy,
             time_getter,
@@ -888,21 +888,89 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     #[log_error]
     pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
-        self.get_higher_block_ids_sorted_by_height(0.into())
+        let block_tree_map =
+            self.db_tx.get_block_tree_by_height_traversing_entire_index(0.into())?;
+        let result = block_tree_map
+            .into_iter()
+            .flat_map(|(_height, ids_per_height)| ids_per_height)
+            .collect();
+
+        Ok(result)
     }
 
-    /// Return ids of all blocks with height bigger or equal to the specified one,
+    /// Return ids of all blocks with height bigger than or equal to the specified one,
+    /// grouped by height.
+    /// Note: the function collects block ids by iterating from each of the current leaf blocks
+    /// down to the specified height, so it's most efficient if the height is comparable to
+    /// the current height of the chain. If the specified height is closer to zero,
+    /// `BlockchainStorageRead::get_block_tree_by_height_traversing_entire_index` might be
+    /// a better choice.
+    pub fn get_block_tree_top_by_height(
+        &self,
+        start_from: BlockHeight,
+    ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, PropertyQueryError> {
+        let mut result = BTreeMap::<BlockHeight, Vec<Id<Block>>>::new();
+        let mut seen_blocks = BTreeSet::new();
+
+        let leaf_block_ids = self.db_tx.get_leaf_block_ids()?;
+
+        for leaf_block_id in leaf_block_ids {
+            let mut cur_block_id = leaf_block_id;
+
+            loop {
+                if seen_blocks.contains(&cur_block_id) {
+                    break;
+                }
+
+                seen_blocks.insert(cur_block_id);
+
+                let cur_block_index = self.get_existing_block_index(&cur_block_id)?;
+
+                if cur_block_index.block_height() < start_from {
+                    break;
+                }
+
+                result.entry(cur_block_index.block_height()).or_default().push(cur_block_id);
+
+                if let Some(non_genesis_parent) =
+                    cur_block_index.prev_block_id().classify(&self.chain_config).chain_block_id()
+                {
+                    cur_block_id = non_genesis_parent;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        if self.chainstate_config.heavy_checks_enabled(&self.chain_config) {
+            // Check that get_block_tree_by_height_traversing_entire_index returns the same data.
+
+            let alternative_result =
+                self.db_tx.get_block_tree_by_height_traversing_entire_index(start_from)?;
+            let alternative_result = alternative_result
+                .iter()
+                .map(|(height, ids)| (height, ids.into_iter().collect::<BTreeSet<_>>()))
+                .collect::<BTreeMap<_, _>>();
+            let result = result
+                .iter()
+                .map(|(height, ids)| (height, ids.into_iter().collect::<BTreeSet<_>>()))
+                .collect::<BTreeMap<_, _>>();
+            assert_eq!(result, alternative_result);
+        }
+
+        Ok(result)
+    }
+
+    /// Return ids of all blocks with height bigger than or equal to the specified one,
     /// sorted by height (lower first).
-    // FIXME: this function iterates over all block indices in the DB, which is too expensive
-    // for places where it's currently used (such as block invalidation or best chain selection).
-    // We need either to optimize it or replace it with some other solution.
-    // See https://github.com/mintlayer/mintlayer-core/issues/1033, item #5.
+    /// This function uses `get_block_tree_top_by_height`, so the same note applies here too.
+    // FIXME: update https://github.com/mintlayer/mintlayer-core/issues/1033, item #5.
     #[log_error]
     pub fn get_higher_block_ids_sorted_by_height(
         &self,
         start_from: BlockHeight,
     ) -> Result<Vec<Id<Block>>, PropertyQueryError> {
-        let block_tree_map = self.db_tx.get_block_tree_by_height(start_from)?;
+        let block_tree_map = self.get_block_tree_top_by_height(start_from)?;
         let result = block_tree_map
             .into_iter()
             .flat_map(|(_height, ids_per_height)| ids_per_height)
