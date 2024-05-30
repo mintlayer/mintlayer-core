@@ -135,7 +135,6 @@ pub const INCREMENTAL_RELAY_FEE_RATE: FeeRate =
 pub const INCREMENTAL_RELAY_THRESHOLD: FeeRate =
     FeeRate::from_amount_per_kb(Amount::from_atoms(500));
 
-// 10^-3 of a coin per 1000 bytes
 make_config_setting!(
     MinTxRelayFeeRate,
     FeeRate,
