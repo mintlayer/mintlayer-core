@@ -48,7 +48,7 @@ use utils::sorted::Sorted;
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn foo(#[case] seed: Seed) {
+fn block_tree_retrieval(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();

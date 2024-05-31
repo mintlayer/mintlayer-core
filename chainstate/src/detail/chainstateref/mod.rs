@@ -893,7 +893,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
         let result = self
-            .get_block_tree_by_height_traversing_entire_index(0.into(), false)?
+            .get_block_tree_top_by_height_traversing_entire_index(0.into(), false)?
             .into_iter()
             .flat_map(|(_height, ids_per_height)| ids_per_height)
             .collect();
@@ -905,7 +905,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     /// Note: the function collects block ids by iterating from each of the current leaf blocks
     /// down to the specified height, while maintaining a set of already seen blocks.
     /// So, if the starting height is close to zero, iterating over the entire index
-    /// (via db_tx.iterate_block_index) might be a better choice.
+    /// (e.g. via get_block_tree_by_height_traversing_entire_index) might be a better choice.
     #[log_error]
     pub fn get_block_tree_top_by_height(
         &self,
@@ -931,7 +931,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         if self.chainstate_config.heavy_checks_enabled(self.chain_config) {
             // Check that traversing the entire index produces the same result.
-            let alternative_result = self.get_block_tree_by_height_traversing_entire_index(
+            let alternative_result = self.get_block_tree_top_by_height_traversing_entire_index(
                 start_from,
                 include_non_persisted,
             )?;
@@ -967,7 +967,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         if self.chainstate_config.heavy_checks_enabled(self.chain_config) {
             // Check that traversing the entire index produces the same result.
-            let alternative_result = self.get_block_tree_by_timestamp_traversing_entire_index(
+            let alternative_result = self.get_block_tree_top_by_timestamp_traversing_entire_index(
                 start_from,
                 include_non_persisted,
             )?;
@@ -978,7 +978,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     #[log_error]
-    fn get_block_tree_by_height_traversing_entire_index(
+    fn get_block_tree_top_by_height_traversing_entire_index(
         &self,
         start_from: BlockHeight,
         include_non_persisted: bool,
@@ -1001,7 +1001,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     #[log_error]
-    fn get_block_tree_by_timestamp_traversing_entire_index(
+    fn get_block_tree_top_by_timestamp_traversing_entire_index(
         &self,
         start_from: BlockTimestamp,
         include_non_persisted: bool,
@@ -1558,6 +1558,12 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         &mut self,
         block_indices: impl DoubleEndedIterator<Item = &'b BlockIndex>,
     ) -> Result<(), BlockError> {
+        let mut block_indices = block_indices.peekable();
+
+        if block_indices.peek().is_none() {
+            return Ok(());
+        }
+
         let old_leaf_block_ids = self.db_tx.get_leaf_block_ids()?;
         let mut leaf_block_ids_candidates = old_leaf_block_ids.clone();
         let mut last_index_height = None;
@@ -1570,7 +1576,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             if let Some(last_index_height) = last_index_height {
                 debug_assert_or_log!(
                     last_index_height >= block_height,
-                    "Block indices muts be sorted by height backwards"
+                    "Block indices must be sorted by height backwards"
                 );
             }
             last_index_height = Some(block_height);
@@ -1603,26 +1609,30 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             .copied()
             .collect::<BTreeSet<_>>();
 
-        if !maybe_new_leaves.is_empty() {
-            let old_leaves_indices_iter = old_leaf_block_ids
-                .intersection(&leaf_block_ids_candidates)
-                .map(|id| self.get_existing_block_index(id));
-            let old_leaves_indices = itertools::process_results(old_leaves_indices_iter, |iter| {
-                iter.collect::<Vec<_>>()
-            })
-            .map_err(BlockError::PropertyQueryError)?;
+        // Note: the complexity here is (remaining old leaves count) x ("may be new leaves" count) x (the average
+        // of "max(old leaf height - new leaf height, 0)").
+        // But:
+        // 1) The total "effective" number of leaves should be small (i.e. we may potentially have lots of very old
+        // leaves, because we don't have block purging yet, but they will have smaller heights than any possible new leaf,
+        // so is_parent_of will return immediately anyway).
+        // 2) The "may be new leaves" count will be even smaller (usually just 1).
+        let old_leaves_indices_iter = old_leaf_block_ids
+            .intersection(&leaf_block_ids_candidates)
+            .map(|id| self.get_existing_block_index(id));
+        let old_leaves_indices =
+            itertools::process_results(old_leaves_indices_iter, |iter| iter.collect::<Vec<_>>())
+                .map_err(BlockError::PropertyQueryError)?;
 
-            for maybe_new_leaf in &maybe_new_leaves {
-                let is_parent = itertools::process_results(
-                    old_leaves_indices
-                        .iter()
-                        .map(|leaf_index| self.is_parent_of(leaf_index, maybe_new_leaf)),
-                    |mut iter| iter.any(|x| x),
-                )?;
+        for maybe_new_leaf in &maybe_new_leaves {
+            let is_parent = itertools::process_results(
+                old_leaves_indices
+                    .iter()
+                    .map(|leaf_index| self.is_parent_of(leaf_index, maybe_new_leaf)),
+                |mut iter| iter.any(|x| x),
+            )?;
 
-                if !is_parent {
-                    self.db_tx.mark_as_leaf(maybe_new_leaf, true)?;
-                }
+            if !is_parent {
+                self.db_tx.mark_as_leaf(maybe_new_leaf, true)?;
             }
         }
 

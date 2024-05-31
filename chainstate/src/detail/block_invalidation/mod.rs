@@ -299,11 +299,13 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                     }
                 }
 
-                chainstate_ref
-                    .del_block_indices_of_non_persisted_blocks(
-                        non_persisted_block_indices.into_iter(),
-                    )
-                    .map_err(BlockInvalidatorError::DelBlockIndicesError)?;
+                if !non_persisted_block_indices.is_empty() {
+                    chainstate_ref
+                        .del_block_indices_of_non_persisted_blocks(
+                            non_persisted_block_indices.into_iter(),
+                        )
+                        .map_err(BlockInvalidatorError::DelBlockIndicesError)?;
+                }
 
                 Ok(())
             },

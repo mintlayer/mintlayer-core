@@ -47,7 +47,7 @@ mockall::mock! {
     /// A mock object for blockchain storage
     pub Store {}
 
-    // Note: mockall doesn't like `Result<impl Iterator<Item = BlockIndex>>` which is returned
+    // Note: mockall doesn't like `Result<impl Iterator<Item = BlockIndex>>` that is returned
     // from `iterate_block_index`, so we have to return `Box` instead'. This triggers the warning
     // "impl trait in impl method signature does not match trait method signature", which
     // we silence here.
