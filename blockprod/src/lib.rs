@@ -59,14 +59,12 @@ pub enum BlockProductionError {
     FailedConsensusInitialization(#[from] ConsensusCreationError),
     #[error("Block production cancelled")]
     Cancelled,
-    #[error("Failed to retrieve peer count")]
-    PeerCountRetrievalError,
+    #[error("Failed to retrieve peer count: {0}")]
+    PeerCountRetrievalError(String),
     #[error("Connected peers {0} is below the required peer threshold {0}")]
     PeerCountBelowRequiredThreshold(usize, usize),
     #[error("Block not found in this round")]
     TryAgainLater,
-    #[error("Tip has changed. Stopping block production for previous tip {0} with height {1} to new tip {2} with height {3}")]
-    TipChanged(Id<GenBlock>, BlockHeight, Id<GenBlock>, BlockHeight),
     #[error("Job already exists")]
     JobAlreadyExists(JobKey),
     #[error("Job manager error: {0}")]
@@ -95,6 +93,14 @@ pub enum BlockProductionError {
     PoolBalanceNotFound(PoolId),
     #[error("PoS accounting error: {0}")]
     PoSAccountingError(#[from] detail::utils::PoSAccountingError),
+    #[error("PoS data provided when consensus is supposed to be ignored")]
+    PoSInputDataProvidedWhenIgnoringConsensus,
+    #[error("PoW data provided when consensus is supposed to be ignored")]
+    PoWInputDataProvidedWhenIgnoringConsensus,
+    #[error("Recoverable mempool error")]
+    RecoverableMempoolError,
+    #[error("Task exited prematurely")]
+    TaskExitedPrematurely,
 }
 
 pub type BlockProductionSubsystem = Box<dyn BlockProductionInterface>;
@@ -155,8 +161,9 @@ mod tests {
     use chainstate_storage::inmemory::Store;
     use common::{
         chain::{
+            self,
             block::timestamp::BlockTimestamp,
-            config::{create_unit_test_config, Builder, ChainConfig, ChainType},
+            config::{create_unit_test_config, ChainConfig, ChainType},
             pos_initial_difficulty,
             stakelock::StakePoolData,
             Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoSChainConfigBuilder,
@@ -166,7 +173,7 @@ mod tests {
         time_getter::TimeGetter,
         Uint256, Uint512,
     };
-    use consensus::calculate_effective_pool_balance;
+    use consensus::{calculate_effective_pool_balance, compact_target_to_target};
     use crypto::{
         key::{KeyKind, PrivateKey},
         vrf::{VRFKeyKind, VRFPrivateKey},
@@ -401,10 +408,24 @@ mod tests {
         switch_to_pos_at: BlockHeight,
         extra_genesis_txs: &[TxOutput],
         rng: &mut (impl Rng + CryptoRng),
-    ) -> (ChainConfig, PrivateKey, VRFPrivateKey, TxOutput) {
+    ) -> (chain::config::Builder, PrivateKey, VRFPrivateKey, TxOutput) {
+        let genesis_timestamp = make_genesis_timestamp(time_getter, rng);
+        setup_pos_with_genesis_timestamp(
+            genesis_timestamp,
+            switch_to_pos_at,
+            extra_genesis_txs,
+            rng,
+        )
+    }
+
+    pub fn setup_pos_with_genesis_timestamp(
+        genesis_timestamp: BlockTimestamp,
+        switch_to_pos_at: BlockHeight,
+        extra_genesis_txs: &[TxOutput],
+        rng: &mut (impl Rng + CryptoRng),
+    ) -> (chain::config::Builder, PrivateKey, VRFPrivateKey, TxOutput) {
         let initial_target = pos_initial_difficulty(ChainType::Regtest);
 
-        let genesis_timestamp = make_genesis_timestamp(time_getter, rng);
         let (
             genesis,
             genesis_stake_private_key,
@@ -412,33 +433,52 @@ mod tests {
             create_genesis_pool_txoutput,
         ) = create_genesis_for_pos_tests(genesis_timestamp, extra_genesis_txs, rng);
 
-        let chain_config = {
-            let net_upgrades = NetUpgrades::initialize(vec![
-                (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
-                (
-                    switch_to_pos_at,
-                    ConsensusUpgrade::PoS {
-                        initial_difficulty: Some(initial_target.into()),
-                        config: PoSChainConfigBuilder::new_for_unit_test().build(),
-                    },
-                ),
-            ])
-            .expect("Net upgrades are valid");
+        let net_upgrades = NetUpgrades::initialize(vec![
+            (BlockHeight::new(0), ConsensusUpgrade::IgnoreConsensus),
+            (
+                switch_to_pos_at,
+                ConsensusUpgrade::PoS {
+                    initial_difficulty: Some(initial_target.into()),
+                    config: PoSChainConfigBuilder::new_for_unit_test().build(),
+                },
+            ),
+        ])
+        .expect("Net upgrades are valid");
 
-            Builder::new(ChainType::Regtest)
-                .genesis_custom(genesis)
-                .consensus_upgrades(net_upgrades)
-                .build()
-        };
-
-        ensure_reasonable_initial_target_for_pos_tests(&chain_config, &initial_target);
+        let chain_config_builder = chain::config::Builder::new(ChainType::Regtest)
+            .genesis_custom(genesis)
+            .consensus_upgrades(net_upgrades);
 
         (
-            chain_config,
+            chain_config_builder,
             genesis_stake_private_key,
             genesis_vrf_private_key,
             create_genesis_pool_txoutput,
         )
+    }
+
+    pub fn build_chain_config_for_pos(builder: chain::config::Builder) -> ChainConfig {
+        let chain_config = builder.build();
+
+        let first_pos_upgrade_difficulty = chain_config
+            .consensus_upgrades()
+            .all_upgrades()
+            .iter()
+            .find_map(|(_, upgrade)| match upgrade {
+                ConsensusUpgrade::PoS {
+                    initial_difficulty,
+                    config: _,
+                } => Some(initial_difficulty.unwrap()),
+                ConsensusUpgrade::PoW { .. } | ConsensusUpgrade::IgnoreConsensus => None,
+            })
+            .unwrap();
+
+        ensure_reasonable_initial_target_for_pos_tests(
+            &chain_config,
+            &compact_target_to_target(first_pos_upgrade_difficulty).unwrap(),
+        );
+
+        chain_config
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

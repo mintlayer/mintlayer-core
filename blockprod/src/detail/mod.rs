@@ -32,21 +32,19 @@ use common::{
             block_body::BlockBody, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        Block, ChainConfig, GenBlock, PoolId, SignedTransaction, Transaction,
+        Block, ChainConfig, PoolId, RequiredConsensus, SignedTransaction, Transaction,
     },
-    primitives::{Amount, BlockHeight, Id, Idable},
+    primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
 use consensus::{
-    generate_consensus_data_and_reward, FinalizeBlockInputData, GenerateBlockInputData,
-    PoSFinalizeBlockInputData, PoSGenerateBlockInputData,
+    generate_consensus_data_and_reward_ignore_consensus, generate_pos_consensus_data_and_reward,
+    generate_pow_consensus_data_and_reward, ConsensusCreationError, ConsensusPoSError,
+    ConsensusPoWError, FinalizeBlockInputData, GenerateBlockInputData, PoSFinalizeBlockInputData,
+    PoSGenerateBlockInputData,
 };
 use crypto::ephemeral_e2e::{self, EndToEndPrivateKey};
-use logging::log;
-use mempool::{
-    tx_accumulator::{DefaultTxAccumulator, PackingStrategy, TransactionAccumulator},
-    MempoolHandle,
-};
+use mempool::{tx_accumulator::PackingStrategy, MempoolHandle};
 use p2p::P2pHandle;
 use randomness::{make_true_rng, Rng};
 use serialization::{Decode, Encode};
@@ -58,15 +56,19 @@ use ::utils::{
 
 use crate::{
     config::BlockProdConfig,
-    detail::job_manager::{JobKey, JobManagerHandle, JobManagerImpl},
+    detail::{
+        job_manager::{JobKey, JobManagerHandle, JobManagerImpl},
+        utils::collect_transactions,
+    },
     BlockProductionError,
 };
 
 use self::{
     timestamp_searcher::TimestampSearchData,
     utils::{
-        get_best_block_index, get_pool_staker_balance, get_pool_total_balance,
-        get_sealed_epoch_randomness, make_ancestor_getter, timestamp_add_secs,
+        calculate_median_time_past, get_best_block_index, get_pool_staker_balance,
+        get_pool_total_balance, get_sealed_epoch_randomness, make_ancestor_getter,
+        timestamp_add_secs,
     },
 };
 
@@ -189,41 +191,6 @@ impl BlockProduction {
         Ok(())
     }
 
-    /// Collect transactions from the mempool
-    /// Returns the accumulator that is filled with transactions from the mempool
-    /// Ok(None) means that a recoverable error happened (such as that the mempool tip moved).
-    pub async fn collect_transactions(
-        &self,
-        current_tip: Id<GenBlock>,
-        current_tip_median_time_past: BlockTimestamp,
-        transactions: Vec<SignedTransaction>,
-        transaction_ids: Vec<Id<Transaction>>,
-        packing_strategy: PackingStrategy,
-    ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockProductionError> {
-        let mut accumulator = Box::new(DefaultTxAccumulator::new(
-            self.chain_config.max_block_size_from_std_scripts(),
-            current_tip,
-            current_tip_median_time_past,
-        ));
-
-        for transaction in transactions.into_iter() {
-            let transaction_id = transaction.transaction().get_id();
-
-            accumulator
-                .add_tx(transaction, Amount::ZERO.into())
-                .map_err(|err| BlockProductionError::FailedToAddTransaction(transaction_id, err))?
-        }
-
-        let returned_accumulator = self
-            .mempool_handle
-            .call(move |mempool| {
-                mempool.collect_txs(accumulator, transaction_ids, packing_strategy)
-            })
-            .await??;
-
-        Ok(returned_accumulator)
-    }
-
     async fn pull_consensus_data(
         &self,
         input_data: GenerateBlockInputData,
@@ -248,36 +215,112 @@ impl BlockProduction {
 
                     let best_block_id = best_block_index.block_id();
                     let current_tip_median_time_past =
-                        cs.calculate_median_time_past(&best_block_id).map_err(|err| {
-                            BlockProductionError::ChainstateError(
-                                consensus::ChainstateError::FailedToCalculateMedianTimePast(
-                                    best_block_id,
-                                    err.to_string(),
-                                ),
-                            )
-                        })?;
-                    let new_block_height = best_block_index.block_height().next_height();
+                        calculate_median_time_past(cs, &best_block_id)?;
+
+                    let block_height = best_block_index.block_height().next_height();
                     let sealed_epoch_randomness =
-                        get_sealed_epoch_randomness(&chain_config, cs, new_block_height)?;
+                        get_sealed_epoch_randomness(&chain_config, cs, block_height)?;
+                    let required_consensus =
+                        chain_config.consensus_upgrades().consensus_status(block_height);
+                    let block_timestamp = BlockTimestamp::from_time(time_getter.get_time());
 
-                    let (consensus_data, block_reward) = generate_consensus_data_and_reward(
-                        &chain_config,
-                        &best_block_index,
-                        sealed_epoch_randomness,
-                        input_data.clone(),
-                        BlockTimestamp::from_time(time_getter.get_time()),
-                        new_block_height,
-                        make_ancestor_getter(cs),
-                    )
-                    .map_err(BlockProductionError::FailedConsensusInitialization)?;
+                    let (consensus_data, block_reward, finalize_block_data) =
+                        match (required_consensus, input_data) {
+                            (
+                                RequiredConsensus::PoS(pos_status),
+                                GenerateBlockInputData::PoS(pos_input_data),
+                            ) => {
+                                let (consensus_data, block_reward) =
+                                    generate_pos_consensus_data_and_reward(
+                                        &chain_config,
+                                        &best_block_index,
+                                        &pos_input_data,
+                                        &pos_status,
+                                        sealed_epoch_randomness,
+                                        // TODO: this block_timestamp and the vrf_data inside PoSData make no sense here,
+                                        // because they'll be overwritten during staking.
+                                        block_timestamp,
+                                        block_height,
+                                        make_ancestor_getter(cs),
+                                        randomness::make_true_rng(),
+                                    )?;
+                                let consensus_data = ConsensusData::PoS(Box::new(consensus_data));
 
-                    let finalize_block_data = generate_finalize_block_data(
-                        &chain_config,
-                        cs,
-                        new_block_height,
-                        sealed_epoch_randomness,
-                        input_data,
-                    )?;
+                                let finalize_block_data =
+                                    FinalizeBlockInputData::PoS(generate_finalize_block_data_pos(
+                                        &chain_config,
+                                        cs,
+                                        block_height,
+                                        sealed_epoch_randomness,
+                                        &pos_input_data,
+                                    )?);
+
+                                (consensus_data, block_reward, finalize_block_data)
+                            }
+                            (
+                                RequiredConsensus::PoW(pow_status),
+                                GenerateBlockInputData::PoW(pow_input_data),
+                            ) => {
+                                let (consensus_data, block_reward) =
+                                    generate_pow_consensus_data_and_reward(
+                                        &chain_config,
+                                        &best_block_index,
+                                        block_timestamp,
+                                        &pow_status,
+                                        make_ancestor_getter(cs),
+                                        *pow_input_data,
+                                        block_height,
+                                    )
+                                    .map_err(ConsensusCreationError::MiningError)?;
+                                let consensus_data = ConsensusData::PoW(Box::new(consensus_data));
+
+                                let finalize_block_data = FinalizeBlockInputData::PoW;
+
+                                (consensus_data, block_reward, finalize_block_data)
+                            }
+                            (RequiredConsensus::IgnoreConsensus, GenerateBlockInputData::None) => {
+                                let (consensus_data, block_reward) =
+                                    generate_consensus_data_and_reward_ignore_consensus(
+                                        &chain_config,
+                                        block_height,
+                                    )?;
+                                let finalize_block_data = FinalizeBlockInputData::None;
+
+                                (consensus_data, block_reward, finalize_block_data)
+                            }
+                            (RequiredConsensus::PoS(_), GenerateBlockInputData::PoW(_)) => {
+                                Err(ConsensusCreationError::StakingError(
+                                    ConsensusPoSError::PoWInputDataProvided,
+                                ))?
+                            }
+                            (RequiredConsensus::PoS(_), GenerateBlockInputData::None) => {
+                                Err(ConsensusCreationError::StakingError(
+                                    ConsensusPoSError::NoInputDataProvided,
+                                ))?
+                            }
+                            (RequiredConsensus::PoW(_), GenerateBlockInputData::PoS(_)) => {
+                                Err(ConsensusCreationError::MiningError(
+                                    ConsensusPoWError::PoSInputDataProvided,
+                                ))?
+                            }
+                            (RequiredConsensus::PoW(_), GenerateBlockInputData::None) => {
+                                Err(ConsensusCreationError::MiningError(
+                                    ConsensusPoWError::NoInputDataProvided,
+                                ))?
+                            }
+                            (
+                                RequiredConsensus::IgnoreConsensus,
+                                GenerateBlockInputData::PoS(_),
+                            ) => Err(
+                                BlockProductionError::PoSInputDataProvidedWhenIgnoringConsensus,
+                            )?,
+                            (
+                                RequiredConsensus::IgnoreConsensus,
+                                GenerateBlockInputData::PoW(_),
+                            ) => Err(
+                                BlockProductionError::PoWInputDataProvidedWhenIgnoringConsensus,
+                            )?,
+                        };
 
                     Ok((
                         consensus_data,
@@ -309,6 +352,9 @@ impl BlockProduction {
     /// the internal job is finished. Generally this can be used to ensure
     /// that the block production process has ended and that there's no
     /// remnants in the job manager.
+    ///
+    /// Note: the function may exit early, e.g. in case of recoverable mempool error.
+    /// TODO: recoverable mempool errors should not affect PoS.
     pub async fn produce_block(
         &self,
         input_data: GenerateBlockInputData,
@@ -326,20 +372,10 @@ impl BlockProduction {
         .await
     }
 
-    async fn produce_block_with_custom_id(
-        &self,
-        input_data: GenerateBlockInputData,
-        transactions: Vec<SignedTransaction>,
-        transaction_ids: Vec<Id<Transaction>>,
-        packing_strategy: PackingStrategy,
-        custom_id_maybe: Option<Vec<u8>>,
-    ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
+    async fn ensure_can_produce_block(&self) -> Result<(), BlockProductionError> {
         if !self.blockprod_config.skip_ibd_check {
-            let is_initial_block_download = self
-                .chainstate_handle
-                .call(|cs| cs.is_initial_block_download())
-                .await
-                .map_err(|_| BlockProductionError::ChainstateInfoRetrievalError)?;
+            let is_initial_block_download =
+                self.chainstate_handle.call(|cs| cs.is_initial_block_download()).await?;
 
             if is_initial_block_download {
                 return Err(BlockProductionError::ChainstateWaitForSync);
@@ -350,7 +386,7 @@ impl BlockProduction {
             .p2p_handle
             .call_async_mut(move |p2p| p2p.get_peer_count())
             .await?
-            .map_err(|_| BlockProductionError::PeerCountRetrievalError)?;
+            .map_err(|err| BlockProductionError::PeerCountRetrievalError(err.to_string()))?;
 
         if current_peer_count < self.blockprod_config.min_peers_to_produce_blocks {
             return Err(BlockProductionError::PeerCountBelowRequiredThreshold(
@@ -358,6 +394,19 @@ impl BlockProduction {
                 self.blockprod_config.min_peers_to_produce_blocks,
             ));
         }
+
+        Ok(())
+    }
+
+    async fn produce_block_with_custom_id(
+        &self,
+        input_data: GenerateBlockInputData,
+        transactions: Vec<SignedTransaction>,
+        transaction_ids: Vec<Id<Transaction>>,
+        packing_strategy: PackingStrategy,
+        custom_id_maybe: Option<Vec<u8>>,
+    ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
+        self.ensure_can_produce_block().await?;
 
         let stop_flag = Arc::new(RelaxedAtomicBool::new(false));
         let tip_at_start = self.pull_best_block_index().await?;
@@ -416,118 +465,74 @@ impl BlockProduction {
             Arc::new(AcqRelAtomicU64::new(prev_plus_one.as_int_seconds()))
         };
 
-        // Range of timestamps for the block we attempt to construct.
-        let min_constructed_block_timestamp =
-            BlockTimestamp::from_time(self.time_getter().get_time());
-        let max_constructed_block_timestamp = timestamp_add_secs(
-            min_constructed_block_timestamp,
-            self.chain_config.max_future_block_time_offset().as_secs(),
+        let (
+            consensus_data,
+            block_reward,
+            current_tip_index,
+            // The so-called "median time past" timestamp calculated from the current tip.
+            // Note: when validating a block, the lock-time constraints of its transactions
+            // are validated against the "median time past" of the block's parent, rather than
+            // the timestamp of the block itself.
+            // So when constructing a new block we must make sure that transactions with locks
+            // after this point are not included, otherwise the block will be incorrect.
+            current_tip_median_time_past,
+            finalize_block_data,
+        ) = self.pull_consensus_data(input_data.clone(), self.time_getter.clone()).await?;
+
+        let collected_transactions = collect_transactions(
+            &self.mempool_handle,
+            &self.chain_config,
+            current_tip_index.block_id(),
+            current_tip_median_time_past,
+            transactions.clone(),
+            transaction_ids.clone(),
+            packing_strategy,
+        )
+        .await?
+        .ok_or(BlockProductionError::RecoverableMempoolError)?;
+
+        let block_body = BlockBody::new(block_reward, collected_transactions);
+
+        // A synchronous channel that sends only when the mining/staking is done
+        let (ended_sender, ended_receiver) = mpsc::channel::<()>();
+
+        // Return the result of mining
+        let (result_sender, mut result_receiver) = oneshot::channel();
+
+        self.spawn_block_solver(
+            &current_tip_index,
+            Arc::clone(&stop_flag),
+            &block_body,
+            Arc::clone(&last_timestamp_seconds_used),
+            finalize_block_data,
+            consensus_data,
+            ended_sender,
+            result_sender,
         )?;
 
-        loop {
-            {
-                // If the last timestamp we tried on a block is larger than the max range allowed, no point in continuing
-                let last_used_block_timestamp =
-                    BlockTimestamp::from_int_seconds(last_timestamp_seconds_used.load());
+        let solver_result = tokio::select! {
+            _ = cancel_receiver.recv() => {
+                stop_flag.store(true);
 
-                if last_used_block_timestamp >= max_constructed_block_timestamp {
-                    stop_flag.store(true);
-                    return Err(BlockProductionError::TryAgainLater);
-                }
+                // This can fail if the mining thread has already finished
+                let _ended = ended_receiver.recv();
 
-                self.update_last_used_block_timestamp(custom_id.clone(), last_used_block_timestamp)
-                    .await?;
+                return Err(BlockProductionError::Cancelled);
             }
-
-            let (
-                consensus_data,
-                block_reward,
-                current_tip_index,
-                // The so-called "median time past" timestamp calculated from the current tip.
-                // Note: when validating a block, the lock-time constraints of its transactions
-                // are validated against the "median time past" of the block's parent, rather than
-                // the timestamp of the block itself.
-                // So when constructing a new block we must make sure that transactions with locks
-                // after this point are not included, otherwise the block will be incorrect.
-                current_tip_median_time_past,
-                finalize_block_data,
-            ) = self.pull_consensus_data(input_data.clone(), self.time_getter.clone()).await?;
-
-            if current_tip_index.block_id() != tip_at_start.block_id() {
-                log::info!(
-                    "Current tip changed from {} with height {} to {} with height {} while mining, cancelling",
-                    tip_at_start.block_id(),
-                    tip_at_start.block_height(),
-                    current_tip_index.block_id(),
-                    current_tip_index.block_height(),
-                );
-                return Err(BlockProductionError::TipChanged(
-                    tip_at_start.block_id(),
-                    tip_at_start.block_height(),
-                    current_tip_index.block_id(),
-                    current_tip_index.block_height(),
-                ));
+            solver_result = &mut result_receiver => {
+                solver_result.map_err(|_| BlockProductionError::TaskExitedPrematurely)?
             }
+        };
 
-            let accumulator = self
-                .collect_transactions(
-                    current_tip_index.block_id(),
-                    current_tip_median_time_past,
-                    transactions.clone(),
-                    transaction_ids.clone(),
-                    packing_strategy,
-                )
-                .await?;
+        let last_used_block_timestamp =
+            BlockTimestamp::from_int_seconds(last_timestamp_seconds_used.load());
 
-            let collected_transactions = match accumulator {
-                Some(acc) => acc.transactions().to_vec(),
-                None => continue,
-            };
+        self.update_last_used_block_timestamp(custom_id.clone(), last_used_block_timestamp)
+            .await?;
 
-            let block_body = BlockBody::new(block_reward, collected_transactions);
-
-            // A synchronous channel that sends only when the mining/staking is done
-            let (ended_sender, ended_receiver) = mpsc::channel::<()>();
-
-            // Return the result of mining
-            let (result_sender, mut result_receiver) = oneshot::channel();
-
-            self.spawn_block_solver(
-                &current_tip_index,
-                Arc::clone(&stop_flag),
-                &block_body,
-                Arc::clone(&last_timestamp_seconds_used),
-                finalize_block_data,
-                consensus_data,
-                ended_sender,
-                result_sender,
-            )?;
-
-            tokio::select! {
-                _ = cancel_receiver.recv() => {
-                    stop_flag.store(true);
-
-                    // This can fail if the mining thread has already finished
-                    let _ended = ended_receiver.recv();
-
-                    return Err(BlockProductionError::Cancelled);
-                }
-                solve_receive_result = &mut result_receiver => {
-                    let mining_result = match solve_receive_result {
-                        Ok(mining_result) => mining_result,
-                        Err(_) => continue,
-                    };
-
-                    let signed_block_header = match mining_result {
-                        Ok(header) => header,
-                        Err(_) => continue,
-                    };
-
-                    let block = Block::new_from_header(signed_block_header, block_body.clone())?;
-                    return Ok((block, job_finished_receiver));
-                }
-            }
-        }
+        let signed_block_header = solver_result?;
+        let block = Block::new_from_header(signed_block_header, block_body.clone())?;
+        Ok((block, job_finished_receiver))
     }
 
     // TODO: get rid of the "block_timestamp_seconds" atomic.
@@ -549,6 +554,13 @@ impl BlockProduction {
             timestamp_add_secs(current_timestamp, max_offset)?
         };
 
+        let min_block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
+
+        // TODO: this should be PoS only.
+        if min_block_timestamp > max_block_timestamp_for_pos {
+            return Err(BlockProductionError::TryAgainLater);
+        }
+
         self.mining_thread_pool.spawn({
             let chain_config = Arc::clone(&self.chain_config);
             let current_tip_height = current_tip_index.block_height();
@@ -557,13 +569,11 @@ impl BlockProduction {
             let merkle_proxy =
                 block_body.merkle_tree_proxy().map_err(BlockCreationError::MerkleTreeError)?;
 
-            let block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
-
             let mut block_header = BlockHeader::new(
                 current_tip_index.block_id(),
                 merkle_proxy.merkle_tree().root(),
                 merkle_proxy.witness_merkle_tree().root(),
-                block_timestamp,
+                min_block_timestamp,
                 consensus_data,
             );
 
@@ -622,34 +632,12 @@ impl BlockProduction {
     }
 }
 
-fn generate_finalize_block_data(
-    chain_config: &ChainConfig,
-    chainstate_handle: &dyn ChainstateInterface,
-    new_block_height: BlockHeight,
-    sealed_epoch_randomness: PoSRandomness,
-    input_data: GenerateBlockInputData,
-) -> Result<FinalizeBlockInputData, BlockProductionError> {
-    match input_data {
-        GenerateBlockInputData::PoS(pos_input_data) => Ok(FinalizeBlockInputData::PoS(
-            generate_finalize_block_data_pos(
-                chain_config,
-                chainstate_handle,
-                new_block_height,
-                sealed_epoch_randomness,
-                *pos_input_data,
-            )?,
-        )),
-        GenerateBlockInputData::PoW(_) => Ok(FinalizeBlockInputData::PoW),
-        GenerateBlockInputData::None => Ok(FinalizeBlockInputData::None),
-    }
-}
-
 fn generate_finalize_block_data_pos(
     chain_config: &ChainConfig,
     chainstate: &dyn ChainstateInterface,
     new_block_height: BlockHeight,
     sealed_epoch_randomness: PoSRandomness,
-    pos_input_data: PoSGenerateBlockInputData,
+    pos_input_data: &PoSGenerateBlockInputData,
 ) -> Result<PoSFinalizeBlockInputData, BlockProductionError> {
     let pool_id = pos_input_data.pool_id();
     let total_balance = get_pool_total_balance(chainstate, &pool_id)?;

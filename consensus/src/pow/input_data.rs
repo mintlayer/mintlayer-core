@@ -17,7 +17,7 @@ use crate::pow::{calculate_work_required, error::ConsensusPoWError};
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     chain::{
-        block::{consensus_data::PoWData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        block::{consensus_data::PoWData, timestamp::BlockTimestamp, BlockReward},
         output_value::OutputValue,
         timelock::OutputTimeLock,
         ChainConfig, Destination, PoWStatus, TxOutput,
@@ -50,7 +50,7 @@ pub fn generate_pow_consensus_data_and_reward<G>(
     get_ancestor: G,
     pow_input_data: PoWGenerateBlockInputData,
     block_height: BlockHeight,
-) -> Result<(ConsensusData, BlockReward), ConsensusPoWError>
+) -> Result<(PoWData, BlockReward), ConsensusPoWError>
 where
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
 {
@@ -62,7 +62,7 @@ where
         get_ancestor,
     )?;
 
-    let consensus_data = ConsensusData::PoW(Box::new(PoWData::new(work_required, 0)));
+    let consensus_data = PoWData::new(work_required, 0);
 
     let time_lock = {
         let block_count = chain_config.get_proof_of_work_config().reward_maturity_distance();
