@@ -34,7 +34,7 @@ pub fn view_addresses(
         .addresses
         .iter()
         .map(|(index, address)| {
-            GridRow::new().push(field(index.clone())).push(field(address.clone())).push(
+            GridRow::new().push(field(index.to_string())).push(field(address.clone())).push(
                 button(
                     Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
                         .font(iced_aw::BOOTSTRAP_FONT),
