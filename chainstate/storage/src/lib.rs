@@ -107,7 +107,7 @@ pub trait BlockchainStorageRead:
     fn get_leaf_block_ids(&self) -> Result<BTreeSet<Id<Block>>>;
 
     /// Return true if the specified block id is in the leaf block ids set.
-    fn is_leaf_block(&self, block_id: &Id<Block>) -> Result<bool>; // FIXME remove?
+    fn is_leaf_block(&self, block_id: &Id<Block>) -> Result<bool>;
 
     fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
 

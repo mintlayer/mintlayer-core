@@ -69,7 +69,7 @@ fn assert_leaves<DbTx: BlockchainStorageRead>(db_tx: &DbTx, expected: &[Id<Block
 
 fn assert_non_leaves<DbTx: BlockchainStorageRead>(db_tx: &DbTx, expected: &[Id<Block>]) {
     for leaf in expected {
-        assert!(!db_tx.is_leaf_block(&leaf).unwrap());
+        assert!(!db_tx.is_leaf_block(leaf).unwrap());
     }
 }
 

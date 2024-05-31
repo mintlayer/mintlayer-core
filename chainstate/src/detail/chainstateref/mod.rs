@@ -901,10 +901,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     /// Return ids of all blocks with height bigger than or equal to the specified one,
     /// grouped by height.
     /// Note: the function collects block ids by iterating from each of the current leaf blocks
-    /// down to the specified height, so it's most efficient if the height is comparable to
-    /// the current height of the chain. If the specified height is closer to zero,
-    /// `BlockchainStorageRead::get_block_tree_by_height_traversing_entire_index` might be
-    /// a better choice.
+    /// down to the specified height, while maintaining a set of already seen blocks.
+    /// So, if the starting height is close to zero, `get_block_tree_by_height_traversing_entire_index`
+    /// from `BlockchainStorageRead` might be a better choice (it is linear with respect
+    /// to the total number of blocks in the chain).
     pub fn get_block_tree_top_by_height(
         &self,
         start_from: BlockHeight,
@@ -933,7 +933,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 result.entry(cur_block_index.block_height()).or_default().push(cur_block_id);
 
                 if let Some(non_genesis_parent) =
-                    cur_block_index.prev_block_id().classify(&self.chain_config).chain_block_id()
+                    cur_block_index.prev_block_id().classify(self.chain_config).chain_block_id()
                 {
                     cur_block_id = non_genesis_parent;
                 } else {
@@ -942,18 +942,18 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             }
         }
 
-        if self.chainstate_config.heavy_checks_enabled(&self.chain_config) {
+        if self.chainstate_config.heavy_checks_enabled(self.chain_config) {
             // Check that get_block_tree_by_height_traversing_entire_index returns the same data.
 
             let alternative_result =
                 self.db_tx.get_block_tree_by_height_traversing_entire_index(start_from)?;
             let alternative_result = alternative_result
                 .iter()
-                .map(|(height, ids)| (height, ids.into_iter().collect::<BTreeSet<_>>()))
+                .map(|(height, ids)| (height, ids.iter().collect::<BTreeSet<_>>()))
                 .collect::<BTreeMap<_, _>>();
             let result = result
                 .iter()
-                .map(|(height, ids)| (height, ids.into_iter().collect::<BTreeSet<_>>()))
+                .map(|(height, ids)| (height, ids.iter().collect::<BTreeSet<_>>()))
                 .collect::<BTreeMap<_, _>>();
             assert_eq!(result, alternative_result);
         }
@@ -964,31 +964,27 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     /// Return ids of all blocks with height bigger than or equal to the specified one,
     /// sorted by height (lower first).
     /// This function uses `get_block_tree_top_by_height`, so the same note applies here too.
-    // FIXME: update https://github.com/mintlayer/mintlayer-core/issues/1033, item #5.
     #[log_error]
     pub fn get_higher_block_ids_sorted_by_height(
         &self,
         start_from: BlockHeight,
-    ) -> Result<Vec<Id<Block>>, PropertyQueryError> {
+    ) -> Result<impl DoubleEndedIterator<Item = Id<Block>>, PropertyQueryError> {
         let block_tree_map = self.get_block_tree_top_by_height(start_from)?;
-        let result = block_tree_map
-            .into_iter()
-            .flat_map(|(_height, ids_per_height)| ids_per_height)
-            .collect();
-        Ok(result)
+        Ok(block_tree_map.into_iter().flat_map(|(_height, ids_per_height)| ids_per_height))
     }
 
     /// Collect block indices corresponding to the branch starting at root_block_id.
-    /// The first block index in the result will correspond to root_block_id.
+    /// The block indices in the result will be sorted by height, the first index will correspond
+    /// to root_block_id.
     #[log_error]
-    pub fn collect_block_indices_in_branch(
+    pub fn collect_block_indices_in_branch_sorted_by_height(
         &self,
         root_block_id: &Id<Block>,
     ) -> Result<Vec<BlockIndex>, PropertyQueryError> {
         let root_block_index = self.get_existing_block_index(root_block_id)?;
 
         let next_block_height = root_block_index.block_height().next_height();
-        let maybe_descendant_block_ids =
+        let maybe_descendant_block_ids_iter =
             self.get_higher_block_ids_sorted_by_height(next_block_height)?;
 
         let mut result = Vec::new();
@@ -996,7 +992,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         seen_block_ids.insert(*root_block_index.block_id());
         result.push(root_block_index);
 
-        for cur_block_id in maybe_descendant_block_ids {
+        for cur_block_id in maybe_descendant_block_ids_iter {
             let cur_block_index = self.get_existing_block_index(&cur_block_id)?;
 
             let prev_block_id = cur_block_index
@@ -1408,7 +1404,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         self.db_tx.mark_as_leaf(block_index.block_id(), true)?;
 
         if let Some(non_genesis_parent) =
-            block_index.prev_block_id().classify(&self.chain_config).chain_block_id()
+            block_index.prev_block_id().classify(self.chain_config).chain_block_id()
         {
             self.db_tx.mark_as_leaf(&non_genesis_parent, false)?;
         }
@@ -1418,18 +1414,18 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
     /// Delete the specified block indices.
     /// Panic if one of the blocks is marked as persisted.
-    /// Note: the passed iterator must be sorted by height backwards.
-    /// FIXME use SortedIterator to enforce sorting.
+    /// Note: the passed iterator must be sorted by height.
+    /// TODO: enforce sorting (e.g. via SortedIterator).
     #[log_error]
     pub fn del_block_indices_of_non_persisted_blocks<'b>(
         &mut self,
-        block_indices: impl Iterator<Item = &'b BlockIndex>,
+        block_indices: impl DoubleEndedIterator<Item = &'b BlockIndex>,
     ) -> Result<(), BlockError> {
         let old_leaf_block_ids = self.db_tx.get_leaf_block_ids()?;
         let mut leaf_block_ids_candidates = old_leaf_block_ids.clone();
         let mut last_index_height = None;
 
-        for block_index in block_indices {
+        for block_index in block_indices.rev() {
             let block_id = *block_index.block_id();
             let block_height = block_index.block_height();
 
@@ -1451,7 +1447,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
             if leaf_block_ids_candidates.remove(&block_id) {
                 if let Some(non_genesis_parent) =
-                    block_index.prev_block_id().classify(&self.chain_config).chain_block_id()
+                    block_index.prev_block_id().classify(self.chain_config).chain_block_id()
                 {
                     leaf_block_ids_candidates.insert(non_genesis_parent);
                 }
@@ -1512,7 +1508,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
         loop {
             let Some(immediate_parent_id) =
-                child_index.prev_block_id().classify(&self.chain_config).chain_block_id()
+                child_index.prev_block_id().classify(self.chain_config).chain_block_id()
             else {
                 return Ok(false);
             };
