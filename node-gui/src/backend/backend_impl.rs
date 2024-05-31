@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, fmt::Debug, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, fmt::Debug, path::PathBuf, str::FromStr, sync::Arc};
 
 use common::{
     address::{Address, RpcAddress},
     chain::{ChainConfig, GenBlock, SignedTransaction},
     primitives::{per_thousand::PerThousand, BlockHeight, Id},
 };
-use crypto::key::hdkd::u31::U31;
+use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use futures::{stream::FuturesOrdered, TryStreamExt};
 use logging::log;
 use node_comm::rpc_client::ColdWalletClient;
@@ -208,41 +208,6 @@ impl Backend {
     async fn get_account_info<T: NodeInterface + Clone + Send + Sync + Debug + 'static>(
         controller: &WalletRpc<T>,
         account_index: U31,
-    ) -> Result<AccountInfo, BackendError> {
-        let name = controller
-            .wallet_info()
-            .await
-            .map_err(|e| BackendError::WalletError(e.to_string()))?
-            .account_names
-            .into_iter()
-            .nth(account_index.into_u32() as usize)
-            .flatten();
-        let transaction_list = controller
-            .get_transaction_list(account_index, 0, TRANSACTION_LIST_PAGE_COUNT)
-            .await
-            .map_err(|e| BackendError::WalletError(e.to_string()))?;
-        let addresses = controller
-            .get_issued_addresses(account_index)
-            .await
-            .map_err(|e| BackendError::WalletError(e.to_string()))?
-            .into_iter()
-            .map(|info| (info.index, info.address.into_string()))
-            .collect();
-
-        Ok(AccountInfo {
-            name,
-            addresses,
-            staking_enabled: false,
-            balance: get_account_balance(controller, account_index).await?,
-            staking_balance: Default::default(),
-            delegations_balance: Default::default(),
-            transaction_list,
-        })
-    }
-
-    async fn get_account_info2<T: NodeInterface + Clone + Send + Sync + Debug + 'static>(
-        controller: &WalletRpc<T>,
-        account_index: U31,
     ) -> Result<(AccountId, AccountInfo), BackendError> {
         let name = controller
             .wallet_info()
@@ -258,8 +223,16 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?
             .into_iter()
-            .map(|info| (info.index, info.address.into_string()))
-            .collect();
+            .map(|info| {
+                Ok((
+                    ChildNumber::from_str(&info.index)
+                        .map_err(|e| BackendError::InvalidAddressIndex(e.to_string()))?
+                        .get_index()
+                        .into_u32(),
+                    info.address.into_string(),
+                ))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
 
         let transaction_list = controller
             .get_transaction_list(account_index, 0, TRANSACTION_LIST_PAGE_COUNT)
@@ -424,7 +397,7 @@ impl Backend {
         let accounts_info: FuturesOrdered<_> = (0..account_indexes)
             .map(|account_index| {
                 let account_index = U31::from_u32(account_index as u32).expect("valid num");
-                Self::get_account_info2(&wallet_rpc, account_index)
+                Self::get_account_info(&wallet_rpc, account_index)
             })
             .collect();
         let accounts_info = accounts_info.try_collect().await?;
@@ -591,7 +564,7 @@ impl Backend {
         let accounts_info: FuturesOrdered<_> = (0..account_indexes)
             .map(|account_index| {
                 let account_index = U31::from_u32(account_index as u32).expect("valid num");
-                Self::get_account_info2(&wallet_rpc, account_index)
+                Self::get_account_info(&wallet_rpc, account_index)
             })
             .collect();
         let accounts_info = accounts_info.try_collect().await?;
@@ -650,8 +623,7 @@ impl Backend {
             .map(|info| (U31::from_u32(info.account).expect("valid index"), info.name))
             .map_err(|err| BackendError::WalletError(err.to_string()))?;
 
-        let account_id = AccountId::new(account_index);
-        let account_info = Self::get_account_info(hot_wallet, account_index).await?;
+        let (account_id, account_info) = Self::get_account_info(hot_wallet, account_index).await?;
         let account_data = Self::get_account_data(account_index);
 
         wallet.accounts.insert(account_id, account_data);
@@ -682,12 +654,7 @@ impl Backend {
                 .map(|info| (info.index, info.address))?,
         };
 
-        Ok(AddressInfo {
-            wallet_id,
-            account_id,
-            index,
-            address,
-        })
+        AddressInfo::new(wallet_id, account_id, &index, address)
     }
 
     async fn toggle_staking(
@@ -1161,12 +1128,12 @@ impl Backend {
                         for info in addresses {
                             Self::send_event(
                                 &self.low_priority_event_tx,
-                                BackendEvent::NewAddress(Ok(AddressInfo {
-                                    wallet_id: *wallet_id,
-                                    account_id: *account_id,
-                                    index: info.index,
-                                    address: info.address.into_string(),
-                                })),
+                                BackendEvent::NewAddress(AddressInfo::new(
+                                    *wallet_id,
+                                    *account_id,
+                                    &info.index,
+                                    info.address.into_string(),
+                                )),
                             );
                         }
                     }

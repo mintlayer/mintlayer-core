@@ -27,6 +27,8 @@ pub enum BackendError {
     UnknownAccountIndex(WalletId, AccountId),
     #[error("Invalid address: {0}")]
     AddressError(String),
+    #[error("Invalid address index: {0}")]
+    InvalidAddressIndex(String),
     #[error("Invalid amount: {0}")]
     InvalidAmount(String),
     #[error("Invalid pledge amount: {0}")]

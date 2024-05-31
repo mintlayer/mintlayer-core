@@ -95,8 +95,7 @@ pub fn view_stake(
                     .push(field("Pool Address".to_owned()))
                     .push(field("Margin ratio".to_owned()))
                     .push(field("Cost per block".to_owned()))
-                    .push(field("Pool balance".to_owned()))
-                    .push(field("Decommission".to_owned())),
+                    .push(field("Pool balance".to_owned())),
             );
             for (pool_id, pool_data) in account.staking_balance.iter() {
                 let pool_id_address = Address::new(chain_config, *pool_id)

@@ -16,6 +16,7 @@
 use std::{
     collections::BTreeMap,
     path::PathBuf,
+    str::FromStr,
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -24,7 +25,7 @@ use common::{
     chain::{DelegationId, GenBlock, PoolId, SignedTransaction},
     primitives::{Amount, BlockHeight, Id},
 };
-use crypto::key::hdkd::u31::U31;
+use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use p2p::P2pEvent;
 use wallet::account::transaction_list::TransactionList;
 use wallet_cli_commands::ConsoleCommand;
@@ -73,7 +74,7 @@ pub struct WalletInfo {
 #[derive(Debug, Clone)]
 pub struct AccountInfo {
     pub name: Option<String>,
-    pub addresses: BTreeMap<String, String>,
+    pub addresses: BTreeMap<u32, String>,
     pub staking_enabled: bool,
     pub balance: Balances,
     pub staking_balance: BTreeMap<PoolId, PoolInfo>,
@@ -85,8 +86,28 @@ pub struct AccountInfo {
 pub struct AddressInfo {
     pub wallet_id: WalletId,
     pub account_id: AccountId,
-    pub index: String,
+    pub index: u32,
     pub address: String,
+}
+
+impl AddressInfo {
+    pub fn new(
+        wallet_id: WalletId,
+        account_id: AccountId,
+        index: &str,
+        address: String,
+    ) -> Result<Self, BackendError> {
+        let index = ChildNumber::from_str(index)
+            .map_err(|e| BackendError::InvalidAddressIndex(e.to_string()))?
+            .get_index()
+            .into_u32();
+        Ok(AddressInfo {
+            wallet_id,
+            account_id,
+            index,
+            address,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
