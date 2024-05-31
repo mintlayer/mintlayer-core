@@ -37,8 +37,11 @@ COINS_PER_NODE = 10_000_000
 assert COINS_PER_NODE * NODES_COUNT < DEFAULT_INITIAL_MINT
 
 # Some nodes will stake this amount, others twice this amount, some other ones 3 times this amount.
-# The rest of the coins can be used for manual staking, if it's needed.
-BASE_COINS_AT_STAKE_PER_NODE = 3_000_000
+# The rest of the coins can be used for manual staking, if needed.
+# Note that this amount will be divided between 3 pools, so we choose a number divisible by 3.
+# Also note that a pool becomes saturated when it reaches 599990 coins; we don't want the pools
+# to become saturated right away.
+BASE_COINS_AT_STAKE_PER_NODE = 300_000
 
 # Note: node index will be added to each of these numbers to form the actual port number,
 # so make sure the ranges don't overlap.

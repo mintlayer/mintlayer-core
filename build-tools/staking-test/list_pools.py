@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from datetime import datetime
 import os
 import sys
 
@@ -26,6 +27,14 @@ from test_framework.authproxy import (
     AuthServiceProxy,
 )
 
+
+node00_rpc = make_node_rpc(0)
+
+node00_cs_info = node00_rpc.chainstate_info()
+bb_height = node00_cs_info['best_block_height']
+bb_timestamp = node00_cs_info['best_block_timestamp']['timestamp']
+bb_time = datetime.fromtimestamp(bb_timestamp)
+print(f"Chainstate info at node 0: best block height = {bb_height}, best block time = {bb_time}")
 
 for i in range(NODES_COUNT):
     wallet_rpc = make_wallet_rpc(i)
