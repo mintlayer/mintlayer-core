@@ -220,3 +220,15 @@ Returns:
 hex string
 ```
 
+### Method `test_functions_dehexify_all_addresses`
+
+Parameters:
+```
+{ "input": string }
+```
+
+Returns:
+```
+string
+```
+

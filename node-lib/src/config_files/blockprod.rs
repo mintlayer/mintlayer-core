@@ -25,6 +25,9 @@ pub struct BlockProdConfigFile {
     pub min_peers_to_produce_blocks: Option<usize>,
     /// Skip initial block download check for block production.
     pub skip_ibd_check: Option<bool>,
+    /// If true, blocks with non-PoS consensus types will always be created with timestamps
+    /// bigger than or equal to the current time.
+    pub use_current_time_if_non_pos: Option<bool>,
 }
 
 impl From<BlockProdConfigFile> for BlockProdConfig {
@@ -32,11 +35,13 @@ impl From<BlockProdConfigFile> for BlockProdConfig {
         let BlockProdConfigFile {
             min_peers_to_produce_blocks,
             skip_ibd_check,
+            use_current_time_if_non_pos,
         } = config_file;
 
         Self {
             min_peers_to_produce_blocks: min_peers_to_produce_blocks.unwrap_or_default(),
             skip_ibd_check: skip_ibd_check.unwrap_or_default(),
+            use_current_time_if_non_pos: use_current_time_if_non_pos.unwrap_or_default(),
         }
     }
 }

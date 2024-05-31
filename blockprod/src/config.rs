@@ -20,4 +20,7 @@ pub struct BlockProdConfig {
     pub skip_ibd_check: bool,
     /// Minimum number of connected peers to enable block production.
     pub min_peers_to_produce_blocks: usize,
+    /// If true, blocks with non-PoS consensus types will always be created with timestamps
+    /// bigger than or equal to the current time.
+    pub use_current_time_if_non_pos: bool,
 }

@@ -52,25 +52,32 @@ pub enum PrepareDataDirError {
 
 /// Prepare data directory for the node.
 /// Two possibilities:
-/// 1. If no data directory is specified, use the default data directory provided by default_data_dir_getter;
-///    it doesn't have to exist. It will be automatically created.
-/// 2. If a custom data directory is specified, it MUST exist. Otherwise, an error is returned.
+/// 1. If no data directory is specified, use the default data directory provided by default_data_dir_getter.
+///    By default, the directory doesn't have to exist; it will be automatically created if it doesn't.
+/// 2. If a custom data directory is specified, it's expected to exist by default. An error is returned if it doesn't.
+///
+/// Additionally, `create_data_dir_if_missing` allows to override the default behavior.
 pub fn prepare_data_dir<F: Fn() -> PathBuf>(
     default_data_dir_getter: F,
     datadir_path_opt: &Option<PathBuf>,
+    create_data_dir_if_missing: Option<bool>,
 ) -> Result<PathBuf, PrepareDataDirError> {
-    let data_dir = match datadir_path_opt {
-        Some(data_dir) => {
-            if !data_dir.exists() {
-                return Err(PrepareDataDirError::DoesNotExist(data_dir.clone()));
-            }
-            data_dir.clone()
-        }
-        None => {
-            std::fs::create_dir_all(default_data_dir_getter())
-                .map_err(|e| PrepareDataDirError::CreateFailed(default_data_dir_getter(), e))?;
-            default_data_dir_getter()
-        }
+    let (data_dir, create_if_missing_default) = match datadir_path_opt {
+        Some(data_dir) => (data_dir.clone(), false),
+        None => (default_data_dir_getter(), true),
     };
+
+    let create_data_dir_if_missing =
+        create_data_dir_if_missing.unwrap_or(create_if_missing_default);
+
+    if !data_dir.exists() {
+        if create_data_dir_if_missing {
+            std::fs::create_dir_all(data_dir.clone())
+                .map_err(|e| PrepareDataDirError::CreateFailed(data_dir.clone(), e))?;
+        } else {
+            return Err(PrepareDataDirError::DoesNotExist(data_dir.clone()));
+        }
+    }
+
     Ok(data_dir)
 }

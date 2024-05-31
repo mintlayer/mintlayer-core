@@ -1,0 +1,170 @@
+x-common-env: &ml-common-env
+  WORK_DIR_IN_CONTAINER: $WORK_DIR_IN_CONTAINER
+  COMMON_NODE_DAEMON_ARGS: $COMMON_NODE_DAEMON_ARGS
+  NODES_LIST: $NODES_LIST
+  RUST_LOG:
+
+x-common: &ml-common
+  build:
+    context: ../..
+    dockerfile: build-tools/staking-test/Dockerfile
+  volumes:
+    - data:$WORK_DIR_IN_CONTAINER
+
+x-node-common: &ml-node-common
+  <<: *ml-common
+  environment:
+      <<: *ml-common-env
+
+x-wallet-common: &ml-wallet-common
+  <<: *ml-common
+  environment:
+      <<: *ml-common-env
+
+services:
+  node00:
+    <<: *ml-node-common
+    container_name: $BASE_NAME-node00
+    command: bash -c "node_runner.sh 00"
+    ports:
+      - '$NODE_00_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
+
+  wallet00:
+    <<: *ml-wallet-common
+    container_name: $BASE_NAME-wallet00
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node00:$NODE_RPC_INTERNAL_PORT
+    ports:
+      - '$WALLET_00_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
+    depends_on:
+      - node00
+
+  node01:
+    <<: *ml-node-common
+    container_name: $BASE_NAME-node01
+    command: bash -c "node_runner.sh 01"
+    ports:
+      - '$NODE_01_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
+
+  wallet01:
+    <<: *ml-wallet-common
+    container_name: $BASE_NAME-wallet01
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node01:$NODE_RPC_INTERNAL_PORT
+    ports:
+      - '$WALLET_01_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
+    depends_on:
+      - node01
+
+  node02:
+    <<: *ml-node-common
+    container_name: $BASE_NAME-node02
+    command: bash -c "node_runner.sh 02"
+    ports:
+      - '$NODE_02_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
+
+  wallet02:
+    <<: *ml-wallet-common
+    container_name: $BASE_NAME-wallet02
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node02:$NODE_RPC_INTERNAL_PORT
+    ports:
+      - '$WALLET_02_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
+    depends_on:
+      - node02
+
+  node03:
+    <<: *ml-node-common
+    container_name: $BASE_NAME-node03
+    command: bash -c "node_runner.sh 03"
+    ports:
+      - '$NODE_03_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
+
+  wallet03:
+    <<: *ml-wallet-common
+    container_name: $BASE_NAME-wallet03
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node03:$NODE_RPC_INTERNAL_PORT
+    ports:
+      - '$WALLET_03_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
+    depends_on:
+      - node03
+
+  node04:
+    <<: *ml-node-common
+    container_name: $BASE_NAME-node04
+    command: bash -c "node_runner.sh 04"
+    ports:
+      - '$NODE_04_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
+
+  wallet04:
+    <<: *ml-wallet-common
+    container_name: $BASE_NAME-wallet04
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node04:$NODE_RPC_INTERNAL_PORT
+    ports:
+      - '$WALLET_04_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
+    depends_on:
+      - node04
+
+  node05:
+    <<: *ml-node-common
+    container_name: $BASE_NAME-node05
+    command: bash -c "node_runner.sh 05"
+    ports:
+      - '$NODE_05_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
+
+  wallet05:
+    <<: *ml-wallet-common
+    container_name: $BASE_NAME-wallet05
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node05:$NODE_RPC_INTERNAL_PORT
+    ports:
+      - '$WALLET_05_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
+    depends_on:
+      - node05
+
+  node06:
+    <<: *ml-node-common
+    container_name: $BASE_NAME-node06
+    command: bash -c "node_runner.sh 06"
+    ports:
+      - '$NODE_06_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
+
+  wallet06:
+    <<: *ml-wallet-common
+    container_name: $BASE_NAME-wallet06
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node06:$NODE_RPC_INTERNAL_PORT
+    ports:
+      - '$WALLET_06_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
+    depends_on:
+      - node06
+
+  node07:
+    <<: *ml-node-common
+    container_name: $BASE_NAME-node07
+    command: bash -c "node_runner.sh 07"
+    ports:
+      - '$NODE_07_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
+
+  wallet07:
+    <<: *ml-wallet-common
+    container_name: $BASE_NAME-wallet07
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node07:$NODE_RPC_INTERNAL_PORT
+    ports:
+      - '$WALLET_07_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
+    depends_on:
+      - node07
+
+  node08:
+    <<: *ml-node-common
+    container_name: $BASE_NAME-node08
+    command: bash -c "node_runner.sh 08"
+    ports:
+      - '$NODE_08_RPC_HOST_PORT:$NODE_RPC_INTERNAL_PORT'
+
+  wallet08:
+    <<: *ml-wallet-common
+    container_name: $BASE_NAME-wallet08
+    command: wallet-rpc-daemon $COMMON_WALLET_RPC_DAEMON_ARGS --node-rpc-address=node08:$NODE_RPC_INTERNAL_PORT
+    ports:
+      - '$WALLET_08_RPC_HOST_PORT:$WALLET_RPC_INTERNAL_PORT'
+    depends_on:
+      - node08
+
+volumes:
+  data:

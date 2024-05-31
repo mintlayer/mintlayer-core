@@ -59,7 +59,7 @@ class WalletDecommissionRequest(BitcoinTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 1
         self.extra_args = [[
-            "--chain-pos-netupgrades=true",
+            "--chain-pos-netupgrades=1",
             "--blockprod-min-peers-to-produce-blocks=0",
         ]]
 
@@ -224,7 +224,7 @@ class WalletDecommissionRequest(BitcoinTestFramework):
         node = self.nodes[0]
         decommission_address = ""
 
-        async with WalletCliController(node, self.config, self.log, wallet_args=["--cold-wallet"], chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with WalletCliController(node, self.config, self.log, wallet_args=["--cold-wallet"], chain_config_args=["--chain-pos-netupgrades", "1"]) as wallet:
             # new cold wallet
             await wallet.create_wallet("cold_wallet")
 
@@ -232,7 +232,7 @@ class WalletDecommissionRequest(BitcoinTestFramework):
 
         decommission_req = ""
 
-        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "1"]) as wallet:
             # new hot wallet
             await wallet.create_wallet("hot_wallet")
 
@@ -301,7 +301,7 @@ class WalletDecommissionRequest(BitcoinTestFramework):
 
         decommission_signed_tx = ""
 
-        async with WalletCliController(node, self.config, self.log, wallet_args=["--cold-wallet"], chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with WalletCliController(node, self.config, self.log, wallet_args=["--cold-wallet"], chain_config_args=["--chain-pos-netupgrades", "1"]) as wallet:
             # open cold wallet
             await wallet.open_wallet("cold_wallet")
 
@@ -309,7 +309,7 @@ class WalletDecommissionRequest(BitcoinTestFramework):
             decommission_signed_tx_output = await wallet.sign_raw_transaction(decommission_req)
             decommission_signed_tx = decommission_signed_tx_output.split('\n')[2]
 
-        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "true"]) as wallet:
+        async with WalletCliController(node, self.config, self.log, chain_config_args=["--chain-pos-netupgrades", "1"]) as wallet:
             # open hot wallet
             await wallet.open_wallet("hot_wallet")
 

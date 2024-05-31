@@ -117,6 +117,7 @@ fn blockprod_config(config: BlockProdConfigFile, options: &RunOptions) -> BlockP
     let BlockProdConfigFile {
         min_peers_to_produce_blocks,
         skip_ibd_check,
+        use_current_time_if_non_pos,
     } = config;
 
     let min_peers_to_produce_blocks = options
@@ -124,10 +125,15 @@ fn blockprod_config(config: BlockProdConfigFile, options: &RunOptions) -> BlockP
         .or(min_peers_to_produce_blocks.or(Some(DEFAULT_MIN_PEERS_TO_PRODUCE_BLOCKS)));
 
     let skip_ibd_check = options.blockprod_skip_ibd_check.or(skip_ibd_check).unwrap_or(false);
+    let use_current_time_if_non_pos = options
+        .blockprod_use_current_time_if_non_pos
+        .or(use_current_time_if_non_pos)
+        .unwrap_or(false);
 
     BlockProdConfigFile {
         min_peers_to_produce_blocks,
         skip_ibd_check: Some(skip_ibd_check),
+        use_current_time_if_non_pos: Some(use_current_time_if_non_pos),
     }
 }
 

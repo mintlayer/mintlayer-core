@@ -21,6 +21,9 @@ import time
 
 ATOMS_PER_COIN = 100_000_000_000
 
+DEFAULT_INITIAL_MINT = 400_000_000 * ATOMS_PER_COIN
+MIN_POOL_PLEDGE = 40_000 * ATOMS_PER_COIN
+
 base_tx_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('TransactionV1')
 block_header_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('BlockHeader')
 block_input_data_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('GenerateBlockInputData')

@@ -118,15 +118,22 @@ impl NetUpgrades<ConsensusUpgrade> {
     }
 
     pub fn regtest_with_pos() -> Self {
+        Self::regtest_with_pos_generic(
+            BlockHeight::new(1),
+            pos_initial_difficulty(ChainType::Regtest).into(),
+        )
+    }
+
+    pub fn regtest_with_pos_generic(height: BlockHeight, initial_difficulty: Compact) -> Self {
         let target_limit = (Uint256::MAX / Uint256::from_u64(120))
             .expect("Target block time cannot be zero as per NonZeroU64");
 
         Self::initialize(vec![
             (BlockHeight::zero(), ConsensusUpgrade::IgnoreConsensus),
             (
-                BlockHeight::new(1),
+                height,
                 ConsensusUpgrade::PoS {
-                    initial_difficulty: Some(pos_initial_difficulty(ChainType::Regtest).into()),
+                    initial_difficulty: Some(initial_difficulty),
                     config: PoSChainConfig::new(
                         target_limit,
                         DEFAULT_MATURITY_BLOCK_COUNT_V0,

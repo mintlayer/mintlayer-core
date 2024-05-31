@@ -17,11 +17,13 @@
 
 use chainstate_types::vrf_tools::{construct_transcript, verify_vrf_and_get_vrf_output};
 use common::{
-    address::Address,
-    chain::config::regtest::genesis_values,
+    address::{dehexify, Address},
     chain::{
         block::timestamp::BlockTimestamp,
-        config::{regtest::GenesisStakingSettings, EpochIndex},
+        config::{
+            regtest::{genesis_values, GenesisStakingSettings},
+            EpochIndex,
+        },
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
@@ -116,6 +118,9 @@ trait RpcTestFunctionsRpc {
         &self,
         address: String,
     ) -> rpc::RpcResult<HexEncoded<Destination>>;
+
+    #[method(name = "dehexify_all_addresses")]
+    async fn dehexify_all_addresses(&self, input: String) -> rpc::RpcResult<String>;
 }
 
 #[async_trait::async_trait]
@@ -358,6 +363,21 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
             .map(HexEncoded::new);
 
         rpc::handle_result(destination)
+    }
+
+    async fn dehexify_all_addresses(&self, input: String) -> rpc::RpcResult<String> {
+        let output = self
+            .call(|this| {
+                if let Some(chain_config) = this.get_chain_config() {
+                    dehexify::dehexify_all_addresses(&chain_config, &input)
+                } else {
+                    input
+                }
+            })
+            .await
+            .expect("Subsystem call ok");
+
+        Ok(output)
     }
 }
 

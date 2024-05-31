@@ -392,14 +392,28 @@ impl BlockProduction {
         // searching over the same search space, across multiple
         // calls, given the same tip
         let last_timestamp_seconds_used = {
-            let tip_timestamp = cmp::max(
+            let prev_timestamp = cmp::max(
                 previous_last_used_block_timestamp.unwrap_or(BlockTimestamp::from_int_seconds(0)),
                 tip_at_start.block_timestamp(),
             );
 
-            let tip_plus_one = timestamp_add_secs(tip_timestamp, 1)?;
+            let mut prev_plus_one = timestamp_add_secs(prev_timestamp, 1)?;
 
-            Arc::new(AcqRelAtomicU64::new(tip_plus_one.as_int_seconds()))
+            if self.blockprod_config.use_current_time_if_non_pos {
+                let is_pos = match &input_data {
+                    GenerateBlockInputData::None | GenerateBlockInputData::PoW(_) => false,
+                    GenerateBlockInputData::PoS(_) => true,
+                };
+
+                if !is_pos {
+                    prev_plus_one = cmp::max(
+                        prev_plus_one,
+                        BlockTimestamp::from_time(self.time_getter.get_time()),
+                    );
+                }
+            }
+
+            Arc::new(AcqRelAtomicU64::new(prev_plus_one.as_int_seconds()))
         };
 
         // Range of timestamps for the block we attempt to construct.
