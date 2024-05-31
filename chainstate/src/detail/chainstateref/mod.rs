@@ -889,10 +889,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     /// Note: the result will be sorted by height; this behavior is expected by some of the callers.
+    /// Only ids of persisted blocks will be returned.
     #[log_error]
     pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
         let result = self
-            .get_block_tree_by_height_traversing_entire_index(0.into())?
+            .get_block_tree_by_height_traversing_entire_index(0.into(), false)?
             .into_iter()
             .flat_map(|(_height, ids_per_height)| ids_per_height)
             .collect();
@@ -909,25 +910,31 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn get_block_tree_top_by_height(
         &self,
         start_from: BlockHeight,
+        include_non_persisted: bool,
     ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, PropertyQueryError> {
         let mut result = BTreeMap::<BlockHeight, Vec<Id<Block>>>::new();
 
-        self.iterate_from_tree_top_until(|block_index| {
-            if block_index.block_height() < start_from {
-                false
-            } else {
-                result
-                    .entry(block_index.block_height())
-                    .or_default()
-                    .push(*block_index.block_id());
-                true
-            }
-        })?;
+        self.iterate_from_tree_top_until(
+            |block_index| {
+                if block_index.block_height() < start_from {
+                    false
+                } else {
+                    result
+                        .entry(block_index.block_height())
+                        .or_default()
+                        .push(*block_index.block_id());
+                    true
+                }
+            },
+            include_non_persisted,
+        )?;
 
         if self.chainstate_config.heavy_checks_enabled(self.chain_config) {
             // Check that traversing the entire index produces the same result.
-            let alternative_result =
-                self.get_block_tree_by_height_traversing_entire_index(start_from)?;
+            let alternative_result = self.get_block_tree_by_height_traversing_entire_index(
+                start_from,
+                include_non_persisted,
+            )?;
             self.assert_equal_tree_top_results(&result, &alternative_result);
         }
 
@@ -939,25 +946,31 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn get_block_tree_top_by_timestamp(
         &self,
         start_from: BlockTimestamp,
+        include_non_persisted: bool,
     ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, PropertyQueryError> {
         let mut result = BTreeMap::<BlockTimestamp, Vec<Id<Block>>>::new();
 
-        self.iterate_from_tree_top_until(|block_index| {
-            if block_index.block_timestamp() < start_from {
-                false
-            } else {
-                result
-                    .entry(block_index.block_timestamp())
-                    .or_default()
-                    .push(*block_index.block_id());
-                true
-            }
-        })?;
+        self.iterate_from_tree_top_until(
+            |block_index| {
+                if block_index.block_timestamp() < start_from {
+                    false
+                } else {
+                    result
+                        .entry(block_index.block_timestamp())
+                        .or_default()
+                        .push(*block_index.block_id());
+                    true
+                }
+            },
+            include_non_persisted,
+        )?;
 
         if self.chainstate_config.heavy_checks_enabled(self.chain_config) {
             // Check that traversing the entire index produces the same result.
-            let alternative_result =
-                self.get_block_tree_by_timestamp_traversing_entire_index(start_from)?;
+            let alternative_result = self.get_block_tree_by_timestamp_traversing_entire_index(
+                start_from,
+                include_non_persisted,
+            )?;
             self.assert_equal_tree_top_results(&result, &alternative_result);
         }
 
@@ -968,12 +981,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     fn get_block_tree_by_height_traversing_entire_index(
         &self,
         start_from: BlockHeight,
+        include_non_persisted: bool,
     ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, PropertyQueryError> {
         let mut result = BTreeMap::<BlockHeight, Vec<Id<Block>>>::new();
         let iter = self.db_tx.iterate_block_index()?;
 
         for block_index in iter {
-            if block_index.block_height() >= start_from {
+            if block_index.block_height() >= start_from
+                && (include_non_persisted || block_index.is_persisted())
+            {
                 result
                     .entry(block_index.block_height())
                     .or_default()
@@ -988,12 +1004,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     fn get_block_tree_by_timestamp_traversing_entire_index(
         &self,
         start_from: BlockTimestamp,
+        include_non_persisted: bool,
     ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, PropertyQueryError> {
         let mut result = BTreeMap::<BlockTimestamp, Vec<Id<Block>>>::new();
         let iter = self.db_tx.iterate_block_index()?;
 
         for block_index in iter {
-            if block_index.block_timestamp() >= start_from {
+            if block_index.block_timestamp() >= start_from
+                && (include_non_persisted || block_index.is_persisted())
+            {
                 result
                     .entry(block_index.block_timestamp())
                     .or_default()
@@ -1031,10 +1050,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
     }
 
+    /// Iterate starting from each leaf block downwards; `handler` returning false means that
+    /// the minimum required depth has been reached, in which case the inner loop will be terminated
+    /// and the function will go to the next available tip.
+    /// Each block index will be visited at most once.
     #[log_error]
-    pub fn iterate_from_tree_top_until(
+    fn iterate_from_tree_top_until(
         &self,
         mut handler: impl FnMut(&BlockIndex) -> bool,
+        include_non_persisted: bool,
     ) -> Result<(), PropertyQueryError> {
         let mut seen_blocks = BTreeSet::new();
 
@@ -1052,7 +1076,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
                 let cur_block_index = self.get_existing_block_index(&cur_block_id)?;
 
-                if !handler(&cur_block_index) {
+                if (include_non_persisted || cur_block_index.is_persisted())
+                    && !handler(&cur_block_index)
+                {
                     break;
                 }
 
@@ -1076,8 +1102,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn get_higher_block_ids_sorted_by_height(
         &self,
         start_from: BlockHeight,
+        include_non_persisted: bool,
     ) -> Result<impl DoubleEndedIterator<Item = Id<Block>>, PropertyQueryError> {
-        let block_tree_map = self.get_block_tree_top_by_height(start_from)?;
+        let block_tree_map =
+            self.get_block_tree_top_by_height(start_from, include_non_persisted)?;
         Ok(block_tree_map.into_iter().flat_map(|(_height, ids_per_height)| ids_per_height))
     }
 
@@ -1088,12 +1116,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn collect_block_indices_in_branch_sorted_by_height(
         &self,
         root_block_id: &Id<Block>,
+        include_non_persisted: bool,
     ) -> Result<Vec<BlockIndex>, PropertyQueryError> {
         let root_block_index = self.get_existing_block_index(root_block_id)?;
 
         let next_block_height = root_block_index.block_height().next_height();
         let maybe_descendant_block_ids_iter =
-            self.get_higher_block_ids_sorted_by_height(next_block_height)?;
+            self.get_higher_block_ids_sorted_by_height(next_block_height, include_non_persisted)?;
 
         let mut result = Vec::new();
         let mut seen_block_ids = BTreeSet::new();

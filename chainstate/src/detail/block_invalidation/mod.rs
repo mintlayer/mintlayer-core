@@ -66,7 +66,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
             root_block_id.into()
         )?);
         let block_indices = chainstate_ref
-            .collect_block_indices_in_branch_sorted_by_height(root_block_id)
+            .collect_block_indices_in_branch_sorted_by_height(root_block_id, true)
             .map_err(BlockInvalidatorError::BlockIndicesForBranchQueryError)?;
         Ok(block_indices)
     }
@@ -279,7 +279,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                 self.chainstate.make_db_tx_ro().map_err(BlockInvalidatorError::from)?;
 
             chainstate_ref
-                .collect_block_indices_in_branch_sorted_by_height(block_id)
+                .collect_block_indices_in_branch_sorted_by_height(block_id, true)
                 .map_err(BlockInvalidatorError::BlockIndicesForBranchQueryError)?
         };
 

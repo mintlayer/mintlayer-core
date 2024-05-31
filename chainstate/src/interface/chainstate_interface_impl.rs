@@ -575,7 +575,7 @@ where
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_block_tree_top_by_height(start_from)
+            .get_block_tree_top_by_height(start_from, false)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
@@ -587,7 +587,7 @@ where
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_block_tree_top_by_timestamp(start_from)
+            .get_block_tree_top_by_timestamp(start_from, false)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 

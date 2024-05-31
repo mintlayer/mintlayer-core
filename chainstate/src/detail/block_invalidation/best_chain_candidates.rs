@@ -230,7 +230,7 @@ where
         &self,
         start_from: BlockHeight,
     ) -> Result<impl DoubleEndedIterator<Item = Id<Block>>, PropertyQueryError> {
-        self.get_higher_block_ids_sorted_by_height(start_from)
+        self.get_higher_block_ids_sorted_by_height(start_from, true)
     }
 
     #[log_error]

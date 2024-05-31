@@ -390,15 +390,19 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn get_block_tree_top_by_height(
         &self,
         start_from: BlockHeight,
+        include_non_persisted: bool,
     ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, PropertyQueryError> {
-        self.chainstate_ref.get_block_tree_top_by_height(start_from)
+        self.chainstate_ref
+            .get_block_tree_top_by_height(start_from, include_non_persisted)
     }
 
     pub fn get_block_tree_top_by_timestamp(
         &self,
         start_from: BlockTimestamp,
+        include_non_persisted: bool,
     ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, PropertyQueryError> {
-        self.chainstate_ref.get_block_tree_top_by_timestamp(start_from)
+        self.chainstate_ref
+            .get_block_tree_top_by_timestamp(start_from, include_non_persisted)
     }
 
     pub fn get_token_data(
