@@ -419,9 +419,8 @@ impl BlockProcessingErrorClassification for PropertyQueryError {
             | PropertyQueryError::BlockForHeightNotFound(_)
             | PropertyQueryError::GenesisHeaderRequested
             | PropertyQueryError::InvalidStartingBlockHeightForMainchainBlocks(_)
-            | PropertyQueryError::InvalidBlockHeightRange { .. } => {
-                BlockProcessingErrorClass::General
-            }
+            | PropertyQueryError::InvalidBlockHeightRange { .. }
+            | PropertyQueryError::InMemoryBlockTreeError(_) => BlockProcessingErrorClass::General,
             // Note: these errors are strange - sometimes they don't look like General, judging
             // by the code that uses them. But other times some of them seem to just wrap storage
             // errors.

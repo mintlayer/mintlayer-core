@@ -16,7 +16,8 @@
 use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
 
 use chainstate::{
-    BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, Locator,
+    BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, InMemoryBlockTrees,
+    Locator,
 };
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex};
 use common::{
@@ -156,14 +157,16 @@ mockall::mock! {
         ) -> Result<Vec<Option<Amount>>, ChainstateError>;
         fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
         fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
-        fn get_block_tree_top_by_height(
+        fn get_block_tree_top_starting_from_height(
             &self,
-            start_from: BlockHeight,
-        ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, ChainstateError>;
-        fn get_block_tree_top_by_timestamp(
+            min_height: BlockHeight,
+            include_non_persisted: bool,
+        ) -> Result<InMemoryBlockTrees, ChainstateError>;
+        fn get_block_tree_top_starting_from_timestamp(
             &self,
-            start_from: BlockTimestamp,
-        ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, ChainstateError>;
+            min_timestamp: BlockTimestamp,
+            include_non_persisted: bool,
+        ) -> Result<InMemoryBlockTrees, ChainstateError>;
         fn import_bootstrap_stream<'a>(
             &'a mut self,
             reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,

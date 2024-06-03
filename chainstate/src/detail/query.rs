@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, num::NonZeroUsize};
+use std::num::NonZeroUsize;
 
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
@@ -31,7 +31,10 @@ use common::{
 use tokens_accounting::TokensAccountingStorageRead;
 use utils::ensure;
 
-use super::{chainstateref, tx_verification_strategy::TransactionVerificationStrategy};
+use super::{
+    chainstateref, in_memory_block_tree::InMemoryBlockTrees,
+    tx_verification_strategy::TransactionVerificationStrategy,
+};
 
 pub fn locator_tip_distances() -> impl Iterator<Item = BlockDistance> {
     itertools::iterate(0, |&i| std::cmp::max(1, i * 2)).map(BlockDistance::new)
@@ -387,22 +390,22 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.chainstate_ref.get_block_id_tree_as_list()
     }
 
-    pub fn get_block_tree_top_by_height(
+    pub fn get_block_tree_top_starting_from_height(
         &self,
-        start_from: BlockHeight,
+        min_height: BlockHeight,
         include_non_persisted: bool,
-    ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, PropertyQueryError> {
+    ) -> Result<InMemoryBlockTrees, PropertyQueryError> {
         self.chainstate_ref
-            .get_block_tree_top_by_height(start_from, include_non_persisted)
+            .get_block_tree_top_starting_from_height(min_height, include_non_persisted)
     }
 
-    pub fn get_block_tree_top_by_timestamp(
+    pub fn get_block_tree_top_starting_from_timestamp(
         &self,
-        start_from: BlockTimestamp,
+        min_timestamp: BlockTimestamp,
         include_non_persisted: bool,
-    ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, PropertyQueryError> {
+    ) -> Result<InMemoryBlockTrees, PropertyQueryError> {
         self.chainstate_ref
-            .get_block_tree_top_by_timestamp(start_from, include_non_persisted)
+            .get_block_tree_top_starting_from_timestamp(min_timestamp, include_non_persisted)
     }
 
     pub fn get_token_data(

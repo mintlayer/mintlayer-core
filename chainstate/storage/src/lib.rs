@@ -201,7 +201,7 @@ pub trait BlockchainStorageWrite:
         block_id: &Id<GenBlock>,
     ) -> Result<()>;
 
-    /// Mark the specified block id as a leaf or a non-leaf, depending on the `is_leaf` parameter.
+    /// Mark the specified block id as a leaf or non-leaf, depending on the `is_leaf` parameter.
     fn mark_as_leaf(&mut self, block_id: &Id<Block>, is_leaf: bool) -> Result<()>;
 
     /// Remove block id from given mainchain height

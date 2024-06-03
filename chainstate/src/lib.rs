@@ -34,12 +34,14 @@ use interface::chainstate_interface_impl;
 pub use crate::{
     config::{ChainstateConfig, MaxTipAge},
     detail::{
-        ban_score, block_invalidation::BlockInvalidatorError, calculate_median_time_past,
-        calculate_median_time_past_from_blocktimestamps, BlockError, BlockProcessingErrorClass,
-        BlockProcessingErrorClassification, BlockSource, ChainInfo, CheckBlockError,
-        CheckBlockTransactionsError, ConnectTransactionError, IOPolicyError, InitializationError,
-        Locator, NonZeroPoolBalances, OrphanCheckError, SpendStakeError,
-        StorageCompatibilityCheckError, TokenIssuanceError, TokensError,
+        ban_score,
+        block_invalidation::BlockInvalidatorError,
+        calculate_median_time_past, calculate_median_time_past_from_blocktimestamps,
+        in_memory_block_tree::{InMemoryBlockTree, InMemoryBlockTreeRef, InMemoryBlockTrees},
+        BlockError, BlockProcessingErrorClass, BlockProcessingErrorClassification, BlockSource,
+        ChainInfo, CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError,
+        IOPolicyError, InitializationError, Locator, NonZeroPoolBalances, OrphanCheckError,
+        SpendStakeError, StorageCompatibilityCheckError, TokenIssuanceError, TokensError,
         TransactionVerifierStorageError, MEDIAN_TIME_SPAN,
     },
 };

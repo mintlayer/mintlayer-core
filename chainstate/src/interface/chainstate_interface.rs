@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
 
 use crate::{
     detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent,
-    NonZeroPoolBalances,
+    InMemoryBlockTrees, NonZeroPoolBalances,
 };
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 use common::{
@@ -234,21 +234,25 @@ pub trait ChainstateInterface: Send + Sync {
     /// The result will be sorted by height.
     fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
 
-    /// Return ids of all persisted blocks with heights bigger than or equal to the specified one,
-    /// grouped by height.
+    /// Return block indices of blocks with heights bigger than or equal to the specified one,
+    /// as a set of zero or more trees.
+    /// If `include_non_persisted` is false, indices of non-persisted blocks will not be included in the result.
     // TODO: a persisted block can still be invalid. Should we only return valid blocks here?
-    // Same for get_block_tree_top_by_timestamp below (and possibly for get_block_id_tree_as_list too).
-    fn get_block_tree_top_by_height(
+    fn get_block_tree_top_starting_from_height(
         &self,
-        start_from: BlockHeight,
-    ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, ChainstateError>;
+        min_height: BlockHeight,
+        include_non_persisted: bool,
+    ) -> Result<InMemoryBlockTrees, ChainstateError>;
 
-    /// Return ids of all persisted blocks with timestamps bigger than or equal to the specified one,
-    /// grouped by timestamp.
-    fn get_block_tree_top_by_timestamp(
+    /// Return block indices of blocks with timestamps bigger than or equal to the specified one,
+    /// as a set of zero or more trees.
+    /// If `include_non_persisted` is false, indices of non-persisted blocks will not be included in the result.
+    // TODO: a persisted block can still be invalid. Should we only return valid blocks here?
+    fn get_block_tree_top_starting_from_timestamp(
         &self,
-        start_from: BlockTimestamp,
-    ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, ChainstateError>;
+        min_timestamp: BlockTimestamp,
+        include_non_persisted: bool,
+    ) -> Result<InMemoryBlockTrees, ChainstateError>;
 
     /// Imports a bootstrap file exported with `export_bootstrap_stream`.
     fn import_bootstrap_stream<'a>(

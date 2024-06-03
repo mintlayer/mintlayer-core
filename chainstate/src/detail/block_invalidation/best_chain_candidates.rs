@@ -85,6 +85,7 @@ impl BestChainCandidates {
     ) -> Result<BestChainCandidates, BestChainCandidatesError> {
         let min_height_with_allowed_reorg = chs.min_height_with_allowed_reorg()?;
 
+        // TODO: use get_block_tree_top_starting_from_height directly here.
         let block_ids_by_height_iter = chs
             .get_higher_block_ids_sorted_by_height(min_height_with_allowed_reorg)
             .log_err()?;
@@ -128,11 +129,11 @@ impl BestChainCandidates {
     // from the set and add the block's parent block to the set if its chain trust is not less than
     // the specified minimum.
     #[log_error]
-    pub fn remove_tree_add_parent<Chs: ChainstateAccessor>(
+    pub fn remove_tree_add_parent<'a, Chs: ChainstateAccessor>(
         &mut self,
-        chs: &Chs,
-        root_block_info: &Chs::BlockInfo,
-        descendant_block_infos: &[Chs::BlockInfo],
+        chs: &'a Chs,
+        root_block_info: &'a Chs::BlockInfo,
+        descendant_block_infos: impl Iterator<Item = &'a Chs::BlockInfo>,
         min_chain_trust: Uint256,
     ) -> Result<(), BestChainCandidatesError> {
         self.remove(root_block_info);

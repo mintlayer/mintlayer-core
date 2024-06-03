@@ -57,7 +57,7 @@ use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
 use serialization::{Decode, Encode};
 use tx_verifier::transaction_verifier::TransactionVerifier;
-use utils::{debug_assert_or_log, ensure, log_error, sorted::Sorted, tap_log::TapLog};
+use utils::{debug_assert_or_log, ensure, log_error, tap_log::TapLog};
 use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
 
 use crate::{BlockError, ChainstateConfig};
@@ -68,9 +68,11 @@ use self::{
 };
 
 use super::{
-    median_time::calculate_median_time_past, transaction_verifier::flush::flush_to_storage,
-    tx_verification_strategy::TransactionVerificationStrategy, BlockSizeError, CheckBlockError,
-    CheckBlockTransactionsError,
+    in_memory_block_tree::{self, InMemoryBlockTreeRef, InMemoryBlockTrees},
+    median_time::calculate_median_time_past,
+    transaction_verifier::flush::flush_to_storage,
+    tx_verification_strategy::TransactionVerificationStrategy,
+    BlockSizeError, CheckBlockError, CheckBlockTransactionsError,
 };
 
 pub use epoch_seal::EpochSealError;
@@ -182,6 +184,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     pub fn current_time(&self) -> Time {
         self.time_getter.get_time()
+    }
+
+    #[log_error]
+    pub fn get_leaf_block_ids(&self) -> Result<BTreeSet<Id<Block>>, PropertyQueryError> {
+        Ok(self.db_tx.get_leaf_block_ids()?)
     }
 
     #[log_error]
@@ -900,81 +907,19 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(result)
     }
 
-    /// Return ids of all blocks with heights bigger than or equal to the specified one,
-    /// grouped by height.
-    /// Note: the function collects block ids by iterating from each of the current leaf blocks
-    /// down to the specified height, while maintaining a set of already seen blocks.
-    /// So, if the starting height is close to zero, iterating over the entire index
-    /// (e.g. via get_block_tree_by_height_traversing_entire_index) might be a better choice.
+    /// Return ids of all blocks with height bigger than or equal to the specified one,
+    /// sorted by height (lower first).
     #[log_error]
-    pub fn get_block_tree_top_by_height(
+    pub fn get_higher_block_ids_sorted_by_height(
         &self,
         start_from: BlockHeight,
         include_non_persisted: bool,
-    ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, PropertyQueryError> {
-        let mut result = BTreeMap::<BlockHeight, Vec<Id<Block>>>::new();
+    ) -> Result<impl DoubleEndedIterator<Item = Id<Block>>, PropertyQueryError> {
+        let block_trees =
+            self.get_block_tree_top_starting_from_height(start_from, include_non_persisted)?;
+        let block_id_map = block_trees.as_by_height_block_id_map()?;
 
-        self.iterate_from_tree_top_until(
-            |block_index| {
-                if block_index.block_height() < start_from {
-                    false
-                } else {
-                    result
-                        .entry(block_index.block_height())
-                        .or_default()
-                        .push(*block_index.block_id());
-                    true
-                }
-            },
-            include_non_persisted,
-        )?;
-
-        if self.chainstate_config.heavy_checks_enabled(self.chain_config) {
-            // Check that traversing the entire index produces the same result.
-            let alternative_result = self.get_block_tree_top_by_height_traversing_entire_index(
-                start_from,
-                include_non_persisted,
-            )?;
-            self.assert_equal_tree_top_results(&result, &alternative_result);
-        }
-
-        Ok(result)
-    }
-
-    /// Same as get_block_tree_top_by_height but for timestamps.
-    #[log_error]
-    pub fn get_block_tree_top_by_timestamp(
-        &self,
-        start_from: BlockTimestamp,
-        include_non_persisted: bool,
-    ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, PropertyQueryError> {
-        let mut result = BTreeMap::<BlockTimestamp, Vec<Id<Block>>>::new();
-
-        self.iterate_from_tree_top_until(
-            |block_index| {
-                if block_index.block_timestamp() < start_from {
-                    false
-                } else {
-                    result
-                        .entry(block_index.block_timestamp())
-                        .or_default()
-                        .push(*block_index.block_id());
-                    true
-                }
-            },
-            include_non_persisted,
-        )?;
-
-        if self.chainstate_config.heavy_checks_enabled(self.chain_config) {
-            // Check that traversing the entire index produces the same result.
-            let alternative_result = self.get_block_tree_top_by_timestamp_traversing_entire_index(
-                start_from,
-                include_non_persisted,
-            )?;
-            self.assert_equal_tree_top_results(&result, &alternative_result);
-        }
-
-        Ok(result)
+        Ok(block_id_map.into_iter().flat_map(|(_height, ids_per_height)| ids_per_height))
     }
 
     #[log_error]
@@ -982,8 +927,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         start_from: BlockHeight,
         include_non_persisted: bool,
-    ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, PropertyQueryError> {
-        let mut result = BTreeMap::<BlockHeight, Vec<Id<Block>>>::new();
+    ) -> Result<BTreeMap<BlockHeight, BTreeSet<Id<Block>>>, PropertyQueryError> {
+        let mut result = BTreeMap::<BlockHeight, BTreeSet<Id<Block>>>::new();
         let iter = self.db_tx.iterate_block_index()?;
 
         for block_index in iter {
@@ -993,7 +938,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 result
                     .entry(block_index.block_height())
                     .or_default()
-                    .push(*block_index.block_id());
+                    .insert(*block_index.block_id());
             }
         }
 
@@ -1005,8 +950,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         start_from: BlockTimestamp,
         include_non_persisted: bool,
-    ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, PropertyQueryError> {
-        let mut result = BTreeMap::<BlockTimestamp, Vec<Id<Block>>>::new();
+    ) -> Result<BTreeMap<BlockTimestamp, BTreeSet<Id<Block>>>, PropertyQueryError> {
+        let mut result = BTreeMap::<BlockTimestamp, BTreeSet<Id<Block>>>::new();
         let iter = self.db_tx.iterate_block_index()?;
 
         for block_index in iter {
@@ -1016,132 +961,93 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 result
                     .entry(block_index.block_timestamp())
                     .or_default()
-                    .push(*block_index.block_id());
+                    .insert(*block_index.block_id());
             }
         }
 
         Ok(result)
     }
 
-    // Assert that result1 equals result2
-    fn assert_equal_tree_top_results<T: Ord + Debug>(
+    /// Find first persisted parent of the specified block.
+    /// At each step call `is_depth_ok`; return None if `is_depth_ok` has returned false.
+    #[log_error]
+    pub fn find_first_persisted_parent(
         &self,
-        result1: &BTreeMap<T, Vec<Id<Block>>>,
-        result2: &BTreeMap<T, Vec<Id<Block>>>,
-    ) {
-        use itertools::EitherOrBoth::*;
+        block_index: BlockIndex,
+        is_depth_ok: impl Fn(&BlockIndex) -> bool,
+    ) -> Result<Option<BlockIndex>, PropertyQueryError> {
+        let mut cur_block_index = block_index;
 
-        for items in result1.iter().zip_longest(result2.iter()) {
-            match items {
-                Left(left) => panic!("{:?} is missing in 2nd result", left.0),
-                Right(right) => panic!("{:?} is missing in 1st result", right.0),
-                Both(left, right) => {
-                    assert_eq!(left.0, right.0, "Keys mismatch");
+        loop {
+            if !is_depth_ok(&cur_block_index) {
+                return Ok(None);
+            }
 
-                    let left_ids = left.1.sorted();
-                    let right_ids = right.1.sorted();
-                    assert_eq!(
-                        left_ids, right_ids,
-                        "Block ids mismatch for key {:?}",
-                        left.0
-                    );
-                }
+            if cur_block_index.is_persisted() {
+                return Ok(Some(cur_block_index));
+            }
+
+            if let Some(non_genesis_parent_id) =
+                cur_block_index.prev_block_id().classify(self.chain_config).chain_block_id()
+            {
+                cur_block_index = self.get_existing_block_index(&non_genesis_parent_id)?;
+            } else {
+                return Ok(None);
             }
         }
     }
 
-    /// Iterate starting from each leaf block downwards; `handler` returning false means that
-    /// the minimum required depth has been reached, in which case the inner loop will be terminated
-    /// and the function will go to the next available tip.
-    /// Each block index will be visited at most once.
+    /// Iterate starting from each leaf block downwards and collect the block indices into
+    /// an in-memory tree structure.
+    /// Only blocks with heights bigger than or equal to the specified one are collected.
     #[log_error]
-    fn iterate_from_tree_top_until(
+    pub fn get_block_tree_top_starting_from_height(
         &self,
-        mut handler: impl FnMut(&BlockIndex) -> bool,
+        min_height: BlockHeight,
         include_non_persisted: bool,
-    ) -> Result<(), PropertyQueryError> {
-        let mut seen_blocks = BTreeSet::new();
+    ) -> Result<InMemoryBlockTrees, PropertyQueryError> {
+        let result = in_memory_block_tree::get_block_tree_top(
+            self,
+            |block_index| block_index.block_height() >= min_height,
+            include_non_persisted,
+        )?;
 
-        let leaf_block_ids = self.db_tx.get_leaf_block_ids()?;
-
-        for leaf_block_id in leaf_block_ids {
-            let mut cur_block_id = leaf_block_id;
-
-            loop {
-                if seen_blocks.contains(&cur_block_id) {
-                    break;
-                }
-
-                seen_blocks.insert(cur_block_id);
-
-                let cur_block_index = self.get_existing_block_index(&cur_block_id)?;
-
-                if (include_non_persisted || cur_block_index.is_persisted())
-                    && !handler(&cur_block_index)
-                {
-                    break;
-                }
-
-                if let Some(non_genesis_parent) =
-                    cur_block_index.prev_block_id().classify(self.chain_config).chain_block_id()
-                {
-                    cur_block_id = non_genesis_parent;
-                } else {
-                    break;
-                }
-            }
+        if self.chainstate_config.heavy_checks_enabled(self.chain_config) {
+            // Check that traversing the entire index produces the same result.
+            let result_as_map = result.as_by_height_block_id_map()?;
+            let alternative_result = self.get_block_tree_top_by_height_traversing_entire_index(
+                min_height,
+                include_non_persisted,
+            )?;
+            assert_eq!(result_as_map, alternative_result);
         }
 
-        Ok(())
+        Ok(result)
     }
 
-    /// Return ids of all blocks with height bigger than or equal to the specified one,
-    /// sorted by height (lower first).
-    /// This function uses `get_block_tree_top_by_height`, so the same note applies here too.
+    /// Iterate starting from each leaf block downwards and collect the block indices into
+    /// an in-memory tree structure.
+    /// Only blocks with timestamps bigger than or equal to the specified one are collected.
     #[log_error]
-    pub fn get_higher_block_ids_sorted_by_height(
+    pub fn get_block_tree_top_starting_from_timestamp(
         &self,
-        start_from: BlockHeight,
+        min_timestamp: BlockTimestamp,
         include_non_persisted: bool,
-    ) -> Result<impl DoubleEndedIterator<Item = Id<Block>>, PropertyQueryError> {
-        let block_tree_map =
-            self.get_block_tree_top_by_height(start_from, include_non_persisted)?;
-        Ok(block_tree_map.into_iter().flat_map(|(_height, ids_per_height)| ids_per_height))
-    }
+    ) -> Result<InMemoryBlockTrees, PropertyQueryError> {
+        let result = in_memory_block_tree::get_block_tree_top(
+            self,
+            |block_index| block_index.block_timestamp() >= min_timestamp,
+            include_non_persisted,
+        )?;
 
-    /// Collect block indices corresponding to the branch starting at root_block_id.
-    /// The block indices in the result will be sorted by height, the first index will correspond
-    /// to root_block_id.
-    #[log_error]
-    pub fn collect_block_indices_in_branch_sorted_by_height(
-        &self,
-        root_block_id: &Id<Block>,
-        include_non_persisted: bool,
-    ) -> Result<Vec<BlockIndex>, PropertyQueryError> {
-        let root_block_index = self.get_existing_block_index(root_block_id)?;
-
-        let next_block_height = root_block_index.block_height().next_height();
-        let maybe_descendant_block_ids_iter =
-            self.get_higher_block_ids_sorted_by_height(next_block_height, include_non_persisted)?;
-
-        let mut result = Vec::new();
-        let mut seen_block_ids = BTreeSet::new();
-        seen_block_ids.insert(*root_block_index.block_id());
-        result.push(root_block_index);
-
-        for cur_block_id in maybe_descendant_block_ids_iter {
-            let cur_block_index = self.get_existing_block_index(&cur_block_id)?;
-
-            let prev_block_id = cur_block_index
-                .prev_block_id()
-                .classify(self.chain_config)
-                .chain_block_id()
-                .expect("Genesis at non-zero height");
-
-            if seen_block_ids.contains(&prev_block_id) {
-                result.push(cur_block_index);
-                seen_block_ids.insert(cur_block_id);
-            }
+        if self.chainstate_config.heavy_checks_enabled(self.chain_config) {
+            // Check that traversing the entire index produces the same result.
+            let result_as_map = result.as_by_timestamp_block_id_map()?;
+            let alternative_result = self.get_block_tree_top_by_timestamp_traversing_entire_index(
+                min_timestamp,
+                include_non_persisted,
+            )?;
+            assert_eq!(result_as_map, alternative_result);
         }
 
         Ok(result)
@@ -1551,88 +1457,55 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
     /// Delete the specified block indices.
     /// Panic if one of the blocks is marked as persisted.
-    /// Note: the passed iterator must be sorted by height.
-    /// TODO: enforce sorting (e.g. via SortedIterator).
     #[log_error]
-    pub fn del_block_indices_of_non_persisted_blocks<'b>(
+    pub fn del_block_indices_of_non_persisted_block_tree<'b>(
         &mut self,
-        block_indices: impl DoubleEndedIterator<Item = &'b BlockIndex>,
+        tree: InMemoryBlockTreeRef<'b>,
     ) -> Result<(), BlockError> {
-        let mut block_indices = block_indices.peekable();
-
-        if block_indices.peek().is_none() {
-            return Ok(());
-        }
-
         let old_leaf_block_ids = self.db_tx.get_leaf_block_ids()?;
-        let mut leaf_block_ids_candidates = old_leaf_block_ids.clone();
-        let mut last_index_height = None;
+        let mut remaining_leaf_block_ids = old_leaf_block_ids.clone();
 
-        for block_index in block_indices.rev() {
+        for block_index in tree.iter_all() {
             let block_id = *block_index.block_id();
-            let block_height = block_index.block_height();
 
-            // Ensure that we go from bigger heights to lower ones.
-            if let Some(last_index_height) = last_index_height {
-                debug_assert_or_log!(
-                    last_index_height >= block_height,
-                    "Block indices must be sorted by height backwards"
-                );
-            }
-            last_index_height = Some(block_height);
-
+            // Note: here we're being extra-cautious about someone mis-using this function, so we only panic in
+            // debug mode.
             debug_assert_or_log!(
                 !block_index.is_persisted(),
                 "Trying to delete a block index for a persisted block {block_id}",
             );
 
-            self.db_tx.del_block_index(*block_index.block_id())?;
-
-            if leaf_block_ids_candidates.remove(&block_id) {
-                if let Some(non_genesis_parent) =
-                    block_index.prev_block_id().classify(self.chain_config).chain_block_id()
-                {
-                    leaf_block_ids_candidates.insert(non_genesis_parent);
-                }
-            }
+            self.db_tx.del_block_index(block_id)?;
+            remaining_leaf_block_ids.remove(&block_id);
         }
 
         // Unmark the removed leaves.
-        for removed_leaf in old_leaf_block_ids.difference(&leaf_block_ids_candidates) {
+        for removed_leaf in old_leaf_block_ids.difference(&remaining_leaf_block_ids) {
             self.db_tx.mark_as_leaf(removed_leaf, false)?;
         }
 
-        // Now we need to mark new leaves.
-        // A parent of a leaf block is not necessarily a leaf itself, so we need to check all the new candidates first.
-        let maybe_new_leaves = leaf_block_ids_candidates
-            .difference(&old_leaf_block_ids)
-            .copied()
-            .collect::<BTreeSet<_>>();
+        // The parent of the removed subtree's root may have become a new leaf.
+        // Check if it's a parent of one of the remaining leaves; if not, mark it as a leaf.
+        let maybe_new_leaf = tree.root_block_index().prev_block_id();
+        if let Some(maybe_new_leaf) = maybe_new_leaf.classify(self.chain_config).chain_block_id() {
+            let mut is_parent = false;
 
-        // Note: the complexity here is (remaining old leaves count) x ("may be new leaves" count) x (the average
-        // of "max(old leaf height - new leaf height, 0)").
-        // But:
-        // 1) The total "effective" number of leaves should be small (i.e. we may potentially have lots of very old
-        // leaves, because we don't have block purging yet, but they will have smaller heights than any possible new leaf,
-        // so is_parent_of will return immediately anyway).
-        // 2) The "may be new leaves" count will be even smaller (usually just 1).
-        let old_leaves_indices_iter = old_leaf_block_ids
-            .intersection(&leaf_block_ids_candidates)
-            .map(|id| self.get_existing_block_index(id));
-        let old_leaves_indices =
-            itertools::process_results(old_leaves_indices_iter, |iter| iter.collect::<Vec<_>>())
-                .map_err(BlockError::PropertyQueryError)?;
+            for leaf_block_id in remaining_leaf_block_ids {
+                let leaf_block_index = self
+                    .get_existing_block_index(&leaf_block_id)
+                    .map_err(BlockError::PropertyQueryError)?;
 
-        for maybe_new_leaf in &maybe_new_leaves {
-            let is_parent = itertools::process_results(
-                old_leaves_indices
-                    .iter()
-                    .map(|leaf_index| self.is_parent_of(leaf_index, maybe_new_leaf)),
-                |mut iter| iter.any(|x| x),
-            )?;
+                if self
+                    .is_parent_of(&leaf_block_index, &maybe_new_leaf)
+                    .map_err(BlockError::PropertyQueryError)?
+                {
+                    is_parent = true;
+                    break;
+                }
+            }
 
             if !is_parent {
-                self.db_tx.mark_as_leaf(maybe_new_leaf, true)?;
+                self.db_tx.mark_as_leaf(&maybe_new_leaf, true)?;
             }
         }
 
@@ -1646,10 +1519,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         &self,
         child_index: &BlockIndex,
         potential_parent_id: &Id<Block>,
-    ) -> Result<bool, BlockError> {
-        let potential_parent_index = self
-            .get_existing_block_index(potential_parent_id)
-            .map_err(BlockError::PropertyQueryError)?;
+    ) -> Result<bool, PropertyQueryError> {
+        let potential_parent_index = self.get_existing_block_index(potential_parent_id)?;
         let mut child_index = child_index;
         let mut tmp_index = None;
 
@@ -1668,10 +1539,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
                 return Ok(false);
             }
 
-            child_index = tmp_index.insert(
-                self.get_existing_block_index(&immediate_parent_id)
-                    .map_err(BlockError::PropertyQueryError)?,
-            );
+            child_index = tmp_index.insert(self.get_existing_block_index(&immediate_parent_id)?);
         }
     }
 

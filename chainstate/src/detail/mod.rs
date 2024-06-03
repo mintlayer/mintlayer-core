@@ -24,6 +24,7 @@ pub mod ban_score;
 pub mod block_checking;
 pub mod block_invalidation;
 pub mod bootstrap;
+pub mod in_memory_block_tree;
 pub mod query;
 pub mod tx_verification_strategy;
 

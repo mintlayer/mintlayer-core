@@ -38,7 +38,7 @@ use utxo::Utxo;
 
 use crate::{
     chainstate_interface::ChainstateInterface, BlockSource, ChainInfo, ChainstateConfig,
-    ChainstateError, ChainstateEvent, NonZeroPoolBalances,
+    ChainstateError, ChainstateEvent, InMemoryBlockTrees, NonZeroPoolBalances,
 };
 
 impl<T: Deref + DerefMut + Send + Sync> ChainstateInterface for T
@@ -304,18 +304,22 @@ where
         self.deref().get_block_id_tree_as_list()
     }
 
-    fn get_block_tree_top_by_height(
+    fn get_block_tree_top_starting_from_height(
         &self,
-        start_from: BlockHeight,
-    ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, ChainstateError> {
-        self.deref().get_block_tree_top_by_height(start_from)
+        min_height: BlockHeight,
+        include_non_persisted: bool,
+    ) -> Result<InMemoryBlockTrees, ChainstateError> {
+        self.deref()
+            .get_block_tree_top_starting_from_height(min_height, include_non_persisted)
     }
 
-    fn get_block_tree_top_by_timestamp(
+    fn get_block_tree_top_starting_from_timestamp(
         &self,
-        start_from: BlockTimestamp,
-    ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, ChainstateError> {
-        self.deref().get_block_tree_top_by_timestamp(start_from)
+        min_timestamp: BlockTimestamp,
+        include_non_persisted: bool,
+    ) -> Result<InMemoryBlockTrees, ChainstateError> {
+        self.deref()
+            .get_block_tree_top_starting_from_timestamp(min_timestamp, include_non_persisted)
     }
 
     fn import_bootstrap_stream<'a>(

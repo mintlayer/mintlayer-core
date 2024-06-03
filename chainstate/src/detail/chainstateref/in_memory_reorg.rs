@@ -136,7 +136,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let mut tx_verifier = TransactionVerifier::new(self, self.chain_config);
         let mut epoch_data_cache = EpochDataCache::new(&self.db_tx);
 
-        // Disconnect the current chain if it is not a genesis
+        // Disconnect the current chain if it is not the genesis
         if let GenBlockId::Block(cur_tip) = cur_tip.classify(self.chain_config) {
             let cur_tip_index = self.get_existing_block_index(&cur_tip)?;
 

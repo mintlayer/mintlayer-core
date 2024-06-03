@@ -15,13 +15,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use chainstate::{InMemoryBlockTreeRef, InMemoryBlockTrees};
 use itertools::Itertools;
 use rstest::rstest;
 
 use chainstate_test_framework::TestFramework;
 use chainstate_types::BlockValidationStage;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block},
+    chain::{block::timestamp::BlockTimestamp, Block, GenBlock},
     primitives::{BlockHeight, Id, Idable},
 };
 use test_utils::random::{make_seedable_rng, Seed};
@@ -42,9 +43,10 @@ use utils::sorted::Sorted;
 // /----a0----a1
 // G----m0----m1----m2
 //      \-----b0---!b1---!b2
+//                   \---!c1
 // where b1 is invalid and persisted and b2 is invalid and non-persisted, checking leaf blocks at each step.
-// After that, check that get_block_id_tree_as_list, get_block_tree_top_by_height and
-// get_block_tree_top_by_timestamp return what they are supposed to.
+// After that, check that get_block_id_tree_as_list, get_block_tree_top_starting_from_height and
+// get_block_tree_top_starting_from_timestamp return what they are supposed to.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -60,6 +62,7 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         // G--m0--m1--m2
         //    a0------a1
         //        b0------b1--b2
+        //                        c1
 
         tf.time_value.as_ref().unwrap().fetch_add(1);
 
@@ -105,9 +108,15 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         assert!(result.is_err());
         assert_leaves(&tf, &[m2_id, a1_id, b2_id]);
 
-        log::debug!("m0_id = {m0_id}, m1_id = {m1_id}, m2_id = {m2_id}, a0_id = {a0_id}, a1_id = {a1_id}, b0_id = {b0_id}, b1_id = {b1_id}, b2_id = {b2_id}");
+        tf.time_value.as_ref().unwrap().fetch_add(1);
 
-        // Sanity check - ensure that all blocks are valid, except b1 and b2, and that b2 is not persisted.
+        let (c1_id, result) = process_block(&mut tf, &b1_id.into(), &mut rng);
+        assert!(result.is_err());
+        assert_leaves(&tf, &[m2_id, a1_id, b2_id, c1_id]);
+
+        log::debug!("m0_id = {m0_id}, m1_id = {m1_id}, m2_id = {m2_id}, a0_id = {a0_id}, a1_id = {a1_id}, b0_id = {b0_id}, b1_id = {b1_id}, b2_id = {b2_id}, c1_id = {c1_id}");
+
+        // Sanity check - ensure that all blocks are valid, except b1 and b2, and that b2 and c1 are not persisted.
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
         assert_ok_blocks_at_stage(
             &tf,
@@ -116,6 +125,9 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         );
         assert_bad_blocks_at_stage(&tf, &[b1_id], BlockValidationStage::CheckBlockOk);
         assert_blocks_with_bad_parent_at_stage(&tf, &[b2_id], BlockValidationStage::CheckBlockOk);
+        // Note: c1 was added when its parent was already found to be invalid, so its validation will fail earlier
+        // than b2's.
+        assert_bad_blocks_at_stage(&tf, &[c1_id], BlockValidationStage::Unchecked);
 
         let block_id_tree_as_list = tf.chainstate.get_block_id_tree_as_list().unwrap();
         assert_eq!(
@@ -126,18 +138,21 @@ fn block_tree_retrieval(#[case] seed: Seed) {
                 .collect_vec()
         );
         assert!(!tf.block_index(&b2_id).is_persisted());
+        assert!(!tf.block_index(&c1_id).is_persisted());
 
-        assert_block_tree_top_by_height(&tf, 5.into(), &[]);
-        assert_block_tree_top_by_height(&tf, 4.into(), &[]);
-        assert_block_tree_top_by_height(&tf, 3.into(), &[(3.into(), &[m2_id, b1_id])]);
+        assert_block_tree_top_by_height(&tf, 5.into(), false, &[]);
+        assert_block_tree_top_by_height(&tf, 4.into(), false, &[]);
+        assert_block_tree_top_by_height(&tf, 3.into(), false, &[(3.into(), &[m2_id, b1_id])]);
         assert_block_tree_top_by_height(
             &tf,
             2.into(),
+            false,
             &[(3.into(), &[m2_id, b1_id]), (2.into(), &[m1_id, a1_id, b0_id])],
         );
         assert_block_tree_top_by_height(
             &tf,
             1.into(),
+            false,
             &[
                 (3.into(), &[m2_id, b1_id]),
                 (2.into(), &[m1_id, a1_id, b0_id]),
@@ -147,7 +162,49 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         assert_block_tree_top_by_height(
             &tf,
             0.into(),
+            false,
             &[
+                (3.into(), &[m2_id, b1_id]),
+                (2.into(), &[m1_id, a1_id, b0_id]),
+                (1.into(), &[m0_id, a0_id]),
+            ],
+        );
+
+        assert_block_tree_top_by_height(&tf, 5.into(), false, &[]);
+        assert_block_tree_top_by_height(&tf, 4.into(), true, &[(4.into(), &[b2_id, c1_id])]);
+        assert_block_tree_top_by_height(
+            &tf,
+            3.into(),
+            true,
+            &[(4.into(), &[b2_id, c1_id]), (3.into(), &[m2_id, b1_id])],
+        );
+        assert_block_tree_top_by_height(
+            &tf,
+            2.into(),
+            true,
+            &[
+                (4.into(), &[b2_id, c1_id]),
+                (3.into(), &[m2_id, b1_id]),
+                (2.into(), &[m1_id, a1_id, b0_id]),
+            ],
+        );
+        assert_block_tree_top_by_height(
+            &tf,
+            1.into(),
+            true,
+            &[
+                (4.into(), &[b2_id, c1_id]),
+                (3.into(), &[m2_id, b1_id]),
+                (2.into(), &[m1_id, a1_id, b0_id]),
+                (1.into(), &[m0_id, a0_id]),
+            ],
+        );
+        assert_block_tree_top_by_height(
+            &tf,
+            0.into(),
+            true,
+            &[
+                (4.into(), &[b2_id, c1_id]),
                 (3.into(), &[m2_id, b1_id]),
                 (2.into(), &[m1_id, a1_id, b0_id]),
                 (1.into(), &[m0_id, a0_id]),
@@ -164,20 +221,29 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         assert_eq!(ts3, tf.block_index(&a1_id).block_timestamp());
         let ts4 = tf.block_index(&b1_id).block_timestamp();
         let ts5 = tf.block_index(&b2_id).block_timestamp();
-        assert!(ts5 > ts4 && ts4 > ts3 && ts3 > ts2 && ts2 > ts1 && ts1 > ts0);
+        let ts6 = tf.block_index(&c1_id).block_timestamp();
+        assert!(ts6 > ts5 && ts5 > ts4 && ts4 > ts3 && ts3 > ts2 && ts2 > ts1 && ts1 > ts0);
 
-        assert_block_tree_top_by_timestamp(&tf, ts5.add_int_seconds(1).unwrap(), &[]);
-        assert_block_tree_top_by_timestamp(&tf, ts5, &[]);
-        assert_block_tree_top_by_timestamp(&tf, ts4, &[(ts4, &[b1_id])]);
-        assert_block_tree_top_by_timestamp(&tf, ts3, &[(ts4, &[b1_id]), (ts3, &[m2_id, a1_id])]);
+        assert_block_tree_top_by_timestamp(&tf, ts6.add_int_seconds(1).unwrap(), false, &[]);
+        assert_block_tree_top_by_timestamp(&tf, ts6, false, &[]);
+        assert_block_tree_top_by_timestamp(&tf, ts5, false, &[]);
+        assert_block_tree_top_by_timestamp(&tf, ts4, false, &[(ts4, &[b1_id])]);
+        assert_block_tree_top_by_timestamp(
+            &tf,
+            ts3,
+            false,
+            &[(ts4, &[b1_id]), (ts3, &[m2_id, a1_id])],
+        );
         assert_block_tree_top_by_timestamp(
             &tf,
             ts2,
+            false,
             &[(ts4, &[b1_id]), (ts3, &[m2_id, a1_id]), (ts2, &[m1_id, b0_id])],
         );
         assert_block_tree_top_by_timestamp(
             &tf,
             ts1,
+            false,
             &[
                 (ts4, &[b1_id]),
                 (ts3, &[m2_id, a1_id]),
@@ -188,7 +254,62 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         assert_block_tree_top_by_timestamp(
             &tf,
             ts1,
+            false,
             &[
+                (ts4, &[b1_id]),
+                (ts3, &[m2_id, a1_id]),
+                (ts2, &[m1_id, b0_id]),
+                (ts1, &[m0_id, a0_id]),
+            ],
+        );
+
+        assert_block_tree_top_by_timestamp(&tf, ts6.add_int_seconds(1).unwrap(), true, &[]);
+        assert_block_tree_top_by_timestamp(&tf, ts6, true, &[(ts6, &[c1_id])]);
+        assert_block_tree_top_by_timestamp(&tf, ts5, true, &[(ts6, &[c1_id]), (ts5, &[b2_id])]);
+        assert_block_tree_top_by_timestamp(
+            &tf,
+            ts4,
+            true,
+            &[(ts6, &[c1_id]), (ts5, &[b2_id]), (ts4, &[b1_id])],
+        );
+        assert_block_tree_top_by_timestamp(
+            &tf,
+            ts3,
+            true,
+            &[(ts6, &[c1_id]), (ts5, &[b2_id]), (ts4, &[b1_id]), (ts3, &[m2_id, a1_id])],
+        );
+        assert_block_tree_top_by_timestamp(
+            &tf,
+            ts2,
+            true,
+            &[
+                (ts6, &[c1_id]),
+                (ts5, &[b2_id]),
+                (ts4, &[b1_id]),
+                (ts3, &[m2_id, a1_id]),
+                (ts2, &[m1_id, b0_id]),
+            ],
+        );
+        assert_block_tree_top_by_timestamp(
+            &tf,
+            ts1,
+            true,
+            &[
+                (ts6, &[c1_id]),
+                (ts5, &[b2_id]),
+                (ts4, &[b1_id]),
+                (ts3, &[m2_id, a1_id]),
+                (ts2, &[m1_id, b0_id]),
+                (ts1, &[m0_id, a0_id]),
+            ],
+        );
+        assert_block_tree_top_by_timestamp(
+            &tf,
+            ts1,
+            true,
+            &[
+                (ts6, &[c1_id]),
+                (ts5, &[b2_id]),
                 (ts4, &[b1_id]),
                 (ts3, &[m2_id, a1_id]),
                 (ts2, &[m1_id, b0_id]),
@@ -204,9 +325,35 @@ fn assert_leaves(tf: &TestFramework, expected: &[Id<Block>]) {
     assert_eq!(actual, expected);
 }
 
+fn check_tree_consistency(tree: InMemoryBlockTreeRef<'_>) {
+    // Check that the root has no parent.
+    let root_node = tree.arena().get(tree.root_id()).unwrap();
+    assert!(root_node.parent().is_none());
+
+    // Note: `descendants` also includes the node itself as the 1st element, so we must skip it.
+    for child_node_id in tree.root_id().descendants(tree.arena()).skip(1) {
+        let child_node = tree.arena().get(child_node_id).unwrap();
+        let parent_node_id = child_node.parent().unwrap();
+        let parent_node = tree.arena().get(parent_node_id).unwrap();
+        let child_block_index = child_node.get();
+        let parent_block_index = parent_node.get();
+        assert_eq!(
+            child_block_index.prev_block_id(),
+            <&_ as Into<&Id<GenBlock>>>::into(parent_block_index.block_id())
+        );
+    }
+}
+
+fn check_trees_consistency(trees: &InMemoryBlockTrees) {
+    for tree in trees.iter_trees() {
+        check_tree_consistency(tree);
+    }
+}
+
 fn assert_block_tree_top_by_height(
     tf: &TestFramework,
     start_from: BlockHeight,
+    include_non_persisted: bool,
     expected: &[(BlockHeight, &[Id<Block>])],
 ) {
     let expected = expected
@@ -214,11 +361,13 @@ fn assert_block_tree_top_by_height(
         .map(|(height, ids)| (*height, ids.iter().copied().collect::<BTreeSet<_>>()))
         .collect::<BTreeMap<_, _>>();
 
-    let actual = tf.chainstate.get_block_tree_top_by_height(start_from).unwrap();
-    let actual = actual
-        .iter()
-        .map(|(height, ids)| (*height, ids.iter().copied().collect::<BTreeSet<_>>()))
-        .collect::<BTreeMap<_, _>>();
+    let actual_trees = tf
+        .chainstate
+        .get_block_tree_top_starting_from_height(start_from, include_non_persisted)
+        .unwrap();
+    check_trees_consistency(&actual_trees);
+
+    let actual = actual_trees.as_by_height_block_id_map().unwrap();
 
     assert_eq!(actual, expected);
 }
@@ -226,6 +375,7 @@ fn assert_block_tree_top_by_height(
 fn assert_block_tree_top_by_timestamp(
     tf: &TestFramework,
     start_from: BlockTimestamp,
+    include_non_persisted: bool,
     expected: &[(BlockTimestamp, &[Id<Block>])],
 ) {
     let expected = expected
@@ -233,11 +383,13 @@ fn assert_block_tree_top_by_timestamp(
         .map(|(height, ids)| (*height, ids.iter().copied().collect::<BTreeSet<_>>()))
         .collect::<BTreeMap<_, _>>();
 
-    let actual = tf.chainstate.get_block_tree_top_by_timestamp(start_from).unwrap();
-    let actual = actual
-        .iter()
-        .map(|(height, ids)| (*height, ids.iter().copied().collect::<BTreeSet<_>>()))
-        .collect::<BTreeMap<_, _>>();
+    let actual_trees = tf
+        .chainstate
+        .get_block_tree_top_starting_from_timestamp(start_from, include_non_persisted)
+        .unwrap();
+    check_trees_consistency(&actual_trees);
+
+    let actual = actual_trees.as_by_timestamp_block_id_map().unwrap();
 
     assert_eq!(actual, expected);
 }

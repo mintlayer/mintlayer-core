@@ -21,13 +21,15 @@ use derive_more::Display;
 use thiserror::Error;
 
 use self::best_chain_candidates::BestChainCandidates;
-use super::{chainstateref::ChainstateRef, Chainstate};
+use super::{chainstateref::ChainstateRef, in_memory_block_tree::InMemoryBlockTree, Chainstate};
 use crate::{
-    detail::chainstateref::ReorgError, BlockError, BlockProcessingErrorClassification,
-    TransactionVerificationStrategy,
+    detail::{chainstateref::ReorgError, in_memory_block_tree},
+    BlockError, BlockProcessingErrorClassification, TransactionVerificationStrategy,
 };
 use chainstate_storage::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite};
-use chainstate_types::{BlockIndex, BlockStatus, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{
+    BlockIndex, BlockStatus, GenBlockIndex, InMemoryBlockTreeError, PropertyQueryError,
+};
 use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
@@ -58,16 +60,16 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
     fn collect_stale_block_indices_in_branch(
         &mut self,
         root_block_id: &Id<Block>,
-    ) -> Result<Vec<BlockIndex>, BlockInvalidatorError> {
+    ) -> Result<InMemoryBlockTree, BlockInvalidatorError> {
         let chainstate_ref =
             self.chainstate.make_db_tx_ro().map_err(BlockInvalidatorError::from)?;
         assert!(!is_block_in_main_chain(
             &chainstate_ref,
             root_block_id.into()
         )?);
-        let block_indices = chainstate_ref
-            .collect_block_indices_in_branch_sorted_by_height(root_block_id, true)
-            .map_err(BlockInvalidatorError::BlockIndicesForBranchQueryError)?;
+        let block_indices =
+            in_memory_block_tree::get_block_tree_branch(&chainstate_ref, root_block_id, true)
+                .map_err(BlockInvalidatorError::BlockTreeBranchQueryError)?;
         Ok(block_indices)
     }
 
@@ -79,12 +81,20 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
         &mut self,
         block_id: &Id<Block>,
         is_explicit_invalidation: IsExplicit,
-    ) -> Result<Vec<BlockIndex>, BlockInvalidatorError> {
+    ) -> Result<(), BlockInvalidatorError> {
         let block_indices_to_invalidate = self.collect_stale_block_indices_in_branch(block_id)?;
+        self.invalidate_block_tree(&block_indices_to_invalidate, is_explicit_invalidation)
+    }
 
+    #[log_error]
+    fn invalidate_block_tree(
+        &mut self,
+        tree: &InMemoryBlockTree,
+        is_explicit_invalidation: IsExplicit,
+    ) -> Result<(), BlockInvalidatorError> {
         self.chainstate.with_rw_tx(
             |chainstate_ref| {
-                for (i, block_index) in block_indices_to_invalidate.iter().enumerate() {
+                for (i, block_index) in tree.iterate_all().enumerate() {
                     let mut status = block_index.status();
                     if i == 0 {
                         match is_explicit_invalidation {
@@ -101,20 +111,25 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                 Ok(())
             },
             |attempt_number| {
-                log::info!("Invalidating block {block_id}, attempt #{attempt_number}");
+                log::info!(
+                    "Invalidating block {block_id}, attempt #{attempt_number}",
+                    block_id = tree.root_block_index().block_id()
+                );
             },
             |attempts_count, db_err| {
                 BlockInvalidatorError::DbCommitError(
                     attempts_count,
                     db_err,
-                    DbCommittingContext::InvalidatedBlockTreeStatuses(*block_id),
+                    DbCommittingContext::InvalidatedBlockTreeStatuses(
+                        *tree.root_block_index().block_id(),
+                    ),
                 )
             },
         )?;
 
-        self.chainstate.remove_orphans_of(block_id);
+        self.chainstate.remove_orphans_of(tree.root_block_index().block_id());
 
-        Ok(block_indices_to_invalidate)
+        Ok(())
     }
 
     /// Invalidate the specified block and its descendants; `is_explicit_invalidation`
@@ -242,21 +257,19 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                         return Err(BlockInvalidatorError::GenericReorgError(Box::new(err)));
                     }
                     ReorgError::ConnectTipFailed(block_id, err) => {
-                        let should_invalidate = err.classify().block_should_be_invalidated();
-                        let indices_to_remove = if should_invalidate {
-                            self.invalidate_stale_block(&block_id, IsExplicit::No)?
-                        } else {
-                            self.collect_stale_block_indices_in_branch(&block_id)?
-                        };
+                        let block_index_tree =
+                            self.collect_stale_block_indices_in_branch(&block_id)?;
+                        if err.classify().block_should_be_invalidated() {
+                            self.invalidate_block_tree(&block_index_tree, IsExplicit::No)?
+                        }
 
-                        assert!(!indices_to_remove.is_empty());
                         best_chain_candidates.remove_tree_add_parent(
                             &self
                                 .chainstate
                                 .make_db_tx_ro()
                                 .map_err(BlockInvalidatorError::from)?,
-                            &indices_to_remove[0],
-                            &indices_to_remove[1..],
+                            block_index_tree.root_block_index(),
+                            block_index_tree.iterate_children(),
                             min_chain_trust,
                         )?;
                     }
@@ -267,47 +280,40 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
         Ok(false)
     }
 
-    /// Reset fail flags in block indices for all blocks in the subtree that starts at the specified block.
+    /// Reset fail flags in block indices for all blocks in the subtree that start at the specified block.
     /// Block indices for which no block data exists in the db will be deleted.
     #[log_error]
     pub fn reset_block_failure_flags(
         &mut self,
         block_id: &Id<Block>,
     ) -> Result<(), BlockInvalidatorError> {
-        let block_indices_to_clear = {
+        let block_index_tree_to_clear = {
             let chainstate_ref =
                 self.chainstate.make_db_tx_ro().map_err(BlockInvalidatorError::from)?;
 
-            chainstate_ref
-                .collect_block_indices_in_branch_sorted_by_height(block_id, true)
-                .map_err(BlockInvalidatorError::BlockIndicesForBranchQueryError)?
+            in_memory_block_tree::get_block_tree_branch(&chainstate_ref, block_id, true)
+                .map_err(BlockInvalidatorError::BlockTreeBranchQueryError)?
         };
 
         self.chainstate.with_rw_tx(
             |chainstate_ref| {
-                let mut non_persisted_block_indices = Vec::new();
+                block_index_tree_to_clear.for_all(|subtree| -> Result<_, BlockInvalidatorError> {
+                    let block_index = subtree.root_block_index();
 
-                for cur_index in &block_indices_to_clear {
-                    if cur_index.is_persisted() {
+                    if block_index.is_persisted() {
                         update_block_status(
                             chainstate_ref,
-                            cur_index.clone(),
-                            cur_index.status().with_cleared_fail_bits(),
+                            block_index.clone(),
+                            block_index.status().with_cleared_fail_bits(),
                         )?;
+                        Ok(true)
                     } else {
-                        non_persisted_block_indices.push(cur_index);
+                        chainstate_ref
+                            .del_block_indices_of_non_persisted_block_tree(subtree)
+                            .map_err(BlockInvalidatorError::DelBlockIndicesError)?;
+                        Ok(false)
                     }
-                }
-
-                if !non_persisted_block_indices.is_empty() {
-                    chainstate_ref
-                        .del_block_indices_of_non_persisted_blocks(
-                            non_persisted_block_indices.into_iter(),
-                        )
-                        .map_err(BlockInvalidatorError::DelBlockIndicesError)?;
-                }
-
-                Ok(())
+                })
             },
             |attempt_number| {
                 log::info!("Clearing block failure flags, attempt #{}", attempt_number);
@@ -347,8 +353,8 @@ pub enum BlockInvalidatorError {
     #[error("Failed to commit to the DB after {0} attempts: {1}, context: {2}")]
     DbCommitError(usize, chainstate_storage::Error, DbCommittingContext),
 
-    #[error("Failed to obtain best block index: {0}")]
-    BlockIndicesForBranchQueryError(PropertyQueryError),
+    #[error("Failed to obtain block tree branch: {0}")]
+    BlockTreeBranchQueryError(InMemoryBlockTreeError),
     #[error("Failed to determine if the block {0} is in mainchain: {1}")]
     IsBlockInMainChainQueryError(Id<GenBlock>, PropertyQueryError),
     #[error("Failed to obtain the minimum height with allowed reorgs: {0}")]

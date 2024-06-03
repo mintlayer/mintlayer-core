@@ -56,6 +56,29 @@ pub enum PropertyQueryError {
         start: BlockHeight,
         end: BlockHeight,
     },
+    #[error(transparent)]
+    InMemoryBlockTreeError(#[from] InMemoryBlockTreeError),
+}
+
+// TODO: ideally, this error shouldn't be here, it should be in the `chainstate` crate itself;
+// it only exists here because we need to include it into `PropertyQueryError`.
+// Perhaps the latter should also be put inside the `chainstate` crate.
+#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
+pub enum InMemoryBlockTreeError {
+    // Note: `PropertyQueryError` itself may contain `InMemoryBlockTreeError`, so here we must box it.
+    #[error("Error querying property: {0}")]
+    PropertyQueryError(Box<PropertyQueryError>),
+    #[error("Invariant error: {0}")]
+    InvariantError(String),
+    // Note: String is used to avoid putting indextree::NodeError here, which is non-comparable.
+    #[error("Index tree node error: {0}")]
+    IndexTreeNodeError(String),
+}
+
+impl From<PropertyQueryError> for InMemoryBlockTreeError {
+    fn from(value: PropertyQueryError) -> Self {
+        InMemoryBlockTreeError::PropertyQueryError(Box::new(value))
+    }
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

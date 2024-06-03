@@ -25,8 +25,8 @@ use crate::{
         tx_verification_strategy::TransactionVerificationStrategy,
         BlockSource, OrphanBlocksRef,
     },
-    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
-    NonZeroPoolBalances,
+    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface,
+    InMemoryBlockTrees, Locator, NonZeroPoolBalances,
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
@@ -568,26 +568,28 @@ where
     }
 
     #[tracing::instrument(skip_all)]
-    fn get_block_tree_top_by_height(
+    fn get_block_tree_top_starting_from_height(
         &self,
-        start_from: BlockHeight,
-    ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, ChainstateError> {
+        min_height: BlockHeight,
+        include_non_persisted: bool,
+    ) -> Result<InMemoryBlockTrees, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_block_tree_top_by_height(start_from, false)
+            .get_block_tree_top_starting_from_height(min_height, include_non_persisted)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
     #[tracing::instrument(skip_all)]
-    fn get_block_tree_top_by_timestamp(
+    fn get_block_tree_top_starting_from_timestamp(
         &self,
-        start_from: BlockTimestamp,
-    ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, ChainstateError> {
+        min_timestamp: BlockTimestamp,
+        include_non_persisted: bool,
+    ) -> Result<InMemoryBlockTrees, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_block_tree_top_by_timestamp(start_from, false)
+            .get_block_tree_top_starting_from_timestamp(min_timestamp, include_non_persisted)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
