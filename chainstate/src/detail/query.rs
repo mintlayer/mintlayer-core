@@ -31,6 +31,8 @@ use common::{
 use tokens_accounting::TokensAccountingStorageRead;
 use utils::ensure;
 
+use crate::BlockValidity;
+
 use super::{
     chainstateref, in_memory_block_tree::InMemoryBlockTrees,
     tx_verification_strategy::TransactionVerificationStrategy,
@@ -393,19 +395,19 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn get_block_tree_top_starting_from_height(
         &self,
         min_height: BlockHeight,
-        include_non_persisted: bool,
+        block_validity: BlockValidity,
     ) -> Result<InMemoryBlockTrees, PropertyQueryError> {
         self.chainstate_ref
-            .get_block_tree_top_starting_from_height(min_height, include_non_persisted)
+            .get_block_tree_top_starting_from_height(min_height, block_validity)
     }
 
     pub fn get_block_tree_top_starting_from_timestamp(
         &self,
         min_timestamp: BlockTimestamp,
-        include_non_persisted: bool,
+        block_validity: BlockValidity,
     ) -> Result<InMemoryBlockTrees, PropertyQueryError> {
         self.chainstate_ref
-            .get_block_tree_top_starting_from_timestamp(min_timestamp, include_non_persisted)
+            .get_block_tree_top_starting_from_timestamp(min_timestamp, block_validity)
     }
 
     pub fn get_token_data(

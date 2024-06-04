@@ -39,10 +39,10 @@ pub use crate::{
         calculate_median_time_past, calculate_median_time_past_from_blocktimestamps,
         in_memory_block_tree::{InMemoryBlockTree, InMemoryBlockTreeRef, InMemoryBlockTrees},
         BlockError, BlockProcessingErrorClass, BlockProcessingErrorClassification, BlockSource,
-        ChainInfo, CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError,
-        IOPolicyError, InitializationError, Locator, NonZeroPoolBalances, OrphanCheckError,
-        SpendStakeError, StorageCompatibilityCheckError, TokenIssuanceError, TokensError,
-        TransactionVerifierStorageError, MEDIAN_TIME_SPAN,
+        BlockValidity, ChainInfo, CheckBlockError, CheckBlockTransactionsError,
+        ConnectTransactionError, IOPolicyError, InitializationError, Locator, NonZeroPoolBalances,
+        OrphanCheckError, SpendStakeError, StorageCompatibilityCheckError, TokenIssuanceError,
+        TokensError, TransactionVerifierStorageError, MEDIAN_TIME_SPAN,
     },
 };
 pub use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};

@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 
 use thiserror::Error;
 
-use crate::{detail::chainstateref::ChainstateRef, TransactionVerificationStrategy};
+use crate::{detail::chainstateref::ChainstateRef, BlockValidity, TransactionVerificationStrategy};
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, BlockStatus, GenBlockIndex, PropertyQueryError};
 use common::{
@@ -231,7 +231,7 @@ where
         &self,
         start_from: BlockHeight,
     ) -> Result<impl DoubleEndedIterator<Item = Id<Block>>, PropertyQueryError> {
-        self.get_higher_block_ids_sorted_by_height(start_from, true)
+        self.get_higher_block_ids_sorted_by_height(start_from, BlockValidity::Any)
     }
 
     #[log_error]

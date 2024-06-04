@@ -25,8 +25,8 @@ use crate::{
         tx_verification_strategy::TransactionVerificationStrategy,
         BlockSource, OrphanBlocksRef,
     },
-    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface,
-    InMemoryBlockTrees, Locator, NonZeroPoolBalances,
+    BlockValidity, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent,
+    ChainstateInterface, InMemoryBlockTrees, Locator, NonZeroPoolBalances,
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
@@ -571,12 +571,12 @@ where
     fn get_block_tree_top_starting_from_height(
         &self,
         min_height: BlockHeight,
-        include_non_persisted: bool,
+        block_validity: BlockValidity,
     ) -> Result<InMemoryBlockTrees, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_block_tree_top_starting_from_height(min_height, include_non_persisted)
+            .get_block_tree_top_starting_from_height(min_height, block_validity)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
@@ -584,12 +584,12 @@ where
     fn get_block_tree_top_starting_from_timestamp(
         &self,
         min_timestamp: BlockTimestamp,
-        include_non_persisted: bool,
+        block_validity: BlockValidity,
     ) -> Result<InMemoryBlockTrees, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_block_tree_top_starting_from_timestamp(min_timestamp, include_non_persisted)
+            .get_block_tree_top_starting_from_timestamp(min_timestamp, block_validity)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 

@@ -15,7 +15,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use chainstate::{InMemoryBlockTreeRef, InMemoryBlockTrees};
+use chainstate::{BlockValidity, InMemoryBlockTreeRef, InMemoryBlockTrees};
 use itertools::Itertools;
 use rstest::rstest;
 
@@ -140,19 +140,56 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         assert!(!tf.block_index(&b2_id).is_persisted());
         assert!(!tf.block_index(&c1_id).is_persisted());
 
-        assert_block_tree_top_by_height(&tf, 5.into(), false, &[]);
-        assert_block_tree_top_by_height(&tf, 4.into(), false, &[]);
-        assert_block_tree_top_by_height(&tf, 3.into(), false, &[(3.into(), &[m2_id, b1_id])]);
+        // BlockValidity::Ok
+        assert_block_tree_top_by_height(&tf, 5.into(), BlockValidity::Ok, &[]);
+        assert_block_tree_top_by_height(&tf, 4.into(), BlockValidity::Ok, &[]);
+        assert_block_tree_top_by_height(&tf, 3.into(), BlockValidity::Ok, &[(3.into(), &[m2_id])]);
         assert_block_tree_top_by_height(
             &tf,
             2.into(),
-            false,
+            BlockValidity::Ok,
+            &[(3.into(), &[m2_id]), (2.into(), &[m1_id, a1_id, b0_id])],
+        );
+        assert_block_tree_top_by_height(
+            &tf,
+            1.into(),
+            BlockValidity::Ok,
+            &[
+                (3.into(), &[m2_id]),
+                (2.into(), &[m1_id, a1_id, b0_id]),
+                (1.into(), &[m0_id, a0_id]),
+            ],
+        );
+        assert_block_tree_top_by_height(
+            &tf,
+            0.into(),
+            BlockValidity::Ok,
+            &[
+                (3.into(), &[m2_id]),
+                (2.into(), &[m1_id, a1_id, b0_id]),
+                (1.into(), &[m0_id, a0_id]),
+            ],
+        );
+
+        // BlockValidity::Persisted
+        assert_block_tree_top_by_height(&tf, 5.into(), BlockValidity::Persisted, &[]);
+        assert_block_tree_top_by_height(&tf, 4.into(), BlockValidity::Persisted, &[]);
+        assert_block_tree_top_by_height(
+            &tf,
+            3.into(),
+            BlockValidity::Persisted,
+            &[(3.into(), &[m2_id, b1_id])],
+        );
+        assert_block_tree_top_by_height(
+            &tf,
+            2.into(),
+            BlockValidity::Persisted,
             &[(3.into(), &[m2_id, b1_id]), (2.into(), &[m1_id, a1_id, b0_id])],
         );
         assert_block_tree_top_by_height(
             &tf,
             1.into(),
-            false,
+            BlockValidity::Persisted,
             &[
                 (3.into(), &[m2_id, b1_id]),
                 (2.into(), &[m1_id, a1_id, b0_id]),
@@ -162,7 +199,7 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         assert_block_tree_top_by_height(
             &tf,
             0.into(),
-            false,
+            BlockValidity::Persisted,
             &[
                 (3.into(), &[m2_id, b1_id]),
                 (2.into(), &[m1_id, a1_id, b0_id]),
@@ -170,18 +207,24 @@ fn block_tree_retrieval(#[case] seed: Seed) {
             ],
         );
 
-        assert_block_tree_top_by_height(&tf, 5.into(), false, &[]);
-        assert_block_tree_top_by_height(&tf, 4.into(), true, &[(4.into(), &[b2_id, c1_id])]);
+        // BlockValidity::Any
+        assert_block_tree_top_by_height(&tf, 5.into(), BlockValidity::Any, &[]);
+        assert_block_tree_top_by_height(
+            &tf,
+            4.into(),
+            BlockValidity::Any,
+            &[(4.into(), &[b2_id, c1_id])],
+        );
         assert_block_tree_top_by_height(
             &tf,
             3.into(),
-            true,
+            BlockValidity::Any,
             &[(4.into(), &[b2_id, c1_id]), (3.into(), &[m2_id, b1_id])],
         );
         assert_block_tree_top_by_height(
             &tf,
             2.into(),
-            true,
+            BlockValidity::Any,
             &[
                 (4.into(), &[b2_id, c1_id]),
                 (3.into(), &[m2_id, b1_id]),
@@ -191,7 +234,7 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         assert_block_tree_top_by_height(
             &tf,
             1.into(),
-            true,
+            BlockValidity::Any,
             &[
                 (4.into(), &[b2_id, c1_id]),
                 (3.into(), &[m2_id, b1_id]),
@@ -202,7 +245,7 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         assert_block_tree_top_by_height(
             &tf,
             0.into(),
-            true,
+            BlockValidity::Any,
             &[
                 (4.into(), &[b2_id, c1_id]),
                 (3.into(), &[m2_id, b1_id]),
@@ -224,26 +267,62 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         let ts6 = tf.block_index(&c1_id).block_timestamp();
         assert!(ts6 > ts5 && ts5 > ts4 && ts4 > ts3 && ts3 > ts2 && ts2 > ts1 && ts1 > ts0);
 
-        assert_block_tree_top_by_timestamp(&tf, ts6.add_int_seconds(1).unwrap(), false, &[]);
-        assert_block_tree_top_by_timestamp(&tf, ts6, false, &[]);
-        assert_block_tree_top_by_timestamp(&tf, ts5, false, &[]);
-        assert_block_tree_top_by_timestamp(&tf, ts4, false, &[(ts4, &[b1_id])]);
+        // BlockValidity::Ok
+        assert_block_tree_top_by_timestamp(
+            &tf,
+            ts6.add_int_seconds(1).unwrap(),
+            BlockValidity::Ok,
+            &[],
+        );
+        assert_block_tree_top_by_timestamp(&tf, ts6, BlockValidity::Ok, &[]);
+        assert_block_tree_top_by_timestamp(&tf, ts5, BlockValidity::Ok, &[]);
+        assert_block_tree_top_by_timestamp(&tf, ts4, BlockValidity::Ok, &[]);
+        assert_block_tree_top_by_timestamp(&tf, ts3, BlockValidity::Ok, &[(ts3, &[m2_id, a1_id])]);
+        assert_block_tree_top_by_timestamp(
+            &tf,
+            ts2,
+            BlockValidity::Ok,
+            &[(ts3, &[m2_id, a1_id]), (ts2, &[m1_id, b0_id])],
+        );
+        assert_block_tree_top_by_timestamp(
+            &tf,
+            ts1,
+            BlockValidity::Ok,
+            &[(ts3, &[m2_id, a1_id]), (ts2, &[m1_id, b0_id]), (ts1, &[m0_id, a0_id])],
+        );
+        assert_block_tree_top_by_timestamp(
+            &tf,
+            ts0,
+            BlockValidity::Ok,
+            &[(ts3, &[m2_id, a1_id]), (ts2, &[m1_id, b0_id]), (ts1, &[m0_id, a0_id])],
+        );
+
+        // BlockValidity::Persisted
+        assert_block_tree_top_by_timestamp(
+            &tf,
+            ts6.add_int_seconds(1).unwrap(),
+            BlockValidity::Persisted,
+            &[],
+        );
+        assert_block_tree_top_by_timestamp(&tf, ts6, BlockValidity::Persisted, &[]);
+        assert_block_tree_top_by_timestamp(&tf, ts5, BlockValidity::Persisted, &[]);
+        assert_block_tree_top_by_timestamp(&tf, ts4, BlockValidity::Persisted, &[(ts4, &[b1_id])]);
         assert_block_tree_top_by_timestamp(
             &tf,
             ts3,
-            false,
+            BlockValidity::Persisted,
             &[(ts4, &[b1_id]), (ts3, &[m2_id, a1_id])],
         );
         assert_block_tree_top_by_timestamp(
             &tf,
             ts2,
-            false,
+            BlockValidity::Persisted,
             &[(ts4, &[b1_id]), (ts3, &[m2_id, a1_id]), (ts2, &[m1_id, b0_id])],
         );
         assert_block_tree_top_by_timestamp(
             &tf,
             ts1,
-            false,
+            BlockValidity::Persisted,
             &[
                 (ts4, &[b1_id]),
                 (ts3, &[m2_id, a1_id]),
@@ -253,8 +332,8 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         );
         assert_block_tree_top_by_timestamp(
             &tf,
-            ts1,
-            false,
+            ts0,
+            BlockValidity::Persisted,
             &[
                 (ts4, &[b1_id]),
                 (ts3, &[m2_id, a1_id]),
@@ -263,25 +342,36 @@ fn block_tree_retrieval(#[case] seed: Seed) {
             ],
         );
 
-        assert_block_tree_top_by_timestamp(&tf, ts6.add_int_seconds(1).unwrap(), true, &[]);
-        assert_block_tree_top_by_timestamp(&tf, ts6, true, &[(ts6, &[c1_id])]);
-        assert_block_tree_top_by_timestamp(&tf, ts5, true, &[(ts6, &[c1_id]), (ts5, &[b2_id])]);
+        // BlockValidity::Any
+        assert_block_tree_top_by_timestamp(
+            &tf,
+            ts6.add_int_seconds(1).unwrap(),
+            BlockValidity::Any,
+            &[],
+        );
+        assert_block_tree_top_by_timestamp(&tf, ts6, BlockValidity::Any, &[(ts6, &[c1_id])]);
+        assert_block_tree_top_by_timestamp(
+            &tf,
+            ts5,
+            BlockValidity::Any,
+            &[(ts6, &[c1_id]), (ts5, &[b2_id])],
+        );
         assert_block_tree_top_by_timestamp(
             &tf,
             ts4,
-            true,
+            BlockValidity::Any,
             &[(ts6, &[c1_id]), (ts5, &[b2_id]), (ts4, &[b1_id])],
         );
         assert_block_tree_top_by_timestamp(
             &tf,
             ts3,
-            true,
+            BlockValidity::Any,
             &[(ts6, &[c1_id]), (ts5, &[b2_id]), (ts4, &[b1_id]), (ts3, &[m2_id, a1_id])],
         );
         assert_block_tree_top_by_timestamp(
             &tf,
             ts2,
-            true,
+            BlockValidity::Any,
             &[
                 (ts6, &[c1_id]),
                 (ts5, &[b2_id]),
@@ -293,7 +383,7 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         assert_block_tree_top_by_timestamp(
             &tf,
             ts1,
-            true,
+            BlockValidity::Any,
             &[
                 (ts6, &[c1_id]),
                 (ts5, &[b2_id]),
@@ -305,8 +395,8 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         );
         assert_block_tree_top_by_timestamp(
             &tf,
-            ts1,
-            true,
+            ts0,
+            BlockValidity::Any,
             &[
                 (ts6, &[c1_id]),
                 (ts5, &[b2_id]),
@@ -353,7 +443,7 @@ fn check_trees_consistency(trees: &InMemoryBlockTrees) {
 fn assert_block_tree_top_by_height(
     tf: &TestFramework,
     start_from: BlockHeight,
-    include_non_persisted: bool,
+    block_validity: BlockValidity,
     expected: &[(BlockHeight, &[Id<Block>])],
 ) {
     let expected = expected
@@ -363,7 +453,7 @@ fn assert_block_tree_top_by_height(
 
     let actual_trees = tf
         .chainstate
-        .get_block_tree_top_starting_from_height(start_from, include_non_persisted)
+        .get_block_tree_top_starting_from_height(start_from, block_validity)
         .unwrap();
     check_trees_consistency(&actual_trees);
 
@@ -375,7 +465,7 @@ fn assert_block_tree_top_by_height(
 fn assert_block_tree_top_by_timestamp(
     tf: &TestFramework,
     start_from: BlockTimestamp,
-    include_non_persisted: bool,
+    block_validity: BlockValidity,
     expected: &[(BlockTimestamp, &[Id<Block>])],
 ) {
     let expected = expected
@@ -385,7 +475,7 @@ fn assert_block_tree_top_by_timestamp(
 
     let actual_trees = tf
         .chainstate
-        .get_block_tree_top_starting_from_timestamp(start_from, include_non_persisted)
+        .get_block_tree_top_starting_from_timestamp(start_from, block_validity)
         .unwrap();
     check_trees_consistency(&actual_trees);
 

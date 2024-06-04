@@ -24,9 +24,9 @@ use common::{
 use indextree::{Arena, NodeId};
 use utils::{debug_panic_or_log, log_error};
 
-use crate::TransactionVerificationStrategy;
+use crate::{detail::chainstateref::block_validity_matches, TransactionVerificationStrategy};
 
-use super::chainstateref::ChainstateRef;
+use super::chainstateref::{BlockValidity, ChainstateRef};
 
 /// Zero or more `BlockIndex` trees sharing the same arena.
 pub struct InMemoryBlockTrees {
@@ -61,18 +61,20 @@ impl InMemoryBlockTrees {
             .map(|node_id| InMemoryBlockTreeRef::new(&self.arena, *node_id))
     }
 
+    pub fn iter_all_block_indices(&self) -> impl Iterator<Item = &'_ BlockIndex> {
+        self.iter_trees().flat_map(|tree| tree.iter_all())
+    }
+
     pub fn as_by_height_block_id_map(
         &self,
     ) -> Result<BTreeMap<BlockHeight, BTreeSet<Id<Block>>>, InMemoryBlockTreeError> {
         let mut result = BTreeMap::<BlockHeight, BTreeSet<Id<Block>>>::new();
 
-        for tree in self.iter_trees() {
-            for block_index in tree.iter_all() {
-                result
-                    .entry(block_index.block_height())
-                    .or_default()
-                    .insert(*block_index.block_id());
-            }
+        for block_index in self.iter_all_block_indices() {
+            result
+                .entry(block_index.block_height())
+                .or_default()
+                .insert(*block_index.block_id());
         }
 
         Ok(result)
@@ -83,16 +85,26 @@ impl InMemoryBlockTrees {
     ) -> Result<BTreeMap<BlockTimestamp, BTreeSet<Id<Block>>>, InMemoryBlockTreeError> {
         let mut result = BTreeMap::<BlockTimestamp, BTreeSet<Id<Block>>>::new();
 
-        for tree in self.iter_trees() {
-            for block_index in tree.iter_all() {
-                result
-                    .entry(block_index.block_timestamp())
-                    .or_default()
-                    .insert(*block_index.block_id());
-            }
+        for block_index in self.iter_all_block_indices() {
+            result
+                .entry(block_index.block_timestamp())
+                .or_default()
+                .insert(*block_index.block_id());
         }
 
         Ok(result)
+    }
+
+    pub fn assert_all_blocks_match_validity(&self, block_validity: BlockValidity) {
+        if block_validity != BlockValidity::Any {
+            for block_index in self.iter_all_block_indices() {
+                assert!(
+                    block_validity_matches(block_index, block_validity),
+                    "Block {id} validity doesn't match {block_validity:?}",
+                    id = block_index.block_id(),
+                );
+            }
+        }
     }
 }
 
@@ -178,11 +190,11 @@ impl InMemoryBlockTree {
         InMemoryBlockTreeRef::new(&self.arena, self.root_id)
     }
 
-    pub fn iterate_all(&self) -> impl Iterator<Item = &BlockIndex> {
+    pub fn iter_all(&self) -> impl Iterator<Item = &BlockIndex> {
         self.as_ref().iter_all()
     }
 
-    pub fn iterate_children(&self) -> impl Iterator<Item = &BlockIndex> {
+    pub fn iter_children(&self) -> impl Iterator<Item = &BlockIndex> {
         self.as_ref().iter_children()
     }
 
@@ -217,7 +229,7 @@ fn append_child<T>(
 pub fn get_block_tree_top<S, V>(
     chainstate_ref: &ChainstateRef<S, V>,
     is_depth_ok: impl Fn(&BlockIndex) -> bool,
-    include_non_persisted: bool,
+    block_validity: BlockValidity,
 ) -> Result<InMemoryBlockTrees, InMemoryBlockTreeError>
 where
     S: BlockchainStorageRead,
@@ -233,16 +245,12 @@ where
     for leaf_block_id in leaf_block_ids {
         let leaf_block_index = chainstate_ref.get_existing_block_index(&leaf_block_id)?;
 
-        let effective_leaf_block_index = if !include_non_persisted {
-            if let Some(block_index) =
-                chainstate_ref.find_first_persisted_parent(leaf_block_index, &is_depth_ok)?
-            {
-                block_index
-            } else {
-                continue;
-            }
+        let effective_leaf_block_index = if let Some(block_index) = chainstate_ref
+            .find_first_parent_with_validity(leaf_block_index, block_validity, &is_depth_ok)?
+        {
+            block_index
         } else {
-            leaf_block_index
+            continue;
         };
 
         if !is_depth_ok(&effective_leaf_block_index) {
@@ -301,7 +309,7 @@ where
 pub fn get_block_tree_branch<S, V>(
     chainstate_ref: &ChainstateRef<S, V>,
     root_block_id: &Id<Block>,
-    include_non_persisted: bool,
+    block_validity: BlockValidity,
 ) -> Result<InMemoryBlockTree, InMemoryBlockTreeError>
 where
     S: BlockchainStorageRead,
@@ -313,7 +321,7 @@ where
     let trees = get_block_tree_top(
         chainstate_ref,
         |block_index| block_index.block_height() >= root_block_height,
-        include_non_persisted,
+        block_validity,
     )?;
     let tree = trees.into_single_tree(root_block_id);
 

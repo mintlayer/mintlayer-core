@@ -24,7 +24,7 @@ use self::best_chain_candidates::BestChainCandidates;
 use super::{chainstateref::ChainstateRef, in_memory_block_tree::InMemoryBlockTree, Chainstate};
 use crate::{
     detail::{chainstateref::ReorgError, in_memory_block_tree},
-    BlockError, BlockProcessingErrorClassification, TransactionVerificationStrategy,
+    BlockError, BlockProcessingErrorClassification, BlockValidity, TransactionVerificationStrategy,
 };
 use chainstate_storage::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite};
 use chainstate_types::{
@@ -67,9 +67,12 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
             &chainstate_ref,
             root_block_id.into()
         )?);
-        let block_indices =
-            in_memory_block_tree::get_block_tree_branch(&chainstate_ref, root_block_id, true)
-                .map_err(BlockInvalidatorError::BlockTreeBranchQueryError)?;
+        let block_indices = in_memory_block_tree::get_block_tree_branch(
+            &chainstate_ref,
+            root_block_id,
+            BlockValidity::Any,
+        )
+        .map_err(BlockInvalidatorError::BlockTreeBranchQueryError)?;
         Ok(block_indices)
     }
 
@@ -94,7 +97,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
     ) -> Result<(), BlockInvalidatorError> {
         self.chainstate.with_rw_tx(
             |chainstate_ref| {
-                for (i, block_index) in tree.iterate_all().enumerate() {
+                for (i, block_index) in tree.iter_all().enumerate() {
                     let mut status = block_index.status();
                     if i == 0 {
                         match is_explicit_invalidation {
@@ -269,7 +272,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                                 .make_db_tx_ro()
                                 .map_err(BlockInvalidatorError::from)?,
                             block_index_tree.root_block_index(),
-                            block_index_tree.iterate_children(),
+                            block_index_tree.iter_children(),
                             min_chain_trust,
                         )?;
                     }
@@ -291,8 +294,12 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
             let chainstate_ref =
                 self.chainstate.make_db_tx_ro().map_err(BlockInvalidatorError::from)?;
 
-            in_memory_block_tree::get_block_tree_branch(&chainstate_ref, block_id, true)
-                .map_err(BlockInvalidatorError::BlockTreeBranchQueryError)?
+            in_memory_block_tree::get_block_tree_branch(
+                &chainstate_ref,
+                block_id,
+                BlockValidity::Any,
+            )
+            .map_err(BlockInvalidatorError::BlockTreeBranchQueryError)?
         };
 
         self.chainstate.with_rw_tx(

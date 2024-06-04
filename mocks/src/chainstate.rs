@@ -16,8 +16,8 @@
 use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
 
 use chainstate::{
-    BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, InMemoryBlockTrees,
-    Locator,
+    BlockSource, BlockValidity, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent,
+    InMemoryBlockTrees, Locator,
 };
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex};
 use common::{
@@ -160,12 +160,12 @@ mockall::mock! {
         fn get_block_tree_top_starting_from_height(
             &self,
             min_height: BlockHeight,
-            include_non_persisted: bool,
+            block_validity: BlockValidity,
         ) -> Result<InMemoryBlockTrees, ChainstateError>;
         fn get_block_tree_top_starting_from_timestamp(
             &self,
             min_timestamp: BlockTimestamp,
-            include_non_persisted: bool,
+            block_validity: BlockValidity,
         ) -> Result<InMemoryBlockTrees, ChainstateError>;
         fn import_bootstrap_stream<'a>(
             &'a mut self,

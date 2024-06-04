@@ -16,8 +16,8 @@
 use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc};
 
 use crate::{
-    detail::BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent,
-    InMemoryBlockTrees, NonZeroPoolBalances,
+    detail::BlockSource, BlockValidity, ChainInfo, ChainstateConfig, ChainstateError,
+    ChainstateEvent, InMemoryBlockTrees, NonZeroPoolBalances,
 };
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 use common::{
@@ -236,22 +236,18 @@ pub trait ChainstateInterface: Send + Sync {
 
     /// Return block indices of blocks with heights bigger than or equal to the specified one,
     /// as a set of zero or more trees.
-    /// If `include_non_persisted` is false, indices of non-persisted blocks will not be included in the result.
-    // TODO: a persisted block can still be invalid. Should we only return valid blocks here?
     fn get_block_tree_top_starting_from_height(
         &self,
         min_height: BlockHeight,
-        include_non_persisted: bool,
+        block_validity: BlockValidity,
     ) -> Result<InMemoryBlockTrees, ChainstateError>;
 
     /// Return block indices of blocks with timestamps bigger than or equal to the specified one,
     /// as a set of zero or more trees.
-    /// If `include_non_persisted` is false, indices of non-persisted blocks will not be included in the result.
-    // TODO: a persisted block can still be invalid. Should we only return valid blocks here?
     fn get_block_tree_top_starting_from_timestamp(
         &self,
         min_timestamp: BlockTimestamp,
-        include_non_persisted: bool,
+        block_validity: BlockValidity,
     ) -> Result<InMemoryBlockTrees, ChainstateError>;
 
     /// Imports a bootstrap file exported with `export_bootstrap_stream`.

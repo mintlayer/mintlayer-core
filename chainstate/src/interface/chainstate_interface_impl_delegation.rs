@@ -37,8 +37,8 @@ use utils_networking::broadcaster;
 use utxo::Utxo;
 
 use crate::{
-    chainstate_interface::ChainstateInterface, BlockSource, ChainInfo, ChainstateConfig,
-    ChainstateError, ChainstateEvent, InMemoryBlockTrees, NonZeroPoolBalances,
+    chainstate_interface::ChainstateInterface, BlockSource, BlockValidity, ChainInfo,
+    ChainstateConfig, ChainstateError, ChainstateEvent, InMemoryBlockTrees, NonZeroPoolBalances,
 };
 
 impl<T: Deref + DerefMut + Send + Sync> ChainstateInterface for T
@@ -307,19 +307,18 @@ where
     fn get_block_tree_top_starting_from_height(
         &self,
         min_height: BlockHeight,
-        include_non_persisted: bool,
+        block_validity: BlockValidity,
     ) -> Result<InMemoryBlockTrees, ChainstateError> {
-        self.deref()
-            .get_block_tree_top_starting_from_height(min_height, include_non_persisted)
+        self.deref().get_block_tree_top_starting_from_height(min_height, block_validity)
     }
 
     fn get_block_tree_top_starting_from_timestamp(
         &self,
         min_timestamp: BlockTimestamp,
-        include_non_persisted: bool,
+        block_validity: BlockValidity,
     ) -> Result<InMemoryBlockTrees, ChainstateError> {
         self.deref()
-            .get_block_tree_top_starting_from_timestamp(min_timestamp, include_non_persisted)
+            .get_block_tree_top_starting_from_timestamp(min_timestamp, block_validity)
     }
 
     fn import_bootstrap_stream<'a>(

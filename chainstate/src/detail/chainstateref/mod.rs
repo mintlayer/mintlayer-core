@@ -900,7 +900,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
         let result = self
-            .get_block_tree_top_by_height_traversing_entire_index(0.into(), false)?
+            .get_block_tree_top_by_height_traversing_entire_index(
+                0.into(),
+                BlockValidity::Persisted,
+            )?
             .into_iter()
             .flat_map(|(_height, ids_per_height)| ids_per_height)
             .collect();
@@ -913,10 +916,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn get_higher_block_ids_sorted_by_height(
         &self,
         start_from: BlockHeight,
-        include_non_persisted: bool,
+        block_validity: BlockValidity,
     ) -> Result<impl DoubleEndedIterator<Item = Id<Block>>, PropertyQueryError> {
         let block_trees =
-            self.get_block_tree_top_starting_from_height(start_from, include_non_persisted)?;
+            self.get_block_tree_top_starting_from_height(start_from, block_validity)?;
         let block_id_map = block_trees.as_by_height_block_id_map()?;
 
         Ok(block_id_map.into_iter().flat_map(|(_height, ids_per_height)| ids_per_height))
@@ -926,14 +929,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     fn get_block_tree_top_by_height_traversing_entire_index(
         &self,
         start_from: BlockHeight,
-        include_non_persisted: bool,
+        block_validity: BlockValidity,
     ) -> Result<BTreeMap<BlockHeight, BTreeSet<Id<Block>>>, PropertyQueryError> {
         let mut result = BTreeMap::<BlockHeight, BTreeSet<Id<Block>>>::new();
         let iter = self.db_tx.iterate_block_index()?;
 
         for block_index in iter {
             if block_index.block_height() >= start_from
-                && (include_non_persisted || block_index.is_persisted())
+                && block_validity_matches(&block_index, block_validity)
             {
                 result
                     .entry(block_index.block_height())
@@ -949,14 +952,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     fn get_block_tree_top_by_timestamp_traversing_entire_index(
         &self,
         start_from: BlockTimestamp,
-        include_non_persisted: bool,
+        block_validity: BlockValidity,
     ) -> Result<BTreeMap<BlockTimestamp, BTreeSet<Id<Block>>>, PropertyQueryError> {
         let mut result = BTreeMap::<BlockTimestamp, BTreeSet<Id<Block>>>::new();
         let iter = self.db_tx.iterate_block_index()?;
 
         for block_index in iter {
             if block_index.block_timestamp() >= start_from
-                && (include_non_persisted || block_index.is_persisted())
+                && block_validity_matches(&block_index, block_validity)
             {
                 result
                     .entry(block_index.block_timestamp())
@@ -968,12 +971,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(result)
     }
 
-    /// Find first persisted parent of the specified block.
+    /// Return the block index of the first parent of the specified block that has the specified validity
+    /// (or the block itself).
     /// At each step call `is_depth_ok`; return None if `is_depth_ok` has returned false.
     #[log_error]
-    pub fn find_first_persisted_parent(
+    pub fn find_first_parent_with_validity(
         &self,
         block_index: BlockIndex,
+        block_validity: BlockValidity,
         is_depth_ok: impl Fn(&BlockIndex) -> bool,
     ) -> Result<Option<BlockIndex>, PropertyQueryError> {
         let mut cur_block_index = block_index;
@@ -983,7 +988,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 return Ok(None);
             }
 
-            if cur_block_index.is_persisted() {
+            if block_validity_matches(&cur_block_index, block_validity) {
                 return Ok(Some(cur_block_index));
             }
 
@@ -1004,21 +1009,21 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn get_block_tree_top_starting_from_height(
         &self,
         min_height: BlockHeight,
-        include_non_persisted: bool,
+        block_validity: BlockValidity,
     ) -> Result<InMemoryBlockTrees, PropertyQueryError> {
         let result = in_memory_block_tree::get_block_tree_top(
             self,
             |block_index| block_index.block_height() >= min_height,
-            include_non_persisted,
+            block_validity,
         )?;
 
         if self.chainstate_config.heavy_checks_enabled(self.chain_config) {
+            result.assert_all_blocks_match_validity(block_validity);
+
             // Check that traversing the entire index produces the same result.
             let result_as_map = result.as_by_height_block_id_map()?;
-            let alternative_result = self.get_block_tree_top_by_height_traversing_entire_index(
-                min_height,
-                include_non_persisted,
-            )?;
+            let alternative_result = self
+                .get_block_tree_top_by_height_traversing_entire_index(min_height, block_validity)?;
             assert_eq!(result_as_map, alternative_result);
         }
 
@@ -1032,20 +1037,22 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn get_block_tree_top_starting_from_timestamp(
         &self,
         min_timestamp: BlockTimestamp,
-        include_non_persisted: bool,
+        block_validity: BlockValidity,
     ) -> Result<InMemoryBlockTrees, PropertyQueryError> {
         let result = in_memory_block_tree::get_block_tree_top(
             self,
             |block_index| block_index.block_timestamp() >= min_timestamp,
-            include_non_persisted,
+            block_validity,
         )?;
 
         if self.chainstate_config.heavy_checks_enabled(self.chain_config) {
+            result.assert_all_blocks_match_validity(block_validity);
+
             // Check that traversing the entire index produces the same result.
             let result_as_map = result.as_by_timestamp_block_id_map()?;
             let alternative_result = self.get_block_tree_top_by_timestamp_traversing_entire_index(
                 min_timestamp,
-                include_non_persisted,
+                block_validity,
             )?;
             assert_eq!(result_as_map, alternative_result);
         }
@@ -1712,5 +1719,20 @@ impl NonZeroPoolBalances {
 
     pub fn staker_balance(&self) -> Amount {
         self.staker_balance
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum BlockValidity {
+    Ok,
+    Persisted,
+    Any,
+}
+
+pub fn block_validity_matches(block_index: &BlockIndex, block_validity: BlockValidity) -> bool {
+    match block_validity {
+        BlockValidity::Ok => block_index.status().is_ok(),
+        BlockValidity::Persisted => block_index.is_persisted(),
+        BlockValidity::Any => true,
     }
 }

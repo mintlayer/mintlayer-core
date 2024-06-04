@@ -77,7 +77,7 @@ pub use self::{
     median_time::calculate_median_time_past_from_blocktimestamps, median_time::MEDIAN_TIME_SPAN,
 };
 pub use chainstate_types::Locator;
-pub use chainstateref::NonZeroPoolBalances;
+pub use chainstateref::{BlockValidity, NonZeroPoolBalances};
 pub use error::{
     BlockError, CheckBlockError, CheckBlockTransactionsError, DbCommittingContext,
     InitializationError, OrphanCheckError, StorageCompatibilityCheckError,
