@@ -13,11 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::primitives::BlockHeight;
-
 use super::*;
-
-type WS = WitnessScript;
 
 #[rstest::rstest]
 #[case(0, 0, true)]
@@ -43,6 +39,44 @@ fn conj(conds: impl IntoIterator<Item = WS>) -> WS {
 
 const fn tl(n: u64) -> WS {
     WS::timelock(OutputTimeLock::UntilHeight(BlockHeight::new(n)))
+}
+
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn threshold_collect_satisfied(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let n_sat = rng.gen_range(0..20);
+    let n_dissat = rng.gen_range(0..20);
+
+    let conds = {
+        let mut conds = vec![ScriptCondition::TRUE; n_sat];
+        conds.extend(vec![ScriptCondition::FALSE; n_dissat]);
+        conds.shuffle(&mut rng);
+        conds
+    };
+
+    {
+        let thresh = Threshold::new(n_sat, conds.clone()).unwrap();
+        assert_eq!(
+            thresh.collect_satisfied(),
+            Ok(vec![&WitnessScript::TRUE; n_sat])
+        );
+    }
+
+    if n_sat > 0 {
+        let thresh = Threshold::new(rng.gen_range(0..n_sat), conds.clone()).unwrap();
+        assert_eq!(thresh.collect_satisfied(), Err(ThresholdError::Excessive));
+    }
+
+    if n_dissat > 0 {
+        let required = rng.gen_range((n_sat + 1)..=conds.len());
+        let thresh = Threshold::new(required, conds.clone()).unwrap();
+        assert_eq!(
+            thresh.collect_satisfied(),
+            Err(ThresholdError::Insufficient)
+        );
+    }
 }
 
 #[rstest::rstest]

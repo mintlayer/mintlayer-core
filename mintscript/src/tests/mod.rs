@@ -13,13 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod checker;
-pub mod script;
-pub mod translate;
+use common::{
+    chain::{signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination},
+    primitives::BlockHeight,
+};
+use test_utils::random::{make_seedable_rng, randomness::SliceRandom, Rng, Seed};
 
-pub use checker::{ScriptChecker, SignatureContext, TimelockContext};
-pub use script::{ScriptResult, WitnessScript};
-pub use translate::{InputInfo, TranslateInput};
+use crate::script::*;
 
-#[cfg(test)]
-mod tests;
+type WS = WitnessScript;
+
+mod script;

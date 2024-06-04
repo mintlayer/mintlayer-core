@@ -4209,6 +4209,7 @@ dependencies = [
  "pos-accounting",
  "rstest",
  "static_assertions",
+ "test-utils",
  "thiserror",
  "tokens-accounting",
  "utils",

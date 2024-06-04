@@ -46,8 +46,6 @@ impl Threshold {
     pub const TRUE: Self = Self::new_unchecked(0, Vec::new());
 
     /// Construct a threshold.
-    ///
-    /// Like [Self::new] but panics instead of failing if an invalid threshold is created.
     const fn new_unchecked(required: usize, conditions: Vec<ScriptCondition>) -> Self {
         Self {
             required,
@@ -228,6 +226,3 @@ impl ScriptCondition {
         }
     }
 }
-
-#[cfg(test)]
-mod tests;
