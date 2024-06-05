@@ -417,14 +417,13 @@ fn assert_leaves(tf: &TestFramework, expected: &[Id<Block>]) {
 
 fn check_tree_consistency(tree: InMemoryBlockTreeRef<'_>) {
     // Check that the root has no parent.
-    let root_node = tree.arena().get(tree.root_id()).unwrap();
+    let root_node = tree.node(tree.root_id()).unwrap();
     assert!(root_node.parent().is_none());
 
-    // Note: `descendants` also includes the node itself as the 1st element, so we must skip it.
-    for child_node_id in tree.root_id().descendants(tree.arena()).skip(1) {
-        let child_node = tree.arena().get(child_node_id).unwrap();
+    for child_node_id in tree.iter_child_ids() {
+        let child_node = tree.node(child_node_id).unwrap();
         let parent_node_id = child_node.parent().unwrap();
-        let parent_node = tree.arena().get(parent_node_id).unwrap();
+        let parent_node = tree.node(parent_node_id).unwrap();
         let child_block_index = child_node.get();
         let parent_block_index = parent_node.get();
         assert_eq!(

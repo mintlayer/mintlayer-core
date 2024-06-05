@@ -21,7 +21,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, Block},
     primitives::{BlockHeight, Id},
 };
-use indextree::{Arena, NodeId};
+use indextree::{Arena, Node, NodeId};
 use utils::{debug_panic_or_log, log_error};
 
 use crate::{detail::chainstateref::block_validity_matches, TransactionVerificationStrategy};
@@ -37,11 +37,6 @@ pub struct InMemoryBlockTrees {
 impl InMemoryBlockTrees {
     fn new(arena: Arena<BlockIndex>, roots: BTreeMap<Id<Block>, NodeId>) -> InMemoryBlockTrees {
         Self { arena, roots }
-    }
-
-    #[allow(unused)]
-    pub fn arena(&self) -> &Arena<BlockIndex> {
-        &self.arena
     }
 
     #[allow(unused)]
@@ -62,7 +57,7 @@ impl InMemoryBlockTrees {
     }
 
     pub fn iter_all_block_indices(&self) -> impl Iterator<Item = &'_ BlockIndex> {
-        self.iter_trees().flat_map(|tree| tree.iter_all())
+        self.iter_trees().flat_map(|tree| tree.iter_all_block_indices())
     }
 
     pub fn as_by_height_block_id_map(
@@ -120,20 +115,28 @@ impl<'a> InMemoryBlockTreeRef<'a> {
     }
 
     #[allow(unused)]
-    pub fn arena(&self) -> &Arena<BlockIndex> {
-        self.arena
-    }
-
-    #[allow(unused)]
     pub fn root_id(&self) -> NodeId {
         self.root_id
+    }
+
+    pub fn node(&self, id: NodeId) -> Option<&'a Node<BlockIndex>> {
+        self.arena.get(id)
     }
 
     /// Return an iterator over the entire tree, for depth-first traversal.
     /// A parent will always be visited before its children.
     /// The first visited block will always be the root block.
-    pub fn iter_all(&self) -> impl Iterator<Item = &'a BlockIndex> {
-        self.root_id.descendants(self.arena).map(|node_id| {
+    pub fn iter_all_ids(&self) -> impl Iterator<Item = NodeId> + 'a {
+        self.root_id.descendants(self.arena)
+    }
+
+    /// Same as iter_all_ids, but the root is excluded.
+    pub fn iter_child_ids(&self) -> impl Iterator<Item = NodeId> + 'a {
+        self.iter_all_ids().skip(1)
+    }
+
+    pub fn iter_all_block_indices(&self) -> impl Iterator<Item = &'a BlockIndex> {
+        self.iter_all_ids().map(|node_id| {
             self.arena
                 .get(node_id)
                 .expect("Node being iterated over must be present in the arena")
@@ -141,9 +144,13 @@ impl<'a> InMemoryBlockTreeRef<'a> {
         })
     }
 
-    /// Same as iter_all, but the root is excluded.
-    pub fn iter_children(&self) -> impl Iterator<Item = &'a BlockIndex> {
-        self.iter_all().skip(1)
+    pub fn iter_child_block_indices(&self) -> impl Iterator<Item = &'a BlockIndex> {
+        self.iter_child_ids().map(|node_id| {
+            self.arena
+                .get(node_id)
+                .expect("Node being iterated over must be present in the arena")
+                .get()
+        })
     }
 
     pub fn root_block_index(&self) -> &'a BlockIndex {
@@ -177,11 +184,6 @@ impl InMemoryBlockTree {
     }
 
     #[allow(unused)]
-    pub fn arena(&self) -> &Arena<BlockIndex> {
-        &self.arena
-    }
-
-    #[allow(unused)]
     pub fn root_id(&self) -> NodeId {
         self.root_id
     }
@@ -190,12 +192,24 @@ impl InMemoryBlockTree {
         InMemoryBlockTreeRef::new(&self.arena, self.root_id)
     }
 
-    pub fn iter_all(&self) -> impl Iterator<Item = &BlockIndex> {
-        self.as_ref().iter_all()
+    pub fn node(&self, id: NodeId) -> Option<&Node<BlockIndex>> {
+        self.as_ref().node(id)
     }
 
-    pub fn iter_children(&self) -> impl Iterator<Item = &BlockIndex> {
-        self.as_ref().iter_children()
+    pub fn iter_all_ids(&self) -> impl Iterator<Item = NodeId> + '_ {
+        self.as_ref().iter_all_ids()
+    }
+
+    pub fn iter_child_ids(&self) -> impl Iterator<Item = NodeId> + '_ {
+        self.as_ref().iter_child_ids()
+    }
+
+    pub fn iter_all_block_indices(&self) -> impl Iterator<Item = &BlockIndex> {
+        self.as_ref().iter_all_block_indices()
+    }
+
+    pub fn iter_child_block_indices(&self) -> impl Iterator<Item = &BlockIndex> {
+        self.as_ref().iter_child_block_indices()
     }
 
     pub fn root_block_index(&self) -> &BlockIndex {

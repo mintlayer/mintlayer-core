@@ -97,7 +97,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
     ) -> Result<(), BlockInvalidatorError> {
         self.chainstate.with_rw_tx(
             |chainstate_ref| {
-                for (i, block_index) in tree.iter_all().enumerate() {
+                for (i, block_index) in tree.iter_all_block_indices().enumerate() {
                     let mut status = block_index.status();
                     if i == 0 {
                         match is_explicit_invalidation {
@@ -272,7 +272,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                                 .make_db_tx_ro()
                                 .map_err(BlockInvalidatorError::from)?,
                             block_index_tree.root_block_index(),
-                            block_index_tree.iter_children(),
+                            block_index_tree.iter_child_block_indices(),
                             min_chain_trust,
                         )?;
                     }

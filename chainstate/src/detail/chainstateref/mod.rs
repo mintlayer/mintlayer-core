@@ -1472,7 +1472,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         let old_leaf_block_ids = self.db_tx.get_leaf_block_ids()?;
         let mut remaining_leaf_block_ids = old_leaf_block_ids.clone();
 
-        for block_index in tree.iter_all() {
+        for block_index in tree.iter_all_block_indices() {
             let block_id = *block_index.block_id();
 
             // Note: here we're being extra-cautious about someone mis-using this function, so we only panic in
