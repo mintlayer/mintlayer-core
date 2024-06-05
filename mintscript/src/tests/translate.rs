@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2024 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -12,18 +12,3 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-//! Blockchain data encoding and decoding tools
-
-pub mod encoded;
-pub mod extras;
-pub mod hex;
-pub mod hex_encoded;
-pub mod json_encoded;
-
-// Re-export all the constituent parts
-pub use serialization_core::*;
-pub use serialization_tagged as tagged;
-pub use tagged::{DirectDecode, DirectEncode, Tag, Tagged};
-
-pub type Result<T> = std::result::Result<T, Error>;

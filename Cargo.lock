@@ -4206,6 +4206,7 @@ name = "mintscript"
 version = "0.5.0"
 dependencies = [
  "common",
+ "crypto",
  "pos-accounting",
  "rstest",
  "static_assertions",

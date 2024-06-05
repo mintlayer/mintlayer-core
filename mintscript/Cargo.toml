@@ -19,5 +19,7 @@ thiserror.workspace = true
 
 [dev-dependencies]
 
-rstest.workspace = true
+crypto = { path = '../crypto' }
 test-utils = { path = '../test-utils' }
+
+rstest.workspace = true

@@ -78,6 +78,11 @@ impl<C: SignatureContext> SignatureChecker<C> for StandardSignatureChecker {
         let input_num = ctx.input_num();
         let chain_config = ctx.chain_config();
 
+        // Note: The verify_signature function below looks up the signature in the transaction
+        // itself. In the future, the logic to find signature may not be so easy, so the signature
+        // from the script should be taken and passed to the signature verification code. This
+        // assertion should then go away. This goes hand in hand with turning Destinations, not
+        // just outputs/input pairs into script.
         assert_eq!(
             tx.signatures().unwrap_or(&[]).get(input_num),
             Some(signature),

@@ -14,13 +14,31 @@
 // limitations under the License.
 
 use common::{
-    chain::{signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination},
-    primitives::BlockHeight,
+    chain::{
+        block::timestamp::BlockTimestamp,
+        output_value::OutputValue,
+        signature::{
+            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            sighash::sighashtype::SigHashType,
+        },
+        timelock::OutputTimeLock,
+        ChainConfig, Destination, OutPointSourceId, SignedTransaction, Transaction, TxInput,
+        TxOutput,
+    },
+    primitives::{Amount, BlockHeight, Id},
 };
-use test_utils::random::{make_seedable_rng, randomness::SliceRandom, Rng, Seed};
+use crypto::key::{KeyKind, PrivateKey, PublicKey};
+use test_utils::random::{
+    make_seedable_rng, randomness::SliceRandom, CryptoRng, Rng, Seed, TestRng,
+};
 
 use crate::script::*;
+use utils::*;
 
 type WS = WitnessScript;
 
+mod utils;
+
+mod checkers;
 mod script;
+mod translate;

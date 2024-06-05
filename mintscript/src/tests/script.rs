@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::RangeInclusive;
+
 use super::*;
 
 #[rstest::rstest]
@@ -38,23 +40,32 @@ fn conj(conds: impl IntoIterator<Item = WS>) -> WS {
 }
 
 const fn tl(n: u64) -> WS {
-    WS::timelock(OutputTimeLock::UntilHeight(BlockHeight::new(n)))
+    WS::timelock(tl_until_height(n))
+}
+
+fn generate_conds(rng: &mut impl Rng, n_sat: usize, n_dissat: usize) -> Vec<ScriptCondition> {
+    let mut conds = vec![ScriptCondition::TRUE; n_sat];
+    conds.extend(vec![ScriptCondition::FALSE; n_dissat]);
+    conds.shuffle(rng);
+    conds
 }
 
 #[rstest::rstest]
+#[case(Seed::from_entropy(), 0..=0, 0..=0)]
+#[case(Seed::from_entropy(), 0..=0, 1..=1)]
+#[case(Seed::from_entropy(), 1..=1, 0..=0)]
+#[case(Seed::from_entropy(), 1..=1, 1..=1)]
 #[trace]
-#[case(Seed::from_entropy())]
-fn threshold_collect_satisfied(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), 2..=100, 2..=100)]
+fn threshold_collect_satisfied(
+    #[case] seed: Seed,
+    #[case] sat_range: RangeInclusive<usize>,
+    #[case] dissat_range: RangeInclusive<usize>,
+) {
     let mut rng = make_seedable_rng(seed);
-    let n_sat = rng.gen_range(0..20);
-    let n_dissat = rng.gen_range(0..20);
-
-    let conds = {
-        let mut conds = vec![ScriptCondition::TRUE; n_sat];
-        conds.extend(vec![ScriptCondition::FALSE; n_dissat]);
-        conds.shuffle(&mut rng);
-        conds
-    };
+    let n_sat = rng.gen_range(sat_range);
+    let n_dissat = rng.gen_range(dissat_range);
+    let conds = generate_conds(&mut rng, n_sat, n_dissat);
 
     {
         let thresh = Threshold::new(n_sat, conds.clone()).unwrap();
@@ -77,6 +88,22 @@ fn threshold_collect_satisfied(#[case] seed: Seed) {
             Err(ThresholdError::Insufficient)
         );
     }
+}
+
+#[rstest::rstest]
+#[trace]
+#[case::zero(Seed::from_entropy(), 0..=0)]
+#[case::unit(Seed::from_entropy(), 1..=1)]
+#[case::rand(Seed::from_entropy(), 2..=100)]
+fn conjunction_matches_explicit(#[case] seed: Seed, #[case] size_range: RangeInclusive<usize>) {
+    let mut rng = make_seedable_rng(seed);
+    let n = rng.gen_range(size_range);
+
+    let conds: Vec<_> = (0..n).map(|_| ScriptCondition::from_bool(rng.gen_bool(0.8))).collect();
+
+    let thr_conj = WitnessScript::conjunction(conds.clone());
+    let thr_expl = WitnessScript::threshold(n, conds).unwrap();
+    assert_eq!(thr_conj, thr_expl);
 }
 
 #[rstest::rstest]
@@ -113,6 +140,6 @@ fn visit_order(#[case] script: WS) {
 
     let mut logger = LockLogger::default();
     script.verify(&mut logger).unwrap();
-    let expected = [1, 2, 3, 4].map(|n| OutputTimeLock::UntilHeight(BlockHeight::new(n)));
+    let expected = [1, 2, 3, 4].map(tl_until_height);
     assert_eq!(logger.0.as_slice(), expected.as_slice());
 }

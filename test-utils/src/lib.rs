@@ -45,6 +45,28 @@ pub fn decode_from_hex<D: serialization::DecodeAll>(to_decode: &str) -> D {
         .expect("The decoding succeeded")
 }
 
+/// Get all variants of the object with single-bit flips (decoding may fail).
+pub fn try_all_single_bit_mutations<T>(obj: &T) -> impl Iterator<Item = serialization::Result<T>>
+where
+    T: serialization::DecodeAll + serialization::Encode,
+{
+    let obj_enc = obj.encode();
+    (0..(obj_enc.len() * 8)).map(move |bit| {
+        let (byte, bit) = (bit / 8, bit % 8);
+        let mut mutated = obj_enc.clone();
+        mutated[byte] ^= 1u8 << bit;
+        T::decode_all(&mut mutated.as_slice())
+    })
+}
+
+/// Get all variants of the object with single-bit flips (decoding failures are dropped).
+pub fn all_single_bit_mutations<T>(obj: &T) -> impl Iterator<Item = T>
+where
+    T: serialization::DecodeAll + serialization::Encode,
+{
+    try_all_single_bit_mutations(obj).filter_map(Result::ok)
+}
+
 pub fn get_random_non_ascii_alphanumeric_byte(rng: &mut impl Rng) -> u8 {
     for _ in 0..1000 {
         let random_byte = rng.gen::<u8>();
