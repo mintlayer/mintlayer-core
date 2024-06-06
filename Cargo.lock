@@ -4207,8 +4207,10 @@ version = "0.5.0"
 dependencies = [
  "common",
  "crypto",
+ "expect-test",
  "pos-accounting",
  "rstest",
+ "serialization",
  "static_assertions",
  "test-utils",
  "thiserror",

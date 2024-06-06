@@ -22,17 +22,20 @@ use common::{
             sighash::sighashtype::SigHashType,
         },
         timelock::OutputTimeLock,
-        ChainConfig, Destination, OutPointSourceId, SignedTransaction, Transaction, TxInput,
-        TxOutput,
+        tokens::TokenId,
+        AccountCommand, AccountOutPoint, ChainConfig, DelegationId, Destination, OutPointSourceId,
+        PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id, H256},
 };
 use crypto::key::{KeyKind, PrivateKey, PublicKey};
 use test_utils::random::{
     make_seedable_rng, randomness::SliceRandom, CryptoRng, Rng, Seed, TestRng,
 };
+use utxo::{Utxo, UtxoSource};
 
 use crate::script::*;
+use crate::translate::*;
 use utils::*;
 
 type WS = WitnessScript;

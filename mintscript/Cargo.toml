@@ -21,5 +21,7 @@ thiserror.workspace = true
 
 crypto = { path = '../crypto' }
 test-utils = { path = '../test-utils' }
+serialization = { path = '../serialization' }
 
 rstest.workspace = true
+expect-test.workspace = true
