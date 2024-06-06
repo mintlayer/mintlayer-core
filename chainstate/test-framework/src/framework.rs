@@ -503,8 +503,8 @@ impl TestFramework {
         tx_rw.commit().unwrap();
     }
 
-    pub fn leaf_block_ids(&self) -> BTreeSet<Id<Block>> {
-        self.storage.transaction_ro().unwrap().get_leaf_block_ids().unwrap()
+    pub fn leaf_block_ids(&self, min_height: BlockHeight) -> BTreeSet<Id<Block>> {
+        self.storage.transaction_ro().unwrap().get_leaf_block_ids(min_height).unwrap()
     }
 
     pub fn on_pool_created(

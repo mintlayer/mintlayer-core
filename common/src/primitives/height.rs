@@ -18,7 +18,7 @@ use std::ops::{Add, Sub};
 
 use serialization::{Decode, Encode};
 
-type HeightIntType = u64;
+pub type BlockHeightIntType = u64;
 type DistanceIntType = i64;
 
 #[derive(
@@ -35,7 +35,7 @@ type DistanceIntType = i64;
     serde::Deserialize,
     rpc_description::HasValueHint,
 )]
-pub struct BlockHeight(#[codec(compact)] HeightIntType);
+pub struct BlockHeight(#[codec(compact)] BlockHeightIntType);
 
 // Display should be defined for thiserror crate
 impl fmt::Display for BlockHeight {
@@ -51,14 +51,14 @@ impl std::str::FromStr for BlockHeight {
     }
 }
 
-impl From<BlockHeight> for HeightIntType {
-    fn from(block_height: BlockHeight) -> HeightIntType {
+impl From<BlockHeight> for BlockHeightIntType {
+    fn from(block_height: BlockHeight) -> BlockHeightIntType {
         block_height.0
     }
 }
 
-impl From<HeightIntType> for BlockHeight {
-    fn from(w: HeightIntType) -> BlockHeight {
+impl From<BlockHeightIntType> for BlockHeight {
+    fn from(w: BlockHeightIntType) -> BlockHeight {
         BlockHeight(w)
     }
 }
@@ -130,9 +130,9 @@ impl Sub<BlockHeight> for BlockHeight {
 impl BlockHeight {
     const ZERO: BlockHeight = BlockHeight(0);
     const ONE: BlockHeight = BlockHeight(1);
-    const MAX: BlockHeight = BlockHeight(HeightIntType::MAX);
+    const MAX: BlockHeight = BlockHeight(BlockHeightIntType::MAX);
 
-    pub const fn new(height: HeightIntType) -> Self {
+    pub const fn new(height: BlockHeightIntType) -> Self {
         Self(height)
     }
 
@@ -148,7 +148,7 @@ impl BlockHeight {
         BlockHeight::MAX
     }
 
-    pub fn checked_add(&self, rhs: HeightIntType) -> Option<Self> {
+    pub fn checked_add(&self, rhs: BlockHeightIntType) -> Option<Self> {
         self.0.checked_add(rhs).map(Self::new)
     }
 
@@ -160,7 +160,7 @@ impl BlockHeight {
         self.0.checked_sub(1).map(Self)
     }
 
-    pub const fn into_int(self) -> HeightIntType {
+    pub const fn into_int(self) -> BlockHeightIntType {
         self.0
     }
 
@@ -275,18 +275,18 @@ mod tests {
 
     #[test]
     fn basic_arithmetic_high() {
-        let h_halfmax = BlockHeight::new(HeightIntType::MAX / 2);
+        let h_halfmax = BlockHeight::new(BlockHeightIntType::MAX / 2);
         let d_max = BlockDistance::new(DistanceIntType::MAX);
         let d_m1 = BlockDistance::new(-1);
         let d_0 = BlockDistance::new(0);
         let d_p1 = BlockDistance::new(1);
         assert_eq!(
             (h_halfmax + d_m1).unwrap(),
-            BlockHeight::new(HeightIntType::MAX / 2 - 1)
+            BlockHeight::new(BlockHeightIntType::MAX / 2 - 1)
         );
         assert_eq!(
             (h_halfmax + d_0).unwrap(),
-            BlockHeight::new(HeightIntType::MAX / 2)
+            BlockHeight::new(BlockHeightIntType::MAX / 2)
         );
         assert_eq!(
             (d_max + d_m1).unwrap(),
@@ -302,7 +302,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn basic_arithmetic_hit_max() {
-        let h_halfmax = BlockHeight::new(HeightIntType::MAX / 2);
+        let h_halfmax = BlockHeight::new(BlockHeightIntType::MAX / 2);
         let d_p1 = BlockDistance::new(1);
         let _ = h_halfmax + d_p1;
     }

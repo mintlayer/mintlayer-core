@@ -37,7 +37,10 @@ use tokens_accounting::{TokenAccountingUndo, TokensAccountingStorageRead};
 use utils::log_error;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead};
 
-use crate::{BlockchainStorageRead, ChainstateStorageVersion, SealedStorageTag, TipStorageTag};
+use crate::{
+    schema::DBLeafBlockIdsMapKey, BlockchainStorageRead, ChainstateStorageVersion,
+    SealedStorageTag, TipStorageTag,
+};
 
 use super::well_known;
 
@@ -146,15 +149,19 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
     }
 
     #[log_error]
-    fn get_leaf_block_ids(&self) -> crate::Result<BTreeSet<Id<Block>>> {
+    fn get_leaf_block_ids(&self, min_height: BlockHeight) -> crate::Result<BTreeSet<Id<Block>>> {
         let map = self.0.get::<db::DBLeafBlockIds, _>();
-        let items = map.prefix_iter_keys(&())?;
+        let items = map
+            .greater_equal_iter_keys(&DBLeafBlockIdsMapKey::with_zero_id(min_height))?
+            .map(|key| *key.block_id());
         Ok(items.collect::<BTreeSet<_>>())
     }
 
     #[log_error]
-    fn is_leaf_block(&self, block_id: &Id<Block>) -> crate::Result<bool> {
-        Ok(self.read::<db::DBLeafBlockIds, _, _>(block_id)?.is_some())
+    fn is_leaf_block(&self, block_index: &BlockIndex) -> crate::Result<bool> {
+        Ok(self
+            .read::<db::DBLeafBlockIds, _, _>(DBLeafBlockIdsMapKey::from_block_index(block_index))?
+            .is_some())
     }
 
     #[log_error]
@@ -429,15 +436,19 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     }
 
     #[log_error]
-    fn get_leaf_block_ids(&self) -> crate::Result<BTreeSet<Id<Block>>> {
+    fn get_leaf_block_ids(&self, min_height: BlockHeight) -> crate::Result<BTreeSet<Id<Block>>> {
         let map = self.get_map::<db::DBLeafBlockIds, _>()?;
-        let items = map.prefix_iter_keys(&())?;
+        let items = map
+            .greater_equal_iter_keys(&DBLeafBlockIdsMapKey::with_zero_id(min_height))?
+            .map(|key| *key.block_id());
         Ok(items.collect::<BTreeSet<_>>())
     }
 
     #[log_error]
-    fn is_leaf_block(&self, block_id: &Id<Block>) -> crate::Result<bool> {
-        Ok(self.read::<db::DBLeafBlockIds, _, _>(block_id)?.is_some())
+    fn is_leaf_block(&self, block_index: &BlockIndex) -> crate::Result<bool> {
+        Ok(self
+            .read::<db::DBLeafBlockIds, _, _>(DBLeafBlockIdsMapKey::from_block_index(block_index))?
+            .is_some())
     }
 
     #[log_error]

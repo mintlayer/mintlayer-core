@@ -103,11 +103,11 @@ pub trait BlockchainStorageRead:
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
 
-    /// Get ids of all leaf blocks.
-    fn get_leaf_block_ids(&self) -> Result<BTreeSet<Id<Block>>>;
+    /// Get ids of all leaf blocks, whose height is not less than the specified minimum.
+    fn get_leaf_block_ids(&self, min_height: BlockHeight) -> Result<BTreeSet<Id<Block>>>;
 
-    /// Return true if the specified block id is in the leaf block ids set.
-    fn is_leaf_block(&self, block_id: &Id<Block>) -> Result<bool>;
+    /// Return true if the specified block is in the leaf block ids set.
+    fn is_leaf_block(&self, block_index: &BlockIndex) -> Result<bool>;
 
     fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
 
@@ -201,8 +201,8 @@ pub trait BlockchainStorageWrite:
         block_id: &Id<GenBlock>,
     ) -> Result<()>;
 
-    /// Mark the specified block id as a leaf or non-leaf, depending on the `is_leaf` parameter.
-    fn mark_as_leaf(&mut self, block_id: &Id<Block>, is_leaf: bool) -> Result<()>;
+    /// Mark the specified block as a leaf or non-leaf, depending on the `is_leaf` parameter.
+    fn mark_as_leaf(&mut self, block_index: &BlockIndex, is_leaf: bool) -> Result<()>;
 
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> Result<()>;

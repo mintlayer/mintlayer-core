@@ -187,8 +187,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     #[log_error]
-    pub fn get_leaf_block_ids(&self) -> Result<BTreeSet<Id<Block>>, PropertyQueryError> {
-        Ok(self.db_tx.get_leaf_block_ids()?)
+    pub fn get_leaf_block_ids(
+        &self,
+        min_height: BlockHeight,
+    ) -> Result<BTreeSet<Id<Block>>, PropertyQueryError> {
+        Ok(self.db_tx.get_leaf_block_ids(min_height)?)
     }
 
     #[log_error]
@@ -1011,8 +1014,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         min_height: BlockHeight,
         block_validity: BlockValidity,
     ) -> Result<InMemoryBlockTrees, PropertyQueryError> {
+        let leaf_block_ids = self.get_leaf_block_ids(min_height)?;
         let result = in_memory_block_tree::get_block_tree_top(
             self,
+            leaf_block_ids.iter(),
             |block_index| block_index.block_height() >= min_height,
             block_validity,
         )?;
@@ -1039,8 +1044,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         min_timestamp: BlockTimestamp,
         block_validity: BlockValidity,
     ) -> Result<InMemoryBlockTrees, PropertyQueryError> {
+        let min_height_with_allowed_reorg = self.get_min_height_with_allowed_reorg()?;
+        let leaf_block_ids = self.get_leaf_block_ids(min_height_with_allowed_reorg)?;
         let result = in_memory_block_tree::get_block_tree_top(
             self,
+            leaf_block_ids.iter(),
             |block_index| block_index.block_timestamp() >= min_timestamp,
             block_validity,
         )?;
@@ -1451,12 +1459,15 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         }
         self.db_tx.set_block_index(block_index)?;
 
-        self.db_tx.mark_as_leaf(block_index.block_id(), true)?;
+        self.db_tx.mark_as_leaf(block_index, true)?;
 
         if let Some(non_genesis_parent) =
             block_index.prev_block_id().classify(self.chain_config).chain_block_id()
         {
-            self.db_tx.mark_as_leaf(&non_genesis_parent, false)?;
+            let parent_index = self
+                .get_existing_block_index(&non_genesis_parent)
+                .map_err(BlockError::PropertyQueryError)?;
+            self.db_tx.mark_as_leaf(&parent_index, false)?;
         }
 
         Ok(())
@@ -1469,7 +1480,12 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         &mut self,
         tree: InMemoryBlockTreeRef<'b>,
     ) -> Result<(), BlockError> {
-        let old_leaf_block_ids = self.db_tx.get_leaf_block_ids()?;
+        let old_leaf_block_ids = self.db_tx.get_leaf_block_ids(
+            tree.root_block_index()
+                .block_height()
+                .prev_height()
+                .expect("Non-genesis can't have zero height"),
+        )?;
         let mut remaining_leaf_block_ids = old_leaf_block_ids.clone();
 
         for block_index in tree.iter_all_block_indices() {
@@ -1483,18 +1499,18 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             );
 
             self.db_tx.del_block_index(block_id)?;
-            remaining_leaf_block_ids.remove(&block_id);
-        }
 
-        // Unmark the removed leaves.
-        for removed_leaf in old_leaf_block_ids.difference(&remaining_leaf_block_ids) {
-            self.db_tx.mark_as_leaf(removed_leaf, false)?;
+            if remaining_leaf_block_ids.remove(&block_id) {
+                self.db_tx.mark_as_leaf(block_index, false)?;
+            }
         }
 
         // The parent of the removed subtree's root may have become a new leaf.
         // Check if it's a parent of one of the remaining leaves; if not, mark it as a leaf.
-        let maybe_new_leaf = tree.root_block_index().prev_block_id();
-        if let Some(maybe_new_leaf) = maybe_new_leaf.classify(self.chain_config).chain_block_id() {
+        let maybe_new_leaf_id = tree.root_block_index().prev_block_id();
+        if let Some(maybe_new_leaf_id) =
+            maybe_new_leaf_id.classify(self.chain_config).chain_block_id()
+        {
             let mut is_parent = false;
 
             for leaf_block_id in remaining_leaf_block_ids {
@@ -1503,7 +1519,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
                     .map_err(BlockError::PropertyQueryError)?;
 
                 if self
-                    .is_parent_of(&leaf_block_index, &maybe_new_leaf)
+                    .is_parent_of(&leaf_block_index, &maybe_new_leaf_id)
                     .map_err(BlockError::PropertyQueryError)?
                 {
                     is_parent = true;
@@ -1512,7 +1528,10 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             }
 
             if !is_parent {
-                self.db_tx.mark_as_leaf(&maybe_new_leaf, true)?;
+                let maybe_new_leaf_index = self
+                    .get_existing_block_index(&maybe_new_leaf_id)
+                    .map_err(BlockError::PropertyQueryError)?;
+                self.db_tx.mark_as_leaf(&maybe_new_leaf_index, true)?;
             }
         }
 

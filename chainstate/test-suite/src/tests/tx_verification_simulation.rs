@@ -144,7 +144,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
                 db_tx.add_block(block).unwrap();
             }
 
-            db_tx.mark_as_leaf(&all_blocks.last().unwrap().0.get_id(), true).unwrap();
+            db_tx.mark_as_leaf(&all_blocks.last().unwrap().1, true).unwrap();
             db_tx.commit().unwrap();
         }
 

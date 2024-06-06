@@ -234,14 +234,15 @@ fn append_child<T>(
         .map_err(|err| InMemoryBlockTreeError::IndexTreeNodeError(err.to_string()))
 }
 
-/// Iterate starting from each leaf block downwards and collect the corresponding block indices.
+/// Iterate starting from each specified leaf block downwards and collect the corresponding block indices.
 /// The `is_depth_ok` function is called for each traversed BlockIndex; it's supposed to
 /// check the "depth" of the given block (i.e. some property that changes strictly monotonically
 /// when going from child to parent, such as the height or the timestamp) and return true if
 /// the caller is still interested in blocks at this "depth" or false if it is not.
 #[log_error]
-pub fn get_block_tree_top<S, V>(
+pub fn get_block_tree_top<'a, S, V>(
     chainstate_ref: &ChainstateRef<S, V>,
+    leaf_block_ids: impl Iterator<Item = &'a Id<Block>>,
     is_depth_ok: impl Fn(&BlockIndex) -> bool,
     block_validity: BlockValidity,
 ) -> Result<InMemoryBlockTrees, InMemoryBlockTreeError>
@@ -254,10 +255,8 @@ where
 
     let mut seen_blocks = BTreeMap::<Id<Block>, NodeId>::new();
 
-    let leaf_block_ids = chainstate_ref.get_leaf_block_ids()?;
-
     for leaf_block_id in leaf_block_ids {
-        let leaf_block_index = chainstate_ref.get_existing_block_index(&leaf_block_id)?;
+        let leaf_block_index = chainstate_ref.get_existing_block_index(leaf_block_id)?;
 
         let effective_leaf_block_index = if let Some(block_index) = chainstate_ref
             .find_first_parent_with_validity(leaf_block_index, block_validity, &is_depth_ok)?
@@ -332,8 +331,11 @@ where
     let root_block_index = chainstate_ref.get_existing_block_index(root_block_id)?;
     let root_block_height = root_block_index.block_height();
 
+    let leaf_block_ids = chainstate_ref.get_leaf_block_ids(root_block_height)?;
+
     let trees = get_block_tree_top(
         chainstate_ref,
+        leaf_block_ids.iter(),
         |block_index| block_index.block_height() >= root_block_height,
         block_validity,
     )?;

@@ -23,11 +23,13 @@ use common::{
         AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
         UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{height::BlockHeightIntType, Amount, BlockHeight, Id, H256},
 };
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingUndo, PoolData,
 };
+use serialization::{Decode, Encode};
+use storage::OrderPreservingValue;
 use tokens_accounting::TokenAccountingUndo;
 use utxo::{Utxo, UtxosBlockUndo};
 
@@ -46,7 +48,7 @@ storage::decl_schema! {
         /// If the set is empty, then genesis is the only leaf block.
         /// Note that the set may or may not contain the current main chain tip - the tip
         /// may have invalid children, in which case it won't be marked as a leaf.
-        pub DBLeafBlockIds: Map<Id<Block>, ()>,
+        pub DBLeafBlockIds: Map<crate::schema::DBLeafBlockIdsMapKey, ()>,
         /// Store for Utxo Entries
         pub DBUtxo: Map<UtxoOutPoint, Utxo>,
         /// Store for utxo BlockUndo
@@ -96,5 +98,88 @@ storage::decl_schema! {
         pub DBAccountingDelegationBalancesSealed: Map<DelegationId, Amount>,
         /// Store for sealed accounting pool delegations balances
         pub DBAccountingPoolDelegationSharesSealed: Map<(PoolId, DelegationId), Amount>,
+    }
+}
+
+/// The key type for the `DBLeafBlockIds` map.
+///
+/// Here `block_height` doesn't add any additional information to the data, because block height
+/// is unambiguously determined by the block id. But by putting it before the id we get the ability
+/// to search for ids with height bigger or equal to the specified one, using `greater_equal_iter`.
+#[derive(Encode, Decode)]
+pub struct DBLeafBlockIdsMapKey {
+    block_height: OrderPreservingValue<BlockHeightIntType>,
+    block_id: Id<Block>,
+}
+
+impl DBLeafBlockIdsMapKey {
+    pub fn new(block_height: BlockHeight, block_id: Id<Block>) -> Self {
+        Self {
+            block_height: OrderPreservingValue::new(block_height.into_int()),
+            block_id,
+        }
+    }
+
+    pub fn with_zero_id(block_height: BlockHeight) -> Self {
+        Self::new(block_height, Id::new(H256::zero()))
+    }
+
+    pub fn from_block_index(block_index: &BlockIndex) -> Self {
+        Self::new(block_index.block_height(), *block_index.block_id())
+    }
+
+    pub fn block_height(&self) -> BlockHeight {
+        BlockHeight::new(self.block_height.inner())
+    }
+
+    pub fn block_id(&self) -> &Id<Block> {
+        &self.block_id
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use common::primitives::H256;
+    use test_utils::random::{make_seedable_rng, Rng, Seed};
+
+    use super::*;
+
+    // DBLeafBlockIdsMapKey in the encoded form must have the same ordering as the tuple (BlockHeight, Id<Block>).
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_block_ids_map_key(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        for _ in 0..100 {
+            let val1 = DBLeafBlockIdsMapKey::new(
+                BlockHeight::new(rng.gen::<BlockHeightIntType>()),
+                Id::new(H256::random_using(&mut rng)),
+            );
+
+            let val2 = DBLeafBlockIdsMapKey::new(
+                BlockHeight::new(rng.gen::<BlockHeightIntType>()),
+                Id::new(H256::random_using(&mut rng)),
+            );
+
+            let val1_encoded = val1.encode();
+            let val2_encoded = val2.encode();
+
+            let cmp1 =
+                (val1.block_height(), val1.block_id()).cmp(&(val2.block_height(), val2.block_id()));
+            let cmp2 = val1_encoded.cmp(&val2_encoded);
+            assert_eq!(cmp1, cmp2);
+
+            // Also check that the key with the zeroed block id is always less than or equal to the original one.
+            let val1_0 = DBLeafBlockIdsMapKey::with_zero_id(val1.block_height());
+            let val1_0_encoded = val1_0.encode();
+            assert!(
+                (val1_0.block_height(), val1_0.block_id())
+                    <= (val1.block_height(), val1.block_id())
+            );
+            assert!(val1_0_encoded <= val1_encoded);
+        }
     }
 }

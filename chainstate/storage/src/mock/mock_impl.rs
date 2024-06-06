@@ -71,8 +71,8 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_leaf_block_ids(&self) -> crate::Result<BTreeSet<Id<Block>>>;
-        fn is_leaf_block(&self, block_id: &Id<Block>) -> crate::Result<bool>;
+        fn get_leaf_block_ids(&self, min_height: BlockHeight) -> crate::Result<BTreeSet<Id<Block>>>;
+        fn is_leaf_block(&self, block_index: &BlockIndex) -> crate::Result<bool>;
 
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
 
@@ -186,7 +186,7 @@ mockall::mock! {
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 
-        fn mark_as_leaf(&mut self, block_id: &Id<Block>, is_leaf: bool) -> crate::Result<()>;
+        fn mark_as_leaf(&mut self, block_index: &BlockIndex, is_leaf: bool) -> crate::Result<()>;
 
         fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
         fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
@@ -349,8 +349,8 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_leaf_block_ids(&self) -> crate::Result<BTreeSet<Id<Block>>>;
-        fn is_leaf_block(&self, block_id: &Id<Block>) -> crate::Result<bool>;
+        fn get_leaf_block_ids(&self, min_height: BlockHeight) -> crate::Result<BTreeSet<Id<Block>>>;
+        fn is_leaf_block(&self, block_index: &BlockIndex) -> crate::Result<bool>;
 
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
 
@@ -469,8 +469,8 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_leaf_block_ids(&self) -> crate::Result<BTreeSet<Id<Block>>>;
-        fn is_leaf_block(&self, block_id: &Id<Block>) -> crate::Result<bool>;
+        fn get_leaf_block_ids(&self, min_height: BlockHeight) -> crate::Result<BTreeSet<Id<Block>>>;
+        fn is_leaf_block(&self, block_index: &BlockIndex) -> crate::Result<bool>;
 
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
 
@@ -577,7 +577,7 @@ mockall::mock! {
             block_id: &Id<GenBlock>,
         ) -> crate::Result<()>;
 
-        fn mark_as_leaf(&mut self, block_id: &Id<Block>, is_leaf: bool) -> crate::Result<()>;
+        fn mark_as_leaf(&mut self, block_index: &BlockIndex, is_leaf: bool) -> crate::Result<()>;
 
         fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
         fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;

@@ -59,7 +59,7 @@ impl<'a, DbTx: BlockchainStorageRead> ConsistencyChecker<'a, DbTx> {
         });
         let min_height_with_allowed_reorg =
             db_tx.get_min_height_with_allowed_reorg()?.unwrap_or(0.into());
-        let leaf_block_ids = db_tx.get_leaf_block_ids()?;
+        let leaf_block_ids = db_tx.get_leaf_block_ids(BlockHeight::zero())?;
 
         Ok(Self {
             db_tx,

@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use super::{well_known, StoreTxRw};
-use crate::{BlockchainStorageWrite, ChainstateStorageVersion, SealedStorageTag, TipStorageTag};
+use crate::{
+    schema::DBLeafBlockIdsMapKey, BlockchainStorageWrite, ChainstateStorageVersion,
+    SealedStorageTag, TipStorageTag,
+};
 use chainstate_types::{BlockIndex, EpochData, EpochStorageWrite};
 use common::{
     chain::{
@@ -96,11 +99,12 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     }
 
     #[log_error]
-    fn mark_as_leaf(&mut self, block_id: &Id<Block>, is_leaf: bool) -> crate::Result<()> {
+    fn mark_as_leaf(&mut self, block_index: &BlockIndex, is_leaf: bool) -> crate::Result<()> {
+        let key = DBLeafBlockIdsMapKey::from_block_index(block_index);
         if is_leaf {
-            self.write::<db::DBLeafBlockIds, _, _, _>(block_id, ())
+            self.write::<db::DBLeafBlockIds, _, _, _>(key, ())
         } else {
-            self.del::<db::DBLeafBlockIds, _, _>(block_id)
+            self.del::<db::DBLeafBlockIds, _, _>(key)
         }
     }
 

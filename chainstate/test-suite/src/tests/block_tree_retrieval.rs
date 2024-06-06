@@ -56,7 +56,8 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let genesis_id = tf.genesis().get_id();
 
-        assert_leaves(&tf, &[]);
+        assert_leaves(&tf, BlockHeight::new(0), &[]);
+        assert_leaves(&tf, BlockHeight::new(1), &[]);
 
         // The block timestamps will be as follows:
         // G--m0--m1--m2
@@ -68,51 +69,82 @@ fn block_tree_retrieval(#[case] seed: Seed) {
 
         let (m0_id, result) = process_block(&mut tf, &genesis_id.into(), &mut rng);
         assert!(result.is_ok());
-        assert_leaves(&tf, &[m0_id]);
+        assert_leaves(&tf, BlockHeight::new(0), &[m0_id]);
+        assert_leaves(&tf, BlockHeight::new(1), &[m0_id]);
+        assert_leaves(&tf, BlockHeight::new(2), &[]);
 
         let (a0_id, result) = process_block(&mut tf, &genesis_id.into(), &mut rng);
         assert!(result.is_ok());
-        assert_leaves(&tf, &[m0_id, a0_id]);
+        assert_leaves(&tf, BlockHeight::new(0), &[m0_id, a0_id]);
+        assert_leaves(&tf, BlockHeight::new(1), &[m0_id, a0_id]);
+        assert_leaves(&tf, BlockHeight::new(2), &[]);
 
         tf.time_value.as_ref().unwrap().fetch_add(1);
 
         let (m1_id, result) = process_block(&mut tf, &m0_id.into(), &mut rng);
         assert!(result.is_ok());
-        assert_leaves(&tf, &[m1_id, a0_id]);
+        assert_leaves(&tf, BlockHeight::new(0), &[m1_id, a0_id]);
+        assert_leaves(&tf, BlockHeight::new(1), &[m1_id, a0_id]);
+        assert_leaves(&tf, BlockHeight::new(2), &[m1_id]);
+        assert_leaves(&tf, BlockHeight::new(3), &[]);
 
         let (b0_id, b0_tx_id, result) =
             process_block_split_parent_reward(&mut tf, &m0_id.into(), &mut rng);
         assert!(result.is_ok());
-        assert_leaves(&tf, &[m1_id, a0_id, b0_id]);
+        assert_leaves(&tf, BlockHeight::new(0), &[m1_id, a0_id, b0_id]);
+        assert_leaves(&tf, BlockHeight::new(1), &[m1_id, a0_id, b0_id]);
+        assert_leaves(&tf, BlockHeight::new(2), &[m1_id, b0_id]);
+        assert_leaves(&tf, BlockHeight::new(3), &[]);
 
         tf.time_value.as_ref().unwrap().fetch_add(1);
 
         let (a1_id, result) = process_block(&mut tf, &a0_id.into(), &mut rng);
         assert!(result.is_ok());
-        assert_leaves(&tf, &[m1_id, a1_id, b0_id]);
+        assert_leaves(&tf, BlockHeight::new(0), &[m1_id, a1_id, b0_id]);
+        assert_leaves(&tf, BlockHeight::new(1), &[m1_id, a1_id, b0_id]);
+        assert_leaves(&tf, BlockHeight::new(2), &[m1_id, a1_id, b0_id]);
+        assert_leaves(&tf, BlockHeight::new(3), &[]);
 
         let (m2_id, result) = process_block(&mut tf, &m1_id.into(), &mut rng);
         assert!(result.is_ok());
-        assert_leaves(&tf, &[m2_id, a1_id, b0_id]);
+        assert_leaves(&tf, BlockHeight::new(0), &[m2_id, a1_id, b0_id]);
+        assert_leaves(&tf, BlockHeight::new(1), &[m2_id, a1_id, b0_id]);
+        assert_leaves(&tf, BlockHeight::new(2), &[m2_id, a1_id, b0_id]);
+        assert_leaves(&tf, BlockHeight::new(3), &[m2_id]);
+        assert_leaves(&tf, BlockHeight::new(4), &[]);
 
         tf.time_value.as_ref().unwrap().fetch_add(1);
 
         let (b1_id, result) =
             process_block_spend_tx(&mut tf, &b0_id.into(), &b0_tx_id, 1, &mut rng);
         assert!(result.is_ok());
-        assert_leaves(&tf, &[m2_id, a1_id, b1_id]);
+        assert_leaves(&tf, BlockHeight::new(0), &[m2_id, a1_id, b1_id]);
+        assert_leaves(&tf, BlockHeight::new(1), &[m2_id, a1_id, b1_id]);
+        assert_leaves(&tf, BlockHeight::new(2), &[m2_id, a1_id, b1_id]);
+        assert_leaves(&tf, BlockHeight::new(3), &[m2_id, b1_id]);
+        assert_leaves(&tf, BlockHeight::new(4), &[]);
 
         tf.time_value.as_ref().unwrap().fetch_add(1);
 
         let (b2_id, result) = process_block(&mut tf, &b1_id.into(), &mut rng);
         assert!(result.is_err());
-        assert_leaves(&tf, &[m2_id, a1_id, b2_id]);
+        assert_leaves(&tf, BlockHeight::new(0), &[m2_id, a1_id, b2_id]);
+        assert_leaves(&tf, BlockHeight::new(1), &[m2_id, a1_id, b2_id]);
+        assert_leaves(&tf, BlockHeight::new(2), &[m2_id, a1_id, b2_id]);
+        assert_leaves(&tf, BlockHeight::new(3), &[m2_id, b2_id]);
+        assert_leaves(&tf, BlockHeight::new(4), &[b2_id]);
+        assert_leaves(&tf, BlockHeight::new(5), &[]);
 
         tf.time_value.as_ref().unwrap().fetch_add(1);
 
         let (c1_id, result) = process_block(&mut tf, &b1_id.into(), &mut rng);
         assert!(result.is_err());
-        assert_leaves(&tf, &[m2_id, a1_id, b2_id, c1_id]);
+        assert_leaves(&tf, BlockHeight::new(0), &[m2_id, a1_id, b2_id, c1_id]);
+        assert_leaves(&tf, BlockHeight::new(1), &[m2_id, a1_id, b2_id, c1_id]);
+        assert_leaves(&tf, BlockHeight::new(2), &[m2_id, a1_id, b2_id, c1_id]);
+        assert_leaves(&tf, BlockHeight::new(3), &[m2_id, b2_id, c1_id]);
+        assert_leaves(&tf, BlockHeight::new(4), &[b2_id, c1_id]);
+        assert_leaves(&tf, BlockHeight::new(5), &[]);
 
         log::debug!("m0_id = {m0_id}, m1_id = {m1_id}, m2_id = {m2_id}, a0_id = {a0_id}, a1_id = {a1_id}, b0_id = {b0_id}, b1_id = {b1_id}, b2_id = {b2_id}, c1_id = {c1_id}");
 
@@ -409,9 +441,9 @@ fn block_tree_retrieval(#[case] seed: Seed) {
     });
 }
 
-fn assert_leaves(tf: &TestFramework, expected: &[Id<Block>]) {
+fn assert_leaves(tf: &TestFramework, min_height: BlockHeight, expected: &[Id<Block>]) {
     let expected = expected.iter().copied().collect::<BTreeSet<_>>();
-    let actual = tf.leaf_block_ids();
+    let actual = tf.leaf_block_ids(min_height);
     assert_eq!(actual, expected);
 }
 
