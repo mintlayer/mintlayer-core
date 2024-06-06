@@ -156,6 +156,14 @@ mockall::mock! {
         ) -> Result<Vec<Option<Amount>>, ChainstateError>;
         fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
         fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
+        fn get_block_tree_top_by_height(
+            &self,
+            start_from: BlockHeight,
+        ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, ChainstateError>;
+        fn get_block_tree_top_by_timestamp(
+            &self,
+            start_from: BlockTimestamp,
+        ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, ChainstateError>;
         fn import_bootstrap_stream<'a>(
             &'a mut self,
             reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,

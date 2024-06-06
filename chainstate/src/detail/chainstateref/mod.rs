@@ -19,12 +19,13 @@ mod epoch_seal;
 mod in_memory_reorg;
 mod tx_verifier_storage;
 
-use itertools::Itertools;
-use serialization::{Decode, Encode};
 use std::{
     cmp::max,
     collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
 };
+
+use itertools::Itertools;
 use thiserror::Error;
 
 use chainstate_storage::{
@@ -54,8 +55,9 @@ use common::{
 };
 use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
+use serialization::{Decode, Encode};
 use tx_verifier::transaction_verifier::TransactionVerifier;
-use utils::{debug_assert_or_log, ensure, log_error, tap_log::TapLog};
+use utils::{debug_assert_or_log, ensure, log_error, sorted::Sorted, tap_log::TapLog};
 use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
 
 use crate::{BlockError, ChainstateConfig};
@@ -886,30 +888,154 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(result)
     }
 
+    /// Note: the result will be sorted by height; this behavior is expected by some of the callers.
     #[log_error]
     pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
-        let block_tree_map =
-            self.db_tx.get_block_tree_by_height_traversing_entire_index(0.into())?;
-        let result = block_tree_map
+        let result = self
+            .get_block_tree_by_height_traversing_entire_index(0.into())?
             .into_iter()
             .flat_map(|(_height, ids_per_height)| ids_per_height)
             .collect();
-
         Ok(result)
     }
 
-    /// Return ids of all blocks with height bigger than or equal to the specified one,
+    /// Return ids of all blocks with heights bigger than or equal to the specified one,
     /// grouped by height.
     /// Note: the function collects block ids by iterating from each of the current leaf blocks
     /// down to the specified height, while maintaining a set of already seen blocks.
-    /// So, if the starting height is close to zero, `get_block_tree_by_height_traversing_entire_index`
-    /// from `BlockchainStorageRead` might be a better choice (it is linear with respect
-    /// to the total number of blocks in the chain).
+    /// So, if the starting height is close to zero, iterating over the entire index
+    /// (via db_tx.iterate_block_index) might be a better choice.
+    #[log_error]
     pub fn get_block_tree_top_by_height(
         &self,
         start_from: BlockHeight,
     ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, PropertyQueryError> {
         let mut result = BTreeMap::<BlockHeight, Vec<Id<Block>>>::new();
+
+        self.iterate_from_tree_top_until(|block_index| {
+            if block_index.block_height() < start_from {
+                false
+            } else {
+                result
+                    .entry(block_index.block_height())
+                    .or_default()
+                    .push(*block_index.block_id());
+                true
+            }
+        })?;
+
+        if self.chainstate_config.heavy_checks_enabled(self.chain_config) {
+            // Check that traversing the entire index produces the same result.
+            let alternative_result =
+                self.get_block_tree_by_height_traversing_entire_index(start_from)?;
+            self.assert_equal_tree_top_results(&result, &alternative_result);
+        }
+
+        Ok(result)
+    }
+
+    /// Same as get_block_tree_top_by_height but for timestamps.
+    #[log_error]
+    pub fn get_block_tree_top_by_timestamp(
+        &self,
+        start_from: BlockTimestamp,
+    ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, PropertyQueryError> {
+        let mut result = BTreeMap::<BlockTimestamp, Vec<Id<Block>>>::new();
+
+        self.iterate_from_tree_top_until(|block_index| {
+            if block_index.block_timestamp() < start_from {
+                false
+            } else {
+                result
+                    .entry(block_index.block_timestamp())
+                    .or_default()
+                    .push(*block_index.block_id());
+                true
+            }
+        })?;
+
+        if self.chainstate_config.heavy_checks_enabled(self.chain_config) {
+            // Check that traversing the entire index produces the same result.
+            let alternative_result =
+                self.get_block_tree_by_timestamp_traversing_entire_index(start_from)?;
+            self.assert_equal_tree_top_results(&result, &alternative_result);
+        }
+
+        Ok(result)
+    }
+
+    #[log_error]
+    fn get_block_tree_by_height_traversing_entire_index(
+        &self,
+        start_from: BlockHeight,
+    ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, PropertyQueryError> {
+        let mut result = BTreeMap::<BlockHeight, Vec<Id<Block>>>::new();
+        let iter = self.db_tx.iterate_block_index()?;
+
+        for block_index in iter {
+            if block_index.block_height() >= start_from {
+                result
+                    .entry(block_index.block_height())
+                    .or_default()
+                    .push(*block_index.block_id());
+            }
+        }
+
+        Ok(result)
+    }
+
+    #[log_error]
+    fn get_block_tree_by_timestamp_traversing_entire_index(
+        &self,
+        start_from: BlockTimestamp,
+    ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, PropertyQueryError> {
+        let mut result = BTreeMap::<BlockTimestamp, Vec<Id<Block>>>::new();
+        let iter = self.db_tx.iterate_block_index()?;
+
+        for block_index in iter {
+            if block_index.block_timestamp() >= start_from {
+                result
+                    .entry(block_index.block_timestamp())
+                    .or_default()
+                    .push(*block_index.block_id());
+            }
+        }
+
+        Ok(result)
+    }
+
+    // Assert that result1 equals result2
+    fn assert_equal_tree_top_results<T: Ord + Debug>(
+        &self,
+        result1: &BTreeMap<T, Vec<Id<Block>>>,
+        result2: &BTreeMap<T, Vec<Id<Block>>>,
+    ) {
+        use itertools::EitherOrBoth::*;
+
+        for items in result1.iter().zip_longest(result2.iter()) {
+            match items {
+                Left(left) => panic!("{:?} is missing in 2nd result", left.0),
+                Right(right) => panic!("{:?} is missing in 1st result", right.0),
+                Both(left, right) => {
+                    assert_eq!(left.0, right.0, "Keys mismatch");
+
+                    let left_ids = left.1.sorted();
+                    let right_ids = right.1.sorted();
+                    assert_eq!(
+                        left_ids, right_ids,
+                        "Block ids mismatch for key {:?}",
+                        left.0
+                    );
+                }
+            }
+        }
+    }
+
+    #[log_error]
+    pub fn iterate_from_tree_top_until(
+        &self,
+        mut handler: impl FnMut(&BlockIndex) -> bool,
+    ) -> Result<(), PropertyQueryError> {
         let mut seen_blocks = BTreeSet::new();
 
         let leaf_block_ids = self.db_tx.get_leaf_block_ids()?;
@@ -926,11 +1052,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
                 let cur_block_index = self.get_existing_block_index(&cur_block_id)?;
 
-                if cur_block_index.block_height() < start_from {
+                if !handler(&cur_block_index) {
                     break;
                 }
-
-                result.entry(cur_block_index.block_height()).or_default().push(cur_block_id);
 
                 if let Some(non_genesis_parent) =
                     cur_block_index.prev_block_id().classify(self.chain_config).chain_block_id()
@@ -942,23 +1066,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             }
         }
 
-        if self.chainstate_config.heavy_checks_enabled(self.chain_config) {
-            // Check that get_block_tree_by_height_traversing_entire_index returns the same data.
-
-            let alternative_result =
-                self.db_tx.get_block_tree_by_height_traversing_entire_index(start_from)?;
-            let alternative_result = alternative_result
-                .iter()
-                .map(|(height, ids)| (height, ids.iter().collect::<BTreeSet<_>>()))
-                .collect::<BTreeMap<_, _>>();
-            let result = result
-                .iter()
-                .map(|(height, ids)| (height, ids.iter().collect::<BTreeSet<_>>()))
-                .collect::<BTreeMap<_, _>>();
-            assert_eq!(result, alternative_result);
-        }
-
-        Ok(result)
+        Ok(())
     }
 
     /// Return ids of all blocks with height bigger than or equal to the specified one,

@@ -304,6 +304,20 @@ where
         self.deref().get_block_id_tree_as_list()
     }
 
+    fn get_block_tree_top_by_height(
+        &self,
+        start_from: BlockHeight,
+    ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, ChainstateError> {
+        self.deref().get_block_tree_top_by_height(start_from)
+    }
+
+    fn get_block_tree_top_by_timestamp(
+        &self,
+        start_from: BlockTimestamp,
+    ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, ChainstateError> {
+        self.deref().get_block_tree_top_by_timestamp(start_from)
+    }
+
     fn import_bootstrap_stream<'a>(
         &mut self,
         reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,

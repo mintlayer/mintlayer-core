@@ -230,8 +230,23 @@ pub trait ChainstateInterface: Send + Sync {
     /// Returns a list of all block ids in mainchain in order (starting from block of height 1, hence the result length is best_height - 1).
     fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
 
-    /// Returns a list of all blocks in the block tree, including orphans. The length cannot be predicted before the call.
+    /// Returns a list of all blocks in the block tree. The length cannot be predicted before the call.
+    /// The result will be sorted by height.
     fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
+
+    /// Return ids of all blocks with heights bigger than or equal to the specified one,
+    /// grouped by height.
+    fn get_block_tree_top_by_height(
+        &self,
+        start_from: BlockHeight,
+    ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, ChainstateError>;
+
+    /// Return ids of all blocks with timestamps bigger than or equal to the specified one,
+    /// grouped by timestamp.
+    fn get_block_tree_top_by_timestamp(
+        &self,
+        start_from: BlockTimestamp,
+    ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, ChainstateError>;
 
     /// Imports a bootstrap file exported with `export_bootstrap_stream`.
     fn import_bootstrap_stream<'a>(

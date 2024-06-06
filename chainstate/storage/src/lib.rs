@@ -117,12 +117,8 @@ pub trait BlockchainStorageRead:
     /// Get token id by id of the creation tx
     fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
 
-    /// Get block tree as height vs ids.
-    /// The function will iterate over the entire block index map.
-    fn get_block_tree_by_height_traversing_entire_index(
-        &self,
-        start_from: BlockHeight,
-    ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
+    /// Iterate the entire block index.
+    fn iterate_block_index(&self) -> crate::Result<impl Iterator<Item = BlockIndex>>;
 
     /// Get tokens accounting undo for specific block
     fn get_tokens_accounting_undo(

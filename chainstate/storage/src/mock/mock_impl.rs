@@ -47,6 +47,12 @@ mockall::mock! {
     /// A mock object for blockchain storage
     pub Store {}
 
+    // Note: mockall doesn't like `Result<impl Iterator<Item = BlockIndex>>` which is returned
+    // from `iterate_block_index`, so we have to return `Box` instead'. This triggers the warning
+    // "impl trait in impl method signature does not match trait method signature", which
+    // we silence here.
+    // Same in other places below.
+    #[allow(refining_impl_trait)]
     impl crate::BlockchainStorageRead for Store {
         fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
         fn get_magic_bytes(&self) -> crate::Result<Option<MagicBytes>>;
@@ -79,10 +85,7 @@ mockall::mock! {
             id: Id<Block>,
         ) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
 
-        fn get_block_tree_by_height_traversing_entire_index(
-            &self,
-            start_from: BlockHeight,
-        ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
+        fn iterate_block_index(&self) -> crate::Result<Box<dyn Iterator<Item = BlockIndex>>>;
 
         fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
 
@@ -327,6 +330,7 @@ mockall::mock! {
     /// A mock object for blockchain storage transaction
     pub StoreTxRo {}
 
+    #[allow(refining_impl_trait)]
     impl crate::BlockchainStorageRead for StoreTxRo {
         fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
         fn get_magic_bytes(&self) -> crate::Result<Option<MagicBytes>>;
@@ -352,10 +356,8 @@ mockall::mock! {
 
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
-        fn get_block_tree_by_height_traversing_entire_index(
-            &self,
-            start_from: BlockHeight,
-        ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
+
+        fn iterate_block_index(&self) -> crate::Result<Box<dyn Iterator<Item = BlockIndex>>>;
 
         fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
 
@@ -448,6 +450,7 @@ mockall::mock! {
     /// A mock object for blockchain storage transaction
     pub StoreTxRw {}
 
+    #[allow(refining_impl_trait)]
     impl crate::BlockchainStorageRead for StoreTxRw {
         fn get_storage_version(&self) -> crate::Result<Option<ChainstateStorageVersion>>;
         fn get_magic_bytes(&self) -> crate::Result<Option<MagicBytes>>;
@@ -474,10 +477,8 @@ mockall::mock! {
         fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
         fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
         fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
-        fn get_block_tree_by_height_traversing_entire_index(
-            &self,
-            start_from: BlockHeight,
-        ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
+
+        fn iterate_block_index(&self) -> crate::Result<Box<dyn Iterator<Item = BlockIndex>>>;
 
         fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
 

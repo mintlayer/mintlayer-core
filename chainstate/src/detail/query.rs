@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::NonZeroUsize;
+use std::{collections::BTreeMap, num::NonZeroUsize};
 
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, BlockReward},
+        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
         tokens::{
             NftIssuance, RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo,
             RPCTokenInfo, TokenAuxiliaryData, TokenId,
@@ -385,6 +385,20 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
         self.chainstate_ref.get_block_id_tree_as_list()
+    }
+
+    pub fn get_block_tree_top_by_height(
+        &self,
+        start_from: BlockHeight,
+    ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, PropertyQueryError> {
+        self.chainstate_ref.get_block_tree_top_by_height(start_from)
+    }
+
+    pub fn get_block_tree_top_by_timestamp(
+        &self,
+        start_from: BlockTimestamp,
+    ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, PropertyQueryError> {
+        self.chainstate_ref.get_block_tree_top_by_timestamp(start_from)
     }
 
     pub fn get_token_data(

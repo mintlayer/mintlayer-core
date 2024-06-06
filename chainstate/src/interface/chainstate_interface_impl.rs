@@ -32,7 +32,10 @@ use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
+        block::{
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, Block, BlockReward,
+            GenBlock,
+        },
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, DelegationId, PoolId, Transaction, TxInput, TxOutput,
@@ -561,6 +564,30 @@ where
             .query()
             .map_err(ChainstateError::from)?
             .get_block_id_tree_as_list()
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn get_block_tree_top_by_height(
+        &self,
+        start_from: BlockHeight,
+    ) -> Result<BTreeMap<BlockHeight, Vec<Id<Block>>>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_block_tree_top_by_height(start_from)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn get_block_tree_top_by_timestamp(
+        &self,
+        start_from: BlockTimestamp,
+    ) -> Result<BTreeMap<BlockTimestamp, Vec<Id<Block>>>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_block_tree_top_by_timestamp(start_from)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
