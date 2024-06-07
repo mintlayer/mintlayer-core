@@ -120,6 +120,43 @@ For heavy debugging operation
 
 More complex log filtering is possible, e.g. you can filter out log lines produced by a certain crate or module, but this is out of scope of this document.
 
+### Cross-compiling for Raspberry Pi (Arm64)
+
+To cross-compile the source code for Raspberry Pi, or any Arm64 OS, assuming you don't want to build it there, a new target has to be added for the Rust compiler + dependencies/linker installed.
+
+Note that Mintlayer only supports 64-bit systems. If your Raspberry Pi's current OS architecture is armhf (32-bit), which you can check using the command `dpkg --print-architecture`, you have to wipe it and start over with an Arm64/aarch64 OS.
+
+#### Steps:
+
+Install the target for the Rust compiler:
+
+```
+rustup target add aarch64-unknown-linux-gnu
+```
+
+Install the dependencies and linker (this is for Debian/Ubuntu, find the equivalent for your OS and run it):
+
+```
+sudo apt install gcc-aarch64-linux-gnu
+```
+
+Once these installations are successful, you can build all binaries for Arm64:
+
+```
+cargo build --all --target=aarch64-unknown-linux-gnu --release
+```
+
+Or build the individual binaries you choose:
+
+```
+cargo build --bin node-daemon --target=aarch64-unknown-linux-gnu --release
+cargo build --bin wallet-cli --target=aarch64-unknown-linux-gnu --release
+# ... etc
+```
+
+The artifacts can be found in `target/aarch64-unknown-linux-gnu/release`, or a similar directory name.
+
+
 ## Wallets
 
 For more information about the wallets and their usage, [visit this readme file](wallet/README.md).

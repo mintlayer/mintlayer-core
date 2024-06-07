@@ -24,7 +24,10 @@ test/**/__pycache__
 test/config.ini
 
 # The cache for docker container dependency
-.cargo
+.cargo/*
+
+# But do not ignore the cargo.toml file
+!.cargo/config.toml
 
 # The cache for chain data in container
 .local
