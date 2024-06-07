@@ -13,9 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use self::mocks::MockSigInfoProvider;
+
 use super::*;
 use common::{
-    chain::{stakelock::StakePoolData, tokens, AccountNonce, AccountSpending},
+    chain::{
+        block::BlockRewardTransactable, stakelock::StakePoolData, tokens, AccountNonce,
+        AccountSpending,
+    },
     primitives::per_thousand::PerThousand,
 };
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
@@ -159,6 +164,35 @@ fn mint(id: TokenId, amount: u128) -> TestInputInfo {
     TestInputInfo::AccountCommand { command }
 }
 
+// A hack to specify all the modes in the parametrized test below. The mode specification ought to
+// be simplified in the actual implementation and then this may be dropped.
+
+trait TranslationMode<'b> {
+    const NAME: &'static str;
+    type Mode: for<'a> TranslateInput<MockSigInfoProvider<'a>> + 'b;
+}
+
+struct TxnMode;
+impl TranslationMode<'_> for TxnMode {
+    const NAME: &'static str = "txn";
+    type Mode = SignedTransaction;
+}
+
+struct RewardMode;
+impl<'a> TranslationMode<'a> for RewardMode {
+    const NAME: &'static str = "reward";
+    type Mode = BlockRewardTransactable<'a>;
+}
+
+impl TranslationMode<'_> for TimelockOnly {
+    const NAME: &'static str = "tlock";
+    type Mode = Self;
+}
+
+fn mode_name<'a, T: TranslationMode<'a>>(_: &T) -> &'static str {
+    T::NAME
+}
+
 // The test itself
 
 #[rstest::rstest]
@@ -176,6 +210,7 @@ fn mint(id: TokenId, amount: u128) -> TestInputInfo {
 #[case("mint_01", mint(token0().0, 582), stdsig(0x57))]
 #[case("mint_02", mint(token0().0, 582), nosig())]
 fn translate_snap(
+    #[values(TxnMode, RewardMode, TimelockOnly)] mode: impl for<'a> TranslationMode<'a>,
     #[case] name: &str,
     #[case] test_input_info: TestInputInfo,
     #[case] witness: InputWitness,
@@ -184,7 +219,7 @@ fn translate_snap(
     let tokens = [token0()];
     let delegs = [deleg0()];
     let sig_info = mocks::MockSigInfoProvider::new(input_info, witness, tokens, [], delegs);
-    let mode = "txn";
+    let mode = mode_name(&mode);
 
     let result = match SignedTransaction::translate_input(&sig_info) {
         Ok(script) => format!("{script:#?}"),

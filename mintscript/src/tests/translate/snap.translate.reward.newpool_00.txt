@@ -1,0 +1,26 @@
+WitnessScript(
+    Signature(
+        PublicKey(
+            PublicKey {
+                pub_key: Secp256k1Schnorr(
+                    Secp256k1PublicKey {
+                        pubkey_data: PublicKey(
+                            bc7bbeb63a51bb64d4c7e7633da41531f10b238d61ff7f5a4d586f75dac91593438f74747016ff2f96579648ff39d480a02bbd5df56456dd456793ce24c87b4b,
+                        ),
+                    },
+                ),
+            },
+        ),
+        Standard(
+            StandardInputSignature {
+                sighash_type: SigHashType(
+                    1,
+                ),
+                raw_signature: [
+                    83,
+                    83,
+                ],
+            },
+        ),
+    ),
+)
