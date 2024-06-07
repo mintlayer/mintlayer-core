@@ -21,13 +21,7 @@ mod utxo_selector;
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
-use common::chain::signature::inputsig::arbitrary_message::ArbitraryMessageSignature;
-use common::chain::signature::inputsig::classical_multisig::authorize_classical_multisig::{
-    sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
-    ClassicalMultisigCompletionStatus,
-};
 use common::chain::signature::sighash::signature_hash;
-use common::chain::signature::DestinationSigError;
 use common::chain::{AccountCommand, AccountOutPoint, AccountSpending, TransactionCreationError};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
@@ -37,13 +31,11 @@ use common::size_estimation::{
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
-use randomness::make_true_rng;
 use serialization::hex_encoded::HexEncoded;
 use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
 use wallet_types::account_id::AccountPrefixedId;
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
-use wallet_types::signature_status::SignatureStatus;
 use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
@@ -58,9 +50,7 @@ use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{get_tx_output_destination, SendRequest, WalletError, WalletResult};
 use common::address::{Address, RpcAddress};
 use common::chain::output_value::OutputValue;
-use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use common::chain::signature::inputsig::InputWitness;
-use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::tokens::{
     make_token_id, IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId,
 };
@@ -282,6 +272,10 @@ impl Account {
         account.scan_genesis(db_tx, &WalletEventsNoOp)?;
 
         Ok(account)
+    }
+
+    pub fn key_chain(&self) -> &AccountKeyChain {
+        &self.key_chain
     }
 
     pub fn find_used_tokens(
@@ -582,11 +576,10 @@ impl Account {
 
     pub fn sweep_addresses(
         &mut self,
-        db_tx: &impl WalletStorageReadUnlocked,
         destination: Destination,
         request: SendRequest,
         current_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SendRequest> {
         let mut grouped_inputs = group_preselected_inputs(
             &request,
             current_fee_rate,
@@ -640,17 +633,16 @@ impl Account {
         );
         outputs.push(coin_output);
 
-        self.sign_transaction_from_req(request.with_outputs(outputs), db_tx)
+        Ok(request.with_outputs(outputs))
     }
 
     pub fn sweep_delegation(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
         address: Address<Destination>,
         delegation_id: DelegationId,
         delegation_share: Amount,
         current_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SendRequest> {
         let current_block_height = self.best_block().1;
         let output = make_address_output_from_delegation(
             self.chain_config.as_ref(),
@@ -692,10 +684,12 @@ impl Account {
             current_block_height,
         );
 
-        let tx = Transaction::new(0, vec![tx_input], vec![output])?;
+        let mut req = SendRequest::new()
+            .with_inputs_and_destinations([(tx_input, delegation_data.destination.clone())])
+            .with_outputs([output]);
+        req.add_fee(Currency::Coin, total_fee);
 
-        self.sign_transaction(tx, &[&delegation_data.destination], &[None], db_tx)?
-            .into_signed_tx(&self.chain_config)
+        Ok(req)
     }
 
     pub fn process_send_request(
@@ -717,14 +711,7 @@ impl Account {
         )?;
 
         let fees = request.get_fees();
-        let (tx, utxos, destinations) = request.into_transaction_and_utxos()?;
-        let num_inputs = tx.inputs().len();
-        let ptx = PartiallySignedTransaction::new(
-            tx,
-            vec![None; num_inputs],
-            utxos,
-            destinations.into_iter().map(Some).collect(),
-        )?;
+        let ptx = request.into_partially_signed_tx()?;
 
         Ok((ptx, fees))
     }
@@ -737,19 +724,16 @@ impl Account {
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SignedTransaction> {
-        let request = self.select_inputs_for_send_request(
+    ) -> WalletResult<SendRequest> {
+        self.select_inputs_for_send_request(
             request,
             inputs,
             change_addresses,
             db_tx,
             median_time,
             fee_rate,
-        )?;
+        )
         // TODO: Randomize inputs and outputs
-
-        let tx = self.sign_transaction_from_req(request, db_tx)?;
-        Ok(tx)
     }
 
     fn decommission_stake_pool_impl(
@@ -759,7 +743,7 @@ impl Account {
         pool_balance: Amount,
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
-    ) -> WalletResult<PartiallySignedTransaction> {
+    ) -> WalletResult<SendRequest> {
         let output_destination = if let Some(dest) = output_address {
             dest
         } else {
@@ -797,10 +781,19 @@ impl Account {
             best_block_height,
         )?;
 
-        let tx = Transaction::new(0, vec![tx_input], vec![output])?;
+        let input_utxo = self
+            .output_cache
+            .get_txo(&pool_data.utxo_outpoint)
+            .ok_or(WalletError::NoUtxos)?;
 
-        let input_utxo = self.output_cache.get_txo(&pool_data.utxo_outpoint);
-        self.sign_transaction(tx, &[&pool_data.decommission_key], &[input_utxo], db_tx)
+        let mut req = SendRequest::new()
+            .with_inputs([(tx_input, input_utxo.clone())], &|id| {
+                (*id == pool_id).then_some(pool_data)
+            })?
+            .with_outputs([output]);
+        req.add_fee(Currency::Coin, network_fee);
+
+        Ok(req)
     }
 
     pub fn decommission_stake_pool(
@@ -810,17 +803,14 @@ impl Account {
         pool_balance: Amount,
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
-        let result = self.decommission_stake_pool_impl(
+    ) -> WalletResult<SendRequest> {
+        self.decommission_stake_pool_impl(
             db_tx,
             pool_id,
             pool_balance,
             output_address,
             current_fee_rate,
-        )?;
-        result
-            .into_signed_tx(&self.chain_config)
-            .map_err(|_| WalletError::PartiallySignedTransactionInDecommissionCommand)
+        )
     }
 
     pub fn decommission_stake_pool_request(
@@ -830,29 +820,24 @@ impl Account {
         pool_balance: Amount,
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
-    ) -> WalletResult<PartiallySignedTransaction> {
-        let result = self.decommission_stake_pool_impl(
+    ) -> WalletResult<SendRequest> {
+        self.decommission_stake_pool_impl(
             db_tx,
             pool_id,
             pool_balance,
             output_address,
             current_fee_rate,
-        )?;
-        if result.is_fully_signed(&self.chain_config) {
-            return Err(WalletError::FullySignedTransactionInDecommissionReq);
-        }
-        Ok(result)
+        )
     }
 
     pub fn spend_from_delegation(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
         address: Address<Destination>,
         amount: Amount,
         delegation_id: DelegationId,
         delegation_share: Amount,
         current_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SendRequest> {
         let current_block_height = self.best_block().1;
         let output = make_address_output_from_delegation(
             self.chain_config.as_ref(),
@@ -883,13 +868,15 @@ impl Account {
         // as the input size depends on the amount we specify the fee will also change a bit so
         // loop until it converges.
         let mut input_size = serialization::Encode::encoded_size(&tx_input);
+        let mut total_fee;
         loop {
-            let new_amount_with_fee = (amount_with_fee
-                + current_fee_rate
-                    .compute_fee(input_size)
-                    .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
-                    .into())
-            .ok_or(WalletError::OutputAmountOverflow)?;
+            total_fee = current_fee_rate
+                .compute_fee(input_size)
+                .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
+                .into();
+
+            let new_amount_with_fee =
+                (amount_with_fee + total_fee).ok_or(WalletError::OutputAmountOverflow)?;
             ensure!(
                 new_amount_with_fee <= delegation_share,
                 UtxoSelectorError::NotEnoughFunds(delegation_share, new_amount_with_fee)
@@ -906,10 +893,12 @@ impl Account {
             }
             input_size = new_input_size;
         }
-        let tx = Transaction::new(0, vec![tx_input], outputs)?;
 
-        self.sign_transaction(tx, &[&delegation_data.destination], &[None], db_tx)?
-            .into_signed_tx(&self.chain_config)
+        let mut req = SendRequest::new()
+            .with_inputs_and_destinations([(tx_input, delegation_data.destination.clone())])
+            .with_outputs(outputs);
+        req.add_fee(Currency::Coin, total_fee);
+        Ok(req)
     }
 
     fn get_vrf_public_key(
@@ -977,7 +966,7 @@ impl Account {
         stake_pool_arguments: StakePoolDataArguments,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SendRequest> {
         // TODO: Use other accounts here
         let staker = Destination::PublicKey(
             self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?.into_public_key(),
@@ -1029,8 +1018,7 @@ impl Account {
             .expect("find output with dummy_pool_id");
         *old_pool_id = new_pool_id;
 
-        let tx = self.sign_transaction_from_req(request, db_tx)?;
-        Ok(tx)
+        Ok(request)
     }
 
     pub fn create_issue_nft_tx(
@@ -1039,7 +1027,7 @@ impl Account {
         nft_issue_arguments: IssueNftArguments,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SendRequest> {
         let nft_issuance = NftIssuanceV0 {
             metadata: nft_issue_arguments.metadata,
         };
@@ -1087,8 +1075,7 @@ impl Account {
             .expect("find output with dummy_token_id");
         *old_token_id = new_token_id;
 
-        let tx = self.sign_transaction_from_req(request, db_tx)?;
-        Ok(tx)
+        Ok(request)
     }
 
     pub fn mint_tokens(
@@ -1099,7 +1086,7 @@ impl Account {
         amount: Amount,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SendRequest> {
         let token_id = *token_info.token_id();
         let outputs = make_mint_token_outputs(token_id, amount, address);
 
@@ -1126,7 +1113,7 @@ impl Account {
         amount: Amount,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SendRequest> {
         let token_id = *token_info.token_id();
         let outputs = make_unmint_token_outputs(token_id, amount);
 
@@ -1152,7 +1139,7 @@ impl Account {
         token_info: &UnconfirmedTokenInfo,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SendRequest> {
         let token_id = *token_info.token_id();
         token_info.check_can_lock()?;
 
@@ -1177,7 +1164,7 @@ impl Account {
         is_token_unfreezable: IsTokenUnfreezable,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SendRequest> {
         token_info.check_can_freeze()?;
 
         let nonce = token_info.get_next_nonce()?;
@@ -1203,7 +1190,7 @@ impl Account {
         token_info: &UnconfirmedTokenInfo,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SendRequest> {
         token_info.check_can_unfreeze()?;
 
         let nonce = token_info.get_next_nonce()?;
@@ -1228,7 +1215,7 @@ impl Account {
         address: Address<Destination>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<SendRequest> {
         let new_authority = address.into_object();
 
         let nonce = token_info.get_next_nonce()?;
@@ -1256,22 +1243,19 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteUnlocked,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
-    ) -> Result<SignedTransaction, WalletError> {
+    ) -> Result<SendRequest, WalletError> {
         let request = SendRequest::new()
             .with_outputs(outputs)
             .with_inputs_and_destinations([(tx_input, authority)]);
 
-        let request = self.select_inputs_for_send_request(
+        self.select_inputs_for_send_request(
             request,
             SelectedInputs::Utxos(vec![]),
             BTreeMap::new(),
             db_tx,
             median_time,
             fee_rate,
-        )?;
-
-        let tx = self.sign_transaction_from_req(request, db_tx)?;
-        Ok(tx)
+        )
     }
 
     pub fn pool_exists(&self, pool_id: PoolId) -> bool {
@@ -1313,171 +1297,7 @@ impl Account {
         Ok(data)
     }
 
-    fn sign_transaction_from_req(
-        &self,
-        request: SendRequest,
-        db_tx: &impl WalletStorageReadUnlocked,
-    ) -> WalletResult<SignedTransaction> {
-        let (tx, input_utxos, destinations) = request.into_transaction_and_utxos()?;
-        let destinations = destinations.iter().collect_vec();
-        let input_utxos = input_utxos.iter().map(Option::as_ref).collect_vec();
-
-        self.sign_transaction(tx, destinations.as_slice(), input_utxos.as_slice(), db_tx)?
-            .into_signed_tx(&self.chain_config)
-    }
-
-    fn sign_input(
-        &self,
-        tx: &Transaction,
-        destination: &Destination,
-        input_index: usize,
-        input_utxos: &[Option<&TxOutput>],
-        db_tx: &impl WalletStorageReadUnlocked,
-    ) -> WalletResult<(Option<InputWitness>, SignatureStatus)> {
-        match destination {
-            Destination::AnyoneCanSpend => Ok((
-                Some(InputWitness::NoSignature(None)),
-                SignatureStatus::FullySigned,
-            )),
-            Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
-                let sig = self
-                    .key_chain
-                    .get_private_key_for_destination(destination, db_tx)?
-                    .map(|private_key| {
-                        let sighash_type =
-                            SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
-
-                        StandardInputSignature::produce_uniparty_signature_for_input(
-                            &private_key,
-                            sighash_type,
-                            destination.clone(),
-                            tx,
-                            input_utxos,
-                            input_index,
-                            make_true_rng(),
-                        )
-                        .map(InputWitness::Standard)
-                        .map_err(WalletError::TransactionSig)
-                    })
-                    .transpose()?;
-
-                if sig.is_some() {
-                    Ok((sig, SignatureStatus::FullySigned))
-                } else {
-                    Ok((sig, SignatureStatus::NotSigned))
-                }
-            }
-            Destination::ClassicMultisig(_) => {
-                if let Some(challenge) = self.key_chain.get_multisig_challenge(destination) {
-                    let current_signatures =
-                        AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
-
-                    let (sig, _, status) = self.sign_multisig_input(
-                        tx,
-                        input_index,
-                        input_utxos,
-                        current_signatures,
-                        db_tx,
-                    )?;
-                    return Ok((sig, status));
-                }
-
-                Ok((None, SignatureStatus::NotSigned))
-            }
-            Destination::ScriptHash(_) => Ok((None, SignatureStatus::NotSigned)),
-        }
-    }
-
-    fn sign_multisig_input(
-        &self,
-        tx: &Transaction,
-        input_index: usize,
-        input_utxos: &[Option<&TxOutput>],
-        mut current_signatures: AuthorizedClassicalMultisigSpend,
-        db_tx: &impl WalletStorageReadUnlocked,
-    ) -> WalletResult<(Option<InputWitness>, SignatureStatus, SignatureStatus)> {
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
-
-        let challenge = current_signatures.challenge().clone();
-        let sighash = signature_hash(sighash_type, tx, input_utxos, input_index)?;
-        let required_signatures = challenge.min_required_signatures();
-
-        let previous_status = SignatureStatus::PartialMultisig {
-            required_signatures,
-            num_signatures: current_signatures.signatures().len() as u8,
-        };
-
-        let mut final_status = previous_status;
-
-        for (key_index, public_key) in challenge.public_keys().iter().enumerate() {
-            if current_signatures.signatures().contains_key(&(key_index as u8)) {
-                continue;
-            }
-
-            if let Some(private_key) = self.key_chain.get_private_key_for_destination(
-                &Destination::PublicKey(public_key.clone()),
-                db_tx,
-            )? {
-                let res = sign_classical_multisig_spending(
-                    &self.chain_config,
-                    key_index as u8,
-                    &private_key,
-                    &challenge,
-                    &sighash,
-                    current_signatures,
-                    &mut make_true_rng(),
-                )
-                .map_err(DestinationSigError::ClassicalMultisigSigningFailed)?;
-
-                match res {
-                    ClassicalMultisigCompletionStatus::Complete(signatures) => {
-                        current_signatures = signatures;
-                        final_status = SignatureStatus::FullySigned;
-                        break;
-                    }
-                    ClassicalMultisigCompletionStatus::Incomplete(signatures) => {
-                        current_signatures = signatures;
-                        final_status = SignatureStatus::PartialMultisig {
-                            required_signatures,
-                            num_signatures: current_signatures.signatures().len() as u8,
-                        };
-                    }
-                };
-            }
-        }
-
-        Ok((
-            Some(InputWitness::Standard(StandardInputSignature::new(
-                sighash_type,
-                current_signatures.encode(),
-            ))),
-            previous_status,
-            final_status,
-        ))
-    }
-
-    fn sign_transaction(
-        &self,
-        tx: Transaction,
-        destinations: &[&Destination],
-        input_utxos: &[Option<&TxOutput>],
-        db_tx: &impl WalletStorageReadUnlocked,
-    ) -> WalletResult<PartiallySignedTransaction> {
-        let witnesses = destinations
-            .iter()
-            .copied()
-            .enumerate()
-            .map(|(i, destination)| {
-                self.sign_input(&tx, destination, i, input_utxos, db_tx).map(|(sig, _)| sig)
-            })
-            .collect::<Result<Vec<Option<InputWitness>>, _>>()?;
-        let input_utxos: Vec<_> = input_utxos.iter().map(|u| u.cloned()).collect();
-        let destinations: Vec<_> = destinations.iter().map(|d| Some((*d).clone())).collect();
-
-        PartiallySignedTransaction::new(tx, witnesses, input_utxos, destinations)
-    }
-
-    fn tx_to_partially_signed_tx(
+    pub fn tx_to_partially_signed_tx(
         &self,
         tx: Transaction,
         median_time: BlockTimestamp,
@@ -1543,113 +1363,6 @@ impl Account {
             get_tx_output_destination(txo, &|pool_id| self.output_cache.pool_data(*pool_id).ok())
                 .ok_or(WalletError::InputCannotBeSpent(txo.clone()))?,
         ))
-    }
-
-    pub fn sign_challenge(
-        &self,
-        message: Vec<u8>,
-        destination: Destination,
-        db_tx: &impl WalletStorageReadUnlocked,
-    ) -> WalletResult<ArbitraryMessageSignature> {
-        let private_key = self
-            .key_chain
-            .get_private_key_for_destination(&destination, db_tx)?
-            .ok_or(WalletError::DestinationNotFromThisWallet)?;
-
-        let sig = ArbitraryMessageSignature::produce_uniparty_signature(
-            &private_key,
-            &destination,
-            &message,
-            make_true_rng(),
-        )?;
-
-        Ok(sig)
-    }
-
-    pub fn sign_raw_transaction(
-        &self,
-        tx: TransactionToSign,
-        median_time: BlockTimestamp,
-        db_tx: &impl WalletStorageReadUnlocked,
-    ) -> WalletResult<(
-        PartiallySignedTransaction,
-        Vec<SignatureStatus>,
-        Vec<SignatureStatus>,
-    )> {
-        let ptx = match tx {
-            TransactionToSign::Partial(ptx) => ptx,
-            TransactionToSign::Tx(tx) => self.tx_to_partially_signed_tx(tx, median_time)?,
-        };
-
-        let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
-
-        let (witnesses, prev_statuses, new_statuses) = ptx
-            .witnesses()
-            .iter()
-            .enumerate()
-            .zip(ptx.destinations())
-            .map(|((i, witness), destination)| match witness {
-                Some(w) => match w {
-                    InputWitness::NoSignature(_) => Ok((
-                        Some(w.clone()),
-                        SignatureStatus::FullySigned,
-                        SignatureStatus::FullySigned,
-                    )),
-                    InputWitness::Standard(sig) => match destination {
-                        Some(destination) => {
-                            let sighash =
-                                signature_hash(sig.sighash_type(), ptx.tx(), &inputs_utxo_refs, i)?;
-
-                            if sig
-                                .verify_signature(&self.chain_config, destination, &sighash)
-                                .is_ok()
-                            {
-                                Ok((
-                                    Some(w.clone()),
-                                    SignatureStatus::FullySigned,
-                                    SignatureStatus::FullySigned,
-                                ))
-                            } else if let Destination::ClassicMultisig(_) = destination {
-                                let sig_components = AuthorizedClassicalMultisigSpend::from_data(
-                                    sig.raw_signature(),
-                                )?;
-
-                                self.sign_multisig_input(
-                                    ptx.tx(),
-                                    i,
-                                    &inputs_utxo_refs,
-                                    sig_components,
-                                    db_tx,
-                                )
-                            } else {
-                                Ok((
-                                    None,
-                                    SignatureStatus::InvalidSignature,
-                                    SignatureStatus::NotSigned,
-                                ))
-                            }
-                        }
-                        None => Ok((
-                            Some(w.clone()),
-                            SignatureStatus::UnknownSignature,
-                            SignatureStatus::UnknownSignature,
-                        )),
-                    },
-                },
-                None => match destination {
-                    Some(destination) => {
-                        let (sig, status) =
-                            self.sign_input(ptx.tx(), destination, i, &inputs_utxo_refs, db_tx)?;
-                        Ok((sig, SignatureStatus::NotSigned, status))
-                    }
-                    None => Ok((None, SignatureStatus::NotSigned, SignatureStatus::NotSigned)),
-                },
-            })
-            .collect::<Result<Vec<_>, WalletError>>()?
-            .into_iter()
-            .multiunzip();
-
-        Ok((ptx.new_witnesses(witnesses), prev_statuses, new_statuses))
     }
 
     pub fn account_index(&self) -> U31 {

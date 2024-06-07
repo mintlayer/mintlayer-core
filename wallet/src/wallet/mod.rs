@@ -30,6 +30,8 @@ use crate::key_chain::{
 use crate::send_request::{
     make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolDataArguments,
 };
+use crate::signer::software_signer::SoftwareSigner;
+use crate::signer::{Signer, SignerError};
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
@@ -225,6 +227,8 @@ pub enum WalletError {
     AddressNotFound,
     #[error("The specified standalone address {0} is not found in this wallet")]
     StandaloneAddressNotFound(RpcAddress<Destination>),
+    #[error("Signer error: {0}")]
+    SignerError(#[from] SignerError),
 }
 
 /// Result type used for the wallet
@@ -950,17 +954,36 @@ impl<B: storage::Backend> Wallet<B> {
         }
     }
 
-    fn for_account_rw_unlocked_and_check_tx(
+    fn for_account_rw_unlocked_and_check_tx_custom_error(
         &mut self,
         account_index: U31,
-        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<SignedTransaction>,
+        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<SendRequest>,
+        error_mapper: impl FnOnce(WalletError) -> WalletError,
     ) -> WalletResult<SignedTransaction> {
         let (_, block_height) = self.get_best_block_for_account(account_index)?;
         self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
-            let tx = f(account, db_tx)?;
+            let request = f(account, db_tx)?;
+
+            let ptx = request.into_partially_signed_tx()?;
+
+            let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
+            let tx = signer
+                .sign_ptx(ptx, account.key_chain())
+                .map(|(ptx, _, _)| ptx)?
+                .into_signed_tx(chain_config)
+                .map_err(error_mapper)?;
+
             check_transaction(chain_config, block_height.next_height(), &tx)?;
             Ok(tx)
         })
+    }
+
+    fn for_account_rw_unlocked_and_check_tx(
+        &mut self,
+        account_index: U31,
+        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<SendRequest>,
+    ) -> WalletResult<SignedTransaction> {
+        self.for_account_rw_unlocked_and_check_tx_custom_error(account_index, f, |err| err)
     }
 
     fn get_account(&self, account_index: U31) -> WalletResult<&Account> {
@@ -1347,8 +1370,8 @@ impl<B: storage::Backend> Wallet<B> {
             &|_| None,
         )?;
 
-        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
-            account.sweep_addresses(db_tx, destination, request, current_fee_rate)
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, _| {
+            account.sweep_addresses(destination, request, current_fee_rate)
         })
     }
 
@@ -1360,14 +1383,8 @@ impl<B: storage::Backend> Wallet<B> {
         delegation_share: Amount,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
-        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
-            account.sweep_delegation(
-                db_tx,
-                address,
-                delegation_id,
-                delegation_share,
-                current_fee_rate,
-            )
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, _| {
+            account.sweep_delegation(address, delegation_id, delegation_share, current_fee_rate)
         })
     }
 
@@ -1380,9 +1397,8 @@ impl<B: storage::Backend> Wallet<B> {
         delegation_share: Amount,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
-        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, _| {
             account.spend_from_delegation(
-                db_tx,
                 address,
                 amount,
                 delegation_id,
@@ -1654,15 +1670,19 @@ impl<B: storage::Backend> Wallet<B> {
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
-        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
-            account.decommission_stake_pool(
-                db_tx,
-                pool_id,
-                pool_balance,
-                output_address,
-                current_fee_rate,
-            )
-        })
+        self.for_account_rw_unlocked_and_check_tx_custom_error(
+            account_index,
+            |account, db_tx| {
+                account.decommission_stake_pool(
+                    db_tx,
+                    pool_id,
+                    pool_balance,
+                    output_address,
+                    current_fee_rate,
+                )
+            },
+            |_err| WalletError::PartiallySignedTransactionInDecommissionCommand,
+        )
     }
 
     pub fn decommission_stake_pool_request(
@@ -1673,14 +1693,24 @@ impl<B: storage::Backend> Wallet<B> {
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
     ) -> WalletResult<PartiallySignedTransaction> {
-        self.for_account_rw_unlocked(account_index, |account, db_tx, _| {
-            account.decommission_stake_pool_request(
+        self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
+            let request = account.decommission_stake_pool_request(
                 db_tx,
                 pool_id,
                 pool_balance,
                 output_address,
                 current_fee_rate,
-            )
+            )?;
+
+            let ptx = request.into_partially_signed_tx()?;
+
+            let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
+            let ptx = signer.sign_ptx(ptx, account.key_chain()).map(|(ptx, _, _)| ptx)?;
+
+            if ptx.is_fully_signed(chain_config) {
+                return Err(WalletError::FullySignedTransactionInDecommissionReq);
+            }
+            Ok(ptx)
         })
     }
 
@@ -1694,8 +1724,17 @@ impl<B: storage::Backend> Wallet<B> {
         Vec<SignatureStatus>,
     )> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(account_index, |account, db_tx, _| {
-            account.sign_raw_transaction(tx, latest_median_time, db_tx)
+        self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
+            let ptx = match tx {
+                TransactionToSign::Partial(ptx) => ptx,
+                TransactionToSign::Tx(tx) => {
+                    account.tx_to_partially_signed_tx(tx, latest_median_time)?
+                }
+            };
+            let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
+
+            let res = signer.sign_ptx(ptx, account.key_chain())?;
+            Ok(res)
         })
     }
 
@@ -1705,8 +1744,10 @@ impl<B: storage::Backend> Wallet<B> {
         challenge: Vec<u8>,
         destination: Destination,
     ) -> WalletResult<ArbitraryMessageSignature> {
-        self.for_account_rw_unlocked(account_index, |account, db_tx, _| {
-            account.sign_challenge(challenge, destination, db_tx)
+        self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
+            let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
+            let msg = signer.sign_challenge(challenge, destination, account.key_chain())?;
+            Ok(msg)
         })
     }
 

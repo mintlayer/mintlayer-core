@@ -42,7 +42,7 @@ use wallet_types::keys::KeyPurpose;
 use wallet_types::{AccountId, AccountInfo, KeychainUsageState};
 
 use super::vrf_key_chain::VrfKeySoftChain;
-use super::{make_path_to_vrf_key, MasterKeyChain, VRF_INDEX};
+use super::{make_path_to_vrf_key, AccountKeyChains, MasterKeyChain, VRF_INDEX};
 
 /// This key chain contains a pool of pre-generated keys and addresses for the usage in a wallet
 pub struct AccountKeyChain {
@@ -691,6 +691,31 @@ impl AccountKeyChain {
 
     pub fn get_addresses_usage_state(&self) -> &KeychainUsageState {
         self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).usage_state()
+    }
+}
+
+impl AccountKeyChains for AccountKeyChain {
+    fn find_public_key(&self, destination: &Destination) -> Option<super::FoundPubKey> {
+        for purpose in KeyPurpose::ALL {
+            let leaf_key = self.get_leaf_key_chain(purpose);
+            if let Some(xpub) = leaf_key
+                .get_child_num_from_destination(destination)
+                .and_then(|child_num| leaf_key.get_derived_xpub(child_num))
+            {
+                return Some(super::FoundPubKey::Hierarchy(xpub.clone()));
+            }
+        }
+
+        self.standalone_private_keys
+            .get(destination)
+            .map(|(_, acc_public_key)| super::FoundPubKey::Standalone(acc_public_key.clone()))
+    }
+
+    fn find_multisig_challenge(
+        &self,
+        destination: &Destination,
+    ) -> Option<&ClassicMultisigChallenge> {
+        self.get_multisig_challenge(destination)
     }
 }
 
