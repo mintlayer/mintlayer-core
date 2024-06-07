@@ -25,7 +25,7 @@ use common::{
 };
 use thiserror::Error;
 
-use crate::{timelock_check, CheckTransactionError, TransactionSource};
+use crate::{CheckTransactionError, TransactionSource};
 
 use super::{
     input_output_policy::IOPolicyError, reward_distribution,
@@ -45,8 +45,6 @@ pub enum ConnectTransactionError {
     InvariantBrokenAlreadyUnspent,
     #[error("Output is not found in the cache or database: {0:?}")]
     MissingOutputOrSpent(UtxoOutPoint),
-    #[error("No inputs in a transaction")]
-    MissingTxInputs,
     #[error("While disconnecting a block, undo info for transaction `{0}` doesn't exist ")]
     MissingTxUndo(Id<Transaction>),
     #[error("While disconnecting a block, block undo info doesn't exist for block `{0:?}`")]
@@ -67,8 +65,6 @@ pub enum ConnectTransactionError {
     BlockHeightArithmeticError,
     #[error("Error while calculating timestamps; possibly an overflow")]
     BlockTimestampArithmeticError,
-    #[error("Transaction index for header found but header not found")]
-    InvariantErrorHeaderCouldNotBeLoaded(Id<GenBlock>),
     #[error("Transaction index for header found but header not found")]
     InvariantErrorHeaderCouldNotBeLoadedFromHeight(GetAncestorError, BlockHeight),
     #[error("Unable to find block index")]
@@ -117,8 +113,6 @@ pub enum ConnectTransactionError {
 
     #[error("Destination retrieval error for signature verification {0}")]
     DestinationRetrievalError(#[from] SignatureDestinationGetterError),
-    #[error("Output timelock error: {0}")]
-    OutputTimelockError(#[from] timelock_check::OutputMaturityError),
     #[error("Nonce is not incremental: {0:?}, expected nonce: {1}, got nonce: {2}")]
     NonceIsNotIncremental(AccountType, AccountNonce, AccountNonce),
     #[error("Nonce is not found: {0:?}")]
@@ -149,8 +143,6 @@ pub enum ConnectTransactionError {
     RewardDistributionError(#[from] reward_distribution::RewardDistributionError),
     #[error("Check transaction error: {0}")]
     CheckTransactionError(#[from] CheckTransactionError),
-    #[error("Utxo requested for input that does not need one")]
-    InvariantBrokenUtxoRequested,
     #[error("Threshold condition not met: {0}")]
     Threshold(#[from] mintscript::script::ThresholdError),
 }

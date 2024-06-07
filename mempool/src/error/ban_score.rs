@@ -134,7 +134,6 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::CheckTransactionError(err) => err.mempool_ban_score(),
 
             // Transaction definitely invalid, ban peer
-            ConnectTransactionError::MissingTxInputs => 100,
             ConnectTransactionError::AttemptToPrintMoney(_, _) => 100,
             ConnectTransactionError::SignatureVerificationFailed(_) => 100,
             ConnectTransactionError::TxFeeTotalCalcFailed(_, _) => 100,
@@ -152,7 +151,6 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::TimelockedAccount => 100,
 
             // Need to drill down deeper into the error in these cases
-            ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
             ConnectTransactionError::ConstrainedValueAccumulatorError(err, _) => err.ban_score(),
 
@@ -168,7 +166,6 @@ impl MempoolBanScore for ConnectTransactionError {
             // Internal errors, not peer's fault
             ConnectTransactionError::InvariantBrokenAlreadyUnspent => 0,
             ConnectTransactionError::BlockIndexCouldNotBeLoaded(_) => 0,
-            ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_) => 0,
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _) => 0,
             ConnectTransactionError::UtxoBlockUndoError(_) => 0,
             ConnectTransactionError::AccountingBlockUndoError(_) => 0,
@@ -184,7 +181,6 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::AttemptToSpendFrozenToken(_) => 0,
-            ConnectTransactionError::InvariantBrokenUtxoRequested => 0,
         }
     }
 }

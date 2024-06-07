@@ -41,8 +41,8 @@ impl<'a> PerInputData<'a> {
         Self { input, witness }
     }
 
-    fn from_input<UW: utxo::UtxosView>(
-        utxo_view: &UW,
+    fn from_input<UV: utxo::UtxosView>(
+        utxo_view: &UV,
         input: &'a TxInput,
         witness: &'a InputWitness,
     ) -> Result<Self, ConnectTransactionError> {
@@ -72,17 +72,17 @@ impl mintscript::translate::InputInfoProvider for PerInputData<'_> {
     }
 }
 
-pub struct TranslationContextFull<'a, AW, TW> {
+pub struct TranslationContextFull<'a, AV, TV> {
     // Sources of additional information, should it be required.
-    pos_accounting: AW,
-    tokens_accounting: TW,
+    pos_accounting: AV,
+    tokens_accounting: TV,
 
     // Information about the input
     input: &'a PerInputData<'a>,
 }
 
-impl<'a, AW, TW> TranslationContextFull<'a, AW, TW> {
-    fn new(pos_accounting: AW, tokens_accounting: TW, input: &'a PerInputData<'a>) -> Self {
+impl<'a, AV, TV> TranslationContextFull<'a, AV, TV> {
+    fn new(pos_accounting: AV, tokens_accounting: TV, input: &'a PerInputData<'a>) -> Self {
         Self {
             pos_accounting,
             tokens_accounting,
@@ -91,7 +91,7 @@ impl<'a, AW, TW> TranslationContextFull<'a, AW, TW> {
     }
 }
 
-impl<AW, TW> mintscript::translate::InputInfoProvider for TranslationContextFull<'_, AW, TW> {
+impl<AV, TV> mintscript::translate::InputInfoProvider for TranslationContextFull<'_, AV, TV> {
     fn input_info(&self) -> &InputInfo {
         self.input.input_info()
     }
@@ -101,13 +101,13 @@ impl<AW, TW> mintscript::translate::InputInfoProvider for TranslationContextFull
     }
 }
 
-impl<AW, TW> mintscript::translate::SignatureInfoProvider for TranslationContextFull<'_, AW, TW>
+impl<AV, TV> mintscript::translate::SignatureInfoProvider for TranslationContextFull<'_, AV, TV>
 where
-    AW: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
-    TW: tokens_accounting::TokensAccountingView<Error = tokens_accounting::Error>,
+    AV: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
+    TV: tokens_accounting::TokensAccountingView<Error = tokens_accounting::Error>,
 {
-    type PoSAccounting = AW;
-    type Tokens = TW;
+    type PoSAccounting = AV;
+    type Tokens = TV;
 
     fn pos_accounting(&self) -> &Self::PoSAccounting {
         &self.pos_accounting
@@ -118,10 +118,10 @@ where
     }
 }
 
-impl<AW, TW> TranslationContextFull<'_, AW, TW>
+impl<AV, TV> TranslationContextFull<'_, AV, TV>
 where
-    AW: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
-    TW: tokens_accounting::TokensAccountingView<Error = tokens_accounting::Error>,
+    AV: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
+    TV: tokens_accounting::TokensAccountingView<Error = tokens_accounting::Error>,
 {
     fn to_script<T: TranslateInput<Self>>(&self) -> Result<WitnessScript, ConnectTransactionError> {
         Ok(T::translate_input(self)?)
@@ -134,8 +134,8 @@ pub struct CoreContext<'a> {
 }
 
 impl<'a> CoreContext<'a> {
-    fn new<T: Transactable, UW: utxo::UtxosView>(
-        utxo_view: &UW,
+    fn new<T: Transactable, UV: utxo::UtxosView>(
+        utxo_view: &UV,
         transaction: &'a T,
     ) -> Result<Self, ConnectTransactionError> {
         let inputs = transaction.inputs().unwrap_or_default();
@@ -374,33 +374,33 @@ impl<T: Transactable, S> SignatureContext for InputVerifyContextFull<'_, T, S> {
     }
 }
 
-pub trait FullyVerifiable<AW, TW>:
-    Transactable + for<'a> TranslateInput<TranslationContextFull<'a, &'a AW, &'a TW>>
+pub trait FullyVerifiable<AV, TV>:
+    Transactable + for<'a> TranslateInput<TranslationContextFull<'a, &'a AV, &'a TV>>
 {
 }
 
-impl<T, AW, TW> FullyVerifiable<AW, TW> for T where
-    T: Transactable + for<'a> TranslateInput<TranslationContextFull<'a, &'a AW, &'a TW>>
+impl<T, AV, TV> FullyVerifiable<AV, TV> for T where
+    T: Transactable + for<'a> TranslateInput<TranslationContextFull<'a, &'a AV, &'a TV>>
 {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn verify_full<T, S, UW, AW, TW>(
+pub fn verify_full<T, S, UV, AV, TV>(
     transaction: &T,
     chain_config: &ChainConfig,
-    utxos_view: &UW,
-    pos_accounting: &AW,
-    tokens_accounting: &TW,
+    utxos_view: &UV,
+    pos_accounting: &AV,
+    tokens_accounting: &TV,
     storage: &S,
     tx_source: &TransactionSourceForConnect,
     spending_time: BlockTimestamp,
 ) -> Result<(), ConnectTransactionError>
 where
-    T: FullyVerifiable<AW, TW>,
+    T: FullyVerifiable<AV, TV>,
     S: TransactionVerifierStorageRef,
-    UW: utxo::UtxosView,
-    AW: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
-    TW: tokens_accounting::TokensAccountingView<Error = tokens_accounting::Error>,
+    UV: utxo::UtxosView,
+    AV: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
+    TV: tokens_accounting::TokensAccountingView<Error = tokens_accounting::Error>,
 {
     let core_ctx = CoreContext::new(utxos_view, transaction)?;
     let tl_ctx = VerifyContextTimelock::for_verifier(
@@ -422,10 +422,10 @@ where
     Ok(())
 }
 
-pub fn verify_timelocks<T, S, UW>(
+pub fn verify_timelocks<T, S, UV>(
     transaction: &T,
     chain_config: &ChainConfig,
-    utxos_view: &UW,
+    utxos_view: &UV,
     storage: &S,
     tip: Id<GenBlock>,
     spending_height: BlockHeight,
@@ -435,7 +435,7 @@ where
     T: Transactable,
     mintscript::translate::TimelockOnly: for<'a> TranslateInput<PerInputData<'a>>,
     S: TransactionVerifierStorageRef,
-    UW: utxo::UtxosView,
+    UV: utxo::UtxosView,
 {
     let core_ctx = CoreContext::new(utxos_view, transaction)?;
     let ctx = VerifyContextTimelock::custom(

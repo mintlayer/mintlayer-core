@@ -277,7 +277,6 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             // Use "General" for consistency with the zero ban score.
             ConnectTransactionError::TxNumWrongInBlockOnDisconnect(_, _)
             | ConnectTransactionError::InvariantBrokenAlreadyUnspent
-            | ConnectTransactionError::InvariantBrokenUtxoRequested
             | ConnectTransactionError::MissingBlockUndo(_)
             | ConnectTransactionError::MissingBlockRewardUndo(_)
             | ConnectTransactionError::MissingTxUndo(_)
@@ -292,13 +291,11 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
 
             ConnectTransactionError::TxNumWrongInBlockOnConnect(_, _)
             | ConnectTransactionError::MissingOutputOrSpent(_)
-            | ConnectTransactionError::MissingTxInputs
             | ConnectTransactionError::AttemptToPrintMoney(_, _)
             | ConnectTransactionError::BlockRewardInputOutputMismatch(_, _)
             | ConnectTransactionError::TxFeeTotalCalcFailed(_, _)
             | ConnectTransactionError::BlockHeightArithmeticError
             | ConnectTransactionError::BlockTimestampArithmeticError
-            | ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_)
             | ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _)
             | ConnectTransactionError::BlockIndexCouldNotBeLoaded(_)
             | ConnectTransactionError::FailedToAddAllFeesOfBlock(_)
@@ -330,7 +327,6 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             ConnectTransactionError::UtxoBlockUndoError(err) => err.classify(),
             ConnectTransactionError::AccountingBlockUndoError(err) => err.classify(),
             ConnectTransactionError::DestinationRetrievalError(err) => err.classify(),
-            ConnectTransactionError::OutputTimelockError(err) => err.classify(),
             ConnectTransactionError::SpendStakeError(err) => err.classify(),
             ConnectTransactionError::TokensAccountingError(err) => err.classify(),
             ConnectTransactionError::RewardDistributionError(err) => err.classify(),

@@ -115,7 +115,6 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::BlockHeightArithmeticError => 100,
             ConnectTransactionError::BlockTimestampArithmeticError => 100,
             // Even though this is an invariant error, it stems from a block reward that doesn't exist
-            ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::FailedToAddAllFeesOfBlock(_) => 100,
             ConnectTransactionError::RewardAdditionError(_) => 100,
             ConnectTransactionError::TimeLockViolation => 100,
@@ -137,13 +136,11 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::SpendStakeError(_) => 100,
             ConnectTransactionError::StakerBalanceNotFound(_) => 0,
             ConnectTransactionError::PoolDataNotFound(_) => 0,
-            ConnectTransactionError::MissingTxInputs => 100,
             ConnectTransactionError::UndoFetchFailure => 0,
             ConnectTransactionError::TxVerifierStorage => 0,
             ConnectTransactionError::UnexpectedPoolId(_, _) => 100,
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 100,
             ConnectTransactionError::DestinationRetrievalError(err) => err.ban_score(),
-            ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
             ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,
             ConnectTransactionError::NonceIsNotIncremental(..) => 100,
             ConnectTransactionError::AttemptToCreateStakePoolFromAccounts => 100,
@@ -159,7 +156,6 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::PoolBalanceNotFound(_) => 100,
             ConnectTransactionError::RewardDistributionError(err) => err.ban_score(),
             ConnectTransactionError::CheckTransactionError(err) => err.ban_score(),
-            ConnectTransactionError::InvariantBrokenUtxoRequested => 0,
             ConnectTransactionError::Threshold(_) => 100,
         }
     }

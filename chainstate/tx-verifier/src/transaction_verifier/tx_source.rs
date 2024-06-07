@@ -15,7 +15,7 @@
 
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
-    chain::{Block, GenBlock},
+    chain::Block,
     primitives::{BlockHeight, Id},
 };
 use utxo::UtxoSource;
@@ -109,18 +109,6 @@ impl<'a> TransactionSourceForConnect<'a> {
                 current_best: _,
                 effective_height: _,
             } => None,
-        }
-    }
-
-    pub fn tip_block_id(&self) -> Id<GenBlock> {
-        match self {
-            TransactionSourceForConnect::Chain { new_block_index } => {
-                (*new_block_index.block_id()).into()
-            }
-            TransactionSourceForConnect::Mempool {
-                current_best,
-                effective_height: _,
-            } => current_best.block_id(),
         }
     }
 
