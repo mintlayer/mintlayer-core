@@ -78,8 +78,6 @@
 //!
 //! * [backend::ReadOps]
 //! * [backend::WriteOps]
-//! * [backend::PrefixIter]
-//! * Implementing [Iterator] for the type returned by [backend::PrefixIter::prefix_iter]
 //!
 //! ## Adaptor pattern
 //!

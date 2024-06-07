@@ -186,7 +186,7 @@ impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapRef<'tx, Tx, DbMap> {
     }
 }
 
-impl<Tx: TxImpl, DbMap: schema::DbMap> MapRef<'_, Tx, DbMap>
+impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapRef<'tx, Tx, DbMap>
 where
     Tx::Impl: backend::ReadOps,
 {
@@ -200,7 +200,7 @@ where
     }
 
     /// Iterator over entries with key starting with given prefix
-    pub fn prefix_iter<Pfx>(&self, prefix: &Pfx) -> crate::Result<impl '_ + EntryIterator<DbMap>>
+    pub fn prefix_iter<Pfx>(&self, prefix: &Pfx) -> crate::Result<impl 'tx + EntryIterator<DbMap>>
     where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
@@ -208,11 +208,11 @@ where
         internal::prefix_iter(self.dbtx, self.map_id, prefix.encode())
     }
 
-    /// Iterator over entries with key starting with given prefix
+    /// Iterator over keys starting with given prefix
     pub fn prefix_iter_keys<Pfx>(
         &self,
         prefix: &Pfx,
-    ) -> crate::Result<impl '_ + Iterator<Item = DbMap::Key>>
+    ) -> crate::Result<impl 'tx + Iterator<Item = DbMap::Key>>
     where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
@@ -224,12 +224,36 @@ where
     pub fn prefix_iter_decoded<Pfx>(
         &self,
         prefix: &Pfx,
-    ) -> crate::Result<impl '_ + Iterator<Item = (DbMap::Key, DbMap::Value)>>
+    ) -> crate::Result<impl 'tx + Iterator<Item = (DbMap::Key, DbMap::Value)>>
     where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
     {
         self.prefix_iter(prefix).map(|item| item.map(|(k, v)| (k, v.decode())))
+    }
+
+    /// Iterator over entries with key greater than or equal to the specified value
+    pub fn greater_equal_iter(
+        &self,
+        key: &DbMap::Key,
+    ) -> crate::Result<impl 'tx + EntryIterator<DbMap>> {
+        internal::greater_equal_iter(self.dbtx, self.map_id, key.encode())
+    }
+
+    /// Iterator over keys that are greater than or equal to the specified value
+    pub fn greater_equal_iter_keys(
+        &self,
+        key: &DbMap::Key,
+    ) -> crate::Result<impl 'tx + Iterator<Item = DbMap::Key>> {
+        internal::greater_equal_iter_keys::<DbMap, _>(self.dbtx, self.map_id, key.encode())
+    }
+
+    /// Iterator over decoded entries with key greater than or equal to the specified value
+    pub fn greater_equal_iter_decoded(
+        &self,
+        key: &DbMap::Key,
+    ) -> crate::Result<impl 'tx + Iterator<Item = (DbMap::Key, DbMap::Value)>> {
+        self.greater_equal_iter(key).map(|item| item.map(|(k, v)| (k, v.decode())))
     }
 }
 

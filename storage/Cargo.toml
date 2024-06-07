@@ -5,16 +5,14 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
-[features]
-default = [ 'inmemory' ]
-# Enable the in-memory backend
-inmemory = [ 'storage-inmemory' ]
-
 [dependencies]
+common = { path = "../common" }
 serialization = { path = "../serialization" }
 storage-core = { path = "core" }
-storage-inmemory = { path = "inmemory", optional = true }
 utils = { path = "../utils" }
 
 [dev-dependencies]
 storage-inmemory = { path = "inmemory" }
+test-utils = { path = "../test-utils" }
+
+rstest.workspace = true

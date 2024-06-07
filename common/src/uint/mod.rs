@@ -15,7 +15,7 @@
 #[macro_use]
 pub(crate) mod internal_macros;
 
-pub(crate) mod endian;
+pub mod endian;
 
 mod impls;
 

@@ -20,6 +20,7 @@ rpc = { path = "../rpc" }
 rpc-description = { path = "../rpc/description" }
 serialization = { path = "../serialization" }
 storage = { path = "../storage" }
+storage-inmemory = { path = "../storage/inmemory" }
 subsystem = { path = "../subsystem" }
 utils = { path = "../utils" }
 utils-networking = { path = "../utils/networking" }
@@ -51,7 +52,6 @@ chainstate-test-framework = { path = "../chainstate/test-framework" }
 consensus = { path = "../consensus" }
 p2p-backend-test-suite = { path = "backend-test-suite" }
 p2p-test-utils = { path = "test-utils" }
-storage-inmemory = { path = "../storage/inmemory" }
 test-utils = { path = "../test-utils" }
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time", "test-util"] }
 

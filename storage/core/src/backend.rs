@@ -23,16 +23,23 @@ pub use crate::{Data, DbDesc, DbMapId};
 
 /// Read-only database operations
 pub trait ReadOps {
-    /// The prefix iterator type
-    type PrefixIter<'i>: Iterator<Item = (Data, Data)> + 'i
-    where
-        Self: 'i;
-
     /// Get value associated with given key.
     fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>>;
 
     /// Get iterator over key-value pairs where the key has given prefix
-    fn prefix_iter(&self, map_id: DbMapId, prefix: Data) -> crate::Result<Self::PrefixIter<'_>>;
+    fn prefix_iter(
+        &self,
+        map_id: DbMapId,
+        prefix: Data,
+    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + '_>;
+
+    /// Get iterator over key-value pairs where the key is lexicographically greater or equal to
+    /// the specified value.
+    fn greater_equal_iter(
+        &self,
+        map_id: DbMapId,
+        key: Data,
+    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + '_>;
 }
 
 /// Write database operation

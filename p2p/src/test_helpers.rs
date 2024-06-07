@@ -172,8 +172,8 @@ where
     filter_connectivity_event::<T, _>(conn, |_event| true).await
 }
 
-pub fn peerdb_inmemory_store() -> PeerDbStorageImpl<storage::inmemory::InMemory> {
-    let storage = storage::inmemory::InMemory::new();
+pub fn peerdb_inmemory_store() -> PeerDbStorageImpl<storage_inmemory::InMemory> {
+    let storage = storage_inmemory::InMemory::new();
     PeerDbStorageImpl::new(storage).unwrap()
 }
 

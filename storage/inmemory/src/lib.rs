@@ -13,27 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use storage_core::{adaptor, backend, util, Data, DbDesc, DbMapId, DbMapsData};
+use storage_core::{adaptor, backend, util::MapPrefixIter, Data, DbDesc, DbMapId, DbMapsData};
 
 use std::{borrow::Cow, collections::BTreeMap};
 
 type Map = BTreeMap<Data, Data>;
 
-pub struct PrefixIter<'i>(util::PrefixIter<'i, Data>);
-
-impl<'i> Iterator for PrefixIter<'i> {
-    type Item = (Data, Data);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next().map(|(k, v)| (k.to_vec(), v.clone()))
-    }
-}
-
 pub struct StorageMaps(DbMapsData<Map>);
 
 impl backend::ReadOps for StorageMaps {
-    type PrefixIter<'i> = PrefixIter<'i>;
-
     fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
         Ok(self.0[map_id].get(key).map(|p| p.into()))
     }
@@ -42,8 +30,16 @@ impl backend::ReadOps for StorageMaps {
         &self,
         map_id: DbMapId,
         prefix: Data,
-    ) -> storage_core::Result<Self::PrefixIter<'_>> {
-        Ok(PrefixIter(util::PrefixIter::new(&self.0[map_id], prefix)))
+    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        Ok(MapPrefixIter::new(&self.0[map_id], prefix).map(|(k, v)| (k.clone(), v.clone())))
+    }
+
+    fn greater_equal_iter(
+        &self,
+        map_id: DbMapId,
+        key: Data,
+    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        Ok(self.0[map_id].range(key..).map(|(k, v)| (k.clone(), v.clone())))
     }
 }
 

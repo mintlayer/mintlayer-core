@@ -82,3 +82,27 @@ pub fn prefix_iter_keys<DbMap: schema::DbMap, Tx: ReadOps>(
     dbtx.prefix_iter(map_id, prefix)
         .map(|iter| iter.map(|(k, _v)| Encoded::from_bytes_unchecked(k).decode()))
 }
+
+pub fn greater_equal_iter<DbMap: schema::DbMap, Tx: ReadOps>(
+    dbtx: &Tx,
+    map_id: DbMapId,
+    key: Vec<u8>,
+) -> crate::Result<impl '_ + EntryIterator<DbMap>> {
+    dbtx.greater_equal_iter(map_id, key).map(|iter| {
+        iter.map(|(k, v)| {
+            (
+                Encoded::from_bytes_unchecked(k).decode(),
+                Encoded::from_bytes_unchecked(v),
+            )
+        })
+    })
+}
+
+pub fn greater_equal_iter_keys<DbMap: schema::DbMap, Tx: ReadOps>(
+    dbtx: &Tx,
+    map_id: DbMapId,
+    key: Vec<u8>,
+) -> crate::Result<impl '_ + Iterator<Item = DbMap::Key>> {
+    dbtx.greater_equal_iter(map_id, key)
+        .map(|iter| iter.map(|(k, _v)| Encoded::from_bytes_unchecked(k).decode()))
+}

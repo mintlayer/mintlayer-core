@@ -7,8 +7,12 @@ rust-version.workspace = true
 
 [dependencies]
 logging = { path = "../../logging" }
+serialization = { path = "../../serialization" }
+storage = { path = ".." }
 storage-core = { path = "../core" }
+test-utils = { path = "../../test-utils" }
 utils = { path = "../../utils" }
 
 libtest-mimic.workspace = true
+parity-scale-codec.workspace = true
 proptest.workspace = true

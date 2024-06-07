@@ -78,7 +78,7 @@ pub mod support {
 }
 
 macro_rules! tests {
-    ($($name:ident),* $(,)?) => {
+    ($($name:path),* $(,)?) => {
         pub fn tests<B: 'static + $crate::prelude::Backend, F: $crate::prelude::BackendFn<B>>(
             backend_fn: Arc<F>,
         ) -> impl std::iter::Iterator<Item = libtest_mimic::Trial> {

@@ -39,6 +39,7 @@ pub mod root_user;
 pub mod rust_backtrace;
 pub mod set_flag;
 pub mod shallow_clone;
+pub mod sorted;
 pub mod tap_log;
 pub mod try_as;
 pub mod workspace_path;

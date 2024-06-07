@@ -1219,6 +1219,7 @@ dependencies = [
  "rstest",
  "serialization",
  "storage",
+ "storage-inmemory",
  "test-utils",
  "tokens-accounting",
  "utils",
@@ -2101,6 +2102,7 @@ dependencies = [
  "rstest",
  "serialization",
  "storage",
+ "storage-inmemory",
  "storage-lmdb",
  "test-utils",
  "thiserror",
@@ -7029,9 +7031,12 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "storage"
 version = "0.5.0"
 dependencies = [
+ "common",
+ "rstest",
  "serialization",
  "storage-core",
  "storage-inmemory",
+ "test-utils",
  "utils",
 ]
 
@@ -7041,8 +7046,12 @@ version = "0.5.0"
 dependencies = [
  "libtest-mimic",
  "logging",
+ "parity-scale-codec",
  "proptest",
+ "serialization",
+ "storage",
  "storage-core",
+ "test-utils",
  "utils",
 ]
 
@@ -7050,8 +7059,11 @@ dependencies = [
 name = "storage-core"
 version = "0.5.0"
 dependencies = [
+ "common",
  "itertools 0.12.1",
  "logging",
+ "rstest",
+ "test-utils",
  "thiserror",
  "utils",
 ]
@@ -7095,6 +7107,7 @@ dependencies = [
 name = "storage-sqlite"
 version = "0.5.0"
 dependencies = [
+ "hex",
  "logging",
  "rusqlite",
  "storage-backend-test-suite",

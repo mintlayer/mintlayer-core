@@ -17,7 +17,7 @@ randomness = { path = "../randomness" }
 serialization = { path = "../serialization" }
 mempool = { path = "../mempool" }
 rpc-description = { path = "../rpc/description" }
-storage = { path = "../storage", features = ["inmemory"] }
+storage = { path = "../storage" }
 tx-verifier = { path = "../chainstate/tx-verifier" }
 chainstate = { path = "../chainstate" }
 utils = { path = "../utils" }

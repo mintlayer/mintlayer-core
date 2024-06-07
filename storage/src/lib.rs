@@ -54,7 +54,7 @@
 //!
 //! fn test() -> storage::Result<()> {
 //!     // Initialize an empty store.
-//!     let mut store = Storage::<_, Schema>::new(storage::inmemory::InMemory::new())?;
+//!     let mut store = Storage::<_, Schema>::new(storage_inmemory::InMemory::new())?;
 //!
 //!     // All store operations happen inside of a transaction.
 //!     let mut tx = store.transaction_rw(None)?;
@@ -94,18 +94,15 @@
 //! ```
 
 mod database;
+mod order_preserving_value;
 pub mod schema;
 
 // Re-export user-facing items from core
+pub use order_preserving_value::OrderPreservingValue;
 pub use storage_core::{error, Backend, Error, Result};
 
 // Re-export the interface types
 pub use database::*;
-
-// Re-export the in-memory storage
-// TODO: Remove this to further decouple the general storage interface from individual backends
-#[cfg(feature = "inmemory")]
-pub use storage_inmemory as inmemory;
 
 #[cfg(test)]
 mod test;

@@ -12,7 +12,7 @@ common = { path = "../../common" }
 crypto = { path = "../../crypto" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
-storage = { path = "../../storage", features = ["inmemory"] }
+storage = { path = "../../storage" }
 storage-sqlite = { path = "../../storage/sqlite" }
 utxo = { path = "../../utxo" }
 wallet-types = { path = "../types" }
