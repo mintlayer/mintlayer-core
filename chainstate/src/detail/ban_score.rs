@@ -20,8 +20,7 @@ use consensus::{
 use tx_verifier::{
     timelock_check::OutputMaturityError,
     transaction_verifier::{
-        signature_destination_getter::SignatureDestinationGetterError, IOPolicyError,
-        RewardDistributionError,
+        error::SignatureDestinationGetterError, IOPolicyError, RewardDistributionError,
     },
     CheckTransactionError,
 };

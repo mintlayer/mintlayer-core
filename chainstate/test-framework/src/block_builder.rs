@@ -16,6 +16,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::framework::BlockOutputs;
+use crate::signature_destination_getter::SignatureDestinationGetter;
 use crate::utils::{create_new_outputs, outputs_from_block, sign_witnesses};
 use crate::TestFramework;
 use chainstate::{BlockSource, ChainstateError};
@@ -40,7 +41,6 @@ use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
 use randomness::{CryptoRng, Rng};
 use serialization::Encode;
 use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
-use tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetter;
 
 /// The block builder that allows construction and processing of a block.
 pub struct BlockBuilder<'f> {

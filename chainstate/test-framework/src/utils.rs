@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{framework::BlockOutputs, key_manager::KeyManager, TestFramework};
+use crate::{
+    framework::BlockOutputs, key_manager::KeyManager,
+    signature_destination_getter::SignatureDestinationGetter, TestFramework,
+};
 use chainstate::{BlockIndex, GenBlockIndex};
 use chainstate_storage::{BlockchainStorageRead, TipStorageTag};
 use chainstate_types::pos_randomness::PoSRandomness;
@@ -41,7 +44,6 @@ use crypto::{
 };
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
 use randomness::{CryptoRng, Rng};
-use tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetter;
 use utxo::UtxosView;
 
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {

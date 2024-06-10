@@ -27,9 +27,7 @@ use consensus::{
 use tx_verifier::{
     error::{ConnectTransactionError, SpendStakeError, TokensError},
     timelock_check,
-    transaction_verifier::{
-        signature_destination_getter::SignatureDestinationGetterError, RewardDistributionError,
-    },
+    transaction_verifier::{error::SignatureDestinationGetterError, RewardDistributionError},
     CheckTransactionError, TransactionVerifierStorageError,
 };
 use utxo::UtxosBlockUndoError;

@@ -45,9 +45,7 @@ use test_utils::{
 };
 use tokens_accounting::TokensAccountingStorageRead;
 use tx_verifier::{
-    transaction_verifier::{
-        error::TokenIssuanceError, signature_destination_getter::SignatureDestinationGetterError,
-    },
+    transaction_verifier::error::{SignatureDestinationGetterError, TokenIssuanceError},
     CheckTransactionError,
 };
 

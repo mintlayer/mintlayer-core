@@ -21,6 +21,7 @@ mod framework_builder;
 mod key_manager;
 mod pos_block_builder;
 mod random_tx_maker;
+mod signature_destination_getter;
 mod staking_pools;
 pub mod storage;
 mod transaction_builder;

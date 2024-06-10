@@ -23,7 +23,6 @@ pub mod error;
 pub mod flush;
 pub mod hierarchy;
 pub mod input_check;
-pub mod signature_destination_getter;
 pub mod storage;
 pub mod timelock_check;
 pub mod tokens_check;

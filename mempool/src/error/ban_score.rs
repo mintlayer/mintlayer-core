@@ -16,9 +16,7 @@
 use chainstate::{
     ban_score::BanScore,
     tx_verifier::{
-        transaction_verifier::{
-            signature_destination_getter::SignatureDestinationGetterError, RewardDistributionError,
-        },
+        transaction_verifier::{error::SignatureDestinationGetterError, RewardDistributionError},
         CheckTransactionError,
     },
     ChainstateError, ConnectTransactionError, IOPolicyError, TokensError,

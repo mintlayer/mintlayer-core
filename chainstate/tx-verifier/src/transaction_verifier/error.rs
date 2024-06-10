@@ -19,7 +19,8 @@ use common::{
         block::{Block, GenBlock},
         signature::DestinationSigError,
         tokens::TokenId,
-        AccountNonce, AccountType, OutPointSourceId, PoolId, Transaction, UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -29,7 +30,6 @@ use crate::{CheckTransactionError, TransactionSource};
 
 use super::{
     input_output_policy::IOPolicyError, reward_distribution,
-    signature_destination_getter::SignatureDestinationGetterError,
     storage::TransactionVerifierStorageError,
 };
 
@@ -210,6 +210,30 @@ where
             mintscript::script::ScriptError::Threshold(e) => e.into(),
         }
     }
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum SignatureDestinationGetterError {
+    #[error("Attempted to spend output in block reward")]
+    SpendingOutputInBlockReward,
+    #[error("Attempted to spend from account in block reward")]
+    SpendingFromAccountInBlockReward,
+    #[error("Attempted to verify signature for not spendable output")]
+    SigVerifyOfNotSpendableOutput,
+    #[error("Pool data not found for signature verification {0}")]
+    PoolDataNotFound(PoolId),
+    #[error("Delegation data not found for signature verification {0}")]
+    DelegationDataNotFound(DelegationId),
+    #[error("Token data not found for signature verification {0}")]
+    TokenDataNotFound(TokenId),
+    #[error("Utxo for the outpoint not fount: {0:?}")]
+    UtxoOutputNotFound(UtxoOutPoint),
+    #[error("Error accessing utxo set")]
+    UtxoViewError(utxo::Error),
+    #[error("During destination getting for signature verification: PoS accounting error {0}")]
+    PoSAccountingViewError(#[from] pos_accounting::Error),
+    #[error("During destination getting for signature verification: Tokens accounting error {0}")]
+    TokensAccountingViewError(#[from] tokens_accounting::Error),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

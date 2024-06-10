@@ -17,6 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     random_tx_maker::StakingPoolsObserver,
+    signature_destination_getter::SignatureDestinationGetter,
     utils::{find_create_pool_tx_in_genesis, pos_mine, produce_kernel_signature, sign_witnesses},
     TestFramework,
 };
@@ -47,7 +48,6 @@ use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
 use randomness::{seq::IteratorRandom, CryptoRng, Rng};
 use serialization::Encode;
 use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
-use tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetter;
 
 /// The block builder that allows construction and processing of a block.
 pub struct PoSBlockBuilder<'f> {
