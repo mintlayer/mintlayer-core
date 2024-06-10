@@ -1,10 +1,8 @@
 WitnessScript(
-    Signature(
-        PublicKeyHash(
-            0x1212121212121212121212121212121212121212,
-        ),
-        NoSignature(
-            None,
-        ),
+    Threshold(
+        Threshold {
+            required: 0,
+            conditions: [],
+        },
     ),
 )

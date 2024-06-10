@@ -1,1 +1,8 @@
-ERROR: Token with id a1a1…a1a1 does not exist
+WitnessScript(
+    Threshold(
+        Threshold {
+            required: 0,
+            conditions: [],
+        },
+    ),
+)

@@ -1,18 +1,1 @@
-WitnessScript(
-    Signature(
-        PublicKey(
-            PublicKey {
-                pub_key: Secp256k1Schnorr(
-                    Secp256k1PublicKey {
-                        pubkey_data: PublicKey(
-                            c2b6c1dd66557d1df359d243e8c68ddc2df5cbffea946beb715e7b4218fa43e8f72bed0631a5058760653a922c21685e3cf8020dbc236fa46ad8b86dfa70c7ca,
-                        ),
-                    },
-                ),
-            },
-        ),
-        NoSignature(
-            None,
-        ),
-    ),
-)
+ERROR: Illegal output spend

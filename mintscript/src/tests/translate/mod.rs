@@ -170,6 +170,12 @@ fn mint(id: TokenId, amount: u128) -> TestInputInfo {
 trait TranslationMode<'b> {
     const NAME: &'static str;
     type Mode: for<'a> TranslateInput<MockSigInfoProvider<'a>> + 'b;
+    fn translate_input_and_witness(
+        &self,
+        info: &mocks::MockSigInfoProvider,
+    ) -> Result<WitnessScript, TranslationError> {
+        Self::Mode::translate_input(info)
+    }
 }
 
 struct TxnMode;
@@ -219,12 +225,12 @@ fn translate_snap(
     let tokens = [token0()];
     let delegs = [deleg0()];
     let sig_info = mocks::MockSigInfoProvider::new(input_info, witness, tokens, [], delegs);
-    let mode = mode_name(&mode);
+    let mode_str = mode_name(&mode);
 
-    let result = match SignedTransaction::translate_input(&sig_info) {
+    let result = match mode.translate_input_and_witness(&sig_info) {
         Ok(script) => format!("{script:#?}"),
         Err(err) => format!("ERROR: {err}"),
     };
 
-    expect_test::expect_file![format!("snap.translate.{mode}.{name}.txt")].assert_eq(&result);
+    expect_test::expect_file![format!("snap.translate.{mode_str}.{name}.txt")].assert_eq(&result);
 }
