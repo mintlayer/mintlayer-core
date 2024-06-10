@@ -232,7 +232,15 @@ where
         self.prefix_iter(prefix).map(|item| item.map(|(k, v)| (k, v.decode())))
     }
 
-    /// Iterator over entries with key greater than or equal to the specified value
+    /// Iterator over entries with keys greater than or equal to the specified value.
+    ///
+    /// Note: only the `Encode`d representations of keys are compared (and `Key` itself
+    /// may not implement `Ord` at all). For the search to work correctly, ensure that the
+    /// relevant parts of `Key` are wrapped in `OrderPreservingValue`.
+    /// If some parts of `Key` are not wrapped in `OrderPreservingValue`, they must come
+    /// at the end (assuming that `Encode` is derived for `Key`); when searching, those parts
+    /// of the provided key must be zeroed/truncated, so that their `Encode`d representation
+    /// is less than or equal to any other possible value.
     pub fn greater_equal_iter(
         &self,
         key: &DbMap::Key,
@@ -240,7 +248,7 @@ where
         internal::greater_equal_iter(self.dbtx, self.map_id, key.encode())
     }
 
-    /// Iterator over keys that are greater than or equal to the specified value
+    /// Same as `greater_equal_iter`, but only the keys are returned.
     pub fn greater_equal_iter_keys(
         &self,
         key: &DbMap::Key,
@@ -248,7 +256,7 @@ where
         internal::greater_equal_iter_keys::<DbMap, _>(self.dbtx, self.map_id, key.encode())
     }
 
-    /// Iterator over decoded entries with key greater than or equal to the specified value
+    /// Same as `greater_equal_iter`, but already decoded valued are returned.
     pub fn greater_equal_iter_decoded(
         &self,
         key: &DbMap::Key,

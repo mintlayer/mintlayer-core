@@ -24,7 +24,7 @@ use serialization::{Decode, Encode, Input};
 #[derive(Eq, PartialEq, Ord, PartialOrd, Debug, Clone, Copy)]
 pub struct OrderPreservingValue<T>(T);
 
-impl<T: Copy> OrderPreservingValue<T> {
+impl<T: Wrappable> OrderPreservingValue<T> {
     pub fn new(val: T) -> Self {
         Self(val)
     }
@@ -32,6 +32,14 @@ impl<T: Copy> OrderPreservingValue<T> {
     pub fn inner(&self) -> T {
         self.0
     }
+}
+
+pub trait Wrappable: Copy {}
+
+impl<T: internal::Sealed + Copy> Wrappable for T {}
+
+mod internal {
+    pub trait Sealed {}
 }
 
 // Note: for unsigned integers, the big-endian representation has the same ordering as
@@ -51,6 +59,8 @@ macro_rules! impl_encode_decode_for_unsigned_int {
                 Ok(Self($from_be_func(&dest)))
             }
         }
+
+        impl internal::Sealed for $type {}
     };
 }
 
@@ -74,7 +84,7 @@ mod tests {
 
     fn test_one_type<T>(rng: &mut impl Rng)
     where
-        T: Copy + Ord + Debug,
+        T: Ord + Debug + Wrappable,
         OrderPreservingValue<T>: Encode + Decode,
         randomness::distributions::Standard: Distribution<T>,
     {

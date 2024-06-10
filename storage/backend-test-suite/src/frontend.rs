@@ -18,7 +18,7 @@
 
 use crate::prelude::*;
 
-use test_utils::random::{make_seedable_rng, Rng};
+use test_utils::random::{gen_random_bytes, make_seedable_rng, Rng};
 
 mod iter_sort_preserving_numbers {
     use serialization::{Decode, Encode};
@@ -30,27 +30,33 @@ mod iter_sort_preserving_numbers {
     use super::*;
 
     #[derive(Encode, Decode, Clone, Eq, PartialEq, Debug)]
-    struct CompoundKey {
-        main_part: OrderPreservingValue<u64>,
-        aux_part: u64,
+    pub struct CompoundKey1 {
+        pub main_part: OrderPreservingValue<u64>,
+        pub aux_part: Vec<u8>,
     }
 
-    decl_schema! {
-        TestSchema {
-            TestMap: Map<CompoundKey, ()>,
+    mod test_schema1 {
+        use super::*;
+
+        decl_schema! {
+            pub Schema {
+                pub TestMap: Map<CompoundKey1, ()>,
+            }
         }
     }
 
-    pub fn test<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
-        let storage = Storage::<_, TestSchema>::new(backend_fn()).unwrap();
+    pub fn test1<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+        use test_schema1::{Schema, TestMap};
+
+        let storage = Storage::<_, Schema>::new(backend_fn()).unwrap();
 
         with_rng_seed(move |seed| {
             let mut rng = make_seedable_rng(seed);
 
             let test_values = (0..100)
-                .map(|_| CompoundKey {
+                .map(|_| CompoundKey1 {
                     main_part: OrderPreservingValue::new(rng.gen::<u64>()),
-                    aux_part: rng.gen::<u64>(),
+                    aux_part: gen_random_bytes(&mut rng, 1, 100),
                 })
                 .collect::<Vec<_>>();
 
@@ -61,22 +67,101 @@ mod iter_sort_preserving_numbers {
             }
             dbtx.commit().unwrap();
 
-            let sorted_test_values = test_values.sorted_by(|v1, v2| {
+            let sorted_test_values = test_values.clone().sorted_by(|v1, v2| {
                 // Note: we explicitly sort by "inner".
                 v1.main_part.inner().cmp(&v2.main_part.inner())
             });
 
             let i = rng.gen_range(0..test_values.len() - 1);
 
+            let item = &sorted_test_values[i];
+            let expected_ge_items = &sorted_test_values[i..];
             let dbtx = storage.transaction_ro().unwrap();
-            let items = dbtx
+            let ge_items = dbtx
                 .get::<TestMap, _>()
-                .greater_equal_iter_keys(&sorted_test_values[i])
+                .greater_equal_iter_keys(item)
                 .unwrap()
                 .collect::<Vec<_>>();
-            assert_eq!(items, &sorted_test_values[i..]);
+            assert_eq!(ge_items, expected_ge_items);
+
+            // Do the same search, but now with zeroed aux_part.
+            let item_with_zeroed_aux_part = CompoundKey1 {
+                main_part: item.main_part,
+                aux_part: vec![0; item.aux_part.len()],
+            };
+            let ge_items = dbtx
+                .get::<TestMap, _>()
+                .greater_equal_iter_keys(&item_with_zeroed_aux_part)
+                .unwrap()
+                .collect::<Vec<_>>();
+            assert_eq!(ge_items, expected_ge_items);
+        });
+    }
+
+    // test2 is the same as test1 but here we use a tuple instead of a custom struct.
+    type CompoundKey2 = (OrderPreservingValue<u64>, Vec<u8>);
+
+    mod test_schema2 {
+        use super::*;
+
+        decl_schema! {
+            pub Schema {
+                pub TestMap: Map<CompoundKey2, ()>,
+            }
+        }
+    }
+
+    pub fn test2<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+        use test_schema2::{Schema, TestMap};
+
+        let storage = Storage::<_, Schema>::new(backend_fn()).unwrap();
+
+        with_rng_seed(move |seed| {
+            let mut rng = make_seedable_rng(seed);
+
+            let test_values = (0..100)
+                .map(|_| {
+                    (
+                        OrderPreservingValue::new(rng.gen::<u64>()),
+                        gen_random_bytes(&mut rng, 1, 100),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            let mut dbtx = storage.transaction_rw(None).unwrap();
+            let mut map = dbtx.get_mut::<TestMap, _>();
+            for val in &test_values {
+                map.put(val, ()).unwrap();
+            }
+            dbtx.commit().unwrap();
+
+            let sorted_test_values = test_values.clone().sorted_by(|v1, v2| {
+                // Note: we explicitly sort by "inner".
+                v1.0.inner().cmp(&v2.0.inner())
+            });
+
+            let i = rng.gen_range(0..test_values.len() - 1);
+
+            let item = &sorted_test_values[i];
+            let expected_ge_items = &sorted_test_values[i..];
+            let dbtx = storage.transaction_ro().unwrap();
+            let ge_items = dbtx
+                .get::<TestMap, _>()
+                .greater_equal_iter_keys(item)
+                .unwrap()
+                .collect::<Vec<_>>();
+            assert_eq!(ge_items, expected_ge_items);
+
+            // Do the same search, but now with zeroed aux_part.
+            let item_with_zeroed_aux_part = (item.0, vec![0; item.1.len()]);
+            let ge_items = dbtx
+                .get::<TestMap, _>()
+                .greater_equal_iter_keys(&item_with_zeroed_aux_part)
+                .unwrap()
+                .collect::<Vec<_>>();
+            assert_eq!(ge_items, expected_ge_items);
         });
     }
 }
 
-tests![iter_sort_preserving_numbers::test];
+tests![iter_sort_preserving_numbers::test1, iter_sort_preserving_numbers::test2];

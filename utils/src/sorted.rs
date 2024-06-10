@@ -14,31 +14,29 @@
 // limitations under the License.
 
 pub trait Sorted<T> {
-    fn sorted(&self) -> Self
+    fn sorted(self) -> Self
     where
         T: Ord;
 
-    fn sorted_by<F>(&self, compare: F) -> Self
+    fn sorted_by<F>(self, compare: F) -> Self
     where
         F: FnMut(&T, &T) -> std::cmp::Ordering;
 }
 
 impl<T: Clone> Sorted<T> for Vec<T> {
-    fn sorted(&self) -> Self
+    fn sorted(mut self) -> Self
     where
         T: Ord,
     {
-        let mut this = (*self).clone();
-        this.sort();
-        this
+        self.sort();
+        self
     }
 
-    fn sorted_by<F>(&self, compare: F) -> Self
+    fn sorted_by<F>(mut self, compare: F) -> Self
     where
         F: FnMut(&T, &T) -> std::cmp::Ordering,
     {
-        let mut this = (*self).clone();
-        this.sort_by(compare);
-        this
+        self.sort_by(compare);
+        self
     }
 }
