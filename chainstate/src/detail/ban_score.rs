@@ -177,10 +177,10 @@ impl BanScore for mintscript::translate::TranslationError {
     }
 }
 
-impl<SE, TE: BanScore> BanScore for mintscript::script::ScriptError<SE, TE> {
+impl<SE, TE: BanScore, HE> BanScore for mintscript::script::ScriptError<SE, TE, HE> {
     fn ban_score(&self) -> u32 {
         match self {
-            Self::Threshold(_) | Self::Signature(_) => 100,
+            Self::Threshold(_) | Self::Signature(_) | Self::Hashlock(_) => 100,
             Self::Timelock(e) => e.ban_score(),
         }
     }

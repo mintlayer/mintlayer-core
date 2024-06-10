@@ -66,6 +66,15 @@ impl WitnessScript {
                 OutputTimeLock::ForBlockCount(c) => write!(f, "after_blocks({c})"),
                 OutputTimeLock::ForSeconds(s) => write!(f, "after_seconds({s})"),
             },
+            WitnessScript::HashLock {
+                hash_type,
+                hash,
+                preimage,
+            } => {
+                let hash = HexEncoded::new(hash);
+                let preimage = HexEncoded::new(preimage);
+                write!(f, "{hash_type:?}(0x{hash}, 0x{preimage})")
+            }
         }
     }
 }

@@ -202,11 +202,12 @@ impl MempoolBanScore for mintscript::translate::TranslationError {
     }
 }
 
-impl<SE, TE: BanScore> MempoolBanScore for mintscript::script::ScriptError<SE, TE> {
+impl<SE, TE: BanScore, HE> MempoolBanScore for mintscript::script::ScriptError<SE, TE, HE> {
     fn mempool_ban_score(&self) -> u32 {
         match self {
             Self::Threshold(_) => 100,
             Self::Signature(_) => 100,
+            Self::Hashlock(_) => 100,
             Self::Timelock(e) => e.ban_score(),
         }
     }

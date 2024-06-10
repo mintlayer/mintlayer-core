@@ -13,11 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod hashlock;
 mod signature;
 mod timelock;
 
 use common::chain::{signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination};
 
+pub use hashlock::HashlockError;
+use hashlock::{HashlockChecker, NoOpHashlockChecker, StandardHashlockChecker};
 pub use signature::{
     NoOpSignatureChecker, SignatureChecker, SignatureContext, StandardSignatureChecker,
 };
@@ -28,45 +31,68 @@ pub use timelock::{StandardTimelockChecker, TimelockChecker, TimelockContext, Ti
 /// This contains a signature checker and timelock checker which can vary independently.
 /// There is also shared context which both checkers have access to.
 #[derive(Debug)]
-pub struct ScriptChecker<C, S, T> {
+pub struct ScriptChecker<C, S, T, H> {
     context: C,
     signature_checker: S,
     timelock_checker: T,
+    hashlock_checker: H,
 }
 
 /// Script checker only verifying timelocks.
 pub type TimelockOnlyScriptChecker<C> =
-    ScriptChecker<C, NoOpSignatureChecker, StandardTimelockChecker>;
+    ScriptChecker<C, NoOpSignatureChecker, StandardTimelockChecker, NoOpHashlockChecker>;
 
 /// Full script checker with all checks active.
-pub type FullScriptChecker<C> = ScriptChecker<C, StandardSignatureChecker, StandardTimelockChecker>;
+pub type FullScriptChecker<C> =
+    ScriptChecker<C, StandardSignatureChecker, StandardTimelockChecker, StandardHashlockChecker>;
 
 impl<C> TimelockOnlyScriptChecker<C> {
     /// Create a script checker that only checks timelocks. Signatures are presumed to pass.
     pub fn timelock_only(context: C) -> Self {
-        Self::custom(context, NoOpSignatureChecker, StandardTimelockChecker)
+        Self::custom(
+            context,
+            NoOpSignatureChecker,
+            StandardTimelockChecker,
+            NoOpHashlockChecker,
+        )
     }
 }
 
 impl<C> FullScriptChecker<C> {
     /// Create a full script checker verifying everything.
     pub fn full(context: C) -> Self {
-        Self::custom(context, StandardSignatureChecker, StandardTimelockChecker)
+        Self::custom(
+            context,
+            StandardSignatureChecker,
+            StandardTimelockChecker,
+            StandardHashlockChecker,
+        )
     }
 }
 
-impl<C, S, T> ScriptChecker<C, S, T> {
+impl<C, S, T, H> ScriptChecker<C, S, T, H> {
     /// Create a script checker with custom checkers for signatures and timelocks.
-    pub fn custom(context: C, signature_checker: S, timelock_checker: T) -> Self {
+    pub fn custom(
+        context: C,
+        signature_checker: S,
+        timelock_checker: T,
+        hashlock_checker: H,
+    ) -> Self {
         Self {
             context,
             signature_checker,
             timelock_checker,
+            hashlock_checker,
         }
     }
 
-    pub fn into_components(self) -> (C, S, T) {
-        (self.context, self.signature_checker, self.timelock_checker)
+    pub fn into_components(self) -> (C, S, T, H) {
+        (
+            self.context,
+            self.signature_checker,
+            self.timelock_checker,
+            self.hashlock_checker,
+        )
     }
 
     pub fn into_context(self) -> C {
@@ -74,14 +100,15 @@ impl<C, S, T> ScriptChecker<C, S, T> {
     }
 }
 
-impl<C, S, T> crate::script::ScriptVisitor for ScriptChecker<C, S, T>
+impl<C, S, T, H> crate::script::ScriptVisitor for ScriptChecker<C, S, T, H>
 where
     S: SignatureChecker<C>,
     T: TimelockChecker<C>,
+    H: HashlockChecker,
 {
     type SignatureError = S::Error;
-
     type TimelockError = T::Error;
+    type HashlockError = H::Error;
 
     fn visit_signature(
         &mut self,
@@ -94,5 +121,14 @@ where
 
     fn visit_timelock(&mut self, timelock: &OutputTimeLock) -> Result<(), Self::TimelockError> {
         self.timelock_checker.check_timelock(&mut self.context, timelock)
+    }
+
+    fn visit_hashlock(
+        &mut self,
+        hash_type: crate::script::HashType,
+        hash: &[u8],
+        preimage: &[u8],
+    ) -> Result<(), Self::HashlockError> {
+        self.hashlock_checker.check_hashlock(hash_type, hash, preimage)
     }
 }

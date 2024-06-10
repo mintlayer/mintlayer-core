@@ -353,10 +353,11 @@ impl BlockProcessingErrorClassification for mintscript::translate::TranslationEr
     }
 }
 
-impl<SE, TE> BlockProcessingErrorClassification for mintscript::script::ScriptError<SE, TE>
+impl<SE, TE, HE> BlockProcessingErrorClassification for mintscript::script::ScriptError<SE, TE, HE>
 where
     SE: BlockProcessingErrorClassification,
     TE: BlockProcessingErrorClassification,
+    HE: BlockProcessingErrorClassification,
 {
     fn classify(&self) -> BlockProcessingErrorClass {
         match self {
@@ -364,6 +365,7 @@ where
 
             Self::Signature(e) => e.classify(),
             Self::Timelock(e) => e.classify(),
+            Self::Hashlock(e) => e.classify(),
         }
     }
 }
@@ -380,6 +382,14 @@ where
             | Self::TimestampArith => BlockProcessingErrorClass::BadBlock,
 
             Self::Context(e) => e.classify(),
+        }
+    }
+}
+
+impl BlockProcessingErrorClassification for mintscript::checker::HashlockError {
+    fn classify(&self) -> BlockProcessingErrorClass {
+        match self {
+            Self::IncorrectHashSize | Self::HashMismatch => BlockProcessingErrorClass::BadBlock,
         }
     }
 }
