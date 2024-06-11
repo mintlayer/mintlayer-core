@@ -1,0 +1,7 @@
+WitnessScript(
+    Timelock(
+        ForBlockCount(
+            600,
+        ),
+    ),
+)

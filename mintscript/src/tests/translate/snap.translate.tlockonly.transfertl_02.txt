@@ -1,0 +1,7 @@
+WitnessScript(
+    Timelock(
+        ForSeconds(
+            31536000,
+        ),
+    ),
+)

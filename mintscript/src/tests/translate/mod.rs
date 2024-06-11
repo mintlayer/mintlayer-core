@@ -102,6 +102,11 @@ fn transfer_pk(pk_seed: u64, amt: u128) -> TestInputInfo {
     tii(TxOutput::Transfer(coins(amt), dest_pk(pk_seed)))
 }
 
+fn transfer_pk_tl(pk_seed: u64, amt: u128, timelock: OutputTimeLock) -> TestInputInfo {
+    let amt = coins(amt);
+    tii(TxOutput::LockThenTransfer(amt, dest_pk(pk_seed), timelock))
+}
+
 fn transfer_pkh(pkh_byte: u8, amt: u128) -> TestInputInfo {
     let pkh = common::address::pubkeyhash::PublicKeyHash::from_slice(&[pkh_byte; 20]);
     let dest = Destination::PublicKeyHash(pkh);
@@ -208,6 +213,31 @@ fn mode_name<'a, T: TranslationMode<'a>>(_: &T) -> &'static str {
 #[case("transfer_01", transfer_pk(13, 557), stdsig(0x51))]
 #[case("transfer_02", transfer_pkh(0x12, 300_000), stdsig(0x52))]
 #[case("transfer_03", transfer_pkh(0x12, 300_000), nosig())]
+#[case(
+    "transfertl_00",
+    transfer_pk_tl(12, 555, tl_for_blocks(600)),
+    stdsig(0x5d)
+)]
+#[case(
+    "transfertl_01",
+    transfer_pk_tl(13, 557, tl_until_height(155_554)),
+    stdsig(0x59)
+)]
+#[case(
+    "transfertl_02",
+    transfer_pk_tl(14, 558, tl_for_secs(365 * 24 * 60 * 60)),
+    stdsig(0x5a),
+)]
+#[case(
+    "transfertl_03",
+    transfer_pk_tl(15, 559, tl_until_time(1_718_120_714)),
+    stdsig(0x5b)
+)]
+#[case(
+    "transfertl_04",
+    transfer_pk_tl(16, 560, tl_until_height(999_999)),
+    nosig()
+)]
 #[case("newpool_00", create_pool(14, 15), stdsig(0x53))]
 #[case("acctspend_00", account_spend(deleg0().0, 579), stdsig(0x54))]
 #[case("acctspend_01", account_spend(fake_id(0xf5), 580), stdsig(0x55))]

@@ -1,0 +1,9 @@
+WitnessScript(
+    Timelock(
+        UntilTime(
+            BlockTimestamp {
+                timestamp: 1718120714,
+            },
+        ),
+    ),
+)
