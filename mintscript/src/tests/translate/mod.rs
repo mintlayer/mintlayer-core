@@ -191,7 +191,7 @@ impl<'a> TranslationMode<'a> for RewardMode {
 }
 
 impl TranslationMode<'_> for TimelockOnly {
-    const NAME: &'static str = "tlock";
+    const NAME: &'static str = "tlockonly";
     type Mode = Self;
 }
 
