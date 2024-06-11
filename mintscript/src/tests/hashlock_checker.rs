@@ -60,14 +60,23 @@ impl crate::TimelockContext for EmptyContext {
 }
 
 #[rstest::rstest]
-#[case([209, 246, 177, 232, 51, 84, 228, 19, 240, 217, 24, 152, 165, 219, 108, 141, 8, 142, 84, 141, 210, 128, 132, 209, 44, 87, 61, 197, 94, 173, 23, 113],
-       [157, 6, 130, 9, 15, 13, 14, 19, 25, 16, 83, 196, 241, 85, 78, 166, 172, 66, 16, 178])]
-#[case([210, 113, 99, 52, 113, 86, 243, 93, 79, 167, 173, 105, 136, 98, 82, 162, 163, 239, 167, 61, 196, 35, 89, 207, 141, 122, 124, 185, 158, 223, 164, 0],
-       [88, 191, 177, 197, 195, 183, 137, 75, 159, 176, 107, 61, 24, 82, 36, 199, 155, 216, 221, 120])]
-#[case([12, 237, 136, 255, 43, 219, 169, 22, 20, 191, 82, 182, 128, 215, 15, 34, 102, 213, 115, 23, 223, 192, 71, 46, 131, 197, 128, 252, 58, 102, 53, 79],
-       [87, 164, 129, 105, 180, 233, 129, 252, 145, 233, 128, 24, 187, 159, 207, 103, 26, 119, 80, 216])]
-fn check_hashlock_160(#[case] preimage: [u8; 32], #[case] hash: [u8; 20]) {
-    let script = WitnessScript::hashlock(HashType::HASH160, hash.to_vec(), preimage.to_vec());
+#[case(
+    "0ced88ff2bdba91614bf52b680d70f2266d57317dfc0472e83c580fc3a66354f",
+    "57a48169b4e981fc91e98018bb9fcf671a7750d8"
+)]
+#[case(
+    "d1f6b1e83354e413f0d91898a5db6c8d088e548dd28084d12c573dc55ead1771",
+    "9d0682090f0d0e13191053c4f1554ea6ac4210b2"
+)]
+#[case(
+    "d27163347156f35d4fa7ad69886252a2a3efa73dc42359cf8d7a7cb99edfa400",
+    "58bfb1c5c3b7894b9fb06b3d185224c79bd8dd78"
+)]
+fn check_hashlock_160_ok(#[case] preimage: &str, #[case] hash: &str) {
+    let hash = hex::decode(hash).unwrap().try_into().unwrap();
+    let preimage = hex::decode(preimage).unwrap().try_into().unwrap();
+
+    let script = WitnessScript::hashlock(HashType::HASH160(hash), preimage);
 
     let context = EmptyContext;
     let mut checker = crate::ScriptChecker::full(context);
@@ -76,42 +85,18 @@ fn check_hashlock_160(#[case] preimage: [u8; 32], #[case] hash: [u8; 20]) {
 
 #[rstest::rstest]
 #[case(Seed::from_entropy())]
-fn check_hashlock_160_random_values(#[case] seed: Seed) {
+fn check_hashlock_160_random_values_mismatch(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let preimage: [u8; 32] = std::array::from_fn(|_| rng.gen::<u8>());
     let hash: [u8; 20] = std::array::from_fn(|_| rng.gen::<u8>());
 
-    let script = WitnessScript::hashlock(HashType::HASH160, hash.to_vec(), preimage.to_vec());
+    let script = WitnessScript::hashlock(HashType::HASH160(hash), preimage);
 
     let context = EmptyContext;
     let mut checker = crate::ScriptChecker::full(context);
     assert_eq!(
         script.verify(&mut checker).unwrap_err(),
         ScriptError::Hashlock(HashlockError::HashMismatch)
-    );
-}
-
-#[rstest::rstest]
-#[case(Seed::from_entropy())]
-fn check_hashlock_160_wrong_preimage_size(#[case] seed: Seed) {
-    let mut rng = make_seedable_rng(seed);
-
-    let preimage: [u8; 32] = std::array::from_fn(|_| rng.gen::<u8>());
-    let hash = {
-        let length1: usize = rng.gen_range(1..20);
-        let length2: usize = rng.gen_range(21..100);
-        let length = if rng.gen::<bool>() { length1 } else { length2 };
-        let random_vector: Vec<u8> = (0..length).map(|_| rng.gen()).collect();
-        random_vector
-    };
-
-    let script = WitnessScript::hashlock(HashType::HASH160, hash, preimage.to_vec());
-
-    let context = EmptyContext;
-    let mut checker = crate::ScriptChecker::full(context);
-    assert_eq!(
-        script.verify(&mut checker).unwrap_err(),
-        ScriptError::Hashlock(HashlockError::IncorrectHashSize)
     );
 }

@@ -122,13 +122,13 @@ impl Threshold {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum HashType {
-    RIPEMD160,
-    SHA1,
-    SHA256,
-    HASH160,
-    HASH256,
+    RIPEMD160([u8; 20]),
+    SHA1([u8; 20]),
+    SHA256([u8; 32]),
+    HASH160([u8; 20]),
+    HASH256([u8; 32]),
 }
 
 /// Script together with witness data presumably satisfying the script.
@@ -139,8 +139,7 @@ pub enum WitnessScript {
     Timelock(OutputTimeLock),
     HashLock {
         hash_type: HashType,
-        hash: Vec<u8>,
-        preimage: Vec<u8>,
+        preimage: [u8; 32],
     },
 }
 
@@ -159,10 +158,9 @@ impl WitnessScript {
     }
 
     /// Construct a hashlock condition
-    pub const fn hashlock(hash_type: HashType, hash: Vec<u8>, preimage: Vec<u8>) -> Self {
+    pub const fn hashlock(hash_type: HashType, preimage: [u8; 32]) -> Self {
         Self::HashLock {
             hash_type,
-            hash,
             preimage,
         }
     }

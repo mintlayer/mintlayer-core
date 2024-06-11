@@ -139,9 +139,8 @@ fn visit_order(#[case] script: WS) {
 
         fn visit_hashlock(
             &mut self,
-            _hash_type: crate::script::HashType,
-            _hash: &[u8],
-            _preimage: &[u8],
+            _hash_type: &crate::script::HashType,
+            _preimage: &[u8; 32],
         ) -> Result<(), Self::HashlockError> {
             unreachable!("Not used in this test")
         }

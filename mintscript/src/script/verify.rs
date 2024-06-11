@@ -48,9 +48,8 @@ pub trait ScriptVisitor {
     ///Check hashlock
     fn visit_hashlock(
         &mut self,
-        hash_type: HashType,
-        hash: &[u8],
-        preimage: &[u8],
+        hash_type: &HashType,
+        preimage: &[u8; 32],
     ) -> Result<(), Self::HashlockError>;
 }
 
@@ -109,10 +108,9 @@ impl WitnessScript {
                 }
                 Self::HashLock {
                     hash_type,
-                    hash,
                     preimage,
                 } => {
-                    v.visit_hashlock(*hash_type, hash, preimage).map_err(ScriptError::Hashlock)?;
+                    v.visit_hashlock(hash_type, preimage).map_err(ScriptError::Hashlock)?;
                 }
             }
         }

@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use crypto::hash::{self, hash};
-use utils::ensure;
 
 use crate::script::HashType;
 
@@ -38,9 +37,8 @@ pub trait HashlockChecker {
 
     fn check_hashlock(
         &mut self,
-        hash_type: HashType,
-        hash: &[u8],
-        preimage: &[u8],
+        hash_type: &HashType,
+        preimage: &[u8; 32],
     ) -> Result<(), Self::Error>;
 }
 
@@ -51,9 +49,8 @@ impl HashlockChecker for NoOpHashlockChecker {
 
     fn check_hashlock(
         &mut self,
-        _hash_type: HashType,
-        _hash: &[u8],
-        _preimage: &[u8],
+        _hash_type: &HashType,
+        _preimage: &[u8; 32],
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -66,23 +63,26 @@ impl HashlockChecker for StandardHashlockChecker {
 
     fn check_hashlock(
         &mut self,
-        hash_type: HashType,
-        expected_hash: &[u8],
-        preimage: &[u8],
+        hash_type: &HashType,
+        preimage: &[u8; 32],
     ) -> Result<(), Self::Error> {
         match hash_type {
-            HashType::HASH160 => {
-                ensure!(expected_hash.len() == 20, HashlockError::IncorrectHashSize);
-
+            HashType::HASH160(expected_hash) => {
                 let actual_hash = hash::<hash::Ripemd160, _>(hash::<hash::Sha256, _>(preimage));
 
-                (actual_hash.as_slice() == expected_hash)
-                    .then_some(())
-                    .ok_or(HashlockError::HashMismatch)
+                ensure_hashes_equal(actual_hash.as_slice(), expected_hash)?;
             }
-            HashType::RIPEMD160 | HashType::SHA1 | HashType::SHA256 | HashType::HASH256 => {
+            HashType::RIPEMD160(_)
+            | HashType::SHA1(_)
+            | HashType::SHA256(_)
+            | HashType::HASH256(_) => {
                 unimplemented!()
             }
         }
+        Ok(())
     }
+}
+
+fn ensure_hashes_equal(left: &[u8], right: &[u8]) -> Result<(), HashlockError> {
+    (left == right).then_some(()).ok_or(HashlockError::HashMismatch)
 }
