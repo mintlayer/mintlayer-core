@@ -258,7 +258,7 @@ fn translate_snap(
     let mode_str = mode_name(&mode);
 
     let result = match mode.translate_input_and_witness(&sig_info) {
-        Ok(script) => format!("{script:#?}"),
+        Ok(script) => format!("{script}\n"),
         Err(err) => format!("ERROR: {err}"),
     };
 

@@ -1,6 +1,1 @@
-Threshold(
-    Threshold {
-        required: 0,
-        conditions: [],
-    },
-)
+true

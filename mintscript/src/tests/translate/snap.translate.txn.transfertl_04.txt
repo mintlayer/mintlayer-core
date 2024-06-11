@@ -1,34 +1,4 @@
-Threshold(
-    Threshold {
-        required: 2,
-        conditions: [
-            Satisfied(
-                Timelock(
-                    UntilHeight(
-                        BlockHeight(
-                            999999,
-                        ),
-                    ),
-                ),
-            ),
-            Satisfied(
-                Signature(
-                    PublicKey(
-                        PublicKey {
-                            pub_key: Secp256k1Schnorr(
-                                Secp256k1PublicKey {
-                                    pubkey_data: PublicKey(
-                                        bb4ea4d8c6d265a9c95b9b0da64464b4d47dfcca5b2e8e2cfca73e2373dccaebbcb34d1438da47a60c899126101020a3a5804ab10e1fd88bf6bf927b7e8c009c,
-                                    ),
-                                },
-                            ),
-                        },
-                    ),
-                    NoSignature(
-                        None,
-                    ),
-                ),
-            ),
-        ],
-    },
-)
+threshold(2, [
+    until_height(999999),
+    signature(0x020002ebcadc73233ea7fc2c8e2e5bcafc7dd4b46444a60d9b5bc9a965d2c6d8a44ebb, 0x0000),
+])

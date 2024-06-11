@@ -1,5 +1,1 @@
-Timelock(
-    ForBlockCount(
-        600,
-    ),
-)
+after_blocks(600)

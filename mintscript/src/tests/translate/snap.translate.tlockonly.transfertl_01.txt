@@ -1,7 +1,1 @@
-Timelock(
-    UntilHeight(
-        BlockHeight(
-            155554,
-        ),
-    ),
-)
+until_height(155554)

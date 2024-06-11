@@ -1,16 +1,1 @@
-Signature(
-    PublicKey(
-        PublicKey {
-            pub_key: Secp256k1Schnorr(
-                Secp256k1PublicKey {
-                    pubkey_data: PublicKey(
-                        f617e74b4f93ad88cb32d21c95c33cb7aaaada5d52ec2e404e63128ba00756748bd23d29767fc963a5e959a01ed8f531d04dce80de3c82b4a81a668d74668408,
-                    ),
-                },
-            ),
-        },
-    ),
-    NoSignature(
-        None,
-    ),
-)
+signature(0x020003745607a08b12634e402eec525ddaaaaab73cc3951cd232cb88ad934f4be717f6, 0x0000)

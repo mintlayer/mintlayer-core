@@ -1,16 +1,1 @@
-Signature(
-    PublicKeyHash(
-        0x1212121212121212121212121212121212121212,
-    ),
-    Standard(
-        StandardInputSignature {
-            sighash_type: SigHashType(
-                1,
-            ),
-            raw_signature: [
-                82,
-                82,
-            ],
-        },
-    ),
-)
+signature(0x011212121212121212121212121212121212121212, 0x0101085252)
