@@ -35,7 +35,7 @@ pub use config::{ChainstateLauncherConfig, StorageBackendConfig};
 /// Subdirectory under `datadir` where LMDB chainstate database is placed
 pub const SUBDIRECTORY_LMDB: &str = "chainstate-lmdb";
 
-fn make_chainstate_and_storage_impl<B: 'static + storage::Backend>(
+fn make_chainstate_and_storage_impl<B: storage::Backend + 'static>(
     storage_backend: B,
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,

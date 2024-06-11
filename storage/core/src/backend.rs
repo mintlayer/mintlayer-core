@@ -65,7 +65,7 @@ pub trait TxRw: ReadOps + WriteOps {
 }
 
 /// Storage backend internal implementation type
-pub trait BackendImpl: 'static + Send + Sync + ShallowClone {
+pub trait BackendImpl: Send + Sync + ShallowClone + 'static {
     /// Read-only transaction internal type
     type TxRo<'a>: TxRo + 'a;
 

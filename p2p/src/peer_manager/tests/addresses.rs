@@ -84,7 +84,7 @@ fn get_new_discoverable_address(rng: &mut impl Rng) -> PeerAddress {
 async fn test_address_rate_limiter<A, T>(seed: Seed)
 where
     A: TestTransportMaker<Transport = T::Transport>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let mut rng = make_seedable_rng(seed);

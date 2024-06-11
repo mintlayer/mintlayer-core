@@ -35,7 +35,7 @@ impl EmissionSchedule {
     /// Construct an emission schedule from a function.
     ///
     /// Be careful to maintain invariants as specified in [EmissionSchedule] docs
-    pub fn from_fn(f: impl 'static + Fn(BlockHeight) -> CoinUnit + Sync + Send) -> Self {
+    pub fn from_fn(f: impl Fn(BlockHeight) -> CoinUnit + Sync + Send + 'static) -> Self {
         Self(std::sync::Arc::new(f))
     }
 

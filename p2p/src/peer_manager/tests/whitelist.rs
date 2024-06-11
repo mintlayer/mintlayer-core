@@ -80,7 +80,7 @@ fn p2p_config_with_whitelisted(whitelisted_addresses: Vec<IpAddr>) -> P2pConfig 
 async fn no_automatic_ban_for_whitelisted<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr1: SocketAddress = A::make_address().into();
@@ -162,7 +162,7 @@ async fn no_automatic_ban_for_whitelisted_noise() {
 async fn no_automatic_unban_for_whitelisted<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr1 = A::make_address().into();

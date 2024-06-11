@@ -92,7 +92,7 @@ use crate::{
 async fn validate_invalid_connection<A, S>(seed: Seed)
 where
     A: TestTransportMaker<Transport = S::Transport>,
-    S: NetworkingService + 'static + std::fmt::Debug,
+    S: NetworkingService + std::fmt::Debug + 'static,
     S::ConnectivityHandle: ConnectivityService<S>,
 {
     let mut rng = make_seedable_rng(seed);
@@ -169,7 +169,7 @@ async fn validate_invalid_connection_noise(#[case] seed: Seed) {
 async fn inbound_connection_invalid_magic<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr1 = A::make_address().into();
@@ -242,7 +242,7 @@ async fn test_peer_manager_connect<T>(
     bind_addr: SocketAddress,
     remote_addr: SocketAddress,
 ) where
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let config = Arc::new(config::create_unit_test_config());
@@ -295,7 +295,7 @@ async fn test_peer_manager_connect_tcp_noise() {
 async fn test_auto_connect<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr1 = A::make_address().into();
@@ -348,7 +348,7 @@ async fn test_auto_connect_noise() {
 async fn connect_outbound_same_network<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr1 = A::make_address().into();
@@ -392,7 +392,7 @@ async fn connect_outbound_same_network_noise() {
 async fn connect_outbound_different_network<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr1 = A::make_address().into();
@@ -449,7 +449,7 @@ async fn connect_outbound_different_network_noise() {
 async fn connect_inbound_same_network<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr1 = A::make_address().into();
@@ -503,7 +503,7 @@ async fn connect_inbound_same_network_noise() {
 async fn connect_inbound_different_network<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr1 = A::make_address().into();
@@ -578,7 +578,7 @@ async fn connect_inbound_different_network_noise() {
 async fn remote_closes_connection<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr1 = A::make_address().into();
@@ -636,7 +636,7 @@ async fn remote_closes_connection_noise() {
 async fn inbound_connection_too_many_peers<A, T>(peers: Vec<(SocketAddress, PeerInfo)>)
 where
     A: TestTransportMaker<Transport = T::Transport>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr1 = A::make_address().into();
@@ -755,7 +755,7 @@ async fn inbound_connection_too_many_peers_noise() {
 
 async fn connection_timeout<T>(transport: T::Transport, addr1: SocketAddress, addr2: SocketAddress)
 where
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let config = Arc::new(config::create_unit_test_config());
@@ -832,7 +832,7 @@ async fn connection_timeout_rpc_notified<T>(
     addr1: SocketAddress,
     addr2: SocketAddress,
 ) where
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let config = Arc::new(config::create_unit_test_config());
@@ -945,7 +945,7 @@ async fn connection_timeout_rpc_notified_noise() {
 async fn connection_reserved_node<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let time_getter = BasicTestTimeGetter::new();
@@ -1074,7 +1074,7 @@ async fn connection_reserved_node_channel() {
 async fn discovered_node_same_address_group<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport>,
-    T: NetworkingService + 'static + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let chain_config = Arc::new(config::create_unit_test_config());

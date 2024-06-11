@@ -428,8 +428,8 @@ mod test {
     use serde_json::Value;
     use std::{future::Future, sync::Arc};
 
-    async fn with_chainstate<F: 'static + Send + Future<Output = ()>>(
-        proc: impl 'static + Send + FnOnce(crate::ChainstateHandle) -> F,
+    async fn with_chainstate<F: Send + Future<Output = ()> + 'static>(
+        proc: impl Send + FnOnce(crate::ChainstateHandle) -> F + 'static,
     ) {
         let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());

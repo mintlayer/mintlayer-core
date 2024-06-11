@@ -46,7 +46,7 @@ pub enum WalletType<N> {
     },
 }
 
-pub async fn run<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
+pub async fn run<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
     chain_config: &Arc<ChainConfig>,
     mut event_rx: mpsc::UnboundedReceiver<Event<N>>,
     in_top_x_mb: usize,

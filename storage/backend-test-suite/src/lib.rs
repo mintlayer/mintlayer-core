@@ -41,7 +41,7 @@ use prelude::*;
 use test_utils::random::Seed;
 
 /// Get all tests
-fn tests<B: 'static + Backend, F: BackendFn<B>>(backend_fn: F) -> Vec<libtest_mimic::Trial> {
+fn tests<B: Backend + 'static, F: BackendFn<B>>(backend_fn: F) -> Vec<libtest_mimic::Trial> {
     let backend_fn = Arc::new(backend_fn);
     std::iter::empty()
         .chain(basic::tests(Arc::clone(&backend_fn)))
@@ -53,7 +53,7 @@ fn tests<B: 'static + Backend, F: BackendFn<B>>(backend_fn: F) -> Vec<libtest_mi
 
 /// Main test suite entry point
 #[must_use = "Test outcome ignored, add a call to .exit()"]
-pub fn main<B: 'static + Backend, F: BackendFn<B>>(backend_fn: F) -> libtest_mimic::Conclusion {
+pub fn main<B: Backend + 'static, F: BackendFn<B>>(backend_fn: F) -> libtest_mimic::Conclusion {
     logging::init_logging();
     let args = libtest_mimic::Arguments::from_args();
     libtest_mimic::run(&args, tests(backend_fn))

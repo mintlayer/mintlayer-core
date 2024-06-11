@@ -200,7 +200,7 @@ where
     }
 
     /// Iterator over entries with key starting with given prefix
-    pub fn prefix_iter<Pfx>(&self, prefix: &Pfx) -> crate::Result<impl 'tx + EntryIterator<DbMap>>
+    pub fn prefix_iter<Pfx>(&self, prefix: &Pfx) -> crate::Result<impl EntryIterator<DbMap> + 'tx>
     where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
@@ -212,7 +212,7 @@ where
     pub fn prefix_iter_keys<Pfx>(
         &self,
         prefix: &Pfx,
-    ) -> crate::Result<impl 'tx + Iterator<Item = DbMap::Key>>
+    ) -> crate::Result<impl Iterator<Item = DbMap::Key> + 'tx>
     where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
@@ -224,7 +224,7 @@ where
     pub fn prefix_iter_decoded<Pfx>(
         &self,
         prefix: &Pfx,
-    ) -> crate::Result<impl 'tx + Iterator<Item = (DbMap::Key, DbMap::Value)>>
+    ) -> crate::Result<impl Iterator<Item = (DbMap::Key, DbMap::Value)> + 'tx>
     where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
@@ -244,7 +244,7 @@ where
     pub fn greater_equal_iter(
         &self,
         key: &DbMap::Key,
-    ) -> crate::Result<impl 'tx + EntryIterator<DbMap>> {
+    ) -> crate::Result<impl EntryIterator<DbMap> + 'tx> {
         internal::greater_equal_iter(self.dbtx, self.map_id, key.encode())
     }
 
@@ -252,7 +252,7 @@ where
     pub fn greater_equal_iter_keys(
         &self,
         key: &DbMap::Key,
-    ) -> crate::Result<impl 'tx + Iterator<Item = DbMap::Key>> {
+    ) -> crate::Result<impl Iterator<Item = DbMap::Key> + 'tx> {
         internal::greater_equal_iter_keys::<DbMap, _>(self.dbtx, self.map_id, key.encode())
     }
 
@@ -260,7 +260,7 @@ where
     pub fn greater_equal_iter_decoded(
         &self,
         key: &DbMap::Key,
-    ) -> crate::Result<impl 'tx + Iterator<Item = (DbMap::Key, DbMap::Value)>> {
+    ) -> crate::Result<impl Iterator<Item = (DbMap::Key, DbMap::Value)> + 'tx> {
         self.greater_equal_iter(key).map(|item| item.map(|(k, v)| (k, v.decode())))
     }
 }
@@ -297,7 +297,7 @@ where
     }
 
     /// Iterator over entries with key starting with given prefix
-    pub fn prefix_iter<Pfx>(&self, prefix: &Pfx) -> crate::Result<impl '_ + EntryIterator<DbMap>>
+    pub fn prefix_iter<Pfx>(&self, prefix: &Pfx) -> crate::Result<impl EntryIterator<DbMap> + '_>
     where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
