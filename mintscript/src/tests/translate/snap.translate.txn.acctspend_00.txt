@@ -1,26 +1,24 @@
-WitnessScript(
-    Signature(
-        PublicKey(
-            PublicKey {
-                pub_key: Secp256k1Schnorr(
-                    Secp256k1PublicKey {
-                        pubkey_data: PublicKey(
-                            fc242c2a5be903a4608aff7cbf5f988e0b115370c05af4e5380979a2367f9f81eccb6b207940933c81eaf0a2307af8caa50c5e32885d571142b1162b74a55b85,
-                        ),
-                    },
-                ),
-            },
-        ),
-        Standard(
-            StandardInputSignature {
-                sighash_type: SigHashType(
-                    1,
-                ),
-                raw_signature: [
-                    84,
-                    84,
-                ],
-            },
-        ),
+Signature(
+    PublicKey(
+        PublicKey {
+            pub_key: Secp256k1Schnorr(
+                Secp256k1PublicKey {
+                    pubkey_data: PublicKey(
+                        fc242c2a5be903a4608aff7cbf5f988e0b115370c05af4e5380979a2367f9f81eccb6b207940933c81eaf0a2307af8caa50c5e32885d571142b1162b74a55b85,
+                    ),
+                },
+            ),
+        },
+    ),
+    Standard(
+        StandardInputSignature {
+            sighash_type: SigHashType(
+                1,
+            ),
+            raw_signature: [
+                84,
+                84,
+            ],
+        },
     ),
 )

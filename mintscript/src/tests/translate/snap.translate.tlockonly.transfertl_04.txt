@@ -1,9 +1,7 @@
-WitnessScript(
-    Timelock(
-        UntilHeight(
-            BlockHeight(
-                999999,
-            ),
+Timelock(
+    UntilHeight(
+        BlockHeight(
+            999999,
         ),
     ),
 )

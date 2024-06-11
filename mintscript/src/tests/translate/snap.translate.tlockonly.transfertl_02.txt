@@ -1,7 +1,5 @@
-WitnessScript(
-    Timelock(
-        ForSeconds(
-            31536000,
-        ),
+Timelock(
+    ForSeconds(
+        31536000,
     ),
 )

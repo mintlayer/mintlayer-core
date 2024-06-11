@@ -1,40 +1,34 @@
-WitnessScript(
-    Threshold(
-        Threshold {
-            required: 2,
-            conditions: [
-                Satisfied(
-                    WitnessScript(
-                        Timelock(
-                            UntilHeight(
-                                BlockHeight(
-                                    999999,
-                                ),
-                            ),
+Threshold(
+    Threshold {
+        required: 2,
+        conditions: [
+            Satisfied(
+                Timelock(
+                    UntilHeight(
+                        BlockHeight(
+                            999999,
                         ),
                     ),
                 ),
-                Satisfied(
-                    WitnessScript(
-                        Signature(
-                            PublicKey(
-                                PublicKey {
-                                    pub_key: Secp256k1Schnorr(
-                                        Secp256k1PublicKey {
-                                            pubkey_data: PublicKey(
-                                                bb4ea4d8c6d265a9c95b9b0da64464b4d47dfcca5b2e8e2cfca73e2373dccaebbcb34d1438da47a60c899126101020a3a5804ab10e1fd88bf6bf927b7e8c009c,
-                                            ),
-                                        },
+            ),
+            Satisfied(
+                Signature(
+                    PublicKey(
+                        PublicKey {
+                            pub_key: Secp256k1Schnorr(
+                                Secp256k1PublicKey {
+                                    pubkey_data: PublicKey(
+                                        bb4ea4d8c6d265a9c95b9b0da64464b4d47dfcca5b2e8e2cfca73e2373dccaebbcb34d1438da47a60c899126101020a3a5804ab10e1fd88bf6bf927b7e8c009c,
                                     ),
                                 },
                             ),
-                            NoSignature(
-                                None,
-                            ),
-                        ),
+                        },
+                    ),
+                    NoSignature(
+                        None,
                     ),
                 ),
-            ],
-        },
-    ),
+            ),
+        ],
+    },
 )

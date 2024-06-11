@@ -1,8 +1,6 @@
-WitnessScript(
-    Threshold(
-        Threshold {
-            required: 0,
-            conditions: [],
-        },
-    ),
+Threshold(
+    Threshold {
+        required: 0,
+        conditions: [],
+    },
 )

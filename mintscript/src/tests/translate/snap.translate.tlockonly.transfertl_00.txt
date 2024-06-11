@@ -1,7 +1,5 @@
-WitnessScript(
-    Timelock(
-        ForBlockCount(
-            600,
-        ),
+Timelock(
+    ForBlockCount(
+        600,
     ),
 )

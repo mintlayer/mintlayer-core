@@ -1,9 +1,7 @@
-WitnessScript(
-    Timelock(
-        UntilTime(
-            BlockTimestamp {
-                timestamp: 1718120714,
-            },
-        ),
+Timelock(
+    UntilTime(
+        BlockTimestamp {
+            timestamp: 1718120714,
+        },
     ),
 )

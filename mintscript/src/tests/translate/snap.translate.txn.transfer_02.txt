@@ -1,18 +1,16 @@
-WitnessScript(
-    Signature(
-        PublicKeyHash(
-            0x1212121212121212121212121212121212121212,
-        ),
-        Standard(
-            StandardInputSignature {
-                sighash_type: SigHashType(
-                    1,
-                ),
-                raw_signature: [
-                    82,
-                    82,
-                ],
-            },
-        ),
+Signature(
+    PublicKeyHash(
+        0x1212121212121212121212121212121212121212,
+    ),
+    Standard(
+        StandardInputSignature {
+            sighash_type: SigHashType(
+                1,
+            ),
+            raw_signature: [
+                82,
+                82,
+            ],
+        },
     ),
 )

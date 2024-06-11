@@ -17,7 +17,7 @@
 
 use common::chain::{signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination};
 
-use super::{WitnessScript, WitnessScriptInner};
+use super::WitnessScript;
 
 /// A script processing object
 ///
@@ -70,14 +70,14 @@ impl WitnessScript {
         let mut eval_stack = vec![self];
 
         while let Some(expr) = eval_stack.pop() {
-            match expr.inner() {
-                WitnessScriptInner::Signature(destination, signature) => {
+            match expr {
+                Self::Signature(destination, signature) => {
                     v.visit_signature(destination, signature).map_err(ScriptError::Signature)?;
                 }
-                WitnessScriptInner::Timelock(tl) => {
+                Self::Timelock(tl) => {
                     v.visit_timelock(tl).map_err(ScriptError::Timelock)?;
                 }
-                WitnessScriptInner::Threshold(thresh) => {
+                Self::Threshold(thresh) => {
                     eval_stack.extend(thresh.collect_satisfied()?.into_iter().rev());
                 }
             }

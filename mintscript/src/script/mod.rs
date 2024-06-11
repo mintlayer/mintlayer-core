@@ -70,7 +70,7 @@ impl Threshold {
 
     /// A [WitnessScript] consisting of only this threshold.
     pub const fn into_script(self) -> WitnessScript {
-        WitnessScriptInner::Threshold(self).into_script()
+        WitnessScript::Threshold(self)
     }
 
     /// Get all the conditions in this threshold construct.
@@ -121,22 +121,13 @@ impl Threshold {
     }
 }
 
+/// Script together with witness data presumably satisfying the script.
 #[derive(Clone, PartialEq, Eq, Debug)]
-enum WitnessScriptInner {
+pub enum WitnessScript {
     Threshold(Threshold),
     Signature(Destination, InputWitness),
     Timelock(OutputTimeLock),
 }
-
-impl WitnessScriptInner {
-    const fn into_script(self) -> WitnessScript {
-        WitnessScript(self)
-    }
-}
-
-/// Script together with witness data presumably satisfying the script.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct WitnessScript(WitnessScriptInner);
 
 impl WitnessScript {
     /// Trivially satisfied script (represented as 0-of-0 threshold)
@@ -144,12 +135,12 @@ impl WitnessScript {
 
     /// Construct a public key / signature lock
     pub const fn signature(dest: Destination, sig: InputWitness) -> Self {
-        WitnessScriptInner::Signature(dest, sig).into_script()
+        Self::Signature(dest, sig)
     }
 
     /// Construct a timelock condition
     pub const fn timelock(tl: OutputTimeLock) -> Self {
-        WitnessScriptInner::Timelock(tl).into_script()
+        Self::Timelock(tl)
     }
 
     /// Construct a threshold. See [Threshold::new_unchecked].
@@ -179,10 +170,6 @@ impl WitnessScript {
     /// Construct a conjunction of multiple satisfied conditions.
     pub fn satisfied_conjunction(conds: impl IntoIterator<Item = WitnessScript>) -> Self {
         Self::conjunction(conds.into_iter().map(ScriptCondition::Satisfied).collect())
-    }
-
-    const fn inner(&self) -> &WitnessScriptInner {
-        &self.0
     }
 }
 
