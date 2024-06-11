@@ -16,14 +16,14 @@
 //! A simple adaptor to add transaction capability to a type that only implements the basic
 //! read/write operations, giving a full-featured (albeit not necessarily efficient) backend.
 
-mod prefix_iter_rw;
-
 use crate::{
     adaptor::{Construct, CoreOps},
     backend::{self, ReadOps, WriteOps},
+    util::MapPrefixIter,
     Data, DbDesc, DbMapCount, DbMapId, DbMapsData,
 };
 
+use itertools::EitherOrBoth;
 use std::{borrow::Cow, collections::BTreeMap};
 use utils::{const_value::ConstValue, sync};
 
@@ -31,14 +31,24 @@ use utils::{const_value::ConstValue, sync};
 pub struct TxRo<'tx, T>(sync::RwLockReadGuard<'tx, T>);
 
 impl<'tx, T: ReadOps> ReadOps for TxRo<'tx, T> {
-    type PrefixIter<'i> = T::PrefixIter<'i> where Self: 'i;
-
     fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
         self.0.get(map_id, key)
     }
 
-    fn prefix_iter(&self, map_id: DbMapId, prefix: Data) -> crate::Result<Self::PrefixIter<'_>> {
+    fn prefix_iter(
+        &self,
+        map_id: DbMapId,
+        prefix: Data,
+    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + '_> {
         self.0.prefix_iter(map_id, prefix)
+    }
+
+    fn greater_equal_iter(
+        &self,
+        map_id: DbMapId,
+        key: Data,
+    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        self.0.greater_equal_iter(map_id, key)
     }
 }
 
@@ -61,8 +71,6 @@ impl<'tx, T> TxRw<'tx, T> {
 }
 
 impl<'tx, T: ReadOps> ReadOps for TxRw<'tx, T> {
-    type PrefixIter<'i> = prefix_iter_rw::Iter<'i, T> where Self: 'i;
-
     fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
         self.deltas[map_id].get(key).map_or_else(
             || self.db.get(map_id, key),
@@ -70,9 +78,46 @@ impl<'tx, T: ReadOps> ReadOps for TxRw<'tx, T> {
         )
     }
 
-    fn prefix_iter(&self, map_id: DbMapId, prefix: Data) -> crate::Result<Self::PrefixIter<'_>> {
-        prefix_iter_rw::iter(self, map_id, prefix)
+    fn prefix_iter(
+        &self,
+        map_id: DbMapId,
+        prefix: Data,
+    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        let db_iter = self.db.prefix_iter(map_id, prefix.clone())?;
+        let delta_iter = MapPrefixIter::new(&self.deltas[map_id], prefix.clone());
+
+        Ok(merge_iterators(db_iter, delta_iter))
     }
+
+    fn greater_equal_iter(
+        &self,
+        map_id: DbMapId,
+        key: Data,
+    ) -> crate::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        let db_iter = self.db.greater_equal_iter(map_id, key.clone())?;
+        let delta_iter = self.deltas[map_id].range(key..);
+
+        Ok(merge_iterators(db_iter, delta_iter))
+    }
+}
+
+fn merge_iterators<'a>(
+    db_iter: impl Iterator<Item = (Data, Data)> + 'a,
+    delta_iter: impl Iterator<Item = (&'a Data, &'a Option<Data>)> + 'a,
+) -> impl Iterator<Item = (Data, Data)> + 'a {
+    itertools::merge_join_by(db_iter, delta_iter, |(k1, _), (k2, _)| k1.cmp(k2)).filter_map(
+        |item| {
+            match item {
+                // Item only in original db, just present it
+                EitherOrBoth::Left(l) => Some(l),
+                // If the entry is present in both database and the delta map, the delta map takes
+                // precedence. If it only is in the delta map, just take that.
+                EitherOrBoth::Right((k, v)) | EitherOrBoth::Both(_, (k, v)) => {
+                    v.as_ref().map(|v| (k.clone(), v.clone()))
+                }
+            }
+        },
+    )
 }
 
 impl<'tx, T> WriteOps for TxRw<'tx, T> {

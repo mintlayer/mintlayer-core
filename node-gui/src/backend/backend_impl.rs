@@ -1297,7 +1297,7 @@ async fn select_acc_and_execute_cmd<N>(
     chain_config: &ChainConfig,
 ) -> Result<ConsoleCommand, BackendError>
 where
-    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
+    N: NodeInterface + Clone + Send + Sync + Debug + 'static,
 {
     c.handle_manageable_wallet_command(
         chain_config,

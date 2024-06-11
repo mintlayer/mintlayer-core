@@ -119,7 +119,7 @@ impl Manager {
     /// Add a subsystem that does not require custom initialization code.
     pub fn add_subsystem<S>(&mut self, name: &'static str, subsys: S) -> Handle<S::Interface>
     where
-        S: 'static + Send + Sync + Subsystem,
+        S: Send + Sync + Subsystem + 'static,
     {
         self.add_custom_subsystem(name, move |_| async {
             Result::<S, std::convert::Infallible>::Ok(subsys)
@@ -129,7 +129,7 @@ impl Manager {
     /// Add a subsystem. Use the provided object directly as the subsystem state object.
     pub fn add_direct_subsystem<S>(&mut self, name: &'static str, subsys: S) -> Handle<S>
     where
-        S: 'static + Send + Sync,
+        S: Send + Sync + 'static,
     {
         self.add_subsystem(name, crate::wrappers::Direct::new(subsys))
     }

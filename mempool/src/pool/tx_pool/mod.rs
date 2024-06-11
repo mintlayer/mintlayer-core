@@ -330,7 +330,7 @@ impl<M: MemoryUsageEstimator> TxPool<M> {
     fn conflicting_tx_ids<'a, O: crate::tx_origin::IsOrigin>(
         &'a self,
         entry: &'a TxEntry<O>,
-    ) -> impl 'a + Iterator<Item = &'a Id<Transaction>> {
+    ) -> impl Iterator<Item = &'a Id<Transaction>> + 'a {
         entry.requires().filter_map(|dep| self.store.find_conflicting_tx(&dep))
     }
 

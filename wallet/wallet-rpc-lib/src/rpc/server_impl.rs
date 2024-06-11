@@ -54,7 +54,7 @@ use crate::{
 };
 
 #[async_trait::async_trait]
-impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletEventsRpcServer
+impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletEventsRpcServer
     for WalletRpc<N>
 {
     async fn subscribe_wallet_events(
@@ -67,7 +67,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletEventsRpcSe
 }
 
 #[async_trait::async_trait]
-impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServer
+impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> ColdWalletRpcServer
     for WalletRpc<N>
 {
     async fn shutdown(&self) -> rpc::RpcResult<()> {
@@ -299,7 +299,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> ColdWalletRpcServ
 }
 
 #[async_trait::async_trait]
-impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcServer for WalletRpc<N> {
+impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer for WalletRpc<N> {
     async fn rescan(&self) -> rpc::RpcResult<()> {
         rpc::handle_result(self.rescan().await)
     }

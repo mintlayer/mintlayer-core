@@ -6,8 +6,14 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+common = { path = "../../common" }
 logging = { path = '../../logging' }
 utils = { path = '../../utils' }
 
 itertools.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+test-utils = { path = "../../test-utils" }
+
+rstest.workspace = true

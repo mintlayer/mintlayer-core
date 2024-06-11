@@ -123,9 +123,10 @@ fn put_iterator_count_matches<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
     let dbtx = store.transaction_ro().unwrap();
     assert_eq!(dbtx.prefix_iter(MAPID.0, vec![]).unwrap().count(), 4);
+    assert_eq!(dbtx.greater_equal_iter(MAPID.0, vec![]).unwrap().count(), 4);
 }
 
-fn put_and_iterate_over_prefixes<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+fn put_and_iterate<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
     let store = backend_fn().open(desc(1)).expect("db open to succeed");
 
     // Populate the database with some values
@@ -142,38 +143,59 @@ fn put_and_iterate_over_prefixes<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>
     dbtx.put(MAPID.0, b"aa".to_vec(), b"0".to_vec()).unwrap();
     dbtx.commit().expect("commit to succeed");
 
-    // Check for a non-existent prefix
-    assert_eq!(
-        store
-            .transaction_ro()
-            .unwrap()
-            .prefix_iter(MAPID.0, b"foo".to_vec())
-            .unwrap()
-            .next(),
-        None,
-    );
+    // prefix_iter
+    {
+        let check = |range: std::ops::Range<usize>, prefix: Data| {
+            let dbtx = store.transaction_ro().unwrap();
+            let vals: Vec<_> =
+                dbtx.prefix_iter(MAPID.0, prefix.clone()).unwrap().map(|x| x.1).collect();
+            let expected: Vec<_> = range.map(|x| Data::from(x.to_string())).collect();
+            assert_eq!(vals, expected, "prefix={prefix:?}");
+            drop(dbtx);
+        };
 
-    // Check for items that are supposed to be present
-    let check = |range: std::ops::RangeInclusive<usize>, prefix: Data| {
-        let dbtx = store.transaction_ro().unwrap();
-        let vals: Vec<_> =
-            dbtx.prefix_iter(MAPID.0, prefix.clone()).unwrap().map(|x| x.1).collect();
-        let expected: Vec<_> = range.map(|x| Data::from(x.to_string())).collect();
-        assert_eq!(vals, expected, "prefix={prefix:?}");
-        drop(dbtx);
-    };
+        check(0..10, b"".to_vec());
+        check(0..5, b"a".to_vec());
+        check(0..1, b"aa".to_vec());
+        check(2..5, b"ac".to_vec());
+        check(5..9, b"b".to_vec());
+        check(9..10, b"x".to_vec());
+        check(0..0, b"foo".to_vec());
+        check(0..0, b"zzz".to_vec());
+    }
 
-    check(0..=9, b"".to_vec());
-    check(0..=4, b"a".to_vec());
-    check(0..=0, b"aa".to_vec());
-    check(2..=4, b"ac".to_vec());
-    check(5..=8, b"b".to_vec());
-    check(9..=9, b"x".to_vec());
+    // greater_equal_iter
+    {
+        let check = |range: std::ops::Range<usize>, prefix: Data| {
+            let dbtx = store.transaction_ro().unwrap();
+            let vals: Vec<_> =
+                dbtx.greater_equal_iter(MAPID.0, prefix.clone()).unwrap().map(|x| x.1).collect();
+            let expected: Vec<_> = range.map(|x| Data::from(x.to_string())).collect();
+            assert_eq!(vals, expected, "prefix={prefix:?}");
+            drop(dbtx);
+        };
+
+        check(0..10, b"".to_vec());
+        check(0..10, b"a".to_vec());
+        check(0..10, b"aa".to_vec());
+        check(2..10, b"ac".to_vec());
+        check(5..10, b"b".to_vec());
+        check(9..10, b"x".to_vec());
+        check(9..10, b"foo".to_vec());
+        check(0..0, b"zzz".to_vec());
+    }
 }
 
-// Check for items that are supposed to be present
-fn check_prefix<Tx: ReadOps>(dbtx: &Tx, prefix: Data, expected: &[(&str, &str)]) {
+fn check_prefix_iter<Tx: ReadOps>(dbtx: &Tx, prefix: Data, expected: &[(&str, &str)]) {
     let entries = dbtx.prefix_iter(MAPID.0, prefix).unwrap();
+    let expected = expected
+        .iter()
+        .map(|(x, y)| (Data::from(x.to_string()), Data::from(y.to_string())));
+    assert!(entries.eq(expected));
+}
+
+fn check_greater_equal_iter<Tx: ReadOps>(dbtx: &Tx, key: Data, expected: &[(&str, &str)]) {
+    let entries = dbtx.greater_equal_iter(MAPID.0, key).unwrap();
     let expected = expected
         .iter()
         .map(|(x, y)| (Data::from(x.to_string()), Data::from(y.to_string())));
@@ -185,8 +207,9 @@ fn put_and_iterate_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) 
 
     let expected_full_0 =
         [("aa", "0"), ("ab", "1"), ("ac", "2"), ("aca", "3"), ("acb", "4"), ("b", "5")];
-    let expected_aa_0 = [("aa", "0")];
-    let expected_ac_0 = [("ac", "2"), ("aca", "3"), ("acb", "4")];
+    let expected_pfx_aa_0 = [("aa", "0")];
+    let expected_pfx_ac_0 = [("ac", "2"), ("aca", "3"), ("acb", "4")];
+    let expected_ge_ac_0 = [("ac", "2"), ("aca", "3"), ("acb", "4"), ("b", "5")];
 
     // Populate the database with some
     let mut dbtx = store.transaction_rw(None).unwrap();
@@ -197,38 +220,51 @@ fn put_and_iterate_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) 
     dbtx.put(MAPID.0, b"acb".to_vec(), b"4".to_vec()).unwrap();
     dbtx.put(MAPID.0, b"b".to_vec(), b"5".to_vec()).unwrap();
     // Check db contents
-    check_prefix(&dbtx, b"".to_vec(), &expected_full_0);
-    check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_0);
-    check_prefix(&dbtx, b"ac".to_vec(), &expected_ac_0);
+    check_prefix_iter(&dbtx, b"".to_vec(), &expected_full_0);
+    check_prefix_iter(&dbtx, b"aa".to_vec(), &expected_pfx_aa_0);
+    check_prefix_iter(&dbtx, b"ac".to_vec(), &expected_pfx_ac_0);
+    check_greater_equal_iter(&dbtx, b"".to_vec(), &expected_full_0);
+    check_greater_equal_iter(&dbtx, b"aa".to_vec(), &expected_full_0);
+    check_greater_equal_iter(&dbtx, b"ac".to_vec(), &expected_ge_ac_0);
     dbtx.commit().expect("commit to succeed");
 
     // Check db contents after a commit
     let dbtx = store.transaction_ro().unwrap();
-    check_prefix(&dbtx, b"".to_vec(), &expected_full_0);
-    check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_0);
-    check_prefix(&dbtx, b"ac".to_vec(), &expected_ac_0);
+    check_prefix_iter(&dbtx, b"".to_vec(), &expected_full_0);
+    check_prefix_iter(&dbtx, b"aa".to_vec(), &expected_pfx_aa_0);
+    check_prefix_iter(&dbtx, b"ac".to_vec(), &expected_pfx_ac_0);
+    check_greater_equal_iter(&dbtx, b"".to_vec(), &expected_full_0);
+    check_greater_equal_iter(&dbtx, b"aa".to_vec(), &expected_full_0);
+    check_greater_equal_iter(&dbtx, b"ac".to_vec(), &expected_ge_ac_0);
     drop(dbtx);
 
     let expected_full_1 = [("aa", "0"), ("ac", "2"), ("acb", "4"), ("b", "5")];
-    let expected_aa_1 = [("aa", "0")];
-    let expected_ac_1 = [("ac", "2"), ("acb", "4")];
+    let expected_pfx_aa_1 = [("aa", "0")];
+    let expected_pfx_ac_1 = [("ac", "2"), ("acb", "4")];
+    let expected_ge_ac_1 = [("ac", "2"), ("acb", "4"), ("b", "5")];
 
     // Delete some entries
     let mut dbtx = store.transaction_rw(None).unwrap();
     dbtx.del(MAPID.0, b"aca").unwrap();
     dbtx.del(MAPID.0, b"ab").unwrap();
     // Check updated contents
-    check_prefix(&dbtx, b"".to_vec(), &expected_full_1);
-    check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_1);
-    check_prefix(&dbtx, b"ac".to_vec(), &expected_ac_1);
+    check_prefix_iter(&dbtx, b"".to_vec(), &expected_full_1);
+    check_prefix_iter(&dbtx, b"aa".to_vec(), &expected_pfx_aa_1);
+    check_prefix_iter(&dbtx, b"ac".to_vec(), &expected_pfx_ac_1);
+    check_greater_equal_iter(&dbtx, b"".to_vec(), &expected_full_1);
+    check_greater_equal_iter(&dbtx, b"aa".to_vec(), &expected_full_1);
+    check_greater_equal_iter(&dbtx, b"ac".to_vec(), &expected_ge_ac_1);
     // Abort the transaction
     drop(dbtx);
 
     // Check updated contents after a commit
     let dbtx = store.transaction_ro().unwrap();
-    check_prefix(&dbtx, b"".to_vec(), &expected_full_0);
-    check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_0);
-    check_prefix(&dbtx, b"ac".to_vec(), &expected_ac_0);
+    check_prefix_iter(&dbtx, b"".to_vec(), &expected_full_0);
+    check_prefix_iter(&dbtx, b"aa".to_vec(), &expected_pfx_aa_0);
+    check_prefix_iter(&dbtx, b"ac".to_vec(), &expected_pfx_ac_0);
+    check_greater_equal_iter(&dbtx, b"".to_vec(), &expected_full_0);
+    check_greater_equal_iter(&dbtx, b"aa".to_vec(), &expected_full_0);
+    check_greater_equal_iter(&dbtx, b"ac".to_vec(), &expected_ge_ac_0);
     drop(dbtx);
 
     // Delete the items, this time for real
@@ -236,17 +272,23 @@ fn put_and_iterate_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) 
     dbtx.del(MAPID.0, b"aca").unwrap();
     dbtx.del(MAPID.0, b"ab").unwrap();
     // Check updated contents
-    check_prefix(&dbtx, b"".to_vec(), &expected_full_1);
-    check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_1);
-    check_prefix(&dbtx, b"ac".to_vec(), &expected_ac_1);
+    check_prefix_iter(&dbtx, b"".to_vec(), &expected_full_1);
+    check_prefix_iter(&dbtx, b"aa".to_vec(), &expected_pfx_aa_1);
+    check_prefix_iter(&dbtx, b"ac".to_vec(), &expected_pfx_ac_1);
+    check_greater_equal_iter(&dbtx, b"".to_vec(), &expected_full_1);
+    check_greater_equal_iter(&dbtx, b"aa".to_vec(), &expected_full_1);
+    check_greater_equal_iter(&dbtx, b"ac".to_vec(), &expected_ge_ac_1);
     // Abort the transaction
     dbtx.commit().unwrap();
 
     // Check updated contents after a commit
     let dbtx = store.transaction_ro().unwrap();
-    check_prefix(&dbtx, b"".to_vec(), &expected_full_1);
-    check_prefix(&dbtx, b"aa".to_vec(), &expected_aa_1);
-    check_prefix(&dbtx, b"ac".to_vec(), &expected_ac_1);
+    check_prefix_iter(&dbtx, b"".to_vec(), &expected_full_1);
+    check_prefix_iter(&dbtx, b"aa".to_vec(), &expected_pfx_aa_1);
+    check_prefix_iter(&dbtx, b"ac".to_vec(), &expected_pfx_ac_1);
+    check_greater_equal_iter(&dbtx, b"".to_vec(), &expected_full_1);
+    check_greater_equal_iter(&dbtx, b"aa".to_vec(), &expected_full_1);
+    check_greater_equal_iter(&dbtx, b"ac".to_vec(), &expected_ge_ac_1);
     drop(dbtx);
 }
 
@@ -254,7 +296,7 @@ tests![
     put_and_abort,
     put_and_commit,
     put_and_iterate_delete_some,
-    put_and_iterate_over_prefixes,
+    put_and_iterate,
     put_iterator_count_matches,
     put_twice_then_commit_read_last,
     put_two_under_different_keys,

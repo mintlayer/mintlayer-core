@@ -100,7 +100,7 @@ struct P2p<T: NetworkingService> {
 
 impl<T> P2p<T>
 where
-    T: 'static + NetworkingService + Send + Sync,
+    T: NetworkingService + Send + Sync + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::MessagingHandle: MessagingService,
     T::SyncingEventReceiver: SyncingEventReceiver,
@@ -267,7 +267,7 @@ pub struct P2pInit<S: PeerDbStorage + 'static> {
 impl<S: PeerDbStorage + 'static> P2pInit<S> {
     async fn init<T>(self, transport: T::Transport) -> Result<P2p<T>>
     where
-        T: 'static + NetworkingService + Send + Sync,
+        T: NetworkingService + Send + Sync + 'static,
         T::ConnectivityHandle: ConnectivityService<T>,
         T::MessagingHandle: MessagingService,
         T::SyncingEventReceiver: SyncingEventReceiver,
@@ -395,7 +395,7 @@ pub fn make_p2p<S: PeerDbStorage + 'static>(
 #[async_trait::async_trait]
 impl<T: NetworkingService> subsystem::Subsystem for P2p<T>
 where
-    T: 'static + NetworkingService + Send + Sync,
+    T: NetworkingService + Send + Sync + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::MessagingHandle: MessagingService,
     T::SyncingEventReceiver: SyncingEventReceiver,

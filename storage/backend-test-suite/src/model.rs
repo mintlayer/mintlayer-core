@@ -116,7 +116,7 @@ impl Model {
     }
 
     /// Iterator over key-value pairs
-    pub fn iter(&self) -> impl '_ + Iterator<Item = (&[u8], &[u8])> {
+    pub fn iter(&self) -> impl Iterator<Item = (&[u8], &[u8])> + '_ {
         self.0.iter().map(|(k, v)| (k.as_ref(), v.as_ref()))
     }
 }

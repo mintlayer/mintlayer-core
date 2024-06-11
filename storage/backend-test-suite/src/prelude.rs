@@ -24,8 +24,8 @@ pub use utils::{sync, thread};
 pub use std::{mem::drop, sync::Arc};
 
 /// A function to construct a backend
-pub trait BackendFn<B: Backend>: 'static + Fn() -> B + Send + Sync {}
-impl<B: Backend, F: 'static + Fn() -> B + Send + Sync> BackendFn<B> for F {}
+pub trait BackendFn<B: Backend>: Fn() -> B + Send + Sync + 'static {}
+impl<B: Backend, F: Fn() -> B + Send + Sync + 'static> BackendFn<B> for F {}
 
 /// A couple of DB map ID constants
 pub const MAPID: (DbMapId, DbMapId) = (DbMapId::new(0), DbMapId::new(1));
@@ -62,7 +62,7 @@ pub mod support {
     use libtest_mimic::Trial;
 
     /// Create the test list
-    pub fn create_tests<B: 'static + Backend, F: BackendFn<B>>(
+    pub fn create_tests<B: Backend + 'static, F: BackendFn<B>>(
         backend_fn: Arc<F>,
         tests: impl IntoIterator<Item = (&'static str, fn(Arc<F>))>,
     ) -> impl Iterator<Item = Trial> {
@@ -78,8 +78,8 @@ pub mod support {
 }
 
 macro_rules! tests {
-    ($($name:ident),* $(,)?) => {
-        pub fn tests<B: 'static + $crate::prelude::Backend, F: $crate::prelude::BackendFn<B>>(
+    ($($name:path),* $(,)?) => {
+        pub fn tests<B: $crate::prelude::Backend + 'static, F: $crate::prelude::BackendFn<B>>(
             backend_fn: Arc<F>,
         ) -> impl std::iter::Iterator<Item = libtest_mimic::Trial> {
             $crate::prelude::support::create_tests(backend_fn, [

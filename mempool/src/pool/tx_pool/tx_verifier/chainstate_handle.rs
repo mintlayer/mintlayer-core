@@ -97,9 +97,9 @@ impl ChainstateHandle {
 
 impl ChainstateHandle {
     /// Chainstate subsystem call. We assume chainstate is alive here.
-    fn call<R: 'static + Send>(
+    fn call<R: Send + 'static>(
         &self,
-        func: impl 'static + Send + FnOnce(&dyn ChainstateInterface) -> Result<R, ChainstateError>,
+        func: impl Send + FnOnce(&dyn ChainstateInterface) -> Result<R, ChainstateError> + 'static,
     ) -> Result<R, Error> {
         Ok(self.0.call(|c| func(c))??)
     }

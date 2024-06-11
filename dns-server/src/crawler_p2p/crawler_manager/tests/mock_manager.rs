@@ -294,7 +294,7 @@ pub fn test_crawler(
     reserved_nodes: Vec<SocketAddress>,
     rng: &mut impl Rng,
 ) -> (
-    CrawlerManager<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
+    CrawlerManager<MockNetworkingService, DnsServerStorageImpl<storage_inmemory::InMemory>>,
     MockStateRef,
     mpsc::UnboundedReceiver<DnsServerCommand>,
     BasicTestTimeGetter,
@@ -329,7 +329,7 @@ pub fn test_crawler(
     };
     let sync = MockSyncingEventReceiver {};
 
-    let storage = storage::inmemory::InMemory::new();
+    let storage = storage_inmemory::InMemory::new();
     let store = DnsServerStorageImpl::new(storage).unwrap();
 
     let (dns_server_cmd_tx, dns_server_cmd_rx) = mpsc::unbounded_channel();
@@ -357,7 +357,7 @@ pub fn test_crawler(
 pub async fn advance_time(
     crawler: &mut CrawlerManager<
         MockNetworkingService,
-        DnsServerStorageImpl<storage::inmemory::InMemory>,
+        DnsServerStorageImpl<storage_inmemory::InMemory>,
     >,
     time_getter: &BasicTestTimeGetter,
     step: Duration,

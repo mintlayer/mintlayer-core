@@ -15,7 +15,8 @@ logging = { path = "../../logging" }
 pos-accounting = { path = "../../pos-accounting" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
-storage = { path = "../../storage", features = ["inmemory"] }
+storage = { path = "../../storage" }
+storage-inmemory = { path = "../../storage/inmemory" }
 tokens-accounting = { path = "../../tokens-accounting" }
 utils = { path = "../../utils" }
 utxo = { path = "../../utxo" }

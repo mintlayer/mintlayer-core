@@ -73,7 +73,7 @@ pub enum WalletRpcHandlesClientError<N: NodeInterface> {
     AddressError(#[from] AddressError),
 }
 
-impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcHandlesClient<N> {
+impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcHandlesClient<N> {
     pub fn new(wallet_rpc: WalletRpc<N>, server_rpc: Option<rpc::Rpc>) -> Self {
         Self {
             wallet_rpc,
@@ -83,7 +83,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletRpcHandlesC
 }
 
 #[async_trait::async_trait]
-impl<N: NodeInterface + Clone + Send + Sync + 'static + Debug> WalletInterface
+impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
     for WalletRpcHandlesClient<N>
 {
     type Error = WalletRpcHandlesClientError<N>;

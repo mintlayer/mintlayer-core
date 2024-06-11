@@ -99,7 +99,7 @@ pub async fn start_services<N>(
     cold_wallet: bool,
 ) -> Result<(WalletService<N>, rpc::Rpc), StartupError<N>>
 where
-    N: NodeInterface + Clone + Sync + Send + 'static + Debug,
+    N: NodeInterface + Clone + Sync + Send + Debug + 'static,
 {
     // Start the wallet service
     let wallet_service = WalletService::start(

@@ -15,7 +15,7 @@
 
 /// Defines hooks into a subsystem lifecycle.
 #[async_trait::async_trait]
-pub trait Subsystem: 'static + Send + Sync + Sized {
+pub trait Subsystem: Send + Sync + Sized + 'static {
     type Interface: ?Sized + Send + Sync;
 
     /// Get the call interface (immutable version)

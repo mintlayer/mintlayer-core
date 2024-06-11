@@ -69,9 +69,27 @@ pub struct DbTx<'m, Tx> {
 type DbTxRo<'a> = DbTx<'a, lmdb::RoTransaction<'a>>;
 type DbTxRw<'a> = DbTx<'a, lmdb::RwTransaction<'a>>;
 
-impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
-    type PrefixIter<'i> = PrefixIter<'i, lmdb::RoCursor<'i>> where Self: 'i;
+impl<Tx: lmdb::Transaction> DbTx<'_, Tx> {
+    fn greater_equal_iter_impl(
+        &self,
+        map_id: DbMapId,
+        key: &[u8],
+    ) -> storage_core::Result<lmdb::Iter<'_, impl Cursor<'_>>> {
+        let cursor = self
+            .tx
+            .open_ro_cursor(self.backend.dbs[map_id])
+            .or_else(error::process_with_err)?;
+        let iter = if key.is_empty() {
+            cursor.into_iter_start()
+        } else {
+            cursor.into_iter_from(key)
+        };
 
+        Ok(iter)
+    }
+}
+
+impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
     fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
         self.tx
             .get(self.backend.dbs[map_id], &key)
@@ -82,17 +100,22 @@ impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
         &self,
         map_id: DbMapId,
         prefix: Data,
-    ) -> storage_core::Result<Self::PrefixIter<'_>> {
-        let cursor = self
-            .tx
-            .open_ro_cursor(self.backend.dbs[map_id])
-            .or_else(error::process_with_err)?;
-        let iter = if prefix.is_empty() {
-            cursor.into_iter_start()
-        } else {
-            cursor.into_iter_from(prefix.as_slice())
-        };
+    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        let iter = self.greater_equal_iter_impl(map_id, prefix.as_slice())?;
         Ok(PrefixIter::new(iter, prefix))
+    }
+
+    fn greater_equal_iter(
+        &self,
+        map_id: DbMapId,
+        key: Data,
+    ) -> storage_core::Result<impl Iterator<Item = (Data, Data)> + '_> {
+        let iter = self.greater_equal_iter_impl(map_id, key.as_slice())?.map(|result| {
+            let (k, v) = result.expect("iteration to proceed");
+            (k.to_vec(), v.to_vec())
+        });
+
+        Ok(iter)
     }
 }
 

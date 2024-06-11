@@ -24,25 +24,52 @@ pub fn create_table_query(table_name: &str) -> String {
 /// SQL queries that are customized per an individual key/value database
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub struct SqliteQuery {
+    /// The name of the database, used in cases when the query must be constructed on the fly.
+    db_name: String,
     /// Used for the get operation
-    pub get_query: String,
+    get_query: String,
     /// Used for the prefix iter operation
-    pub prefix_iter_query: String,
+    prefix_iter_query: String,
     /// Used for the put operation
-    pub put_query: String,
+    put_query: String,
     /// Used for the delete operation
-    pub delete_query: String,
+    delete_query: String,
 }
 
 impl SqliteQuery {
     pub fn from_desc(desc: &DbMapDesc) -> Self {
         let name = desc.name();
         Self {
+            db_name: name.to_owned(),
             get_query: format!("SELECT value FROM {name} WHERE key = ?"),
             prefix_iter_query: format!("SELECT key, value FROM {name} ORDER BY key"),
             put_query: format!("INSERT or REPLACE into {name} values(?, ?)"),
             delete_query: format!("DELETE FROM {name} WHERE key = ?"),
         }
+    }
+
+    pub fn get_query(&self) -> &str {
+        &self.get_query
+    }
+
+    pub fn prefix_iter_query(&self) -> &str {
+        &self.prefix_iter_query
+    }
+
+    pub fn greater_equal_iter_query(&self, key: &[u8]) -> String {
+        let key_hex = hex::encode(key);
+        format!(
+            "SELECT key, value FROM {db_name} WHERE key >= x'{key_hex}' ORDER BY key",
+            db_name = self.db_name
+        )
+    }
+
+    pub fn put_query(&self) -> &str {
+        &self.put_query
+    }
+
+    pub fn delete_query(&self) -> &str {
+        &self.delete_query
     }
 }
 

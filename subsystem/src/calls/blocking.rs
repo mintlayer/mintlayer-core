@@ -50,11 +50,11 @@ impl<T: ?Sized> BlockingHandle<T> {
     }
 }
 
-impl<T: 'static + Send + Sync + ?Sized> BlockingHandle<T> {
+impl<T: Send + Sync + ?Sized + 'static> BlockingHandle<T> {
     /// Perform given closure in a worker, passing the handle to it, get the result
-    fn with_handle<R: 'static + Send>(
+    fn with_handle<R: Send + 'static>(
         &self,
-        func: impl 'static + Send + FnOnce(&Handle<T>) -> CallResult<R>,
+        func: impl Send + FnOnce(&Handle<T>) -> CallResult<R> + 'static,
     ) -> Result<R, CallError> {
         // Get the future associated with the function call result
         let result = func(self.handle());
@@ -104,15 +104,15 @@ impl<T: 'static + Send + Sync + ?Sized> BlockingHandle<T> {
     }
 
     /// Blocking variant of [Handle::call]
-    pub fn call<R: 'static + Send>(
+    pub fn call<R: Send + 'static>(
         &self,
-        func: impl 'static + Send + FnOnce(&T) -> R,
+        func: impl Send + FnOnce(&T) -> R + 'static,
     ) -> Result<R, CallError> {
         self.with_handle(|h| h.call(func))
     }
 }
 
-impl<T: 'static + Send + ?Sized> From<Handle<T>> for BlockingHandle<T> {
+impl<T: Send + ?Sized + 'static> From<Handle<T>> for BlockingHandle<T> {
     fn from(handle: Handle<T>) -> Self {
         Self::new(handle)
     }

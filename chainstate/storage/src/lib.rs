@@ -50,7 +50,7 @@ pub type Result<T> = chainstate_types::storage_result::Result<T>;
 pub type Error = chainstate_types::storage_result::Error;
 
 pub mod inmemory {
-    pub type Store = super::Store<storage::inmemory::InMemory>;
+    pub type Store = super::Store<storage_inmemory::InMemory>;
 }
 
 pub struct TipStorageTag;

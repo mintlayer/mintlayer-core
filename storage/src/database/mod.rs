@@ -186,7 +186,7 @@ impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapRef<'tx, Tx, DbMap> {
     }
 }
 
-impl<Tx: TxImpl, DbMap: schema::DbMap> MapRef<'_, Tx, DbMap>
+impl<'tx, Tx: TxImpl, DbMap: schema::DbMap> MapRef<'tx, Tx, DbMap>
 where
     Tx::Impl: backend::ReadOps,
 {
@@ -200,7 +200,7 @@ where
     }
 
     /// Iterator over entries with key starting with given prefix
-    pub fn prefix_iter<Pfx>(&self, prefix: &Pfx) -> crate::Result<impl '_ + EntryIterator<DbMap>>
+    pub fn prefix_iter<Pfx>(&self, prefix: &Pfx) -> crate::Result<impl EntryIterator<DbMap> + 'tx>
     where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
@@ -208,11 +208,11 @@ where
         internal::prefix_iter(self.dbtx, self.map_id, prefix.encode())
     }
 
-    /// Iterator over entries with key starting with given prefix
+    /// Iterator over keys starting with given prefix
     pub fn prefix_iter_keys<Pfx>(
         &self,
         prefix: &Pfx,
-    ) -> crate::Result<impl '_ + Iterator<Item = DbMap::Key>>
+    ) -> crate::Result<impl Iterator<Item = DbMap::Key> + 'tx>
     where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
@@ -224,12 +224,44 @@ where
     pub fn prefix_iter_decoded<Pfx>(
         &self,
         prefix: &Pfx,
-    ) -> crate::Result<impl '_ + Iterator<Item = (DbMap::Key, DbMap::Value)>>
+    ) -> crate::Result<impl Iterator<Item = (DbMap::Key, DbMap::Value)> + 'tx>
     where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,
     {
         self.prefix_iter(prefix).map(|item| item.map(|(k, v)| (k, v.decode())))
+    }
+
+    /// Iterator over entries with keys greater than or equal to the specified value.
+    ///
+    /// Note: only the `Encode`d representations of keys are compared (and `Key` itself
+    /// may not implement `Ord` at all). For the search to work correctly, ensure that the
+    /// relevant parts of `Key` are wrapped in `OrderPreservingValue`.
+    /// If some parts of `Key` are not wrapped in `OrderPreservingValue`, they must come
+    /// at the end (assuming that `Encode` is derived for `Key`); when searching, those parts
+    /// of the provided key must be zeroed/truncated, so that their `Encode`d representation
+    /// is less than or equal to any other possible value.
+    pub fn greater_equal_iter(
+        &self,
+        key: &DbMap::Key,
+    ) -> crate::Result<impl EntryIterator<DbMap> + 'tx> {
+        internal::greater_equal_iter(self.dbtx, self.map_id, key.encode())
+    }
+
+    /// Same as `greater_equal_iter`, but only the keys are returned.
+    pub fn greater_equal_iter_keys(
+        &self,
+        key: &DbMap::Key,
+    ) -> crate::Result<impl Iterator<Item = DbMap::Key> + 'tx> {
+        internal::greater_equal_iter_keys::<DbMap, _>(self.dbtx, self.map_id, key.encode())
+    }
+
+    /// Same as `greater_equal_iter`, but already decoded valued are returned.
+    pub fn greater_equal_iter_decoded(
+        &self,
+        key: &DbMap::Key,
+    ) -> crate::Result<impl Iterator<Item = (DbMap::Key, DbMap::Value)> + 'tx> {
+        self.greater_equal_iter(key).map(|item| item.map(|(k, v)| (k, v.decode())))
     }
 }
 
@@ -265,7 +297,7 @@ where
     }
 
     /// Iterator over entries with key starting with given prefix
-    pub fn prefix_iter<Pfx>(&self, prefix: &Pfx) -> crate::Result<impl '_ + EntryIterator<DbMap>>
+    pub fn prefix_iter<Pfx>(&self, prefix: &Pfx) -> crate::Result<impl EntryIterator<DbMap> + '_>
     where
         Pfx: Encode,
         DbMap::Key: HasPrefix<Pfx>,

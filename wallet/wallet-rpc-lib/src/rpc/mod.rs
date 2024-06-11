@@ -1792,7 +1792,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     }
 }
 
-pub async fn start<N: NodeInterface + Clone + Send + Sync + 'static + Debug>(
+pub async fn start<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
     wallet_handle: WalletHandle<N>,
     node_rpc: N,
     config: WalletRpcConfig,
