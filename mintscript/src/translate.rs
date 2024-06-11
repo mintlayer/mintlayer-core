@@ -118,13 +118,8 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                         .ok_or(TranslationError::PoolNotFound(*pool_id))?;
                     Ok(checksig(pool_data.decommission_destination()))
                 }
-                TxOutput::DelegateStaking(_amount, delegation_id) => {
-                    let delegation = pos_accounting
-                        .get_delegation_data(*delegation_id)?
-                        .ok_or(TranslationError::DelegationNotFound(*delegation_id))?;
-                    Ok(checksig(delegation.spend_destination()))
-                }
                 TxOutput::IssueNft(_id, _issuance, dest) => Ok(checksig(dest)),
+                TxOutput::DelegateStaking(_amount, _deleg_id) => Err(TranslationError::Unspendable),
                 TxOutput::CreateDelegationId(_dest, _pool_id) => Err(TranslationError::Unspendable),
                 TxOutput::IssueFungibleToken(_issuance) => Err(TranslationError::Unspendable),
                 TxOutput::Burn(_val) => Err(TranslationError::Unspendable),
@@ -168,11 +163,11 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_>
                 match utxo.output() {
                     TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::DelegateStaking(_, _)
                     | TxOutput::IssueNft(_, _, _) => Err(TranslationError::IllegalOutputSpend),
                     TxOutput::CreateDelegationId(_, _)
                     | TxOutput::Burn(_)
                     | TxOutput::DataDeposit(_)
+                    | TxOutput::DelegateStaking(_, _)
                     | TxOutput::IssueFungibleToken(_) => Err(TranslationError::Unspendable),
 
                     TxOutput::ProduceBlockFromStake(d, _) => {
@@ -208,10 +203,10 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 TxOutput::Transfer(_, _)
                 | TxOutput::CreateStakePool(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::DelegateStaking(_, _)
                 | TxOutput::IssueNft(_, _, _) => Ok(WitnessScript::TRUE),
                 TxOutput::CreateDelegationId(_, _)
                 | TxOutput::IssueFungibleToken(_)
+                | TxOutput::DelegateStaking(_, _)
                 | TxOutput::Burn(_)
                 | TxOutput::DataDeposit(_) => Err(TranslationError::Unspendable),
             },
