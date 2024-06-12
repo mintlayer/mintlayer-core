@@ -384,6 +384,7 @@ impl<T, AV, TV> FullyVerifiable<AV, TV> for T where
 {
 }
 
+/// Perform full verification of given input.
 #[allow(clippy::too_many_arguments)]
 pub fn verify_full<T, S, UV, AV, TV>(
     transaction: &T,
@@ -422,6 +423,16 @@ where
     Ok(())
 }
 
+/// Verify timelocks of given inputs.
+///
+/// This is used only in mempool. The full check also checks timelocks, no need to call this in
+/// addition to the full check. This method exists just to re-check timelocks in case the tip
+/// moves, where some timelocks may become valid (or invalid if reorg happened). Signatures and
+/// hashlocks are not affected by moving tip.
+///
+/// While it would be cleaner for this function to be private to mempool, it currently uses parts
+/// of code that are shared with the full check in a way that makes it somewhat difficult to factor
+/// out without making some support types public.
 pub fn verify_timelocks<T, S, UV>(
     transaction: &T,
     chain_config: &ChainConfig,
