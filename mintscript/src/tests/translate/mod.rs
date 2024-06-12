@@ -24,7 +24,7 @@ use common::{
     primitives::per_thousand::PerThousand,
 };
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
-use pos_accounting::DelegationData;
+use pos_accounting::{DelegationData, PoolData};
 use tokens_accounting::TokenData;
 
 mod mocks;
@@ -130,6 +130,18 @@ fn burn(amount: u128) -> TestInputInfo {
     tii(TxOutput::Burn(coins(amount)))
 }
 
+fn prod_block(dest: Destination, id_byte: u8) -> TestInputInfo {
+    tii(TxOutput::ProduceBlockFromStake(dest, fake_id(id_byte)))
+}
+
+fn delegate(amount: u128, del_id_byte: u8) -> TestInputInfo {
+    let del_id = fake_id(del_id_byte);
+    tii(TxOutput::DelegateStaking(
+        Amount::from_atoms(amount),
+        del_id,
+    ))
+}
+
 fn nosig() -> InputWitness {
     InputWitness::NoSignature(None)
 }
@@ -142,6 +154,22 @@ fn stdsig(byte: u8) -> InputWitness {
 fn deleg0() -> (DelegationId, DelegationData) {
     let data = DelegationData::new(fake_id(0x57), dest_pk(101));
     (fake_id(0x75), data)
+}
+
+fn pool0_decom() -> Destination {
+    dest_pk(1337)
+}
+
+fn pool0() -> (PoolId, PoolData) {
+    let data = PoolData::new(
+        pool0_decom(),
+        Amount::from_atoms(500_000_000),
+        Amount::from_atoms(2_000),
+        vrf_keypair(2337).1,
+        PerThousand::new(2).unwrap(),
+        Amount::from_atoms(1_000),
+    );
+    (fake_id(0xbc), data)
 }
 
 fn account_spend(deleg: DelegationId, amount: u128) -> TestInputInfo {
@@ -238,6 +266,11 @@ fn mode_name<'a, T: TranslationMode<'a>>(_: &T) -> &'static str {
     transfer_pk_tl(16, 560, tl_until_height(999_999)),
     nosig()
 )]
+#[case("prodblock_00", prod_block(dest_pk(0x543), 0xe0), stdsig(0x60))]
+#[case("prodblock_01", prod_block(dest_pk(0x544), 0xe1), nosig())]
+#[case("prodblock_02", prod_block(pool0_decom(), 0xe2), stdsig(0x63))]
+#[case("delegate_00", delegate(5_000_000, 0xe2), stdsig(0x61))]
+#[case("delegate_01", delegate(6_000_000, 0xe3), nosig())]
 #[case("newpool_00", create_pool(14, 15), stdsig(0x53))]
 #[case("acctspend_00", account_spend(deleg0().0, 579), stdsig(0x54))]
 #[case("acctspend_01", account_spend(fake_id(0xf5), 580), stdsig(0x55))]
@@ -254,7 +287,8 @@ fn translate_snap(
     let input_info = test_input_info.to_input_info();
     let tokens = [token0()];
     let delegs = [deleg0()];
-    let sig_info = mocks::MockSigInfoProvider::new(input_info, witness, tokens, [], delegs);
+    let pools = [pool0()];
+    let sig_info = mocks::MockSigInfoProvider::new(input_info, witness, tokens, pools, delegs);
     let mode_str = mode_name(&mode);
 
     let result = match mode.translate_input_and_witness(&sig_info) {
