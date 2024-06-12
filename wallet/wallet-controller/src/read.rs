@@ -31,8 +31,9 @@ use node_comm::node_traits::NodeInterface;
 use utils::tap_log::TapLog;
 use wallet::{
     account::{transaction_list::TransactionList, DelegationData, PoolData, TxInfo},
+    signer::SignerProvider,
     wallet::WalletPoolsFilter,
-    DefaultWallet,
+    Wallet,
 };
 use wallet_types::{
     account_info::StandaloneAddresses,
@@ -47,8 +48,8 @@ use crate::{
     ControllerError,
 };
 
-pub struct ReadOnlyController<'a, T> {
-    wallet: &'a DefaultWallet,
+pub struct ReadOnlyController<'a, T, B: storage::Backend + 'static, P> {
+    wallet: &'a Wallet<B, P>,
     rpc_client: T,
     chain_config: &'a ChainConfig,
     account_index: U31,
@@ -57,9 +58,14 @@ pub struct ReadOnlyController<'a, T> {
 /// A Map between the derived child number and the Address with whether it is marked as used or not
 type MapAddressWithUsage<T> = BTreeMap<ChildNumber, (Address<T>, bool)>;
 
-impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
+impl<'a, T, B, P> ReadOnlyController<'a, T, B, P>
+where
+    T: NodeInterface,
+    B: storage::Backend + 'static,
+    P: SignerProvider,
+{
     pub fn new(
-        wallet: &'a DefaultWallet,
+        wallet: &'a Wallet<B, P>,
         rpc_client: T,
         chain_config: &'a ChainConfig,
         account_index: U31,
