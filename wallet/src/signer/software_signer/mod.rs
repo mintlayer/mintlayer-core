@@ -45,28 +45,28 @@ use wallet_types::signature_status::SignatureStatus;
 
 use crate::key_chain::{make_account_path, AccountKeyChains, FoundPubKey, MasterKeyChain};
 
-use super::{Signer, SignerError, SignerResult};
+use super::{Signer, SignerError, SignerProvider, SignerResult};
 
-pub struct SoftwareSigner<'a, T> {
-    db_tx: &'a T,
+pub struct SoftwareSigner {
     chain_config: Arc<ChainConfig>,
     account_index: U31,
 }
 
-impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
-    pub fn new(db_tx: &'a T, chain_config: Arc<ChainConfig>, account_index: U31) -> Self {
+impl SoftwareSigner {
+    pub fn new(chain_config: Arc<ChainConfig>, account_index: U31) -> Self {
         Self {
-            db_tx,
             chain_config,
             account_index,
         }
     }
 
-    fn derive_account_private_key(&self) -> SignerResult<ExtendedPrivateKey> {
+    fn derive_account_private_key(
+        &self,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> SignerResult<ExtendedPrivateKey> {
         let account_path = make_account_path(&self.chain_config, self.account_index);
 
-        let root_key =
-            MasterKeyChain::load_root_key(self.db_tx)?.derive_absolute_path(&account_path)?;
+        let root_key = MasterKeyChain::load_root_key(db_tx)?.derive_absolute_path(&account_path)?;
         Ok(root_key)
     }
 
@@ -74,15 +74,15 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
         &self,
         destination: &Destination,
         key_chain: &impl AccountKeyChains,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<Option<PrivateKey>> {
-        let xpriv = self.derive_account_private_key()?;
+        let xpriv = self.derive_account_private_key(db_tx)?;
         match key_chain.find_public_key(destination) {
             Some(FoundPubKey::Hierarchy(xpub)) => {
                 get_private_key(&xpriv, &xpub).map(|pk| Some(pk.private_key()))
             }
             Some(FoundPubKey::Standalone(acc_public_key)) => {
-                let standalone_pk =
-                    self.db_tx.get_account_standalone_private_key(&acc_public_key)?;
+                let standalone_pk = db_tx.get_account_standalone_private_key(&acc_public_key)?;
                 Ok(standalone_pk)
             }
             None => Ok(None),
@@ -96,6 +96,7 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
         input_index: usize,
         input_utxos: &[Option<&TxOutput>],
         key_chain: &impl AccountKeyChains,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<(Option<InputWitness>, SignatureStatus)> {
         match destination {
             Destination::AnyoneCanSpend => Ok((
@@ -104,7 +105,7 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
             )),
             Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
                 let sig = self
-                    .get_private_key_for_destination(destination, key_chain)?
+                    .get_private_key_for_destination(destination, key_chain, db_tx)?
                     .map(|private_key| {
                         let sighash_type =
                             SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
@@ -140,6 +141,7 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
                         input_utxos,
                         current_signatures,
                         key_chain,
+                        db_tx,
                     )?;
                     return Ok((sig, status));
                 }
@@ -157,6 +159,7 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
         input_utxos: &[Option<&TxOutput>],
         mut current_signatures: AuthorizedClassicalMultisigSpend,
         key_chain: &impl AccountKeyChains,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<(Option<InputWitness>, SignatureStatus, SignatureStatus)> {
         let sighash_type = SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
 
@@ -179,6 +182,7 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
             if let Some(private_key) = self.get_private_key_for_destination(
                 &Destination::PublicKey(public_key.clone()),
                 key_chain,
+                db_tx,
             )? {
                 let res = sign_classical_multisig_spending(
                     &self.chain_config,
@@ -219,11 +223,12 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
     }
 }
 
-impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
+impl Signer for SoftwareSigner {
     fn sign_tx(
-        &self,
+        &mut self,
         ptx: PartiallySignedTransaction,
         key_chain: &impl AccountKeyChains,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
@@ -272,6 +277,7 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
                                     &inputs_utxo_refs,
                                     sig_components,
                                     key_chain,
+                                    db_tx,
                                 )
                             } else {
                                 Ok((
@@ -296,6 +302,7 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
                             i,
                             &inputs_utxo_refs,
                             key_chain,
+                            db_tx,
                         )?;
                         Ok((sig, SignatureStatus::NotSigned, status))
                     }
@@ -310,13 +317,14 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
     }
 
     fn sign_challenge(
-        &self,
+        &mut self,
         message: Vec<u8>,
         destination: Destination,
         key_chain: &impl AccountKeyChains,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<ArbitraryMessageSignature> {
         let private_key = self
-            .get_private_key_for_destination(&destination, key_chain)?
+            .get_private_key_for_destination(&destination, key_chain, db_tx)?
             .ok_or(SignerError::DestinationNotFromThisWallet)?;
 
         let sig = ArbitraryMessageSignature::produce_uniparty_signature(
@@ -341,6 +349,23 @@ fn get_private_key(
         Ok(derived_key)
     } else {
         Err(SignerError::KeysNotInSameHierarchy)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SoftwareSignerProvider;
+
+impl SoftwareSignerProvider {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl SignerProvider for SoftwareSignerProvider {
+    type S = SoftwareSigner;
+
+    fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S {
+        SoftwareSigner::new(chain_config, account_index)
     }
 }
 
