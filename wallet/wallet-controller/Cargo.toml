@@ -20,6 +20,8 @@ node-comm = { path = "../wallet-node-client" }
 rpc-description = { path = "../../rpc/description" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
+storage = { path = "../../storage" }
+storage-inmemory = { path = "../../storage/inmemory" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
 wallet = { path = ".." }

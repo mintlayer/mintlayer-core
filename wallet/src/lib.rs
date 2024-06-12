@@ -21,8 +21,10 @@ pub mod version;
 pub mod wallet;
 pub mod wallet_events;
 
+use signer::software_signer::SoftwareSignerProvider;
+
 pub use crate::account::Account;
 pub use crate::send_request::{get_tx_output_destination, SendRequest};
 pub use crate::wallet::{Wallet, WalletError, WalletResult};
 
-pub type DefaultWallet = Wallet<wallet_storage::DefaultBackend>;
+pub type DefaultWallet = Wallet<wallet_storage::DefaultBackend, SoftwareSignerProvider>;
