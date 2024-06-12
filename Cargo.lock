@@ -8603,6 +8603,8 @@ dependencies = [
  "rstest",
  "serde",
  "serialization",
+ "storage",
+ "storage-inmemory",
  "test-utils",
  "thiserror",
  "tokio",
@@ -8694,6 +8696,7 @@ dependencies = [
  "utils-networking",
  "wallet",
  "wallet-controller",
+ "wallet-storage",
  "wallet-test-node",
  "wallet-types",
 ]
