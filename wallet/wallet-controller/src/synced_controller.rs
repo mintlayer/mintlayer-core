@@ -51,9 +51,10 @@ use wallet::{
         make_address_output, make_address_output_token, make_create_delegation_output,
         make_data_deposit_output, SelectedInputs, StakePoolCreationArguments,
     },
+    signer::SignerProvider,
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
-    DefaultWallet, WalletError, WalletResult,
+    Wallet, WalletError, WalletResult,
 };
 use wallet_types::{
     signature_status::SignatureStatus,
@@ -68,8 +69,8 @@ use crate::{
     ControllerConfig, ControllerError,
 };
 
-pub struct SyncedController<'a, T, W> {
-    wallet: &'a mut DefaultWallet,
+pub struct SyncedController<'a, T, W, B: storage::Backend + 'static, P> {
+    wallet: &'a mut Wallet<B, P>,
     rpc_client: T,
     chain_config: &'a ChainConfig,
     wallet_events: &'a W,
@@ -78,9 +79,15 @@ pub struct SyncedController<'a, T, W> {
     config: ControllerConfig,
 }
 
-impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
+impl<'a, T, W, B, P> SyncedController<'a, T, W, B, P>
+where
+    B: storage::Backend + 'static,
+    P: SignerProvider,
+    T: NodeInterface,
+    W: WalletEvents,
+{
     pub fn new(
-        wallet: &'a mut DefaultWallet,
+        wallet: &'a mut Wallet<B, P>,
         rpc_client: T,
         chain_config: &'a ChainConfig,
         wallet_events: &'a W,
@@ -270,7 +277,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31| {
                 wallet.issue_new_token(
                     account_index,
@@ -298,7 +305,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31| {
                 wallet.issue_new_nft(
                     account_index,
@@ -322,7 +329,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             &token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
@@ -347,7 +354,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             &token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
@@ -371,7 +378,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             &token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
@@ -397,7 +404,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             &token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 wallet.freeze_token(
@@ -421,7 +428,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             &token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 wallet.unfreeze_token(
@@ -446,7 +453,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             &token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 wallet.change_token_authority(
@@ -495,7 +502,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31| {
                 wallet.create_transaction_to_addresses(
                     account_index,
@@ -526,7 +533,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31| {
                 wallet.create_transaction_to_addresses(
                     account_index,
@@ -571,7 +578,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   _consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31| {
                 wallet.create_sweep_transaction(
                     account_index,
@@ -609,7 +616,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   _consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31| {
                 wallet.create_sweep_from_delegation_transaction(
                     account_index,
@@ -834,7 +841,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31| {
                 wallet.create_delegation(
                     account_index,
@@ -858,7 +865,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31| {
                 wallet.create_transaction_to_addresses(
                     account_index,
@@ -899,7 +906,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   _consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31| {
                 wallet.create_transaction_to_addresses_from_delegation(
                     account_index,
@@ -927,7 +934,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             &token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
@@ -988,7 +995,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31| {
                 wallet.create_stake_pool_tx(
                     account_index,
@@ -1026,7 +1033,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   _consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut Wallet<B, P>,
                   account_index: U31| {
                 wallet.decommission_stake_pool(
                     account_index,
@@ -1253,7 +1260,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
 
     /// Create a transaction and broadcast it
     async fn create_and_send_tx<
-        F: FnOnce(FeeRate, FeeRate, &mut DefaultWallet, U31) -> WalletResult<SignedTransaction>,
+        F: FnOnce(FeeRate, FeeRate, &mut Wallet<B, P>, U31) -> WalletResult<SignedTransaction>,
     >(
         &mut self,
         tx_maker: F,
@@ -1282,7 +1289,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         F: FnOnce(
             FeeRate,
             FeeRate,
-            &mut DefaultWallet,
+            &mut Wallet<B, P>,
             U31,
             &UnconfirmedTokenInfo,
         ) -> WalletResult<R>,
@@ -1336,7 +1343,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     /// e.g. newly issued token, nft or delegation id
     async fn create_and_send_tx_with_id<
         ID,
-        F: FnOnce(FeeRate, FeeRate, &mut DefaultWallet, U31) -> WalletResult<(ID, SignedTransaction)>,
+        F: FnOnce(FeeRate, FeeRate, &mut Wallet<B, P>, U31) -> WalletResult<(ID, SignedTransaction)>,
     >(
         &mut self,
         tx_maker: F,

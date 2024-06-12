@@ -98,20 +98,31 @@ use self::types::{
 };
 
 #[derive(Clone)]
-pub struct WalletRpc<N: Clone> {
-    wallet: WalletHandle<N>,
+pub struct WalletRpc<N: Clone, P: Clone> {
+    wallet: WalletHandle<N, P>,
     node: N,
     chain_config: Arc<ChainConfig>,
+    signer_provider: P,
 }
 
 type WRpcResult<T, N> = Result<T, RpcError<N>>;
 
-impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
-    pub fn new(wallet: WalletHandle<N>, node: N, chain_config: Arc<ChainConfig>) -> Self {
+impl<N, P> WalletRpc<N, P>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static,
+    P: SignerProvider + Clone + Sync + Send + 'static,
+{
+    pub fn new(
+        wallet: WalletHandle<N, P>,
+        node: N,
+        chain_config: Arc<ChainConfig>,
+        signer_provider: P,
+    ) -> Self {
         Self {
             wallet,
             node,
             chain_config,
+            signer_provider,
         }
     }
 
@@ -135,6 +146,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         passphrase: Option<String>,
         scan_blockchain: ScanBlockchain,
     ) -> WRpcResult<CreatedWallet, N> {
+        let signer_provider = self.signer_provider.clone();
         self.wallet
             .manage_async(move |wallet_manager| {
                 Box::pin(async move {
@@ -145,6 +157,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                             mnemonic,
                             passphrase,
                             scan_blockchain,
+                            signer_provider,
                         )
                         .await
                 })
@@ -159,6 +172,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         force_migrate_wallet_type: bool,
         scan_blockchain: ScanBlockchain,
     ) -> WRpcResult<(), N> {
+        let signer_provider = self.signer_provider.clone();
         Ok(self
             .wallet
             .manage_async(move |wallet_manager| {
@@ -169,6 +183,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                             password,
                             force_migrate_wallet_type,
                             scan_blockchain,
+                            signer_provider,
                         )
                         .await
                 })
@@ -2271,19 +2286,24 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     }
 }
 
-pub async fn start<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
-    wallet_handle: WalletHandle<N>,
+pub async fn start<N, P>(
+    wallet_handle: WalletHandle<N, P>,
     node_rpc: N,
     config: WalletRpcConfig,
     chain_config: Arc<ChainConfig>,
     cold_wallet: bool,
-) -> anyhow::Result<rpc::Rpc> {
+    signer_provider: P,
+) -> anyhow::Result<rpc::Rpc>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
+    P: SignerProvider + Clone + Send + Sync + 'static,
+{
     let WalletRpcConfig {
         bind_addr,
         auth_credentials,
     } = config;
 
-    let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc, chain_config);
+    let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc, chain_config, signer_provider);
     let builder = rpc::Builder::new(bind_addr, auth_credentials)
         .with_method_list("list_methods")
         .register(ColdWalletRpcServer::into_rpc(wallet_rpc.clone()));

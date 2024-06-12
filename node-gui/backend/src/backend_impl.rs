@@ -30,7 +30,12 @@ use tokio::{
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
     task::JoinHandle,
 };
-use wallet::{account::transaction_list::TransactionList, wallet::Error, WalletError};
+use wallet::{
+    account::transaction_list::TransactionList,
+    signer::{software_signer::SoftwareSignerProvider, SignerProvider},
+    wallet::Error,
+    WalletError,
+};
 use wallet_cli_commands::{
     get_repl_command, parse_input, CommandHandler, ConsoleCommand, ManageableWalletCommand,
     WalletCommand,
@@ -70,12 +75,12 @@ const IN_TOP_X_MB: usize = 5;
 
 enum GuiHotColdController {
     Hot(
-        WalletRpc<WalletHandlesClient>,
-        CommandHandler<WalletRpcHandlesClient<WalletHandlesClient>>,
+        WalletRpc<WalletHandlesClient, SoftwareSignerProvider>,
+        CommandHandler<WalletRpcHandlesClient<WalletHandlesClient, SoftwareSignerProvider>>,
     ),
     Cold(
-        WalletRpc<ColdWalletClient>,
-        CommandHandler<WalletRpcHandlesClient<ColdWalletClient>>,
+        WalletRpc<ColdWalletClient, SoftwareSignerProvider>,
+        CommandHandler<WalletRpcHandlesClient<ColdWalletClient, SoftwareSignerProvider>>,
     ),
 }
 
@@ -87,7 +92,9 @@ struct WalletData {
 }
 
 impl WalletData {
-    fn hot_wallet(&mut self) -> Option<&mut WalletRpc<WalletHandlesClient>> {
+    fn hot_wallet(
+        &mut self,
+    ) -> Option<&mut WalletRpc<WalletHandlesClient, SoftwareSignerProvider>> {
         match &mut self.controller {
             GuiHotColdController::Hot(w, _) => Some(w),
             GuiHotColdController::Cold(_, _) => None,
@@ -206,10 +213,14 @@ impl Backend {
         }
     }
 
-    async fn get_account_info<T: NodeInterface + Clone + Send + Sync + Debug + 'static>(
-        controller: &WalletRpc<T>,
+    async fn get_account_info<T, P>(
+        controller: &WalletRpc<T, P>,
         account_index: U31,
-    ) -> Result<(AccountId, AccountInfo), BackendError> {
+    ) -> Result<(AccountId, AccountInfo), BackendError>
+    where
+        T: NodeInterface + Clone + Send + Sync + Debug + 'static,
+        P: SignerProvider + Clone + Send + Sync + Debug + 'static,
+    {
         let name = controller
             .wallet_info()
             .await
@@ -284,6 +295,7 @@ impl Backend {
                         &mnemonic,
                         import,
                         wallet_events,
+                        SoftwareSignerProvider::new(),
                     )
                     .await?;
 
@@ -300,7 +312,14 @@ impl Backend {
                 let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
 
                 let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) = self
-                    .create_wallet(client, file_path.clone(), &mnemonic, import, wallet_events)
+                    .create_wallet(
+                        client,
+                        file_path.clone(),
+                        &mnemonic,
+                        import,
+                        wallet_events,
+                        SoftwareSignerProvider::new(),
+                    )
                     .await?;
 
                 let wallet_data = WalletData {
@@ -333,36 +352,47 @@ impl Backend {
         Ok(wallet_info)
     }
 
-    async fn create_wallet<N: NodeInterface + Clone + Debug + Send + Sync + 'static>(
+    async fn create_wallet<N, P>(
         &mut self,
         handles_client: N,
         file_path: PathBuf,
         mnemonic: &wallet::wallet::Mnemonic,
         import: ImportOrCreate,
         wallet_events: GuiWalletEvents,
+        signer_provider: P,
     ) -> Result<
         (
-            WalletRpc<N>,
-            CommandHandler<WalletRpcHandlesClient<N>>,
+            WalletRpc<N, P>,
+            CommandHandler<WalletRpcHandlesClient<N, P>>,
             (Id<GenBlock>, BlockHeight),
             BTreeMap<AccountId, AccountInfo>,
             BTreeMap<AccountId, AccountData>,
         ),
         BackendError,
-    > {
+    >
+    where
+        N: NodeInterface + Clone + Debug + Send + Sync + 'static,
+        P: SignerProvider + Clone + Send + Sync + Debug + 'static,
+    {
         let wallet_service = WalletService::start(
             self.chain_config.clone(),
             None,
             false,
             vec![],
             handles_client,
+            signer_provider.clone(),
         )
         .await
         .map_err(|err| BackendError::WalletError(err.to_string()))?;
         let wallet_handle = wallet_service.handle();
         let node_rpc = wallet_service.node_rpc().clone();
         let chain_config = wallet_service.chain_config().clone();
-        let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc.clone(), chain_config.clone());
+        let wallet_rpc = WalletRpc::new(
+            wallet_handle,
+            node_rpc.clone(),
+            chain_config.clone(),
+            signer_provider,
+        );
         wallet_rpc
             .create_wallet(
                 file_path,
@@ -448,7 +478,14 @@ impl Backend {
                         best_block,
                         accounts_info,
                         accounts_data,
-                    ) = self.open_wallet(handles_client, file_path.clone(), wallet_events).await?;
+                    ) = self
+                        .open_wallet(
+                            handles_client,
+                            file_path.clone(),
+                            wallet_events,
+                            SoftwareSignerProvider::new(),
+                        )
+                        .await?;
 
                     let wallet_data = WalletData {
                         controller: GuiHotColdController::Hot(wallet_rpc, command_handler),
@@ -469,7 +506,14 @@ impl Backend {
                         best_block,
                         accounts_info,
                         accounts_data,
-                    ) = self.open_wallet(client, file_path.clone(), wallet_events).await?;
+                    ) = self
+                        .open_wallet(
+                            client,
+                            file_path.clone(),
+                            wallet_events,
+                            SoftwareSignerProvider::new(),
+                        )
+                        .await?;
 
                     let wallet_data = WalletData {
                         controller: GuiHotColdController::Cold(wallet_rpc, command_handler),
@@ -499,35 +543,46 @@ impl Backend {
         Ok(wallet_info)
     }
 
-    async fn open_wallet<N: NodeInterface + Clone + Debug + Send + Sync + 'static>(
+    async fn open_wallet<N, P>(
         &mut self,
         handles_client: N,
         file_path: PathBuf,
         wallet_events: GuiWalletEvents,
+        signer_provider: P,
     ) -> Result<
         (
-            WalletRpc<N>,
-            CommandHandler<WalletRpcHandlesClient<N>>,
+            WalletRpc<N, P>,
+            CommandHandler<WalletRpcHandlesClient<N, P>>,
             EncryptionState,
             (Id<GenBlock>, BlockHeight),
             BTreeMap<AccountId, AccountInfo>,
             BTreeMap<AccountId, AccountData>,
         ),
         BackendError,
-    > {
+    >
+    where
+        N: NodeInterface + Clone + Debug + Send + Sync + 'static,
+        P: SignerProvider + Clone + Debug + Send + Sync + 'static,
+    {
         let wallet_service = WalletService::start(
             self.chain_config.clone(),
             None,
             false,
             vec![],
             handles_client,
+            signer_provider.clone(),
         )
         .await
         .map_err(|err| BackendError::WalletError(err.to_string()))?;
         let wallet_handle = wallet_service.handle();
         let node_rpc = wallet_service.node_rpc().clone();
         let chain_config = wallet_service.chain_config().clone();
-        let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc.clone(), chain_config.clone());
+        let wallet_rpc = WalletRpc::new(
+            wallet_handle,
+            node_rpc.clone(),
+            chain_config.clone(),
+            signer_provider,
+        );
         wallet_rpc
             .open_wallet(file_path, None, false, ScanBlockchain::ScanNoWait)
             .await
@@ -683,7 +738,7 @@ impl Backend {
     fn hot_wallet(
         &mut self,
         wallet_id: WalletId,
-    ) -> Result<&mut WalletRpc<WalletHandlesClient>, BackendError> {
+    ) -> Result<&mut WalletRpc<WalletHandlesClient, SoftwareSignerProvider>, BackendError> {
         self.wallets
             .get_mut(&wallet_id)
             .ok_or(BackendError::UnknownWalletIndex(wallet_id))?
@@ -1273,10 +1328,14 @@ impl Backend {
     }
 }
 
-async fn get_account_balance<N: NodeInterface + Clone + Send + Sync + 'static>(
-    controller: &WalletRpc<N>,
+async fn get_account_balance<N, P>(
+    controller: &WalletRpc<N, P>,
     account_index: U31,
-) -> Result<Balances, BackendError> {
+) -> Result<Balances, BackendError>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static,
+    P: SignerProvider + Clone + Send + Sync + 'static,
+{
     controller
         .get_balance(
             account_index,
@@ -1287,11 +1346,15 @@ async fn get_account_balance<N: NodeInterface + Clone + Send + Sync + 'static>(
         .map_err(|e| BackendError::WalletError(e.to_string()))
 }
 
-async fn encrypt_action<T: NodeInterface + Clone + Send + Sync + 'static>(
+async fn encrypt_action<T, P>(
     action: EncryptionAction,
-    controller: &mut WalletRpc<T>,
+    controller: &mut WalletRpc<T, P>,
     wallet_id: WalletId,
-) -> Result<(WalletId, EncryptionState), BackendError> {
+) -> Result<(WalletId, EncryptionState), BackendError>
+where
+    T: NodeInterface + Clone + Send + Sync + 'static,
+    P: SignerProvider + Clone + Send + Sync + 'static,
+{
     match action {
         EncryptionAction::SetPassword(password) => controller
             .encrypt_private_keys(password)
@@ -1313,14 +1376,15 @@ async fn encrypt_action<T: NodeInterface + Clone + Send + Sync + 'static>(
     .map_err(|err| BackendError::WalletError(err.to_string()))
 }
 
-async fn select_acc_and_execute_cmd<N>(
-    c: &mut CommandHandler<WalletRpcHandlesClient<N>>,
+async fn select_acc_and_execute_cmd<N, P>(
+    c: &mut CommandHandler<WalletRpcHandlesClient<N, P>>,
     account_id: AccountId,
     command: ManageableWalletCommand,
     chain_config: &ChainConfig,
 ) -> Result<ConsoleCommand, BackendError>
 where
-    N: NodeInterface + Clone + Send + Sync + Debug + 'static,
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
+    P: SignerProvider + Clone + Send + Sync + 'static + Debug,
 {
     c.handle_manageable_wallet_command(
         chain_config,

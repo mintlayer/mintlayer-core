@@ -31,7 +31,7 @@ use crate::send_request::{
     make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
 };
 use crate::signer::software_signer::SoftwareSigner;
-use crate::signer::{Signer, SignerError};
+use crate::signer::{Signer, SignerError, SignerProvider};
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
@@ -266,13 +266,14 @@ pub enum WalletPoolsFilter {
     Stake,
 }
 
-pub struct Wallet<B: storage::Backend> {
+pub struct Wallet<B: storage::Backend + 'static, P> {
     chain_config: Arc<ChainConfig>,
     db: Store<B>,
     key_chain: MasterKeyChain,
     accounts: BTreeMap<U31, Account>,
     latest_median_time: BlockTimestamp,
     next_unused_account: (U31, Account),
+    signer_provider: P,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -289,7 +290,12 @@ pub fn create_wallet_in_memory() -> WalletResult<Store<DefaultBackend>> {
     Ok(Store::new(DefaultBackend::new_in_memory())?)
 }
 
-impl<B: storage::Backend> Wallet<B> {
+impl<B, P> Wallet<B, P>
+where
+    B: storage::Backend + 'static,
+    P: SignerProvider,
+{
+    #[allow(clippy::too_many_arguments)]
     pub fn create_new_wallet(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
@@ -298,6 +304,7 @@ impl<B: storage::Backend> Wallet<B> {
         save_seed_phrase: StoreSeedPhrase,
         best_block: (BlockHeight, Id<GenBlock>),
         wallet_type: WalletType,
+        signer_provider: P,
     ) -> WalletResult<Self> {
         let mut wallet = Self::new_wallet(
             chain_config,
@@ -306,6 +313,7 @@ impl<B: storage::Backend> Wallet<B> {
             passphrase,
             save_seed_phrase,
             wallet_type,
+            signer_provider,
         )?;
 
         wallet.set_best_block(best_block.0, best_block.1)?;
@@ -320,6 +328,7 @@ impl<B: storage::Backend> Wallet<B> {
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,
         wallet_type: WalletType,
+        signer_provider: P,
     ) -> WalletResult<Self> {
         Self::new_wallet(
             chain_config,
@@ -328,6 +337,7 @@ impl<B: storage::Backend> Wallet<B> {
             passphrase,
             save_seed_phrase,
             wallet_type,
+            signer_provider,
         )
     }
 
@@ -338,6 +348,7 @@ impl<B: storage::Backend> Wallet<B> {
         passphrase: Option<&str>,
         save_seed_phrase: StoreSeedPhrase,
         wallet_type: WalletType,
+        signer_provider: P,
     ) -> WalletResult<Self> {
         let mut db_tx = db.transaction_rw_unlocked(None)?;
 
@@ -354,7 +365,7 @@ impl<B: storage::Backend> Wallet<B> {
         db_tx.set_lookahead_size(LOOKAHEAD_SIZE)?;
         db_tx.set_wallet_type(wallet_type)?;
 
-        let default_account = Wallet::<B>::create_next_unused_account(
+        let default_account = Wallet::<B, P>::create_next_unused_account(
             U31::ZERO,
             chain_config.clone(),
             &key_chain,
@@ -362,7 +373,7 @@ impl<B: storage::Backend> Wallet<B> {
             None,
         )?;
 
-        let next_unused_account = Wallet::<B>::create_next_unused_account(
+        let next_unused_account = Wallet::<B, P>::create_next_unused_account(
             U31::ONE,
             chain_config.clone(),
             &key_chain,
@@ -380,6 +391,7 @@ impl<B: storage::Backend> Wallet<B> {
             accounts: [default_account].into(),
             latest_median_time,
             next_unused_account,
+            signer_provider,
         };
 
         Ok(wallet)
@@ -711,7 +723,7 @@ impl<B: storage::Backend> Wallet<B> {
             .0
             .plus_one()
             .map_err(|_| WalletError::AbsoluteMaxNumAccountsExceeded(last_account.0))?;
-        Wallet::<B>::create_next_unused_account(
+        Wallet::<B, P>::create_next_unused_account(
             next_account_index,
             chain_config.clone(),
             &key_chain,
@@ -728,6 +740,7 @@ impl<B: storage::Backend> Wallet<B> {
         pre_migration: F,
         wallet_type: WalletType,
         force_change_wallet_type: bool,
+        signer_provider: P,
     ) -> WalletResult<Self> {
         if let Some(password) = password {
             db.unlock_private_keys(&password)?;
@@ -771,6 +784,7 @@ impl<B: storage::Backend> Wallet<B> {
             accounts,
             latest_median_time,
             next_unused_account,
+            signer_provider,
         })
     }
 
@@ -985,13 +999,14 @@ impl<B: storage::Backend> Wallet<B> {
         error_mapper: impl FnOnce(WalletError) -> WalletError,
     ) -> WalletResult<(SignedTransaction, AddlData)> {
         let (_, block_height) = self.get_best_block_for_account(account_index)?;
+
         self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
             let (request, additional_data) = f(account, db_tx)?;
 
             let ptx = request.into_partially_signed_tx()?;
 
-            let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
-            let ptx = signer.sign_tx(ptx, account.key_chain()).map(|(ptx, _, _)| ptx)?;
+            let mut signer = SoftwareSigner::new(Arc::new(chain_config.clone()), account_index);
+            let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
 
             let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
             let is_fully_signed = ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
@@ -1406,14 +1421,14 @@ impl<B: storage::Backend> Wallet<B> {
 
         let signed_intent =
             self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
-                let signer =
-                    SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
+                let signer = SoftwareSigner::new(Arc::new(chain_config.clone()), account_index);
 
                 Ok(signer.sign_transaction_intent(
                     signed_tx.transaction(),
                     &input_destinations,
                     &intent,
                     account.key_chain(),
+                    db_tx,
                 )?)
             })?;
 
@@ -1854,8 +1869,8 @@ impl<B: storage::Backend> Wallet<B> {
 
             let ptx = request.into_partially_signed_tx()?;
 
-            let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
-            let ptx = signer.sign_tx(ptx, account.key_chain()).map(|(ptx, _, _)| ptx)?;
+            let mut signer = SoftwareSigner::new(Arc::new(chain_config.clone()), account_index);
+            let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
 
             if ptx.all_signatures_available() {
                 return Err(WalletError::FullySignedTransactionInDecommissionReq);
@@ -1985,9 +2000,9 @@ impl<B: storage::Backend> Wallet<B> {
                     account.tx_to_partially_signed_tx(tx, latest_median_time)?
                 }
             };
-            let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
+            let mut signer = SoftwareSigner::new(Arc::new(chain_config.clone()), account_index);
 
-            let res = signer.sign_tx(ptx, account.key_chain())?;
+            let res = signer.sign_tx(ptx, account.key_chain(), db_tx)?;
             Ok(res)
         })
     }
@@ -1999,8 +2014,8 @@ impl<B: storage::Backend> Wallet<B> {
         destination: &Destination,
     ) -> WalletResult<ArbitraryMessageSignature> {
         self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
-            let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
-            let msg = signer.sign_challenge(challenge, destination, account.key_chain())?;
+            let mut signer = SoftwareSigner::new(Arc::new(chain_config.clone()), account_index);
+            let msg = signer.sign_challenge(challenge, destination, account.key_chain(), db_tx)?;
             Ok(msg)
         })
     }
