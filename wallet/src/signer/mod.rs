@@ -13,20 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common::chain::{
     partially_signed_transaction::PartiallySignedTransaction,
     signature::{
         inputsig::arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
         DestinationSigError,
     },
-    Destination, SignedTransactionIntent, SignedTransactionIntentError, Transaction,
+    ChainConfig, Destination, SignedTransactionIntent, SignedTransactionIntentError, Transaction,
 };
-use crypto::key::hdkd::derivable::DerivationError;
+use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
+use wallet_storage::WalletStorageReadUnlocked;
 use wallet_types::signature_status::SignatureStatus;
 
 use crate::key_chain::{AccountKeyChains, KeyChainError};
 
 pub mod software_signer;
+// pub mod trezor_signer;
 
 /// KeyChain errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -56,9 +60,10 @@ type SignerResult<T> = Result<T, SignerError>;
 pub trait Signer {
     /// Sign a partially signed transaction and return the before and after signature statuses.
     fn sign_tx(
-        &self,
+        &mut self,
         tx: PartiallySignedTransaction,
         key_chain: &impl AccountKeyChains,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
@@ -67,10 +72,11 @@ pub trait Signer {
 
     /// Sign an arbitrary message for a destination known to this key chain.
     fn sign_challenge(
-        &self,
+        &mut self,
         message: &[u8],
         destination: &Destination,
         key_chain: &impl AccountKeyChains,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<ArbitraryMessageSignature>;
 
     /// Sign a transaction intent. The number of `input_destinations` must be the same as
@@ -82,5 +88,12 @@ pub trait Signer {
         input_destinations: &[Destination],
         intent: &str,
         key_chain: &impl AccountKeyChains,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<SignedTransactionIntent>;
+}
+
+pub trait SignerProvider {
+    type S: Signer;
+
+    fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S;
 }
