@@ -57,8 +57,10 @@ use crate::{
 use super::types::RpcHashedTimelockContract;
 
 #[async_trait::async_trait]
-impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletEventsRpcServer
-    for WalletRpc<N>
+impl<N, P> WalletEventsRpcServer for WalletRpc<N, P>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
+    P: SignerProvider + Clone + Send + Sync + 'static,
 {
     async fn subscribe_wallet_events(
         &self,
@@ -70,8 +72,10 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletEventsRpcSe
 }
 
 #[async_trait::async_trait]
-impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> ColdWalletRpcServer
-    for WalletRpc<N>
+impl<N, P> ColdWalletRpcServer for WalletRpc<N, P>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
+    P: SignerProvider + Clone + Send + Sync + 'static,
 {
     async fn shutdown(&self) -> rpc::RpcResult<()> {
         rpc::handle_result(self.shutdown())
@@ -303,7 +307,11 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> ColdWalletRpcServ
 }
 
 #[async_trait::async_trait]
-impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer for WalletRpc<N> {
+impl<N, P> WalletRpcServer for WalletRpc<N, P>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
+    P: SignerProvider + Clone + Sync + Send + 'static,
+{
     async fn rescan(&self) -> rpc::RpcResult<()> {
         rpc::handle_result(self.rescan().await)
     }

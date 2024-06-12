@@ -25,6 +25,7 @@ use common::{
 };
 use rpc::RpcAuthData;
 use test_utils::{test_dir::TestRoot, test_root};
+use wallet::signer::software_signer::SoftwareSignerProvider;
 use wallet_controller::NodeRpcClient;
 use wallet_rpc_lib::{config::WalletServiceConfig, types::AccountArg, WalletHandle, WalletService};
 use wallet_test_node::{RPC_PASSWORD, RPC_USERNAME};
@@ -39,7 +40,7 @@ pub const ACCOUNT0_ARG: AccountArg = AccountArg(0);
 pub const ACCOUNT1_ARG: AccountArg = AccountArg(1);
 
 pub struct TestFramework {
-    pub wallet_service: WalletService<NodeRpcClient>,
+    pub wallet_service: WalletService<NodeRpcClient, SoftwareSignerProvider>,
     pub shutdown_trigger: subsystem::ShutdownTrigger,
     pub node_manager_task: subsystem::ManagerJoinHandle,
     pub test_root: TestRoot,
@@ -72,6 +73,7 @@ impl TestFramework {
                 wallet_types::seed_phrase::StoreSeedPhrase::DoNotStore,
                 (BlockHeight::new(0), chain_config.genesis_block_id()),
                 WalletType::Hot,
+                SoftwareSignerProvider::new(),
             )
             .unwrap();
 
@@ -125,9 +127,15 @@ impl TestFramework {
             .await
             .unwrap();
 
-            wallet_rpc_lib::start_services(ws_config, rpc_config, node_rpc, false)
-                .await
-                .unwrap()
+            wallet_rpc_lib::start_services(
+                ws_config,
+                rpc_config,
+                node_rpc,
+                false,
+                SoftwareSignerProvider::new(),
+            )
+            .await
+            .unwrap()
         };
 
         TestFramework {
@@ -155,7 +163,7 @@ impl TestFramework {
         rpc::new_ws_client(rpc_addr, rpc_auth).await.unwrap()
     }
 
-    pub fn handle(&self) -> WalletHandle<NodeRpcClient> {
+    pub fn handle(&self) -> WalletHandle<NodeRpcClient, SoftwareSignerProvider> {
         self.wallet_service.handle()
     }
 
