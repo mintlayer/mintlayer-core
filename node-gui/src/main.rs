@@ -26,7 +26,7 @@ use iced::advanced::graphics::core::window;
 use iced::widget::{column, container, row, text, tooltip, Text};
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced::{font, Subscription};
-use iced_aw::native::cupertino::cupertino_spinner::CupertinoSpinner;
+use iced_aw::widgets::cupertino::cupertino_spinner::CupertinoSpinner;
 use main_window::{MainWindow, MainWindowMessage};
 use tokio::sync::mpsc::UnboundedReceiver;
 
@@ -97,7 +97,7 @@ impl Application for MintlayerNodeGUI {
     fn new(_flags: ()) -> (Self, Command<Message>) {
         (
             MintlayerNodeGUI::Initial,
-            font::load(iced_aw::graphics::icons::BOOTSTRAP_FONT_BYTES).map(Message::FontLoaded),
+            font::load(iced_aw::core::BOOTSTRAP_FONT_BYTES).map(Message::FontLoaded),
         )
     }
 
@@ -298,7 +298,7 @@ impl Application for MintlayerNodeGUI {
                     row![
                         iced::widget::button(text("Mainnet")).on_press(InitNetwork::Mainnet),
                         tooltip(
-                            Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                            Text::new(iced_aw::Bootstrap::Question.to_string())
                                 .font(iced_aw::BOOTSTRAP_FONT),
                             MAIN_NETWORK_TOOLTIP,
                             tooltip::Position::Bottom
@@ -309,7 +309,7 @@ impl Application for MintlayerNodeGUI {
                     row![
                         iced::widget::button(text("Testnet")).on_press(InitNetwork::Testnet),
                         tooltip(
-                            Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                            Text::new(iced_aw::Bootstrap::Question.to_string())
                                 .font(iced_aw::BOOTSTRAP_FONT),
                             TEST_NETWORK_TOOLTIP,
                             tooltip::Position::Bottom
@@ -337,7 +337,7 @@ impl Application for MintlayerNodeGUI {
                     row![
                         iced::widget::button(text("Hot")).on_press(WalletMode::Hot),
                         tooltip(
-                            Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                            Text::new(iced_aw::Bootstrap::Question.to_string())
                                 .font(iced_aw::BOOTSTRAP_FONT),
                             HOT_WALLET_TOOLTIP_TEXT,
                             tooltip::Position::Bottom
@@ -348,7 +348,7 @@ impl Application for MintlayerNodeGUI {
                     row![
                         iced::widget::button(text("Cold")).on_press(WalletMode::Cold),
                         tooltip(
-                            Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                            Text::new(iced_aw::Bootstrap::Question.to_string())
                                 .font(iced_aw::BOOTSTRAP_FONT),
                             COLD_WALLET_TOOLTIP_TEXT,
                             tooltip::Position::Bottom

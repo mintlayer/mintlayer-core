@@ -47,13 +47,12 @@ pub fn view_console(
     let buttons = row![
         iced::widget::horizontal_space(),
         button(
-            Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
-                .font(iced_aw::BOOTSTRAP_FONT),
+            Text::new(iced_aw::Bootstrap::ClipboardCheck.to_string()).font(iced_aw::BOOTSTRAP_FONT),
         )
         .style(iced::theme::Button::Text)
         .width(Length::Shrink)
         .on_press(WalletMessage::CopyToClipboard(output)),
-        button(Text::new(iced_aw::BootstrapIcon::Trash.to_string()).font(iced_aw::BOOTSTRAP_FONT),)
+        button(Text::new(iced_aw::Bootstrap::Trash.to_string()).font(iced_aw::BOOTSTRAP_FONT),)
             .style(iced::theme::Button::Text)
             .width(Length::Shrink)
             .on_press(WalletMessage::ConsoleClear),
@@ -69,8 +68,7 @@ pub fn view_console(
             iced::widget::button(Text::new("Submit"))
                 .on_press(still_syncing.unwrap_or(WalletMessage::ConsoleInputSubmit)),
             tooltip(
-                Text::new(iced_aw::BootstrapIcon::Question.to_string())
-                    .font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 SUBMIT_TOOLTIP_TEXT,
                 tooltip::Position::Bottom
             )

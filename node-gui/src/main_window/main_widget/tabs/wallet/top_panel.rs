@@ -59,7 +59,7 @@ pub fn view_top_panel(
             )
             .on_press(WalletMessage::SetPassword),
             tooltip(
-                Text::new(iced_aw::BootstrapIcon::Question.to_string())
+                Text::new(iced_aw::Bootstrap::Question.to_string())
                     .line_height(LineHeight::Relative(1.0))
                     .font(iced_aw::BOOTSTRAP_FONT),
                 ENCRYPT_WALLET_TOOLTIP_TEXT,

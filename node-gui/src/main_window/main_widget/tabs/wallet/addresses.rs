@@ -36,7 +36,7 @@ pub fn view_addresses(
         .map(|(index, address)| {
             GridRow::new().push(field(index.to_string())).push(field(address.clone())).push(
                 button(
-                    Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
+                    Text::new(iced_aw::Bootstrap::ClipboardCheck.to_string())
                         .font(iced_aw::BOOTSTRAP_FONT),
                 )
                 .style(iced::theme::Button::Text)
@@ -51,8 +51,7 @@ pub fn view_addresses(
             iced::widget::button(Text::new("New address"))
                 .on_press(still_syncing.unwrap_or(WalletMessage::GetNewAddress)),
             tooltip(
-                Text::new(iced_aw::BootstrapIcon::Question.to_string())
-                    .font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 NEW_ADDRESS_TOOLTIP_TEXT,
                 tooltip::Position::Bottom
             )

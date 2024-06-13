@@ -48,7 +48,7 @@ impl Tab for NetworkingTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_aw::BootstrapIcon::Wifi.into(), self.title())
+        TabLabel::IconText(iced_aw::Bootstrap::Wifi.into(), self.title())
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {

@@ -21,7 +21,7 @@ use common::{
     primitives::{per_thousand::PerThousand, semver::SemVer, user_agent::UserAgent, Amount},
 };
 use iced::{widget::Text, window, Command, Element};
-use iced_aw::native::Modal;
+use iced_aw::widgets::Modal;
 use logging::log;
 use p2p::{net::types::services::Services, types::peer_id::PeerId, P2pEvent};
 use rfd::AsyncFileDialog;

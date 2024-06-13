@@ -109,7 +109,7 @@ pub fn view_delegation(
                             .gap(5)
                             .style(iced::theme::Container::Box),
                             button(
-                                Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
+                                Text::new(iced_aw::Bootstrap::ClipboardCheck.to_string())
                                     .font(iced_aw::BOOTSTRAP_FONT),
                             )
                             .style(iced::theme::Button::Text)
@@ -135,7 +135,7 @@ pub fn view_delegation(
                             .gap(5)
                             .style(iced::theme::Container::Box),
                             button(
-                                Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
+                                Text::new(iced_aw::Bootstrap::ClipboardCheck.to_string())
                                     .font(iced_aw::BOOTSTRAP_FONT),
                             )
                             .style(iced::theme::Button::Text)
@@ -178,8 +178,7 @@ pub fn view_delegation(
         row![
             Text::new(maturity_period_text).size(13),
             tooltip(
-                Text::new(iced_aw::BootstrapIcon::Question.to_string())
-                    .font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 MATURITY_PERIOD_TOOLTIP_TEXT,
                 Position::Bottom
             )
@@ -198,8 +197,7 @@ pub fn view_delegation(
                 })
                 .padding(10),
             tooltip(
-                Text::new(iced_aw::BootstrapIcon::Question.to_string())
-                    .font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 POOL_ID_TOOLTIP_TEXT,
                 Position::Bottom
             )
@@ -217,8 +215,7 @@ pub fn view_delegation(
                 })
                 .padding(10),
             tooltip(
-                Text::new(iced_aw::BootstrapIcon::Question.to_string())
-                    .font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 DELEGATION_ADDRESS_TOOLTIP_TEXT,
                 Position::Bottom
             )
@@ -230,8 +227,7 @@ pub fn view_delegation(
                 .padding(10)
                 .on_press(still_syncing.clone().unwrap_or(WalletMessage::CreateDelegation)),
             tooltip(
-                Text::new(iced_aw::BootstrapIcon::Question.to_string())
-                    .font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 CREATE_DELEGATION_BUTTON_TOOLTIP_TEXT,
                 Position::Bottom
             )
@@ -251,8 +247,7 @@ pub fn view_delegation(
                 })
                 .padding(10),
             tooltip(
-                Text::new(iced_aw::BootstrapIcon::Question.to_string())
-                    .font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 SEND_DELEGATION_ADDRESS_TOOLTIP_TEXT,
                 Position::Bottom
             )
@@ -270,8 +265,7 @@ pub fn view_delegation(
                 })
                 .padding(10),
             tooltip(
-                Text::new(iced_aw::BootstrapIcon::Question.to_string())
-                    .font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 SEND_DELEGATION_AMOUNT_TOOLTIP_TEXT,
                 Position::Bottom
             )
@@ -289,8 +283,7 @@ pub fn view_delegation(
                 })
                 .padding(10),
             tooltip(
-                Text::new(iced_aw::BootstrapIcon::Question.to_string())
-                    .font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 SEND_DELEGATION_ID_TOOLTIP_TEXT,
                 Position::Bottom
             )
@@ -302,8 +295,7 @@ pub fn view_delegation(
                 .padding(10)
                 .on_press(still_syncing.unwrap_or(WalletMessage::SendDelegationToAddress)),
             tooltip(
-                Text::new(iced_aw::BootstrapIcon::Question.to_string())
-                    .font(iced_aw::BOOTSTRAP_FONT),
+                Text::new(iced_aw::Bootstrap::Question.to_string()).font(iced_aw::BOOTSTRAP_FONT),
                 WITHDRAW_BUTTON_TOOLTIP_TEXT,
                 Position::Bottom
             )
