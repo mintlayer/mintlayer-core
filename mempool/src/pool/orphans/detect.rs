@@ -39,7 +39,6 @@ impl OrphanType {
             | CTE::TxNumWrongInBlockOnConnect(_, _)
             | CTE::TxNumWrongInBlockOnDisconnect(_, _)
             | CTE::InvariantBrokenAlreadyUnspent
-            | CTE::MissingTxInputs
             | CTE::MissingTxUndo(_)
             | CTE::MissingBlockUndo(_)
             | CTE::MissingBlockRewardUndo(_)
@@ -50,12 +49,12 @@ impl OrphanType {
             | CTE::SignatureVerificationFailed(_)
             | CTE::BlockHeightArithmeticError
             | CTE::BlockTimestampArithmeticError
-            | CTE::InvariantErrorHeaderCouldNotBeLoaded(_)
             | CTE::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _)
             | CTE::BlockIndexCouldNotBeLoaded(_)
             | CTE::FailedToAddAllFeesOfBlock(_)
             | CTE::RewardAdditionError(_)
-            | CTE::TimeLockViolation(_)
+            | CTE::TimeLockViolation
+            | CTE::TimelockedAccount
             | CTE::UtxoError(_)
             | CTE::TokensError(_)
             | CTE::TransactionVerifierError(_)
@@ -71,7 +70,6 @@ impl OrphanType {
             | CTE::UndoFetchFailure
             | CTE::TxVerifierStorage
             | CTE::DestinationRetrievalError(_)
-            | CTE::OutputTimelockError(_)
             | CTE::NotEnoughPledgeToCreateStakePool(..)
             | CTE::MissingTransactionNonce(_)
             | CTE::AttemptToCreateStakePoolFromAccounts
@@ -85,6 +83,7 @@ impl OrphanType {
             | CTE::PoolBalanceNotFound(_)
             | CTE::RewardDistributionError(_)
             | CTE::CheckTransactionError(_)
+            | CTE::Threshold(_)
             | CTE::IOPolicyError(_, _) => Err(err),
         }
     }

@@ -27,9 +27,7 @@ use consensus::{
 use tx_verifier::{
     error::{ConnectTransactionError, SpendStakeError, TokensError},
     timelock_check,
-    transaction_verifier::{
-        signature_destination_getter::SignatureDestinationGetterError, RewardDistributionError,
-    },
+    transaction_verifier::{error::SignatureDestinationGetterError, RewardDistributionError},
     CheckTransactionError, TransactionVerifierStorageError,
 };
 use utxo::UtxosBlockUndoError;
@@ -291,18 +289,17 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
 
             ConnectTransactionError::TxNumWrongInBlockOnConnect(_, _)
             | ConnectTransactionError::MissingOutputOrSpent(_)
-            | ConnectTransactionError::MissingTxInputs
             | ConnectTransactionError::AttemptToPrintMoney(_, _)
             | ConnectTransactionError::BlockRewardInputOutputMismatch(_, _)
             | ConnectTransactionError::TxFeeTotalCalcFailed(_, _)
             | ConnectTransactionError::BlockHeightArithmeticError
             | ConnectTransactionError::BlockTimestampArithmeticError
-            | ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_)
             | ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _)
             | ConnectTransactionError::BlockIndexCouldNotBeLoaded(_)
             | ConnectTransactionError::FailedToAddAllFeesOfBlock(_)
             | ConnectTransactionError::RewardAdditionError(_)
-            | ConnectTransactionError::TimeLockViolation(_)
+            | ConnectTransactionError::TimeLockViolation
+            | ConnectTransactionError::TimelockedAccount
             | ConnectTransactionError::BurnAmountSumError(_)
             | ConnectTransactionError::AttemptToSpendBurnedAmount
             | ConnectTransactionError::PoolBalanceNotFound(_)
@@ -315,6 +312,7 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             | ConnectTransactionError::IOPolicyError(_, _)
             | ConnectTransactionError::TotalFeeRequiredOverflow
             | ConnectTransactionError::InsufficientCoinsFee(_, _)
+            | ConnectTransactionError::Threshold(_)
             | ConnectTransactionError::AttemptToSpendFrozenToken(_) => {
                 BlockProcessingErrorClass::BadBlock
             }
@@ -327,7 +325,6 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             ConnectTransactionError::UtxoBlockUndoError(err) => err.classify(),
             ConnectTransactionError::AccountingBlockUndoError(err) => err.classify(),
             ConnectTransactionError::DestinationRetrievalError(err) => err.classify(),
-            ConnectTransactionError::OutputTimelockError(err) => err.classify(),
             ConnectTransactionError::SpendStakeError(err) => err.classify(),
             ConnectTransactionError::TokensAccountingError(err) => err.classify(),
             ConnectTransactionError::RewardDistributionError(err) => err.classify(),

@@ -198,7 +198,12 @@ impl RandomizedTransactionVerificationStrategy {
             .log_err()?;
 
         tx_verifier
-            .connect_block_reward(block_index, block.block_reward_transactable(), total_fees)
+            .connect_block_reward(
+                block_index,
+                block.block_reward_transactable(),
+                total_fees,
+                *median_time_past,
+            )
             .log_err()?;
 
         Ok(tx_verifier)

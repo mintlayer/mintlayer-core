@@ -148,15 +148,17 @@ pub fn collect_txs<M>(
             // If the transaction with this ID has already been processed, skip it
             ensure!(processed.insert(tx_id));
             let tx = mempool.store.txs_by_id.get(tx_id).expect("already checked").deref();
-            let timelock_check = chainstate::tx_verifier::timelock_check::check_timelocks(
-                &chainstate,
+
+            tx_verifier::input_check::verify_timelocks(
+                tx.transaction(),
                 chain_config,
                 &utxo_view,
-                tx.transaction(),
-                &tx_source,
-                &unlock_timestamp,
-            );
-            ensure!(timelock_check.is_ok());
+                &chainstate,
+                mempool_tip,
+                best_index.block_height().next_height(),
+                unlock_timestamp,
+            )
+            .ok()?;
             Some(tx)
         })
         .fuse()

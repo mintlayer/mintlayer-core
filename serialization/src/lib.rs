@@ -25,3 +25,5 @@ pub mod json_encoded;
 pub use serialization_core::*;
 pub use serialization_tagged as tagged;
 pub use tagged::{DirectDecode, DirectEncode, Tag, Tagged};
+
+pub type Result<T> = std::result::Result<T, Error>;

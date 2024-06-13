@@ -19,6 +19,7 @@ pub use transaction_verifier::{
     check_transaction::{check_transaction, CheckTransactionError},
     error,
     flush::flush_to_storage,
+    input_check,
     storage::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,

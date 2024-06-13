@@ -4326,6 +4326,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "mintscript"
+version = "0.5.0"
+dependencies = [
+ "common",
+ "crypto",
+ "expect-test",
+ "pos-accounting",
+ "rstest",
+ "serialization",
+ "static_assertions",
+ "test-utils",
+ "thiserror",
+ "tokens-accounting",
+ "utils",
+ "utxo",
+]
+
+[[package]]
 name = "mio"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8118,6 +8136,7 @@ dependencies = [
  "fallible-iterator 0.3.0",
  "itertools 0.13.0",
  "logging",
+ "mintscript",
  "mockall",
  "pos-accounting",
  "randomness",

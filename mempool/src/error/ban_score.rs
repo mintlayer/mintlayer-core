@@ -16,9 +16,7 @@
 use chainstate::{
     ban_score::BanScore,
     tx_verifier::{
-        transaction_verifier::{
-            signature_destination_getter::SignatureDestinationGetterError, RewardDistributionError,
-        },
+        transaction_verifier::{error::SignatureDestinationGetterError, RewardDistributionError},
         CheckTransactionError,
     },
     ChainstateError, ConnectTransactionError, IOPolicyError, TokensError,
@@ -120,7 +118,7 @@ impl MempoolBanScore for ConnectTransactionError {
             // These depend on the current chainstate. Since it is not easy to determine whether
             // it is the transaction or the current tip that's wrong, we don't punish the peer.
             ConnectTransactionError::MissingOutputOrSpent(_) => 0,
-            ConnectTransactionError::TimeLockViolation(_) => 0,
+            ConnectTransactionError::TimeLockViolation => 0,
             ConnectTransactionError::NonceIsNotIncremental(..) => 0,
 
             // These are delegated to the inner error
@@ -134,7 +132,6 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::CheckTransactionError(err) => err.mempool_ban_score(),
 
             // Transaction definitely invalid, ban peer
-            ConnectTransactionError::MissingTxInputs => 100,
             ConnectTransactionError::AttemptToPrintMoney(_, _) => 100,
             ConnectTransactionError::SignatureVerificationFailed(_) => 100,
             ConnectTransactionError::TxFeeTotalCalcFailed(_, _) => 100,
@@ -148,7 +145,10 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
-            ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
+            ConnectTransactionError::Threshold(_) => 100,
+            ConnectTransactionError::TimelockedAccount => 100,
+
+            // Need to drill down deeper into the error in these cases
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
             ConnectTransactionError::ConstrainedValueAccumulatorError(err, _) => err.ban_score(),
 
@@ -164,7 +164,6 @@ impl MempoolBanScore for ConnectTransactionError {
             // Internal errors, not peer's fault
             ConnectTransactionError::InvariantBrokenAlreadyUnspent => 0,
             ConnectTransactionError::BlockIndexCouldNotBeLoaded(_) => 0,
-            ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_) => 0,
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _) => 0,
             ConnectTransactionError::UtxoBlockUndoError(_) => 0,
             ConnectTransactionError::AccountingBlockUndoError(_) => 0,

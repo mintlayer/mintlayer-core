@@ -40,6 +40,7 @@ use randomness::{Rng, SliceRandom};
 use rstest::rstest;
 use serialization::Encode;
 use std::num::NonZeroU8;
+use test_utils::random::gen_random_bytes;
 use test_utils::random::Seed;
 
 #[rstest]
@@ -87,26 +88,61 @@ fn signed_tx(#[case] seed: Seed) {
             .transaction()
             .clone();
 
-        // The second transaction has the signed input.
-        let tx_2 = {
-            let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
-                &private_key,
-                SigHashType::try_from(SigHashType::ALL).unwrap(),
-                Destination::PublicKey(public_key),
-                &tx,
-                &[Some(&tx_1.transaction().outputs()[0])],
-                0,
-                &mut rng,
-            )
-            .unwrap();
-            SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)])
-                .expect("invalid witness count")
-        };
+        // Attempt to spend with NoSignature signature
+        {
+            // The second transaction has the signed input.
+            let tx_2 = {
+                SignedTransaction::new(tx.clone(), vec![InputWitness::NoSignature(None)])
+                    .expect("invalid witness count")
+            };
 
-        tf.make_block_builder()
-            .with_transactions(vec![tx_1, tx_2])
-            .build_and_process(&mut rng)
-            .unwrap();
+            tf.make_block_builder()
+                .with_transactions(vec![tx_1.clone(), tx_2])
+                .build_and_process(&mut rng)
+                .unwrap_err();
+        }
+        // Attempt to spend with garbage signature
+        {
+            // The second transaction has the signed input.
+            let tx_2 = {
+                SignedTransaction::new(
+                    tx.clone(),
+                    vec![InputWitness::Standard(StandardInputSignature::new(
+                        SigHashType::try_from(SigHashType::ALL).unwrap(),
+                        gen_random_bytes(&mut rng, 1, 100),
+                    ))],
+                )
+                .expect("invalid witness count")
+            };
+
+            tf.make_block_builder()
+                .with_transactions(vec![tx_1.clone(), tx_2])
+                .build_and_process(&mut rng)
+                .unwrap_err();
+        }
+        // Spend it properly with proper signature
+        {
+            // The second transaction has the signed input.
+            let tx_2 = {
+                let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
+                    &private_key,
+                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    Destination::PublicKey(public_key),
+                    &tx,
+                    &[Some(&tx_1.transaction().outputs()[0])],
+                    0,
+                    &mut rng,
+                )
+                .unwrap();
+                SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)])
+                    .expect("invalid witness count")
+            };
+
+            tf.make_block_builder()
+                .with_transactions(vec![tx_1, tx_2])
+                .build_and_process(&mut rng)
+                .unwrap();
+        }
     });
 }
 
@@ -195,26 +231,60 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
             authorization
         };
 
-        // The second transaction has the signed input.
-        let tx_2 = {
-            let input_sign =
-                StandardInputSignature::produce_classical_multisig_signature_for_input(
-                    &chain_config,
-                    &authorization,
-                    SigHashType::try_from(SigHashType::ALL).unwrap(),
-                    &tx,
-                    &[Some(&tx_1.transaction().outputs()[0])],
-                    0,
-                )
-                .unwrap();
-            SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)])
-                .expect("invalid witness count")
-        };
+        // Attempt to spend with NoSignature signature
+        {
+            // The second transaction has the signed input.
+            let tx_2 = {
+                SignedTransaction::new(tx.clone(), vec![InputWitness::NoSignature(None)])
+                    .expect("invalid witness count")
+            };
 
-        tf.make_block_builder()
-            .with_transactions(vec![tx_1, tx_2])
-            .build_and_process(&mut rng)
-            .unwrap();
+            tf.make_block_builder()
+                .with_transactions(vec![tx_1.clone(), tx_2])
+                .build_and_process(&mut rng)
+                .unwrap_err();
+        }
+        // Attempt to spend with garbage signature
+        {
+            // The second transaction has the signed input.
+            let tx_2 = {
+                SignedTransaction::new(
+                    tx.clone(),
+                    vec![InputWitness::Standard(StandardInputSignature::new(
+                        SigHashType::try_from(SigHashType::ALL).unwrap(),
+                        gen_random_bytes(&mut rng, 1, 100),
+                    ))],
+                )
+                .expect("invalid witness count")
+            };
+
+            tf.make_block_builder()
+                .with_transactions(vec![tx_1.clone(), tx_2])
+                .build_and_process(&mut rng)
+                .unwrap_err();
+        }
+        {
+            // The second transaction has the signed input.
+            let tx_2 = {
+                let input_sign =
+                    StandardInputSignature::produce_classical_multisig_signature_for_input(
+                        &chain_config,
+                        &authorization,
+                        SigHashType::try_from(SigHashType::ALL).unwrap(),
+                        &tx,
+                        &[Some(&tx_1.transaction().outputs()[0])],
+                        0,
+                    )
+                    .unwrap();
+                SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)])
+                    .expect("invalid witness count")
+            };
+
+            tf.make_block_builder()
+                .with_transactions(vec![tx_1, tx_2])
+                .build_and_process(&mut rng)
+                .unwrap();
+        }
     });
 }
 

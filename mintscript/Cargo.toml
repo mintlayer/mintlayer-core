@@ -1,0 +1,28 @@
+[package]
+name = "mintscript"
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+license.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common = { path = "../common" }
+pos-accounting = { path = "../pos-accounting" }
+serialization = { path = "../serialization" }
+tokens-accounting = { path = "../tokens-accounting" }
+utils = { path = "../utils" }
+utxo = { path = "../utxo" }
+
+static_assertions.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+
+crypto = { path = '../crypto' }
+test-utils = { path = '../test-utils' }
+serialization = { path = '../serialization' }
+
+rstest.workspace = true
+expect-test.workspace = true

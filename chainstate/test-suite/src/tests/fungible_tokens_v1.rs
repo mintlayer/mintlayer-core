@@ -45,9 +45,7 @@ use test_utils::{
 };
 use tokens_accounting::TokensAccountingStorageRead;
 use tx_verifier::{
-    transaction_verifier::{
-        error::TokenIssuanceError, signature_destination_getter::SignatureDestinationGetterError,
-    },
+    transaction_verifier::error::{SignatureDestinationGetterError, TokenIssuanceError},
     CheckTransactionError,
 };
 
@@ -3834,7 +3832,7 @@ fn mint_with_timelock(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation(token_mint_outpoint.clone()),
+                ConnectTransactionError::TimeLockViolation,
             ))
         );
 

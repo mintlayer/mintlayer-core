@@ -326,6 +326,53 @@ fn spend_create_delegation_output(#[case] seed: Seed) {
     });
 }
 
+// Try spending DelegateStaking output and get an error
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn spend_delegate_staking_output(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (_, _, delegation_id, _, transfer_outpoint) = prepare_delegation(&mut rng, &mut tf);
+        let available_amount = get_coin_amount_from_outpoint(&tf.storage, &transfer_outpoint);
+        let amount_to_delegate = available_amount;
+
+        // Delegate staking
+        let tx = TransactionBuilder::new()
+            .add_input(transfer_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
+            .build();
+        let delegate_staking_outpoint = UtxoOutPoint::new(tx.transaction().get_id().into(), 0);
+
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        let tx = TransactionBuilder::new()
+            .add_input(
+                delegate_staking_outpoint.clone().into(),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::ZERO),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+
+        let res = tf
+            .make_block_builder()
+            .add_transaction(tx)
+            .build_and_process(&mut rng)
+            .unwrap_err();
+        assert_eq!(
+            res,
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::MissingOutputOrSpent(delegate_staking_outpoint)
+            ))
+        );
+    });
+}
+
 // Prepare a pool with a delegation.
 // Delegate some coins. Check the balance.
 // Spend a part of delegated coins. Check the balance.

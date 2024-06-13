@@ -19,17 +19,17 @@ use common::{
         block::{Block, GenBlock},
         signature::DestinationSigError,
         tokens::TokenId,
-        AccountNonce, AccountType, OutPointSourceId, PoolId, Transaction, UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
 use thiserror::Error;
 
-use crate::{timelock_check, CheckTransactionError, TransactionSource};
+use crate::{CheckTransactionError, TransactionSource};
 
 use super::{
     input_output_policy::IOPolicyError, reward_distribution,
-    signature_destination_getter::SignatureDestinationGetterError,
     storage::TransactionVerifierStorageError,
 };
 
@@ -45,8 +45,6 @@ pub enum ConnectTransactionError {
     InvariantBrokenAlreadyUnspent,
     #[error("Output is not found in the cache or database: {0:?}")]
     MissingOutputOrSpent(UtxoOutPoint),
-    #[error("No inputs in a transaction")]
-    MissingTxInputs,
     #[error("While disconnecting a block, undo info for transaction `{0}` doesn't exist ")]
     MissingTxUndo(Id<Transaction>),
     #[error("While disconnecting a block, block undo info doesn't exist for block `{0:?}`")]
@@ -68,8 +66,6 @@ pub enum ConnectTransactionError {
     #[error("Error while calculating timestamps; possibly an overflow")]
     BlockTimestampArithmeticError,
     #[error("Transaction index for header found but header not found")]
-    InvariantErrorHeaderCouldNotBeLoaded(Id<GenBlock>),
-    #[error("Transaction index for header found but header not found")]
     InvariantErrorHeaderCouldNotBeLoadedFromHeight(GetAncestorError, BlockHeight),
     #[error("Unable to find block index")]
     BlockIndexCouldNotBeLoaded(Id<GenBlock>),
@@ -77,8 +73,10 @@ pub enum ConnectTransactionError {
     FailedToAddAllFeesOfBlock(Id<Block>),
     #[error("Block reward addition error for block {0}")]
     RewardAdditionError(Id<Block>),
-    #[error("Timelock rules violated in output {0:?}")]
-    TimeLockViolation(UtxoOutPoint),
+    #[error("Timelock rules violated")]
+    TimeLockViolation,
+    #[error("Timelocks on accounts not supported")]
+    TimelockedAccount,
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
     #[error("Tokens error: {0}")]
@@ -115,8 +113,6 @@ pub enum ConnectTransactionError {
 
     #[error("Destination retrieval error for signature verification {0}")]
     DestinationRetrievalError(#[from] SignatureDestinationGetterError),
-    #[error("Output timelock error: {0}")]
-    OutputTimelockError(#[from] timelock_check::OutputMaturityError),
     #[error("Nonce is not incremental: {0:?}, expected nonce: {1}, got nonce: {2}")]
     NonceIsNotIncremental(AccountType, AccountNonce, AccountNonce),
     #[error("Nonce is not found: {0:?}")]
@@ -147,6 +143,14 @@ pub enum ConnectTransactionError {
     RewardDistributionError(#[from] reward_distribution::RewardDistributionError),
     #[error("Check transaction error: {0}")]
     CheckTransactionError(#[from] CheckTransactionError),
+    #[error("Threshold condition not met: {0}")]
+    Threshold(#[from] mintscript::script::ThresholdError),
+}
+
+impl From<std::convert::Infallible> for ConnectTransactionError {
+    fn from(value: std::convert::Infallible) -> Self {
+        match value {}
+    }
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
@@ -155,6 +159,81 @@ impl From<chainstate_storage::Error> for ConnectTransactionError {
         // We don't need to cause panic here
         ConnectTransactionError::StorageError(err)
     }
+}
+
+impl From<mintscript::translate::TranslationError> for ConnectTransactionError {
+    fn from(value: mintscript::translate::TranslationError) -> Self {
+        SignatureDestinationGetterError::from(value).into()
+    }
+}
+
+impl From<mintscript::translate::TranslationError> for SignatureDestinationGetterError {
+    fn from(value: mintscript::translate::TranslationError) -> Self {
+        use mintscript::translate::TranslationError as E;
+        match value {
+            E::Unspendable => Self::SigVerifyOfNotSpendableOutput,
+            E::PoSAccounting(e) => Self::from(e),
+            E::TokensAccounting(e) => Self::from(e),
+            E::PoolNotFound(id) => Self::PoolDataNotFound(id),
+            E::DelegationNotFound(id) => Self::DelegationDataNotFound(id),
+            E::TokenNotFound(id) => Self::TokenDataNotFound(id),
+            E::IllegalAccountSpend => Self::SpendingFromAccountInBlockReward,
+            E::IllegalOutputSpend => Self::SpendingOutputInBlockReward,
+        }
+    }
+}
+
+impl<CE> From<mintscript::checker::TimelockError<CE>> for ConnectTransactionError
+where
+    Self: From<CE>,
+{
+    fn from(value: mintscript::checker::TimelockError<CE>) -> Self {
+        use mintscript::checker::TimelockError as E;
+        match value {
+            E::Context(e) => e.into(),
+            E::HeightArith => Self::BlockHeightArithmeticError,
+            E::TimestampArith => Self::BlockTimestampArithmeticError,
+            E::HeightLocked(_, _) => Self::TimeLockViolation,
+            E::TimestampLocked(_, _) => Self::TimeLockViolation,
+        }
+    }
+}
+
+impl<SE, TE> From<mintscript::script::ScriptError<SE, TE>> for ConnectTransactionError
+where
+    Self: From<SE> + From<TE>,
+{
+    fn from(value: mintscript::script::ScriptError<SE, TE>) -> Self {
+        match value {
+            mintscript::script::ScriptError::Signature(e) => e.into(),
+            mintscript::script::ScriptError::Timelock(e) => e.into(),
+            mintscript::script::ScriptError::Threshold(e) => e.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum SignatureDestinationGetterError {
+    #[error("Attempted to spend output in block reward")]
+    SpendingOutputInBlockReward,
+    #[error("Attempted to spend from account in block reward")]
+    SpendingFromAccountInBlockReward,
+    #[error("Attempted to verify signature for not spendable output")]
+    SigVerifyOfNotSpendableOutput,
+    #[error("Pool data not found for signature verification {0}")]
+    PoolDataNotFound(PoolId),
+    #[error("Delegation data not found for signature verification {0}")]
+    DelegationDataNotFound(DelegationId),
+    #[error("Token data not found for signature verification {0}")]
+    TokenDataNotFound(TokenId),
+    #[error("Utxo for the outpoint not fount: {0:?}")]
+    UtxoOutputNotFound(UtxoOutPoint),
+    #[error("Error accessing utxo set")]
+    UtxoViewError(utxo::Error),
+    #[error("During destination getting for signature verification: PoS accounting error {0}")]
+    PoSAccountingViewError(#[from] pos_accounting::Error),
+    #[error("During destination getting for signature verification: Tokens accounting error {0}")]
+    TokensAccountingViewError(#[from] tokens_accounting::Error),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

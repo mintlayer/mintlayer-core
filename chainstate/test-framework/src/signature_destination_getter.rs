@@ -13,40 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{
-    tokens::TokenId, AccountCommand, AccountSpending, DelegationId, Destination, PoolId, TxInput,
-    TxOutput, UtxoOutPoint,
-};
+use common::chain::{AccountCommand, AccountSpending, Destination, TxInput, TxOutput};
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
+use tx_verifier::error::SignatureDestinationGetterError;
 use utxo::UtxosView;
 
 pub type SignatureDestinationGetterFn<'a> =
     dyn Fn(&TxInput) -> Result<Destination, SignatureDestinationGetterError> + 'a;
-
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-pub enum SignatureDestinationGetterError {
-    #[error("Attempted to spend output in block reward")]
-    SpendingOutputInBlockReward,
-    #[error("Attempted to spend from account in block reward")]
-    SpendingFromAccountInBlockReward,
-    #[error("Attempted to verify signature for not spendable output")]
-    SigVerifyOfNotSpendableOutput,
-    #[error("Pool data not found for signature verification {0}")]
-    PoolDataNotFound(PoolId),
-    #[error("Delegation data not found for signature verification {0}")]
-    DelegationDataNotFound(DelegationId),
-    #[error("Token data not found for signature verification {0}")]
-    TokenDataNotFound(TokenId),
-    #[error("Utxo for the outpoint not fount: {0:?}")]
-    UtxoOutputNotFound(UtxoOutPoint),
-    #[error("Error accessing utxo set")]
-    UtxoViewError(utxo::Error),
-    #[error("During destination getting for signature verification: PoS accounting error {0}")]
-    PoSAccountingViewError(#[from] pos_accounting::Error),
-    #[error("During destination getting for signature verification: Tokens accounting error {0}")]
-    TokensAccountingViewError(#[from] tokens_accounting::Error),
-}
 
 /// Given a signed transaction input, which spends an output of some type,
 /// what is the destination of the output being spent, against which
@@ -183,61 +157,6 @@ impl<'a> SignatureDestinationGetter<'a> {
                             Ok(destination)
                         }
                     },
-                }
-            };
-
-        Self {
-            f: Box::new(destination_getter),
-        }
-    }
-
-    pub fn new_for_block_reward<U: UtxosView>(utxos_view: &'a U) -> Self {
-        let destination_getter =
-            |input: &TxInput| -> Result<Destination, SignatureDestinationGetterError> {
-                match input {
-                    TxInput::Utxo(outpoint) => {
-                        let utxo = utxos_view
-                            .utxo(outpoint)
-                            .map_err(|_| {
-                                SignatureDestinationGetterError::UtxoViewError(
-                                    utxo::Error::ViewRead,
-                                )
-                            })?
-                            .ok_or(SignatureDestinationGetterError::UtxoOutputNotFound(
-                                outpoint.clone(),
-                            ))?;
-
-                        match utxo.output() {
-                            TxOutput::Transfer(_, _)
-                            | TxOutput::LockThenTransfer(_, _, _)
-                            | TxOutput::DelegateStaking(_, _)
-                            | TxOutput::IssueNft(_, _, _) => {
-                                Err(SignatureDestinationGetterError::SpendingOutputInBlockReward)
-                            }
-                            TxOutput::CreateDelegationId(_, _)
-                            | TxOutput::Burn(_)
-                            | TxOutput::DataDeposit(_)
-                            | TxOutput::IssueFungibleToken(_) => {
-                                Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
-                            }
-
-                            TxOutput::ProduceBlockFromStake(d, _) => {
-                                // Spending an output of a block creation output is only allowed to
-                                // create another block, given that this is a block reward.
-                                Ok(d.clone())
-                            }
-                            TxOutput::CreateStakePool(_, pool_data) => {
-                                // Spending an output of a pool creation output is only allowed when
-                                // creating a block (given it's in a block reward; otherwise it should
-                                // be a transaction for decommissioning the pool), hence the staker key
-                                // is checked.
-                                Ok(pool_data.staker().clone())
-                            }
-                        }
-                    }
-                    TxInput::Account(..) | TxInput::AccountCommand(..) => {
-                        Err(SignatureDestinationGetterError::SpendingFromAccountInBlockReward)
-                    }
                 }
             };
 

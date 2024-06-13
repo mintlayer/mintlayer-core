@@ -16,14 +16,13 @@
 mod input_output_policy;
 mod pos_accounting_delta_adapter;
 mod reward_distribution;
-mod signature_check;
 mod token_issuance_cache;
 
 pub mod check_transaction;
 pub mod error;
 pub mod flush;
 pub mod hierarchy;
-pub mod signature_destination_getter;
+pub mod input_check;
 pub mod storage;
 pub mod timelock_check;
 pub mod tokens_check;
@@ -54,7 +53,6 @@ use self::{
     accounting_undo_cache::{AccountingBlockUndoCache, CachedBlockUndoOp},
     error::{ConnectTransactionError, TokensError},
     pos_accounting_delta_adapter::PoSAccountingDeltaAdapter,
-    signature_destination_getter::SignatureDestinationGetter,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
     utxos_undo_cache::{CachedUtxoBlockUndoOp, UtxosBlockUndoCache},
@@ -255,7 +253,7 @@ where
         };
         ensure!(
             expected_nonce == nonce,
-            ConnectTransactionError::NonceIsNotIncremental(account, expected_nonce, nonce,)
+            ConnectTransactionError::NonceIsNotIncremental(account, expected_nonce, nonce)
         );
         // store new nonce
         self.account_nonce.insert(account, CachedOperation::Write(nonce));
@@ -732,27 +730,7 @@ where
             &self.utxo_cache,
         )?;
 
-        // check timelocks of the outputs and make sure there's no premature spending
-        timelock_check::check_timelocks(
-            &self.storage,
-            &self.chain_config,
-            &self.utxo_cache,
-            tx,
-            tx_source,
-            median_time_past,
-        )?;
-
-        // verify input signatures
-        signature_check::verify_signatures(
-            self.chain_config.as_ref(),
-            &self.utxo_cache,
-            tx,
-            SignatureDestinationGetter::new_for_transaction(
-                &self.tokens_accounting_cache,
-                &self.pos_accounting_adapter.accounting_delta(),
-                &self.utxo_cache,
-            ),
-        )?;
+        self.verify_inputs(tx, tx_source, *median_time_past)?;
 
         self.connect_pos_accounting_outputs(tx_source, tx.transaction())?;
 
@@ -779,16 +757,12 @@ where
         block_index: &BlockIndex,
         reward_transactable: BlockRewardTransactable,
         total_fees: Fee,
+        median_time_past: BlockTimestamp,
     ) -> Result<(), ConnectTransactionError> {
         // TODO: test spending block rewards from chains outside the mainchain
-        if let Some(_inputs) = reward_transactable.inputs() {
-            // verify input signatures
-            signature_check::verify_signatures(
-                self.chain_config.as_ref(),
-                &self.utxo_cache,
-                &reward_transactable,
-                SignatureDestinationGetter::new_for_block_reward(&self.utxo_cache),
-            )?;
+        if reward_transactable.inputs().is_some() {
+            let tx_source = TransactionSourceForConnect::for_chain(block_index);
+            self.verify_inputs(&reward_transactable, &tx_source, median_time_past)?;
         }
 
         let block_id = *block_index.block_id();
@@ -970,6 +944,27 @@ where
 
     pub fn set_best_block(&mut self, id: Id<GenBlock>) {
         self.utxo_cache.set_best_block(id);
+    }
+
+    pub fn verify_inputs<Tx>(
+        &self,
+        tx: &Tx,
+        tx_source: &TransactionSourceForConnect,
+        median_time_past: BlockTimestamp,
+    ) -> Result<(), ConnectTransactionError>
+    where
+        Tx: input_check::FullyVerifiable<PoSAccountingDelta<A>, TokensAccountingCache<T>>,
+    {
+        input_check::verify_full(
+            tx,
+            self.chain_config.as_ref(),
+            &self.utxo_cache,
+            self.pos_accounting_adapter.accounting_delta(),
+            &self.tokens_accounting_cache,
+            &self.storage,
+            tx_source,
+            median_time_past,
+        )
     }
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {

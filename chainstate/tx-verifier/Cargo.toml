@@ -16,6 +16,7 @@ consensus = { path = "../../consensus" }
 constraints-value-accumulator = { path = "../constraints-value-accumulator" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
+mintscript = { path = "../../mintscript" }
 pos-accounting = { path = "../../pos-accounting" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }

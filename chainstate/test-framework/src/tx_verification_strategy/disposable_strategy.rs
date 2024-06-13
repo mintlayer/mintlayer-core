@@ -108,7 +108,12 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
             .log_err()?;
 
         base_tx_verifier
-            .connect_block_reward(block_index, block.block_reward_transactable(), total_fees)
+            .connect_block_reward(
+                block_index,
+                block.block_reward_transactable(),
+                total_fees,
+                median_time_past,
+            )
             .log_err()?;
 
         base_tx_verifier.set_best_block(block.get_id().into());
