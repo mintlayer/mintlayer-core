@@ -34,6 +34,10 @@ use common::{
         block::{consensus_data::PoWData, timestamp::BlockTimestamp, ConsensusData},
         config::{create_unit_test_config, Builder as ConfigBuilder},
         output_value::OutputValue,
+        signature::{
+            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            sighash::sighashtype::SigHashType,
+        },
         signed_transaction::SignedTransaction,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -1352,5 +1356,158 @@ fn temporarily_bad_block_not_invalidated_after_reorg(#[case] seed: Seed) {
             &tf,
             &[m0_id, m1_id, m2_id, c0_id, c1_id, c2_id, future_block_id],
         );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn spend_timelocked_signed_output(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (private_key, public_key) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+        // Produce timelocked output with signature required
+        let tx_1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(
+                    tf.chainstate.get_chain_config().genesis_block_id().into(),
+                    0,
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                Destination::PublicKey(public_key.clone()),
+                OutputTimeLock::ForBlockCount(2),
+            ))
+            .build();
+        let tx1_id = tx_1.transaction().get_id();
+
+        tf.make_block_builder()
+            .add_transaction(tx_1.clone())
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        let tx_2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(tx1_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                anyonecanspend_address(),
+            ))
+            .build()
+            .take_transaction();
+
+        // Try spend violating timelock and signature
+        {
+            let tx = SignedTransaction::new(tx_2.clone(), vec![InputWitness::NoSignature(None)])
+                .unwrap();
+
+            let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            assert_eq!(
+                res.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::TimeLockViolation
+                ))
+            );
+        }
+        // Try spend violating timelock but not signature
+        {
+            let tx = {
+                let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
+                    &private_key,
+                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    Destination::PublicKey(public_key.clone()),
+                    &tx_2,
+                    &[Some(&tx_1.transaction().outputs()[0])],
+                    0,
+                    &mut rng,
+                )
+                .unwrap();
+                SignedTransaction::new(tx_2.clone(), vec![InputWitness::Standard(input_sign)])
+                    .expect("invalid witness count")
+            };
+
+            let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            assert_eq!(
+                res.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::TimeLockViolation
+                ))
+            );
+        }
+
+        // Produce an empty block just to satisfy timelock
+        tf.make_block_builder().build_and_process(&mut rng).unwrap();
+
+        // Try spend violating signature (empty sig) but not timelock
+        {
+            let tx = SignedTransaction::new(tx_2.clone(), vec![InputWitness::NoSignature(None)])
+                .unwrap();
+
+            let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            assert_eq!(
+                res.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::SignatureVerificationFailed(
+                        common::chain::signature::DestinationSigError::SignatureNotFound
+                    )
+                ))
+            );
+        }
+
+        // Try spend violating signature (incorrect sig) but not timelock
+        {
+            let tx = {
+                let (random_private_key, random_public_key) =
+                    PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+                let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
+                    &random_private_key,
+                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    Destination::PublicKey(random_public_key),
+                    &tx_2,
+                    &[Some(&tx_1.transaction().outputs()[0])],
+                    0,
+                    &mut rng,
+                )
+                .unwrap();
+                SignedTransaction::new(tx_2.clone(), vec![InputWitness::Standard(input_sign)])
+                    .expect("invalid witness count")
+            };
+
+            let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            assert_eq!(
+                res.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::SignatureVerificationFailed(
+                        common::chain::signature::DestinationSigError::SignatureVerificationFailed
+                    )
+                ))
+            );
+        }
+
+        // Satisfy all conditions
+        let tx = {
+            let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
+                &private_key,
+                SigHashType::try_from(SigHashType::ALL).unwrap(),
+                Destination::PublicKey(public_key),
+                &tx_2,
+                &[Some(&tx_1.transaction().outputs()[0])],
+                0,
+                &mut rng,
+            )
+            .unwrap();
+            SignedTransaction::new(tx_2.clone(), vec![InputWitness::Standard(input_sign)])
+                .expect("invalid witness count")
+        };
+
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
     });
 }
