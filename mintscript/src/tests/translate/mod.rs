@@ -130,8 +130,8 @@ fn burn(amount: u128) -> TestInputInfo {
     tii(TxOutput::Burn(coins(amount)))
 }
 
-fn prod_block(dest: Destination, id_byte: u8) -> TestInputInfo {
-    tii(TxOutput::ProduceBlockFromStake(dest, fake_id(id_byte)))
+fn prod_block(dest: Destination, pool_id: PoolId) -> TestInputInfo {
+    tii(TxOutput::ProduceBlockFromStake(dest, pool_id))
 }
 
 fn delegate(amount: u128, del_id_byte: u8) -> TestInputInfo {
@@ -157,7 +157,7 @@ fn deleg0() -> (DelegationId, DelegationData) {
 }
 
 fn pool0_decom() -> Destination {
-    dest_pk(1337)
+    dest_pk(0x1337)
 }
 
 fn pool0() -> (PoolId, PoolData) {
@@ -266,9 +266,15 @@ fn mode_name<'a, T: TranslationMode<'a>>(_: &T) -> &'static str {
     transfer_pk_tl(16, 560, tl_until_height(999_999)),
     nosig()
 )]
-#[case("prodblock_00", prod_block(dest_pk(0x543), 0xe0), stdsig(0x60))]
-#[case("prodblock_01", prod_block(dest_pk(0x544), 0xe1), nosig())]
-#[case("prodblock_02", prod_block(pool0_decom(), 0xe2), stdsig(0x63))]
+#[case(
+    "prodblock_00",
+    prod_block(dest_pk(0x543), fake_id(0xe0)),
+    stdsig(0x60)
+)]
+#[case("prodblock_01", prod_block(dest_pk(0x544), fake_id(0xe1)), nosig())]
+#[case("prodblock_02", prod_block(pool0_decom(), fake_id(0xe2)), stdsig(0x63))]
+#[case("prodblock_03", prod_block(dest_pk(0x545), pool0().0), stdsig(0x64))]
+#[case("prodblock_04", prod_block(pool0_decom(), pool0().0), stdsig(0x65))]
 #[case("delegate_00", delegate(5_000_000, 0xe2), stdsig(0x61))]
 #[case("delegate_01", delegate(6_000_000, 0xe3), nosig())]
 #[case("newpool_00", create_pool(14, 15), stdsig(0x53))]
