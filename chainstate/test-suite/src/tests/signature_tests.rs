@@ -96,10 +96,21 @@ fn signed_tx(#[case] seed: Seed) {
                     .expect("invalid witness count")
             };
 
-            tf.make_block_builder()
+            let res = tf
+                .make_block_builder()
                 .with_transactions(vec![tx_1.clone(), tx_2])
-                .build_and_process(&mut rng)
-                .unwrap_err();
+                .build_and_process(&mut rng);
+
+            assert_eq!(
+                res.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(
+                    chainstate::BlockError::StateUpdateFailed(
+                        chainstate::ConnectTransactionError::SignatureVerificationFailed(
+                            chain::signature::DestinationSigError::SignatureNotFound
+                        )
+                    )
+                )
+            );
         }
         // Attempt to spend with garbage signature
         {
@@ -115,10 +126,21 @@ fn signed_tx(#[case] seed: Seed) {
                 .expect("invalid witness count")
             };
 
-            tf.make_block_builder()
+            let res = tf
+                .make_block_builder()
                 .with_transactions(vec![tx_1.clone(), tx_2])
-                .build_and_process(&mut rng)
-                .unwrap_err();
+                .build_and_process(&mut rng);
+
+            assert_eq!(
+                res.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(
+                    chainstate::BlockError::StateUpdateFailed(
+                        chainstate::ConnectTransactionError::SignatureVerificationFailed(
+                            chain::signature::DestinationSigError::InvalidSignatureEncoding
+                        )
+                    )
+                )
+            );
         }
         // Spend it properly with proper signature
         {
@@ -239,10 +261,21 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
                     .expect("invalid witness count")
             };
 
-            tf.make_block_builder()
+            let res = tf
+                .make_block_builder()
                 .with_transactions(vec![tx_1.clone(), tx_2])
-                .build_and_process(&mut rng)
-                .unwrap_err();
+                .build_and_process(&mut rng);
+
+            assert_eq!(
+                res.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(
+                    chainstate::BlockError::StateUpdateFailed(
+                        chainstate::ConnectTransactionError::SignatureVerificationFailed(
+                            chain::signature::DestinationSigError::SignatureNotFound
+                        )
+                    )
+                )
+            );
         }
         // Attempt to spend with garbage signature
         {
@@ -258,10 +291,21 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
                 .expect("invalid witness count")
             };
 
-            tf.make_block_builder()
+            let res = tf
+                .make_block_builder()
                 .with_transactions(vec![tx_1.clone(), tx_2])
-                .build_and_process(&mut rng)
-                .unwrap_err();
+                .build_and_process(&mut rng);
+
+            assert_eq!(
+                res.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(
+                    chainstate::BlockError::StateUpdateFailed(
+                        chainstate::ConnectTransactionError::SignatureVerificationFailed(
+                            chain::signature::DestinationSigError::InvalidSignatureEncoding
+                        )
+                    )
+                )
+            );
         }
         {
             // The second transaction has the signed input.
