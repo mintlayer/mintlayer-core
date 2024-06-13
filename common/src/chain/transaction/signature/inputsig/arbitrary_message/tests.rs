@@ -19,7 +19,7 @@ use chain::signature::{
     inputsig::{standard_signature::StandardInputSignature, InputWitness},
     sighash::{sighashtype::SigHashType, signature_hash},
     tests::utils::{generate_input_utxo, generate_unsigned_tx},
-    verify_signature, SignedTransaction,
+    verify_signature,
 };
 use crypto::{
     hash::StreamHasher,
@@ -34,7 +34,7 @@ use test_utils::{
 
 use crate::{
     address::pubkeyhash::PublicKeyHash,
-    chain::{self, Destination},
+    chain::{self, Destination, SignedTransaction},
     primitives::{id::DefaultHashAlgoStream, Id},
 };
 

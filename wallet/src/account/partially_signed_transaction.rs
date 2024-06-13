@@ -106,6 +106,7 @@ impl PartiallySignedTransaction {
                 (Some(InputWitness::NoSignature(_)), Some(_)) => false,
                 (Some(InputWitness::Standard(_)), None) => false,
                 (Some(InputWitness::Standard(_)), Some(dest)) => {
+                    // FIXME: move to into_signed_tx?
                     verify_signature(chain_config, dest, self, &inputs_utxos_refs, input_num)
                         .is_ok()
                 }
@@ -142,10 +143,7 @@ impl Signable for PartiallySignedTransaction {
 }
 
 impl Transactable for PartiallySignedTransaction {
-    //fn signatures(&self) -> Vec<Option<InputWitness>> {
-    //    self.witnesses.clone()
-    //}
-    fn signatures(&self) -> Option<&[InputWitness]> {
-        todo!()
+    fn signatures(&self) -> Vec<Option<InputWitness>> {
+        self.witnesses.clone()
     }
 }

@@ -61,6 +61,24 @@ pub enum Transaction {
     V1(TransactionV1),
 }
 
+impl signature::Signable for Transaction {
+    fn inputs(&self) -> Option<&[TxInput]> {
+        Some(self.inputs())
+    }
+
+    fn outputs(&self) -> Option<&[TxOutput]> {
+        Some(self.outputs())
+    }
+
+    fn version_byte(&self) -> Option<u8> {
+        Some(self.version_byte())
+    }
+
+    fn flags(&self) -> Option<u128> {
+        Some(self.flags())
+    }
+}
+
 impl Idable for Transaction {
     type Tag = Transaction;
     fn get_id(&self) -> Id<Transaction> {

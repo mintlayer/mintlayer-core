@@ -88,7 +88,7 @@ impl<'a> Signable for BlockRewardTransactable<'a> {
 }
 
 impl<'a> Transactable for BlockRewardTransactable<'a> {
-    fn signatures(&self) -> Option<&[InputWitness]> {
-        self.witness
+    fn signatures(&self) -> Vec<Option<InputWitness>> {
+        self.witness.map_or(vec![], |w| w.iter().map(|s| Some(s.clone())).collect())
     }
 }

@@ -84,8 +84,8 @@ impl<C: SignatureContext> SignatureChecker<C> for StandardSignatureChecker {
         // assertion should then go away. This goes hand in hand with turning Destinations, not
         // just outputs/input pairs into script.
         assert_eq!(
-            tx.signatures().and_then(|ins| ins.get(input_num)),
-            Some(signature),
+            tx.signatures().get(input_num),
+            Some(&Some(signature.clone()))
         );
 
         verify_signature(chain_config, destination, tx, ctx.input_utxos(), input_num)

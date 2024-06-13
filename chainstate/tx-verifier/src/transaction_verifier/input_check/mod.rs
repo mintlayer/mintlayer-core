@@ -24,12 +24,13 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
+use crypto::key::SignatureError;
 use mintscript::{
     checker::HashlockError, translate::InputInfoProvider, InputInfo, SignatureContext,
     TimelockContext, TranslateInput, WitnessScript,
 };
 
-use crate::TransactionVerifierStorageRef;
+use crate::{error::SignatureDestinationGetterError, TransactionVerifierStorageRef};
 
 use super::TransactionSourceForConnect;
 
@@ -89,11 +90,11 @@ pub enum TimelockContextError {
 
 pub struct PerInputData<'a> {
     input: InputInfo<'a>,
-    witness: &'a InputWitness,
+    witness: InputWitness,
 }
 
 impl<'a> PerInputData<'a> {
-    fn new(input: InputInfo<'a>, witness: &'a InputWitness) -> Self {
+    fn new(input: InputInfo<'a>, witness: InputWitness) -> Self {
         Self { input, witness }
     }
 
@@ -101,7 +102,7 @@ impl<'a> PerInputData<'a> {
         utxo_view: &UV,
         input_num: usize,
         input: &'a TxInput,
-        witness: &'a InputWitness,
+        witness: InputWitness,
     ) -> Result<Self, InputCheckError> {
         let info = match input {
             TxInput::Utxo(outpoint) => {
@@ -127,7 +128,7 @@ impl mintscript::translate::InputInfoProvider for PerInputData<'_> {
     }
 
     fn witness(&self) -> &InputWitness {
-        self.witness
+        &self.witness
     }
 }
 
@@ -198,7 +199,7 @@ impl<'a> CoreContext<'a> {
         transaction: &'a T,
     ) -> Result<Self, InputCheckError> {
         let inputs = transaction.inputs().unwrap_or_default();
-        let sigs = transaction.signatures().unwrap_or_default();
+        let sigs = transaction.signatures();
 
         assert_eq!(inputs.len(), sigs.len());
 
@@ -206,7 +207,15 @@ impl<'a> CoreContext<'a> {
             .iter()
             .zip(sigs.iter())
             .enumerate()
-            .map(|(n, (input, sig))| PerInputData::from_input(utxo_view, n, input, sig))
+            .map(|(n, (input, sig))| {
+                let witness = sig.clone().ok_or_else(|| {
+                    InputCheckError::new(
+                        n,
+                        ScriptError::Signature(DestinationSigError::SignatureNotFound),
+                    )
+                })?;
+                PerInputData::from_input(utxo_view, n, input, witness)
+            })
             .collect::<Result<_, _>>()?;
 
         Ok(Self { inputs_and_sigs })
@@ -525,3 +534,16 @@ where
 
     Ok(())
 }
+
+//pub fn verify_signature<T: Transactable>(
+//    chain_config: &ChainConfig,
+//    outpoint_destination: &Destination,
+//    tx: &T,
+//    inputs_utxos: &[Option<&TxOutput>],
+//    input_num: usize,
+//) -> Result<(), ConnectTransactionError> {
+//    let mut checker = mintscript::checker::StandardSignatureChecker;
+//    checker.check_signature(ctx, destination, signature)?;
+//
+//    Ok(())
+//}

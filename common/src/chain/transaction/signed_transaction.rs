@@ -114,12 +114,8 @@ impl Signable for SignedTransaction {
 }
 
 impl Transactable for SignedTransaction {
-    //fn signatures(&self) -> Vec<Option<InputWitness>> {
-    //    self.signatures.iter().map(|s| Some(s.clone())).collect()
-    //}
-
-    fn signatures(&self) -> Option<&[InputWitness]> {
-        Some(self.signatures())
+    fn signatures(&self) -> Vec<Option<InputWitness>> {
+        self.signatures.iter().map(|s| Some(s.clone())).collect()
     }
 }
 
