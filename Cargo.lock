@@ -3232,9 +3232,9 @@ dependencies = [
 
 [[package]]
 name = "iced_aw"
-version = "0.8.0"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "129deba9897243dd59c2038e2267a691e392c94e569680066ee63b1164429490"
+checksum = "6e68c330918a95bd73176206d65b84efe9aee6581da0e6dea0390cd146d7214c"
 dependencies = [
  "cfg-if",
  "chrono",

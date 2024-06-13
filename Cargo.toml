@@ -167,7 +167,7 @@ hex = "0.4"
 hex-literal = "0.4"
 hmac = "0.12"
 iced = "0.12"
-iced_aw = "0.8"
+iced_aw = "0.9"
 indoc = "2.0"
 itertools = "0.13"
 jsonrpsee = { version = "0.22", default-features = false }

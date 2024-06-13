@@ -73,7 +73,7 @@ pub fn view_transactions(
                     .gap(5)
                     .style(iced::theme::Container::Box),
                     button(
-                        Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
+                        Text::new(iced_aw::Bootstrap::ClipboardCheck.to_string())
                             .font(iced_aw::BOOTSTRAP_FONT),
                     )
                     .style(iced::theme::Button::Text)

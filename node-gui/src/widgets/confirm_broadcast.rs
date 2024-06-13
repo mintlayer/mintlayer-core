@@ -82,8 +82,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for ConfirmBroadcast<Mes
         .on_press(ConfirmBroadcastEvent::Ok);
 
         let copy_to_clipboard = Button::new(
-            Text::new(iced_aw::BootstrapIcon::ClipboardCheck.to_string())
-                .font(iced_aw::BOOTSTRAP_FONT),
+            Text::new(iced_aw::Bootstrap::ClipboardCheck.to_string()).font(iced_aw::BOOTSTRAP_FONT),
         )
         .style(iced::theme::Button::Text)
         .on_press(ConfirmBroadcastEvent::CopyToClipboard(summary.clone()));

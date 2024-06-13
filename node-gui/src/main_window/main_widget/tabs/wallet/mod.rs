@@ -467,7 +467,7 @@ impl Tab for WalletTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_aw::BootstrapIcon::Wallet.into(), self.title())
+        TabLabel::IconText(iced_aw::Bootstrap::Wallet.into(), self.title())
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {

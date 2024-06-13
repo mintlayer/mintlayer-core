@@ -58,7 +58,7 @@ impl Tab for SummaryTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        TabLabel::IconText(iced_aw::BootstrapIcon::Info.into(), self.title())
+        TabLabel::IconText(iced_aw::Bootstrap::Info.into(), self.title())
     }
 
     fn content(&self, node_state: &NodeState) -> Element<Self::Message> {
