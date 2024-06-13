@@ -94,6 +94,12 @@ pub enum DestinationSigError {
     Unsupported,
 }
 
+impl From<std::convert::Infallible> for DestinationSigError {
+    fn from(value: std::convert::Infallible) -> Self {
+        match value {}
+    }
+}
+
 pub trait Signable {
     fn inputs(&self) -> Option<&[TxInput]>;
     fn outputs(&self) -> Option<&[TxOutput]>;

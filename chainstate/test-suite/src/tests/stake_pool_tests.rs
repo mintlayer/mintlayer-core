@@ -47,6 +47,7 @@ use test_utils::{
     nft_utils::random_token_issuance_v1,
     random::{make_seedable_rng, Seed},
 };
+use tx_verifier::error::{InputCheckError, ScriptError};
 
 #[rstest]
 #[trace]
@@ -775,9 +776,10 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
             assert_eq!(
                 result,
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::SignatureVerificationFailed(
-                        DestinationSigError::SignatureVerificationFailed
-                    )
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        ScriptError::Signature(DestinationSigError::SignatureVerificationFailed)
+                    ))
                 ))
             );
         }

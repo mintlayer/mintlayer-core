@@ -25,7 +25,7 @@ use utxo::Utxo;
 use crate::WitnessScript;
 
 /// An error that can happen during translation of an input to a script
-#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum TranslationError {
     #[error("Attempt to spend an unspendable output")]
     Unspendable,

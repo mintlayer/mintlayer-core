@@ -17,11 +17,11 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, timelock::OutputTimeLock, UtxoOutPoint},
     primitives::{BlockCount, BlockHeight},
 };
-use mintscript::checker::TimelockChecker;
+use mintscript::checker::TimelockChecker as _;
 use thiserror::Error;
 use utils::ensure;
 
-use super::error::ConnectTransactionError;
+pub type TimelockError = mintscript::checker::TimelockError<std::convert::Infallible>;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum OutputMaturityError {
@@ -62,15 +62,14 @@ pub fn check_timelock(
     spend_height: &BlockHeight,
     spending_time: &BlockTimestamp,
     _outpoint: &UtxoOutPoint,
-) -> Result<(), ConnectTransactionError> {
+) -> Result<(), TimelockError> {
     let mut data = TimelockData {
         spending_height: *spend_height,
         spending_time: *spending_time,
         source_height: *source_block_height,
         source_time: *source_block_time,
     };
-    mintscript::checker::StandardTimelockChecker.check_timelock(&mut data, timelock)?;
-    Ok(())
+    mintscript::checker::StandardTimelockChecker.check_timelock(&mut data, timelock)
 }
 
 pub fn check_output_maturity_setting(

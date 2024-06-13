@@ -16,6 +16,7 @@
 use chainstate::{
     ban_score::BanScore,
     tx_verifier::{
+        self,
         transaction_verifier::{error::SignatureDestinationGetterError, RewardDistributionError},
         CheckTransactionError,
     },
@@ -118,7 +119,6 @@ impl MempoolBanScore for ConnectTransactionError {
             // These depend on the current chainstate. Since it is not easy to determine whether
             // it is the transaction or the current tip that's wrong, we don't punish the peer.
             ConnectTransactionError::MissingOutputOrSpent(_) => 0,
-            ConnectTransactionError::TimeLockViolation => 0,
             ConnectTransactionError::NonceIsNotIncremental(..) => 0,
 
             // These are delegated to the inner error
@@ -126,15 +126,12 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::TokensError(err) => err.mempool_ban_score(),
             ConnectTransactionError::TransactionVerifierError(err) => err.mempool_ban_score(),
             ConnectTransactionError::PoSAccountingError(err) => err.mempool_ban_score(),
-            ConnectTransactionError::DestinationRetrievalError(err) => err.mempool_ban_score(),
             ConnectTransactionError::TokensAccountingError(err) => err.mempool_ban_score(),
             ConnectTransactionError::RewardDistributionError(err) => err.mempool_ban_score(),
             ConnectTransactionError::CheckTransactionError(err) => err.mempool_ban_score(),
+            ConnectTransactionError::InputCheck(err) => err.mempool_ban_score(),
 
             // Transaction definitely invalid, ban peer
-            ConnectTransactionError::AttemptToPrintMoney(_, _) => 100,
-            ConnectTransactionError::SignatureVerificationFailed(_) => 100,
-            ConnectTransactionError::TxFeeTotalCalcFailed(_, _) => 100,
             ConnectTransactionError::RewardAdditionError(_) => 100,
             ConnectTransactionError::AttemptToSpendBurnedAmount => 100,
             ConnectTransactionError::BurnAmountSumError(_) => 100,
@@ -145,40 +142,94 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
-            ConnectTransactionError::Threshold(_) => 100,
-            ConnectTransactionError::TimelockedAccount => 100,
 
             // Need to drill down deeper into the error in these cases
             ConnectTransactionError::IOPolicyError(err, _) => err.ban_score(),
             ConnectTransactionError::ConstrainedValueAccumulatorError(err, _) => err.ban_score(),
 
             // Should not happen when processing standalone transactions
-            ConnectTransactionError::BlockHeightArithmeticError => 0,
-            ConnectTransactionError::BlockTimestampArithmeticError => 0,
             ConnectTransactionError::MissingBlockUndo(_) => 0,
             ConnectTransactionError::MissingBlockRewardUndo(_) => 0,
-            ConnectTransactionError::TxNumWrongInBlockOnConnect(_, _) => 0,
-            ConnectTransactionError::TxNumWrongInBlockOnDisconnect(_, _) => 0,
             ConnectTransactionError::FailedToAddAllFeesOfBlock(_) => 0,
 
             // Internal errors, not peer's fault
-            ConnectTransactionError::InvariantBrokenAlreadyUnspent => 0,
             ConnectTransactionError::BlockIndexCouldNotBeLoaded(_) => 0,
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _) => 0,
             ConnectTransactionError::UtxoBlockUndoError(_) => 0,
             ConnectTransactionError::AccountingBlockUndoError(_) => 0,
             ConnectTransactionError::StakerBalanceNotFound(_) => 0,
-            ConnectTransactionError::PoolDataNotFound(_) => 0,
-            ConnectTransactionError::PoolBalanceNotFound(_) => 0,
             ConnectTransactionError::StorageError(_) => 0,
             ConnectTransactionError::UndoFetchFailure => 0,
             ConnectTransactionError::TxVerifierStorage => 0,
             ConnectTransactionError::MissingTxUndo(_) => 0,
-            ConnectTransactionError::MissingMempoolTxsUndo => 0,
-            ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 0,
             ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::FailedToIncrementAccountNonce => 0,
             ConnectTransactionError::AttemptToSpendFrozenToken(_) => 0,
+        }
+    }
+}
+
+impl MempoolBanScore for tx_verifier::error::InputCheckError {
+    fn mempool_ban_score(&self) -> u32 {
+        self.error().mempool_ban_score()
+    }
+}
+
+impl MempoolBanScore for tx_verifier::error::InputCheckErrorPayload {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            Self::MissingUtxo(_) => 100,
+            Self::UtxoView(e) => e.ban_score(),
+            Self::Translation(e) => e.ban_score(),
+            Self::Verification(e) => e.ban_score(),
+        }
+    }
+}
+
+impl MempoolBanScore for mintscript::translate::TranslationError {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            Self::Unspendable
+            | Self::IllegalAccountSpend
+            | Self::IllegalOutputSpend
+            | Self::PoolNotFound(_)
+            | Self::DelegationNotFound(_)
+            | Self::TokenNotFound(_) => 100,
+
+            Self::PoSAccounting(e) => e.ban_score(),
+            Self::TokensAccounting(e) => e.ban_score(),
+        }
+    }
+}
+
+impl<SE, TE: BanScore> MempoolBanScore for mintscript::script::ScriptError<SE, TE> {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            Self::Threshold(_) => 100,
+            Self::Signature(_) => 100,
+            Self::Timelock(e) => e.ban_score(),
+        }
+    }
+}
+
+impl<CE: BanScore> MempoolBanScore for mintscript::checker::TimelockError<CE> {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            Self::HeightLocked(_, _)
+            | Self::TimestampLocked(_, _)
+            | Self::HeightArith
+            | Self::TimestampArith => 100,
+
+            Self::Context(e) => e.ban_score(),
+        }
+    }
+}
+
+impl MempoolBanScore for tx_verifier::error::TimelockContextError {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            Self::TimelockedAccount => 0,
+            Self::HeaderLoad(e, _) => e.ban_score(),
         }
     }
 }

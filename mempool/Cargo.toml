@@ -15,6 +15,7 @@ common = { path = "../common" }
 crypto = { path = "../crypto" }
 logging = { path = "../logging" }
 mempool-types = { path = "types" }
+mintscript = { path = "../mintscript" }
 p2p-types = { path = "../p2p/types" }
 pos-accounting = { path = "../pos-accounting" }
 rpc = { path = "../rpc" }

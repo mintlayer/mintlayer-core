@@ -273,36 +273,23 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
     fn classify(&self) -> BlockProcessingErrorClass {
         match self {
             // Use "General" for consistency with the zero ban score.
-            ConnectTransactionError::TxNumWrongInBlockOnDisconnect(_, _)
-            | ConnectTransactionError::InvariantBrokenAlreadyUnspent
-            | ConnectTransactionError::MissingBlockUndo(_)
+            ConnectTransactionError::MissingBlockUndo(_)
             | ConnectTransactionError::MissingBlockRewardUndo(_)
             | ConnectTransactionError::MissingTxUndo(_)
-            | ConnectTransactionError::MissingMempoolTxsUndo
             | ConnectTransactionError::StakerBalanceNotFound(_)
-            | ConnectTransactionError::PoolDataNotFound(_)
             | ConnectTransactionError::UndoFetchFailure
             | ConnectTransactionError::TxVerifierStorage
             | ConnectTransactionError::FailedToIncrementAccountNonce => {
                 BlockProcessingErrorClass::General
             }
 
-            ConnectTransactionError::TxNumWrongInBlockOnConnect(_, _)
-            | ConnectTransactionError::MissingOutputOrSpent(_)
-            | ConnectTransactionError::AttemptToPrintMoney(_, _)
-            | ConnectTransactionError::BlockRewardInputOutputMismatch(_, _)
-            | ConnectTransactionError::TxFeeTotalCalcFailed(_, _)
-            | ConnectTransactionError::BlockHeightArithmeticError
-            | ConnectTransactionError::BlockTimestampArithmeticError
+            ConnectTransactionError::MissingOutputOrSpent(_)
             | ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _)
             | ConnectTransactionError::BlockIndexCouldNotBeLoaded(_)
             | ConnectTransactionError::FailedToAddAllFeesOfBlock(_)
             | ConnectTransactionError::RewardAdditionError(_)
-            | ConnectTransactionError::TimeLockViolation
-            | ConnectTransactionError::TimelockedAccount
             | ConnectTransactionError::BurnAmountSumError(_)
             | ConnectTransactionError::AttemptToSpendBurnedAmount
-            | ConnectTransactionError::PoolBalanceNotFound(_)
             | ConnectTransactionError::UnexpectedPoolId(_, _)
             | ConnectTransactionError::NonceIsNotIncremental(_, _, _)
             | ConnectTransactionError::MissingTransactionNonce(_)
@@ -312,25 +299,96 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             | ConnectTransactionError::IOPolicyError(_, _)
             | ConnectTransactionError::TotalFeeRequiredOverflow
             | ConnectTransactionError::InsufficientCoinsFee(_, _)
-            | ConnectTransactionError::Threshold(_)
             | ConnectTransactionError::AttemptToSpendFrozenToken(_) => {
                 BlockProcessingErrorClass::BadBlock
             }
 
             ConnectTransactionError::StorageError(err) => err.classify(),
-            ConnectTransactionError::SignatureVerificationFailed(err) => err.classify(),
             ConnectTransactionError::UtxoError(err) => err.classify(),
             ConnectTransactionError::TokensError(err) => err.classify(),
             ConnectTransactionError::TransactionVerifierError(err) => err.classify(),
             ConnectTransactionError::UtxoBlockUndoError(err) => err.classify(),
             ConnectTransactionError::AccountingBlockUndoError(err) => err.classify(),
-            ConnectTransactionError::DestinationRetrievalError(err) => err.classify(),
             ConnectTransactionError::SpendStakeError(err) => err.classify(),
             ConnectTransactionError::TokensAccountingError(err) => err.classify(),
             ConnectTransactionError::RewardDistributionError(err) => err.classify(),
             ConnectTransactionError::CheckTransactionError(err) => err.classify(),
             ConnectTransactionError::PoSAccountingError(err) => err.classify(),
             ConnectTransactionError::ConstrainedValueAccumulatorError(err, _) => err.classify(),
+            ConnectTransactionError::InputCheck(err) => err.classify(),
+        }
+    }
+}
+
+impl BlockProcessingErrorClassification for tx_verifier::error::InputCheckError {
+    fn classify(&self) -> BlockProcessingErrorClass {
+        self.error().classify()
+    }
+}
+
+impl BlockProcessingErrorClassification for tx_verifier::error::InputCheckErrorPayload {
+    fn classify(&self) -> BlockProcessingErrorClass {
+        match self {
+            Self::MissingUtxo(_) => BlockProcessingErrorClass::BadBlock,
+            Self::UtxoView(e) => e.classify(),
+            Self::Translation(e) => e.classify(),
+            Self::Verification(e) => e.classify(),
+        }
+    }
+}
+
+impl BlockProcessingErrorClassification for mintscript::translate::TranslationError {
+    fn classify(&self) -> BlockProcessingErrorClass {
+        match self {
+            Self::Unspendable
+            | Self::IllegalAccountSpend
+            | Self::IllegalOutputSpend
+            | Self::PoolNotFound(_)
+            | Self::DelegationNotFound(_)
+            | Self::TokenNotFound(_) => BlockProcessingErrorClass::BadBlock,
+
+            Self::PoSAccounting(e) => e.classify(),
+            Self::TokensAccounting(e) => e.classify(),
+        }
+    }
+}
+
+impl<SE, TE> BlockProcessingErrorClassification for mintscript::script::ScriptError<SE, TE>
+where
+    SE: BlockProcessingErrorClassification,
+    TE: BlockProcessingErrorClassification,
+{
+    fn classify(&self) -> BlockProcessingErrorClass {
+        match self {
+            Self::Threshold(_) => BlockProcessingErrorClass::BadBlock,
+
+            Self::Signature(e) => e.classify(),
+            Self::Timelock(e) => e.classify(),
+        }
+    }
+}
+
+impl<CE> BlockProcessingErrorClassification for mintscript::checker::TimelockError<CE>
+where
+    CE: BlockProcessingErrorClassification,
+{
+    fn classify(&self) -> BlockProcessingErrorClass {
+        match self {
+            Self::HeightLocked(_, _)
+            | Self::TimestampLocked(_, _)
+            | Self::HeightArith
+            | Self::TimestampArith => BlockProcessingErrorClass::BadBlock,
+
+            Self::Context(e) => e.classify(),
+        }
+    }
+}
+
+impl BlockProcessingErrorClassification for tx_verifier::error::TimelockContextError {
+    fn classify(&self) -> BlockProcessingErrorClass {
+        match self {
+            Self::TimelockedAccount => BlockProcessingErrorClass::General,
+            Self::HeaderLoad(e, _) => e.classify(),
         }
     }
 }

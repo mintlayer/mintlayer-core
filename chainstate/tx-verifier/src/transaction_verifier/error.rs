@@ -17,7 +17,6 @@ use chainstate_types::GetAncestorError;
 use common::{
     chain::{
         block::{Block, GenBlock},
-        signature::DestinationSigError,
         tokens::TokenId,
         AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, Transaction,
         UtxoOutPoint,
@@ -33,16 +32,15 @@ use super::{
     storage::TransactionVerifierStorageError,
 };
 
+pub use super::input_check::{
+    InputCheckError, InputCheckErrorPayload, ScriptError, TimelockContextError, TimelockError,
+};
+pub use mintscript::translate::TranslationError;
+
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConnectTransactionError {
     #[error("Blockchain storage error: {0}")]
     StorageError(chainstate_storage::Error),
-    #[error("While connecting a block, transaction number `{0}` does not exist in block `{1}`")]
-    TxNumWrongInBlockOnConnect(usize, Id<Block>),
-    #[error("While disconnecting a block, transaction number `{0}` does not exist in block `{1}`")]
-    TxNumWrongInBlockOnDisconnect(usize, Id<Block>),
-    #[error("Block disconnect already-unspent (invariant broken)")]
-    InvariantBrokenAlreadyUnspent,
     #[error("Output is not found in the cache or database: {0:?}")]
     MissingOutputOrSpent(UtxoOutPoint),
     #[error("While disconnecting a block, undo info for transaction `{0}` doesn't exist ")]
@@ -51,20 +49,6 @@ pub enum ConnectTransactionError {
     MissingBlockUndo(TransactionSource),
     #[error("While disconnecting a block, block reward undo info doesn't exist for block `{0}`")]
     MissingBlockRewardUndo(Id<GenBlock>),
-    #[error("While disconnecting a mempool tx, undo info is missing")]
-    MissingMempoolTxsUndo,
-    #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
-    AttemptToPrintMoney(Amount, Amount),
-    #[error("Block reward inputs and outputs value mismatch (total inputs: `{0:?}` vs total outputs `{1:?}`")]
-    BlockRewardInputOutputMismatch(Amount, Amount),
-    #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
-    TxFeeTotalCalcFailed(Amount, Amount),
-    #[error("Signature verification failed in transaction: {0}")]
-    SignatureVerificationFailed(#[from] DestinationSigError),
-    #[error("Error while calculating block height; possibly an overflow")]
-    BlockHeightArithmeticError,
-    #[error("Error while calculating timestamps; possibly an overflow")]
-    BlockTimestampArithmeticError,
     #[error("Transaction index for header found but header not found")]
     InvariantErrorHeaderCouldNotBeLoadedFromHeight(GetAncestorError, BlockHeight),
     #[error("Unable to find block index")]
@@ -73,10 +57,6 @@ pub enum ConnectTransactionError {
     FailedToAddAllFeesOfBlock(Id<Block>),
     #[error("Block reward addition error for block {0}")]
     RewardAdditionError(Id<Block>),
-    #[error("Timelock rules violated")]
-    TimeLockViolation,
-    #[error("Timelocks on accounts not supported")]
-    TimelockedAccount,
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
     #[error("Tokens error: {0}")]
@@ -97,10 +77,6 @@ pub enum ConnectTransactionError {
     SpendStakeError(#[from] SpendStakeError),
     #[error("Staker balance of pool {0} not found")]
     StakerBalanceNotFound(PoolId),
-    #[error("Data of pool {0} not found")]
-    PoolDataNotFound(PoolId),
-    #[error("Balance of pool {0} not found")]
-    PoolBalanceNotFound(PoolId),
     #[error("Pool id provided in the tx output {0} doesn't match calculated pool id {1}")]
     UnexpectedPoolId(PoolId, PoolId),
 
@@ -111,8 +87,6 @@ pub enum ConnectTransactionError {
     #[error("Some transaction verifier storage error")]
     TxVerifierStorage,
 
-    #[error("Destination retrieval error for signature verification {0}")]
-    DestinationRetrievalError(#[from] SignatureDestinationGetterError),
     #[error("Nonce is not incremental: {0:?}, expected nonce: {1}, got nonce: {2}")]
     NonceIsNotIncremental(AccountType, AccountNonce, AccountNonce),
     #[error("Nonce is not found: {0:?}")]
@@ -143,8 +117,9 @@ pub enum ConnectTransactionError {
     RewardDistributionError(#[from] reward_distribution::RewardDistributionError),
     #[error("Check transaction error: {0}")]
     CheckTransactionError(#[from] CheckTransactionError),
-    #[error("Threshold condition not met: {0}")]
-    Threshold(#[from] mintscript::script::ThresholdError),
+
+    #[error(transparent)]
+    InputCheck(#[from] InputCheckError),
 }
 
 impl From<std::convert::Infallible> for ConnectTransactionError {
@@ -158,57 +133,6 @@ impl From<chainstate_storage::Error> for ConnectTransactionError {
         // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
         // We don't need to cause panic here
         ConnectTransactionError::StorageError(err)
-    }
-}
-
-impl From<mintscript::translate::TranslationError> for ConnectTransactionError {
-    fn from(value: mintscript::translate::TranslationError) -> Self {
-        SignatureDestinationGetterError::from(value).into()
-    }
-}
-
-impl From<mintscript::translate::TranslationError> for SignatureDestinationGetterError {
-    fn from(value: mintscript::translate::TranslationError) -> Self {
-        use mintscript::translate::TranslationError as E;
-        match value {
-            E::Unspendable => Self::SigVerifyOfNotSpendableOutput,
-            E::PoSAccounting(e) => Self::from(e),
-            E::TokensAccounting(e) => Self::from(e),
-            E::PoolNotFound(id) => Self::PoolDataNotFound(id),
-            E::DelegationNotFound(id) => Self::DelegationDataNotFound(id),
-            E::TokenNotFound(id) => Self::TokenDataNotFound(id),
-            E::IllegalAccountSpend => Self::SpendingFromAccountInBlockReward,
-            E::IllegalOutputSpend => Self::SpendingOutputInBlockReward,
-        }
-    }
-}
-
-impl<CE> From<mintscript::checker::TimelockError<CE>> for ConnectTransactionError
-where
-    Self: From<CE>,
-{
-    fn from(value: mintscript::checker::TimelockError<CE>) -> Self {
-        use mintscript::checker::TimelockError as E;
-        match value {
-            E::Context(e) => e.into(),
-            E::HeightArith => Self::BlockHeightArithmeticError,
-            E::TimestampArith => Self::BlockTimestampArithmeticError,
-            E::HeightLocked(_, _) => Self::TimeLockViolation,
-            E::TimestampLocked(_, _) => Self::TimeLockViolation,
-        }
-    }
-}
-
-impl<SE, TE> From<mintscript::script::ScriptError<SE, TE>> for ConnectTransactionError
-where
-    Self: From<SE> + From<TE>,
-{
-    fn from(value: mintscript::script::ScriptError<SE, TE>) -> Self {
-        match value {
-            mintscript::script::ScriptError::Signature(e) => e.into(),
-            mintscript::script::ScriptError::Timelock(e) => e.into(),
-            mintscript::script::ScriptError::Threshold(e) => e.into(),
-        }
     }
 }
 

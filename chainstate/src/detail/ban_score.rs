@@ -102,26 +102,14 @@ impl BanScore for ConnectTransactionError {
     fn ban_score(&self) -> u32 {
         match self {
             ConnectTransactionError::StorageError(_) => 0,
-            ConnectTransactionError::TxNumWrongInBlockOnConnect(_, _) => 100,
-            ConnectTransactionError::TxNumWrongInBlockOnDisconnect(_, _) => 0,
-            // this is zero because it's used when we add the outputs whose transactions we tested beforehand
-            ConnectTransactionError::InvariantBrokenAlreadyUnspent => 0,
             // Even though this is an invariant error, it stems from referencing a block for reward that doesn't exist
             ConnectTransactionError::MissingOutputOrSpent(_) => 100,
-            ConnectTransactionError::AttemptToPrintMoney(_, _) => 100,
-            ConnectTransactionError::TxFeeTotalCalcFailed(_, _) => 100,
-            ConnectTransactionError::SignatureVerificationFailed(_) => 100,
-            ConnectTransactionError::BlockHeightArithmeticError => 100,
-            ConnectTransactionError::BlockTimestampArithmeticError => 100,
             // Even though this is an invariant error, it stems from a block reward that doesn't exist
             ConnectTransactionError::FailedToAddAllFeesOfBlock(_) => 100,
             ConnectTransactionError::RewardAdditionError(_) => 100,
-            ConnectTransactionError::TimeLockViolation => 100,
-            ConnectTransactionError::TimelockedAccount => 100,
             ConnectTransactionError::MissingBlockUndo(_) => 0,
             ConnectTransactionError::MissingBlockRewardUndo(_) => 0,
             ConnectTransactionError::MissingTxUndo(_) => 0,
-            ConnectTransactionError::MissingMempoolTxsUndo => 0,
             ConnectTransactionError::UtxoError(err) => err.ban_score(),
             ConnectTransactionError::TokensError(err) => err.ban_score(),
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _) => 100,
@@ -134,12 +122,9 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::AccountingBlockUndoError(_) => 100,
             ConnectTransactionError::SpendStakeError(_) => 100,
             ConnectTransactionError::StakerBalanceNotFound(_) => 0,
-            ConnectTransactionError::PoolDataNotFound(_) => 0,
             ConnectTransactionError::UndoFetchFailure => 0,
             ConnectTransactionError::TxVerifierStorage => 0,
             ConnectTransactionError::UnexpectedPoolId(_, _) => 100,
-            ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 100,
-            ConnectTransactionError::DestinationRetrievalError(err) => err.ban_score(),
             ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,
             ConnectTransactionError::NonceIsNotIncremental(..) => 100,
             ConnectTransactionError::AttemptToCreateStakePoolFromAccounts => 100,
@@ -152,10 +137,73 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
             ConnectTransactionError::AttemptToSpendFrozenToken(_) => 100,
-            ConnectTransactionError::PoolBalanceNotFound(_) => 100,
             ConnectTransactionError::RewardDistributionError(err) => err.ban_score(),
             ConnectTransactionError::CheckTransactionError(err) => err.ban_score(),
-            ConnectTransactionError::Threshold(_) => 100,
+            ConnectTransactionError::InputCheck(e) => e.ban_score(),
+        }
+    }
+}
+
+impl BanScore for tx_verifier::error::InputCheckError {
+    fn ban_score(&self) -> u32 {
+        self.error().ban_score()
+    }
+}
+
+impl BanScore for tx_verifier::error::InputCheckErrorPayload {
+    fn ban_score(&self) -> u32 {
+        match self {
+            Self::MissingUtxo(_) => 100,
+            Self::UtxoView(e) => e.ban_score(),
+            Self::Translation(e) => e.ban_score(),
+            Self::Verification(e) => e.ban_score(),
+        }
+    }
+}
+
+impl BanScore for mintscript::translate::TranslationError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            Self::Unspendable
+            | Self::IllegalAccountSpend
+            | Self::IllegalOutputSpend
+            | Self::PoolNotFound(_)
+            | Self::DelegationNotFound(_)
+            | Self::TokenNotFound(_) => 100,
+
+            Self::PoSAccounting(e) => e.ban_score(),
+            Self::TokensAccounting(e) => e.ban_score(),
+        }
+    }
+}
+
+impl<SE, TE: BanScore> BanScore for mintscript::script::ScriptError<SE, TE> {
+    fn ban_score(&self) -> u32 {
+        match self {
+            Self::Threshold(_) | Self::Signature(_) => 100,
+            Self::Timelock(e) => e.ban_score(),
+        }
+    }
+}
+
+impl<CE: BanScore> BanScore for mintscript::checker::TimelockError<CE> {
+    fn ban_score(&self) -> u32 {
+        match self {
+            Self::HeightLocked(_, _)
+            | Self::TimestampLocked(_, _)
+            | Self::HeightArith
+            | Self::TimestampArith => 100,
+
+            Self::Context(e) => e.ban_score(),
+        }
+    }
+}
+
+impl BanScore for tx_verifier::error::TimelockContextError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            Self::TimelockedAccount => 0,
+            Self::HeaderLoad(e, _) => e.ban_score(),
         }
     }
 }
