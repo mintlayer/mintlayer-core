@@ -19,6 +19,7 @@ allow = [
     "MIT",
     "MPL-2.0",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
     "Unlicense", # this is a specific license rather than no license at all
     "Zlib",
 ] # deny a license not in this set of licenses
