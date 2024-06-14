@@ -26,7 +26,7 @@ use crate::{
         BlockSource, OrphanBlocksRef,
     },
     BlockValidity, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent,
-    ChainstateInterface, InMemoryBlockTrees, Locator, NonZeroPoolBalances,
+    ChainstateInterface, InMemoryBlockTreeRef, InMemoryBlockTrees, Locator, NonZeroPoolBalances,
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
@@ -680,6 +680,20 @@ where
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_stake_pool_balances_at_heights(pool_ids, min_height, max_height)
+            .map_err(ChainstateError::ProcessBlockError)
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn get_stake_pool_balances_for_tree<'a>(
+        &self,
+        pool_ids: &[PoolId],
+        tree: InMemoryBlockTreeRef<'a>,
+    ) -> Result<BTreeMap<Id<GenBlock>, BTreeMap<PoolId, NonZeroPoolBalances>>, ChainstateError>
+    {
+        self.chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
+            .get_stake_pool_balances_for_tree(pool_ids, tree)
             .map_err(ChainstateError::ProcessBlockError)
     }
 

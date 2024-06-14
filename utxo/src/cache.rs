@@ -37,6 +37,7 @@ pub struct ConsumedUtxoCache {
     pub(crate) best_block: Id<GenBlock>,
 }
 
+#[derive(Clone)]
 pub struct UtxosCache<P> {
     parent: P,
     current_block_hash: Id<GenBlock>,

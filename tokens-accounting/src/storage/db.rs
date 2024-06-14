@@ -30,6 +30,7 @@ use crate::{
 use super::{TokensAccountingStorageRead, TokensAccountingStorageWrite};
 
 #[must_use]
+#[derive(Clone)]
 pub struct TokensAccountingDB<S>(S);
 
 impl<S: TokensAccountingStorageRead> TokensAccountingDB<S> {

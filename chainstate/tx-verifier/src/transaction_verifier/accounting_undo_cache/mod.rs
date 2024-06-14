@@ -25,7 +25,7 @@ pub use cached_block_undo::CachedBlockUndo;
 
 pub type CachedBlockUndoOp<T> = CachedOperation<CachedBlockUndo<T>>;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AccountingBlockUndoCache<T> {
     data: BTreeMap<TransactionSource, CachedOperation<CachedBlockUndo<T>>>,
 }

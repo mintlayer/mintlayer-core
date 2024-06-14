@@ -68,7 +68,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.clone())
             .with_initial_time_since_genesis(target_time.as_secs())
-            .with_staking_pools(BTreeMap::from_iter([(
+            .with_staking_pools_at_genesis(BTreeMap::from_iter([(
                 genesis_pool_id,
                 (
                     staking_sk.clone(),
@@ -82,7 +82,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
         let mut reference_tf = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config.clone())
             .with_initial_time_since_genesis(target_time.as_secs())
-            .with_staking_pools(BTreeMap::from_iter([(
+            .with_staking_pools_at_genesis(BTreeMap::from_iter([(
                 genesis_pool_id,
                 (
                     staking_sk.clone(),
@@ -101,7 +101,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
         let mut tf2 = TestFramework::builder(&mut rng)
             .with_chain_config(chain_config)
             .with_initial_time_since_genesis(target_time.as_secs())
-            .with_staking_pools(BTreeMap::from_iter([(
+            .with_staking_pools_at_genesis(BTreeMap::from_iter([(
                 genesis_pool_id,
                 (staking_sk.clone(), vrf_sk.clone(), genesis_pool_outpoint),
             )]))
@@ -112,7 +112,10 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
         let blocks_to_generate = rng.gen_range((max_blocks / 2)..max_blocks);
         let reorg_at_height = rng.gen_range(0..blocks_to_generate);
         for i in 0..blocks_to_generate {
-            let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
+            let mut block_builder = tf
+                .make_pos_block_builder()
+                .with_best_block_as_parent()
+                .with_random_staking_pool(&mut rng);
 
             for _ in 0..rng.gen_range(10..max_tx_per_block) {
                 block_builder = block_builder.add_test_transaction(&mut rng);
@@ -150,7 +153,10 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
 
         // Create longer chain to trigger reorg and disconnect all the random txs.
         for _ in reorg_at_height..max_blocks {
-            let mut block_builder = tf2.make_pos_block_builder().with_random_staking_pool(&mut rng);
+            let mut block_builder = tf2
+                .make_pos_block_builder()
+                .with_best_block_as_parent()
+                .with_random_staking_pool(&mut rng);
 
             for _ in 0..rng.gen_range(10..max_tx_per_block) {
                 block_builder = block_builder.add_test_transaction(&mut rng);

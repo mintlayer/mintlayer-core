@@ -25,6 +25,7 @@ use randomness::{CryptoRng, Rng};
 use crate::{empty_witness, TransactionBuilder};
 
 /// A struct that tracks a utxo and amount available for spending.
+#[derive(Clone)]
 pub struct UtxoForSpending {
     outpoint: UtxoOutPoint,
     amount_available: Amount,

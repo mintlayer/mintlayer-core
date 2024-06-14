@@ -33,6 +33,7 @@ use crate::{
     FlushableTokensAccountingView,
 };
 
+#[derive(Clone)]
 pub struct TokensAccountingCache<P> {
     parent: P,
     data: TokensAccountingDeltaData,

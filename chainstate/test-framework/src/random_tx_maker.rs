@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::{key_manager::KeyManager, TestChainstate};
+use crate::{key_manager::KeyManager, staking_pools::StakingPoolUpdate, TestChainstate};
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
@@ -77,18 +77,6 @@ fn get_random_delegation_data<'a>(
         })
 }
 
-pub trait StakingPoolsObserver {
-    fn on_pool_created(
-        &mut self,
-        pool_id: PoolId,
-        staker_key: PrivateKey,
-        vrf_sk: VRFPrivateKey,
-        outpoint: UtxoOutPoint,
-    );
-    fn on_pool_decommissioned(&mut self, pool_id: PoolId);
-    fn on_pool_used_for_staking(&mut self, pool_id: PoolId, outpoint: UtxoOutPoint);
-}
-
 pub struct RandomTxMaker<'a> {
     chainstate: &'a TestChainstate,
     utxo_set: &'a UtxosDBInMemoryImpl,
@@ -148,7 +136,7 @@ impl<'a> RandomTxMaker<'a> {
     pub fn make(
         mut self,
         rng: &mut (impl Rng + CryptoRng),
-        staking_pools_observer: &mut impl StakingPoolsObserver,
+        staking_pools_updates: &mut Vec<StakingPoolUpdate>,
         key_manager: &mut KeyManager,
     ) -> (
         Transaction,
@@ -194,7 +182,7 @@ impl<'a> RandomTxMaker<'a> {
         // Spend selected utxos
         let (inputs, mut outputs) = self.create_utxo_spending(
             rng,
-            staking_pools_observer,
+            staking_pools_updates,
             &mut tokens_cache,
             &mut pos_delta,
             key_manager,
@@ -243,12 +231,12 @@ impl<'a> RandomTxMaker<'a> {
             | TxOutput::DataDeposit(_) => { /* do nothing */ }
             TxOutput::CreateStakePool(pool_id, _) => {
                 let (staker_sk, vrf_sk) = new_staking_pools.get(pool_id).unwrap();
-                staking_pools_observer.on_pool_created(
-                    *pool_id,
-                    staker_sk.clone(),
-                    vrf_sk.clone(),
-                    UtxoOutPoint::new(tx_id.into(), i as u32),
-                );
+                staking_pools_updates.push(StakingPoolUpdate::Created {
+                    pool_id: *pool_id,
+                    staker_key: staker_sk.clone(),
+                    vrf_sk: vrf_sk.clone(),
+                    outpoint: UtxoOutPoint::new(tx_id.into(), i as u32),
+                });
             }
         });
 
@@ -546,7 +534,7 @@ impl<'a> RandomTxMaker<'a> {
     fn create_utxo_spending(
         &mut self,
         rng: &mut (impl Rng + CryptoRng),
-        staking_pools_observer: &mut impl StakingPoolsObserver,
+        staking_pools_updates: &mut Vec<StakingPoolUpdate>,
         tokens_cache: &mut (impl TokensAccountingView + TokensAccountingOperations),
         pos_accounting_cache: &mut (impl PoSAccountingView + PoSAccountingOperations<PoSAccountingUndo>),
         key_manager: &mut KeyManager,
@@ -629,7 +617,8 @@ impl<'a> RandomTxMaker<'a> {
                             .staker_balance()
                             .unwrap();
                         let _ = pos_accounting_cache.decommission_pool(*pool_id).unwrap();
-                        staking_pools_observer.on_pool_decommissioned(*pool_id);
+                        staking_pools_updates
+                            .push(StakingPoolUpdate::Decommissioned { pool_id: *pool_id });
 
                         let lock_period = self
                             .chainstate

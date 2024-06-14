@@ -38,7 +38,8 @@ use utxo::Utxo;
 
 use crate::{
     chainstate_interface::ChainstateInterface, BlockSource, BlockValidity, ChainInfo,
-    ChainstateConfig, ChainstateError, ChainstateEvent, InMemoryBlockTrees, NonZeroPoolBalances,
+    ChainstateConfig, ChainstateError, ChainstateEvent, InMemoryBlockTreeRef, InMemoryBlockTrees,
+    NonZeroPoolBalances,
 };
 
 impl<T: Deref + DerefMut + Send + Sync> ChainstateInterface for T
@@ -360,6 +361,15 @@ where
     ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, NonZeroPoolBalances>>, ChainstateError> {
         self.deref()
             .get_stake_pool_balances_at_heights(pool_ids, min_height, max_height)
+    }
+
+    fn get_stake_pool_balances_for_tree(
+        &self,
+        pool_ids: &[PoolId],
+        tree: InMemoryBlockTreeRef<'_>,
+    ) -> Result<BTreeMap<Id<GenBlock>, BTreeMap<PoolId, NonZeroPoolBalances>>, ChainstateError>
+    {
+        self.deref().get_stake_pool_balances_for_tree(pool_ids, tree)
     }
 
     fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError> {

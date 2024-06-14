@@ -1116,6 +1116,46 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     #[log_error]
+    pub fn get_stake_pool_balances_for_tree(
+        &self,
+        pool_ids: &[PoolId],
+        tree: InMemoryBlockTreeRef<'_>,
+    ) -> Result<BTreeMap<Id<GenBlock>, BTreeMap<PoolId, NonZeroPoolBalances>>, BlockError> {
+        let best_block_index =
+            self.get_best_block_index().map_err(BlockError::PropertyQueryError)?;
+
+        let mut pool_balances_map = BTreeMap::new();
+
+        let balances_at_tip =
+            Self::collect_pool_balances(pool_ids.iter(), self, &best_block_index.block_id())?;
+        if !balances_at_tip.is_empty() {
+            pool_balances_map.insert(best_block_index.block_id(), balances_at_tip);
+        }
+
+        self.iterate_block_tree_and_reorganize_in_memory(
+            tree,
+            |base_block_index, tx_verifier, _| -> Result<_, BlockError> {
+                let base_block_id = if let Some(base_block_index) = base_block_index {
+                    base_block_index.block_id().into()
+                } else {
+                    tree.root_block_index()?.prev_block_id()
+                };
+
+                let balances =
+                    Self::collect_pool_balances(pool_ids.iter(), &tx_verifier, base_block_id)?;
+
+                if !balances.is_empty() {
+                    pool_balances_map.insert(*base_block_id, balances);
+                }
+
+                Ok(())
+            },
+        )?;
+
+        Ok(pool_balances_map)
+    }
+
+    #[log_error]
     pub fn get_stake_pool_balances_at_heights(
         &self,
         pool_ids: &[PoolId],
@@ -1144,7 +1184,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         let max_height = if max_height == best_block_height {
             let balances_at_tip =
-                Self::collect_pool_balances(pool_ids.iter(), self, best_block_height)?;
+                Self::collect_pool_balances(pool_ids.iter(), self, &best_block_index.block_id())?;
             if !balances_at_tip.is_empty() {
                 height_map.insert(best_block_height, balances_at_tip);
             }
@@ -1165,14 +1205,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.disconnect_tip_in_memory_until(
             &lowest_block_id,
             |disconnected_block_index, tx_verifier, _| -> Result<_, BlockError> {
-                let cur_height = disconnected_block_index
+                let base_block_id = disconnected_block_index.prev_block_id();
+                let base_height = disconnected_block_index
                     .block_height()
                     .prev_height()
                     .expect("Genesis can't be disconnected");
-                assert!(cur_height >= min_height);
+                assert!(base_height >= min_height);
 
                 let balances =
-                    Self::collect_pool_balances(pool_ids.iter(), &tx_verifier, cur_height)?;
+                    Self::collect_pool_balances(pool_ids.iter(), &tx_verifier, base_block_id)?;
 
                 pool_ids.retain(|pool_id| {
                     // We didn't see this pool having balance yet.
@@ -1183,12 +1224,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
                 pool_ids_that_had_balance.extend(balances.keys().copied());
 
-                if cur_height <= max_height && !balances.is_empty() {
-                    height_map.insert(cur_height, balances);
+                if base_height <= max_height && !balances.is_empty() {
+                    height_map.insert(base_height, balances);
                 }
 
                 if pool_ids.is_empty() {
-                    log::debug!("Stopping iteration early at height {cur_height}");
+                    log::debug!("Stopping iteration early at height {base_height}");
                     Ok(false)
                 } else {
                     Ok(true)
@@ -1203,13 +1244,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     fn collect_pool_balances<'b>(
         pool_ids: impl Iterator<Item = &'b PoolId>,
         pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
-        assumed_bb_height: BlockHeight,
+        assumed_base_block: &Id<GenBlock>,
     ) -> Result<BTreeMap<PoolId, NonZeroPoolBalances>, BlockError> {
         let mut balances = BTreeMap::new();
 
         for pool_id in pool_ids {
             if let Some(pool_balance) =
-                NonZeroPoolBalances::obtain(pool_id, pos_accounting_view, assumed_bb_height)?
+                NonZeroPoolBalances::obtain(pool_id, pos_accounting_view, assumed_base_block)?
             {
                 balances.insert(*pool_id, pool_balance);
             }
@@ -1732,7 +1773,7 @@ impl NonZeroPoolBalances {
     pub fn obtain(
         pool_id: &PoolId,
         pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
-        assumed_bb_height: BlockHeight,
+        assumed_base_block: &Id<GenBlock>,
     ) -> Result<Option<Self>, BlockError> {
         let total_balance = pos_accounting_view
             .get_pool_balance(*pool_id)?
@@ -1749,21 +1790,21 @@ impl NonZeroPoolBalances {
                         total_balance,
                         staker_balance,
                         pool_id: *pool_id,
-                        best_block_height: assumed_bb_height,
+                        base_block: *assumed_base_block,
                     }
                 );
 
                 Ok(NonZeroPoolBalances::new(total_balance, staker_balance))
             }
             (None, None) => Ok(None),
-            (Some(_), None) => Err(BlockError::InvariantErrorPoolBalancePresentDataMissing(
-                *pool_id,
-                assumed_bb_height,
-            )),
-            (None, Some(_)) => Err(BlockError::InvariantErrorPoolDataPresentBalanceMissing(
-                *pool_id,
-                assumed_bb_height,
-            )),
+            (Some(_), None) => Err(BlockError::InvariantErrorPoolBalancePresentDataMissing {
+                pool_id: *pool_id,
+                base_block: *assumed_base_block,
+            }),
+            (None, Some(_)) => Err(BlockError::InvariantErrorPoolDataPresentBalanceMissing {
+                pool_id: *pool_id,
+                base_block: *assumed_base_block,
+            }),
         }
     }
 

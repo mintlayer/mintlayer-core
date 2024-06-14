@@ -33,11 +33,13 @@ pub trait EpochStorageWrite: EpochStorageRead {
     fn del_epoch_data(&mut self, epoch_index: EpochIndex) -> storage_result::Result<()>;
 }
 
+#[derive(Clone)]
 enum DataEntry {
     Write(EpochData),
     Erase,
 }
 
+#[derive(Clone)]
 pub struct EpochDataCache<P> {
     parent: P,
     data: BTreeMap<EpochIndex, DataEntry>,

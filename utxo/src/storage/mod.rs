@@ -39,6 +39,7 @@ pub trait UtxosStorageWrite: UtxosStorageRead {
 }
 
 #[must_use]
+#[derive(Clone)]
 pub struct UtxosDB<S>(S);
 
 impl<S: UtxosStorageRead> UtxosDB<S> {
