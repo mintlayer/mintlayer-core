@@ -1473,27 +1473,122 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         Ok(())
     }
 
-    /// Delete the specified block indices.
-    /// Panic if one of the blocks is marked as persisted.
+    /// Reset fail flags in block indices for all blocks in the subtree that start at the specified block.
+    ///
+    /// Note: this is a lower-level function that doesn't attempt to look for a better chain after the blocks have
+    /// become valid again. This is supposed to be done by the caller.
     #[log_error]
-    pub fn del_block_indices_of_non_persisted_block_tree<'b>(
-        &mut self,
-        tree: InMemoryBlockTreeRef<'b>,
-    ) -> Result<(), BlockError> {
-        let root_block_index = tree.root_block_index()?;
+    pub fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), BlockError> {
+        let block_index = self
+            .get_existing_block_index(block_id)
+            .map_err(BlockError::PropertyQueryError)?;
+        let block_height = block_index.block_height();
+
+        let block_index_trees = self
+            .get_block_tree_top_starting_from_height(block_height, BlockValidity::Any)
+            .map_err(BlockError::PropertyQueryError)?;
+        let block_index_tree_to_clear = block_index_trees.single_tree(block_id)?;
+
         let old_leaf_block_ids = self.db_tx.get_leaf_block_ids(
-            root_block_index
-                .block_height()
-                .prev_height()
-                .expect("Non-genesis can't have zero height"),
+            block_height.prev_height().expect("Non-genesis can't have zero height"),
         )?;
         let mut remaining_leaf_block_ids = old_leaf_block_ids.clone();
 
+        // Below we'll be removing block indices of non-persisted blocks; parents of those
+        // blocks may need to be marked as leaves. Two cases exist:
+        // 1) If `block_index` is itself non-persisted, then we have only one leaf candidate.
+        // To check if it's an actual leaf, we need to iterate over all blocks at the same height
+        // as `block_index` (which are all root nodes in block_index_trees) and check their parents -
+        // if the candidate if not among them, it's an actual leaf.
+        // 2) If `block_index` is persisted, all leaf candidates will belong to block_index_tree_to_clear.
+        // So, when iterating over the tree, we can collect all parents of all persisted blocks in it
+        // and then compare leaf candidates against them - a candidate will be a leaf only if
+        // it's not among those parents.
+
+        let mark_as_leaf =
+            |this: &mut ChainstateRef<'a, S, V>, leaf_block_id| -> Result<_, BlockError> {
+                let new_leaf_index = this
+                    .get_existing_block_index(&leaf_block_id)
+                    .map_err(BlockError::PropertyQueryError)?;
+                this.db_tx.mark_as_leaf(&new_leaf_index, true)?;
+                Ok(())
+            };
+
+        if !block_index.is_persisted() {
+            self.del_block_indices_of_non_persisted_block_tree(
+                block_index_tree_to_clear,
+                &mut remaining_leaf_block_ids,
+            )?;
+
+            // The parent of the removed tree root may be a new leaf.
+            let maybe_new_leaf_id = block_index.prev_block_id();
+            if let Some(maybe_new_leaf_chain_block_id) =
+                maybe_new_leaf_id.classify(self.chain_config).chain_block_id()
+            {
+                // Check parents of all other roots in block_index_trees. If maybe_new_leaf is not
+                // among them, it is a leaf.
+                let mut is_parent = false;
+                for some_tree in block_index_trees.trees_iter() {
+                    let some_root_block_index = some_tree.root_block_index()?;
+                    if some_root_block_index.block_id() != block_id
+                        && some_root_block_index.prev_block_id() == maybe_new_leaf_id
+                    {
+                        is_parent = true;
+                    }
+                }
+
+                if !is_parent {
+                    mark_as_leaf(self, maybe_new_leaf_chain_block_id)?;
+                }
+            }
+        } else {
+            let mut maybe_new_leaves = BTreeSet::new();
+            let mut parents_of_persisted_blocks = BTreeSet::new();
+
+            block_index_tree_to_clear.for_all(|child_node_id| -> Result<_, BlockError> {
+                let block_index = block_index_tree_to_clear.get_block_index(child_node_id)?;
+
+                if block_index.is_persisted() {
+                    self.update_block_status(
+                        block_index.clone(),
+                        block_index.status().with_cleared_fail_bits(),
+                    )?;
+                    parents_of_persisted_blocks.insert(block_index.prev_block_id());
+                    Ok(true)
+                } else {
+                    let subtree = block_index_tree_to_clear.subtree(child_node_id)?;
+                    self.del_block_indices_of_non_persisted_block_tree(
+                        subtree,
+                        &mut remaining_leaf_block_ids,
+                    )?;
+                    maybe_new_leaves.insert(block_index.prev_block_id());
+                    Ok(false)
+                }
+            })?;
+
+            for new_leaf_id in maybe_new_leaves.difference(&parents_of_persisted_blocks) {
+                if let Some(new_leaf_chain_block_id) =
+                    new_leaf_id.classify(self.chain_config).chain_block_id()
+                {
+                    mark_as_leaf(self, new_leaf_chain_block_id)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[log_error]
+    fn del_block_indices_of_non_persisted_block_tree<'b>(
+        &mut self,
+        tree: InMemoryBlockTreeRef<'b>,
+        leaf_block_ids: &mut BTreeSet<Id<Block>>,
+    ) -> Result<(), BlockError> {
         for block_index in tree.all_block_indices_iter() {
             let block_id = *block_index.block_id();
 
-            // Note: here we're being extra-cautious about someone mis-using this function, so we only panic in
-            // debug mode.
+            // Note: here we're being extra-cautious about someone mis-using this function,
+            // so we only panic in debug mode.
             debug_assert_or_log!(
                 !block_index.is_persisted(),
                 "Trying to delete a block index for a persisted block {block_id}",
@@ -1501,73 +1596,12 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
             self.db_tx.del_block_index(block_id)?;
 
-            if remaining_leaf_block_ids.remove(&block_id) {
+            if leaf_block_ids.remove(&block_id) {
                 self.db_tx.mark_as_leaf(block_index, false)?;
             }
         }
 
-        // The parent of the removed subtree's root may have become a new leaf.
-        // Check if it's a parent of one of the remaining leaves; if not, mark it as a leaf.
-        let maybe_new_leaf_id = root_block_index.prev_block_id();
-        if let Some(maybe_new_leaf_id) =
-            maybe_new_leaf_id.classify(self.chain_config).chain_block_id()
-        {
-            let mut is_parent = false;
-
-            for leaf_block_id in remaining_leaf_block_ids {
-                let leaf_block_index = self
-                    .get_existing_block_index(&leaf_block_id)
-                    .map_err(BlockError::PropertyQueryError)?;
-
-                if self
-                    .is_parent_of(&leaf_block_index, &maybe_new_leaf_id)
-                    .map_err(BlockError::PropertyQueryError)?
-                {
-                    is_parent = true;
-                    break;
-                }
-            }
-
-            if !is_parent {
-                let maybe_new_leaf_index = self
-                    .get_existing_block_index(&maybe_new_leaf_id)
-                    .map_err(BlockError::PropertyQueryError)?;
-                self.db_tx.mark_as_leaf(&maybe_new_leaf_index, true)?;
-            }
-        }
-
         Ok(())
-    }
-
-    /// Check if the block specified by `potential_parent_id` is a (possibly indirect) parent of
-    /// the block specified by `child_index`.
-    #[log_error]
-    fn is_parent_of(
-        &self,
-        child_index: &BlockIndex,
-        potential_parent_id: &Id<Block>,
-    ) -> Result<bool, PropertyQueryError> {
-        let potential_parent_index = self.get_existing_block_index(potential_parent_id)?;
-        let mut child_index = child_index;
-        let mut tmp_index = None;
-
-        loop {
-            let Some(immediate_parent_id) =
-                child_index.prev_block_id().classify(self.chain_config).chain_block_id()
-            else {
-                return Ok(false);
-            };
-
-            if immediate_parent_id == *potential_parent_index.block_id() {
-                return Ok(true);
-            }
-
-            if child_index.block_height() <= potential_parent_index.block_height() {
-                return Ok(false);
-            }
-
-            child_index = tmp_index.insert(self.get_existing_block_index(&immediate_parent_id)?);
-        }
     }
 
     /// Update the status of the passed `block_index`.

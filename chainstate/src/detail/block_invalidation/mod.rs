@@ -72,7 +72,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
             root_block_id,
             BlockValidity::Any,
         )
-        .map_err(BlockInvalidatorError::BlockTreeBranchQueryError)?;
+        .map_err(BlockInvalidatorError::BlockTreeQueryError)?;
         Ok(block_indices)
     }
 
@@ -283,42 +283,17 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
     }
 
     /// Reset fail flags in block indices for all blocks in the subtree that start at the specified block.
+    /// Then try reorging to a better chain if it exists.
     /// Block indices for which no block data exists in the db will be deleted.
     #[log_error]
     pub fn reset_block_failure_flags(
         &mut self,
         block_id: &Id<Block>,
     ) -> Result<(), BlockInvalidatorError> {
-        let block_index_tree_to_clear = {
-            let chainstate_ref =
-                self.chainstate.make_db_tx_ro().map_err(BlockInvalidatorError::from)?;
-
-            in_memory_block_tree::get_block_tree_branch(
-                &chainstate_ref,
-                block_id,
-                BlockValidity::Any,
-            )
-            .map_err(BlockInvalidatorError::BlockTreeBranchQueryError)?
-        };
-
         self.chainstate.with_rw_tx(
             |chainstate_ref| {
-                block_index_tree_to_clear.for_all(|subtree| -> Result<_, BlockInvalidatorError> {
-                    let block_index = subtree.root_block_index()?;
-
-                    if block_index.is_persisted() {
-                        update_block_status(
-                            chainstate_ref,
-                            block_index.clone(),
-                            block_index.status().with_cleared_fail_bits(),
-                        )?;
-                        Ok(true)
-                    } else {
-                        chainstate_ref
-                            .del_block_indices_of_non_persisted_block_tree(subtree)
-                            .map_err(BlockInvalidatorError::DelBlockIndicesError)?;
-                        Ok(false)
-                    }
+                chainstate_ref.reset_block_failure_flags(block_id).map_err(|err| {
+                    BlockInvalidatorError::ResetBlockFailureFlagsError(*block_id, Box::new(err))
                 })
             },
             |attempt_number| {
@@ -360,7 +335,7 @@ pub enum BlockInvalidatorError {
     DbCommitError(usize, chainstate_storage::Error, DbCommittingContext),
 
     #[error("Failed to obtain block tree branch: {0}")]
-    BlockTreeBranchQueryError(InMemoryBlockTreeError),
+    BlockTreeQueryError(InMemoryBlockTreeError),
     #[error("Failed to determine if the block {0} is in mainchain: {1}")]
     IsBlockInMainChainQueryError(Id<GenBlock>, PropertyQueryError),
     #[error("Failed to obtain the minimum height with allowed reorgs: {0}")]
@@ -369,8 +344,8 @@ pub enum BlockInvalidatorError {
     BestBlockIndexQueryError(PropertyQueryError),
     #[error("Failed to obtain block index for block {0}: {1}")]
     BlockIndexQueryError(Id<GenBlock>, PropertyQueryError),
-    #[error("Error deleting block indices: {0}")]
-    DelBlockIndicesError(BlockError),
+    #[error("Failed to reset failure flags for block {0}: {1}")]
+    ResetBlockFailureFlagsError(Id<Block>, Box<BlockError>),
     #[error("In-memory block tree error: {0}")]
     InMemoryBlockTreeError(#[from] InMemoryBlockTreeError),
 }

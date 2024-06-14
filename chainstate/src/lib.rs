@@ -38,8 +38,7 @@ pub use crate::{
         block_invalidation::BlockInvalidatorError,
         calculate_median_time_past, calculate_median_time_past_from_blocktimestamps,
         in_memory_block_tree::{
-            InMemoryBlockTree, InMemoryBlockTreeNodeId, InMemoryBlockTreeNodeRef,
-            InMemoryBlockTreeRef, InMemoryBlockTrees,
+            InMemoryBlockTree, InMemoryBlockTreeNodeId, InMemoryBlockTreeRef, InMemoryBlockTrees,
         },
         BlockError, BlockProcessingErrorClass, BlockProcessingErrorClassification, BlockSource,
         BlockValidity, ChainInfo, CheckBlockError, CheckBlockTransactionsError,

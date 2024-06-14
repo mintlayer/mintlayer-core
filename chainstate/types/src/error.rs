@@ -68,8 +68,6 @@ pub enum InMemoryBlockTreeError {
     // Note: `PropertyQueryError` itself may contain `InMemoryBlockTreeError`, so here we must box it.
     #[error("Error querying property: {0}")]
     PropertyQueryError(Box<PropertyQueryError>),
-    #[error("Invariant error: {0}")]
-    InvariantError(String),
     // Note: String is used to avoid putting indextree::NodeError here, which is non-comparable.
     #[error("Index tree node error: {0}")]
     IndexTreeNodeError(String),
@@ -83,6 +81,8 @@ pub enum InMemoryBlockTreeError {
         nodes_branch_root: indextree::NodeId,
         actual_branch_root: indextree::NodeId,
     },
+    #[error("Block id {0} doesn't correspond to any root node")]
+    BlockIdDoesntCorrespondToRoot(Id<Block>),
 }
 
 impl From<PropertyQueryError> for InMemoryBlockTreeError {
