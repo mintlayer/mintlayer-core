@@ -37,7 +37,10 @@ pub use crate::{
         ban_score,
         block_invalidation::BlockInvalidatorError,
         calculate_median_time_past, calculate_median_time_past_from_blocktimestamps,
-        in_memory_block_tree::{InMemoryBlockTree, InMemoryBlockTreeRef, InMemoryBlockTrees},
+        in_memory_block_tree::{
+            InMemoryBlockTree, InMemoryBlockTreeNodeId, InMemoryBlockTreeNodeRef,
+            InMemoryBlockTreeRef, InMemoryBlockTrees,
+        },
         BlockError, BlockProcessingErrorClass, BlockProcessingErrorClassification, BlockSource,
         BlockValidity, ChainInfo, CheckBlockError, CheckBlockTransactionsError,
         ConnectTransactionError, IOPolicyError, InitializationError, Locator, NonZeroPoolBalances,

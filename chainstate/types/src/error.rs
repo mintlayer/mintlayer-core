@@ -73,6 +73,16 @@ pub enum InMemoryBlockTreeError {
     // Note: String is used to avoid putting indextree::NodeError here, which is non-comparable.
     #[error("Index tree node error: {0}")]
     IndexTreeNodeError(String),
+    #[error("Node for id {0} is not in the arena")]
+    NodeNotInArena(indextree::NodeId),
+    #[error("Non-root node {0} has no parent")]
+    NonRootWithoutParent(indextree::NodeId),
+    #[error("Node {node_id} belongs to the branch at {nodes_branch_root} but this branch is at {actual_branch_root}")]
+    NodeNotInBranch {
+        node_id: indextree::NodeId,
+        nodes_branch_root: indextree::NodeId,
+        actual_branch_root: indextree::NodeId,
+    },
 }
 
 impl From<PropertyQueryError> for InMemoryBlockTreeError {

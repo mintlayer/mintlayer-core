@@ -110,7 +110,8 @@ impl BlockProcessingErrorClassification for BlockError {
             | BlockError::BestBlockIndexQueryError(_)
             | BlockError::BlockIndexQueryError(_, _)
             | BlockError::IsBlockInMainChainQueryError(_, _)
-            | BlockError::MinHeightForReorgQueryError(_) => BlockProcessingErrorClass::General,
+            | BlockError::MinHeightForReorgQueryError(_)
+            | BlockError::InMemoryBlockTreeError(_) => BlockProcessingErrorClass::General,
 
             BlockError::PrevBlockNotFoundForNewBlock(_) => {
                 BlockProcessingErrorClass::TemporarilyBadBlock

@@ -1295,6 +1295,7 @@ dependencies = [
  "derive_more",
  "enum-iterator",
  "generic-array",
+ "indextree",
  "logging",
  "num-derive",
  "num-traits",

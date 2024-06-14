@@ -95,9 +95,10 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
         tree: &InMemoryBlockTree,
         is_explicit_invalidation: IsExplicit,
     ) -> Result<(), BlockInvalidatorError> {
+        let root_block_index = tree.root_block_index()?;
         self.chainstate.with_rw_tx(
             |chainstate_ref| {
-                for (i, block_index) in tree.iter_all_block_indices().enumerate() {
+                for (i, block_index) in tree.all_block_indices_iter().enumerate() {
                     let mut status = block_index.status();
                     if i == 0 {
                         match is_explicit_invalidation {
@@ -116,21 +117,19 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
             |attempt_number| {
                 log::info!(
                     "Invalidating block {block_id}, attempt #{attempt_number}",
-                    block_id = tree.root_block_index().block_id()
+                    block_id = root_block_index.block_id()
                 );
             },
             |attempts_count, db_err| {
                 BlockInvalidatorError::DbCommitError(
                     attempts_count,
                     db_err,
-                    DbCommittingContext::InvalidatedBlockTreeStatuses(
-                        *tree.root_block_index().block_id(),
-                    ),
+                    DbCommittingContext::InvalidatedBlockTreeStatuses(*root_block_index.block_id()),
                 )
             },
         )?;
 
-        self.chainstate.remove_orphans_of(tree.root_block_index().block_id());
+        self.chainstate.remove_orphans_of(root_block_index.block_id());
 
         Ok(())
     }
@@ -271,8 +270,8 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
                                 .chainstate
                                 .make_db_tx_ro()
                                 .map_err(BlockInvalidatorError::from)?,
-                            block_index_tree.root_block_index(),
-                            block_index_tree.iter_child_block_indices(),
+                            block_index_tree.root_block_index()?,
+                            block_index_tree.all_child_block_indices_iter(),
                             min_chain_trust,
                         )?;
                     }
@@ -305,7 +304,7 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockInvalida
         self.chainstate.with_rw_tx(
             |chainstate_ref| {
                 block_index_tree_to_clear.for_all(|subtree| -> Result<_, BlockInvalidatorError> {
-                    let block_index = subtree.root_block_index();
+                    let block_index = subtree.root_block_index()?;
 
                     if block_index.is_persisted() {
                         update_block_status(
@@ -372,6 +371,8 @@ pub enum BlockInvalidatorError {
     BlockIndexQueryError(Id<GenBlock>, PropertyQueryError),
     #[error("Error deleting block indices: {0}")]
     DelBlockIndicesError(BlockError),
+    #[error("In-memory block tree error: {0}")]
+    InMemoryBlockTreeError(#[from] InMemoryBlockTreeError),
 }
 
 #[derive(Debug, Display, PartialEq, Eq, Clone)]

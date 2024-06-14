@@ -449,15 +449,15 @@ fn assert_leaves(tf: &TestFramework, min_height: BlockHeight, expected: &[Id<Blo
 
 fn check_tree_consistency(tree: InMemoryBlockTreeRef<'_>) {
     // Check that the root has no parent.
-    let root_node = tree.node(tree.root_id()).unwrap();
-    assert!(root_node.parent().is_none());
+    let root_node = tree.node(tree.root_node_id()).unwrap();
+    assert!(root_node.parent().unwrap().is_none());
 
-    for child_node_id in tree.iter_child_ids() {
+    for child_node_id in tree.all_child_node_ids_iter() {
         let child_node = tree.node(child_node_id).unwrap();
-        let parent_node_id = child_node.parent().unwrap();
+        let parent_node_id = child_node.parent().unwrap().unwrap();
         let parent_node = tree.node(parent_node_id).unwrap();
-        let child_block_index = child_node.get();
-        let parent_block_index = parent_node.get();
+        let child_block_index = child_node.block_index();
+        let parent_block_index = parent_node.block_index();
         assert_eq!(
             child_block_index.prev_block_id(),
             <&_ as Into<&Id<GenBlock>>>::into(parent_block_index.block_id())
@@ -466,7 +466,7 @@ fn check_tree_consistency(tree: InMemoryBlockTreeRef<'_>) {
 }
 
 fn check_trees_consistency(trees: &InMemoryBlockTrees) {
-    for tree in trees.iter_trees() {
+    for tree in trees.trees_iter() {
         check_tree_consistency(tree);
     }
 }

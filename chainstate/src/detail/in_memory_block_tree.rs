@@ -13,6 +13,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Here we have a number of types that represent a block tree in memory; the main purpose of this
+//! is to be able to iterate over descendants of a particular block.
+//!
+//! The types use the `indextree` crate under the hood. In `indextree` the actual nodes are
+//! stored inside an arena and can be referenced via a `NodeId`. The nodes in our tree hold
+//! `BlockIndex`es, not the whole blocks.
+//!
+//! We have the following types:
+//! * `InMemoryBlockTrees` - this represents one or more unrelated trees that share the same arena.
+//! This type is needed when collecting the "top" of an actual block tree starting from a particular
+//! height (which may produce multiple branches without a common root).
+//! * `InMemoryBlockTree` - this represents a single tree and can be produced from `InMemoryBlockTrees`
+//! by choosing one of its roots.
+//! * `InMemoryBlockTreeRef` - this represents a reference to a particular branch of a tree.
+
+// Note: `InMemoryBlockTreeRef` can represent a branch of a bigger tree; this means that the
+// `indextree::NodeId` and `indextree::Node` that correspond to the root of the branch may actually
+// have a parent. So, if those `indextree` primitives are used directly, it's possible to accidentally
+// step out of the corresponding "logical" branch. This is why we wrap `Node` and `NodeId` in custom
+// structs that also hold additional information about the root of the logical branch that the entity
+// belongs to.
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use chainstate_storage::BlockchainStorageRead;
@@ -21,43 +43,117 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, Block},
     primitives::{BlockHeight, Id},
 };
-use indextree::{Arena, Node, NodeId};
+use indextree::NodeId;
 use utils::{debug_panic_or_log, log_error};
 
 use crate::{detail::chainstateref::block_validity_matches, TransactionVerificationStrategy};
 
 use super::chainstateref::{BlockValidity, ChainstateRef};
 
-/// Zero or more `BlockIndex` trees sharing the same arena.
+type Arena = indextree::Arena<BlockIndex>;
+type Node = indextree::Node<BlockIndex>;
+
+/// The wrapped `NodeId`.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct InMemoryBlockTreeNodeId {
+    node_id: indextree::NodeId,
+    branch_root_node_id: indextree::NodeId,
+}
+
+impl InMemoryBlockTreeNodeId {
+    fn new_root(node_id: indextree::NodeId) -> Self {
+        Self {
+            node_id,
+            branch_root_node_id: node_id,
+        }
+    }
+
+    pub fn is_branch_root(&self) -> bool {
+        self.node_id == self.branch_root_node_id
+    }
+}
+
+/// The wrapped `&Node`.
+pub struct InMemoryBlockTreeNodeRef<'a> {
+    node: &'a Node,
+    node_id: InMemoryBlockTreeNodeId,
+}
+
+impl<'a> InMemoryBlockTreeNodeRef<'a> {
+    fn new(
+        arena: &'a Arena,
+        node_id: InMemoryBlockTreeNodeId,
+    ) -> Result<Self, InMemoryBlockTreeError> {
+        Ok(Self {
+            node: get_node_from_arena(arena, node_id.node_id)?,
+            node_id,
+        })
+    }
+
+    pub fn block_index(&self) -> &'a BlockIndex {
+        self.node.get()
+    }
+
+    pub fn parent(&self) -> Result<Option<InMemoryBlockTreeNodeId>, InMemoryBlockTreeError> {
+        let result = if self.node_id.is_branch_root() {
+            None
+        } else {
+            let parent_id = self.node.parent().ok_or(
+                InMemoryBlockTreeError::NonRootWithoutParent(self.node_id.node_id),
+            )?;
+            Some(InMemoryBlockTreeNodeId {
+                node_id: parent_id,
+                branch_root_node_id: self.node_id.branch_root_node_id,
+            })
+        };
+
+        Ok(result)
+    }
+}
+
+/// Zero or more trees sharing the same arena.
 pub struct InMemoryBlockTrees {
-    arena: Arena<BlockIndex>,
+    arena: Arena,
     roots: BTreeMap<Id<Block>, NodeId>,
 }
 
 impl InMemoryBlockTrees {
-    fn new(arena: Arena<BlockIndex>, roots: BTreeMap<Id<Block>, NodeId>) -> InMemoryBlockTrees {
+    fn new(arena: Arena, roots: BTreeMap<Id<Block>, NodeId>) -> InMemoryBlockTrees {
+        #[cfg(debug_assertions)]
+        {
+            // Ensure that all roots are present in the arena and are actual roots, i.e. nodes
+            // without parents.
+            for node_id in roots.values() {
+                assert!(arena.get(*node_id).expect("node must be in the arena").parent().is_none());
+            }
+        }
+
         Self { arena, roots }
     }
 
     #[allow(unused)]
-    pub fn roots(&self) -> &BTreeMap<Id<Block>, NodeId> {
-        &self.roots
+    pub fn roots(&self) -> impl Iterator<Item = (&Id<Block>, InMemoryBlockTreeNodeId)> {
+        self.roots
+            .iter()
+            .map(|(block_id, node_id)| (block_id, InMemoryBlockTreeNodeId::new_root(*node_id)))
     }
 
+    /// Turn itself into a single tree corresponding to the specified block id.
+    /// Note that the other trees will still occupy space in the arena.
     pub fn into_single_tree(self, root_block_id: &Id<Block>) -> Option<InMemoryBlockTree> {
         self.roots
             .get(root_block_id)
             .map(|root_node_id| InMemoryBlockTree::new(self.arena, *root_node_id))
     }
 
-    pub fn iter_trees(&self) -> impl Iterator<Item = InMemoryBlockTreeRef<'_>> {
+    pub fn trees_iter(&self) -> impl Iterator<Item = InMemoryBlockTreeRef<'_>> {
         self.roots
             .values()
             .map(|node_id| InMemoryBlockTreeRef::new(&self.arena, *node_id))
     }
 
-    pub fn iter_all_block_indices(&self) -> impl Iterator<Item = &'_ BlockIndex> {
-        self.iter_trees().flat_map(|tree| tree.iter_all_block_indices())
+    pub fn all_block_indices_iter(&self) -> impl Iterator<Item = &'_ BlockIndex> {
+        self.trees_iter().flat_map(|tree| tree.all_block_indices_iter())
     }
 
     pub fn as_by_height_block_id_map(
@@ -65,7 +161,7 @@ impl InMemoryBlockTrees {
     ) -> Result<BTreeMap<BlockHeight, BTreeSet<Id<Block>>>, InMemoryBlockTreeError> {
         let mut result = BTreeMap::<BlockHeight, BTreeSet<Id<Block>>>::new();
 
-        for block_index in self.iter_all_block_indices() {
+        for block_index in self.all_block_indices_iter() {
             result
                 .entry(block_index.block_height())
                 .or_default()
@@ -80,7 +176,7 @@ impl InMemoryBlockTrees {
     ) -> Result<BTreeMap<BlockTimestamp, BTreeSet<Id<Block>>>, InMemoryBlockTreeError> {
         let mut result = BTreeMap::<BlockTimestamp, BTreeSet<Id<Block>>>::new();
 
-        for block_index in self.iter_all_block_indices() {
+        for block_index in self.all_block_indices_iter() {
             result
                 .entry(block_index.block_timestamp())
                 .or_default()
@@ -92,7 +188,7 @@ impl InMemoryBlockTrees {
 
     pub fn assert_all_blocks_match_validity(&self, block_validity: BlockValidity) {
         if block_validity != BlockValidity::Any {
-            for block_index in self.iter_all_block_indices() {
+            for block_index in self.all_block_indices_iter() {
                 assert!(
                     block_validity_matches(block_index, block_validity),
                     "Block {id} validity doesn't match {block_validity:?}",
@@ -101,63 +197,185 @@ impl InMemoryBlockTrees {
             }
         }
     }
+
+    pub fn find_node_id(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<Option<(InMemoryBlockTreeRef<'_>, InMemoryBlockTreeNodeId)>, InMemoryBlockTreeError>
+    {
+        for tree in self.trees_iter() {
+            if let Some(node_id) = tree.find_node_id(block_id)? {
+                return Ok(Some((tree, node_id)));
+            }
+        }
+
+        Ok(None)
+    }
 }
 
-/// A "reference" to a single `BlockIndex` tree.
+/// A single tree.
+pub struct InMemoryBlockTree {
+    arena: Arena,
+    root_id: NodeId,
+}
+
+impl InMemoryBlockTree {
+    fn new(arena: Arena, root_id: NodeId) -> InMemoryBlockTree {
+        #[cfg(debug_assertions)]
+        {
+            // Ensure that the root is present in the arena and is actually a root, i.e. a node
+            // without a parent.
+            assert!(arena.get(root_id).expect("node must be in the arena").parent().is_none());
+        }
+
+        Self { arena, root_id }
+    }
+
+    pub fn as_ref(&self) -> InMemoryBlockTreeRef<'_> {
+        InMemoryBlockTreeRef::new(&self.arena, self.root_id)
+    }
+
+    pub fn node(
+        &self,
+        id: InMemoryBlockTreeNodeId,
+    ) -> Result<InMemoryBlockTreeNodeRef<'_>, InMemoryBlockTreeError> {
+        self.as_ref().node(id)
+    }
+
+    pub fn subtree(
+        &self,
+        id: InMemoryBlockTreeNodeId,
+    ) -> Result<InMemoryBlockTreeRef<'_>, InMemoryBlockTreeError> {
+        self.as_ref().subtree(id)
+    }
+
+    pub fn all_node_ids_iter(&self) -> impl Iterator<Item = InMemoryBlockTreeNodeId> + '_ {
+        self.as_ref().all_node_ids_iter()
+    }
+
+    pub fn all_child_node_ids_iter(&self) -> impl Iterator<Item = InMemoryBlockTreeNodeId> + '_ {
+        self.as_ref().all_child_node_ids_iter()
+    }
+
+    pub fn all_block_indices_iter(&self) -> impl Iterator<Item = &BlockIndex> {
+        self.as_ref().all_block_indices_iter()
+    }
+
+    pub fn all_child_block_indices_iter(&self) -> impl Iterator<Item = &BlockIndex> {
+        self.as_ref().all_child_block_indices_iter()
+    }
+
+    pub fn root_block_index(&self) -> Result<&BlockIndex, InMemoryBlockTreeError> {
+        self.as_ref().root_block_index()
+    }
+
+    pub fn for_all<E: std::error::Error>(
+        &self,
+        handler: impl FnMut(InMemoryBlockTreeRef<'_>) -> Result<bool, E>,
+    ) -> Result<(), E> {
+        self.as_ref().for_all(handler)
+    }
+
+    pub fn find_node_id(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<Option<InMemoryBlockTreeNodeId>, InMemoryBlockTreeError> {
+        self.as_ref().find_node_id(block_id)
+    }
+}
+
+/// A "reference" to a single tree.
+#[derive(Clone, Copy)]
 pub struct InMemoryBlockTreeRef<'a> {
-    arena: &'a Arena<BlockIndex>,
+    arena: &'a Arena,
     root_id: NodeId,
 }
 
 impl<'a> InMemoryBlockTreeRef<'a> {
-    fn new(arena: &'a Arena<BlockIndex>, root_id: NodeId) -> Self {
+    fn new(arena: &'a Arena, root_id: NodeId) -> Self {
+        // Check that the arena has a node with this id.
+        // Note that unlike `InMemoryBlockTree`, here root_id may not be an actual root node
+        // (i.e. it may have a parent).
+        debug_assert!(arena.get(root_id).is_some());
+
         Self { arena, root_id }
     }
 
     #[allow(unused)]
-    pub fn root_id(&self) -> NodeId {
-        self.root_id
+    pub fn root_node_id(&self) -> InMemoryBlockTreeNodeId {
+        InMemoryBlockTreeNodeId::new_root(self.root_id)
     }
 
-    pub fn node(&self, id: NodeId) -> Option<&'a Node<BlockIndex>> {
-        self.arena.get(id)
+    pub fn node(
+        &self,
+        id: InMemoryBlockTreeNodeId,
+    ) -> Result<InMemoryBlockTreeNodeRef<'a>, InMemoryBlockTreeError> {
+        self.ensure_node_in_subtree(id)?;
+        InMemoryBlockTreeNodeRef::new(self.arena, id)
+    }
+
+    pub fn subtree(
+        &self,
+        id: InMemoryBlockTreeNodeId,
+    ) -> Result<InMemoryBlockTreeRef<'a>, InMemoryBlockTreeError> {
+        self.ensure_node_in_subtree(id)?;
+        Ok(Self::new(self.arena, id.node_id))
+    }
+
+    /// Return an iterator over node ids of direct children of the given node.
+    pub fn child_node_ids_iter_for(
+        &self,
+        id: InMemoryBlockTreeNodeId,
+    ) -> Result<impl Iterator<Item = InMemoryBlockTreeNodeId> + 'a, InMemoryBlockTreeError> {
+        self.ensure_node_in_subtree(id)?;
+
+        let branch_root_node_id = self.root_id;
+        Ok(
+            id.node_id.children(self.arena).map(move |child_id| InMemoryBlockTreeNodeId {
+                node_id: child_id,
+                branch_root_node_id,
+            }),
+        )
     }
 
     /// Return an iterator over the entire tree, for depth-first traversal.
     /// A parent will always be visited before its children.
     /// The first visited block will always be the root block.
-    pub fn iter_all_ids(&self) -> impl Iterator<Item = NodeId> + 'a {
-        self.root_id.descendants(self.arena)
+    pub fn all_node_ids_iter(&self) -> impl Iterator<Item = InMemoryBlockTreeNodeId> + 'a {
+        let branch_root_node_id = self.root_id;
+        self.root_id
+            .descendants(self.arena)
+            .map(move |child_id| InMemoryBlockTreeNodeId {
+                node_id: child_id,
+                branch_root_node_id,
+            })
     }
 
-    /// Same as iter_all_ids, but the root is excluded.
-    pub fn iter_child_ids(&self) -> impl Iterator<Item = NodeId> + 'a {
-        self.iter_all_ids().skip(1)
+    /// Same as all_ids_iter, but the root is excluded.
+    pub fn all_child_node_ids_iter(&self) -> impl Iterator<Item = InMemoryBlockTreeNodeId> + 'a {
+        self.all_node_ids_iter().skip(1)
     }
 
-    pub fn iter_all_block_indices(&self) -> impl Iterator<Item = &'a BlockIndex> {
-        self.iter_all_ids().map(|node_id| {
+    pub fn all_block_indices_iter(&self) -> impl Iterator<Item = &'a BlockIndex> {
+        self.all_node_ids_iter().map(|node_id| {
             self.arena
-                .get(node_id)
+                .get(node_id.node_id)
                 .expect("Node being iterated over must be present in the arena")
                 .get()
         })
     }
 
-    pub fn iter_child_block_indices(&self) -> impl Iterator<Item = &'a BlockIndex> {
-        self.iter_child_ids().map(|node_id| {
+    pub fn all_child_block_indices_iter(&self) -> impl Iterator<Item = &'a BlockIndex> {
+        self.all_child_node_ids_iter().map(|node_id| {
             self.arena
-                .get(node_id)
+                .get(node_id.node_id)
                 .expect("Node being iterated over must be present in the arena")
                 .get()
         })
     }
 
-    pub fn root_block_index(&self) -> &'a BlockIndex {
-        self.arena
-            .get(self.root_id)
-            .expect("Inconsistent InMemoryBlockTree - root node is not in the arena")
-            .get()
+    pub fn root_block_index(&self) -> Result<&'a BlockIndex, InMemoryBlockTreeError> {
+        Ok(get_node_from_arena(self.arena, self.root_id)?.get())
     }
 
     /// Iterate over all nodes, depth first, and call the provided function on each node.
@@ -170,64 +388,46 @@ impl<'a> InMemoryBlockTreeRef<'a> {
             handler(InMemoryBlockTreeRef::new(self.arena, node_id))
         })
     }
-}
 
-/// A single `BlockIndex` tree.
-pub struct InMemoryBlockTree {
-    arena: Arena<BlockIndex>,
-    root_id: NodeId,
-}
-
-impl InMemoryBlockTree {
-    fn new(arena: Arena<BlockIndex>, root_id: NodeId) -> InMemoryBlockTree {
-        Self { arena, root_id }
-    }
-
-    #[allow(unused)]
-    pub fn root_id(&self) -> NodeId {
-        self.root_id
-    }
-
-    pub fn as_ref(&self) -> InMemoryBlockTreeRef<'_> {
-        InMemoryBlockTreeRef::new(&self.arena, self.root_id)
-    }
-
-    pub fn node(&self, id: NodeId) -> Option<&Node<BlockIndex>> {
-        self.as_ref().node(id)
-    }
-
-    pub fn iter_all_ids(&self) -> impl Iterator<Item = NodeId> + '_ {
-        self.as_ref().iter_all_ids()
-    }
-
-    pub fn iter_child_ids(&self) -> impl Iterator<Item = NodeId> + '_ {
-        self.as_ref().iter_child_ids()
-    }
-
-    pub fn iter_all_block_indices(&self) -> impl Iterator<Item = &BlockIndex> {
-        self.as_ref().iter_all_block_indices()
-    }
-
-    pub fn iter_child_block_indices(&self) -> impl Iterator<Item = &BlockIndex> {
-        self.as_ref().iter_child_block_indices()
-    }
-
-    pub fn root_block_index(&self) -> &BlockIndex {
-        self.as_ref().root_block_index()
-    }
-
-    pub fn for_all<E: std::error::Error>(
+    pub fn find_node_id(
         &self,
-        handler: impl FnMut(InMemoryBlockTreeRef<'_>) -> Result<bool, E>,
-    ) -> Result<(), E> {
-        self.as_ref().for_all(handler)
+        block_id: &Id<Block>,
+    ) -> Result<Option<InMemoryBlockTreeNodeId>, InMemoryBlockTreeError> {
+        for node_id in self.all_node_ids_iter() {
+            let block_index = self.node(node_id)?.block_index();
+
+            if block_index.block_id() == block_id {
+                return Ok(Some(node_id));
+            }
+        }
+
+        Ok(None)
     }
+
+    fn ensure_node_in_subtree(
+        &self,
+        node_id: InMemoryBlockTreeNodeId,
+    ) -> Result<(), InMemoryBlockTreeError> {
+        if node_id.branch_root_node_id == self.root_id {
+            Ok(())
+        } else {
+            Err(InMemoryBlockTreeError::NodeNotInBranch {
+                node_id: node_id.node_id,
+                nodes_branch_root: node_id.branch_root_node_id,
+                actual_branch_root: self.root_id,
+            })
+        }
+    }
+}
+
+fn get_node_from_arena(arena: &Arena, node_id: NodeId) -> Result<&Node, InMemoryBlockTreeError> {
+    arena.get(node_id).ok_or(InMemoryBlockTreeError::NodeNotInArena(node_id))
 }
 
 fn append_child<T>(
     parent: NodeId,
     child: NodeId,
-    arena: &mut Arena<T>,
+    arena: &mut indextree::Arena<T>,
 ) -> Result<(), InMemoryBlockTreeError> {
     parent
         .checked_append(child, arena)
@@ -354,7 +554,9 @@ where
 }
 
 mod indextree_utils {
-    use indextree::{Arena, NodeId};
+    use indextree::Arena;
+
+    use super::*;
 
     pub fn for_all_depth_first<T, E: std::error::Error>(
         arena: &Arena<T>,

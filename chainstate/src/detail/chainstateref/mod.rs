@@ -1480,15 +1480,16 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         &mut self,
         tree: InMemoryBlockTreeRef<'b>,
     ) -> Result<(), BlockError> {
+        let root_block_index = tree.root_block_index()?;
         let old_leaf_block_ids = self.db_tx.get_leaf_block_ids(
-            tree.root_block_index()
+            root_block_index
                 .block_height()
                 .prev_height()
                 .expect("Non-genesis can't have zero height"),
         )?;
         let mut remaining_leaf_block_ids = old_leaf_block_ids.clone();
 
-        for block_index in tree.iter_all_block_indices() {
+        for block_index in tree.all_block_indices_iter() {
             let block_id = *block_index.block_id();
 
             // Note: here we're being extra-cautious about someone mis-using this function, so we only panic in
@@ -1507,7 +1508,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
         // The parent of the removed subtree's root may have become a new leaf.
         // Check if it's a parent of one of the remaining leaves; if not, mark it as a leaf.
-        let maybe_new_leaf_id = tree.root_block_index().prev_block_id();
+        let maybe_new_leaf_id = root_block_index.prev_block_id();
         if let Some(maybe_new_leaf_id) =
             maybe_new_leaf_id.classify(self.chain_config).chain_block_id()
         {
