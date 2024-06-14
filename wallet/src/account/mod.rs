@@ -39,7 +39,7 @@ use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
-use crate::key_chain::{AccountKeyChain, KeyChainError};
+use crate::key_chain::{AccountKeyChainImpl, KeyChainError};
 use crate::send_request::{
     make_address_output, make_address_output_from_delegation, make_address_output_token,
     make_decommission_stake_pool_output, make_mint_token_outputs, make_stake_output,
@@ -211,7 +211,7 @@ impl PartiallySignedTransaction {
 
 pub struct Account {
     chain_config: Arc<ChainConfig>,
-    key_chain: AccountKeyChain,
+    key_chain: AccountKeyChainImpl,
     output_cache: OutputCache,
     account_info: AccountInfo,
 }
@@ -226,8 +226,12 @@ impl Account {
         let account_info =
             account_infos.remove(id).ok_or(KeyChainError::NoAccountFound(id.clone()))?;
 
-        let key_chain =
-            AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id, &account_info)?;
+        let key_chain = AccountKeyChainImpl::load_from_database(
+            chain_config.clone(),
+            db_tx,
+            id,
+            &account_info,
+        )?;
 
         let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
         let output_cache = OutputCache::new(txs)?;
@@ -244,7 +248,7 @@ impl Account {
     pub fn new(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut impl WalletStorageWriteLocked,
-        key_chain: AccountKeyChain,
+        key_chain: AccountKeyChainImpl,
         name: Option<String>,
     ) -> WalletResult<Account> {
         let account_id = key_chain.get_account_id();
@@ -274,7 +278,7 @@ impl Account {
         Ok(account)
     }
 
-    pub fn key_chain(&self) -> &AccountKeyChain {
+    pub fn key_chain(&self) -> &AccountKeyChainImpl {
         &self.key_chain
     }
 

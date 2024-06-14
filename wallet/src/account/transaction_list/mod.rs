@@ -24,7 +24,7 @@ use wallet_types::{
     KeyPurpose, WalletTx,
 };
 
-use crate::{key_chain::AccountKeyChain, WalletError, WalletResult};
+use crate::{key_chain::AccountKeyChainImpl, WalletError, WalletResult};
 
 use super::{currency_grouper::group_outputs, output_cache::OutputCache};
 
@@ -108,7 +108,7 @@ fn compare_tx_ref(a: &TxRef, b: &TxRef) -> Ordering {
     }
 }
 
-fn own_output(key_chain: &AccountKeyChain, output: &TxOutput) -> bool {
+fn own_output(key_chain: &AccountKeyChainImpl, output: &TxOutput) -> bool {
     match output {
         TxOutput::Transfer(_, dest) | TxOutput::LockThenTransfer(_, dest, _) => KeyPurpose::ALL
             .iter()
@@ -125,7 +125,7 @@ fn own_output(key_chain: &AccountKeyChain, output: &TxOutput) -> bool {
 }
 
 fn own_input<'a>(
-    key_chain: &AccountKeyChain,
+    key_chain: &AccountKeyChainImpl,
     output_cache: &'a OutputCache,
     input: &TxInput,
 ) -> Option<&'a TxOutput> {
@@ -142,7 +142,7 @@ fn own_input<'a>(
 }
 
 fn get_transaction(
-    key_chain: &AccountKeyChain,
+    key_chain: &AccountKeyChainImpl,
     output_cache: &OutputCache,
     tx_data: &TxData,
 ) -> WalletResult<TransactionInfo> {
@@ -213,7 +213,7 @@ fn get_transaction(
 }
 
 pub fn get_transaction_list(
-    key_chain: &AccountKeyChain,
+    key_chain: &AccountKeyChainImpl,
     output_cache: &OutputCache,
     skip: usize,
     count: usize,

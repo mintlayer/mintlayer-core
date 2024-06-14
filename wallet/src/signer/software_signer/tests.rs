@@ -129,7 +129,7 @@ fn sign_transaction(#[case] seed: Seed) {
     let ptx = req.into_partially_signed_tx().unwrap();
 
     let signer = SoftwareSigner::new(&db_tx, config.clone(), DEFAULT_ACCOUNT_INDEX);
-    let (ptx, _, _) = signer.sign_ptx(ptx, account.key_chain()).unwrap();
+    let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain()).unwrap();
 
     assert!(ptx.is_fully_signed(&config));
 

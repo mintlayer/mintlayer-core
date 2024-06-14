@@ -968,7 +968,7 @@ impl<B: storage::Backend> Wallet<B> {
 
             let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
             let tx = signer
-                .sign_ptx(ptx, account.key_chain())
+                .sign_tx(ptx, account.key_chain())
                 .map(|(ptx, _, _)| ptx)?
                 .into_signed_tx(chain_config)
                 .map_err(error_mapper)?;
@@ -1705,7 +1705,7 @@ impl<B: storage::Backend> Wallet<B> {
             let ptx = request.into_partially_signed_tx()?;
 
             let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
-            let ptx = signer.sign_ptx(ptx, account.key_chain()).map(|(ptx, _, _)| ptx)?;
+            let ptx = signer.sign_tx(ptx, account.key_chain()).map(|(ptx, _, _)| ptx)?;
 
             if ptx.is_fully_signed(chain_config) {
                 return Err(WalletError::FullySignedTransactionInDecommissionReq);
@@ -1733,7 +1733,7 @@ impl<B: storage::Backend> Wallet<B> {
             };
             let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
 
-            let res = signer.sign_ptx(ptx, account.key_chain())?;
+            let res = signer.sign_tx(ptx, account.key_chain())?;
             Ok(res)
         })
     }

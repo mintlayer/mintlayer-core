@@ -32,7 +32,7 @@ mod master_key_chain;
 mod vrf_key_chain;
 mod with_purpose;
 
-pub use account_key_chain::AccountKeyChain;
+pub use account_key_chain::AccountKeyChainImpl;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use crypto::key::hdkd::u31::U31;
 use crypto::vrf::VRFKeyKind;

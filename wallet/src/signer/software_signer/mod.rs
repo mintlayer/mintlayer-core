@@ -49,7 +49,7 @@ use crate::{
 
 use super::{Signer, SignerError, SignerResult};
 
-pub struct SoftwareSigner<'a, T: WalletStorageReadUnlocked> {
+pub struct SoftwareSigner<'a, T> {
     db_tx: &'a T,
     chain_config: Arc<ChainConfig>,
     account_index: U31,
@@ -222,7 +222,7 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
 }
 
 impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
-    fn sign_ptx(
+    fn sign_tx(
         &self,
         ptx: PartiallySignedTransaction,
         key_chain: &impl AccountKeyChains,

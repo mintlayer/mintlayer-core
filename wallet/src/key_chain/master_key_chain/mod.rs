@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::key_chain::account_key_chain::AccountKeyChain;
+use crate::key_chain::account_key_chain::AccountKeyChainImpl;
 use crate::key_chain::{KeyChainError, KeyChainResult, DEFAULT_KEY_KIND};
 use common::chain::ChainConfig;
 use crypto::key::extended::ExtendedPrivateKey;
@@ -134,10 +134,10 @@ impl MasterKeyChain {
         db_tx: &mut impl WalletStorageWriteUnlocked,
         account_index: U31,
         lookahead_size: u32,
-    ) -> KeyChainResult<AccountKeyChain> {
+    ) -> KeyChainResult<AccountKeyChainImpl> {
         let root_key = Self::load_root_key(db_tx)?;
         let root_vrf_key = Self::load_root_vrf_key(db_tx)?;
-        AccountKeyChain::new_from_root_key(
+        AccountKeyChainImpl::new_from_root_key(
             self.chain_config.clone(),
             db_tx,
             root_key,

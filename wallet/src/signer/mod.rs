@@ -55,7 +55,7 @@ type SignerResult<T> = Result<T, SignerError>;
 /// wallet
 pub trait Signer {
     /// sign a partially signed transaction and return the before and after signature statuses
-    fn sign_ptx(
+    fn sign_tx(
         &self,
         tx: PartiallySignedTransaction,
         key_chain: &impl AccountKeyChains,
