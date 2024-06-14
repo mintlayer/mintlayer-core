@@ -54,8 +54,11 @@ pub struct MockPeer {
 
 #[derive(Debug)]
 pub struct AddressUpdate {
+    #[allow(dead_code)]
     pub address: SocketAddress,
+    #[allow(dead_code)]
     pub old_state: AddressState,
+    #[allow(dead_code)]
     pub new_state: AddressState,
 }
 
