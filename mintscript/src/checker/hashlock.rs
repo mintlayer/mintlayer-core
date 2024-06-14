@@ -15,7 +15,7 @@
 
 use crypto::hash::{self, hash};
 
-use crate::script::HashType;
+use crate::script::HashChallenge;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum HashlockError {
@@ -37,7 +37,7 @@ pub trait HashlockChecker {
 
     fn check_hashlock(
         &mut self,
-        hash_type: &HashType,
+        hash_challenge: &HashChallenge,
         preimage: &[u8; 32],
     ) -> Result<(), Self::Error>;
 }
@@ -49,7 +49,7 @@ impl HashlockChecker for NoOpHashlockChecker {
 
     fn check_hashlock(
         &mut self,
-        _hash_type: &HashType,
+        _hash_challenge: &HashChallenge,
         _preimage: &[u8; 32],
     ) -> Result<(), Self::Error> {
         Ok(())
@@ -63,19 +63,19 @@ impl HashlockChecker for StandardHashlockChecker {
 
     fn check_hashlock(
         &mut self,
-        hash_type: &HashType,
+        hash_challenge: &HashChallenge,
         preimage: &[u8; 32],
     ) -> Result<(), Self::Error> {
-        match hash_type {
-            HashType::HASH160(expected_hash) => {
+        match hash_challenge {
+            HashChallenge::HASH160(expected_hash) => {
                 let actual_hash = hash::<hash::Ripemd160, _>(hash::<hash::Sha256, _>(preimage));
 
                 ensure_hashes_equal(actual_hash.as_slice(), expected_hash)?;
             }
-            HashType::RIPEMD160(_)
-            | HashType::SHA1(_)
-            | HashType::SHA256(_)
-            | HashType::HASH256(_) => {
+            HashChallenge::RIPEMD160(_)
+            | HashChallenge::SHA1(_)
+            | HashChallenge::SHA256(_)
+            | HashChallenge::HASH256(_) => {
                 unimplemented!()
             }
         }

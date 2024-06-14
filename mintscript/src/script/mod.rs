@@ -123,7 +123,7 @@ impl Threshold {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum HashType {
+pub enum HashChallenge {
     RIPEMD160([u8; 20]),
     SHA1([u8; 20]),
     SHA256([u8; 32]),
@@ -138,7 +138,7 @@ pub enum WitnessScript {
     Signature(Destination, InputWitness),
     Timelock(OutputTimeLock),
     HashLock {
-        hash_type: HashType,
+        hash_challenge: HashChallenge,
         preimage: [u8; 32],
     },
 }
@@ -158,9 +158,9 @@ impl WitnessScript {
     }
 
     /// Construct a hashlock condition
-    pub const fn hashlock(hash_type: HashType, preimage: [u8; 32]) -> Self {
+    pub const fn hashlock(hash_challenge: HashChallenge, preimage: [u8; 32]) -> Self {
         Self::HashLock {
-            hash_type,
+            hash_challenge,
             preimage,
         }
     }

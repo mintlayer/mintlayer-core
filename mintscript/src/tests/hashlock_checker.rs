@@ -76,7 +76,7 @@ fn check_hashlock_160_ok(#[case] preimage: &str, #[case] hash: &str) {
     let hash = hex::decode(hash).unwrap().try_into().unwrap();
     let preimage = hex::decode(preimage).unwrap().try_into().unwrap();
 
-    let script = WitnessScript::hashlock(HashType::HASH160(hash), preimage);
+    let script = WitnessScript::hashlock(HashChallenge::HASH160(hash), preimage);
 
     let context = EmptyContext;
     let mut checker = crate::ScriptChecker::full(context);
@@ -91,7 +91,7 @@ fn check_hashlock_160_random_values_mismatch(#[case] seed: Seed) {
     let preimage: [u8; 32] = std::array::from_fn(|_| rng.gen::<u8>());
     let hash: [u8; 20] = std::array::from_fn(|_| rng.gen::<u8>());
 
-    let script = WitnessScript::hashlock(HashType::HASH160(hash), preimage);
+    let script = WitnessScript::hashlock(HashChallenge::HASH160(hash), preimage);
 
     let context = EmptyContext;
     let mut checker = crate::ScriptChecker::full(context);

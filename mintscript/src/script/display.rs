@@ -18,7 +18,7 @@ use std::fmt;
 use common::chain::timelock::OutputTimeLock;
 use serialization::hex_encoded::HexEncoded;
 
-use crate::script::HashType;
+use crate::script::HashChallenge;
 
 use super::{DissatisfiedScript, ScriptCondition, Threshold, WitnessScript};
 
@@ -69,7 +69,7 @@ impl WitnessScript {
                 OutputTimeLock::ForSeconds(s) => write!(f, "after_seconds({s})"),
             },
             WitnessScript::HashLock {
-                hash_type,
+                hash_challenge,
                 preimage,
             } => {
                 let preimage = HexEncoded::new(preimage);
@@ -77,12 +77,12 @@ impl WitnessScript {
                     let hash = HexEncoded::new(hash);
                     write!(f, "{algo}(0x{hash}, 0x{preimage})")
                 };
-                match hash_type {
-                    HashType::RIPEMD160(hash) => write_fn("RIPEMD160", hash.as_slice()),
-                    HashType::SHA1(hash) => write_fn("SHA1", hash.as_slice()),
-                    HashType::SHA256(hash) => write_fn("SHA256", hash.as_slice()),
-                    HashType::HASH160(hash) => write_fn("HASH160", hash.as_slice()),
-                    HashType::HASH256(hash) => write_fn("HASH256", hash.as_slice()),
+                match hash_challenge {
+                    HashChallenge::RIPEMD160(hash) => write_fn("RIPEMD160", hash.as_slice()),
+                    HashChallenge::SHA1(hash) => write_fn("SHA1", hash.as_slice()),
+                    HashChallenge::SHA256(hash) => write_fn("SHA256", hash.as_slice()),
+                    HashChallenge::HASH160(hash) => write_fn("HASH160", hash.as_slice()),
+                    HashChallenge::HASH256(hash) => write_fn("HASH256", hash.as_slice()),
                 }
             }
         }

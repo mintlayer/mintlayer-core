@@ -17,7 +17,7 @@
 
 use common::chain::{signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination};
 
-use super::{HashType, WitnessScript};
+use super::{HashChallenge, WitnessScript};
 
 /// A script processing object
 ///
@@ -48,7 +48,7 @@ pub trait ScriptVisitor {
     ///Check hashlock
     fn visit_hashlock(
         &mut self,
-        hash_type: &HashType,
+        hash_challenge: &HashChallenge,
         preimage: &[u8; 32],
     ) -> Result<(), Self::HashlockError>;
 }
@@ -107,10 +107,10 @@ impl WitnessScript {
                     eval_stack.extend(thresh.collect_satisfied()?.into_iter().rev());
                 }
                 Self::HashLock {
-                    hash_type,
+                    hash_challenge,
                     preimage,
                 } => {
-                    v.visit_hashlock(hash_type, preimage).map_err(ScriptError::Hashlock)?;
+                    v.visit_hashlock(hash_challenge, preimage).map_err(ScriptError::Hashlock)?;
                 }
             }
         }

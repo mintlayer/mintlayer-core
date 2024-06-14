@@ -125,9 +125,9 @@ where
 
     fn visit_hashlock(
         &mut self,
-        hash_type: &crate::script::HashType,
+        hash_challenge: &crate::script::HashChallenge,
         preimage: &[u8; 32],
     ) -> Result<(), Self::HashlockError> {
-        self.hashlock_checker.check_hashlock(hash_type, preimage)
+        self.hashlock_checker.check_hashlock(hash_challenge, preimage)
     }
 }
