@@ -19,7 +19,7 @@ use super::*;
 use chainstate_storage::{BlockchainStorageWrite, TransactionRw, Transactional};
 use common::{
     chain::{ConsensusUpgrade, NetUpgrades, PoSChainConfigBuilder, UtxoOutPoint},
-    primitives::{BlockCount, Idable},
+    primitives::BlockCount,
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -135,16 +135,15 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
             )]))
             .build();
 
-        let mut prev_block_id = tf2.genesis().get_id().into();
+        // TODO: start from arbitrary block
         for _ in 0..max_blocks {
-            let block = tf2
-                .make_pos_block_builder()
-                .with_parent(prev_block_id)
-                .with_stake_pool_id(genesis_pool_id)
-                .with_stake_spending_key(staking_sk.clone())
-                .with_vrf_key(vrf_sk.clone())
-                .build(&mut rng);
-            prev_block_id = block.get_id().into();
+            let mut block_builder = tf2.make_pos_block_builder().with_random_staking_pool(&mut rng);
+
+            for _ in 0..rng.gen_range(10..max_tx_per_block) {
+                block_builder = block_builder.add_test_transaction(&mut rng);
+            }
+
+            let block = block_builder.build(&mut rng);
             tf2.process_block(block.clone(), BlockSource::Local).unwrap();
             tf2.progress_time_seconds_since_epoch(target_time.as_secs());
 
