@@ -92,7 +92,9 @@ where
     Transport: TransportSocket,
 {
     pub peer_mgr: PeerMgr<Transport>,
+    #[allow(dead_code)]
     pub peer_mgr_error: P2pError,
+    #[allow(dead_code)]
     pub sync_mgr_error: P2pError,
 }
 

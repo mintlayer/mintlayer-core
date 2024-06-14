@@ -72,6 +72,7 @@ pub struct CliTestFramework {
     pub shutdown_trigger: ShutdownTrigger,
     pub manager_task: ManagerJoinHandle,
     pub test_root: TestRoot,
+    #[allow(dead_code)]
     pub chain_config: Arc<ChainConfig>,
 }
 
