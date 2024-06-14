@@ -46,7 +46,7 @@ pub trait ScriptVisitor {
 }
 
 /// Script verification error
-#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum ScriptError<SE, TE> {
     #[error(transparent)]
     Signature(SE),
@@ -56,6 +56,17 @@ pub enum ScriptError<SE, TE> {
 
     #[error(transparent)]
     Threshold(#[from] super::ThresholdError),
+}
+
+impl<S0, T0> ScriptError<S0, T0> {
+    /// Apply [Into::into] to both generic error fields.
+    pub fn errs_into<S1: From<S0>, T1: From<T0>>(self) -> ScriptError<S1, T1> {
+        match self {
+            Self::Signature(e) => ScriptError::Signature(e.into()),
+            Self::Timelock(e) => ScriptError::Timelock(e.into()),
+            Self::Threshold(e) => ScriptError::Threshold(e),
+        }
+    }
 }
 
 pub type ScriptErrorOf<V> =

@@ -37,6 +37,7 @@ use common::{
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::sighashtype::SigHashType,
+            DestinationSigError,
         },
         signed_transaction::SignedTransaction,
         stakelock::StakePoolData,
@@ -61,7 +62,10 @@ use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
     random::{make_seedable_rng, Seed},
 };
-use tx_verifier::timelock_check::OutputMaturityError;
+use tx_verifier::{
+    error::{InputCheckError, ScriptError, TimelockError},
+    timelock_check::OutputMaturityError,
+};
 use utils::atomics::SeqCstAtomicU64;
 use utxo::UtxoSource;
 
@@ -1413,7 +1417,13 @@ fn spend_timelocked_signed_output(#[case] seed: Seed) {
             assert_eq!(
                 res.unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        ScriptError::Timelock(TimelockError::HeightLocked(
+                            BlockHeight::new(2),
+                            BlockHeight::new(3)
+                        ))
+                    )),
                 ))
             );
         }
@@ -1438,7 +1448,13 @@ fn spend_timelocked_signed_output(#[case] seed: Seed) {
             assert_eq!(
                 res.unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        ScriptError::Timelock(TimelockError::HeightLocked(
+                            BlockHeight::new(2),
+                            BlockHeight::new(3)
+                        ))
+                    )),
                 ))
             );
         }
@@ -1455,9 +1471,10 @@ fn spend_timelocked_signed_output(#[case] seed: Seed) {
             assert_eq!(
                 res.unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::SignatureVerificationFailed(
-                        common::chain::signature::DestinationSigError::SignatureNotFound
-                    )
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        ScriptError::Signature(DestinationSigError::SignatureNotFound)
+                    ))
                 ))
             );
         }
@@ -1485,9 +1502,10 @@ fn spend_timelocked_signed_output(#[case] seed: Seed) {
             assert_eq!(
                 res.unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::SignatureVerificationFailed(
-                        common::chain::signature::DestinationSigError::SignatureVerificationFailed
-                    )
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        ScriptError::Signature(DestinationSigError::SignatureVerificationFailed)
+                    ))
                 ))
             );
         }

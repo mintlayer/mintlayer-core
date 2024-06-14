@@ -951,7 +951,7 @@ where
         tx: &Tx,
         tx_source: &TransactionSourceForConnect,
         median_time_past: BlockTimestamp,
-    ) -> Result<(), ConnectTransactionError>
+    ) -> Result<(), input_check::InputCheckError>
     where
         Tx: input_check::FullyVerifiable<PoSAccountingDelta<A>, TokensAccountingCache<T>>,
     {

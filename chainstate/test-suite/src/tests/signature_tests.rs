@@ -13,10 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate::ConnectTransactionError;
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::signature::inputsig::classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend;
+use common::chain::signature::DestinationSigError;
 use common::chain::signed_transaction::SignedTransaction;
 use common::chain::ConsensusUpgrade;
 use common::chain::NetUpgrades;
@@ -42,6 +44,8 @@ use serialization::Encode;
 use std::num::NonZeroU8;
 use test_utils::random::gen_random_bytes;
 use test_utils::random::Seed;
+use tx_verifier::error::InputCheckError;
+use tx_verifier::error::ScriptError;
 
 #[rstest]
 #[trace]
@@ -104,11 +108,12 @@ fn signed_tx(#[case] seed: Seed) {
             assert_eq!(
                 res.unwrap_err(),
                 chainstate::ChainstateError::ProcessBlockError(
-                    chainstate::BlockError::StateUpdateFailed(
-                        chainstate::ConnectTransactionError::SignatureVerificationFailed(
-                            chain::signature::DestinationSigError::SignatureNotFound
+                    chainstate::BlockError::StateUpdateFailed(ConnectTransactionError::InputCheck(
+                        InputCheckError::new(
+                            0,
+                            ScriptError::Signature(DestinationSigError::SignatureNotFound)
                         )
-                    )
+                    ))
                 )
             );
         }
@@ -134,11 +139,12 @@ fn signed_tx(#[case] seed: Seed) {
             assert_eq!(
                 res.unwrap_err(),
                 chainstate::ChainstateError::ProcessBlockError(
-                    chainstate::BlockError::StateUpdateFailed(
-                        chainstate::ConnectTransactionError::SignatureVerificationFailed(
-                            chain::signature::DestinationSigError::InvalidSignatureEncoding
+                    chainstate::BlockError::StateUpdateFailed(ConnectTransactionError::InputCheck(
+                        InputCheckError::new(
+                            0,
+                            ScriptError::Signature(DestinationSigError::InvalidSignatureEncoding)
                         )
-                    )
+                    ))
                 )
             );
         }
@@ -269,11 +275,12 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
             assert_eq!(
                 res.unwrap_err(),
                 chainstate::ChainstateError::ProcessBlockError(
-                    chainstate::BlockError::StateUpdateFailed(
-                        chainstate::ConnectTransactionError::SignatureVerificationFailed(
-                            chain::signature::DestinationSigError::SignatureNotFound
+                    chainstate::BlockError::StateUpdateFailed(ConnectTransactionError::InputCheck(
+                        InputCheckError::new(
+                            0,
+                            ScriptError::Signature(DestinationSigError::SignatureNotFound)
                         )
-                    )
+                    ))
                 )
             );
         }
@@ -299,11 +306,12 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
             assert_eq!(
                 res.unwrap_err(),
                 chainstate::ChainstateError::ProcessBlockError(
-                    chainstate::BlockError::StateUpdateFailed(
-                        chainstate::ConnectTransactionError::SignatureVerificationFailed(
-                            chain::signature::DestinationSigError::InvalidSignatureEncoding
+                    chainstate::BlockError::StateUpdateFailed(ConnectTransactionError::InputCheck(
+                        InputCheckError::new(
+                            0,
+                            ScriptError::Signature(DestinationSigError::InvalidSignatureEncoding)
                         )
-                    )
+                    ))
                 )
             );
         }
@@ -460,9 +468,17 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
                     process_error,
                     chainstate::ChainstateError::ProcessBlockError(
                         chainstate::BlockError::StateUpdateFailed(
-                            chainstate::ConnectTransactionError::SignatureVerificationFailed(
-                                common::chain::signature::DestinationSigError::IncompleteClassicalMultisigSignature(min_required_signatures.get(), authorization_potentially_missing_sigs.available_signatures_count() as u8)
-                            )
+                            ConnectTransactionError::InputCheck(InputCheckError::new(
+                                0,
+                                ScriptError::Signature(
+                                    DestinationSigError::IncompleteClassicalMultisigSignature(
+                                        min_required_signatures.get(),
+                                        authorization_potentially_missing_sigs
+                                            .available_signatures_count()
+                                            as u8
+                                    )
+                                )
+                            ))
                         )
                     )
                 );
@@ -665,11 +681,12 @@ fn try_to_spend_with_no_signature_on_mainnet(#[case] seed: Seed) {
         assert_eq!(
             process_result.unwrap_err(),
             chainstate::ChainstateError::ProcessBlockError(
-                chainstate::BlockError::StateUpdateFailed(
-                    chainstate::ConnectTransactionError::SignatureVerificationFailed(
-                        chain::signature::DestinationSigError::SignatureNotFound
+                chainstate::BlockError::StateUpdateFailed(ConnectTransactionError::InputCheck(
+                    InputCheckError::new(
+                        0,
+                        ScriptError::Signature(DestinationSigError::SignatureNotFound)
                     )
-                )
+                ))
             )
         );
 

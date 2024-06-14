@@ -24,7 +24,10 @@ use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::{
     chain::{
         output_value::OutputValue,
-        signature::inputsig::{standard_signature::StandardInputSignature, InputWitness},
+        signature::{
+            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            DestinationSigError,
+        },
         timelock::OutputTimeLock,
         tokens::{
             make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance,
@@ -45,7 +48,8 @@ use test_utils::{
 };
 use tokens_accounting::TokensAccountingStorageRead;
 use tx_verifier::{
-    transaction_verifier::error::{SignatureDestinationGetterError, TokenIssuanceError},
+    error::{InputCheckError, ScriptError, TimelockError, TranslationError},
+    transaction_verifier::error::TokenIssuanceError,
     CheckTransactionError,
 };
 
@@ -2952,9 +2956,10 @@ fn issue_and_mint_same_tx(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::DestinationRetrievalError(
-                    SignatureDestinationGetterError::TokenDataNotFound(token_id)
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    1,
+                    TranslationError::TokenNotFound(token_id)
+                ))
             ))
         );
     });
@@ -3344,9 +3349,10 @@ fn check_signature_on_mint(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureNotFound
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureNotFound)
+                ))
             ))
         );
 
@@ -3384,9 +3390,10 @@ fn check_signature_on_mint(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureVerificationFailed)
+                ))
             ))
         );
 
@@ -3536,9 +3543,10 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureNotFound
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureNotFound)
+                ))
             ))
         );
 
@@ -3587,9 +3595,10 @@ fn check_signature_on_unmint(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureVerificationFailed)
+                ))
             ))
         );
 
@@ -3679,9 +3688,10 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureNotFound
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureNotFound)
+                ))
             ))
         );
 
@@ -3719,9 +3729,10 @@ fn check_signature_on_lock_supply(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureVerificationFailed)
+                ))
             ))
         );
 
@@ -3832,7 +3843,13 @@ fn mint_with_timelock(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation,
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Timelock(TimelockError::HeightLocked(
+                        BlockHeight::new(3),
+                        BlockHeight::new(4)
+                    ))
+                )),
             ))
         );
 
@@ -4581,9 +4598,10 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureNotFound
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureNotFound)
+                ))
             ))
         );
 
@@ -4625,9 +4643,10 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureVerificationFailed)
+                ))
             ))
         );
 
@@ -4666,9 +4685,10 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureNotFound
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureNotFound)
+                ))
             ))
         );
 
@@ -4694,9 +4714,10 @@ fn check_signature_on_freeze_unfreeze(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureVerificationFailed)
+                ))
             ))
         );
 
@@ -4779,9 +4800,10 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureNotFound
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureNotFound)
+                ))
             ))
         );
 
@@ -4819,9 +4841,10 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureVerificationFailed)
+                ))
             ))
         );
 
@@ -4899,9 +4922,10 @@ fn check_signature_on_change_authority(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureVerificationFailed)
+                ))
             ))
         );
 

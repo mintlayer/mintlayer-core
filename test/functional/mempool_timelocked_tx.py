@@ -81,7 +81,7 @@ class MempoolTimelockedTxTest(BitcoinTestFramework):
         node.mempool_submit_transaction(tx1, {})
         node.mempool_submit_transaction(tx3, {})
         # Cannot submit tx2 yet, it spends and unconfirmed time-locked output
-        assert_raises_rpc_error(None, "Timelock rules violated", node.mempool_submit_transaction, tx2, {})
+        assert_raises_rpc_error(None, "locked until height", node.mempool_submit_transaction, tx2, {})
 
         assert node.mempool_contains_tx(tx0_id)
         assert node.mempool_contains_tx(tx1_id)

@@ -23,7 +23,10 @@ use common::{
     chain::{
         config::create_unit_test_config,
         output_value::OutputValue,
-        signature::inputsig::{standard_signature::StandardInputSignature, InputWitness},
+        signature::{
+            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            DestinationSigError,
+        },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         AccountNonce, AccountOutPoint, AccountSpending, AccountType, DelegationId, Destination,
@@ -39,6 +42,7 @@ use pos_accounting::{DelegationData, PoSAccountingStorageRead};
 use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+use tx_verifier::error::{InputCheckError, ScriptError};
 
 fn prepare_stake_pool(
     rng: &mut (impl Rng + CryptoRng),
@@ -908,9 +912,10 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureNotFound
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureNotFound)
+                ))
             ))
         );
 
@@ -941,9 +946,10 @@ fn check_signature_on_spend_share(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::SignatureVerificationFailed(
-                    common::chain::signature::DestinationSigError::SignatureVerificationFailed
-                )
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Signature(DestinationSigError::SignatureVerificationFailed)
+                ))
             ))
         );
 

@@ -24,7 +24,9 @@ pub enum OrphanType {
 impl OrphanType {
     /// Check an error signifies a potential orphan transaction
     pub fn from_error(err: ConnectTransactionError) -> Result<Self, ConnectTransactionError> {
+        use chainstate::tx_verifier::error::InputCheckErrorPayload as ICE;
         use ConnectTransactionError as CTE;
+
         match &err {
             // Missing UTXO signifies a possible orphan
             CTE::MissingOutputOrSpent(_) => Ok(Self::MissingUtxo),
@@ -34,27 +36,21 @@ impl OrphanType {
                 got.value().checked_sub(expected.value()).map(Self::AccountNonceGap).ok_or(err)
             }
 
+            CTE::InputCheck(e) => match e.error() {
+                // Missing UTXO signifies a possible orphan
+                ICE::MissingUtxo(_) => Ok(Self::MissingUtxo),
+                ICE::UtxoView(_) | ICE::Translation(_) | ICE::Verification(_) => Err(err),
+            },
+
             // These do not
             CTE::StorageError(_)
-            | CTE::TxNumWrongInBlockOnConnect(_, _)
-            | CTE::TxNumWrongInBlockOnDisconnect(_, _)
-            | CTE::InvariantBrokenAlreadyUnspent
             | CTE::MissingTxUndo(_)
             | CTE::MissingBlockUndo(_)
             | CTE::MissingBlockRewardUndo(_)
-            | CTE::MissingMempoolTxsUndo
-            | CTE::AttemptToPrintMoney(_, _)
-            | CTE::BlockRewardInputOutputMismatch(_, _)
-            | CTE::TxFeeTotalCalcFailed(_, _)
-            | CTE::SignatureVerificationFailed(_)
-            | CTE::BlockHeightArithmeticError
-            | CTE::BlockTimestampArithmeticError
             | CTE::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _)
             | CTE::BlockIndexCouldNotBeLoaded(_)
             | CTE::FailedToAddAllFeesOfBlock(_)
             | CTE::RewardAdditionError(_)
-            | CTE::TimeLockViolation
-            | CTE::TimelockedAccount
             | CTE::UtxoError(_)
             | CTE::TokensError(_)
             | CTE::TransactionVerifierError(_)
@@ -65,11 +61,9 @@ impl OrphanType {
             | CTE::PoSAccountingError(_)
             | CTE::SpendStakeError(_)
             | CTE::StakerBalanceNotFound(_)
-            | CTE::PoolDataNotFound(_)
             | CTE::UnexpectedPoolId(_, _)
             | CTE::UndoFetchFailure
             | CTE::TxVerifierStorage
-            | CTE::DestinationRetrievalError(_)
             | CTE::NotEnoughPledgeToCreateStakePool(..)
             | CTE::MissingTransactionNonce(_)
             | CTE::AttemptToCreateStakePoolFromAccounts
@@ -80,10 +74,8 @@ impl OrphanType {
             | CTE::InsufficientCoinsFee(_, _)
             | CTE::AttemptToSpendFrozenToken(_)
             | CTE::ConstrainedValueAccumulatorError(_, _)
-            | CTE::PoolBalanceNotFound(_)
             | CTE::RewardDistributionError(_)
             | CTE::CheckTransactionError(_)
-            | CTE::Threshold(_)
             | CTE::IOPolicyError(_, _) => Err(err),
         }
     }

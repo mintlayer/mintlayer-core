@@ -44,7 +44,7 @@ pub trait TimelockContext {
 
 pub struct StandardTimelockChecker;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum TimelockError<CE> {
     #[error(transparent)]
     Context(#[from] CE),
@@ -55,10 +55,10 @@ pub enum TimelockError<CE> {
     #[error("Timestamp arithmetic error")]
     TimestampArith,
 
-    #[error("Spending at height {0}, locked until {1}")]
+    #[error("Spending at height {0}, locked until height {1}")]
     HeightLocked(BlockHeight, BlockHeight),
 
-    #[error("Spending at timestamp {0}, locked until {1}")]
+    #[error("Spending at timestamp {0}, locked until timestamp {1}")]
     TimestampLocked(BlockTimestamp, BlockTimestamp),
 }
 

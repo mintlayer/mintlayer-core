@@ -26,6 +26,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id, Idable},
 };
 use rstest::rstest;
+use tx_verifier::error::{InputCheckError, ScriptError, TimelockError};
 
 use super::helpers::add_block_with_locked_output;
 use chainstate::BlockError;
@@ -71,7 +72,13 @@ fn output_lock_until_height(#[case] seed: Seed) {
                 .build_and_process(&mut rng)
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Timelock(TimelockError::HeightLocked(
+                        BlockHeight::new(2),
+                        BlockHeight::new(block_height_that_unlocks)
+                    ))
+                )),
             ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
@@ -112,7 +119,13 @@ fn output_lock_until_height(#[case] seed: Seed) {
                     .build_and_process(&mut rng)
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        ScriptError::Timelock(TimelockError::HeightLocked(
+                            BlockHeight::new(height),
+                            BlockHeight::new(block_height_that_unlocks)
+                        ))
+                    )),
                 ))
             );
             assert_eq!(
@@ -191,7 +204,13 @@ fn output_lock_until_height_but_spend_at_same_block(#[case] seed: Seed) {
                 .build_and_process(&mut rng)
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Timelock(TimelockError::HeightLocked(
+                        BlockHeight::new(1),
+                        BlockHeight::new(block_height_that_unlocks)
+                    ))
+                )),
             ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
@@ -208,6 +227,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
 
         let block_count_that_unlocks = 20;
         let block_height_with_locked_output = 1;
+        let block_height_that_unlocks = block_count_that_unlocks + block_height_with_locked_output;
 
         // create the first block, with a locked output
         let current_time = tf.current_time();
@@ -230,7 +250,13 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                 .build_and_process(&mut rng)
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Timelock(TimelockError::HeightLocked(
+                        BlockHeight::new(2),
+                        BlockHeight::new(block_height_that_unlocks)
+                    ))
+                )),
             ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
@@ -271,7 +297,13 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                     .build_and_process(&mut rng)
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        ScriptError::Timelock(TimelockError::HeightLocked(
+                            BlockHeight::new(height),
+                            BlockHeight::new(block_height_that_unlocks)
+                        ))
+                    )),
                 ))
             );
             assert_eq!(
@@ -344,7 +376,13 @@ fn output_lock_for_block_count_but_spend_at_same_block(#[case] seed: Seed) {
                 .build_and_process(&mut rng)
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Timelock(TimelockError::HeightLocked(
+                        BlockHeight::new(1),
+                        BlockHeight::new(block_count_that_unlocks + 1)
+                    ))
+                )),
             ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
@@ -397,7 +435,10 @@ fn output_lock_for_block_count_attempted_overflow(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::BlockHeightArithmeticError
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Timelock(TimelockError::HeightArith)
+                )),
             ))
         );
     });
@@ -461,7 +502,13 @@ fn output_lock_until_time(#[case] seed: Seed) {
                     .build_and_process(&mut rng)
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        ScriptError::Timelock(TimelockError::TimestampLocked(
+                            mtp,
+                            BlockTimestamp::from_int_seconds(lock_time),
+                        ))
+                    )),
                 ))
             );
             assert_eq!(
@@ -543,7 +590,13 @@ fn output_lock_until_time_but_spend_at_same_block(#[case] seed: Seed) {
                 .build_and_process(&mut rng)
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Timelock(TimelockError::TimestampLocked(
+                        genesis_timestamp,
+                        BlockTimestamp::from_int_seconds(lock_time),
+                    ))
+                )),
             ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
@@ -609,7 +662,13 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                     .build_and_process(&mut rng)
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        ScriptError::Timelock(TimelockError::TimestampLocked(
+                            mtp,
+                            BlockTimestamp::from_int_seconds(unlock_time),
+                        ))
+                    )),
                 ))
             );
             assert_eq!(
@@ -657,6 +716,7 @@ fn output_lock_for_seconds_but_spend_at_same_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_timestamp = tf.genesis().timestamp();
 
         // create the first block, with a locked output
         let tx1 = TransactionBuilder::new()
@@ -689,7 +749,13 @@ fn output_lock_for_seconds_but_spend_at_same_block(#[case] seed: Seed) {
                 .build_and_process(&mut rng)
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Timelock(TimelockError::TimestampLocked(
+                        genesis_timestamp,
+                        BlockTimestamp::from_int_seconds(genesis_timestamp.as_int_seconds() + 100)
+                    ))
+                )),
             ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
@@ -725,7 +791,10 @@ fn output_lock_for_seconds_attempted_overflow(#[case] seed: Seed) {
                 .build_and_process(&mut rng)
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::BlockTimestampArithmeticError
+                ConnectTransactionError::InputCheck(InputCheckError::new(
+                    0,
+                    ScriptError::Timelock(TimelockError::TimestampArith)
+                )),
             ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));

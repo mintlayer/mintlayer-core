@@ -13,11 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::Infallible;
+
 use chainstate_types::block_index_ancestor_getter;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
-        signature::{inputsig::InputWitness, Transactable},
+        signature::{inputsig::InputWitness, DestinationSigError, Transactable},
         ChainConfig, GenBlock, TxInput, TxOutput,
     },
     primitives::{BlockHeight, Id},
@@ -29,7 +31,58 @@ use mintscript::{
 
 use crate::TransactionVerifierStorageRef;
 
-use super::{error::ConnectTransactionError, TransactionSourceForConnect};
+use super::TransactionSourceForConnect;
+
+pub type TimelockError = mintscript::checker::TimelockError<TimelockContextError>;
+pub type ScriptError = mintscript::script::ScriptError<DestinationSigError, TimelockError>;
+
+#[derive(PartialEq, Eq, Clone, thiserror::Error, Debug)]
+pub enum InputCheckErrorPayload {
+    #[error("Utxo {0:?} missing or spent")]
+    MissingUtxo(common::chain::UtxoOutPoint),
+
+    #[error("Utxo view error: {0}")]
+    UtxoView(#[from] utxo::Error),
+
+    #[error(transparent)]
+    Translation(#[from] mintscript::translate::TranslationError),
+
+    #[error(transparent)]
+    Verification(#[from] ScriptError),
+}
+
+impl From<mintscript::script::ScriptError<Infallible, TimelockError>> for InputCheckErrorPayload {
+    fn from(value: mintscript::script::ScriptError<Infallible, TimelockError>) -> Self {
+        Self::Verification(value.errs_into())
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, thiserror::Error, Debug)]
+#[error("Error verifying input #{input_num}: {error}")]
+pub struct InputCheckError {
+    input_num: usize,
+    error: InputCheckErrorPayload,
+}
+
+impl InputCheckError {
+    pub fn new(input_num: usize, error: impl Into<InputCheckErrorPayload>) -> Self {
+        let error = error.into();
+        Self { input_num, error }
+    }
+
+    pub fn error(&self) -> &InputCheckErrorPayload {
+        &self.error
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, thiserror::Error, Debug)]
+pub enum TimelockContextError {
+    #[error("Timelocks on accounts not supported")]
+    TimelockedAccount,
+
+    #[error("Loading ancestor header at height {1} failed: {0}")]
+    HeaderLoad(chainstate_types::GetAncestorError, BlockHeight),
+}
 
 pub struct PerInputData<'a> {
     input: InputInfo<'a>,
@@ -43,16 +96,19 @@ impl<'a> PerInputData<'a> {
 
     fn from_input<UV: utxo::UtxosView>(
         utxo_view: &UV,
+        input_num: usize,
         input: &'a TxInput,
         witness: &'a InputWitness,
-    ) -> Result<Self, ConnectTransactionError> {
+    ) -> Result<Self, InputCheckError> {
         let info = match input {
             TxInput::Utxo(outpoint) => {
-                let err_f = || ConnectTransactionError::MissingOutputOrSpent(outpoint.clone());
                 let utxo = utxo_view
                     .utxo(outpoint)
-                    .map_err(|_| utxo::Error::ViewRead)?
-                    .ok_or_else(err_f)?;
+                    .map_err(|_| InputCheckError::new(input_num, utxo::Error::ViewRead))?
+                    .ok_or_else(|| {
+                        let err = InputCheckErrorPayload::MissingUtxo(outpoint.clone());
+                        InputCheckError::new(input_num, err)
+                    })?;
                 InputInfo::Utxo { outpoint, utxo }
             }
             TxInput::Account(outpoint) => InputInfo::Account { outpoint },
@@ -123,7 +179,7 @@ where
     AV: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
     TV: tokens_accounting::TokensAccountingView<Error = tokens_accounting::Error>,
 {
-    fn to_script<T: TranslateInput<Self>>(&self) -> Result<WitnessScript, ConnectTransactionError> {
+    fn to_script<T: TranslateInput<Self>>(&self) -> Result<WitnessScript, InputCheckErrorPayload> {
         Ok(T::translate_input(self)?)
     }
 }
@@ -137,7 +193,7 @@ impl<'a> CoreContext<'a> {
     fn new<T: Transactable, UV: utxo::UtxosView>(
         utxo_view: &UV,
         transaction: &'a T,
-    ) -> Result<Self, ConnectTransactionError> {
+    ) -> Result<Self, InputCheckError> {
         let inputs = transaction.inputs().unwrap_or_default();
         let sigs = transaction.signatures().unwrap_or_default();
 
@@ -146,7 +202,8 @@ impl<'a> CoreContext<'a> {
         let inputs_and_sigs = inputs
             .iter()
             .zip(sigs.iter())
-            .map(|(input, sig)| PerInputData::from_input(utxo_view, input, sig))
+            .enumerate()
+            .map(|(n, (input, sig))| PerInputData::from_input(utxo_view, n, input, sig))
             .collect::<Result<_, _>>()?;
 
         Ok(Self { inputs_and_sigs })
@@ -243,7 +300,7 @@ impl<'a, S> InputVerifyContextTimelock<'a, S> {
 }
 
 impl<S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextTimelock<'_, S> {
-    type Error = ConnectTransactionError;
+    type Error = TimelockContextError;
 
     fn spending_height(&self) -> BlockHeight {
         self.ctx.spending_height
@@ -260,7 +317,7 @@ impl<S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextTim
                 utxo::UtxoSource::Mempool => Ok(self.ctx.spending_height),
             },
             InputInfo::Account { .. } | InputInfo::AccountCommand { .. } => {
-                Err(ConnectTransactionError::TimelockedAccount)
+                Err(TimelockContextError::TimelockedAccount)
             }
         }
     }
@@ -280,18 +337,14 @@ impl<S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextTim
                         (&self.ctx.tip).into(),
                         *height,
                     )
-                    .map_err(|e| {
-                        ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(
-                            e, *height,
-                        )
-                    })?;
+                    .map_err(|e| TimelockContextError::HeaderLoad(e, *height))?;
 
                     Ok(source_block_index.block_timestamp())
                 }
                 utxo::UtxoSource::Mempool => Ok(self.ctx.spending_time),
             },
             InputInfo::Account { .. } | InputInfo::AccountCommand { .. } => {
-                Err(ConnectTransactionError::TimelockedAccount)
+                Err(TimelockContextError::TimelockedAccount)
             }
         }
     }
@@ -335,7 +388,7 @@ impl<'a, T, S> InputVerifyContextFull<'a, T, S> {
 }
 
 impl<T, S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextFull<'_, T, S> {
-    type Error = ConnectTransactionError;
+    type Error = TimelockContextError;
 
     fn spending_height(&self) -> BlockHeight {
         self.sub_ctx().spending_height()
@@ -395,7 +448,7 @@ pub fn verify_full<T, S, UV, AV, TV>(
     storage: &S,
     tx_source: &TransactionSourceForConnect,
     spending_time: BlockTimestamp,
-) -> Result<(), ConnectTransactionError>
+) -> Result<(), InputCheckError>
 where
     T: FullyVerifiable<AV, TV>,
     S: TransactionVerifierStorageRef,
@@ -414,10 +467,11 @@ where
     let ctx = VerifyContextFull::new(transaction, &tl_ctx);
 
     for (n, inp) in core_ctx.inputs_iter() {
-        let script =
-            TranslationContextFull::new(pos_accounting, tokens_accounting, inp).to_script::<T>()?;
+        let script = TranslationContextFull::new(pos_accounting, tokens_accounting, inp)
+            .to_script::<T>()
+            .map_err(|e| InputCheckError::new(n, e))?;
         let mut checker = mintscript::ScriptChecker::full(InputVerifyContextFull::new(&ctx, n));
-        script.verify(&mut checker)?;
+        script.verify(&mut checker).map_err(|e| InputCheckError::new(n, e))?;
     }
 
     Ok(())
@@ -441,7 +495,7 @@ pub fn verify_timelocks<T, S, UV>(
     tip: Id<GenBlock>,
     spending_height: BlockHeight,
     spending_time: BlockTimestamp,
-) -> Result<(), ConnectTransactionError>
+) -> Result<(), InputCheckError>
 where
     T: Transactable,
     mintscript::translate::TimelockOnly: for<'a> TranslateInput<PerInputData<'a>>,
@@ -459,10 +513,11 @@ where
     );
 
     for (n, inp) in core_ctx.inputs_iter() {
-        let script = mintscript::translate::TimelockOnly::translate_input(inp)?;
+        let script = mintscript::translate::TimelockOnly::translate_input(inp)
+            .map_err(|e| InputCheckError::new(n, e))?;
         let mut checker =
             mintscript::ScriptChecker::timelock_only(InputVerifyContextTimelock::new(&ctx, n));
-        script.verify(&mut checker)?;
+        script.verify(&mut checker).map_err(|e| InputCheckError::new(n, e))?;
     }
 
     Ok(())
