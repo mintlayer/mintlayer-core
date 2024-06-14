@@ -42,10 +42,10 @@ use wallet_types::keys::KeyPurpose;
 use wallet_types::{AccountId, AccountInfo, KeychainUsageState};
 
 use super::vrf_key_chain::VrfKeySoftChain;
-use super::{make_path_to_vrf_key, MasterKeyChain, VRF_INDEX};
+use super::{make_path_to_vrf_key, AccountKeyChains, MasterKeyChain, VRF_INDEX};
 
 /// This key chain contains a pool of pre-generated keys and addresses for the usage in a wallet
-pub struct AccountKeyChain {
+pub struct AccountKeyChainImpl {
     chain_config: Arc<ChainConfig>,
 
     account_index: U31,
@@ -75,7 +75,7 @@ pub struct AccountKeyChain {
     lookahead_size: ConstValue<u32>,
 }
 
-impl AccountKeyChain {
+impl AccountKeyChainImpl {
     pub fn new_from_root_key(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -83,7 +83,7 @@ impl AccountKeyChain {
         root_vrf_key: ExtendedVRFPrivateKey,
         account_index: U31,
         lookahead_size: u32,
-    ) -> KeyChainResult<AccountKeyChain> {
+    ) -> KeyChainResult<AccountKeyChainImpl> {
         let account_path = make_account_path(&chain_config, account_index);
 
         let account_privkey = root_key.derive_absolute_path(&account_path)?;
@@ -138,7 +138,7 @@ impl AccountKeyChain {
         );
         vrf_chain.save_usage_state(db_tx)?;
 
-        let mut new_account = AccountKeyChain {
+        let mut new_account = AccountKeyChainImpl {
             chain_config,
             account_index,
             account_public_key: account_pubkey.into(),
@@ -230,7 +230,7 @@ impl AccountKeyChain {
             })
             .collect();
 
-        Ok(AccountKeyChain {
+        Ok(AccountKeyChainImpl {
             chain_config,
             account_index: account_info.account_index(),
             account_public_key: pubkey_id,
@@ -691,6 +691,31 @@ impl AccountKeyChain {
 
     pub fn get_addresses_usage_state(&self) -> &KeychainUsageState {
         self.get_leaf_key_chain(KeyPurpose::ReceiveFunds).usage_state()
+    }
+}
+
+impl AccountKeyChains for AccountKeyChainImpl {
+    fn find_public_key(&self, destination: &Destination) -> Option<super::FoundPubKey> {
+        for purpose in KeyPurpose::ALL {
+            let leaf_key = self.get_leaf_key_chain(purpose);
+            if let Some(xpub) = leaf_key
+                .get_child_num_from_destination(destination)
+                .and_then(|child_num| leaf_key.get_derived_xpub(child_num))
+            {
+                return Some(super::FoundPubKey::Hierarchy(xpub.clone()));
+            }
+        }
+
+        self.standalone_private_keys
+            .get(destination)
+            .map(|(_, acc_public_key)| super::FoundPubKey::Standalone(acc_public_key.clone()))
+    }
+
+    fn find_multisig_challenge(
+        &self,
+        destination: &Destination,
+    ) -> Option<&ClassicMultisigChallenge> {
+        self.get_multisig_challenge(destination)
     }
 }
 

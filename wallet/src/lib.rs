@@ -16,6 +16,7 @@
 pub mod account;
 pub mod key_chain;
 pub mod send_request;
+pub mod signer;
 pub mod version;
 pub mod wallet;
 pub mod wallet_events;

@@ -32,7 +32,8 @@ mod master_key_chain;
 mod vrf_key_chain;
 mod with_purpose;
 
-pub use account_key_chain::AccountKeyChain;
+pub use account_key_chain::AccountKeyChainImpl;
+use common::chain::classic_multisig::ClassicMultisigChallenge;
 use crypto::key::hdkd::u31::U31;
 use crypto::vrf::VRFKeyKind;
 pub use master_key_chain::MasterKeyChain;
@@ -41,10 +42,11 @@ use common::address::pubkeyhash::PublicKeyHashError;
 use common::address::{AddressError, RpcAddress};
 use common::chain::config::BIP44_PATH;
 use common::chain::{ChainConfig, Destination};
-use crypto::key::extended::ExtendedKeyKind;
+use crypto::key::extended::{ExtendedKeyKind, ExtendedPublicKey};
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::DerivationError;
 use crypto::key::hdkd::derivation_path::DerivationPath;
+use wallet_types::account_id::AccountPublicKey;
 use wallet_types::keys::{KeyPurpose, KeyPurposeError};
 use wallet_types::AccountId;
 
@@ -103,6 +105,20 @@ pub enum KeyChainError {
     NoStandaloneAddressFound(RpcAddress<Destination>),
     #[error("Standalone address already exists: {0}")]
     StandaloneAddressAlreadyExists(RpcAddress<Destination>),
+}
+
+pub enum FoundPubKey {
+    Hierarchy(ExtendedPublicKey),
+    Standalone(AccountPublicKey),
+}
+
+pub trait AccountKeyChains {
+    fn find_public_key(&self, destination: &Destination) -> Option<FoundPubKey>;
+
+    fn find_multisig_challenge(
+        &self,
+        destination: &Destination,
+    ) -> Option<&ClassicMultisigChallenge>;
 }
 
 /// Result type used for the key chain

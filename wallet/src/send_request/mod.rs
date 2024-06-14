@@ -22,8 +22,7 @@ use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{Metadata, TokenId, TokenIssuance};
 use common::chain::{
-    ChainConfig, Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
-    UtxoOutPoint,
+    ChainConfig, Destination, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight};
@@ -31,7 +30,7 @@ use crypto::vrf::VRFPublicKey;
 use utils::ensure;
 
 use crate::account::currency_grouper::Currency;
-use crate::account::PoolData;
+use crate::account::{PartiallySignedTransaction, PoolData};
 use crate::{WalletError, WalletResult};
 
 /// The `SendRequest` struct provides the necessary information to the wallet
@@ -173,8 +172,6 @@ pub struct IssueNftArguments {
     pub destination: Destination,
 }
 
-type TxAndInputs = (Transaction, Vec<Option<TxOutput>>, Vec<Destination>);
-
 impl SendRequest {
     pub fn new() -> Self {
         Self {
@@ -277,13 +274,16 @@ impl SendRequest {
         &mut self.outputs
     }
 
-    pub fn into_transaction_and_utxos(self) -> Result<TxAndInputs, TransactionCreationError> {
-        let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
-        Ok((tx, self.utxos, self.destinations))
-    }
-
     pub fn get_fees(&mut self) -> BTreeMap<Currency, Amount> {
         take(&mut self.fees)
+    }
+
+    pub fn into_partially_signed_tx(self) -> WalletResult<PartiallySignedTransaction> {
+        let num_inputs = self.inputs.len();
+        let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
+        let destinations = self.destinations.into_iter().map(Some).collect();
+
+        PartiallySignedTransaction::new(tx, vec![None; num_inputs], self.utxos, destinations)
     }
 }
 
