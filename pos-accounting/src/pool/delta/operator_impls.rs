@@ -44,7 +44,12 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
     ) -> Result<PoSAccountingUndo, Error> {
         let pledge_amount = pool_data.pledge_amount();
 
-        if self.get_pool_balance(pool_id).map_err(|_| Error::ViewFail)?.is_some() {
+        if self
+            .get_pool_balance(pool_id)
+            .map_err(|_| Error::ViewFail)?
+            .unwrap_or(Amount::ZERO)
+            != Amount::ZERO
+        {
             // This should never happen since it's based on an unspent input
             return Err(Error::InvariantErrorPoolBalanceAlreadyExists);
         }

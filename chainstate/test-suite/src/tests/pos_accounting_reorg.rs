@@ -240,6 +240,113 @@ fn stake_pool_reorg(
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn create_same_stake_pool_after_reorg(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+        let genesis_pool_id = PoolId::new(H256::random_using(&mut rng));
+        let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
+
+        let (stake_pool_data, staking_sk) = create_stake_pool_data_with_all_reward_to_staker(
+            &mut rng,
+            amount_to_stake,
+            vrf_pk.clone(),
+        );
+
+        let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+            &mut rng,
+            (amount_to_stake * 2).unwrap(),
+            genesis_pool_id,
+            stake_pool_data,
+        )
+        .build();
+        let target_block_time = chain_config.target_block_spacing();
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+        tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+
+        // prepare tx with pool creation
+        let destination_a = new_pub_key_destination(&mut rng);
+        let (_, vrf_pub_key_a) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let genesis_block_id = tf.genesis().get_id().into();
+        let genesis_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_block_id), 0);
+        let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
+        let create_pool_tx_builder = TransactionBuilder::new()
+            .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateStakePool(
+                pool_id,
+                Box::new(StakePoolData::new(
+                    amount_to_stake,
+                    anyonecanspend_address(),
+                    vrf_pub_key_a,
+                    destination_a,
+                    PerThousand::new(0).unwrap(),
+                    Amount::ZERO,
+                )),
+            ));
+
+        // create block a
+        let block_a = tf
+            .make_pos_block_builder()
+            .add_transaction(create_pool_tx_builder.clone().build())
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .build(&mut rng);
+        let block_a_index = tf.process_block(block_a.clone(), BlockSource::Local).unwrap().unwrap();
+        assert_eq!(
+            tf.best_block_id(),
+            Id::<GenBlock>::from(*block_a_index.block_id())
+        );
+
+        // create block b
+
+        // add another output so that block id would be different
+        let create_pool_tx_2 = create_pool_tx_builder
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(1)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let block_b = tf
+            .make_pos_block_builder()
+            .with_parent(genesis_block_id)
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .add_transaction(create_pool_tx_2.clone())
+            .build(&mut rng);
+        let block_b_id = block_b.get_id();
+        tf.process_block(block_b, BlockSource::Local).unwrap();
+
+        // no reorg here
+        assert_eq!(
+            tf.best_block_id(),
+            Id::<GenBlock>::from(*block_a_index.block_id())
+        );
+
+        // create block c
+        let block_c = tf
+            .make_pos_block_builder()
+            .with_parent(block_b_id.into())
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk)
+            .with_vrf_key(vrf_sk.clone())
+            .build_and_process(&mut rng)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            tf.best_block_id(),
+            Id::<GenBlock>::from(*block_c.block_id())
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn long_chain_reorg(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
