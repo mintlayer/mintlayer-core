@@ -124,11 +124,11 @@ impl Threshold {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum HashChallenge {
-    RIPEMD160([u8; 20]),
-    SHA1([u8; 20]),
-    SHA256([u8; 32]),
-    HASH160([u8; 20]),
-    HASH256([u8; 32]),
+    Ripemd160([u8; 20]),
+    Sha1([u8; 20]),
+    Sha256([u8; 32]),
+    Hash160([u8; 20]),
+    Hash256([u8; 32]),
 }
 
 /// Script together with witness data presumably satisfying the script.

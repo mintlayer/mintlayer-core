@@ -78,11 +78,11 @@ impl WitnessScript {
                     write!(f, "{algo}(0x{hash}, 0x{preimage})")
                 };
                 match hash_challenge {
-                    HashChallenge::RIPEMD160(hash) => write_fn("RIPEMD160", hash.as_slice()),
-                    HashChallenge::SHA1(hash) => write_fn("SHA1", hash.as_slice()),
-                    HashChallenge::SHA256(hash) => write_fn("SHA256", hash.as_slice()),
-                    HashChallenge::HASH160(hash) => write_fn("HASH160", hash.as_slice()),
-                    HashChallenge::HASH256(hash) => write_fn("HASH256", hash.as_slice()),
+                    HashChallenge::Ripemd160(hash) => write_fn("Ripemd160", hash.as_slice()),
+                    HashChallenge::Sha1(hash) => write_fn("Sha1", hash.as_slice()),
+                    HashChallenge::Sha256(hash) => write_fn("Sha256", hash.as_slice()),
+                    HashChallenge::Hash160(hash) => write_fn("Hash160", hash.as_slice()),
+                    HashChallenge::Hash256(hash) => write_fn("Hash256", hash.as_slice()),
                 }
             }
         }

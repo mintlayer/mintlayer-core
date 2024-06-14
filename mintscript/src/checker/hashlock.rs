@@ -67,15 +67,15 @@ impl HashlockChecker for StandardHashlockChecker {
         preimage: &[u8; 32],
     ) -> Result<(), Self::Error> {
         match hash_challenge {
-            HashChallenge::HASH160(expected_hash) => {
+            HashChallenge::Hash160(expected_hash) => {
                 let actual_hash = hash::<hash::Ripemd160, _>(hash::<hash::Sha256, _>(preimage));
 
                 ensure_hashes_equal(actual_hash.as_slice(), expected_hash)?;
             }
-            HashChallenge::RIPEMD160(_)
-            | HashChallenge::SHA1(_)
-            | HashChallenge::SHA256(_)
-            | HashChallenge::HASH256(_) => {
+            HashChallenge::Ripemd160(_)
+            | HashChallenge::Sha1(_)
+            | HashChallenge::Sha256(_)
+            | HashChallenge::Hash256(_) => {
                 unimplemented!()
             }
         }
