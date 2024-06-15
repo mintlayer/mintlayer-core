@@ -297,7 +297,6 @@ fn calculate_rewards_per_delegation<'a, I: Iterator<Item = (&'a DelegationId, &'
     let total_delegations_reward = Uint256::from_amount(total_delegations_reward_amount);
     delegation_shares
         .into_iter()
-        .filter(|(_, balance_amount)| **balance_amount > Amount::ZERO)
         .map(
             |(delegation_id, balance_amount)| -> Result<_, RewardDistributionError> {
                 let balance = Uint256::from_amount(*balance_amount);
