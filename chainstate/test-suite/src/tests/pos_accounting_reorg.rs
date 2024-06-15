@@ -347,6 +347,292 @@ fn create_same_stake_pool_after_reorg(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn create_same_delegation_after_reorg(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+        let genesis_pool_id = PoolId::new(H256::random_using(&mut rng));
+        let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
+
+        let (stake_pool_data, staking_sk) = create_stake_pool_data_with_all_reward_to_staker(
+            &mut rng,
+            amount_to_stake,
+            vrf_pk.clone(),
+        );
+
+        let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+            &mut rng,
+            (amount_to_stake * 2).unwrap(),
+            genesis_pool_id,
+            stake_pool_data,
+        )
+        .build();
+        let target_block_time = chain_config.target_block_spacing();
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+        tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+
+        // prepare txs with delegation creation
+        let genesis_block_id = tf.genesis().get_id().into();
+        let genesis_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_block_id), 0);
+        let delegation_id = pos_accounting::make_delegation_id(&genesis_outpoint);
+        let create_delegation_tx = TransactionBuilder::new()
+            .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateDelegationId(
+                Destination::AnyoneCanSpend,
+                genesis_pool_id,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(2000)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let delegate_staking_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(create_delegation_tx.transaction().get_id().into(), 1),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::DelegateStaking(
+                Amount::from_atoms(1000),
+                delegation_id,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(1000)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+
+        // create block a
+        let block_a = tf
+            .make_pos_block_builder()
+            .with_transactions(vec![
+                create_delegation_tx.clone(),
+                delegate_staking_tx.clone(),
+            ])
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .build(&mut rng);
+        let block_a_index = tf.process_block(block_a.clone(), BlockSource::Local).unwrap().unwrap();
+        assert_eq!(
+            tf.best_block_id(),
+            Id::<GenBlock>::from(*block_a_index.block_id())
+        );
+
+        // create block b
+
+        // add another tx so that block id would be different
+        let additional_transfer_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(delegate_staking_tx.transaction().get_id().into(), 1),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(1)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let block_b = tf
+            .make_pos_block_builder()
+            .with_parent(genesis_block_id)
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .with_transactions(vec![
+                create_delegation_tx,
+                delegate_staking_tx,
+                additional_transfer_tx,
+            ])
+            .build(&mut rng);
+        let block_b_id = block_b.get_id();
+        tf.process_block(block_b, BlockSource::Local).unwrap();
+
+        // no reorg here
+        assert_eq!(
+            tf.best_block_id(),
+            Id::<GenBlock>::from(*block_a_index.block_id())
+        );
+
+        // create block c
+        let block_c = tf
+            .make_pos_block_builder()
+            .with_parent(block_b_id.into())
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk)
+            .with_vrf_key(vrf_sk.clone())
+            .build_and_process(&mut rng)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            tf.best_block_id(),
+            Id::<GenBlock>::from(*block_c.block_id())
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_delegation_for_staking_pool_in_reorg(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+        let genesis_pool_id = PoolId::new(H256::random_using(&mut rng));
+        let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
+
+        let (staking_sk, staking_pk) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+        let stake_pool_data = StakePoolData::new(
+            amount_to_stake,
+            Destination::PublicKey(staking_pk),
+            vrf_pk.clone(),
+            Destination::AnyoneCanSpend,
+            PerThousand::new(0).unwrap(),
+            Amount::from_atoms(1),
+        );
+
+        let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+            &mut rng,
+            (amount_to_stake * 2).unwrap(),
+            genesis_pool_id,
+            stake_pool_data,
+        )
+        .build();
+        let target_block_time = chain_config.target_block_spacing();
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+        tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+
+        // create block a with delegation 1
+        let genesis_block_id = tf.genesis().get_id().into();
+        let genesis_outpoint =
+            UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_block_id), 0);
+        let delegation_id_1 = pos_accounting::make_delegation_id(&genesis_outpoint);
+        let create_delegation_tx_1 = TransactionBuilder::new()
+            .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateDelegationId(
+                Destination::AnyoneCanSpend,
+                genesis_pool_id,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(2000)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let delegate_staking_tx_1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(create_delegation_tx_1.transaction().get_id().into(), 1),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::DelegateStaking(
+                Amount::from_atoms(1000),
+                delegation_id_1,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(1000)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let delegate_staking_tx_id = delegate_staking_tx_1.transaction().get_id();
+
+        let block_a = tf
+            .make_pos_block_builder()
+            .with_transactions(vec![create_delegation_tx_1, delegate_staking_tx_1])
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .build(&mut rng);
+        let block_a_index = tf.process_block(block_a.clone(), BlockSource::Local).unwrap().unwrap();
+        assert_eq!(
+            tf.best_block_id(),
+            Id::<GenBlock>::from(*block_a_index.block_id())
+        );
+
+        // create block b with delegation 2
+        let delegation_id_2 = pos_accounting::make_delegation_id(&UtxoOutPoint::new(
+            delegate_staking_tx_id.clone().into(),
+            1,
+        ));
+        let create_delegation_tx_2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(delegate_staking_tx_id.into(), 1),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::CreateDelegationId(
+                Destination::AnyoneCanSpend,
+                genesis_pool_id,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(1000)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let create_delegation_tx_2_id = create_delegation_tx_2.transaction().get_id();
+        let delegate_staking_tx_2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(create_delegation_tx_2_id.into(), 1),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::DelegateStaking(
+                Amount::from_atoms(1000),
+                delegation_id_2,
+            ))
+            .build();
+
+        let block_b = tf
+            .make_pos_block_builder()
+            .with_transactions(vec![create_delegation_tx_2, delegate_staking_tx_2])
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .build(&mut rng);
+        let block_b_index = tf.process_block(block_b.clone(), BlockSource::Local).unwrap().unwrap();
+        assert_eq!(
+            tf.best_block_id(),
+            Id::<GenBlock>::from(*block_b_index.block_id())
+        );
+
+        // create empty block c from a
+        let block_c = tf
+            .make_pos_block_builder()
+            .with_parent((*block_a_index.block_id()).into())
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .build(&mut rng);
+        let block_c_id = block_c.get_id();
+        tf.process_block(block_c, BlockSource::Local).unwrap();
+
+        // no reorg here
+        assert_eq!(
+            tf.best_block_id(),
+            Id::<GenBlock>::from(*block_b_index.block_id())
+        );
+
+        // create empty block d
+        let block_d = tf
+            .make_pos_block_builder()
+            .with_parent(block_c_id.into())
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk)
+            .with_vrf_key(vrf_sk.clone())
+            .build_and_process(&mut rng)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            tf.best_block_id(),
+            Id::<GenBlock>::from(*block_d.block_id())
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn long_chain_reorg(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
