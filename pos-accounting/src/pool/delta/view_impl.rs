@@ -67,16 +67,19 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
     type Error = Error;
 
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Self::Error> {
-        Ok(self
-            .get_pool_data(pool_id)?
-            .ok_or_else(|| self.parent.get_pool_data(pool_id))
-            .is_ok())
+        Ok(self.get_pool_data(pool_id)?.is_some())
     }
 
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
         let parent_balance = self.parent.get_pool_balance(pool_id).map_err(|_| Error::ViewFail)?;
         let local_delta = self.data.pool_balances.data().get(&pool_id).cloned();
-        combine_amount_delta(&parent_balance, &local_delta).map_err(Error::AccountingError)
+        let balance =
+            combine_amount_delta(&parent_balance, &local_delta).map_err(Error::AccountingError)?;
+        if self.pool_exists(pool_id)? {
+            Ok(balance)
+        } else {
+            Ok(None)
+        }
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
@@ -97,16 +100,23 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
             self.parent.get_pool_delegations_shares(pool_id).map_err(|_| Error::ViewFail)?;
         let local_shares = self.get_cached_delegations_shares(pool_id);
 
-        match (parent_shares, local_shares) {
-            (None, None) => Ok(None),
-            (None, Some(m)) => Ok(Some(
-                m.into_iter()
-                    .map(signed_to_unsigned_pair)
-                    .collect::<Result<BTreeMap<DelegationId, Amount>, Error>>()?,
-            )),
-            (Some(m), None) => Ok(Some(m)),
-            (Some(m1), Some(m2)) => Ok(Some(sum_maps(m1, m2)?)),
+        let shares = match (parent_shares, local_shares) {
+            (None, None) => return Ok(None),
+            (None, Some(m)) => m
+                .into_iter()
+                .map(signed_to_unsigned_pair)
+                .collect::<Result<BTreeMap<DelegationId, Amount>, Error>>()?,
+            (Some(m), None) => m,
+            (Some(m1), Some(m2)) => sum_maps(m1, m2)?,
+        };
+
+        let mut result = BTreeMap::new();
+        for (id, share) in shares {
+            if self.get_delegation_data(id)?.is_some() {
+                result.insert(id, share);
+            }
         }
+        Ok(Some(result))
     }
 
     fn get_delegation_balance(
@@ -116,7 +126,13 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
         let parent_amount =
             self.parent.get_delegation_balance(delegation_id).map_err(|_| Error::ViewFail)?;
         let local_amount = self.data.delegation_balances.data().get(&delegation_id).copied();
-        combine_amount_delta(&parent_amount, &local_amount).map_err(Error::AccountingError)
+        let balance =
+            combine_amount_delta(&parent_amount, &local_amount).map_err(Error::AccountingError)?;
+        if self.get_delegation_data(delegation_id)?.is_some() {
+            Ok(balance)
+        } else {
+            Ok(None)
+        }
     }
 
     fn get_delegation_data(
@@ -143,7 +159,13 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
             .map_err(|_| Error::ViewFail)?;
         let local_amount =
             self.data.pool_delegation_shares.data().get(&(pool_id, delegation_id)).copied();
-        combine_amount_delta(&parent_amount, &local_amount).map_err(Error::AccountingError)
+        let balance =
+            combine_amount_delta(&parent_amount, &local_amount).map_err(Error::AccountingError)?;
+        if self.get_delegation_data(delegation_id)?.is_some() {
+            Ok(balance)
+        } else {
+            Ok(None)
+        }
     }
 }
 

@@ -553,7 +553,7 @@ fn create_delegation_for_staking_pool_in_reorg(#[case] seed: Seed) {
 
         // create block b with delegation 2
         let delegation_id_2 = pos_accounting::make_delegation_id(&UtxoOutPoint::new(
-            delegate_staking_tx_id.clone().into(),
+            delegate_staking_tx_id.into(),
             1,
         ));
         let create_delegation_tx_2 = TransactionBuilder::new()

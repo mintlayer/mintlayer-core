@@ -436,10 +436,10 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     store
         .expect_get_pool_data()
         .with(eq(pool_id_0))
-        .times(2)
+        .times(5)
         .return_const(Ok(Some(pool_data0.clone().into())));
-    store.expect_get_pool_data().with(eq(pool_id_1)).times(1).return_const(Ok(None));
-    store.expect_get_pool_data().with(eq(pool_id_2)).times(2).return_const(Ok(None));
+    store.expect_get_pool_data().with(eq(pool_id_1)).times(3).return_const(Ok(None));
+    store.expect_get_pool_data().with(eq(pool_id_2)).times(7).return_const(Ok(None));
 
     store
         .expect_get_pos_accounting_undo()
