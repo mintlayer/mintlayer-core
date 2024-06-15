@@ -328,6 +328,7 @@ impl MempoolBanScore for pos_accounting::Error {
             E::InvariantErrorPoolCreationReversalFailedDataNotFound => 0,
             E::InvariantErrorPoolCreationReversalFailedAmountChanged => 0,
             E::InvariantErrorDelegationShareNotFound => 0,
+            E::InvariantErrorNonZeroBalanceForNonExistingDelegation => 0,
 
             // These signify an invalid transaction
             E::AdditionError => 100,
@@ -425,6 +426,7 @@ impl MempoolBanScore for tokens_accounting::Error {
             tokens_accounting::Error::CannotUnmintFrozenToken(_) => 0,
             tokens_accounting::Error::CannotLockFrozenToken(_) => 0,
             tokens_accounting::Error::CannotChangeAuthorityForFrozenToken(_) => 0,
+            tokens_accounting::Error::InvariantErrorNonZeroSupplyForNonExistingToken => 0,
             tokens_accounting::Error::ViewFail => 0,
             tokens_accounting::Error::StorageWrite => 0,
 

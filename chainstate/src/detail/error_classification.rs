@@ -722,7 +722,8 @@ impl BlockProcessingErrorClassification for tokens_accounting::Error {
             | Error::CannotUndoFreezeTokenThatIsNotFrozen(_)
             | Error::CannotUndoUnfreezeTokenThatIsFrozen(_)
             | Error::CannotChangeAuthorityForFrozenToken(_)
-            | Error::CannotUndoChangeAuthorityForFrozenToken(_) => {
+            | Error::CannotUndoChangeAuthorityForFrozenToken(_)
+            | Error::InvariantErrorNonZeroSupplyForNonExistingToken => {
                 BlockProcessingErrorClass::BadBlock
             }
 
@@ -830,7 +831,8 @@ impl BlockProcessingErrorClassification for pos_accounting::Error {
             | Error::IncreaseStakerRewardsOfNonexistingPool
             | Error::StakerBalanceOverflow
             | Error::InvariantErrorIncreasePledgeUndoFailedPoolBalanceNotFound
-            | Error::InvariantErrorIncreaseStakerRewardUndoFailedPoolBalanceNotFound => {
+            | Error::InvariantErrorIncreaseStakerRewardUndoFailedPoolBalanceNotFound
+            | Error::InvariantErrorNonZeroBalanceForNonExistingDelegation => {
                 BlockProcessingErrorClass::BadBlock
             }
 
