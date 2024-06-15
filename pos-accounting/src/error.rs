@@ -97,6 +97,8 @@ pub enum Error {
     InvariantErrorIncreasePledgeUndoFailedPoolBalanceNotFound,
     #[error("Undo of increase staker reward failed as pool balance is not in storage")]
     InvariantErrorIncreaseStakerRewardUndoFailedPoolBalanceNotFound,
+    #[error("Non-zero balance of non-existing delegation")]
+    InvariantErrorNonZeroBalanceForNonExistingDelegation,
 
     // TODO Need a more granular error reporting in the following
     //      https://github.com/mintlayer/mintlayer-core/issues/811

@@ -714,17 +714,17 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
     store
         .expect_get_token_data()
         .with(eq(token_id_0))
-        .times(2)
+        .times(5)
         .return_const(Ok(Some(token_data0.clone())));
     store
         .expect_get_token_data()
         .with(eq(token_id_1))
-        .times(1)
+        .times(2)
         .return_const(Ok(None));
     store
         .expect_get_token_data()
         .with(eq(token_id_2))
-        .times(2)
+        .times(7)
         .return_const(Ok(None));
 
     store
