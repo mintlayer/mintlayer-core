@@ -80,15 +80,11 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
 
         // When combining deltas with amounts it's impossible to distinguish None from Some(Amount::ZERO).
         // Use information from DeltaData to make the decision.
-        if self.pool_exists(pool_id)? {
+        // Note: if a pool doesn't exist the balance can be non-zero  because of delegations
+        if self.pool_exists(pool_id)? || balance.unwrap_or(Amount::ZERO) != Amount::ZERO {
             Ok(balance)
         } else {
-            if balance.unwrap_or(Amount::ZERO) == Amount::ZERO {
-                Ok(None)
-            } else {
-                // Balance can be non-zero due to existing delegations
-                Ok(balance)
-            }
+            Ok(None)
         }
     }
 
