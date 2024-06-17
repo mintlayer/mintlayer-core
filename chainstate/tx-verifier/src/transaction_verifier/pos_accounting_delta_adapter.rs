@@ -279,6 +279,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo>
     }
 
     fn undo(&mut self, undo: PoSAccountingUndo) -> Result<(), pos_accounting::Error> {
+        log::debug!("Undo {:?} ", undo);
         let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
 
         delta.undo(undo)?;

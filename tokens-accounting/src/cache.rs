@@ -71,7 +71,20 @@ impl<P: TokensAccountingView> TokensAccountingView for TokensAccountingCache<P> 
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
         let parent_supply = self.parent.get_circulating_supply(id).map_err(|_| Error::ViewFail)?;
         let local_delta = self.data.circulating_supply.data().get(id).cloned();
-        combine_amount_delta(&parent_supply, &local_delta).map_err(Error::AccountingError)
+        let supply =
+            combine_amount_delta(&parent_supply, &local_delta).map_err(Error::AccountingError)?;
+
+        // When combining deltas with amounts it's impossible to distinguish None from Some(Amount::ZERO).
+        // Use information from DeltaData to make the decision.
+        if self.get_token_data(id)?.is_some() {
+            Ok(supply)
+        } else {
+            utils::ensure!(
+                supply.unwrap_or(Amount::ZERO) == Amount::ZERO,
+                Error::InvariantErrorNonZeroSupplyForNonExistingToken
+            );
+            Ok(None)
+        }
     }
 }
 

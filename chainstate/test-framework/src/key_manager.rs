@@ -37,6 +37,7 @@ use common::{
 use crypto::key::{KeyKind, PrivateKey, PublicKey};
 use randomness::{CryptoRng, Rng};
 
+#[derive(Clone)]
 struct Multisig {
     keys: Vec<(PrivateKey, PublicKey)>,
     min_required_signatures: NonZeroU8,
@@ -53,6 +54,7 @@ impl Multisig {
     }
 }
 
+#[derive(Clone)]
 pub struct KeyManager {
     public_key_hashes: BTreeMap<PublicKeyHash, PrivateKey>,
     public_keys: BTreeMap<PublicKey, PrivateKey>,

@@ -23,6 +23,7 @@ use common::{
 use rstest::rstest;
 
 /// The transaction builder.
+#[derive(Clone)]
 pub struct TransactionBuilder {
     flags: u128,
     inputs: Vec<TxInput>,

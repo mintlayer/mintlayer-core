@@ -44,14 +44,14 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
     ) -> Result<PoSAccountingUndo, Error> {
         let pledge_amount = pool_data.pledge_amount();
 
-        if self.get_pool_balance(pool_id).map_err(|_| Error::ViewFail)?.is_some() {
-            // This should never happen since it's based on an unspent input
-            return Err(Error::InvariantErrorPoolBalanceAlreadyExists);
-        }
-
         if self.get_pool_data(pool_id)?.is_some() {
             // This should never happen since it's based on an unspent input
             return Err(Error::InvariantErrorPoolDataAlreadyExists);
+        }
+
+        if self.get_pool_balance(pool_id).map_err(|_| Error::ViewFail)?.is_some() {
+            // This should never happen since it's based on an unspent input
+            return Err(Error::InvariantErrorPoolBalanceAlreadyExists);
         }
 
         self.data.pool_balances.add_unsigned(pool_id, pledge_amount)?;
@@ -276,12 +276,12 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
     }
 
     fn undo_decommission_pool(&mut self, undo: DecommissionPoolUndo) -> Result<(), Error> {
-        if self.get_pool_balance(undo.pool_id)?.unwrap_or(Amount::ZERO) != Amount::ZERO {
-            return Err(Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists);
-        }
-
         if self.get_pool_data(undo.pool_id)?.is_some() {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists);
+        }
+
+        if self.get_pool_balance(undo.pool_id)?.is_some() {
+            return Err(Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists);
         }
 
         self.data.pool_balances.add_unsigned(undo.pool_id, undo.pool_balance)?;

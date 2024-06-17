@@ -58,7 +58,7 @@ fn create_pool_twice(#[case] seed: Seed) {
     // before flush
     assert_eq!(
         delta.create_pool(pool_id, pool_data.clone()).unwrap_err(),
-        Error::InvariantErrorPoolBalanceAlreadyExists
+        Error::InvariantErrorPoolDataAlreadyExists
     );
 
     let consumed = delta.consume();
@@ -68,7 +68,7 @@ fn create_pool_twice(#[case] seed: Seed) {
     let mut delta = PoSAccountingDelta::new(&mut db);
     assert_eq!(
         delta.create_pool(pool_id, pool_data).unwrap_err(),
-        Error::InvariantErrorPoolBalanceAlreadyExists
+        Error::InvariantErrorPoolDataAlreadyExists
     );
 }
 
