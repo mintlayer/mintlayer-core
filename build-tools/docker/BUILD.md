@@ -33,7 +33,7 @@ The result should similar to the following:
 
 ```
 $ docker images |grep mintlayer
-mintlayer/wallet-cli           0.5.0     57dcc4898a30   2 minutes ago   125MB
-mintlayer/node-gui             0.5.0     a2ed3937e081   2 minutes ago   290MB
-mintlayer/node-daemon          0.5.0     ad830bf576e3   3 minutes ago   119MB
+mintlayer/wallet-cli           0.5.1     57dcc4898a30   2 minutes ago   125MB
+mintlayer/node-gui             0.5.1     a2ed3937e081   2 minutes ago   290MB
+mintlayer/node-daemon          0.5.1     ad830bf576e3   3 minutes ago   119MB
 ```
