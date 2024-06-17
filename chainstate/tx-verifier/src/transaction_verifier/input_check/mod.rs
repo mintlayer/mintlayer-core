@@ -25,8 +25,8 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 use mintscript::{
-    translate::InputInfoProvider, InputInfo, SignatureContext, TimelockContext, TranslateInput,
-    WitnessScript,
+    checker::HashlockError, translate::InputInfoProvider, InputInfo, SignatureContext,
+    TimelockContext, TranslateInput, WitnessScript,
 };
 
 use crate::TransactionVerifierStorageRef;
@@ -34,7 +34,8 @@ use crate::TransactionVerifierStorageRef;
 use super::TransactionSourceForConnect;
 
 pub type TimelockError = mintscript::checker::TimelockError<TimelockContextError>;
-pub type ScriptError = mintscript::script::ScriptError<DestinationSigError, TimelockError>;
+pub type ScriptError =
+    mintscript::script::ScriptError<DestinationSigError, TimelockError, HashlockError>;
 
 #[derive(PartialEq, Eq, Clone, thiserror::Error, Debug)]
 pub enum InputCheckErrorPayload {
@@ -51,8 +52,10 @@ pub enum InputCheckErrorPayload {
     Verification(#[from] ScriptError),
 }
 
-impl From<mintscript::script::ScriptError<Infallible, TimelockError>> for InputCheckErrorPayload {
-    fn from(value: mintscript::script::ScriptError<Infallible, TimelockError>) -> Self {
+impl From<mintscript::script::ScriptError<Infallible, TimelockError, Infallible>>
+    for InputCheckErrorPayload
+{
+    fn from(value: mintscript::script::ScriptError<Infallible, TimelockError, Infallible>) -> Self {
         Self::Verification(value.errs_into())
     }
 }

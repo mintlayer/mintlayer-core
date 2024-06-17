@@ -100,7 +100,9 @@ fn check_sig(#[case] seed: Seed) {
         let mut checker = MockContext::new(0, &bad_tx, &utxos).into_checker();
         match script.verify(&mut checker).expect_err("this should fail") {
             ScriptError::Signature(_e) => (),
-            e @ (ScriptError::Timelock(_) | ScriptError::Threshold(_)) => {
+            e @ (ScriptError::Timelock(_)
+            | ScriptError::Threshold(_)
+            | ScriptError::Hashlock(_)) => {
                 panic!("Unexpected error {e}")
             }
         }

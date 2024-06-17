@@ -121,8 +121,8 @@ fn visit_order(#[case] script: WS) {
 
     impl ScriptVisitor for LockLogger {
         type SignatureError = std::convert::Infallible;
-
         type TimelockError = std::convert::Infallible;
+        type HashlockError = std::convert::Infallible;
 
         fn visit_signature(
             &mut self,
@@ -135,6 +135,14 @@ fn visit_order(#[case] script: WS) {
         fn visit_timelock(&mut self, lock: &OutputTimeLock) -> Result<(), Self::TimelockError> {
             self.0.push(*lock);
             Ok(())
+        }
+
+        fn visit_hashlock(
+            &mut self,
+            _hash_challenge: &crate::script::HashChallenge,
+            _preimage: &[u8; 32],
+        ) -> Result<(), Self::HashlockError> {
+            unreachable!("Not used in this test")
         }
     }
 

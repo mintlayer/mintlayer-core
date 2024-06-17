@@ -18,6 +18,8 @@ use std::fmt;
 use common::chain::timelock::OutputTimeLock;
 use serialization::hex_encoded::HexEncoded;
 
+use crate::script::HashChallenge;
+
 use super::{DissatisfiedScript, ScriptCondition, Threshold, WitnessScript};
 
 impl Threshold {
@@ -66,6 +68,23 @@ impl WitnessScript {
                 OutputTimeLock::ForBlockCount(c) => write!(f, "after_blocks({c})"),
                 OutputTimeLock::ForSeconds(s) => write!(f, "after_seconds({s})"),
             },
+            WitnessScript::HashLock {
+                hash_challenge,
+                preimage,
+            } => {
+                let preimage = HexEncoded::new(preimage);
+                let mut write_fn = |algo: &str, hash: &[u8]| {
+                    let hash = HexEncoded::new(hash);
+                    write!(f, "{algo}(0x{hash}, 0x{preimage})")
+                };
+                match hash_challenge {
+                    HashChallenge::Ripemd160(hash) => write_fn("Ripemd160", hash.as_slice()),
+                    HashChallenge::Sha1(hash) => write_fn("Sha1", hash.as_slice()),
+                    HashChallenge::Sha256(hash) => write_fn("Sha256", hash.as_slice()),
+                    HashChallenge::Hash160(hash) => write_fn("Hash160", hash.as_slice()),
+                    HashChallenge::Hash256(hash) => write_fn("Hash256", hash.as_slice()),
+                }
+            }
         }
     }
 }

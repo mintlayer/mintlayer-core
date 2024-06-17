@@ -9,6 +9,7 @@ license.workspace = true
 
 [dependencies]
 common = { path = "../common" }
+crypto = { path = "../crypto" }
 pos-accounting = { path = "../pos-accounting" }
 serialization = { path = "../serialization" }
 tokens-accounting = { path = "../tokens-accounting" }
@@ -24,5 +25,6 @@ crypto = { path = '../crypto' }
 test-utils = { path = '../test-utils' }
 serialization = { path = '../serialization' }
 
+hex.workspace = true
 rstest.workspace = true
 expect-test.workspace = true

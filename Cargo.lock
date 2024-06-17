@@ -4334,6 +4334,7 @@ dependencies = [
  "common",
  "crypto",
  "expect-test",
+ "hex",
  "pos-accounting",
  "rstest",
  "serialization",

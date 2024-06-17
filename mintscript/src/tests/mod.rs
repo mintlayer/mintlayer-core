@@ -43,5 +43,6 @@ type WS = WitnessScript;
 mod utils;
 
 mod checkers;
+mod hashlock_checker;
 mod script;
 mod translate;

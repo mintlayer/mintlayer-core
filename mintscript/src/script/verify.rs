@@ -17,7 +17,7 @@
 
 use common::chain::{signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination};
 
-use super::WitnessScript;
+use super::{HashChallenge, WitnessScript};
 
 /// A script processing object
 ///
@@ -33,6 +33,7 @@ use super::WitnessScript;
 pub trait ScriptVisitor {
     type SignatureError: std::error::Error;
     type TimelockError: std::error::Error;
+    type HashlockError: std::error::Error;
 
     /// Check signature
     fn visit_signature(
@@ -43,11 +44,18 @@ pub trait ScriptVisitor {
 
     /// Check timelock
     fn visit_timelock(&mut self, timelock: &OutputTimeLock) -> Result<(), Self::TimelockError>;
+
+    ///Check hashlock
+    fn visit_hashlock(
+        &mut self,
+        hash_challenge: &HashChallenge,
+        preimage: &[u8; 32],
+    ) -> Result<(), Self::HashlockError>;
 }
 
 /// Script verification error
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
-pub enum ScriptError<SE, TE> {
+pub enum ScriptError<SE, TE, HE> {
     #[error(transparent)]
     Signature(SE),
 
@@ -55,22 +63,29 @@ pub enum ScriptError<SE, TE> {
     Timelock(TE),
 
     #[error(transparent)]
+    Hashlock(HE),
+
+    #[error(transparent)]
     Threshold(#[from] super::ThresholdError),
 }
 
-impl<S0, T0> ScriptError<S0, T0> {
+impl<S0, T0, H0> ScriptError<S0, T0, H0> {
     /// Apply [Into::into] to both generic error fields.
-    pub fn errs_into<S1: From<S0>, T1: From<T0>>(self) -> ScriptError<S1, T1> {
+    pub fn errs_into<S1: From<S0>, T1: From<T0>, H1: From<H0>>(self) -> ScriptError<S1, T1, H1> {
         match self {
             Self::Signature(e) => ScriptError::Signature(e.into()),
             Self::Timelock(e) => ScriptError::Timelock(e.into()),
+            Self::Hashlock(e) => ScriptError::Hashlock(e.into()),
             Self::Threshold(e) => ScriptError::Threshold(e),
         }
     }
 }
 
-pub type ScriptErrorOf<V> =
-    ScriptError<<V as ScriptVisitor>::SignatureError, <V as ScriptVisitor>::TimelockError>;
+pub type ScriptErrorOf<V> = ScriptError<
+    <V as ScriptVisitor>::SignatureError,
+    <V as ScriptVisitor>::TimelockError,
+    <V as ScriptVisitor>::HashlockError,
+>;
 pub type ScriptResult<T, V> = Result<T, ScriptErrorOf<V>>;
 
 impl WitnessScript {
@@ -90,6 +105,12 @@ impl WitnessScript {
                 }
                 Self::Threshold(thresh) => {
                     eval_stack.extend(thresh.collect_satisfied()?.into_iter().rev());
+                }
+                Self::HashLock {
+                    hash_challenge,
+                    preimage,
+                } => {
+                    v.visit_hashlock(hash_challenge, preimage).map_err(ScriptError::Hashlock)?;
                 }
             }
         }
