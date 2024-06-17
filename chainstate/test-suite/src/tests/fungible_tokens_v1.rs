@@ -5351,3 +5351,163 @@ fn reorg_tokens_tx_with_simple_tx(#[case] seed: Seed) {
     let new_chain_block_id = tf.create_chain(&tf.genesis().get_id().into(), 2, &mut rng).unwrap();
     assert_eq!(new_chain_block_id, tf.best_block_id());
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn issue_same_token_alternative_pos_chain(#[case] seed: Seed) {
+    use chainstate_test_framework::create_stake_pool_data_with_all_reward_to_staker;
+    use common::{
+        chain::{config::create_unit_test_config, PoolId},
+        primitives::H256,
+    };
+    use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
+
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+        let genesis_pool_id = PoolId::new(H256::random_using(&mut rng));
+        let amount_to_stake = create_unit_test_config().min_stake_pool_pledge();
+
+        let (stake_pool_data, staking_sk) = create_stake_pool_data_with_all_reward_to_staker(
+            &mut rng,
+            amount_to_stake,
+            vrf_pk.clone(),
+        );
+
+        let chain_config = chainstate_test_framework::create_chain_config_with_staking_pool(
+            &mut rng,
+            (amount_to_stake * 2).unwrap(),
+            genesis_pool_id,
+            stake_pool_data,
+        )
+        .build();
+        let target_block_time = chain_config.target_block_spacing();
+        let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+        tf.progress_time_seconds_since_epoch(target_block_time.as_secs());
+
+        let genesis_block_id = tf.genesis().get_id();
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
+
+        //issue a token
+        let issuance = make_issuance(
+            &mut rng,
+            TokenTotalSupply::Fixed(Amount::from_atoms(100)),
+            IsTokenFreezable::No,
+        );
+        let issue_token_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(genesis_block_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(token_supply_change_fee),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::IssueFungibleToken(Box::new(issuance.clone())))
+            .build();
+        let token_id = make_token_id(issue_token_tx.transaction().inputs()).unwrap();
+        let tx_id = issue_token_tx.transaction().get_id();
+        tf.make_pos_block_builder()
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .add_transaction(issue_token_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Mint some tokens to increase circulating supply
+        let mint_block_index = tf
+            .make_pos_block_builder()
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_command(
+                            AccountNonce::new(0),
+                            AccountCommand::MintTokens(token_id, Amount::from_atoms(5)),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        UtxoOutPoint::new(tx_id.into(), 0).into(),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, Amount::from_atoms(5)),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            Id::<GenBlock>::from(*mint_block_index.block_id()),
+            tf.best_block_id()
+        );
+
+        // issue same token in alternative chain
+        let alt_block_a = tf
+            .make_pos_block_builder()
+            .with_parent(genesis_block_id.into())
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(genesis_block_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin((token_supply_change_fee * 2).unwrap()),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::IssueFungibleToken(Box::new(issuance)))
+                    .build(),
+            )
+            .build(&mut rng);
+        let alt_block_a_id = alt_block_a.get_id();
+        tf.process_block(alt_block_a, BlockSource::Local).unwrap();
+
+        assert_ne!(Id::<GenBlock>::from(alt_block_a_id), tf.best_block_id());
+        assert_eq!(
+            Id::<GenBlock>::from(*mint_block_index.block_id()),
+            tf.best_block_id()
+        );
+
+        let alt_block_b = tf
+            .make_pos_block_builder()
+            .with_parent(alt_block_a_id.into())
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .build(&mut rng);
+        let alt_block_b_id = alt_block_b.get_id();
+        tf.process_block(alt_block_b, BlockSource::Local).unwrap();
+
+        assert_ne!(Id::<GenBlock>::from(alt_block_b_id), tf.best_block_id());
+        assert_eq!(
+            Id::<GenBlock>::from(*mint_block_index.block_id()),
+            tf.best_block_id()
+        );
+
+        // Trigger a reorg
+        let alt_block_c = tf
+            .make_pos_block_builder()
+            .with_parent(alt_block_b_id.into())
+            .with_stake_pool_id(genesis_pool_id)
+            .with_stake_spending_key(staking_sk.clone())
+            .with_vrf_key(vrf_sk.clone())
+            .build(&mut rng);
+        let alt_block_c_id = alt_block_c.get_id();
+        tf.process_block(alt_block_c, BlockSource::Local).unwrap();
+
+        assert_eq!(Id::<GenBlock>::from(alt_block_c_id), tf.best_block_id());
+    });
+}

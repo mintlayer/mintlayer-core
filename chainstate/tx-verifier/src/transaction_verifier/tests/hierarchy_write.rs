@@ -675,8 +675,8 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
         .times(1)
         .return_const(Ok(None));
 
-    store.expect_get_pool_data().with(eq(pool_id_1)).times(1).return_const(Ok(None));
-    store.expect_get_pool_data().with(eq(pool_id_2)).times(1).return_const(Ok(None));
+    store.expect_get_pool_data().with(eq(pool_id_1)).times(3).return_const(Ok(None));
+    store.expect_get_pool_data().with(eq(pool_id_2)).times(4).return_const(Ok(None));
 
     store.expect_apply_accounting_delta().times(1).return_const(Ok(()));
 

@@ -125,7 +125,7 @@ fn signed_tx(#[case] seed: Seed) {
                     tx.clone(),
                     vec![InputWitness::Standard(StandardInputSignature::new(
                         SigHashType::try_from(SigHashType::ALL).unwrap(),
-                        gen_random_bytes(&mut rng, 1, 100),
+                        gen_random_bytes(&mut rng, 100, 200),
                     ))],
                 )
                 .expect("invalid witness count")
@@ -292,7 +292,7 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
                     tx.clone(),
                     vec![InputWitness::Standard(StandardInputSignature::new(
                         SigHashType::try_from(SigHashType::ALL).unwrap(),
-                        gen_random_bytes(&mut rng, 1, 100),
+                        gen_random_bytes(&mut rng, 100, 200),
                     ))],
                 )
                 .expect("invalid witness count")

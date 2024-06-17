@@ -15,6 +15,7 @@ crypto = { path = "../crypto" }
 randomness = { path = "../randomness" }
 serialization = { path = "../serialization" }
 typename = { path = "../utils/typename" }
+utils = { path = "../utils" }
 
 thiserror.workspace = true
 parity-scale-codec.workspace = true

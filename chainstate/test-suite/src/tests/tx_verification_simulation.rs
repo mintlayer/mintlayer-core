@@ -19,7 +19,7 @@ use super::*;
 use chainstate_storage::{BlockchainStorageWrite, TransactionRw, Transactional};
 use common::{
     chain::{ConsensusUpgrade, NetUpgrades, PoSChainConfigBuilder, UtxoOutPoint},
-    primitives::{BlockCount, Idable},
+    primitives::BlockCount,
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -92,9 +92,26 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
             )]))
             .build();
 
+        // TestFramework that represents alternative chain. Up until some arbitrary height it contains
+        // common blocks with the original chain.
+        //
+        // Second TestFramework with separate storage is used, because generating alternative chain
+        // requires up-to-date kernel information which is not trivial to implement from outside of chainstate.
+        // So here we process the same blocks from separate TestFrameworks to get the same state.
+        let mut tf2 = TestFramework::builder(&mut rng)
+            .with_chain_config(chain_config)
+            .with_initial_time_since_genesis(target_time.as_secs())
+            .with_staking_pools(BTreeMap::from_iter([(
+                genesis_pool_id,
+                (staking_sk.clone(), vrf_sk.clone(), genesis_pool_outpoint),
+            )]))
+            .build();
+
         // Generate a random chain
         let mut all_blocks = Vec::new();
-        for _ in 0..rng.gen_range((max_blocks / 2)..max_blocks) {
+        let blocks_to_generate = rng.gen_range((max_blocks / 2)..max_blocks);
+        let reorg_at_height = rng.gen_range(0..blocks_to_generate);
+        for i in 0..blocks_to_generate {
             let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
             for _ in 0..rng.gen_range(10..max_tx_per_block) {
@@ -103,7 +120,16 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
 
             let block = block_builder.build(&mut rng);
             let block_index = tf.process_block(block.clone(), BlockSource::Local).unwrap();
-            tf.progress_time_seconds_since_epoch(target_time.as_secs());
+
+            // submit common blocks to the alternative chain
+            if i <= reorg_at_height {
+                tf2.process_block(block.clone(), BlockSource::Peer).unwrap();
+                tf2.progress_time_seconds_since_epoch(target_time.as_secs());
+                reference_tf.process_block(block.clone(), BlockSource::Peer).unwrap();
+
+                tf2.staking_pools = tf.staking_pools.clone();
+                tf2.key_manager = tf.key_manager.clone();
+            }
 
             all_blocks.push((block, block_index.unwrap()));
         }
@@ -121,34 +147,17 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
         }
 
         // Create longer chain to trigger reorg and disconnect all the random txs.
-        //
-        // Second TestFramework with separate storage is used, because generating alternative chain
-        // requires up-to-date kernel information which is not trivial to implement from outside of chainstate.
-        // So here we create a separate chain from the same Genesis and submit blocks one by one eventually
-        // triggering a reorg.
-        let mut tf2 = TestFramework::builder(&mut rng)
-            .with_chain_config(chain_config)
-            .with_initial_time_since_genesis(target_time.as_secs())
-            .with_staking_pools(BTreeMap::from_iter([(
-                genesis_pool_id,
-                (staking_sk.clone(), vrf_sk.clone(), genesis_pool_outpoint),
-            )]))
-            .build();
+        for _ in reorg_at_height..max_blocks {
+            let mut block_builder = tf2.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
-        let mut prev_block_id = tf2.genesis().get_id().into();
-        for _ in 0..max_blocks {
-            let block = tf2
-                .make_pos_block_builder()
-                .with_parent(prev_block_id)
-                .with_stake_pool_id(genesis_pool_id)
-                .with_stake_spending_key(staking_sk.clone())
-                .with_vrf_key(vrf_sk.clone())
-                .build(&mut rng);
-            prev_block_id = block.get_id().into();
+            for _ in 0..rng.gen_range(10..max_tx_per_block) {
+                block_builder = block_builder.add_test_transaction(&mut rng);
+            }
+
+            let block = block_builder.build(&mut rng);
             tf2.process_block(block.clone(), BlockSource::Local).unwrap();
-            tf2.progress_time_seconds_since_epoch(target_time.as_secs());
 
-            // submit block to the original chain
+            // submit alternative blocks to the original chain
             tf.process_block(block.clone(), BlockSource::Peer).unwrap();
             reference_tf.process_block(block, BlockSource::Peer).unwrap();
         }

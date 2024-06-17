@@ -521,6 +521,7 @@ impl BanScore for pos_accounting::Error {
             E::DelegationDeletionFailedBalanceNonZero => 100,
             E::DelegationDeletionFailedPoolsShareNonZero => 100,
             E::DelegationDeletionFailedPoolStillExists => 100,
+            E::InvariantErrorNonZeroBalanceForNonExistingDelegation => 100,
         }
     }
 }
@@ -614,6 +615,7 @@ impl BanScore for tokens_accounting::Error {
             tokens_accounting::Error::CannotLockFrozenToken(_) => 100,
             tokens_accounting::Error::CannotChangeAuthorityForFrozenToken(_) => 100,
             tokens_accounting::Error::CannotUndoChangeAuthorityForFrozenToken(_) => 100,
+            tokens_accounting::Error::InvariantErrorNonZeroSupplyForNonExistingToken => 100,
             tokens_accounting::Error::ViewFail => 0,
             tokens_accounting::Error::StorageWrite => 0,
         }

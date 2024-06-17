@@ -5498,6 +5498,7 @@ dependencies = [
  "test-utils",
  "thiserror",
  "typename",
+ "utils",
  "variant_count",
 ]
 
