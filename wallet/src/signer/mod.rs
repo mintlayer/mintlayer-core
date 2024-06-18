@@ -30,7 +30,8 @@ use wallet_types::signature_status::SignatureStatus;
 use crate::key_chain::{AccountKeyChains, KeyChainError};
 
 pub mod software_signer;
-// pub mod trezor_signer;
+#[cfg(feature = "trezor")]
+pub mod trezor_signer;
 
 /// KeyChain errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -51,6 +52,8 @@ pub enum SignerError {
     SignArbitraryMessageError(#[from] SignArbitraryMessageError),
     #[error("Signed transaction intent error: {0}")]
     SignedTransactionIntentError(#[from] SignedTransactionIntentError),
+    #[error("{0}")]
+    SerializationError(#[from] serialization::Error),
 }
 
 type SignerResult<T> = Result<T, SignerError>;
@@ -83,7 +86,7 @@ pub trait Signer {
     /// the number of inputs in the transaction; all of the destinations must be known
     /// to this key chain.
     fn sign_transaction_intent(
-        &self,
+        &mut self,
         transaction: &Transaction,
         input_destinations: &[Destination],
         intent: &str,

@@ -30,7 +30,6 @@ use crate::key_chain::{
 use crate::send_request::{
     make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
 };
-use crate::signer::software_signer::SoftwareSigner;
 use crate::signer::{Signer, SignerError, SignerProvider};
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{Account, SendRequest};
@@ -971,11 +970,16 @@ where
     fn for_account_rw_unlocked<T>(
         &mut self,
         account_index: U31,
-        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>, &ChainConfig) -> WalletResult<T>,
+        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>, &ChainConfig, &mut P) -> WalletResult<T>,
     ) -> WalletResult<T> {
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
         let account = Self::get_account_mut(&mut self.accounts, account_index)?;
-        match f(account, &mut db_tx, &self.chain_config) {
+        match f(
+            account,
+            &mut db_tx,
+            &self.chain_config,
+            &mut self.signer_provider,
+        ) {
             Ok(value) => {
                 // Abort the process if the DB transaction fails. See `for_account_rw` for more information.
                 db_tx.commit().expect("RW transaction commit failed unexpectedly");
@@ -1000,44 +1004,50 @@ where
     ) -> WalletResult<(SignedTransaction, AddlData)> {
         let (_, block_height) = self.get_best_block_for_account(account_index)?;
 
-        self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
-            let (request, additional_data) = f(account, db_tx)?;
+        self.for_account_rw_unlocked(
+            account_index,
+            |account, db_tx, chain_config, signer_provider| {
+                let (request, additional_data) = f(account, db_tx)?;
 
-            let ptx = request.into_partially_signed_tx()?;
+                let ptx = request.into_partially_signed_tx()?;
 
-            let mut signer = SoftwareSigner::new(Arc::new(chain_config.clone()), account_index);
-            let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
+                let mut signer =
+                    signer_provider.provide(Arc::new(chain_config.clone()), account_index);
+                let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
 
-            let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
-            let is_fully_signed = ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
-                |((i, destination), witness)| match (witness, destination) {
-                    (None | Some(_), None) | (None, Some(_)) => false,
-                    (Some(_), Some(destination)) => {
-                        tx_verifier::input_check::signature_only_check::verify_tx_signature(
-                            chain_config,
-                            destination,
-                            &ptx,
-                            &inputs_utxo_refs,
-                            i,
-                        )
-                        .is_ok()
-                    }
-                },
-            );
+                let inputs_utxo_refs: Vec<_> =
+                    ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
+                let is_fully_signed =
+                    ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
+                        |((i, destination), witness)| match (witness, destination) {
+                            (None | Some(_), None) | (None, Some(_)) => false,
+                            (Some(_), Some(destination)) => {
+                                tx_verifier::input_check::signature_only_check::verify_tx_signature(
+                                    chain_config,
+                                    destination,
+                                    &ptx,
+                                    &inputs_utxo_refs,
+                                    i,
+                                )
+                                .is_ok()
+                            }
+                        },
+                    );
 
-            if !is_fully_signed {
-                return Err(error_mapper(WalletError::FailedToConvertPartiallySignedTx(
-                    ptx,
-                )));
-            }
+                if !is_fully_signed {
+                    return Err(error_mapper(WalletError::FailedToConvertPartiallySignedTx(
+                        ptx,
+                    )));
+                }
 
-            let tx = ptx
-                .into_signed_tx()
-                .map_err(|e| error_mapper(WalletError::TransactionCreation(e)))?;
+                let tx = ptx
+                    .into_signed_tx()
+                    .map_err(|e| error_mapper(WalletError::TransactionCreation(e)))?;
 
-            check_transaction(chain_config, block_height.next_height(), &tx)?;
-            Ok((tx, additional_data))
-        })
+                check_transaction(chain_config, block_height.next_height(), &tx)?;
+                Ok((tx, additional_data))
+            },
+        )
     }
 
     fn for_account_rw_unlocked_and_check_tx(
@@ -1229,7 +1239,7 @@ where
         private_key: PrivateKey,
         label: Option<String>,
     ) -> WalletResult<()> {
-        self.for_account_rw_unlocked(account_index, |account, db_tx, _| {
+        self.for_account_rw_unlocked(account_index, |account, db_tx, _, _| {
             account.add_standalone_private_key(db_tx, private_key, label)
         })
     }
@@ -1419,9 +1429,11 @@ where
             |send_request| send_request.destinations().to_owned(),
         )?;
 
-        let signed_intent =
-            self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
-                let signer = SoftwareSigner::new(Arc::new(chain_config.clone()), account_index);
+        let signed_intent = self.for_account_rw_unlocked(
+            account_index,
+            |account, db_tx, chain_config, signer_provider| {
+                let mut signer =
+                    signer_provider.provide(Arc::new(chain_config.clone()), account_index);
 
                 Ok(signer.sign_transaction_intent(
                     signed_tx.transaction(),
@@ -1430,7 +1442,8 @@ where
                     account.key_chain(),
                     db_tx,
                 )?)
-            })?;
+            },
+        )?;
 
         Ok((signed_tx, signed_intent))
     }
@@ -1858,25 +1871,29 @@ where
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
     ) -> WalletResult<PartiallySignedTransaction> {
-        self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
-            let request = account.decommission_stake_pool_request(
-                db_tx,
-                pool_id,
-                pool_balance,
-                output_address,
-                current_fee_rate,
-            )?;
+        self.for_account_rw_unlocked(
+            account_index,
+            |account, db_tx, chain_config, signer_provider| {
+                let request = account.decommission_stake_pool_request(
+                    db_tx,
+                    pool_id,
+                    pool_balance,
+                    output_address,
+                    current_fee_rate,
+                )?;
 
-            let ptx = request.into_partially_signed_tx()?;
+                let ptx = request.into_partially_signed_tx()?;
 
-            let mut signer = SoftwareSigner::new(Arc::new(chain_config.clone()), account_index);
-            let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
+                let mut signer =
+                    signer_provider.provide(Arc::new(chain_config.clone()), account_index);
+                let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
 
-            if ptx.all_signatures_available() {
-                return Err(WalletError::FullySignedTransactionInDecommissionReq);
-            }
-            Ok(ptx)
-        })
+                if ptx.all_signatures_available() {
+                    return Err(WalletError::FullySignedTransactionInDecommissionReq);
+                }
+                Ok(ptx)
+            },
+        )
     }
 
     pub fn create_htlc_tx(
@@ -1993,18 +2010,22 @@ where
         Vec<SignatureStatus>,
     )> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
-            let ptx = match tx {
-                TransactionToSign::Partial(ptx) => ptx,
-                TransactionToSign::Tx(tx) => {
-                    account.tx_to_partially_signed_tx(tx, latest_median_time)?
-                }
-            };
-            let mut signer = SoftwareSigner::new(Arc::new(chain_config.clone()), account_index);
+        self.for_account_rw_unlocked(
+            account_index,
+            |account, db_tx, chain_config, signer_provider| {
+                let ptx = match tx {
+                    TransactionToSign::Partial(ptx) => ptx,
+                    TransactionToSign::Tx(tx) => {
+                        account.tx_to_partially_signed_tx(tx, latest_median_time)?
+                    }
+                };
+                let mut signer =
+                    signer_provider.provide(Arc::new(chain_config.clone()), account_index);
 
-            let res = signer.sign_tx(ptx, account.key_chain(), db_tx)?;
-            Ok(res)
-        })
+                let res = signer.sign_tx(ptx, account.key_chain(), db_tx)?;
+                Ok(res)
+            },
+        )
     }
 
     pub fn sign_challenge(
@@ -2013,11 +2034,16 @@ where
         challenge: &[u8],
         destination: &Destination,
     ) -> WalletResult<ArbitraryMessageSignature> {
-        self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
-            let mut signer = SoftwareSigner::new(Arc::new(chain_config.clone()), account_index);
-            let msg = signer.sign_challenge(challenge, destination, account.key_chain(), db_tx)?;
-            Ok(msg)
-        })
+        self.for_account_rw_unlocked(
+            account_index,
+            |account, db_tx, chain_config, signer_provider| {
+                let mut signer =
+                    signer_provider.provide(Arc::new(chain_config.clone()), account_index);
+                let msg =
+                    signer.sign_challenge(challenge, destination, account.key_chain(), db_tx)?;
+                Ok(msg)
+            },
+        )
     }
 
     pub fn get_pos_gen_block_data(

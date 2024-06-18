@@ -368,7 +368,7 @@ impl Signer for SoftwareSigner {
     }
 
     fn sign_transaction_intent(
-        &self,
+        &mut self,
         transaction: &Transaction,
         input_destinations: &[Destination],
         intent: &str,
