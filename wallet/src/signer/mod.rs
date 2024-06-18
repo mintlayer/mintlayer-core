@@ -30,7 +30,8 @@ use wallet_types::signature_status::SignatureStatus;
 use crate::key_chain::{AccountKeyChains, KeyChainError};
 
 pub mod software_signer;
-// pub mod trezor_signer;
+#[cfg(feature = "trezor")]
+pub mod trezor_signer;
 
 /// KeyChain errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -49,6 +50,8 @@ pub enum SignerError {
     DestinationNotFromThisWallet,
     #[error("{0}")]
     SignArbitraryMessageError(#[from] SignArbitraryMessageError),
+    #[error("{0}")]
+    SerializationError(#[from] serialization::Error),
 }
 
 type SignerResult<T> = Result<T, SignerError>;
