@@ -20,7 +20,7 @@ checksum = "c71b1793ee61086797f5c80b6efa2b8ffa6d5dd703f118545808a7f2e27f7046"
 
 [[package]]
 name = "accounting"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "common",
  "parity-scale-codec",
@@ -241,7 +241,7 @@ checksum = "b3d1d046238990b9cf5bcde22a3fb3584ee5cf65fb2765f454ed428c7a0063da"
 
 [[package]]
 name = "api-blockchain-scanner-daemon"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "api-blockchain-scanner-lib",
  "api-server-common",
@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "api-blockchain-scanner-lib"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "api-server-common",
  "async-trait",
@@ -285,7 +285,7 @@ dependencies = [
 
 [[package]]
 name = "api-server-backend-test-suite"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "api-server-common",
  "async-trait",
@@ -308,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "api-server-common"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "bb8-postgres",
@@ -332,7 +332,7 @@ dependencies = [
 
 [[package]]
 name = "api-server-stack-test-suite"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "api-blockchain-scanner-lib",
  "api-server-common",
@@ -361,7 +361,7 @@ dependencies = [
 
 [[package]]
 name = "api-web-server"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "api-server-common",
  "async-trait",
@@ -699,12 +699,11 @@ checksum = "8c3c1a368f70d6cf7302d78f8f7093da241fb8e8807c05cc9e51a125895a6d5b"
 
 [[package]]
 name = "bb8"
-version = "0.8.3"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df7c2093d15d6a1d33b1f972e1c5ea3177748742b97a5f392aa83a65262c6780"
+checksum = "b10cf871f3ff2ce56432fddc2615ac7acc3aa22ca321f8fea800846fbb32f188"
 dependencies = [
  "async-trait",
- "futures-channel",
  "futures-util",
  "parking_lot 0.12.3",
  "tokio",
@@ -897,7 +896,7 @@ dependencies = [
 
 [[package]]
 name = "blockprod"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "chainstate",
@@ -1145,7 +1144,7 @@ dependencies = [
 
 [[package]]
 name = "chainstate"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "accounting",
  "async-trait",
@@ -1189,7 +1188,7 @@ dependencies = [
 
 [[package]]
 name = "chainstate-launcher"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "chainstate",
  "chainstate-storage",
@@ -1204,7 +1203,7 @@ dependencies = [
 
 [[package]]
 name = "chainstate-storage"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "accounting",
  "chainstate-types",
@@ -1229,7 +1228,7 @@ dependencies = [
 
 [[package]]
 name = "chainstate-test-framework"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "chainstate",
  "chainstate-storage",
@@ -1257,7 +1256,7 @@ dependencies = [
 
 [[package]]
 name = "chainstate-test-suite"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "accounting",
  "chainstate",
@@ -1288,7 +1287,7 @@ dependencies = [
 
 [[package]]
 name = "chainstate-types"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "common",
  "crypto",
@@ -1496,7 +1495,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "bech32 0.11.0",
@@ -1549,7 +1548,7 @@ dependencies = [
 
 [[package]]
 name = "consensus"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "chainstate-types",
  "common",
@@ -1570,7 +1569,7 @@ dependencies = [
 
 [[package]]
 name = "constraints-value-accumulator"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "common",
  "crypto",
@@ -1794,7 +1793,7 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
 name = "crypto"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "argon2",
  "bip39",
@@ -1981,15 +1980,15 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
-version = "0.99.17"
+version = "0.99.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fb810d30a7c1953f91334de7244731fc3f3c10d7fe163338a35b9f640960321"
+checksum = "5f33878137e4dafd7fa914ad4e259e18a4e8e532b9617a2d0150262bf53abfce"
 dependencies = [
  "convert_case",
  "proc-macro2",
  "quote",
  "rustc_version",
- "syn 1.0.109",
+ "syn 2.0.66",
 ]
 
 [[package]]
@@ -2094,7 +2093,7 @@ dependencies = [
 
 [[package]]
 name = "dns-server"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2313,9 +2312,9 @@ checksum = "5692dd7b5a1978a5aeb0ce83b7655c58ca8efdcb79d21036ea249da95afec2c6"
 
 [[package]]
 name = "etagere"
-version = "0.2.12"
+version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dff377452246a4a2e0ef3a7e85ce78ed77c7f93c3a4771e1c93d0cc0c69eb411"
+checksum = "0e2f1e3be19fb10f549be8c1bf013e8675b4066c445e36eb76d2ebb2f54ee495"
 dependencies = [
  "euclid",
  "svg_fmt",
@@ -2988,6 +2987,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 
 [[package]]
+name = "hermit-abi"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbf6a919d6cf397374f7dfeeea91d974c7c0a7221d0d0f4f20d859d329e53fcc"
+
+[[package]]
 name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3078,9 +3083,9 @@ checksum = "add0ab9360ddbd88cfeb3bd9574a1d85cfdfa14db10b3e21d3700dbc4328758f"
 
 [[package]]
 name = "httparse"
-version = "1.9.3"
+version = "1.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0e7a4dd27b9476dc40cb050d3632d3bba3a70ddbff012285f7f8559a1e7e545"
+checksum = "0fcc0b4a115bf80b728eb8ea024ad5bd707b615bfed49e0665b6e0f86fd082d9"
 
 [[package]]
 name = "httpdate"
@@ -3539,9 +3544,9 @@ dependencies = [
 
 [[package]]
 name = "idna"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4716a3a0933a1d01c2f72450e89596eb51dd34ef3c211ccd875acdf1f8fe47ed"
+checksum = "44a986806a1cc899952ba462bc1f28afbfd5850ab6cb030ccb20dd02cc527a24"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
@@ -3618,7 +3623,7 @@ version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f23ff5ef2b80d608d61efee834934d862cd92461afc0560dedf493e4c033738b"
 dependencies = [
- "hermit-abi",
+ "hermit-abi 0.3.9",
  "libc",
  "windows-sys 0.52.0",
 ]
@@ -4024,7 +4029,7 @@ checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 
 [[package]]
 name = "log_error"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "derive_more",
  "logging",
@@ -4037,7 +4042,7 @@ dependencies = [
 
 [[package]]
 name = "logging"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "log",
  "thiserror",
@@ -4054,7 +4059,6 @@ checksum = "419e0dc8046cb947daa77eb95ae174acfbddb7673b4151f56d1eed8e93fbfaca"
 dependencies = [
  "cfg-if",
  "generator",
- "pin-utils",
  "scoped-tls",
  "tracing",
  "tracing-subscriber",
@@ -4157,9 +4161,9 @@ dependencies = [
 
 [[package]]
 name = "memchr"
-version = "2.7.2"
+version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c8640c5d730cb13ebd907d8d04b52f55ac9a2eec55b440c8892f40d56c76c1d"
+checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
 name = "memmap2"
@@ -4190,7 +4194,7 @@ dependencies = [
 
 [[package]]
 name = "mempool"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "accounting",
  "anyhow",
@@ -4231,7 +4235,7 @@ dependencies = [
 
 [[package]]
 name = "mempool-types"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "p2p-types",
  "rpc-description",
@@ -4284,9 +4288,9 @@ checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
 name = "miniz_oxide"
-version = "0.7.3"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87dfd01fe195c66b572b37921ad8803d010623c0aca821bea2302239d155cdae"
+checksum = "b8a240ddb74feaf34a79a7add65a741f3167852fba007066dcac1ca548d89c08"
 dependencies = [
  "adler",
  "simd-adler32",
@@ -4294,7 +4298,7 @@ dependencies = [
 
 [[package]]
 name = "mintlayer-core"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "chainstate",
  "chainstate-storage",
@@ -4313,7 +4317,7 @@ dependencies = [
 
 [[package]]
 name = "mintlayer-test"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "libtest-mimic",
@@ -4329,7 +4333,7 @@ dependencies = [
 
 [[package]]
 name = "mintscript"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "common",
  "crypto",
@@ -4387,7 +4391,7 @@ dependencies = [
 
 [[package]]
 name = "mocks"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "chainstate",
@@ -4474,7 +4478,7 @@ dependencies = [
 
 [[package]]
 name = "networking"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4521,7 +4525,7 @@ dependencies = [
 
 [[package]]
 name = "node-comm"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -4548,7 +4552,7 @@ dependencies = [
 
 [[package]]
 name = "node-daemon"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -4562,7 +4566,7 @@ dependencies = [
 
 [[package]]
 name = "node-gui"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "chainstate",
@@ -4594,7 +4598,7 @@ dependencies = [
 
 [[package]]
 name = "node-lib"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "blockprod",
@@ -4739,7 +4743,7 @@ version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
 dependencies = [
- "hermit-abi",
+ "hermit-abi 0.3.9",
  "libc",
 ]
 
@@ -4945,12 +4949,9 @@ checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 
 [[package]]
 name = "oneshot"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "071d1cf3298ad8e543dca18217d198cb6a3884443d204757b9624b935ef09fa0"
-dependencies = [
- "loom",
-]
+checksum = "e296cf87e61c9cfc1a61c3c63a0f7f286ed4554e0e22be84e8a38e1d264a2a29"
 
 [[package]]
 name = "oorandom"
@@ -5075,7 +5076,7 @@ dependencies = [
 
 [[package]]
 name = "p2p"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "chainstate",
@@ -5126,7 +5127,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-backend-test-suite"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "chainstate",
  "common",
@@ -5146,7 +5147,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-test-utils"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "chainstate",
  "chainstate-storage",
@@ -5166,7 +5167,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-types"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "common",
  "parity-scale-codec",
@@ -5274,7 +5275,7 @@ checksum = "1e401f977ab385c9e4e3ab30627d6f26d00e2c73eef317493c4ec6d468726cf8"
 dependencies = [
  "cfg-if",
  "libc",
- "redox_syscall 0.5.1",
+ "redox_syscall 0.5.2",
  "smallvec",
  "windows-targets 0.52.5",
 ]
@@ -5442,13 +5443,13 @@ dependencies = [
 
 [[package]]
 name = "polling"
-version = "3.7.1"
+version = "3.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e6a007746f34ed64099e88783b0ae369eaa3da6392868ba262e2af9b8fbaea1"
+checksum = "a3ed00ed3fbf728b5816498ecd316d1716eecaced9c0c8d2c5a6740ca214985b"
 dependencies = [
  "cfg-if",
  "concurrent-queue",
- "hermit-abi",
+ "hermit-abi 0.4.0",
  "pin-project-lite",
  "rustix",
  "tracing",
@@ -5486,7 +5487,7 @@ dependencies = [
 
 [[package]]
 name = "pos-accounting"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "accounting",
  "chainstate-types",
@@ -5686,9 +5687,9 @@ dependencies = [
 
 [[package]]
 name = "psl"
-version = "2.1.44"
+version = "2.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af74a900ec47f5ed97bf2148eaad32c3b9a414d382e0ce765fcf9409bf4d3681"
+checksum = "bac2a3a4c4b39bd07eccfb97bacc286859b7b1440e5e56fb9969beaace0ae308"
 dependencies = [
  "psl-types",
 ]
@@ -5856,7 +5857,7 @@ dependencies = [
 
 [[package]]
 name = "randomness"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "rand 0.8.5",
 ]
@@ -5938,9 +5939,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "469052894dcb553421e483e4209ee581a45100d31b4018de03e5a7ad86374a7e"
+checksum = "c82cf8cff14456045f55ec4241383baeff27af886adb72ffb2162f99911de0fd"
 dependencies = [
  "bitflags 2.5.0",
 ]
@@ -6207,7 +6208,7 @@ checksum = "3cd14fd5e3b777a7422cca79358c57a8f6e3a703d9ac187448d0daf220c2407f"
 
 [[package]]
 name = "rpc"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6237,7 +6238,7 @@ dependencies = [
 
 [[package]]
 name = "rpc-description"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "rpc-description-macro",
  "serde_json",
@@ -6245,7 +6246,7 @@ dependencies = [
 
 [[package]]
 name = "rpc-description-macro"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6254,7 +6255,7 @@ dependencies = [
 
 [[package]]
 name = "rpc-types"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "hex",
  "rpc-description",
@@ -6563,7 +6564,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "script"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "crypto",
  "flate2",
@@ -6815,7 +6816,7 @@ dependencies = [
 
 [[package]]
 name = "serialization"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "hex",
  "rpc-description",
@@ -6828,7 +6829,7 @@ dependencies = [
 
 [[package]]
 name = "serialization-core"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "arraytools",
  "hex-literal",
@@ -6838,7 +6839,7 @@ dependencies = [
 
 [[package]]
 name = "serialization-tagged"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "parity-scale-codec",
  "proptest",
@@ -6850,7 +6851,7 @@ dependencies = [
 
 [[package]]
 name = "serialization-tagged-derive"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "itertools 0.13.0",
  "proc-macro2",
@@ -6982,6 +6983,16 @@ name = "siphasher"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56199f7ddabf13fe5074ce809e7d3f42b42ae711800501b5b16ea82ad029c39d"
+
+[[package]]
+name = "skrifa"
+version = "0.19.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ab45fb68b53576a43d4fc0e9ec8ea64e29a4d2cc7f44506964cb75f288222e9"
+dependencies = [
+ "bytemuck",
+ "read-fonts",
+]
 
 [[package]]
 name = "slab"
@@ -7124,7 +7135,7 @@ dependencies = [
  "objc2-foundation",
  "objc2-quartz-core",
  "raw-window-handle",
- "redox_syscall 0.5.1",
+ "redox_syscall 0.5.2",
  "rustix",
  "tiny-xlib",
  "wasm-bindgen",
@@ -7181,7 +7192,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "storage"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "common",
  "rstest",
@@ -7194,7 +7205,7 @@ dependencies = [
 
 [[package]]
 name = "storage-backend-test-suite"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "libtest-mimic",
  "logging",
@@ -7209,7 +7220,7 @@ dependencies = [
 
 [[package]]
 name = "storage-core"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "common",
  "itertools 0.13.0",
@@ -7222,7 +7233,7 @@ dependencies = [
 
 [[package]]
 name = "storage-failing"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "enumflags2",
  "storage",
@@ -7234,7 +7245,7 @@ dependencies = [
 
 [[package]]
 name = "storage-inmemory"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "storage-backend-test-suite",
  "storage-core",
@@ -7243,7 +7254,7 @@ dependencies = [
 
 [[package]]
 name = "storage-lmdb"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "lmdb-mintlayer",
  "logging",
@@ -7257,7 +7268,7 @@ dependencies = [
 
 [[package]]
 name = "storage-sqlite"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "hex",
  "logging",
@@ -7321,7 +7332,7 @@ dependencies = [
 
 [[package]]
 name = "subsystem"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -7350,11 +7361,11 @@ checksum = "20e16a0f46cf5fd675563ef54f26e83e20f2366bcf027bcb3cc3ed2b98aaf2ca"
 
 [[package]]
 name = "swash"
-version = "0.1.16"
+version = "0.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "682a612b50baf09e8a039547ecf49e6c155690dcb751b1bcb19c93cdeb3d42d4"
+checksum = "4d7773d67fe3373048cf840bfcc54ec3207cfc1e95c526b287ef2eb5eff9faf6"
 dependencies = [
- "read-fonts",
+ "skrifa",
  "yazi",
  "zeno",
 ]
@@ -7492,7 +7503,7 @@ checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
 
 [[package]]
 name = "test-rpc-functions"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "chainstate",
@@ -7514,7 +7525,7 @@ dependencies = [
 
 [[package]]
 name = "test-utils"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "common",
  "crypto",
@@ -7685,7 +7696,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokens-accounting"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "accounting",
  "chainstate-types",
@@ -8128,7 +8139,7 @@ checksum = "2c591d83f69777866b9126b24c6dd9a18351f177e49d625920d19f989fd31cf8"
 
 [[package]]
 name = "tx-verifier"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "accounting",
  "chainstate-storage",
@@ -8157,14 +8168,14 @@ dependencies = [
 
 [[package]]
 name = "typename"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "typename-derive",
 ]
 
 [[package]]
 name = "typename-derive"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "itertools 0.13.0",
  "quote",
@@ -8286,7 +8297,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7c25da092f0a868cdf09e8674cd3b7ef3a7d92a24253e663a2fb85e2496de56"
 dependencies = [
  "form_urlencoded",
- "idna 1.0.0",
+ "idna 1.0.1",
  "percent-encoding",
  "serde",
 ]
@@ -8323,7 +8334,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -8354,7 +8365,7 @@ dependencies = [
 
 [[package]]
 name = "utils-networking"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "addr",
  "itertools 0.13.0",
@@ -8368,7 +8379,7 @@ dependencies = [
 
 [[package]]
 name = "utxo"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "chainstate-types",
  "common",
@@ -8458,7 +8469,7 @@ dependencies = [
 
 [[package]]
 name = "wallet"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "bip39",
  "chainstate",
@@ -8491,7 +8502,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-address-generator"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "common",
@@ -8506,7 +8517,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-address-generator-lib"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "common",
@@ -8520,7 +8531,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-cli"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "tokio",
@@ -8530,7 +8541,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-cli-commands"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "blockprod",
@@ -8576,7 +8587,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-cli-lib"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "blockprod",
@@ -8623,7 +8634,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-controller"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8658,7 +8669,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-rpc-client"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -8687,7 +8698,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-rpc-daemon"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "clap",
  "common",
@@ -8703,7 +8714,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-rpc-lib"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8741,7 +8752,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-storage"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "bip39",
  "common",
@@ -8760,7 +8771,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-test-node"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "blockprod",
  "chainstate",
@@ -8781,7 +8792,7 @@ dependencies = [
 
 [[package]]
 name = "wallet-types"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "bip39",
  "common",
@@ -8896,7 +8907,7 @@ checksum = "af190c94f2773fdb3729c55b007a722abb5384da03bc0986df4c289bf5567e96"
 
 [[package]]
 name = "wasm-doc-gen"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -8920,7 +8931,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-wrappers"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "bip39",
  "common",
@@ -9714,9 +9725,9 @@ dependencies = [
 
 [[package]]
 name = "zbus"
-version = "4.2.2"
+version = "4.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "989c3977a7aafa97b12b9a35d21cdcff9b0d2289762b14683f45d66b1ba6c48f"
+checksum = "23915fcb26e7a9a9dc05fd93a9870d336d6d032cd7e8cebf1c5c37666489fdd5"
 dependencies = [
  "async-broadcast",
  "async-process",
@@ -9747,9 +9758,9 @@ dependencies = [
 
 [[package]]
 name = "zbus_macros"
-version = "4.2.2"
+version = "4.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fe9de53245dcf426b7be226a4217dd5e339080e5d46e64a02d6e5dcbf90fca1"
+checksum = "02bcca0b586d2f8589da32347b4784ba424c4891ed86aa5b50d5e88f6b2c4f5d"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
