@@ -20,7 +20,6 @@ use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
 use crate::{Account, SendRequest};
 use common::chain::config::create_regtest;
 use common::chain::output_value::OutputValue;
-use common::chain::signature::verify_signature;
 use common::chain::timelock::OutputTimeLock;
 use common::chain::{GenBlock, TxInput};
 use common::primitives::amount::UnsignedIntType;
@@ -140,6 +139,14 @@ fn sign_transaction(#[case] seed: Seed) {
     for i in 0..sig_tx.inputs().len() {
         let destination =
             crate::get_tx_output_destination(utxos_ref[i].unwrap(), &|_| None).unwrap();
-        verify_signature(&config, &destination, &sig_tx, &utxos_ref, i).unwrap();
+        common::chain::signature::verify_signature(
+            &config,
+            &destination,
+            &sig_tx,
+            &sig_tx.signatures()[i],
+            &utxos_ref,
+            i,
+        )
+        .unwrap();
     }
 }

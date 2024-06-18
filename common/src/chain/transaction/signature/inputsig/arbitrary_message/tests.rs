@@ -19,7 +19,6 @@ use chain::signature::{
     inputsig::{standard_signature::StandardInputSignature, InputWitness},
     sighash::{sighashtype::SigHashType, signature_hash},
     tests::utils::{generate_input_utxo, generate_unsigned_tx},
-    verify_signature,
 };
 use crypto::{
     hash::StreamHasher,
@@ -364,10 +363,11 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
         let signed_tx =
             SignedTransaction::new(tx.clone(), vec![InputWitness::Standard(sig)]).unwrap();
 
-        verify_signature(
+        chain::signature::verify_signature(
             &chain_config,
             &destination,
             &signed_tx,
+            &signed_tx.signatures()[0],
             &[Some(&input_utxo)],
             0,
         )
@@ -390,10 +390,11 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
     let sig = StandardInputSignature::new(sighash_type, msg_sig.raw_signature);
     let signed_tx = SignedTransaction::new(tx, vec![InputWitness::Standard(sig)]).unwrap();
 
-    let ver_err = verify_signature(
+    let ver_err = chain::signature::verify_signature(
         &chain_config,
         &destination,
         &signed_tx,
+        &signed_tx.signatures()[0],
         &[Some(&input_utxo)],
         0,
     )

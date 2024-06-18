@@ -26,7 +26,7 @@ use crate::{
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::sighashtype::SigHashType,
-            verify_signature, DestinationSigError,
+            DestinationSigError,
         },
         signed_transaction::SignedTransaction,
         AccountNonce, AccountSpending, ChainConfig, DelegationId, Destination, Transaction,
@@ -215,7 +215,14 @@ pub fn verify_signed_tx(
     destination: &Destination,
 ) -> Result<(), DestinationSigError> {
     for i in 0..tx.inputs().len() {
-        verify_signature(chain_config, destination, tx, inputs_utxos, i)?
+        crate::chain::signature::verify_signature(
+            chain_config,
+            destination,
+            tx,
+            &tx.signatures()[i],
+            inputs_utxos,
+            i,
+        )?
     }
     Ok(())
 }

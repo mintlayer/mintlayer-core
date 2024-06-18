@@ -88,10 +88,10 @@ impl<C: SignatureContext> SignatureChecker<C> for StandardSignatureChecker {
         //    Some(&Some(signature.clone()))
         //);
 
-        common::chain::signature::verify_signature_2(
+        common::chain::signature::verify_signature(
             chain_config,
-            tx,
             destination,
+            tx,
             signature,
             ctx.input_utxos(),
             input_num,

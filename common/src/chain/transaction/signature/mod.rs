@@ -112,50 +112,10 @@ pub trait Transactable: Signable {
     fn signatures(&self) -> Vec<Option<InputWitness>>;
 }
 
-pub fn verify_signature<T: Transactable>(
+pub fn verify_signature<T: Signable>(
     chain_config: &ChainConfig,
     outpoint_destination: &Destination,
     tx: &T,
-    inputs_utxos: &[Option<&TxOutput>],
-    input_num: usize,
-) -> Result<(), DestinationSigError> {
-    let inputs = tx.inputs().ok_or(DestinationSigError::SignatureVerificationWithoutInputs)?;
-    let input_witness = tx
-        .signatures()
-        .get(input_num)
-        .cloned()
-        .ok_or(DestinationSigError::InvalidSignatureIndex(
-            input_num,
-            inputs.len(),
-        ))?
-        .ok_or(DestinationSigError::SignatureNotFound)?;
-
-    match input_witness {
-        InputWitness::NoSignature(_) => match outpoint_destination {
-            Destination::PublicKeyHash(_)
-            | Destination::PublicKey(_)
-            | Destination::ScriptHash(_)
-            | Destination::ClassicMultisig(_) => {
-                return Err(DestinationSigError::SignatureNotFound)
-            }
-            Destination::AnyoneCanSpend => {}
-        },
-        InputWitness::Standard(witness) => verify_standard_input_signature(
-            chain_config,
-            outpoint_destination,
-            &witness,
-            tx,
-            inputs_utxos,
-            input_num,
-        )?,
-    }
-    Ok(())
-}
-
-pub fn verify_signature_2<T: Signable>(
-    chain_config: &ChainConfig,
-    tx: &T,
-    outpoint_destination: &Destination,
     input_witness: &InputWitness,
     inputs_utxos: &[Option<&TxOutput>],
     input_num: usize,

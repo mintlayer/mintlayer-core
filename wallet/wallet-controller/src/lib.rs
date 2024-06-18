@@ -48,16 +48,11 @@ use read::ReadOnlyController;
 use sync::InSync;
 use synced_controller::SyncedController;
 
-use chainstate::ConnectTransactionError;
 use common::{
     address::AddressError,
     chain::{
         block::timestamp::BlockTimestamp,
-        signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::signature_hash,
-            DestinationSigError, Transactable,
-        },
+        signature::{inputsig::InputWitness, DestinationSigError, Transactable},
         tokens::{RPCTokenInfo, TokenId},
         Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxInput,
         TxOutput, UtxoOutPoint,
@@ -862,13 +857,28 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         input_num: usize,
         dest: &Destination,
     ) -> SignatureStatus {
-        let valid = common::chain::signature::verify_signature(
-            &self.chain_config,
-            dest,
-            tx,
-            inputs_utxos_refs,
-            input_num,
-        );
+        let valid = (|| {
+            let inputs =
+                tx.inputs().ok_or(DestinationSigError::SignatureVerificationWithoutInputs)?;
+            let witness = tx
+                .signatures()
+                .get(input_num)
+                .cloned()
+                .ok_or(DestinationSigError::InvalidSignatureIndex(
+                    input_num,
+                    inputs.len(),
+                ))?
+                .ok_or(DestinationSigError::SignatureNotFound)?;
+
+            common::chain::signature::verify_signature(
+                &self.chain_config,
+                dest,
+                tx,
+                &witness,
+                inputs_utxos_refs,
+                input_num,
+            )
+        })();
 
         match valid {
             Err(DestinationSigError::IncompleteClassicalMultisigSignature(

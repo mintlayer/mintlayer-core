@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::chain::{
-    signature::{inputsig::InputWitness, verify_signature, Signable, Transactable},
+    signature::{inputsig::InputWitness, Signable, Transactable},
     ChainConfig, Destination, SignedTransaction, Transaction, TransactionCreationError, TxInput,
     TxOutput,
 };
@@ -105,10 +105,16 @@ impl PartiallySignedTransaction {
                 (Some(InputWitness::NoSignature(_)), None) => true,
                 (Some(InputWitness::NoSignature(_)), Some(_)) => false,
                 (Some(InputWitness::Standard(_)), None) => false,
-                (Some(InputWitness::Standard(_)), Some(dest)) => {
-                    // FIXME: move to into_signed_tx?
-                    verify_signature(chain_config, dest, self, &inputs_utxos_refs, input_num)
-                        .is_ok()
+                (Some(InputWitness::Standard(sig)), Some(dest)) => {
+                    common::chain::signature::verify_signature(
+                        chain_config,
+                        dest,
+                        self,
+                        &InputWitness::Standard(sig.clone()),
+                        &inputs_utxos_refs,
+                        input_num,
+                    )
+                    .is_ok()
                 }
                 (None, _) => false,
             })
