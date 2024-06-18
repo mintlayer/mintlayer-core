@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::chain::{
-    signature::{inputsig::InputWitness, verify_signature, DestinationSigError, Transactable},
+    signature::{inputsig::InputWitness, DestinationSigError, Transactable},
     ChainConfig, Destination, TxOutput,
 };
 
@@ -83,11 +83,18 @@ impl<C: SignatureContext> SignatureChecker<C> for StandardSignatureChecker {
         // from the script should be taken and passed to the signature verification code. This
         // assertion should then go away. This goes hand in hand with turning Destinations, not
         // just outputs/input pairs into script.
-        assert_eq!(
-            tx.signatures().get(input_num),
-            Some(&Some(signature.clone()))
-        );
+        //assert_eq!(
+        //    tx.signatures().get(input_num),
+        //    Some(&Some(signature.clone()))
+        //);
 
-        verify_signature(chain_config, destination, tx, ctx.input_utxos(), input_num)
+        common::chain::signature::verify_signature_2(
+            chain_config,
+            tx,
+            destination,
+            signature,
+            ctx.input_utxos(),
+            input_num,
+        )
     }
 }

@@ -16,7 +16,9 @@
 mod display;
 mod verify;
 
-use common::chain::{signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination};
+use common::chain::{
+    htlc::HtlcSecretHash, signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination,
+};
 use utils::ensure;
 
 pub use verify::{ScriptError, ScriptErrorOf, ScriptResult, ScriptVisitor};
@@ -129,6 +131,13 @@ pub enum HashChallenge {
     Sha256([u8; 32]),
     Hash160([u8; 20]),
     Hash256([u8; 32]),
+}
+
+impl From<HtlcSecretHash> for HashChallenge {
+    fn from(value: HtlcSecretHash) -> Self {
+        // FIXME: endian?
+        Self::Hash160(value.to_fixed_bytes())
+    }
 }
 
 /// Script together with witness data presumably satisfying the script.

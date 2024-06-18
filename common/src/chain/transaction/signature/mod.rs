@@ -31,6 +31,7 @@ pub mod inputsig;
 pub mod sighash;
 
 use thiserror::Error;
+use utils::ensure;
 
 use super::{Destination, TxOutput};
 
@@ -151,7 +152,43 @@ pub fn verify_signature<T: Transactable>(
     Ok(())
 }
 
-fn verify_standard_input_signature<T: Transactable>(
+pub fn verify_signature_2<T: Signable>(
+    chain_config: &ChainConfig,
+    tx: &T,
+    outpoint_destination: &Destination,
+    input_witness: &InputWitness,
+    inputs_utxos: &[Option<&TxOutput>],
+    input_num: usize,
+) -> Result<(), DestinationSigError> {
+    let inputs = tx.inputs().ok_or(DestinationSigError::SignatureVerificationWithoutInputs)?;
+    ensure!(
+        input_num < inputs.len(),
+        DestinationSigError::InvalidSignatureIndex(input_num, inputs.len(),)
+    );
+
+    match input_witness {
+        InputWitness::NoSignature(_) => match outpoint_destination {
+            Destination::PublicKeyHash(_)
+            | Destination::PublicKey(_)
+            | Destination::ScriptHash(_)
+            | Destination::ClassicMultisig(_) => {
+                return Err(DestinationSigError::SignatureNotFound)
+            }
+            Destination::AnyoneCanSpend => {}
+        },
+        InputWitness::Standard(witness) => verify_standard_input_signature(
+            chain_config,
+            outpoint_destination,
+            &witness,
+            tx,
+            inputs_utxos,
+            input_num,
+        )?,
+    }
+    Ok(())
+}
+
+fn verify_standard_input_signature<T: Signable>(
     chain_config: &ChainConfig,
     outpoint_destination: &Destination,
     witness: &StandardInputSignature,

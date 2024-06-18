@@ -349,6 +349,7 @@ impl BlockProcessingErrorClassification for mintscript::translate::TranslationEr
 
             Self::PoSAccounting(e) => e.classify(),
             Self::TokensAccounting(e) => e.classify(),
+            Self::SignatureError(e) => e.classify(),
         }
     }
 }

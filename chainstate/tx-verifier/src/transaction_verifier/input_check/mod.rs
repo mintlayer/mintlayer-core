@@ -24,16 +24,16 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
-use crypto::key::SignatureError;
 use mintscript::{
-    checker::HashlockError, translate::InputInfoProvider, InputInfo, SignatureContext,
-    TimelockContext, TranslateInput, WitnessScript,
+    translate::InputInfoProvider, InputInfo, SignatureContext, TimelockContext, TranslateInput,
+    WitnessScript,
 };
 
-use crate::{error::SignatureDestinationGetterError, TransactionVerifierStorageRef};
+use crate::TransactionVerifierStorageRef;
 
 use super::TransactionSourceForConnect;
 
+pub type HashlockError = mintscript::checker::HashlockError;
 pub type TimelockError = mintscript::checker::TimelockError<TimelockContextError>;
 pub type ScriptError =
     mintscript::script::ScriptError<DestinationSigError, TimelockError, HashlockError>;

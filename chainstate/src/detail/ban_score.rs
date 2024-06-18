@@ -171,6 +171,7 @@ impl BanScore for mintscript::translate::TranslationError {
             | Self::DelegationNotFound(_)
             | Self::TokenNotFound(_) => 100,
 
+            Self::SignatureError(_) => 100,
             Self::PoSAccounting(e) => e.ban_score(),
             Self::TokensAccounting(e) => e.ban_score(),
         }

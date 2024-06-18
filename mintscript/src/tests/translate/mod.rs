@@ -304,3 +304,5 @@ fn translate_snap(
 
     expect_test::expect_file![format!("snap.translate.{mode_str}.{name}.txt")].assert_eq(&result);
 }
+
+//FIXME: htlc translation tests

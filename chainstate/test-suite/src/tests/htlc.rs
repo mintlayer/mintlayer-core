@@ -40,7 +40,6 @@ use common::{
         tokens::{make_token_id, TokenData, TokenIssuance, TokenTransfer},
         AccountCommand, AccountNonce, ChainConfig, ChainstateUpgrade, Destination, HtlcActivated,
         RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion, TxInput, TxOutput,
-        UtxoOutPoint,
     },
     primitives::{Amount, Idable},
 };
@@ -48,6 +47,10 @@ use crypto::key::{KeyKind, PrivateKey, PublicKey};
 use randomness::CryptoRng;
 use serialization::Encode;
 use test_utils::nft_utils::{random_token_issuance, random_token_issuance_v1};
+use tx_verifier::{
+    error::{InputCheckError, TranslationError},
+    input_check::HashlockError,
+};
 
 struct TestFixture {
     alice_sk: PrivateKey,
@@ -157,15 +160,17 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
                     SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)]).unwrap(),
                 )
                 .build_and_process(&mut rng);
-            // FIXME: is it still valid?
-            //assert_eq!(
-            //    result.unwrap_err(),
-            //    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            //        ConnectTransactionError::SignatureVerificationFailed(
-            //            DestinationSigError::PublicKeyToAddressMismatch
-            //        )
-            //    ))
-            //);
+            assert_eq!(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        tx_verifier::error::ScriptError::Signature(
+                            DestinationSigError::PublicKeyToAddressMismatch
+                        )
+                    ))
+                ))
+            );
         }
 
         // Bob can't spend the output without the secret
@@ -201,15 +206,17 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
                     SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)]).unwrap(),
                 )
                 .build_and_process(&mut rng);
-            // FIXME: is it still valid?
-            //assert_eq!(
-            //    result.unwrap_err(),
-            //    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            //        ConnectTransactionError::SignatureVerificationFailed(
-            //            DestinationSigError::InvalidSignatureEncoding
-            //        )
-            //    ))
-            //);
+            assert_eq!(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        TranslationError::SignatureError(
+                            DestinationSigError::InvalidSignatureEncoding
+                        )
+                    ))
+                ))
+            );
         }
 
         // Bob can't spend the output with random secret
@@ -248,16 +255,15 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
                     SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)]).unwrap(),
                 )
                 .build_and_process(&mut rng);
-            todo!();
-            //assert_eq!(
-            //    result.unwrap_err(),
-            //    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            //        ConnectTransactionError::SecretHashMismatch(UtxoOutPoint::new(
-            //            tx_1_id.into(),
-            //            0
-            //        ))
-            //    ))
-            //);
+            assert_eq!(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        tx_verifier::error::ScriptError::Hashlock(HashlockError::HashMismatch)
+                    ))
+                ))
+            );
         }
 
         // Success case
@@ -298,6 +304,8 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn refund_htlc(#[case] seed: Seed) {
+    use tx_verifier::error::TimelockError;
+
     utils::concurrency::model(move || {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -374,13 +382,19 @@ fn refund_htlc(#[case] seed: Seed) {
                     SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)]).unwrap(),
                 )
                 .build_and_process(&mut rng);
-            // FIXME: fix
-            //assert_eq!(
-            //    result.unwrap_err(),
-            //    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            //        ConnectTransactionError::InputCheck(())
-            //    ))
-            //);
+            let best_block_timestamp = tf.best_block_index().block_timestamp();
+            assert_eq!(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        tx_verifier::error::ScriptError::Timelock(TimelockError::TimestampLocked(
+                            best_block_timestamp,
+                            best_block_timestamp.add_int_seconds(200).unwrap(),
+                        ))
+                    ))
+                ))
+            );
         }
 
         tf.progress_time_seconds_since_epoch(200);
@@ -432,15 +446,17 @@ fn refund_htlc(#[case] seed: Seed) {
                     SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)]).unwrap(),
                 )
                 .build_and_process(&mut rng);
-            // FIXME: is it still valid?
-            //assert_eq!(
-            //    result.unwrap_err(),
-            //    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            //        ConnectTransactionError::SignatureVerificationFailed(
-            //            DestinationSigError::IncompleteClassicalMultisigSignature(2, 1)
-            //        )
-            //    ))
-            //);
+            assert_eq!(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        tx_verifier::error::ScriptError::Signature(
+                            DestinationSigError::IncompleteClassicalMultisigSignature(2, 1)
+                        )
+                    ))
+                ))
+            );
         }
 
         // Bob can't spend output alone
@@ -487,15 +503,17 @@ fn refund_htlc(#[case] seed: Seed) {
                     SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)]).unwrap(),
                 )
                 .build_and_process(&mut rng);
-            // FIXME: is it still valid?
-            //assert_eq!(
-            //    result.unwrap_err(),
-            //    ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            //        ConnectTransactionError::SignatureVerificationFailed(
-            //            DestinationSigError::IncompleteClassicalMultisigSignature(2, 1)
-            //        )
-            //    ))
-            //);
+            assert_eq!(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::InputCheck(InputCheckError::new(
+                        0,
+                        tx_verifier::error::ScriptError::Signature(
+                            DestinationSigError::IncompleteClassicalMultisigSignature(2, 1)
+                        )
+                    ))
+                ))
+            );
         }
 
         // Success case
