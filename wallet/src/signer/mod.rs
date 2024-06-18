@@ -32,7 +32,8 @@ use crate::{
 };
 
 pub mod software_signer;
-// pub mod trezor_signer;
+#[cfg(feature = "trezor")]
+pub mod trezor_signer;
 
 /// KeyChain errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -51,6 +52,8 @@ pub enum SignerError {
     DestinationNotFromThisWallet,
     #[error("{0}")]
     SignArbitraryMessageError(#[from] SignArbitraryMessageError),
+    #[error("{0}")]
+    SerializationError(#[from] serialization::Error),
 }
 
 type SignerResult<T> = Result<T, SignerError>;
