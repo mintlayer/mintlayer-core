@@ -265,8 +265,6 @@ pub fn produce_vrf_data(
 /// can be chosen for a block with that timestamp. The information about possible parents
 /// is provided via `candidate_infos_iter`.
 /// If multiple parents can be chosen, use the one that gives the biggest chain trust.
-/// The function will only return `Success` if the resulting chain trust is strictly bigger than
-/// `cur_tip_chain_trust`.
 #[allow(clippy::too_many_arguments)]
 pub fn stake<'a>(
     chain_config: &ChainConfig,
@@ -275,7 +273,6 @@ pub fn stake<'a>(
     candidate_infos_iter: impl SortedIterator<Item = &'a PoSBlockCandidateInfoCmpByParentTS> + Clone,
     min_timestamp: BlockTimestamp,
     max_timestamp: BlockTimestamp,
-    cur_tip_chain_trust: &Uint256,
     last_used_block_timestamp_sender: Option<&watch::Sender<BlockTimestamp>>,
     stop_flag: Option<Arc<RelaxedAtomicBool>>,
 ) -> Result<StakeResult<'a>, ConsensusPoSError> {
@@ -296,7 +293,6 @@ pub fn stake<'a>(
         candidate_infos_iter,
         min_timestamp,
         max_timestamp,
-        cur_tip_chain_trust,
         last_used_block_timestamp_sender,
         stop_flag,
         &mut randomness::make_true_rng(),
@@ -326,7 +322,6 @@ pub fn stake_impl<'a>(
     candidate_infos_iter: impl SortedIterator<Item = &'a PoSBlockCandidateInfoCmpByParentTS> + Clone,
     min_timestamp: BlockTimestamp,
     max_timestamp: BlockTimestamp,
-    cur_tip_chain_trust: &Uint256,
     last_used_block_timestamp_sender: Option<&watch::Sender<BlockTimestamp>>,
     stop_flag: Option<Arc<RelaxedAtomicBool>>,
     rng: &mut (impl Rng + CryptoRng),
@@ -396,14 +391,12 @@ pub fn stake_impl<'a>(
             let _ = last_used_block_timestamp_sender.send(timestamp);
         }
 
-        if let Some((chain_trust, vrf_data, block_candidate_info)) = best_result {
-            if chain_trust > *cur_tip_chain_trust {
-                return Ok(StakeResult::Success {
-                    block_candidate_info,
-                    timestamp,
-                    vrf_data,
-                });
-            }
+        if let Some((_, vrf_data, block_candidate_info)) = best_result {
+            return Ok(StakeResult::Success {
+                block_candidate_info,
+                timestamp,
+                vrf_data,
+            });
         }
 
         if stop_flag.as_ref().is_some_and(|stop_flag| stop_flag.load()) {
