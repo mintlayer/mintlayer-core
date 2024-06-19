@@ -20,20 +20,27 @@ use common::{
     Uint256,
 };
 
+/// This struct holds certain information necessary to produce a new block by staking.
 #[derive(Debug, Clone)]
 pub struct PoSBlockCandidateInfo {
+    /// The information about the parent block.
     pub parent_id: Id<GenBlock>,
     pub parent_timestamp: BlockTimestamp,
     pub parent_chain_trust: Uint256,
 
+    /// The target required for staking; this value depends on the parent block.
     pub target: Uint256,
+
+    /// The PoS chain config corresponding to the height of the new block.
     pub pos_chain_config: PoSChainConfig,
 
+    /// Epoch data corresponding to the height of the new block.
     pub epoch_index: EpochIndex,
     pub sealed_epoch_randomness: PoSRandomness,
 
-    pub staker_balance: Amount,
-    pub total_balance: Amount,
+    /// The balances of the pool that will be used for staking; these also depend ont he parent block.
+    pub pool_staker_balance: Amount,
+    pub pool_total_balance: Amount,
 }
 
 #[derive(Debug, Clone)]

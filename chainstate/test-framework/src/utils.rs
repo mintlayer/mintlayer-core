@@ -302,8 +302,8 @@ pub fn pos_mine(
         pos_chain_config: pos_chain_config.clone(),
         epoch_index,
         sealed_epoch_randomness,
-        staker_balance: pool_balances.staker_balance,
-        total_balance: pool_balances.total_balance,
+        pool_staker_balance: pool_balances.staker_balance,
+        pool_total_balance: pool_balances.total_balance,
     });
 
     let stake_result = stake_impl(

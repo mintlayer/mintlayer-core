@@ -28,20 +28,43 @@ pub struct BlockProdConfigFile {
     /// If true, blocks with non-PoS consensus types will always be created with timestamps
     /// bigger than or equal to the current time.
     pub use_current_time_if_non_pos: Option<bool>,
+    /// If true, staking will always be performed on top of the best block in pos.
+    /// Only for tests.
+    pub force_stake_on_top_of_best_block_in_pos: Option<bool>,
 }
 
 impl From<BlockProdConfigFile> for BlockProdConfig {
     fn from(config_file: BlockProdConfigFile) -> Self {
+        const DEFAULT_MIN_PEERS_TO_PRODUCE_BLOCKS: usize = 3;
+
         let BlockProdConfigFile {
             min_peers_to_produce_blocks,
             skip_ibd_check,
             use_current_time_if_non_pos,
+            force_stake_on_top_of_best_block_in_pos,
         } = config_file;
 
         Self {
-            min_peers_to_produce_blocks: min_peers_to_produce_blocks.unwrap_or_default(),
+            min_peers_to_produce_blocks: min_peers_to_produce_blocks
+                .unwrap_or(DEFAULT_MIN_PEERS_TO_PRODUCE_BLOCKS),
             skip_ibd_check: skip_ibd_check.unwrap_or_default(),
             use_current_time_if_non_pos: use_current_time_if_non_pos.unwrap_or_default(),
+            force_stake_on_top_of_best_block_in_pos: force_stake_on_top_of_best_block_in_pos
+                .unwrap_or_default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_defaults() {
+        let cfg_file = BlockProdConfigFile::default();
+        let cfg: BlockProdConfig = cfg_file.into();
+
+        // Should be false by default.
+        assert!(!cfg.force_stake_on_top_of_best_block_in_pos);
     }
 }

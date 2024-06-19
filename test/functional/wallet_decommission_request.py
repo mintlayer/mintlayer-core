@@ -61,6 +61,7 @@ class WalletDecommissionRequest(BitcoinTestFramework):
         self.extra_args = [[
             "--chain-pos-netupgrades=1",
             "--blockprod-min-peers-to-produce-blocks=0",
+            "--blockprod-force-stake-on-top-of-best-block-in-pos",
         ]]
 
     def setup_network(self):

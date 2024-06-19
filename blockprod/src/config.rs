@@ -23,4 +23,7 @@ pub struct BlockProdConfig {
     /// If true, blocks with non-PoS consensus types will always be created with timestamps
     /// bigger than or equal to the current time.
     pub use_current_time_if_non_pos: bool,
+    /// If true, staking will always be performed on top of the best block in pos.
+    /// Only for tests.
+    pub force_stake_on_top_of_best_block_in_pos: bool,
 }

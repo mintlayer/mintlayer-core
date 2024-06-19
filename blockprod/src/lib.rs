@@ -155,6 +155,7 @@ pub fn test_blockprod_config() -> BlockProdConfig {
         min_peers_to_produce_blocks: 0,
         skip_ibd_check: false,
         use_current_time_if_non_pos: false,
+        force_stake_on_top_of_best_block_in_pos: false,
     }
 }
 

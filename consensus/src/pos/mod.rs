@@ -299,15 +299,16 @@ pub fn stake<'a>(
     )?;
 
     if let StakeResult::Success {
-        block_candidate_info: _,
+        block_candidate_info,
         timestamp,
         vrf_data: _vrf_data,
     } = &stake_result
     {
         log::info!(
-            "Valid block found, timestamp: {}, pool_id: {}",
+            "Valid block found, timestamp: {}, pool_id: {}, parent block id: {}",
             timestamp,
-            pool_id
+            pool_id,
+            block_candidate_info.parent_id
         );
     }
 
@@ -360,8 +361,8 @@ pub fn stake_impl<'a>(
                 &vrf_data,
                 &vrf_pub_key,
                 timestamp,
-                candidate_info.staker_balance,
-                candidate_info.total_balance,
+                candidate_info.pool_staker_balance,
+                candidate_info.pool_total_balance,
                 final_supply,
             )
             .is_ok()

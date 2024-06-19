@@ -173,7 +173,7 @@ pub fn is_block_in_main_chain<CS: ChainstateInterface + ?Sized>(
     chainstate.is_block_in_main_chain(block_id).map_err(|err| {
         BlockProductionError::ChainstateError(
             consensus::ChainstateError::FailedToDetermineIfBlockInMainchain(
-                (*block_id).into(),
+                *block_id,
                 err.to_string(),
             ),
         )

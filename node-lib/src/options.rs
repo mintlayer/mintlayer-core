@@ -105,6 +105,12 @@ pub struct RunOptions {
     #[arg(hide = true)]
     pub blockprod_use_current_time_if_non_pos: Option<bool>,
 
+    /// If true, blocks with PoS consensus will always be created on top of the current best block.
+    /// This option is for testing purposes only,
+    #[clap(long, action = clap::ArgAction::SetTrue)]
+    #[arg(hide = true)]
+    pub blockprod_force_stake_on_top_of_best_block_in_pos: Option<bool>,
+
     /// Storage backend to use.
     #[clap(long)]
     pub storage_backend: Option<StorageBackendConfigFile>,

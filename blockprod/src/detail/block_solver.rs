@@ -52,7 +52,7 @@ use consensus::{
     PoWGenerateBlockInputData, StakeResult,
 };
 
-use crate::BlockProductionError;
+use crate::{config::BlockProdConfig, BlockProductionError};
 
 use super::{
     utils::{
@@ -98,11 +98,18 @@ impl BlockProduction {
             generate_pos_consensus_data_and_reward(input_data, randomness::make_true_rng())?;
 
         let pool_id = consensus_data.pool_id;
+        let blockprod_config = Arc::clone(&self.blockprod_config);
 
         let candidate_infos = self
             .chainstate_handle
             .call(move |cs| -> Result<_, BlockProductionError> {
-                collect_pos_candidate_infos(cs, &pool_id, min_timestamp, best_block_index)
+                collect_pos_candidate_infos(
+                    cs,
+                    &pool_id,
+                    min_timestamp,
+                    best_block_index,
+                    &blockprod_config,
+                )
             })
             .await??;
 
@@ -485,8 +492,8 @@ fn make_pos_candidate_info(
         pos_chain_config: tmp_info.pos_chain_config,
         epoch_index: tmp_info.epoch_index,
         sealed_epoch_randomness: tmp_info.sealed_epoch_randomness,
-        staker_balance: pool_balances.staker_balance(),
-        total_balance: pool_balances.total_balance(),
+        pool_staker_balance: pool_balances.staker_balance(),
+        pool_total_balance: pool_balances.total_balance(),
     }
 }
 
@@ -498,11 +505,15 @@ fn collect_pos_candidate_infos(
     pool_id: &PoolId,
     min_timestamp: BlockTimestamp,
     best_block_index: GenBlockIndex,
+    blockprod_config: &BlockProdConfig,
 ) -> Result<PoSBlockCandidateInfosByParentTS, BlockProductionError> {
     let chain_config = chainstate.get_chain_config();
     let mut infos = BTreeSet::new();
 
-    if min_timestamp > best_block_index.block_timestamp() || best_block_index.is_genesis() {
+    if min_timestamp > best_block_index.block_timestamp()
+        || best_block_index.is_genesis()
+        || blockprod_config.force_stake_on_top_of_best_block_in_pos
+    {
         if let Some(tmp_info) =
             obtain_pos_candidate_info(chain_config, chainstate, &best_block_index)?
         {
@@ -718,7 +729,6 @@ pub struct PoSBlockSolverInputData {
     consensus_data: PoSPartialConsensusData,
 
     candidate_infos: PoSBlockCandidateInfosByParentTS,
-
 
     min_timestamp: BlockTimestamp,
     max_timestamp: BlockTimestamp,
