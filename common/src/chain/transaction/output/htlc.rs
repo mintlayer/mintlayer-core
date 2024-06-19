@@ -16,19 +16,10 @@
 // TODO: consider removing this in the future when fixed-hash fixes this problem
 #![allow(clippy::non_canonical_clone_impl)]
 
-use crypto::hash::{self, hash};
 use randomness::Rng;
 use serialization::{Decode, Encode};
 
 use super::{timelock::OutputTimeLock, Destination};
-
-pub enum HashType {
-    RIPEMD160,
-    SHA1,
-    SHA256,
-    HASH160,
-    HASH256,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct HashedTimelockContract {
@@ -56,15 +47,8 @@ impl HtlcSecret {
         &self.secret
     }
 
-    pub fn hashed(&self, t: HashType) -> HtlcSecretHash {
-        match t {
-            HashType::RIPEMD160 | HashType::SHA1 | HashType::SHA256 | HashType::HASH256 => {
-                unimplemented!()
-            }
-            HashType::HASH160 => HtlcSecretHash::from_slice(
-                hash::<hash::Ripemd160, _>(hash::<hash::Sha256, _>(self.secret)).as_slice(),
-            ),
-        }
+    pub fn consume(self) -> [u8; 32] {
+        self.secret
     }
 }
 

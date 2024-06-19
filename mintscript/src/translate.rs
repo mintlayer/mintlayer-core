@@ -30,7 +30,7 @@ use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
 use utxo::Utxo;
 
-use crate::WitnessScript;
+use crate::{script::HashChallenge, WitnessScript};
 
 /// An error that can happen during translation of an input to a script
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
@@ -146,8 +146,8 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                                     raw_signature,
                                 ) => WitnessScript::satisfied_conjunction([
                                     WitnessScript::hashlock(
-                                        htlc.secret_hash.clone().into(),
-                                        secret.secret().try_into().unwrap(),
+                                        HashChallenge::Hash160(htlc.secret_hash.to_fixed_bytes()),
+                                        secret.consume(),
                                     ),
                                     WitnessScript::signature(
                                         htlc.spend_key.clone(),
