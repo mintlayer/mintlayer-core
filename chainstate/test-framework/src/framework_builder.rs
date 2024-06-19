@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
     key_manager::KeyManager,
-    staking_pools::StakingPools,
+    staking_pools::{StakingPoolsForAllHeights, StakingPoolsForOneHeight},
     tx_verification_strategy::{
         DisposableTransactionVerificationStrategy, RandomizedTransactionVerificationStrategy,
     },
@@ -52,7 +52,9 @@ pub struct TestFrameworkBuilder {
     time_value: Option<Arc<SeqCstAtomicU64>>,
     tx_verification_strategy: TxVerificationStrategy,
     initial_time_since_genesis: u64,
-    staking_pools: StakingPools,
+    // Note: these two are mutually exclusive
+    staking_pools: Option<StakingPoolsForAllHeights>,
+    staking_pools_at_genesis: Option<BTreeMap<PoolId, (PrivateKey, VRFPrivateKey, UtxoOutPoint)>>,
 }
 
 impl TestFrameworkBuilder {
@@ -64,7 +66,6 @@ impl TestFrameworkBuilder {
         let time_getter = None;
         let time_value = None;
         let initial_time_since_genesis = 0;
-        let staking_pools = StakingPools::new();
 
         assert_eq!(TxVerificationStrategy::VARIANT_COUNT, 3);
         let tx_verification_strategy = match rng.gen_range(0..3) {
@@ -83,7 +84,8 @@ impl TestFrameworkBuilder {
             time_value,
             tx_verification_strategy,
             initial_time_since_genesis,
-            staking_pools,
+            staking_pools: None,
+            staking_pools_at_genesis: None,
         }
     }
 
@@ -96,7 +98,6 @@ impl TestFrameworkBuilder {
         // TODO: get strategy from `tf`
         let tx_verification_strategy = TxVerificationStrategy::Default;
         let initial_time_since_genesis = 0;
-        let staking_pools = tf.staking_pools;
 
         TestFrameworkBuilder {
             chain_config,
@@ -107,7 +108,8 @@ impl TestFrameworkBuilder {
             time_value,
             tx_verification_strategy,
             initial_time_since_genesis,
-            staking_pools,
+            staking_pools_at_genesis: None,
+            staking_pools: Some(tf.staking_pools),
         }
     }
 
@@ -160,11 +162,11 @@ impl TestFrameworkBuilder {
         self
     }
 
-    pub fn with_staking_pools(
+    pub fn with_staking_pools_at_genesis(
         mut self,
         staking_pools: BTreeMap<PoolId, (PrivateKey, VRFPrivateKey, UtxoOutPoint)>,
     ) -> Self {
-        self.staking_pools = StakingPools::from_data(staking_pools);
+        self.staking_pools_at_genesis = Some(staking_pools);
         self
     }
 
@@ -198,9 +200,10 @@ impl TestFrameworkBuilder {
     pub fn try_build(self) -> Result<TestFramework, chainstate::ChainstateError> {
         let (time_getter, time_value) = self.create_time_getter_and_value();
 
+        let chain_config = Arc::new(self.chain_config);
         let chainstate = match self.tx_verification_strategy {
             TxVerificationStrategy::Default => chainstate::make_chainstate(
-                Arc::new(self.chain_config),
+                Arc::clone(&chain_config),
                 self.chainstate_config,
                 self.chainstate_storage.clone(),
                 DefaultTransactionVerificationStrategy::new(),
@@ -208,7 +211,7 @@ impl TestFrameworkBuilder {
                 time_getter.clone(),
             ),
             TxVerificationStrategy::Disposable => chainstate::make_chainstate(
-                Arc::new(self.chain_config),
+                Arc::clone(&chain_config),
                 self.chainstate_config,
                 self.chainstate_storage.clone(),
                 DisposableTransactionVerificationStrategy::new(),
@@ -216,7 +219,7 @@ impl TestFrameworkBuilder {
                 time_getter.clone(),
             ),
             TxVerificationStrategy::Randomized(seed) => chainstate::make_chainstate(
-                Arc::new(self.chain_config),
+                Arc::clone(&chain_config),
                 self.chainstate_config,
                 self.chainstate_storage.clone(),
                 RandomizedTransactionVerificationStrategy::new(seed),
@@ -225,8 +228,39 @@ impl TestFrameworkBuilder {
             ),
         }?;
 
-        let key_manager =
-            KeyManager::new(self.staking_pools.staking_pools().values().map(|(pk, _, _)| pk));
+        assert!(self.staking_pools.is_none() || self.staking_pools_at_genesis.is_none());
+
+        let staking_pools = if let Some(staking_pools) = self.staking_pools {
+            staking_pools
+        } else if let Some(staking_pools_at_genesis) = self.staking_pools_at_genesis {
+            let genesis_id = chain_config.genesis_block_id();
+            StakingPoolsForAllHeights::from_data(BTreeMap::from([(
+                genesis_id,
+                StakingPoolsForOneHeight::from_data(
+                    staking_pools_at_genesis
+                        .into_iter()
+                        .map(
+                            |(pool_id, (staker_sk, staker_vrf_sk, kernel_input_outpoint))| {
+                                (
+                                    pool_id,
+                                    (staker_sk, staker_vrf_sk, kernel_input_outpoint, genesis_id),
+                                )
+                            },
+                        )
+                        .collect::<BTreeMap<_, _>>(),
+                ),
+            )]))
+        } else {
+            StakingPoolsForAllHeights::new()
+        };
+
+        let key_manager = KeyManager::new(
+            staking_pools
+                .all_staking_pools()
+                .values()
+                .flat_map(|pools| pools.staking_pools().values())
+                .map(|(pk, _, _, _)| pk),
+        );
 
         Ok(TestFramework {
             chainstate,
@@ -234,7 +268,7 @@ impl TestFrameworkBuilder {
             block_indexes: Vec::new(),
             time_getter,
             time_value,
-            staking_pools: self.staking_pools,
+            staking_pools,
             key_manager,
         })
     }

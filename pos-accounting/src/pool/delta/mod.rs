@@ -32,6 +32,7 @@ pub mod data;
 pub mod operator_impls;
 mod view_impl;
 
+#[derive(Clone)]
 pub struct PoSAccountingDelta<P> {
     parent: P,
     data: PoSAccountingDeltaData,

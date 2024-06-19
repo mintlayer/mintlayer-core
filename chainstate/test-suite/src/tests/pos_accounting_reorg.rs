@@ -745,12 +745,13 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
         ))
         .build();
     let stake_pool_2_tx_id = stake_pool_2_tx.transaction().get_id();
-    tf.make_pos_block_builder()
+    let block_with_stake_pool_2_tx_id = tf
+        .make_pos_block_builder()
         .add_transaction(stake_pool_2_tx)
         .with_stake_pool_id(genesis_pool_id)
         .with_stake_spending_key(staking_sk)
         .with_vrf_key(vrf_sk.clone())
-        .build_and_process(&mut rng)
+        .build_and_process_return_block_id(&mut rng)
         .unwrap();
     let block_a_id = tf.best_block_id();
 
@@ -770,7 +771,10 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
         .make_pos_block_builder()
         .add_transaction(decommission_pool_tx)
         .with_stake_pool_id(pool_2_id)
-        .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
+        .with_kernel_input(
+            UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0),
+            block_with_stake_pool_2_tx_id.into(),
+        )
         .with_stake_spending_key(staking_sk_2.clone())
         .with_vrf_key(vrf_sk.clone())
         .build_and_process(&mut rng)
@@ -785,7 +789,10 @@ fn in_memory_reorg_disconnect_produce_pool(#[case] seed: Seed) {
     tf.make_pos_block_builder()
         .with_parent(block_a_id)
         .with_stake_pool_id(pool_2_id)
-        .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
+        .with_kernel_input(
+            UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0),
+            block_with_stake_pool_2_tx_id.into(),
+        )
         .with_stake_spending_key(staking_sk_2)
         .with_vrf_key(vrf_sk)
         .build_and_process(&mut rng)
@@ -1335,7 +1342,7 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
     let block_c = tf
         .make_pos_block_builder()
         .with_stake_pool_id(pool_2_id)
-        .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
+        .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0), block_a_id)
         .with_stake_spending_key(staker_sk_2.clone())
         .with_vrf_key(vrf_sk_2.clone())
         .build(&mut rng);
@@ -1346,7 +1353,7 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
         .make_pos_block_builder()
         .with_parent(block_a_id)
         .with_stake_pool_id(pool_2_id)
-        .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0))
+        .with_kernel_input(UtxoOutPoint::new(stake_pool_2_tx_id.into(), 0), block_a_id)
         .with_stake_spending_key(staker_sk_2.clone())
         .with_vrf_key(vrf_sk_2.clone())
         .build(&mut rng);
@@ -1361,7 +1368,7 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
         .make_pos_block_builder()
         .with_parent(block_d_id)
         .with_stake_pool_id(pool_2_id)
-        .with_kernel_input(UtxoOutPoint::new(block_d_id.into(), 0))
+        .with_kernel_input(UtxoOutPoint::new(block_d_id.into(), 0), block_d_id)
         .with_stake_spending_key(staker_sk_2)
         .with_vrf_key(vrf_sk_2)
         .build(&mut rng);

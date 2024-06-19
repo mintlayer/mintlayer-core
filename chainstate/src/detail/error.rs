@@ -97,18 +97,25 @@ pub enum BlockError {
     InvariantErrorAttemptToConnectInvalidBlock(Id<GenBlock>),
     #[error("Disconnected headers")]
     InvariantErrorDisconnectedHeaders,
-    #[error("Total pool {pool_id} balance {total_balance:?} is less than the staker's balance {staker_balance:?}; best block height = {best_block_height}")]
+    #[error("Total pool {pool_id} balance {total_balance:?} is less than the staker's balance {staker_balance:?}; base block = {base_block}")]
     InvariantErrorTotalPoolBalanceLessThanStakers {
         total_balance: Amount,
         staker_balance: Amount,
         pool_id: PoolId,
-        best_block_height: BlockHeight,
+        base_block: Id<GenBlock>,
     },
-    #[error("Pool {0} data missing while balance is present; best block height =  {1}")]
-    InvariantErrorPoolBalancePresentDataMissing(PoolId, BlockHeight),
-    #[error("Pool {0} balance missing while pool data is present; best block height =  {1}")]
-    InvariantErrorPoolDataPresentBalanceMissing(PoolId, BlockHeight),
-
+    #[error("Pool {pool_id} data missing while balance is present; base block = {base_block}")]
+    InvariantErrorPoolBalancePresentDataMissing {
+        pool_id: PoolId,
+        base_block: Id<GenBlock>,
+    },
+    #[error(
+        "Pool {pool_id} balance missing while pool data is present; base block = {base_block}"
+    )]
+    InvariantErrorPoolDataPresentBalanceMissing {
+        pool_id: PoolId,
+        base_block: Id<GenBlock>,
+    },
     #[error("Unexpected block height range: first = {0}, second = {1}")]
     UnexpectedHeightRange(BlockHeight, BlockHeight),
 

@@ -17,6 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::framework::BlockOutputs;
 use crate::signature_destination_getter::SignatureDestinationGetter;
+use crate::staking_pools::{apply_staking_pools_updates, StakingPoolUpdate};
 use crate::utils::{create_new_outputs, outputs_from_block, sign_witnesses};
 use crate::TestFramework;
 use chainstate::{BlockSource, ChainstateError};
@@ -26,6 +27,7 @@ use common::chain::block::block_body::BlockBody;
 use common::chain::block::signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData};
 use common::chain::block::BlockHeader;
 use common::chain::{AccountNonce, AccountType, OutPointSourceId, UtxoOutPoint};
+use common::primitives::Idable;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
@@ -46,7 +48,7 @@ use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
 pub struct BlockBuilder<'f> {
     framework: &'f mut TestFramework,
     transactions: Vec<SignedTransaction>,
-    prev_block_hash: Id<GenBlock>,
+    prev_block_hash: Option<Id<GenBlock>>,
     timestamp: BlockTimestamp,
     consensus_data: ConsensusData,
     reward: BlockReward,
@@ -58,13 +60,14 @@ pub struct BlockBuilder<'f> {
     account_nonce_tracker: BTreeMap<AccountType, AccountNonce>,
     tokens_accounting_store: InMemoryTokensAccounting,
     pos_accounting_store: InMemoryPoSAccounting,
+
+    staking_pools_updates: Vec<StakingPoolUpdate>,
 }
 
 impl<'f> BlockBuilder<'f> {
     /// Creates a new builder instance.
     pub fn new(framework: &'f mut TestFramework) -> Self {
         let transactions = Vec::new();
-        let prev_block_hash = framework.chainstate.get_best_block_id().unwrap();
         let timestamp = BlockTimestamp::from_time(framework.time_getter.get_time());
         let consensus_data = ConsensusData::None;
         let reward = BlockReward::new(Vec::new());
@@ -94,7 +97,7 @@ impl<'f> BlockBuilder<'f> {
         Self {
             framework,
             transactions,
-            prev_block_hash,
+            prev_block_hash: None,
             timestamp,
             consensus_data,
             reward,
@@ -104,6 +107,7 @@ impl<'f> BlockBuilder<'f> {
             account_nonce_tracker,
             tokens_accounting_store,
             pos_accounting_store,
+            staking_pools_updates: Vec::new(),
         }
     }
 
@@ -121,6 +125,10 @@ impl<'f> BlockBuilder<'f> {
 
     /// Adds a transaction that uses random utxos and accounts
     pub fn add_test_transaction(mut self, rng: &mut (impl Rng + CryptoRng)) -> Self {
+        let prev_block_hash = self
+            .prev_block_hash
+            .expect("this function requires the previous block to be specified in advance");
+
         let utxo_set = self
             .framework
             .storage
@@ -131,7 +139,7 @@ impl<'f> BlockBuilder<'f> {
             .into_iter()
             .filter(|(outpoint, _)| !self.used_utxo.contains(outpoint))
             .collect();
-        let utxo_set = utxo::UtxosDBInMemoryImpl::new(self.prev_block_hash, utxo_set);
+        let utxo_set = utxo::UtxosDBInMemoryImpl::new(prev_block_hash, utxo_set);
 
         let account_nonce_getter = Box::new(|account: AccountType| -> Option<AccountNonce> {
             self.account_nonce_tracker.get(&account).copied().or_else(|| {
@@ -151,7 +159,7 @@ impl<'f> BlockBuilder<'f> {
             )
             .make(
                 rng,
-                &mut self.framework.staking_pools,
+                &mut self.staking_pools_updates,
                 &mut self.framework.key_manager,
             );
 
@@ -271,15 +279,24 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
-    /// Overrides the previous block hash that is deduced by default as the best block.
+    /// Sets the previous block hash; if not set, the best block will be used.
     pub fn with_parent(mut self, prev_block_hash: Id<GenBlock>) -> Self {
-        self.prev_block_hash = prev_block_hash;
+        assert!(self.prev_block_hash.is_none());
+        self.prev_block_hash = Some(prev_block_hash);
         self
+    }
+
+    /// Explicitly set the previous block hash to the best block (some builder functions require
+    /// the parent to be specified explicitly).
+    pub fn with_best_block_as_parent(self) -> Self {
+        let parent_id = self.framework.chainstate.get_best_block_id().unwrap();
+        self.with_parent(parent_id)
     }
 
     /// Overrides the previous block hash by a random value making the resulting block an orphan.
     pub fn make_orphan(mut self, rng: &mut impl Rng) -> Self {
-        self.prev_block_hash = Id::new(H256::random_using(rng));
+        assert!(self.prev_block_hash.is_none());
+        self.prev_block_hash = Some(Id::new(H256::random_using(rng)));
         self
     }
 
@@ -307,10 +324,13 @@ impl<'f> BlockBuilder<'f> {
     }
 
     fn build_impl(self, rng: &mut (impl Rng + CryptoRng)) -> (Block, &'f mut TestFramework) {
+        let prev_block_hash = self
+            .prev_block_hash
+            .unwrap_or_else(|| self.framework.chainstate.get_best_block_id().unwrap());
         let block_body = BlockBody::new(self.reward, self.transactions);
         let merkle_proxy = block_body.merkle_tree_proxy().unwrap();
         let unsigned_header = BlockHeader::new(
-            self.prev_block_hash,
+            prev_block_hash,
             merkle_proxy.merkle_tree().root(),
             merkle_proxy.witness_merkle_tree().root(),
             self.timestamp,
@@ -326,10 +346,16 @@ impl<'f> BlockBuilder<'f> {
             unsigned_header.with_no_signature()
         };
 
-        (
-            Block::new_from_header(signed_header, block_body).unwrap(),
-            self.framework,
-        )
+        let block = Block::new_from_header(signed_header, block_body).unwrap();
+
+        apply_staking_pools_updates(
+            &self.staking_pools_updates,
+            &mut self.framework.staking_pools,
+            &block.get_id().into(),
+            Some(&prev_block_hash),
+        );
+
+        (block, self.framework)
     }
 
     /// Builds a block without processing it.

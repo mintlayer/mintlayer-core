@@ -40,6 +40,7 @@ pub struct ConsumedTokenIssuanceCache {
     pub txid_vs_tokenid: BTreeMap<Id<Transaction>, CachedTokenIndexOp>,
 }
 
+#[derive(Clone)]
 pub struct TokenIssuanceCache {
     data: BTreeMap<TokenId, CachedAuxDataOp>,
     txid_vs_tokenid: BTreeMap<Id<Transaction>, CachedTokenIndexOp>,

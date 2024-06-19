@@ -96,8 +96,8 @@ impl BlockProcessingErrorClassification for BlockError {
             | BlockError::InvariantErrorAttemptToConnectInvalidBlock(_)
             | BlockError::InvariantErrorDisconnectedHeaders
             | BlockError::InvariantErrorTotalPoolBalanceLessThanStakers { .. }
-            | BlockError::InvariantErrorPoolBalancePresentDataMissing(_, _)
-            | BlockError::InvariantErrorPoolDataPresentBalanceMissing(_, _)
+            | BlockError::InvariantErrorPoolBalancePresentDataMissing { .. }
+            | BlockError::InvariantErrorPoolDataPresentBalanceMissing { .. }
             | BlockError::UnexpectedHeightRange(_, _)
             | BlockError::DbCommitError(_, _, _)
             | BlockError::BlockAlreadyExists(_)
@@ -195,7 +195,10 @@ impl BlockProcessingErrorClassification for InMemoryReorgError {
     fn classify(&self) -> BlockProcessingErrorClass {
         match self {
             InMemoryReorgError::BlockNotFound(_)
-            | InMemoryReorgError::MainchainBlockExpected(_) => BlockProcessingErrorClass::General,
+            | InMemoryReorgError::MainchainBlockExpected(_)
+            | InMemoryReorgError::IterateBlockTreeInvariantErrorBestBlockIsGenesis
+            | InMemoryReorgError::IterateBlockTreeInvariantErrorMainChainTipNotInTree
+            | InMemoryReorgError::InMemoryBlockTreeError(_) => BlockProcessingErrorClass::General,
 
             InMemoryReorgError::StorageError(err) => err.classify(),
             InMemoryReorgError::PropertyQueryError(err) => err.classify(),
@@ -203,7 +206,7 @@ impl BlockProcessingErrorClassification for InMemoryReorgError {
             InMemoryReorgError::TransactionVerifierError(err) => err.classify(),
             InMemoryReorgError::EpochSealError(err) => err.classify(),
 
-            InMemoryReorgError::StepHandlerFailedWhenDisconnectingBlocks {
+            InMemoryReorgError::StepHandlerFailed {
                 error: _,
                 error_class,
                 ban_score: _,

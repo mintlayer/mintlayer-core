@@ -16,13 +16,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    random_tx_maker::StakingPoolsObserver,
     signature_destination_getter::SignatureDestinationGetter,
+    staking_pools::{apply_staking_pools_updates, StakingPoolUpdate},
     utils::{find_create_pool_tx_in_genesis, pos_mine, produce_kernel_signature, sign_witnesses},
-    TestFramework,
+    PoolBalances, TestFramework,
 };
 use chainstate::{BlockSource, ChainstateError};
-use chainstate_storage::{BlockchainStorageRead, Transactional};
+use chainstate_storage::{BlockchainStorageRead, TipStorageTag, Transactional};
 use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex, EpochStorageRead};
 use common::{
     chain::{
@@ -44,7 +44,7 @@ use crypto::{
     key::{PrivateKey, PublicKey},
     vrf::VRFPrivateKey,
 };
-use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
+use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB, PoSAccountingView};
 use randomness::{seq::IteratorRandom, CryptoRng, Rng};
 use serialization::Encode;
 use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
@@ -52,13 +52,14 @@ use tokens_accounting::{InMemoryTokensAccounting, TokensAccountingDB};
 /// The block builder that allows construction and processing of a block.
 pub struct PoSBlockBuilder<'f> {
     framework: &'f mut TestFramework,
-    prev_block_hash: Id<GenBlock>,
+    prev_block_hash: Option<Id<GenBlock>>,
     timestamp: BlockTimestamp,
     consensus_data: Option<ConsensusData>,
     transactions: Vec<SignedTransaction>,
 
     staking_pool: Option<PoolId>,
-    kernel_input_outpoint: Option<UtxoOutPoint>,
+    staking_pool_balances: Option<PoolBalances>,
+    kernel_input: Option<(UtxoOutPoint, Id<GenBlock>)>,
     staker_sk: Option<PrivateKey>,
     staker_vrf_sk: Option<VRFPrivateKey>,
 
@@ -69,13 +70,14 @@ pub struct PoSBlockBuilder<'f> {
     account_nonce_tracker: BTreeMap<AccountType, AccountNonce>,
     tokens_accounting_store: InMemoryTokensAccounting,
     pos_accounting_store: InMemoryPoSAccounting,
+
+    staking_pools_updates: Vec<StakingPoolUpdate>,
 }
 
 impl<'f> PoSBlockBuilder<'f> {
     /// Creates a new builder instance.
     pub fn new(framework: &'f mut TestFramework) -> Self {
         let transactions = Vec::new();
-        let prev_block_hash = framework.chainstate.get_best_block_id().unwrap();
         let timestamp = BlockTimestamp::from_time(framework.time_getter.get_time());
 
         let all_tokens_data = framework
@@ -100,11 +102,12 @@ impl<'f> PoSBlockBuilder<'f> {
         Self {
             framework,
             transactions,
-            prev_block_hash,
+            prev_block_hash: None,
             timestamp,
             consensus_data: None,
             staking_pool: None,
-            kernel_input_outpoint: None,
+            staking_pool_balances: None,
+            kernel_input: None,
             staker_sk: None,
             staker_vrf_sk: None,
             randomness: None,
@@ -112,6 +115,7 @@ impl<'f> PoSBlockBuilder<'f> {
             account_nonce_tracker: BTreeMap::new(),
             tokens_accounting_store,
             pos_accounting_store,
+            staking_pools_updates: Vec::new(),
         }
     }
 
@@ -127,15 +131,24 @@ impl<'f> PoSBlockBuilder<'f> {
         self
     }
 
-    /// Overrides the previous block hash that is deduced by default as the best block.
+    /// Sets the previous block hash; if not set, the best block will be used.
     pub fn with_parent(mut self, prev_block_hash: Id<GenBlock>) -> Self {
-        self.prev_block_hash = prev_block_hash;
+        assert!(self.prev_block_hash.is_none());
+        self.prev_block_hash = Some(prev_block_hash);
         self
+    }
+
+    /// Explicitly set the previous block hash to the best block (some builder functions require
+    /// the parent to be specified explicitly).
+    pub fn with_best_block_as_parent(self) -> Self {
+        let parent_id = self.framework.chainstate.get_best_block_id().unwrap();
+        self.with_parent(parent_id)
     }
 
     /// Overrides the previous block hash by a random value making the resulting block an orphan.
     pub fn make_orphan(mut self, rng: &mut impl Rng) -> Self {
-        self.prev_block_hash = Id::new(H256::random_using(rng));
+        assert!(self.prev_block_hash.is_none());
+        self.prev_block_hash = Some(Id::new(H256::random_using(rng)));
         self
     }
 
@@ -168,46 +181,76 @@ impl<'f> PoSBlockBuilder<'f> {
         self
     }
 
-    pub fn with_kernel_input(mut self, outpoint: UtxoOutPoint) -> Self {
-        debug_assert!(self.kernel_input_outpoint.is_none());
-        self.kernel_input_outpoint = Some(outpoint);
+    pub fn with_kernel_input(
+        mut self,
+        outpoint: UtxoOutPoint,
+        utxo_block_id: Id<GenBlock>,
+    ) -> Self {
+        debug_assert!(self.kernel_input.is_none());
+        self.kernel_input = Some((outpoint, utxo_block_id));
         self
     }
 
     pub fn with_random_staking_pool(self, rng: &mut impl Rng) -> Self {
-        let (staking_pool, staker_sk, staker_vrf_sk, kernel_input_outpoint) =
+        let prev_block_hash = self
+            .prev_block_hash
+            .expect("this function requires the previous block to be specified in advance");
+
+        let (staking_pool, staker_sk, staker_vrf_sk, kernel_input_outpoint, kernel_utxo_block_id) =
             self.framework
                  .staking_pools
+                 .staking_pools_for_base_block(&prev_block_hash)
                  .staking_pools()
                  .iter()
-                 .map(|(id, (sk, vrf, kernel_input_outpoint))| (*id, sk.clone(), vrf.clone(), kernel_input_outpoint.clone()))
+                 .map(|(id, (sk, vrf, kernel_input_outpoint, kernel_utxo_block_id))| (*id, sk.clone(), vrf.clone(), kernel_input_outpoint.clone(), *kernel_utxo_block_id))
                  .choose(rng)
                  .expect("if pool is not provided it should be available for random selection in TestFramework");
 
         self.with_stake_pool_id(staking_pool)
             .with_stake_spending_key(staker_sk)
             .with_vrf_key(staker_vrf_sk)
-            .with_kernel_input(kernel_input_outpoint)
+            .with_kernel_input(kernel_input_outpoint, kernel_utxo_block_id)
     }
 
     pub fn with_specific_staking_pool(self, pool_id: &PoolId) -> Self {
-        let (staker_sk, staker_vrf_sk, kernel_input_outpoint) =
-            self.framework.staking_pools.staking_pools().get(pool_id).unwrap();
+        let prev_block_hash = self
+            .prev_block_hash
+            .expect("this function requires the previous block to be specified in advance");
+
+        let (staker_sk, staker_vrf_sk, kernel_input_outpoint, kernel_utxo_block_id) = self
+            .framework
+            .staking_pools
+            .staking_pools_for_base_block(&prev_block_hash)
+            .staking_pools()
+            .get(pool_id)
+            .unwrap();
         let staker_sk = staker_sk.clone();
         let staker_vrf_sk = staker_vrf_sk.clone();
         let kernel_input_outpoint = kernel_input_outpoint.clone();
+        let kernel_utxo_block_id = *kernel_utxo_block_id;
 
         self.with_stake_pool_id(*pool_id)
             .with_stake_spending_key(staker_sk)
             .with_vrf_key(staker_vrf_sk)
-            .with_kernel_input(kernel_input_outpoint)
+            .with_kernel_input(kernel_input_outpoint, kernel_utxo_block_id)
+    }
+
+    // Assume that the specified staking pool has these balances (if not set, the pool balances
+    // at the tip will be used).
+    pub fn with_staking_pool_balances(mut self, balances: PoolBalances) -> Self {
+        self.staking_pool_balances = Some(balances);
+        self
     }
 
     fn build_impl(self, rng: &mut (impl Rng + CryptoRng)) -> (Block, &'f mut TestFramework) {
+        let prev_block_hash = self
+            .prev_block_hash
+            .unwrap_or_else(|| self.framework.chainstate.get_best_block_id().unwrap());
+
         let (consensus_data, block_timestamp) = match self.consensus_data {
             Some(data) => (data, self.timestamp),
             None => {
-                let (pos_data, block_timestamp) = self.mine_pos_block(rng);
+                let (pos_data, block_timestamp) = self.mine_pos_block(&prev_block_hash, rng);
                 (ConsensusData::PoS(Box::new(pos_data)), block_timestamp)
             }
         };
@@ -215,15 +258,17 @@ impl<'f> PoSBlockBuilder<'f> {
         let staking_destination = Destination::PublicKey(PublicKey::from_private_key(
             self.staker_sk.as_ref().unwrap(),
         ));
+        let staking_pool = self.staking_pool.unwrap();
         let reward = BlockReward::new(vec![TxOutput::ProduceBlockFromStake(
             staking_destination,
-            self.staking_pool.unwrap(),
+            staking_pool,
         )]);
 
         let block_body = BlockBody::new(reward, self.transactions);
         let merkle_proxy = block_body.merkle_tree_proxy().unwrap();
+
         let unsigned_header = BlockHeader::new(
-            self.prev_block_hash,
+            prev_block_hash,
             merkle_proxy.merkle_tree().root(),
             merkle_proxy.witness_merkle_tree().root(),
             block_timestamp,
@@ -247,9 +292,16 @@ impl<'f> PoSBlockBuilder<'f> {
 
         let block = Block::new_from_header(signed_header, block_body).unwrap();
 
-        self.framework.staking_pools.on_pool_used_for_staking(
-            self.staking_pool.unwrap(),
-            UtxoOutPoint::new(block.get_id().into(), 0),
+        let mut staking_pools_updates = self.staking_pools_updates;
+        staking_pools_updates.push(StakingPoolUpdate::UsedForStaking {
+            pool_id: staking_pool,
+            outpoint: UtxoOutPoint::new(block.get_id().into(), 0),
+        });
+        apply_staking_pools_updates(
+            &staking_pools_updates,
+            &mut self.framework.staking_pools,
+            &block.get_id().into(),
+            Some(&prev_block_hash),
         );
 
         (block, self.framework)
@@ -270,27 +322,50 @@ impl<'f> PoSBlockBuilder<'f> {
         Ok(res)
     }
 
-    fn mine_pos_block(&self, rng: &mut (impl Rng + CryptoRng)) -> (PoSData, BlockTimestamp) {
-        let parent_block_index = self.framework.gen_block_index(&self.prev_block_hash);
+    /// Construct a block and process it by the chainstate.
+    /// Return the id of the new block.
+    pub fn build_and_process_return_block_id(
+        self,
+        rng: &mut (impl Rng + CryptoRng),
+    ) -> Result<Id<Block>, ChainstateError> {
+        let (block, framework) = self.build_impl(&mut *rng);
+        let block_id = block.get_id();
+        framework.process_block(block, BlockSource::Local)?;
+        Ok(block_id)
+    }
 
-        let kernel_input_outpoint = self.kernel_input_outpoint.clone().unwrap_or_else(|| {
-            // if staking outpoint is not set try to extract it from the parent
-            match &parent_block_index {
-                chainstate_types::GenBlockIndex::Block(block_index) => {
-                    match block_index.block_header().header().consensus_data() {
-                        ConsensusData::None | ConsensusData::PoW(_) => {
-                            unimplemented!()
-                        }
-                        ConsensusData::PoS(_) => {
-                            UtxoOutPoint::new(parent_block_index.block_id().into(), 0)
+    fn mine_pos_block(
+        &self,
+        prev_block_hash: &Id<GenBlock>,
+        rng: &mut (impl Rng + CryptoRng),
+    ) -> (PoSData, BlockTimestamp) {
+        let parent_block_index = self.framework.gen_block_index(prev_block_hash);
+
+        let (kernel_input_outpoint, kernel_utxo_block_id) =
+            self.kernel_input.clone().unwrap_or_else(|| {
+                // if staking outpoint is not set try to extract it from the parent
+                match &parent_block_index {
+                    chainstate_types::GenBlockIndex::Block(block_index) => {
+                        match block_index.block_header().header().consensus_data() {
+                            ConsensusData::None | ConsensusData::PoW(_) => {
+                                unimplemented!()
+                            }
+                            ConsensusData::PoS(_) => {
+                                let parent_block_id = parent_block_index.block_id();
+                                (
+                                    UtxoOutPoint::new(parent_block_id.into(), 0),
+                                    parent_block_id,
+                                )
+                            }
                         }
                     }
+                    chainstate_types::GenBlockIndex::Genesis(genesis) => (
+                        find_create_pool_tx_in_genesis(genesis, &self.staking_pool.unwrap())
+                            .unwrap(),
+                        genesis.get_id().into(),
+                    ),
                 }
-                chainstate_types::GenBlockIndex::Genesis(genesis) => {
-                    find_create_pool_tx_in_genesis(genesis, &self.staking_pool.unwrap()).unwrap()
-                }
-            }
-        });
+            });
 
         let staking_destination = Destination::PublicKey(PublicKey::from_private_key(
             self.staker_sk.as_ref().unwrap(),
@@ -306,7 +381,7 @@ impl<'f> PoSBlockBuilder<'f> {
             self.staker_sk.as_ref().unwrap(),
             kernel_outputs.as_slice(),
             staking_destination,
-            self.prev_block_hash,
+            kernel_utxo_block_id,
             kernel_input_outpoint.clone(),
         );
 
@@ -342,25 +417,44 @@ impl<'f> PoSBlockBuilder<'f> {
             }
         });
 
+        let pool_id = self.staking_pool.unwrap();
+        let staking_pool_balances = self.staking_pool_balances.unwrap_or_else(|| {
+            let storage = &self.framework.storage.transaction_ro().unwrap();
+            let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&storage);
+
+            let staker_balance =
+                pos_db.get_pool_data(pool_id).unwrap().unwrap().staker_balance().unwrap();
+            let total_balance = pos_db.get_pool_balance(pool_id).unwrap().unwrap();
+
+            PoolBalances {
+                total_balance,
+                staker_balance,
+            }
+        });
+
         pos_mine(
             rng,
-            &self.framework.storage.transaction_ro().unwrap(),
             pos_status.get_chain_config(),
             BlockTimestamp::from_time(self.framework.current_time()),
             kernel_input_outpoint,
             InputWitness::Standard(kernel_sig),
             self.staker_vrf_sk.as_ref().unwrap(),
             randomness,
-            self.staking_pool.unwrap(),
+            pool_id,
             chain_config.final_supply().unwrap(),
             epoch_index,
             current_difficulty.into(),
+            staking_pool_balances,
         )
         .unwrap()
     }
 
     /// Adds a transaction that uses random utxos and accounts
     pub fn add_test_transaction(mut self, rng: &mut (impl Rng + CryptoRng)) -> Self {
+        let prev_block_hash = self
+            .prev_block_hash
+            .expect("this function requires the previous block to be specified in advance");
+
         let utxo_set = self
             .framework
             .storage
@@ -371,7 +465,7 @@ impl<'f> PoSBlockBuilder<'f> {
             .into_iter()
             .filter(|(outpoint, _)| !self.used_utxo.contains(outpoint))
             .collect();
-        let utxo_set = utxo::UtxosDBInMemoryImpl::new(self.prev_block_hash, utxo_set);
+        let utxo_set = utxo::UtxosDBInMemoryImpl::new(prev_block_hash, utxo_set);
 
         let account_nonce_getter = Box::new(|account: AccountType| -> Option<AccountNonce> {
             self.account_nonce_tracker.get(&account).copied().or_else(|| {
@@ -391,7 +485,7 @@ impl<'f> PoSBlockBuilder<'f> {
             )
             .make(
                 rng,
-                &mut self.framework.staking_pools,
+                &mut self.staking_pools_updates,
                 &mut self.framework.key_manager,
             );
 

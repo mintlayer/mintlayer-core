@@ -101,6 +101,7 @@ impl TransactionVerifierDelta {
 }
 
 /// The tool used to verify transactions and cache their updated states in memory
+#[derive(Clone)]
 pub struct TransactionVerifier<C, S, U, A, T> {
     chain_config: C,
     storage: S,

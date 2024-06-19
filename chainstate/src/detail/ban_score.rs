@@ -78,8 +78,8 @@ impl BanScore for BlockError {
             BlockError::InvariantErrorAttemptToConnectInvalidBlock(_) => 0,
             BlockError::InvariantErrorDisconnectedHeaders => 0,
             BlockError::InvariantErrorTotalPoolBalanceLessThanStakers { .. } => 0,
-            BlockError::InvariantErrorPoolBalancePresentDataMissing(_, _) => 0,
-            BlockError::InvariantErrorPoolDataPresentBalanceMissing(_, _) => 0,
+            BlockError::InvariantErrorPoolBalancePresentDataMissing { .. } => 0,
+            BlockError::InvariantErrorPoolDataPresentBalanceMissing { .. } => 0,
 
             BlockError::UnexpectedHeightRange(_, _) => 0,
 
@@ -304,11 +304,16 @@ impl BanScore for InMemoryReorgError {
             InMemoryReorgError::EpochSealError(err) => err.ban_score(),
             InMemoryReorgError::BlockNotFound(_) => 0,
             InMemoryReorgError::MainchainBlockExpected(_) => 0,
-            InMemoryReorgError::StepHandlerFailedWhenDisconnectingBlocks {
+            InMemoryReorgError::IterateBlockTreeInvariantErrorBestBlockIsGenesis => 0,
+            InMemoryReorgError::IterateBlockTreeInvariantErrorMainChainTipNotInTree => 0,
+
+            InMemoryReorgError::StepHandlerFailed {
                 error: _,
                 error_class: _,
                 ban_score,
             } => *ban_score,
+
+            InMemoryReorgError::InMemoryBlockTreeError(_) => 0,
         }
     }
 }

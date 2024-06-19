@@ -34,7 +34,7 @@ pub type CachedUtxoBlockUndoOp = CachedOperation<CachedUtxosBlockUndo>;
 /// On every level of its nested structure the `CachedOperation` is used to keep the information
 /// about whether data should be eventually added or erased from the db after hierarchy of verifiers
 /// fold.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct UtxosBlockUndoCache {
     data: BTreeMap<TransactionSource, CachedUtxoBlockUndoOp>,
 }

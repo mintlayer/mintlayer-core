@@ -40,7 +40,7 @@ mod events_tests;
 mod framework_tests;
 mod fungible_tokens;
 mod fungible_tokens_v1;
-mod get_stake_pool_balances_at_heights;
+mod get_stake_pool_balances_tests;
 mod history_iteration;
 mod homomorphism;
 mod initialization;

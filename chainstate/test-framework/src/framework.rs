@@ -26,8 +26,7 @@ use rstest::rstest;
 use crate::{
     key_manager::KeyManager,
     pos_block_builder::PoSBlockBuilder,
-    random_tx_maker::StakingPoolsObserver,
-    staking_pools::StakingPools,
+    staking_pools::{StakingPoolsForAllHeights, StakingPoolsForAllHeightsObserver},
     utils::{
         assert_block_index_opt_identical_to, assert_gen_block_index_identical_to,
         assert_gen_block_index_opt_identical_to, find_create_pool_tx_in_genesis,
@@ -61,7 +60,7 @@ pub struct TestFramework {
     pub time_value: Option<Arc<SeqCstAtomicU64>>,
 
     // All pools from the tip that can be used for staking
-    pub staking_pools: StakingPools,
+    pub staking_pools: StakingPoolsForAllHeights,
     pub key_manager: KeyManager,
 }
 
@@ -513,8 +512,16 @@ impl TestFramework {
         staker_key: PrivateKey,
         vrf_sk: VRFPrivateKey,
         outpoint: UtxoOutPoint,
+        base_block: &Id<GenBlock>,
     ) {
-        self.staking_pools.on_pool_created(pool_id, staker_key, vrf_sk, outpoint);
+        self.staking_pools.on_pool_created(
+            pool_id,
+            staker_key,
+            vrf_sk,
+            outpoint,
+            base_block,
+            self.gen_block_index(base_block).prev_block_id().as_ref(),
+        );
     }
 
     pub fn set_genesis_pool_keys(
@@ -523,12 +530,15 @@ impl TestFramework {
         staker_key: PrivateKey,
         vrf_sk: VRFPrivateKey,
     ) {
-        let outpoint = find_create_pool_tx_in_genesis(
-            self.chainstate.get_chain_config().genesis_block(),
-            pool_id,
-        )
-        .unwrap();
-        self.on_pool_created(*pool_id, staker_key, vrf_sk, outpoint);
+        let genesis = self.chainstate.get_chain_config().genesis_block();
+        let outpoint = find_create_pool_tx_in_genesis(genesis, pool_id).unwrap();
+        self.on_pool_created(
+            *pool_id,
+            staker_key,
+            vrf_sk,
+            outpoint,
+            &genesis.get_id().into(),
+        );
     }
 }
 

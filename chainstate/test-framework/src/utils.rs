@@ -46,6 +46,25 @@ use pos_accounting::{PoSAccountingDB, PoSAccountingView};
 use randomness::{CryptoRng, Rng};
 use utxo::UtxosView;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PoolBalances {
+    pub total_balance: Amount,
+    pub staker_balance: Amount,
+}
+
+impl PoolBalances {
+    pub fn new(total_balance: Amount, staker_balance: Amount) -> Self {
+        Self {
+            total_balance,
+            staker_balance,
+        }
+    }
+
+    pub fn new_same(balance: Amount) -> Self {
+        Self::new(balance, balance)
+    }
+}
+
 pub fn empty_witness(rng: &mut impl Rng) -> InputWitness {
     use randomness::SliceRandom;
     let mut msg: Vec<u8> = (1..100).collect();
@@ -258,7 +277,6 @@ pub fn produce_kernel_signature(
 #[allow(clippy::too_many_arguments)]
 pub fn pos_mine(
     rng: &mut (impl Rng + CryptoRng),
-    storage: &impl BlockchainStorageRead,
     pos_config: &PoSChainConfig,
     initial_timestamp: BlockTimestamp,
     kernel_outpoint: UtxoOutPoint,
@@ -269,12 +287,8 @@ pub fn pos_mine(
     final_supply: CoinUnit,
     epoch_index: EpochIndex,
     target: Compact,
+    pool_balances: PoolBalances,
 ) -> Option<(PoSData, BlockTimestamp)> {
-    let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&storage);
-
-    let pool_balance = pos_db.get_pool_balance(pool_id).unwrap().unwrap();
-    let pledge_amount = pos_db.get_pool_data(pool_id).unwrap().unwrap().staker_balance().unwrap();
-
     find_timestamp_for_staking(
         final_supply,
         pos_config,
@@ -283,8 +297,8 @@ pub fn pos_mine(
         initial_timestamp.add_int_seconds(1000).unwrap(),
         &sealed_epoch_randomness,
         epoch_index,
-        pledge_amount,
-        pool_balance,
+        pool_balances.staker_balance,
+        pool_balances.total_balance,
         vrf_sk,
         rng,
     )
@@ -300,6 +314,45 @@ pub fn pos_mine(
 
         (pos_data, timestamp)
     })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn pos_mine_at_tip(
+    rng: &mut (impl Rng + CryptoRng),
+    storage: &impl BlockchainStorageRead,
+    pos_config: &PoSChainConfig,
+    initial_timestamp: BlockTimestamp,
+    kernel_outpoint: UtxoOutPoint,
+    kernel_witness: InputWitness,
+    vrf_sk: &VRFPrivateKey,
+    sealed_epoch_randomness: PoSRandomness,
+    pool_id: PoolId,
+    final_supply: CoinUnit,
+    epoch_index: EpochIndex,
+    target: Compact,
+) -> Option<(PoSData, BlockTimestamp)> {
+    let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&storage);
+
+    let total_balance = pos_db.get_pool_balance(pool_id).unwrap().unwrap();
+    let staker_balance = pos_db.get_pool_data(pool_id).unwrap().unwrap().staker_balance().unwrap();
+
+    pos_mine(
+        rng,
+        pos_config,
+        initial_timestamp,
+        kernel_outpoint,
+        kernel_witness,
+        vrf_sk,
+        sealed_epoch_randomness,
+        pool_id,
+        final_supply,
+        epoch_index,
+        target,
+        PoolBalances {
+            total_balance,
+            staker_balance,
+        },
+    )
 }
 
 #[allow(unused)]

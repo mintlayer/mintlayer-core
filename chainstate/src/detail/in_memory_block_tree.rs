@@ -210,6 +210,13 @@ impl InMemoryBlockTree {
         InMemoryBlockTreeRef::new(&self.arena, self.root_id)
     }
 
+    pub fn get_parent(
+        &self,
+        node_id: InMemoryBlockTreeNodeId,
+    ) -> Result<Option<InMemoryBlockTreeNodeId>, InMemoryBlockTreeError> {
+        self.as_ref().get_parent(node_id)
+    }
+
     pub fn subtree(
         &self,
         id: InMemoryBlockTreeNodeId,

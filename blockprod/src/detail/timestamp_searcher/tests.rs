@@ -484,7 +484,9 @@ mod collect_search_data {
     }
 
     fn make_block_builder(tf: &mut TestFramework) -> PoSBlockBuilder {
-        tf.make_pos_block_builder().with_specific_staking_pool(&H256::zero().into())
+        tf.make_pos_block_builder()
+            .with_best_block_as_parent()
+            .with_specific_staking_pool(&H256::zero().into())
     }
 }
 

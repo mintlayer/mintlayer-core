@@ -30,6 +30,7 @@ use pos_accounting::{
 /// Adapter over `PosAccountingDelta` that implements `PoSAccountingOperations`.
 /// Main purpose of this struct is to make it impossible to perform operations on current delta
 /// and forget to update cumulative blocks delta.
+#[derive(Clone)]
 pub struct PoSAccountingDeltaAdapter<P> {
     // represents accumulated delta with all changes done via current verifier object
     accounting_delta: PoSAccountingDelta<P>,
