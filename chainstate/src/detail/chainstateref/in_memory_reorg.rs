@@ -221,13 +221,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     /// index of the current step's "base" block (which is either the parent of the mainchain block
     /// that has just been disconnected, or the stale block that has just been connected).
     /// If the passed index is `None`, this means that the root of the tree has just been
-    /// disconnected.
+    /// disconnected (which will only happen if disconnect_root is true).
     ///
     /// The passed tree must contain the current mainchain tip.
     #[log_error]
     pub fn iterate_block_tree_and_reorganize_in_memory<'tree, StepHandler, StepHandlerError>(
         &self,
         tree: InMemoryBlockTreeRef<'tree>,
+        disconnect_root: bool,
         mut step_handler: StepHandler,
     ) -> Result<(), InMemoryReorgError>
     where
@@ -269,19 +270,21 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
             let cur_block_index = tree.get_block_index(cur_mainchain_node_id)?;
 
+            let (parent_node_id, base_block_index) =
+                if let Some(parent_node_id) = tree.get_parent(cur_mainchain_node_id)? {
+                    let parent_block_index = tree.get_block_index(parent_node_id)?;
+                    (Some(parent_node_id), Some(parent_block_index))
+                } else if disconnect_root {
+                    (None, None)
+                } else {
+                    break;
+                };
+
             self.disconnect_block_in_memory(
                 cur_block_index,
                 &mut tx_verifier,
                 &mut epoch_data_cache,
             )?;
-
-            let (parent_node_id, base_block_index) =
-                if let Some(parent_node_id) = tree.get_parent(cur_mainchain_node_id)? {
-                    let parent_block_index = tree.get_block_index(parent_node_id)?;
-                    (Some(parent_node_id), Some(parent_block_index))
-                } else {
-                    (None, None)
-                };
 
             step_handler(base_block_index, &tx_verifier, &epoch_data_cache)
                 .map_err(convert_step_handler_error)?;

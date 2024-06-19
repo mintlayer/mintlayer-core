@@ -569,8 +569,12 @@ fn get_balances_for_tree(
     tf: &TestFramework,
     pool_ids: &[PoolId],
     tree: InMemoryBlockTreeRef<'_>,
+    include_tree_root_parent: bool,
 ) -> BTreeMap<Id<GenBlock>, BTreeMap<PoolId, PoolBalances>> {
-    let balances = tf.chainstate.get_stake_pool_balances_for_tree(pool_ids, tree).unwrap();
+    let balances = tf
+        .chainstate
+        .get_stake_pool_balances_for_tree(pool_ids, tree, include_tree_root_parent)
+        .unwrap();
 
     balances
         .iter()
@@ -614,11 +618,19 @@ fn get_node_tree(
     )
 }
 
+fn balances_with_root_parent_removed(
+    mut balances: BTreeMap<Id<GenBlock>, BTreeMap<PoolId, PoolBalances>>,
+    tree: InMemoryBlockTreeRef<'_>,
+) -> BTreeMap<Id<GenBlock>, BTreeMap<PoolId, PoolBalances>> {
+    balances.remove(tree.root_block_index().unwrap().prev_block_id());
+    balances
+}
+
 fn check_balances_in_test_data(tf: &TestFramework, test_data: &TestData) {
     let all_pool_ids = test_data.collect_all_pool_ids();
     let (tree, _) = get_node_tree(tf);
 
-    let balances = get_balances_for_tree(tf, &all_pool_ids, tree.as_ref());
+    let balances = get_balances_for_tree(tf, &all_pool_ids, tree.as_ref(), true);
     let expected_balances = test_data
         .expected_balances()
         .iter()
@@ -627,6 +639,10 @@ fn check_balances_in_test_data(tf: &TestFramework, test_data: &TestData) {
             (!balances.is_empty()).then(|| (*base_block, balances.clone()))
         })
         .collect::<BTreeMap<_, _>>();
+    assert_eq!(balances, expected_balances);
+
+    let balances = get_balances_for_tree(tf, &all_pool_ids, tree.as_ref(), false);
+    let expected_balances = balances_with_root_parent_removed(expected_balances, tree.as_ref());
     assert_eq!(balances, expected_balances);
 }
 
@@ -640,7 +656,7 @@ fn check_balances(
 
     loop {
         let subtree = tree.subtree(cur_mainchain_node_id).unwrap();
-        let balances = get_balances_for_tree(tf, existing_pools, subtree);
+        let balances = get_balances_for_tree(tf, existing_pools, subtree, true);
 
         let base_block_ids = std::iter::once(*subtree.root_block_index().unwrap().prev_block_id())
             .chain(subtree.all_block_indices_iter().filter_map(|block_index| {
@@ -658,6 +674,10 @@ fn check_balances(
                 (!balances.is_empty()).then(|| (*base_block_id, balances.clone()))
             })
             .collect::<BTreeMap<_, _>>();
+        assert_eq!(balances, expected_balances);
+
+        let balances = get_balances_for_tree(tf, existing_pools, subtree, false);
+        let expected_balances = balances_with_root_parent_removed(expected_balances, subtree);
         assert_eq!(balances, expected_balances);
 
         if let Some(parent_node_id) = tree.get_parent(cur_mainchain_node_id).unwrap() {

@@ -54,7 +54,7 @@ type Arena = indextree::Arena<BlockIndex>;
 type Node = indextree::Node<BlockIndex>;
 
 /// The wrapped `NodeId`.
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
 pub struct InMemoryBlockTreeNodeId {
     node_id: indextree::NodeId,
     branch_root_node_id: indextree::NodeId,
@@ -70,6 +70,7 @@ impl InMemoryBlockTreeNodeId {
 }
 
 /// Zero or more trees sharing the same arena.
+#[derive(Clone)]
 pub struct InMemoryBlockTrees {
     arena: Arena,
     roots: BTreeMap<Id<Block>, NodeId>,
@@ -94,6 +95,10 @@ impl InMemoryBlockTrees {
         self.roots
             .iter()
             .map(|(block_id, node_id)| (block_id, InMemoryBlockTreeNodeId::new_root(*node_id)))
+    }
+
+    pub fn roots_count(&self) -> usize {
+        self.roots.len()
     }
 
     /// Turn itself into a single tree corresponding to the specified block id.
@@ -189,6 +194,7 @@ impl InMemoryBlockTrees {
 }
 
 /// A single tree.
+#[derive(Clone)]
 pub struct InMemoryBlockTree {
     arena: Arena,
     root_id: NodeId,
@@ -215,6 +221,20 @@ impl InMemoryBlockTree {
         node_id: InMemoryBlockTreeNodeId,
     ) -> Result<Option<InMemoryBlockTreeNodeId>, InMemoryBlockTreeError> {
         self.as_ref().get_parent(node_id)
+    }
+
+    pub fn has_children(
+        &self,
+        node_id: InMemoryBlockTreeNodeId,
+    ) -> Result<bool, InMemoryBlockTreeError> {
+        self.as_ref().has_children(node_id)
+    }
+
+    pub fn get_block_index(
+        &self,
+        node_id: InMemoryBlockTreeNodeId,
+    ) -> Result<&BlockIndex, InMemoryBlockTreeError> {
+        self.as_ref().get_block_index(node_id)
     }
 
     pub fn subtree(
@@ -299,6 +319,31 @@ impl<'a> InMemoryBlockTreeRef<'a> {
         };
 
         Ok(result)
+    }
+
+    pub fn has_children(
+        &self,
+        node_id: InMemoryBlockTreeNodeId,
+    ) -> Result<bool, InMemoryBlockTreeError> {
+        self.ensure_node_in_subtree(node_id)?;
+        let node = get_node_from_arena(self.arena, node_id.node_id)?;
+        Ok(node.first_child().is_some())
+    }
+
+    /// If the specified node has exactly one child, return its node id. Otherwise return None.
+    pub fn get_single_child_of(
+        &self,
+        node_id: InMemoryBlockTreeNodeId,
+    ) -> Result<Option<InMemoryBlockTreeNodeId>, InMemoryBlockTreeError> {
+        let mut children_iter = self.child_node_ids_iter_for(node_id)?;
+
+        if let Some(first_child) = children_iter.next() {
+            if children_iter.next().is_none() {
+                return Ok(Some(first_child));
+            }
+        }
+
+        Ok(None)
     }
 
     pub fn get_block_index(
@@ -511,6 +556,89 @@ where
         if is_standalone_branch {
             roots.insert(branch_root_block_id, branch_root_node_id);
         }
+    }
+
+    Ok(InMemoryBlockTrees::new(arena, roots))
+}
+
+// If there are more than 1 tree in the set, extend each tree downwards until either they
+// converge to a common root or the specified minimum height is reached.
+#[log_error]
+pub fn try_connect_block_trees<'a, S, V>(
+    chainstate_ref: &ChainstateRef<S, V>,
+    trees: InMemoryBlockTrees,
+    min_height: BlockHeight,
+) -> Result<InMemoryBlockTrees, InMemoryBlockTreeError>
+where
+    S: BlockchainStorageRead,
+    V: TransactionVerificationStrategy,
+{
+    if trees.roots.len() <= 1 {
+        return Ok(trees);
+    }
+
+    let InMemoryBlockTrees {
+        mut arena,
+        mut roots,
+    } = trees;
+
+    let mut roots_to_connect = BTreeMap::new();
+
+    roots.retain(|block_id, node_id| {
+        #[allow(clippy::map_unwrap_or)]
+        let retain = arena
+            .get(*node_id)
+            .map(|node| node.get().block_height() <= min_height)
+            // Note: this is an invariant violation and normally we should return
+            // InMemoryBlockTreeError::NodeNotInArena here, but this is non-trivial
+            // to do inside `retain`. So, we ignore the error and put the node id into
+            // roots_to_connect, so that it'll fail again in the loop below.
+            .unwrap_or(false);
+
+        if !retain {
+            roots_to_connect.insert(*block_id, *node_id);
+        }
+
+        retain
+    });
+
+    while !roots_to_connect.is_empty() {
+        let mut new_roots = BTreeMap::new();
+
+        for (block_id, node_id) in &roots_to_connect {
+            let block_index = arena
+                .get(*node_id)
+                .ok_or(InMemoryBlockTreeError::NodeNotInArena(*node_id))?
+                .get();
+
+            if block_index.block_height() <= min_height {
+                roots.insert(*block_id, *node_id);
+            } else if let Some(prev_block_id) = block_index
+                .prev_block_id()
+                .classify(chainstate_ref.chain_config())
+                .chain_block_id()
+            {
+                let prev_node_id = if let Some(prev_node_id) = new_roots.get(&prev_block_id) {
+                    *prev_node_id
+                } else if let Some(prev_node_id) = roots_to_connect.get(&prev_block_id) {
+                    *prev_node_id
+                } else if let Some(prev_node_id) = roots.get(&prev_block_id) {
+                    *prev_node_id
+                } else {
+                    let prev_block_index =
+                        chainstate_ref.get_existing_block_index(&prev_block_id)?;
+                    let prev_node_id = arena.new_node(prev_block_index);
+                    new_roots.insert(prev_block_id, prev_node_id);
+                    prev_node_id
+                };
+
+                append_child(prev_node_id, *node_id, &mut arena)?;
+            } else {
+                roots.insert(*block_id, *node_id);
+            }
+        }
+
+        roots_to_connect = new_roots;
     }
 
     Ok(InMemoryBlockTrees::new(arena, roots))

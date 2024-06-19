@@ -250,6 +250,14 @@ pub trait ChainstateInterface: Send + Sync {
         block_validity: BlockValidity,
     ) -> Result<InMemoryBlockTrees, ChainstateError>;
 
+    /// Given a set of in-memory block trees produced by get_block_tree_top_xxx, extend it downwards
+    /// until all of its roots converge into one root or the specified height is reached.
+    fn try_connect_block_trees(
+        &self,
+        trees: InMemoryBlockTrees,
+        min_height: BlockHeight,
+    ) -> Result<InMemoryBlockTrees, ChainstateError>;
+
     /// Imports a bootstrap file exported with `export_bootstrap_stream`.
     fn import_bootstrap_stream<'a>(
         &mut self,
@@ -290,10 +298,16 @@ pub trait ChainstateInterface: Send + Sync {
         max_height: BlockHeight,
     ) -> Result<BTreeMap<BlockHeight, BTreeMap<PoolId, NonZeroPoolBalances>>, ChainstateError>;
 
+    /// For each block in the tree (and, if include_tree_root_parent is true, also the parent of
+    /// the root block), get balances of the specified stake pools, as they would be if
+    /// the corresponding block was the current tip.
+    ///
+    /// The function expects the passed tree to contain current mainchain tip.
     fn get_stake_pool_balances_for_tree(
         &self,
         pool_ids: &[PoolId],
         tree: InMemoryBlockTreeRef<'_>,
+        include_tree_root_parent: bool,
     ) -> Result<BTreeMap<Id<GenBlock>, BTreeMap<PoolId, NonZeroPoolBalances>>, ChainstateError>;
 
     /// Get stake pool data. See [pos_accounting::PoSAccountingView::get_pool_data].

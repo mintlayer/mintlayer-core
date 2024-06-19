@@ -594,6 +594,19 @@ where
     }
 
     #[tracing::instrument(skip_all)]
+    fn try_connect_block_trees(
+        &self,
+        trees: InMemoryBlockTrees,
+        min_height: BlockHeight,
+    ) -> Result<InMemoryBlockTrees, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .try_connect_block_trees(trees, min_height)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    #[tracing::instrument(skip_all)]
     fn import_bootstrap_stream<'a>(
         &mut self,
         reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
@@ -688,12 +701,13 @@ where
         &self,
         pool_ids: &[PoolId],
         tree: InMemoryBlockTreeRef<'a>,
+        include_tree_root_parent: bool,
     ) -> Result<BTreeMap<Id<GenBlock>, BTreeMap<PoolId, NonZeroPoolBalances>>, ChainstateError>
     {
         self.chainstate
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
-            .get_stake_pool_balances_for_tree(pool_ids, tree)
+            .get_stake_pool_balances_for_tree(pool_ids, tree, include_tree_root_parent)
             .map_err(ChainstateError::ProcessBlockError)
     }
 

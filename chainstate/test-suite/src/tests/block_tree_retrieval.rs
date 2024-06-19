@@ -172,6 +172,9 @@ fn block_tree_retrieval(#[case] seed: Seed) {
         assert!(!tf.block_index(&b2_id).is_persisted());
         assert!(!tf.block_index(&c1_id).is_persisted());
 
+        //------------------------------------------------------------------------------------------
+        // block_tree_top_by_height
+
         // BlockValidity::Ok
         assert_block_tree_top_by_height(&tf, 5.into(), BlockValidity::Ok, &[]);
         assert_block_tree_top_by_height(&tf, 4.into(), BlockValidity::Ok, &[]);
@@ -285,6 +288,9 @@ fn block_tree_retrieval(#[case] seed: Seed) {
                 (1.into(), &[m0_id, a0_id]),
             ],
         );
+
+        //------------------------------------------------------------------------------------------
+        // block_tree_top_by_timestamp
 
         // Sanity check: ensure timestamps are as expected.
         let ts0 = tf.genesis().timestamp();
@@ -441,6 +447,337 @@ fn block_tree_retrieval(#[case] seed: Seed) {
     });
 }
 
+// Test connect_block_tree.
+// The following block tree will be created:
+// /----a0----a1
+// G----m0----m1----m2
+//      \-----b0----b1----b2
+//                   \----c1
+// Timestamp-wise, the tree will look as follows:
+// ts0  ts1  ts2  ts3  ts4  ts5  ts6
+// /----a0--------a1
+// G----m0---m1---m2
+//      \---------b0----b1---b2
+//                      \--------c1
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn connect_block_tree(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_id = tf.genesis().get_id();
+
+        tf.time_value.as_ref().unwrap().fetch_add(1);
+
+        let (m0_id, result) = process_block(&mut tf, &genesis_id.into(), &mut rng);
+        assert!(result.is_ok());
+        let (a0_id, result) = process_block(&mut tf, &genesis_id.into(), &mut rng);
+        assert!(result.is_ok());
+
+        tf.time_value.as_ref().unwrap().fetch_add(1);
+
+        let (m1_id, result) = process_block(&mut tf, &m0_id.into(), &mut rng);
+        assert!(result.is_ok());
+
+        tf.time_value.as_ref().unwrap().fetch_add(1);
+
+        let (b0_id, result) = process_block(&mut tf, &m0_id.into(), &mut rng);
+        assert!(result.is_ok());
+        let (a1_id, result) = process_block(&mut tf, &a0_id.into(), &mut rng);
+        assert!(result.is_ok());
+        let (m2_id, result) = process_block(&mut tf, &m1_id.into(), &mut rng);
+        assert!(result.is_ok());
+
+        tf.time_value.as_ref().unwrap().fetch_add(1);
+
+        let (b1_id, result) = process_block(&mut tf, &b0_id.into(), &mut rng);
+        assert!(result.is_ok());
+        tf.time_value.as_ref().unwrap().fetch_add(1);
+
+        let (b2_id, result) = process_block(&mut tf, &b1_id.into(), &mut rng);
+        assert!(result.is_ok());
+
+        tf.time_value.as_ref().unwrap().fetch_add(1);
+
+        let (c1_id, result) = process_block(&mut tf, &b1_id.into(), &mut rng);
+        assert!(result.is_ok());
+
+        log::debug!("m0_id = {m0_id}, m1_id = {m1_id}, m2_id = {m2_id}, a0_id = {a0_id}, a1_id = {a1_id}, b0_id = {b0_id}, b1_id = {b1_id}, b2_id = {b2_id}, c1_id = {c1_id}");
+
+        // Sanity check: ensure timestamps are as expected.
+        let ts0 = tf.genesis().timestamp();
+        let ts1 = tf.block_index(&m0_id).block_timestamp();
+        assert_eq!(ts1, tf.block_index(&a0_id).block_timestamp());
+        let ts2 = tf.block_index(&m1_id).block_timestamp();
+        let ts3 = tf.block_index(&m2_id).block_timestamp();
+        assert_eq!(ts3, tf.block_index(&b0_id).block_timestamp());
+        assert_eq!(ts3, tf.block_index(&a1_id).block_timestamp());
+        let ts4 = tf.block_index(&b1_id).block_timestamp();
+        let ts5 = tf.block_index(&b2_id).block_timestamp();
+        let ts6 = tf.block_index(&c1_id).block_timestamp();
+        assert!(ts6 > ts5 && ts5 > ts4 && ts4 > ts3 && ts3 > ts2 && ts2 > ts1 && ts1 > ts0);
+
+        //------------------------------------------------------------------------------------------
+
+        // Start from the height 4.
+        let trees = tf
+            .chainstate
+            .get_block_tree_top_starting_from_height(4.into(), BlockValidity::Any)
+            .unwrap();
+        let orig_expected_data: &[(BlockHeight, &[Id<Block>])] = &[(4.into(), &[b2_id, c1_id])];
+        assert_height_data_for_trees(&tf, &trees, orig_expected_data);
+
+        // Specifying too big a minimum height has no effect.
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 5.into()).unwrap();
+        assert_height_data_for_trees(&tf, &connected_trees, orig_expected_data);
+
+        // Specifying minimum height which is the same as root's height has no effect.
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 4.into()).unwrap();
+        assert_height_data_for_trees(&tf, &connected_trees, orig_expected_data);
+
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 3.into()).unwrap();
+        assert_height_data_for_trees(
+            &tf,
+            &connected_trees,
+            &[(3.into(), &[b1_id]), (4.into(), &[b2_id, c1_id])],
+        );
+
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 2.into()).unwrap();
+        assert_height_data_for_trees(
+            &tf,
+            &connected_trees,
+            &[(2.into(), &[b0_id]), (3.into(), &[b1_id]), (4.into(), &[b2_id, c1_id])],
+        );
+
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 1.into()).unwrap();
+        let expected_data_for_1: &[(BlockHeight, &[Id<Block>])] = &[
+            (1.into(), &[m0_id]),
+            (2.into(), &[b0_id]),
+            (3.into(), &[b1_id]),
+            (4.into(), &[b2_id, c1_id]),
+        ];
+        assert_height_data_for_trees(&tf, &connected_trees, expected_data_for_1);
+
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 0.into()).unwrap();
+        assert_height_data_for_trees(&tf, &connected_trees, expected_data_for_1);
+
+        // Now do the same starting from height 2.
+        let trees = tf
+            .chainstate
+            .get_block_tree_top_starting_from_height(2.into(), BlockValidity::Any)
+            .unwrap();
+        let orig_expected_data: &[(BlockHeight, &[Id<Block>])] = &[
+            (4.into(), &[b2_id, c1_id]),
+            (3.into(), &[m2_id, b1_id]),
+            (2.into(), &[m1_id, a1_id, b0_id]),
+        ];
+        assert_height_data_for_trees(&tf, &trees, orig_expected_data);
+
+        // Specifying too big a minimum height has no effect.
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 3.into()).unwrap();
+        assert_height_data_for_trees(&tf, &connected_trees, orig_expected_data);
+
+        // Specifying minimum height which is the same as roots' height has no effect.
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 2.into()).unwrap();
+        assert_height_data_for_trees(&tf, &connected_trees, orig_expected_data);
+
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 1.into()).unwrap();
+        let expected_data_for_1: &[(BlockHeight, &[Id<Block>])] = &[
+            (4.into(), &[b2_id, c1_id]),
+            (3.into(), &[m2_id, b1_id]),
+            (2.into(), &[m1_id, a1_id, b0_id]),
+            (1.into(), &[m0_id, a0_id]),
+        ];
+        assert_height_data_for_trees(&tf, &connected_trees, expected_data_for_1);
+
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 0.into()).unwrap();
+        assert_height_data_for_trees(&tf, &connected_trees, expected_data_for_1);
+
+        //------------------------------------------------------------------------------------------
+
+        // Start from the timestamp ts3.
+
+        // The obtained trees will be as follows ('h' means height):
+        // h2    h3    h4
+        // a1
+        //       m2
+        // b0----b1----b2
+        //        \----c1
+
+        let trees = tf
+            .chainstate
+            .get_block_tree_top_starting_from_timestamp(ts3, BlockValidity::Any)
+            .unwrap();
+        assert_height_data_for_trees(
+            &tf,
+            &trees,
+            &[
+                (2.into(), &[a1_id, b0_id]),
+                (3.into(), &[m2_id, b1_id]),
+                (4.into(), &[b2_id, c1_id]),
+            ],
+        );
+
+        // With the minimum height of 2 try_connect_block_trees will try to extend the m chain adding m1 to it,
+        // but then stop at height 2.
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 2.into()).unwrap();
+        assert_height_data_for_trees(
+            &tf,
+            &connected_trees,
+            &[
+                (2.into(), &[m1_id, a1_id, b0_id]),
+                (3.into(), &[m2_id, b1_id]),
+                (4.into(), &[b2_id, c1_id]),
+            ],
+        );
+
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 1.into()).unwrap();
+        assert_height_data_for_trees(
+            &tf,
+            &connected_trees,
+            &[
+                (1.into(), &[a0_id, m0_id]),
+                (2.into(), &[m1_id, a1_id, b0_id]),
+                (3.into(), &[m2_id, b1_id]),
+                (4.into(), &[b2_id, c1_id]),
+            ],
+        );
+    });
+}
+
+// Test connect_block_tree.
+// The following block tree will be created:
+// G----m0----m1----m2----m3
+//      \-----b0----b1----b2
+// Timestamp-wise, the tree will look as follows:
+// ts0  ts1  ts2  ts3  ts4  ts5  ts6
+// G----m0---m1---m2---m3
+//      \--------------b0---b1---b2
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn connect_block_tree2(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_id = tf.genesis().get_id();
+
+        tf.time_value.as_ref().unwrap().fetch_add(1);
+
+        let (m0_id, result) = process_block(&mut tf, &genesis_id.into(), &mut rng);
+        assert!(result.is_ok());
+
+        tf.time_value.as_ref().unwrap().fetch_add(1);
+
+        let (m1_id, result) = process_block(&mut tf, &m0_id.into(), &mut rng);
+        assert!(result.is_ok());
+
+        tf.time_value.as_ref().unwrap().fetch_add(1);
+
+        let (m2_id, result) = process_block(&mut tf, &m1_id.into(), &mut rng);
+        assert!(result.is_ok());
+
+        tf.time_value.as_ref().unwrap().fetch_add(1);
+
+        let (m3_id, result) = process_block(&mut tf, &m2_id.into(), &mut rng);
+        assert!(result.is_ok());
+        let (b0_id, result) = process_block(&mut tf, &m0_id.into(), &mut rng);
+        assert!(result.is_ok());
+
+        tf.time_value.as_ref().unwrap().fetch_add(1);
+
+        let (b1_id, result) = process_block(&mut tf, &b0_id.into(), &mut rng);
+        assert!(result.is_ok());
+
+        tf.time_value.as_ref().unwrap().fetch_add(1);
+
+        let (b2_id, result) = process_block(&mut tf, &b1_id.into(), &mut rng);
+        assert!(result.is_ok());
+
+        log::debug!("m0_id = {m0_id}, m1_id = {m1_id}, m2_id = {m2_id}, m3_id = {m3_id}, b0_id = {b0_id}, b1_id = {b1_id}, b2_id = {b2_id}");
+
+        // Sanity check: ensure timestamps are as expected.
+        let ts0 = tf.genesis().timestamp();
+        let ts1 = tf.block_index(&m0_id).block_timestamp();
+        let ts2 = tf.block_index(&m1_id).block_timestamp();
+        let ts3 = tf.block_index(&m2_id).block_timestamp();
+        let ts4 = tf.block_index(&m3_id).block_timestamp();
+        assert_eq!(ts4, tf.block_index(&b0_id).block_timestamp());
+        let ts5 = tf.block_index(&b1_id).block_timestamp();
+        let ts6 = tf.block_index(&b2_id).block_timestamp();
+        assert!(ts6 > ts5 && ts5 > ts4 && ts4 > ts3 && ts3 > ts2 && ts2 > ts1 && ts1 > ts0);
+
+        //------------------------------------------------------------------------------------------
+
+        // Start from the timestamp ts4.
+
+        // The obtained trees will be as follows ('h' means height):
+        // h2    h3    h4
+        //             m3
+        // b0----b1----b2
+
+        let trees = tf
+            .chainstate
+            .get_block_tree_top_starting_from_timestamp(ts4, BlockValidity::Any)
+            .unwrap();
+        assert_height_data_for_trees(
+            &tf,
+            &trees,
+            &[(2.into(), &[b0_id]), (3.into(), &[b1_id]), (4.into(), &[m3_id, b2_id])],
+        );
+
+        // With the minimum height of 3, try_connect_block_trees will try to extend the m chain adding m2 to it,
+        // but then stop at height 3.
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 3.into()).unwrap();
+        assert_height_data_for_trees(
+            &tf,
+            &connected_trees,
+            &[(2.into(), &[b0_id]), (3.into(), &[m2_id, b1_id]), (4.into(), &[m3_id, b2_id])],
+        );
+
+        // With the minimum height of 2, try_connect_block_trees will try to extend the m chain adding m2 and m1 to it,
+        // but then stop at height 2.
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 2.into()).unwrap();
+        assert_height_data_for_trees(
+            &tf,
+            &connected_trees,
+            &[
+                (2.into(), &[m1_id, b0_id]),
+                (3.into(), &[m2_id, b1_id]),
+                (4.into(), &[m3_id, b2_id]),
+            ],
+        );
+
+        let connected_trees =
+            tf.chainstate.try_connect_block_trees(trees.clone(), 1.into()).unwrap();
+        assert_height_data_for_trees(
+            &tf,
+            &connected_trees,
+            &[
+                (1.into(), &[m0_id]),
+                (2.into(), &[m1_id, b0_id]),
+                (3.into(), &[m2_id, b1_id]),
+                (4.into(), &[m3_id, b2_id]),
+            ],
+        );
+    });
+}
+
 fn assert_leaves(tf: &TestFramework, min_height: BlockHeight, expected: &[Id<Block>]) {
     let expected = expected.iter().copied().collect::<BTreeSet<_>>();
     let actual = tf.leaf_block_ids(min_height);
@@ -462,32 +799,81 @@ fn check_tree_consistency(tree: InMemoryBlockTreeRef<'_>) {
     }
 }
 
-fn check_trees_consistency(trees: &InMemoryBlockTrees) {
+fn check_trees_consistency(tf: &TestFramework, trees: &InMemoryBlockTrees) {
+    let mut root_node_ids = BTreeSet::new();
+    let mut block_ids_in_trees = Vec::new();
+
     for tree in trees.trees_iter() {
         check_tree_consistency(tree);
+
+        let block_ids_in_tree = tree
+            .all_block_indices_iter()
+            .map(|idx| *idx.block_id())
+            .collect::<BTreeSet<_>>();
+        root_node_ids.insert(tree.root_node_id());
+        block_ids_in_trees.push((tree.root_block_index().unwrap().clone(), block_ids_in_tree));
     }
+
+    // All trees have distinct node ids.
+    assert!(root_node_ids.len() == trees.roots_count());
+
+    let mut iter1 = block_ids_in_trees.iter();
+    while let Some((root_block_index1, block_ids_in_tree1)) = iter1.next() {
+        for (root_block_index2, block_ids_in_tree2) in iter1.clone() {
+            assert!(block_ids_in_tree1.is_disjoint(block_ids_in_tree2));
+
+            if let Some(root_parent_id1) = root_block_index1
+                .prev_block_id()
+                .classify(tf.chainstate.get_chain_config())
+                .chain_block_id()
+            {
+                assert!(block_ids_in_tree2.get(&root_parent_id1).is_none());
+            }
+
+            if let Some(root_parent_id2) = root_block_index2
+                .prev_block_id()
+                .classify(tf.chainstate.get_chain_config())
+                .chain_block_id()
+            {
+                assert!(block_ids_in_tree1.get(&root_parent_id2).is_none());
+            }
+        }
+    }
+}
+
+fn make_expected_data_map_by_height(
+    expected_data: &[(BlockHeight, &[Id<Block>])],
+) -> BTreeMap<BlockHeight, BTreeSet<Id<Block>>> {
+    expected_data
+        .iter()
+        .map(|(height, ids)| (*height, ids.iter().copied().collect::<BTreeSet<_>>()))
+        .collect()
+}
+
+fn assert_height_data_for_trees(
+    tf: &TestFramework,
+    actual_trees: &InMemoryBlockTrees,
+    expected_data: &[(BlockHeight, &[Id<Block>])],
+) {
+    let expected_data = make_expected_data_map_by_height(expected_data);
+    check_trees_consistency(tf, actual_trees);
+
+    let actual = actual_trees.as_by_height_block_id_map().unwrap();
+
+    assert_eq!(actual, expected_data);
 }
 
 fn assert_block_tree_top_by_height(
     tf: &TestFramework,
     start_from: BlockHeight,
     block_validity: BlockValidity,
-    expected: &[(BlockHeight, &[Id<Block>])],
+    expected_data: &[(BlockHeight, &[Id<Block>])],
 ) {
-    let expected = expected
-        .iter()
-        .map(|(height, ids)| (*height, ids.iter().copied().collect::<BTreeSet<_>>()))
-        .collect::<BTreeMap<_, _>>();
-
     let actual_trees = tf
         .chainstate
         .get_block_tree_top_starting_from_height(start_from, block_validity)
         .unwrap();
-    check_trees_consistency(&actual_trees);
-
-    let actual = actual_trees.as_by_height_block_id_map().unwrap();
-
-    assert_eq!(actual, expected);
+    assert_height_data_for_trees(tf, &actual_trees, expected_data);
 }
 
 fn assert_block_tree_top_by_timestamp(
@@ -505,7 +891,7 @@ fn assert_block_tree_top_by_timestamp(
         .chainstate
         .get_block_tree_top_starting_from_timestamp(start_from, block_validity)
         .unwrap();
-    check_trees_consistency(&actual_trees);
+    check_trees_consistency(tf, &actual_trees);
 
     let actual = actual_trees.as_by_timestamp_block_id_map().unwrap();
 

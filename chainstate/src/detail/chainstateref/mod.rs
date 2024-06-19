@@ -1069,6 +1069,17 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     #[log_error]
+    pub fn try_connect_block_trees(
+        &self,
+        trees: InMemoryBlockTrees,
+        min_height: BlockHeight,
+    ) -> Result<InMemoryBlockTrees, PropertyQueryError> {
+        let result = in_memory_block_tree::try_connect_block_trees(self, trees, min_height)?;
+
+        Ok(result)
+    }
+
+    #[log_error]
     pub fn create_block_index_for_new_block(
         &self,
         block: &WithId<Block>,
@@ -1120,6 +1131,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         pool_ids: &[PoolId],
         tree: InMemoryBlockTreeRef<'_>,
+        include_tree_root_parent: bool,
     ) -> Result<BTreeMap<Id<GenBlock>, BTreeMap<PoolId, NonZeroPoolBalances>>, BlockError> {
         let best_block_index =
             self.get_best_block_index().map_err(BlockError::PropertyQueryError)?;
@@ -1134,10 +1146,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         self.iterate_block_tree_and_reorganize_in_memory(
             tree,
+            include_tree_root_parent,
             |base_block_index, tx_verifier, _| -> Result<_, BlockError> {
                 let base_block_id = if let Some(base_block_index) = base_block_index {
                     base_block_index.block_id().into()
                 } else {
+                    // Sanity check - we can only get here if include_tree_root_parent is true.
+                    debug_assert!(include_tree_root_parent);
+
                     tree.root_block_index()?.prev_block_id()
                 };
 
