@@ -37,7 +37,9 @@ use common::{
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
 };
-use consensus::{compact_target_to_target, stake_impl, PoSSlotInfo, PoSSlotInfoCmpByParentTS};
+use consensus::{
+    compact_target_to_target, stake_impl, PoSBlockCandidateInfo, PoSBlockCandidateInfoCmpByParentTS,
+};
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFPrivateKey, VRFPublicKey},
@@ -289,7 +291,9 @@ pub fn pos_mine(
     target: Compact,
     pool_balances: PoolBalances,
 ) -> Option<(PoSData, BlockTimestamp)> {
-    let slot_info = PoSSlotInfo {
+    let candidate_info = PoSBlockCandidateInfoCmpByParentTS(PoSBlockCandidateInfo {
+        // Note: parent_id only matters when multiple parents are provided.
+        parent_id: H256::zero().into(),
         // Note: it doesn't matter what timestamp is passed here, as long as it's less than initial_timestamp.
         parent_timestamp: BlockTimestamp::from_int_seconds(0),
         // Note: parent_chain_trust only matters when multiple parents are provided.
@@ -298,15 +302,14 @@ pub fn pos_mine(
         pos_chain_config: pos_chain_config.clone(),
         epoch_index,
         sealed_epoch_randomness,
-        pool_balances.staker_balance,
-        pool_balances.total_balance,
-    };
-    let tmp_slot_info = PoSSlotInfoCmpByParentTS(&slot_info);
+        staker_balance: pool_balances.staker_balance,
+        total_balance: pool_balances.total_balance,
+    });
 
     let stake_result = stake_impl(
         final_supply,
         vrf_sk,
-        std::iter::once(&tmp_slot_info),
+        std::iter::once(&candidate_info),
         initial_timestamp,
         initial_timestamp.add_int_seconds(1000).unwrap(),
         &Uint256::ZERO,
@@ -318,7 +321,7 @@ pub fn pos_mine(
 
     match stake_result {
         consensus::StakeResult::Success {
-            slot_info: _slot_info,
+            block_candidate_info: _,
             timestamp,
             vrf_data,
         } => {

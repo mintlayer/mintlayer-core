@@ -21,6 +21,7 @@ pub mod rpc;
 use std::sync::Arc;
 
 use chainstate::ChainstateHandle;
+use chainstate_types::InMemoryBlockTreeError;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockCreationError},
@@ -105,6 +106,12 @@ pub enum BlockProductionError {
     InvariantBrokenExpectingPoSConsensusType,
     #[error("Invariant broken: failed to determine parent blocks for staking with pool {0}")]
     InvariantBrokenNoParentsForPoS(PoolId),
+    #[error("Invariant broken: block tree has unexpected number of mainchain roots: {0}")]
+    InvariantBrokenUnexpectedNumberOfMainchainRootsInBlockTree(String),
+    #[error("Invariant broken: can't obtain a single block tree from block tree set: {0}")]
+    InvariantBrokenCantObtainSingleBlockTree(String),
+    #[error("In-memory tree error: {0}")]
+    InMemoryBlockTreeError(#[from] InMemoryBlockTreeError),
 }
 
 pub type BlockProductionSubsystem = Box<dyn BlockProductionInterface>;

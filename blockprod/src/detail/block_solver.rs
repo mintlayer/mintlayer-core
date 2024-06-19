@@ -13,21 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::{collections::BTreeSet, sync::Arc};
 
 use chainstate_types::pos_randomness::PoSRandomness;
 use crypto::{
     key::PrivateKey,
     vrf::{VRFPrivateKey, VRFReturn},
 };
+use itertools::Itertools;
 use serialization::Encode;
 use tokio::sync::{oneshot, watch};
 
 use ::utils::{atomics::RelaxedAtomicBool, once_destructor::OnceDestructor};
-use chainstate::{chainstate_interface::ChainstateInterface, GenBlockIndex};
+use chainstate::{chainstate_interface::ChainstateInterface, GenBlockIndex, NonZeroPoolBalances};
 use common::{
     chain::{
         block::{
@@ -42,24 +40,26 @@ use common::{
         config::EpochIndex,
         Block, ChainConfig, GenBlock, PoSChainConfig, PoWStatus, PoolId, RequiredConsensus,
     },
-    primitives::{BlockHeight, Compact, Id},
+    primitives::{Compact, Id},
     Uint256,
 };
 use consensus::{
     calculate_target_required_from_block_index, compact_target_to_target,
     generate_pos_consensus_data_and_reward, generate_pow_consensus_data_and_reward,
     generate_reward_ignore_consensus, mine, stake, ConsensusCreationError, ConsensusPoSError,
-    ConsensusPoWError, GenerateBlockInputData, MiningResult, PoSGenerateBlockInputData,
-    PoSPartialConsensusData, PoSSlotInfo, PoSSlotInfoCmpByParentTS, PoWGenerateBlockInputData,
-    StakeResult,
+    ConsensusPoWError, GenerateBlockInputData, MiningResult, PoSBlockCandidateInfo,
+    PoSBlockCandidateInfoCmpByParentTS, PoSGenerateBlockInputData, PoSPartialConsensusData,
+    PoWGenerateBlockInputData, StakeResult,
 };
 
 use crate::BlockProductionError;
 
 use super::{
     utils::{
-        get_existing_gen_block_index, get_pool_balances_at_heights, get_sealed_epoch_randomness,
-        make_ancestor_getter, timestamp_add_secs,
+        get_block_tree_top_starting_from_timestamp, get_existing_gen_block_index,
+        get_min_height_with_allowed_reorg, get_sealed_epoch_randomness,
+        get_stake_pool_balances_at_tip, get_stake_pool_balances_for_tree, is_block_in_main_chain,
+        make_ancestor_getter, timestamp_add_secs, try_connect_block_trees,
     },
     BlockProduction, TxData,
 };
@@ -78,13 +78,6 @@ impl BlockProduction {
         let min_timestamp = {
             // If last_used_block_timestamp_for_pos is None, the pool has just been created or the node has been restarted.
             // In such a case, we just start from the tip.
-            // Note that though it might be tempting to start from some block in the recent past (where a reorg to the new block
-            // would still be probable, e.g. 1h in the past), it might not be a good idea because:
-            // 1) Though the later call to collect_pos_slot_infos validates the min timestamp, ensuring that we don't go below the
-            // point where we've already produced a block using this pool, it does so only for mainchain blocks.
-            // If we start from a block in the past here, we'll have to check stale chains too (so that we don't stake twice
-            // for the same timestamp); this won't work if the node has been restarted after deleting the chainstate db.
-            // 2) It doesn't look like we'd gain much by doing so.
             let prev_timestamp =
                 last_used_block_timestamp_for_pos.unwrap_or(best_block_index.block_timestamp());
 
@@ -107,15 +100,15 @@ impl BlockProduction {
 
         let pool_id = consensus_data.pool_id;
 
-        let slot_infos = self
+        let candidate_infos = self
             .chainstate_handle
             .call(move |cs| -> Result<_, BlockProductionError> {
-                collect_pos_slot_infos(cs, &pool_id, min_timestamp, best_block_index)
+                collect_pos_candidate_infos(cs, &pool_id, min_timestamp, best_block_index)
             })
             .await??;
 
-        let first_slot_info = slot_infos.first().expect("parents map must be non-empty");
-        let earliest_parent_timestamp = first_slot_info.0.slot_info.parent_timestamp;
+        let first_candidate_info = candidate_infos.first().expect("parents map must be non-empty");
+        let earliest_parent_timestamp = first_candidate_info.0.parent_timestamp;
         let min_possible_timestamp = timestamp_add_secs(earliest_parent_timestamp, 1)?;
         let min_timestamp = std::cmp::max(min_timestamp, min_possible_timestamp);
 
@@ -124,7 +117,7 @@ impl BlockProduction {
                 stake_private_key,
                 vrf_private_key,
                 consensus_data,
-                slot_infos,
+                candidate_infos,
                 min_timestamp,
                 max_timestamp,
                 cur_tip_chain_trust,
@@ -426,10 +419,9 @@ impl BlockSolverInputData {
     }
 }
 
-pub struct PoSTmpSlotInfo {
+pub struct PoSTmpBlockCandidateInfo {
     parent_id: Id<GenBlock>,
     parent_timestamp: BlockTimestamp,
-    parent_height: BlockHeight,
     parent_chain_trust: Uint256,
     target: Uint256,
     pos_chain_config: PoSChainConfig,
@@ -440,15 +432,16 @@ pub struct PoSTmpSlotInfo {
 /// Obtain information required for staking using given block as the parent.
 // Note/TODO: this function is called in a loop that goes through block's parents.
 // But it itself calls `calculate_target_required_from_block_index` that also iterates over block's parents,
-// so the caller has quadratic complexity with respect to block index load calls. This can be optimized by
-// pre-loading the required amount of block indices into memory. But also note that:
-// 1) LMDB is already memory-mapped, so pre-loading indices into memory might not have that big of effect.
-// 2) The number of parents traversed by the caller won't be big normally.
-fn obtain_pos_slot_info(
+// so the caller has quadratic complexity with respect to block index load calls. And although
+// LMDB is itself memory-mapped, out storage has extra overhead of memory allocations when searching
+// for the key. So it may make sense to introduce something like a BlockIndexCache, which would
+// hold already collected block indices, and pass it here (note that this will require passing
+// this cache object to ChainstateInterface::get_ancestor as well).
+fn obtain_pos_candidate_info(
     chain_config: &ChainConfig,
     chainstate: &dyn ChainstateInterface,
     parent_index: &GenBlockIndex,
-) -> Result<Option<PoSTmpSlotInfo>, BlockProductionError> {
+) -> Result<Option<PoSTmpBlockCandidateInfo>, BlockProductionError> {
     let next_block_height = parent_index.block_height().next_height();
 
     let required_consensus = chain_config.consensus_upgrades().consensus_status(next_block_height);
@@ -468,10 +461,9 @@ fn obtain_pos_slot_info(
             let sealed_epoch_randomness =
                 get_sealed_epoch_randomness(chain_config, chainstate, next_block_height)?;
 
-            Ok(Some(PoSTmpSlotInfo {
+            Ok(Some(PoSTmpBlockCandidateInfo {
                 parent_id: parent_index.block_id(),
                 parent_timestamp: parent_index.block_timestamp(),
-                parent_height: parent_index.block_height(),
                 parent_chain_trust: parent_index.chain_trust(),
                 target,
                 pos_chain_config,
@@ -483,87 +475,225 @@ fn obtain_pos_slot_info(
     }
 }
 
-/// Find possible slots (i.e. parents) for a new block, given a minimum timestamp and assuming that
+fn make_pos_candidate_info(
+    tmp_info: PoSTmpBlockCandidateInfo,
+    pool_balances: NonZeroPoolBalances,
+) -> PoSBlockCandidateInfo {
+    PoSBlockCandidateInfo {
+        parent_id: tmp_info.parent_id,
+        parent_timestamp: tmp_info.parent_timestamp,
+        parent_chain_trust: tmp_info.parent_chain_trust,
+        target: tmp_info.target,
+        pos_chain_config: tmp_info.pos_chain_config,
+        epoch_index: tmp_info.epoch_index,
+        sealed_epoch_randomness: tmp_info.sealed_epoch_randomness,
+        staker_balance: pool_balances.staker_balance(),
+        total_balance: pool_balances.total_balance(),
+    }
+}
+
+/// Find possible parents for a new block, given a minimum timestamp and assuming that
 /// the maximum timestamp is bigger than the tip's.
 /// Always return a non-empty set or an error.
-fn collect_pos_slot_infos(
+fn collect_pos_candidate_infos(
     chainstate: &dyn ChainstateInterface,
     pool_id: &PoolId,
     min_timestamp: BlockTimestamp,
     best_block_index: GenBlockIndex,
-) -> Result<PoSSlotInfosByParentTS, BlockProductionError> {
+) -> Result<PoSBlockCandidateInfosByParentTS, BlockProductionError> {
     let chain_config = chainstate.get_chain_config();
-    let best_block_height = best_block_index.block_height();
-    let mut tmp_infos = Vec::new();
-    let mut next_gen_block_index = best_block_index;
+    let mut infos = BTreeSet::new();
 
-    loop {
-        let tmp_info = obtain_pos_slot_info(chain_config, chainstate, &next_gen_block_index)?;
-        let tmp_info = if let Some(tmp_info) = tmp_info {
-            tmp_info
-        } else {
-            break;
-        };
-
-        tmp_infos.push(tmp_info);
-
-        if min_timestamp > next_gen_block_index.block_timestamp() {
-            // We've already seen a parent with the timestamp strictly less than min_timestamp, so we can stop now.
-            break;
+    if min_timestamp > best_block_index.block_timestamp() || best_block_index.is_genesis() {
+        if let Some(tmp_info) =
+            obtain_pos_candidate_info(chain_config, chainstate, &best_block_index)?
+        {
+            if let Some(pool_balances) = get_stake_pool_balances_at_tip(chainstate, pool_id)? {
+                infos.insert(PoSBlockCandidateInfoCmpByParentTS(make_pos_candidate_info(
+                    tmp_info,
+                    pool_balances,
+                )));
+            }
         }
+    } else {
+        // Obtain all blocks with timestamps bigger than or equal to the minimum.
+        let block_trees = get_block_tree_top_starting_from_timestamp(
+            chainstate,
+            min_timestamp,
+            chainstate::BlockValidity::Ok,
+        )?;
 
-        let block_index = match next_gen_block_index {
-            GenBlockIndex::Block(block_index) => block_index,
-            GenBlockIndex::Genesis(_) => {
+        // Now we need to obtain pool balances; since get_stake_pool_balances_for_tree needs
+        // a single tree, we need to connect the roots in `block_trees` to a single common root.
+        // This is an expensive operation, involving disconnecting/re-connecting blocks in memory,
+        // so we don't want to go too deep; stale chains that don't connect to the mainchain
+        // at or above the specified minimum height will be skipped by the logic below.
+        // TODO: "min_height_with_allowed_reorg" is 1000 blocks below the tip, we probably don't
+        // need to go that deep.
+        let min_height = get_min_height_with_allowed_reorg(chainstate)?;
+        let block_trees = try_connect_block_trees(chainstate, block_trees, min_height)?;
+
+        let mainchain_tree_root = itertools::process_results(
+            block_trees.roots().map(
+                |(block_id, _)| -> Result<(Id<Block>, bool), BlockProductionError> {
+                    let is_in_mainchain = is_block_in_main_chain(chainstate, block_id.into())?;
+                    Ok((*block_id, is_in_mainchain))
+                },
+            ),
+            |iter| {
+                iter.filter_map(move |(block_id, is_in_mainchain)| is_in_mainchain.then_some(block_id)).exactly_one()
+                .map_err(|err| {
+                    BlockProductionError::InvariantBrokenUnexpectedNumberOfMainchainRootsInBlockTree(
+                        err.to_string(),
+                    )
+                })
+            },
+        )??;
+
+        // Now choose the tree that contains the mainchain.
+        // Note: if there are stale chains that start directly from the genesis, this logic
+        // will always skip them. This is not a realistic situation though, so we don't care.
+        let block_tree = block_trees.into_single_tree(&mainchain_tree_root).map_err(|err| {
+            BlockProductionError::InvariantBrokenCantObtainSingleBlockTree(err.to_string())
+        })?;
+
+        // try_connect_block_trees may have extended the tree too much (e.g. it was trying to connect
+        // two branches but the height limit has been reached). If we pass it to get_stake_pool_balances_for_tree
+        // as is, we may be performing redundant reorgs to heights that we don't care about.
+        // To avoid doing so, iterate over the tree upwards, skipping redundant root nodes.
+        let block_tree_ref = {
+            let mut block_tree_ref = block_tree.as_ref();
+
+            loop {
+                // If a root has more than one child, then it's needed to be able to reorg to a stale chain,
+                // so we can't skip it.
+                if let Some(single_child_node_id) =
+                    block_tree_ref.get_single_child_of(block_tree_ref.root_node_id())?
+                {
+                    let child_block_index = block_tree_ref.get_block_index(single_child_node_id)?;
+
+                    // The single child of the root node is already below the minimum timestamp;
+                    // this means that the root is useless.
+                    if child_block_index.block_timestamp() < min_timestamp {
+                        block_tree_ref = block_tree_ref.subtree(single_child_node_id)?;
+                        continue;
+                    }
+                }
+
                 break;
             }
+
+            block_tree_ref
         };
 
-        match block_index.block_header().consensus_data() {
-            ConsensusData::PoS(pos_data) => {
-                if pos_data.stake_pool_id() == pool_id {
-                    // We've found a parent block that was created by this pool. We can't go below it,
-                    // or else we'll be staking twice for the same timestamp.
+        // Obtain pool balances. Note that obtaining balances for the parent of block_tree's root may
+        // not be needed, so we check for this.
+        let include_tree_root_parent =
+            block_tree_ref.root_block_index()?.block_timestamp() >= min_timestamp;
+        let pool_balances = get_stake_pool_balances_for_tree(
+            chainstate,
+            &[*pool_id],
+            block_tree_ref,
+            include_tree_root_parent,
+        )?;
+
+        let get_balances = |block_id: &Id<GenBlock>| {
+            pool_balances.get(block_id).and_then(|balances| balances.get(pool_id))
+        };
+
+        // To obtain the parents info, we need to iterate from the tree's leaves down to the root,
+        // while checking if any of the blocks was produced by our pool.
+
+        // First, obtain the set of leaves.
+        // TODO: we could store the leaves in the tree itself when constructing it.
+        let mut leaves = Vec::new();
+        for node_id in block_tree_ref.all_child_node_ids_iter() {
+            if !block_tree_ref.has_children(node_id)? {
+                leaves.push(node_id);
+            }
+        }
+
+        let mut seen_nodes = BTreeSet::new();
+        let mut root_reached = false;
+
+        for leaf in leaves {
+            let mut cur_node_id = leaf;
+
+            loop {
+                if seen_nodes.contains(&cur_node_id) {
+                    break;
+                }
+
+                seen_nodes.insert(cur_node_id);
+
+                let cur_block_index = block_tree_ref.get_block_index(cur_node_id)?;
+
+                let tmp_info = if let Some(tmp_info) = obtain_pos_candidate_info(
+                    chain_config,
+                    chainstate,
+                    &GenBlockIndex::Block(cur_block_index.clone()),
+                )? {
+                    tmp_info
+                } else {
+                    break;
+                };
+
+                if let Some(pool_balances) = get_balances(cur_block_index.block_id().into()) {
+                    infos.insert(PoSBlockCandidateInfoCmpByParentTS(make_pos_candidate_info(
+                        tmp_info,
+                        pool_balances.clone(),
+                    )));
+                } else {
+                    break;
+                };
+
+                if min_timestamp > cur_block_index.block_timestamp() {
+                    // We've already seen a parent with the timestamp strictly less than min_timestamp,
+                    // it makes no sense to go deeper.
+                    break;
+                }
+
+                match cur_block_index.block_header().consensus_data() {
+                    ConsensusData::PoS(pos_data) => {
+                        if pos_data.stake_pool_id() == pool_id {
+                            // We've found a parent block that was created by this pool. We can't go below it,
+                            // or else we'll be staking twice for the same timestamp.
+                            break;
+                        }
+                    }
+                    ConsensusData::PoW(_) | ConsensusData::None => {
+                        break;
+                    }
+                }
+
+                if let Some(parent_node_id) = block_tree_ref.get_parent(cur_node_id)? {
+                    cur_node_id = parent_node_id;
+                } else {
+                    root_reached = true;
                     break;
                 }
             }
-            ConsensusData::PoW(_) | ConsensusData::None => {
-                break;
-            }
         }
 
-        next_gen_block_index =
-            get_existing_gen_block_index(chainstate, block_index.prev_block_id())?;
-    }
+        // If we've reached the root node from any of the leaves, the parent of the root block
+        // may be eligible too.
+        if root_reached {
+            let root_block_index = block_tree_ref.root_block_index()?;
 
-    // Note: tmp_infos are sorted by height backwards.
-    let min_parent_height = tmp_infos.last().ok_or_else(|| {
-        // We can only get here, if obtain_pos_slot_info has returned None for best_block_index.
-        debug_assert!(false, "Collected slot info is empty, which means that the best block has non-PoS consensus type");
-        BlockProductionError::InvariantBrokenExpectingPoSConsensusType
-    })?.parent_height;
-
-    let pool_balances =
-        get_pool_balances_at_heights(chainstate, min_parent_height, best_block_height, pool_id)?
-            .collect::<BTreeMap<_, _>>();
-
-    let mut infos = BTreeSet::new();
-
-    for tmp_info in tmp_infos {
-        if let Some(balances) = pool_balances.get(&tmp_info.parent_height) {
-            infos.insert(PoSSlotInfoCmpByParentTS(PoSSlotInfoExt {
-                slot_info: PoSSlotInfo {
-                    parent_timestamp: tmp_info.parent_timestamp,
-                    parent_chain_trust: tmp_info.parent_chain_trust,
-                    target: tmp_info.target,
-                    pos_chain_config: tmp_info.pos_chain_config,
-                    epoch_index: tmp_info.epoch_index,
-                    sealed_epoch_randomness: tmp_info.sealed_epoch_randomness,
-                    staker_balance: balances.staker_balance(),
-                    total_balance: balances.total_balance(),
-                },
-                parent_id: tmp_info.parent_id,
-            }));
+            if root_block_index.block_timestamp() >= min_timestamp {
+                let prev_block_id = root_block_index.prev_block_id();
+                if let Some(pool_balances) = get_balances(prev_block_id) {
+                    let prev_block_index = get_existing_gen_block_index(chainstate, prev_block_id)?;
+                    if let Some(tmp_info) =
+                        obtain_pos_candidate_info(chain_config, chainstate, &prev_block_index)?
+                    {
+                        infos.insert(PoSBlockCandidateInfoCmpByParentTS(make_pos_candidate_info(
+                            tmp_info,
+                            pool_balances.clone(),
+                        )));
+                    }
+                }
+            }
         }
     }
 
@@ -580,19 +710,7 @@ fn collect_pos_slot_infos(
     }
 }
 
-#[derive(Debug, Clone)]
-struct PoSSlotInfoExt {
-    slot_info: PoSSlotInfo,
-    parent_id: Id<GenBlock>,
-}
-
-impl AsRef<PoSSlotInfo> for PoSSlotInfoExt {
-    fn as_ref(&self) -> &PoSSlotInfo {
-        &self.slot_info
-    }
-}
-
-type PoSSlotInfosByParentTS = BTreeSet<PoSSlotInfoCmpByParentTS<PoSSlotInfoExt>>;
+type PoSBlockCandidateInfosByParentTS = BTreeSet<PoSBlockCandidateInfoCmpByParentTS>;
 
 #[derive(Debug, Clone)]
 pub struct PoSBlockSolverInputData {
@@ -601,7 +719,7 @@ pub struct PoSBlockSolverInputData {
 
     consensus_data: PoSPartialConsensusData,
 
-    slot_infos: PoSSlotInfosByParentTS,
+    candidate_infos: PoSBlockCandidateInfosByParentTS,
 
     cur_tip_chain_trust: Uint256,
 
@@ -643,7 +761,7 @@ pub fn solve_block(
                 chain_config,
                 &input_data.consensus_data.pool_id,
                 &input_data.vrf_private_key,
-                input_data.slot_infos.iter(),
+                input_data.candidate_infos.iter(),
                 input_data.min_timestamp,
                 input_data.max_timestamp,
                 &input_data.cur_tip_chain_trust,
@@ -653,15 +771,15 @@ pub fn solve_block(
 
             match stake_result {
                 StakeResult::Success {
-                    slot_info,
+                    block_candidate_info,
                     timestamp,
                     vrf_data,
                 } => Ok(BlockSolverOutputData::PoS(PoSBlockSolverOutputData {
                     found_timestamp: timestamp,
                     vrf_data,
                     consensus_data: input_data.consensus_data,
-                    target: slot_info.slot_info.target.into(),
-                    parent_id: slot_info.parent_id,
+                    target: block_candidate_info.target.into(),
+                    parent_id: block_candidate_info.parent_id,
                     stake_private_key: input_data.stake_private_key,
                     block_reward: input_data.block_reward,
                     transactions: input_data.transactions,

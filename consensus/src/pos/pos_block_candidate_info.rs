@@ -15,13 +15,14 @@
 
 use chainstate_types::pos_randomness::PoSRandomness;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, config::EpochIndex, PoSChainConfig},
-    primitives::Amount,
+    chain::{block::timestamp::BlockTimestamp, config::EpochIndex, GenBlock, PoSChainConfig},
+    primitives::{Amount, Id},
     Uint256,
 };
 
 #[derive(Debug, Clone)]
-pub struct PoSSlotInfo {
+pub struct PoSBlockCandidateInfo {
+    pub parent_id: Id<GenBlock>,
     pub parent_timestamp: BlockTimestamp,
     pub parent_chain_trust: Uint256,
 
@@ -36,30 +37,26 @@ pub struct PoSSlotInfo {
 }
 
 #[derive(Debug, Clone)]
-pub struct PoSSlotInfoCmpByParentTS<T: AsRef<PoSSlotInfo>>(pub T);
+pub struct PoSBlockCandidateInfoCmpByParentTS(pub PoSBlockCandidateInfo);
 
-impl<T: AsRef<PoSSlotInfo>> Ord for PoSSlotInfoCmpByParentTS<T> {
+impl Ord for PoSBlockCandidateInfoCmpByParentTS {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.as_ref().parent_timestamp.cmp(&other.0.as_ref().parent_timestamp)
+        // Compare by timestamps first; use the id to resolve ties.
+        (self.0.parent_timestamp, self.0.parent_id)
+            .cmp(&(other.0.parent_timestamp, other.0.parent_id))
     }
 }
 
-impl<T: AsRef<PoSSlotInfo>> PartialOrd for PoSSlotInfoCmpByParentTS<T> {
+impl PartialOrd for PoSBlockCandidateInfoCmpByParentTS {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: AsRef<PoSSlotInfo>> PartialEq for PoSSlotInfoCmpByParentTS<T> {
+impl PartialEq for PoSBlockCandidateInfoCmpByParentTS {
     fn eq(&self, other: &Self) -> bool {
         self.cmp(other) == std::cmp::Ordering::Equal
     }
 }
 
-impl<T: AsRef<PoSSlotInfo>> Eq for PoSSlotInfoCmpByParentTS<T> {}
-
-impl AsRef<PoSSlotInfo> for PoSSlotInfo {
-    fn as_ref(&self) -> &PoSSlotInfo {
-        self
-    }
-}
+impl Eq for PoSBlockCandidateInfoCmpByParentTS {}

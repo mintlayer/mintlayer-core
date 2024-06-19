@@ -167,6 +167,11 @@ mockall::mock! {
             min_timestamp: BlockTimestamp,
             block_validity: BlockValidity,
         ) -> Result<InMemoryBlockTrees, ChainstateError>;
+        fn try_connect_block_trees(
+            &self,
+            trees: InMemoryBlockTrees,
+            min_height: BlockHeight,
+        ) -> Result<InMemoryBlockTrees, ChainstateError>;
         fn import_bootstrap_stream<'a>(
             &'a mut self,
             reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
@@ -190,6 +195,7 @@ mockall::mock! {
             &self,
             pool_ids: &[PoolId],
             tree: chainstate::InMemoryBlockTreeRef<'a>,
+            include_tree_root_parent: bool,
         ) -> Result<BTreeMap<Id<GenBlock>, BTreeMap<PoolId, chainstate::NonZeroPoolBalances>>, ChainstateError>;
         fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
         fn get_stake_pool_delegations_shares(

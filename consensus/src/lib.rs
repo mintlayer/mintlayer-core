@@ -46,7 +46,7 @@ pub use crate::{
             PoSPartialConsensusData, PoSTimestampSearchInputData,
         },
         kernel::get_kernel_output,
-        pos_slot_info::{PoSSlotInfo, PoSSlotInfoCmpByParentTS},
+        pos_block_candidate_info::{PoSBlockCandidateInfo, PoSBlockCandidateInfoCmpByParentTS},
         produce_vrf_data, stake, stake_impl,
         target::{calculate_target_required, calculate_target_required_from_block_index},
         EffectivePoolBalanceError, StakeResult,
@@ -96,6 +96,16 @@ pub enum ChainstateError {
     StakePoolDataReadError(PoolId, String),
     #[error("Failed to read balance of pool {0}: {1}")]
     PoolBalanceReadError(PoolId, String),
+    #[error("Failed to obtain block tree from timestamp {0}: {1}")]
+    FailedToObtainBlockTreeFromTimestamp(BlockTimestamp, String),
+    #[error("Failed to connect block trees: {0}")]
+    FailedToConnectBlockTrees(String),
+    #[error("Failed to obtain min height with allowed reorg: {0}")]
+    FailedToObtainMinHeightWithAllowedReorg(String),
+    #[error("Failed to determine whether block {0} is in mainchain: {1}")]
+    FailedToDetermineIfBlockInMainchain(Id<GenBlock>, String),
+    #[error("Failed to obtain pool balances for tree: {0}")]
+    FailedToObtainPoolBalancesForTree(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
