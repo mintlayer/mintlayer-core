@@ -441,6 +441,10 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::EffectivePoolBalanceError(_) => 100,
             ConsensusPoSError::EmptyTimespan => 100,
             ConsensusPoSError::FailedToCalculateCappedBalance => 100,
+            // This error happens during block production.
+            ConsensusPoSError::BlockProofCalculationError { .. } => 0,
+            // This error happens during block production.
+            ConsensusPoSError::ChainTrustCalculationOverflow { .. } => 0,
         }
     }
 }

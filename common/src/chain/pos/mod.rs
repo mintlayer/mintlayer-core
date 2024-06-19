@@ -24,7 +24,7 @@ use crate::{
     Uint256,
 };
 
-use super::{config::ChainType, ChainConfig};
+use super::{block::timestamp::BlockTimestamp, chaintrust, config::ChainType, ChainConfig};
 
 pub mod config;
 pub mod config_builder;
@@ -179,4 +179,16 @@ pub fn get_initial_randomness(chain_type: ChainType) -> H256 {
     };
 
     H256::from_str(randomness_hex).expect("nothing wrong")
+}
+
+pub fn get_pos_block_proof(
+    prev_block_timestamp: BlockTimestamp,
+    this_block_timestamp: BlockTimestamp,
+) -> Option<Uint256> {
+    let timestamp_diff = this_block_timestamp
+        .as_int_seconds()
+        .checked_sub(prev_block_timestamp.as_int_seconds())?;
+
+    let block_proof = chaintrust::asymptote::calculate_block_proof(timestamp_diff);
+    Some(block_proof)
 }

@@ -22,26 +22,17 @@ mod validator;
 
 pub use pos::calculate_effective_pool_balance;
 
-use std::{ops::Deref, sync::Arc};
-
 use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex};
 use common::{
     chain::{
-        block::{
-            signed_block_header::{
-                BlockHeaderSignature, BlockHeaderSignatureData, SignedBlockHeader,
-            },
-            timestamp::BlockTimestamp,
-            BlockHeader, BlockReward, ConsensusData,
-        },
+        block::{timestamp::BlockTimestamp, BlockReward},
         output_value::OutputValue,
         timelock::OutputTimeLock,
-        Block, ChainConfig, Destination, GenBlock, PoolId, RequiredConsensus, TxOutput,
+        Block, ChainConfig, Destination, GenBlock, PoolId, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
 use serialization::{Decode, Encode};
-use utils::atomics::RelaxedAtomicBool;
 
 pub use crate::{
     error::ConsensusVerificationError,
@@ -49,14 +40,14 @@ pub use crate::{
         block_sig::BlockSignatureError,
         calc_pos_hash_from_prv_key, check_pos_hash, compact_target_to_target,
         error::ConsensusPoSError,
-        find_timestamp_for_staking,
         hash_check::calc_and_check_pos_hash,
         input_data::{
-            generate_pos_consensus_data_and_reward, PoSFinalizeBlockInputData,
-            PoSGenerateBlockInputData, PoSTimestampSearchInputData,
+            generate_pos_consensus_data_and_reward, PoSGenerateBlockInputData,
+            PoSPartialConsensusData, PoSTimestampSearchInputData,
         },
         kernel::get_kernel_output,
-        stake,
+        pos_block_candidate_info::{PoSBlockCandidateInfo, PoSBlockCandidateInfoCmpByParentTS},
+        produce_vrf_data, stake, stake_impl,
         target::{calculate_target_required, calculate_target_required_from_block_index},
         EffectivePoolBalanceError, StakeResult,
     },
@@ -105,6 +96,16 @@ pub enum ChainstateError {
     StakePoolDataReadError(PoolId, String),
     #[error("Failed to read balance of pool {0}: {1}")]
     PoolBalanceReadError(PoolId, String),
+    #[error("Failed to obtain block tree from timestamp {0}: {1}")]
+    FailedToObtainBlockTreeFromTimestamp(BlockTimestamp, String),
+    #[error("Failed to connect block trees: {0}")]
+    FailedToConnectBlockTrees(String),
+    #[error("Failed to obtain min height with allowed reorg: {0}")]
+    FailedToObtainMinHeightWithAllowedReorg(String),
+    #[error("Failed to determine whether block {0} is in mainchain: {1}")]
+    FailedToDetermineIfBlockInMainchain(Id<GenBlock>, String),
+    #[error("Failed to obtain pool balances for tree: {0}")]
+    FailedToObtainPoolBalancesForTree(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
@@ -117,19 +118,10 @@ pub enum GenerateBlockInputData {
     PoS(Box<PoSGenerateBlockInputData>),
 }
 
-#[derive(Debug, Clone)]
-pub enum FinalizeBlockInputData {
-    PoW,
-    PoS(PoSFinalizeBlockInputData),
-    None,
-}
-
-pub fn generate_consensus_data_and_reward_ignore_consensus(
+pub fn generate_reward_ignore_consensus(
     chain_config: &ChainConfig,
     block_height: BlockHeight,
-) -> Result<(ConsensusData, BlockReward), ConsensusCreationError> {
-    let consensus_data = ConsensusData::None;
-
+) -> Result<BlockReward, ConsensusCreationError> {
     let time_lock = {
         let block_count = chain_config.empty_consensus_reward_maturity_block_count();
         OutputTimeLock::ForBlockCount(block_count.to_int())
@@ -141,84 +133,7 @@ pub fn generate_consensus_data_and_reward_ignore_consensus(
         time_lock,
     )]);
 
-    Ok((consensus_data, block_reward))
-}
-
-pub fn finalize_consensus_data(
-    chain_config: &ChainConfig,
-    block_header: &mut BlockHeader,
-    block_height: BlockHeight,
-    block_timestamp_for_pos: &mut BlockTimestamp,
-    max_block_timestamp_for_pos: BlockTimestamp,
-    stop_flag: Arc<RelaxedAtomicBool>,
-    finalize_data: FinalizeBlockInputData,
-) -> Result<SignedBlockHeader, ConsensusCreationError> {
-    match chain_config.consensus_upgrades().consensus_status(block_height.next_height()) {
-        RequiredConsensus::IgnoreConsensus => Ok(block_header.clone().with_no_signature()),
-        RequiredConsensus::PoS(pos_status) => match block_header.consensus_data() {
-            ConsensusData::None => Err(ConsensusCreationError::StakingError(
-                ConsensusPoSError::NoInputDataProvided,
-            )),
-            ConsensusData::PoW(_) => Err(ConsensusCreationError::StakingError(
-                ConsensusPoSError::PoWInputDataProvided,
-            )),
-            ConsensusData::PoS(pos_data) => match finalize_data {
-                FinalizeBlockInputData::None => Err(ConsensusCreationError::StakingError(
-                    ConsensusPoSError::NoInputDataProvided,
-                )),
-                FinalizeBlockInputData::PoW => Err(ConsensusCreationError::StakingError(
-                    ConsensusPoSError::PoWInputDataProvided,
-                )),
-                FinalizeBlockInputData::PoS(finalize_pos_data) => {
-                    let stake_private_key = finalize_pos_data.stake_private_key().clone();
-
-                    let stake_result = stake(
-                        chain_config,
-                        pos_status.get_chain_config(),
-                        pos_data.deref().clone(),
-                        block_header,
-                        block_timestamp_for_pos,
-                        max_block_timestamp_for_pos,
-                        finalize_pos_data,
-                    )?;
-
-                    let signed_block_header = stake_private_key
-                        .sign_message(&block_header.encode(), randomness::make_true_rng())
-                        .map_err(|_| {
-                            ConsensusCreationError::StakingError(
-                                ConsensusPoSError::FailedToSignBlockHeader,
-                            )
-                        })
-                        .map(BlockHeaderSignatureData::new)
-                        .map(BlockHeaderSignature::HeaderSignature)
-                        .map(|signed_data| block_header.clone().with_signature(signed_data))?;
-
-                    match stake_result {
-                        StakeResult::Success => Ok(signed_block_header),
-                        StakeResult::Failed => Err(ConsensusCreationError::StakingFailed),
-                        StakeResult::Stopped => Err(ConsensusCreationError::StakingStopped),
-                    }
-                }
-            },
-        },
-        RequiredConsensus::PoW(_) => match block_header.consensus_data() {
-            ConsensusData::None => Err(ConsensusCreationError::MiningError(
-                ConsensusPoWError::NoInputDataProvided,
-            )),
-            ConsensusData::PoS(_) => Err(ConsensusCreationError::MiningError(
-                ConsensusPoWError::PoSInputDataProvided,
-            )),
-            ConsensusData::PoW(pow_data) => {
-                let mine_result = mine(block_header, u128::MAX, pow_data.bits(), stop_flag)?;
-
-                match mine_result {
-                    MiningResult::Success => Ok(block_header.clone().with_no_signature()),
-                    MiningResult::Failed => Err(ConsensusCreationError::MiningFailed),
-                    MiningResult::Stopped => Err(ConsensusCreationError::MiningStopped),
-                }
-            }
-        },
-    }
+    Ok(block_reward)
 }
 
 fn get_ancestor_from_block_index_handle(

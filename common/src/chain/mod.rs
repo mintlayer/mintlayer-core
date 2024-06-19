@@ -36,7 +36,7 @@ pub use gen_block::{GenBlock, GenBlockId};
 pub use genesis::Genesis;
 pub use pos::{
     config::PoSChainConfig, config_builder::PoSChainConfigBuilder, get_initial_randomness,
-    pos_initial_difficulty, DelegationId, PoSConsensusVersion, PoolId,
+    get_pos_block_proof, pos_initial_difficulty, DelegationId, PoSConsensusVersion, PoolId,
 };
 pub use pow::{PoWChainConfig, PoWChainConfigBuilder};
 pub use upgrades::*;

@@ -112,28 +112,30 @@ impl NodeConfigFile {
 }
 
 fn blockprod_config(config: BlockProdConfigFile, options: &RunOptions) -> BlockProdConfigFile {
-    const DEFAULT_MIN_PEERS_TO_PRODUCE_BLOCKS: usize = 3;
-
     let BlockProdConfigFile {
         min_peers_to_produce_blocks,
         skip_ibd_check,
         use_current_time_if_non_pos,
+        force_stake_on_top_of_best_block_in_pos,
     } = config;
 
-    let min_peers_to_produce_blocks = options
-        .blockprod_min_peers_to_produce_blocks
-        .or(min_peers_to_produce_blocks.or(Some(DEFAULT_MIN_PEERS_TO_PRODUCE_BLOCKS)));
+    let min_peers_to_produce_blocks =
+        options.blockprod_min_peers_to_produce_blocks.or(min_peers_to_produce_blocks);
 
-    let skip_ibd_check = options.blockprod_skip_ibd_check.or(skip_ibd_check).unwrap_or(false);
-    let use_current_time_if_non_pos = options
-        .blockprod_use_current_time_if_non_pos
-        .or(use_current_time_if_non_pos)
-        .unwrap_or(false);
+    let skip_ibd_check = options.blockprod_skip_ibd_check.or(skip_ibd_check);
+
+    let use_current_time_if_non_pos =
+        options.blockprod_use_current_time_if_non_pos.or(use_current_time_if_non_pos);
+
+    let force_stake_on_top_of_best_block_in_pos = options
+        .blockprod_force_stake_on_top_of_best_block_in_pos
+        .or(force_stake_on_top_of_best_block_in_pos);
 
     BlockProdConfigFile {
         min_peers_to_produce_blocks,
-        skip_ibd_check: Some(skip_ibd_check),
-        use_current_time_if_non_pos: Some(use_current_time_if_non_pos),
+        skip_ibd_check,
+        use_current_time_if_non_pos,
+        force_stake_on_top_of_best_block_in_pos,
     }
 }
 

@@ -113,6 +113,13 @@ impl GenBlockIndex {
             (Self::Block(_), Self::Genesis(_)) | (Self::Genesis(_), Self::Block(_)) => false,
         }
     }
+
+    pub fn is_genesis(&self) -> bool {
+        match self {
+            GenBlockIndex::Block(_) => false,
+            GenBlockIndex::Genesis(_) => true,
+        }
+    }
 }
 
 impl From<BlockIndex> for GenBlockIndex {

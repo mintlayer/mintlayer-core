@@ -13,12 +13,14 @@ logging = { path = "../logging" }
 pos-accounting = { path = "../pos-accounting" }
 randomness = { path = "../randomness" }
 serialization = { path = "../serialization" }
+tokio = { workspace = true, default-features = false, features = ["sync"] }
 utils = { path = "../utils" }
 utxo = { path = "../utxo" }
 
 itertools.workspace = true
 num.workspace = true
 parity-scale-codec.workspace = true
+sorted-iter.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

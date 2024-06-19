@@ -18,9 +18,12 @@ pub mod error;
 pub mod hash_check;
 pub mod input_data;
 pub mod kernel;
+pub mod pos_block_candidate_info;
 pub mod target;
 
 mod effective_pool_balance;
+
+use std::sync::Arc;
 
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
@@ -32,24 +35,27 @@ use common::{
     chain::{
         block::{
             consensus_data::PoSData, signed_block_header::SignedBlockHeader,
-            timestamp::BlockTimestamp, BlockHeader, ConsensusData,
+            timestamp::BlockTimestamp,
         },
         config::EpochIndex,
-        ChainConfig, CoinUnit, PoSChainConfig, PoSStatus, TxOutput,
+        get_pos_block_proof, ChainConfig, CoinUnit, PoSStatus, PoolId, TxOutput,
     },
-    primitives::{Amount, BlockHeight, Compact, Idable},
+    primitives::{BlockHeight, Compact, Idable},
     Uint256,
 };
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey, VRFReturn};
 use logging::log;
 use pos_accounting::PoSAccountingView;
 use randomness::{CryptoRng, Rng};
-use utils::ensure;
+use sorted_iter::SortedIterator;
+use tokio::sync::watch;
+use utils::{atomics::RelaxedAtomicBool, ensure};
 use utxo::UtxosView;
 
 use crate::{
+    calc_and_check_pos_hash,
     pos::{block_sig::check_block_signature, error::ConsensusPoSError, kernel::get_kernel_output},
-    PoSFinalizeBlockInputData,
+    PoSBlockCandidateInfoCmpByParentTS,
 };
 
 pub use effective_pool_balance::{
@@ -57,10 +63,16 @@ pub use effective_pool_balance::{
 };
 pub use hash_check::check_pos_hash;
 
+use self::pos_block_candidate_info::PoSBlockCandidateInfo;
+
 #[must_use]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StakeResult {
-    Success,
+#[derive(Debug, Clone)]
+pub enum StakeResult<'a> {
+    Success {
+        block_candidate_info: &'a PoSBlockCandidateInfo,
+        timestamp: BlockTimestamp,
+        vrf_data: VRFReturn,
+    },
     Failed,
     Stopped,
 }
@@ -207,62 +219,6 @@ where
     Ok(())
 }
 
-pub fn stake(
-    chain_config: &ChainConfig,
-    pos_config: &PoSChainConfig,
-    pos_data: PoSData,
-    block_header: &mut BlockHeader,
-    block_timestamp: &mut BlockTimestamp,
-    max_block_timestamp: BlockTimestamp,
-    finalize_pos_data: PoSFinalizeBlockInputData,
-) -> Result<StakeResult, ConsensusPoSError> {
-    let final_supply = chain_config
-        .final_supply()
-        .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
-
-    let first_timestamp = *block_timestamp;
-
-    log::debug!(
-        "Search for a valid block ({}..{}), pool_id: {}",
-        first_timestamp,
-        max_block_timestamp,
-        Address::new(chain_config, *pos_data.stake_pool_id())
-            .expect("Pool id to address cannot fail")
-    );
-
-    if let Some((found_timestamp, vrf_data)) = find_timestamp_for_staking(
-        final_supply,
-        pos_config,
-        pos_data.compact_target(),
-        first_timestamp,
-        max_block_timestamp,
-        finalize_pos_data.sealed_epoch_randomness(),
-        finalize_pos_data.epoch_index(),
-        finalize_pos_data.pledge_amount(),
-        finalize_pos_data.pool_balance(),
-        finalize_pos_data.vrf_private_key(),
-        &mut randomness::make_true_rng(),
-    )? {
-        log::info!(
-            "Valid block found, timestamp: {}, pool_id: {}",
-            found_timestamp,
-            pos_data.stake_pool_id()
-        );
-
-        let mut pos_data = pos_data;
-        pos_data.update_vrf_data(vrf_data);
-        block_header.update_consensus_data(ConsensusData::PoS(Box::new(pos_data)));
-        block_header.update_timestamp(found_timestamp);
-
-        *block_timestamp = found_timestamp;
-
-        Ok(StakeResult::Success)
-    } else {
-        *block_timestamp = max_block_timestamp;
-        Ok(StakeResult::Failed)
-    }
-}
-
 pub fn calc_pos_hash_from_prv_key(
     epoch_index: EpochIndex,
     sealed_epoch_randomness: &PoSRandomness,
@@ -305,55 +261,149 @@ pub fn produce_vrf_data(
     vrf_prv_key.produce_vrf_data(transcript)
 }
 
+/// For each timestamp in the range, try to stake using all possible parent blocks that
+/// can be chosen for a block with that timestamp. The information about possible parents
+/// is provided via `candidate_infos_iter`.
+/// If multiple parents can be chosen, use the one that gives the biggest chain trust.
 #[allow(clippy::too_many_arguments)]
-pub fn find_timestamp_for_staking(
-    final_supply: CoinUnit,
-    pos_config: &PoSChainConfig,
-    target: Compact,
-    first_timestamp: BlockTimestamp,
-    max_timestamp: BlockTimestamp,
-    sealed_epoch_randomness: &PoSRandomness,
-    epoch_index: EpochIndex,
-    pledge_amount: Amount,
-    pool_balance: Amount,
+pub fn stake<'a>(
+    chain_config: &ChainConfig,
+    pool_id: &PoolId,
     vrf_prv_key: &VRFPrivateKey,
+    candidate_infos_iter: impl SortedIterator<Item = &'a PoSBlockCandidateInfoCmpByParentTS> + Clone,
+    min_timestamp: BlockTimestamp,
+    max_timestamp: BlockTimestamp,
+    last_used_block_timestamp_sender: Option<&watch::Sender<BlockTimestamp>>,
+    stop_flag: Option<Arc<RelaxedAtomicBool>>,
+) -> Result<StakeResult<'a>, ConsensusPoSError> {
+    let final_supply = chain_config
+        .final_supply()
+        .ok_or(ConsensusPoSError::FiniteTotalSupplyIsRequired)?;
+
+    log::debug!(
+        "Search for a valid block ({}..{}), pool_id: {}",
+        min_timestamp,
+        max_timestamp,
+        Address::new(chain_config, *pool_id).expect("Pool id to address cannot fail")
+    );
+
+    let stake_result = stake_impl(
+        final_supply,
+        vrf_prv_key,
+        candidate_infos_iter,
+        min_timestamp,
+        max_timestamp,
+        last_used_block_timestamp_sender,
+        stop_flag,
+        &mut randomness::make_true_rng(),
+    )?;
+
+    if let StakeResult::Success {
+        block_candidate_info,
+        timestamp,
+        vrf_data: _vrf_data,
+    } = &stake_result
+    {
+        log::info!(
+            "Valid block found, timestamp: {}, pool_id: {}, parent block id: {}",
+            timestamp,
+            pool_id,
+            block_candidate_info.parent_id
+        );
+    }
+
+    Ok(stake_result)
+}
+
+/// A lower-level variant of `stake` to be called from tests.
+#[allow(clippy::too_many_arguments)]
+pub fn stake_impl<'a>(
+    final_supply: CoinUnit,
+    vrf_prv_key: &VRFPrivateKey,
+    candidate_infos_iter: impl SortedIterator<Item = &'a PoSBlockCandidateInfoCmpByParentTS> + Clone,
+    min_timestamp: BlockTimestamp,
+    max_timestamp: BlockTimestamp,
+    last_used_block_timestamp_sender: Option<&watch::Sender<BlockTimestamp>>,
+    stop_flag: Option<Arc<RelaxedAtomicBool>>,
     rng: &mut (impl Rng + CryptoRng),
-) -> Result<Option<(BlockTimestamp, VRFReturn)>, ConsensusPoSError> {
-    let vrf_pub_key = VRFPublicKey::from_private_key(vrf_prv_key);
-    let target = compact_target_to_target(target)?;
+) -> Result<StakeResult<'a>, ConsensusPoSError> {
     let final_supply = final_supply.to_amount_atoms();
+    let vrf_pub_key = VRFPublicKey::from_private_key(vrf_prv_key);
 
     ensure!(
-        first_timestamp <= max_timestamp,
+        min_timestamp <= max_timestamp,
         ConsensusPoSError::FutureTimestampInThePast
     );
 
-    for timestamp in first_timestamp.iter_up_to_including(max_timestamp) {
-        let vrf_data = produce_vrf_data(
-            epoch_index,
-            sealed_epoch_randomness,
-            timestamp,
-            vrf_prv_key,
-            rng,
-        );
+    for timestamp in min_timestamp.iter_up_to_including(max_timestamp) {
+        let mut best_result = None;
+        let candidate_infos_iter = candidate_infos_iter.clone();
 
-        if hash_check::calc_and_check_pos_hash(
-            pos_config.consensus_version(),
-            epoch_index,
-            sealed_epoch_randomness,
-            &target,
-            &vrf_data,
-            &vrf_pub_key,
-            timestamp,
-            pledge_amount,
-            pool_balance,
-            final_supply,
-        )
-        .is_ok()
-        {
-            return Ok(Some((timestamp, vrf_data)));
+        for candidate_info in candidate_infos_iter {
+            let candidate_info = &candidate_info.0;
+            if candidate_info.parent_timestamp >= timestamp {
+                break;
+            }
+
+            let vrf_data = produce_vrf_data(
+                candidate_info.epoch_index,
+                &candidate_info.sealed_epoch_randomness,
+                timestamp,
+                vrf_prv_key,
+                rng,
+            );
+
+            if calc_and_check_pos_hash(
+                candidate_info.pos_chain_config.consensus_version(),
+                candidate_info.epoch_index,
+                &candidate_info.sealed_epoch_randomness,
+                &candidate_info.target,
+                &vrf_data,
+                &vrf_pub_key,
+                timestamp,
+                candidate_info.pool_staker_balance,
+                candidate_info.pool_total_balance,
+                final_supply,
+            )
+            .is_ok()
+            {
+                let block_proof = get_pos_block_proof(candidate_info.parent_timestamp, timestamp)
+                    .ok_or(ConsensusPoSError::BlockProofCalculationError {
+                    parent_block_timestamp: candidate_info.parent_timestamp,
+                    new_block_timestamp: timestamp,
+                })?;
+                let chain_trust = (candidate_info.parent_chain_trust + block_proof).ok_or(
+                    ConsensusPoSError::ChainTrustCalculationOverflow {
+                        parent_block_chain_trust: candidate_info.parent_chain_trust,
+                        new_block_proof: block_proof,
+                    },
+                )?;
+
+                let prev_best_chain_trust =
+                    best_result.as_ref().map_or(Uint256::ZERO, |(chain_trust, _, _)| *chain_trust);
+
+                if chain_trust > prev_best_chain_trust {
+                    best_result = Some((chain_trust, vrf_data, candidate_info));
+                }
+            }
+        }
+
+        if let Some(last_used_block_timestamp_sender) = last_used_block_timestamp_sender {
+            let _ = last_used_block_timestamp_sender.send(timestamp);
+        }
+
+        if let Some((_, vrf_data, block_candidate_info)) = best_result {
+            return Ok(StakeResult::Success {
+                block_candidate_info,
+                timestamp,
+                vrf_data,
+            });
+        }
+
+        if stop_flag.as_ref().is_some_and(|stop_flag| stop_flag.load()) {
+            return Ok(StakeResult::Stopped);
         }
     }
 
-    Ok(None)
+    Ok(StakeResult::Failed)
 }

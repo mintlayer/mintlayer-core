@@ -322,6 +322,14 @@ where
             .get_block_tree_top_starting_from_timestamp(min_timestamp, block_validity)
     }
 
+    fn try_connect_block_trees(
+        &self,
+        trees: InMemoryBlockTrees,
+        min_height: BlockHeight,
+    ) -> Result<InMemoryBlockTrees, ChainstateError> {
+        self.deref().try_connect_block_trees(trees, min_height)
+    }
+
     fn import_bootstrap_stream<'a>(
         &mut self,
         reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
@@ -367,9 +375,11 @@ where
         &self,
         pool_ids: &[PoolId],
         tree: InMemoryBlockTreeRef<'_>,
+        include_tree_root_parent: bool,
     ) -> Result<BTreeMap<Id<GenBlock>, BTreeMap<PoolId, NonZeroPoolBalances>>, ChainstateError>
     {
-        self.deref().get_stake_pool_balances_for_tree(pool_ids, tree)
+        self.deref()
+            .get_stake_pool_balances_for_tree(pool_ids, tree, include_tree_root_parent)
     }
 
     fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError> {

@@ -410,6 +410,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .get_block_tree_top_starting_from_timestamp(min_timestamp, block_validity)
     }
 
+    pub fn try_connect_block_trees(
+        &self,
+        trees: InMemoryBlockTrees,
+        min_height: BlockHeight,
+    ) -> Result<InMemoryBlockTrees, PropertyQueryError> {
+        self.chainstate_ref.try_connect_block_trees(trees, min_height)
+    }
+
     pub fn get_token_data(
         &self,
         id: &TokenId,

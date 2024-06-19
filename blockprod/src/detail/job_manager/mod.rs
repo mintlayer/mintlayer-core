@@ -20,10 +20,7 @@ use std::sync::Arc;
 use crate::detail::CustomId;
 use async_trait::async_trait;
 use chainstate::{ChainstateEvent, ChainstateHandle};
-use common::{
-    chain::{block::timestamp::BlockTimestamp, GenBlock},
-    primitives::Id,
-};
+use common::{chain::GenBlock, primitives::Id};
 use logging::log;
 use serialization::{Decode, Encode};
 use tokio::sync::{
@@ -84,14 +81,12 @@ pub struct NewJobEvent {
     custom_id: CustomId,
     expected_tip_id: Option<Id<GenBlock>>,
     cancel_sender: UnboundedSender<()>,
-    result_sender: oneshot::Sender<Result<(JobKey, Option<BlockTimestamp>), JobManagerError>>,
+    result_sender: oneshot::Sender<Result<JobKey, JobManagerError>>,
 }
 
 pub struct JobManager {
     chainstate_handle: Option<ChainstateHandle>,
     get_job_count_sender: UnboundedSender<oneshot::Sender<usize>>,
-    last_used_block_timestamp_sender:
-        UnboundedSender<(CustomId, BlockTimestamp, oneshot::Sender<()>)>,
     new_job_sender: UnboundedSender<NewJobEvent>,
     stop_job_sender: UnboundedSender<(Option<JobKey>, oneshot::Sender<usize>)>,
     shutdown_sender: UnboundedSender<oneshot::Sender<usize>>,
@@ -108,7 +103,7 @@ pub trait JobManagerInterface: Send + Sync {
         &self,
         custom_id: CustomId,
         expected_tip_id: Option<Id<GenBlock>>,
-    ) -> Result<(JobKey, Option<BlockTimestamp>, UnboundedReceiver<()>), JobManagerError>;
+    ) -> Result<(JobKey, UnboundedReceiver<()>), JobManagerError>;
 
     async fn stop_all_jobs(&mut self) -> Result<usize, JobManagerError>;
 
@@ -122,12 +117,6 @@ pub trait JobManagerInterface: Send + Sync {
     fn make_job_stopper_function(
         &self,
     ) -> (Box<dyn FnOnce(JobKey) + Send>, oneshot::Receiver<usize>);
-
-    async fn update_last_used_block_timestamp(
-        &self,
-        custom_id: CustomId,
-        last_used_block_timestamp: BlockTimestamp,
-    ) -> Result<(), JobManagerError>;
 }
 
 pub type JobManagerHandle = Box<dyn JobManagerInterface>;
@@ -154,7 +143,7 @@ impl JobManagerInterface for JobManagerImpl {
         &self,
         custom_id: CustomId,
         expected_tip_id: Option<Id<GenBlock>>,
-    ) -> Result<(JobKey, Option<BlockTimestamp>, UnboundedReceiver<()>), JobManagerError> {
+    ) -> Result<(JobKey, UnboundedReceiver<()>), JobManagerError> {
         self.job_manager.add_job(custom_id, expected_tip_id).await
     }
 
@@ -170,16 +159,6 @@ impl JobManagerInterface for JobManagerImpl {
         &self,
     ) -> (Box<dyn FnOnce(JobKey) + Send>, oneshot::Receiver<usize>) {
         self.job_manager.make_job_stopper_function()
-    }
-
-    async fn update_last_used_block_timestamp(
-        &self,
-        custom_id: CustomId,
-        last_used_block_timestamp: BlockTimestamp,
-    ) -> Result<(), JobManagerError> {
-        self.job_manager
-            .update_last_used_block_timestamp(custom_id, last_used_block_timestamp)
-            .await
     }
 }
 
@@ -198,13 +177,9 @@ impl JobManager {
         let (stop_job_sender, stop_job_receiver) = mpsc::unbounded_channel();
         let (shutdown_sender, shutdown_receiver) = mpsc::unbounded_channel();
 
-        let (last_used_block_timestamp_sender, last_used_block_timestamp_receiver) =
-            mpsc::unbounded_channel();
-
         let mut job_manager = JobManager {
             chainstate_handle: chainstate_handle.clone(),
             get_job_count_sender,
-            last_used_block_timestamp_sender,
             new_job_sender,
             stop_job_sender,
             shutdown_sender,
@@ -217,7 +192,6 @@ impl JobManager {
         job_manager.run(
             chainstate_receiver,
             get_job_count_receiver,
-            last_used_block_timestamp_receiver,
             new_job_receiver,
             stop_job_receiver,
             shutdown_receiver,
@@ -230,11 +204,6 @@ impl JobManager {
         &mut self,
         mut chainstate_receiver: UnboundedReceiver<Id<GenBlock>>,
         mut get_job_count_receiver: UnboundedReceiver<oneshot::Sender<usize>>,
-        mut last_used_block_timestamp_receiver: UnboundedReceiver<(
-            CustomId,
-            BlockTimestamp,
-            oneshot::Sender<()>,
-        )>,
         mut new_job_receiver: UnboundedReceiver<NewJobEvent>,
         mut stop_job_receiver: UnboundedReceiver<(Option<JobKey>, oneshot::Sender<usize>)>,
         mut shutdown_receiver: UnboundedReceiver<oneshot::Sender<usize>>,
@@ -252,9 +221,6 @@ impl JobManager {
 
                     event = new_job_receiver.recv()
                         => event_then(event, |job| jobs.handle_add_job(job)),
-
-                    event = last_used_block_timestamp_receiver.recv()
-                        => event_then(event, |ev| jobs.handle_update_last_used_block_timestamp(ev)),
 
                     event = stop_job_receiver.recv()
                         => event_then(event, |ev| jobs.handle_stop_job(ev)),
@@ -308,7 +274,7 @@ impl JobManager {
         &self,
         custom_id: CustomId,
         expected_tip_id: Option<Id<GenBlock>>,
-    ) -> Result<(JobKey, Option<BlockTimestamp>, UnboundedReceiver<()>), JobManagerError> {
+    ) -> Result<(JobKey, UnboundedReceiver<()>), JobManagerError> {
         let (result_sender, result_receiver) = oneshot::channel();
         let (cancel_sender, cancel_receiver) = unbounded_channel::<()>();
 
@@ -324,11 +290,10 @@ impl JobManager {
             JobManagerError::FailedToSendNewJobEvent
         );
 
-        result_receiver.await.map_err(|_| JobManagerError::FailedToCreateJob)?.map(
-            |(job_key, last_used_block_timestamp)| {
-                (job_key, last_used_block_timestamp, cancel_receiver)
-            },
-        )
+        result_receiver
+            .await
+            .map_err(|_| JobManagerError::FailedToCreateJob)?
+            .map(|job_key| (job_key, cancel_receiver))
     }
 
     pub async fn stop_all_jobs(&mut self) -> Result<usize, JobManagerError> {
@@ -367,25 +332,6 @@ impl JobManager {
 
         (stopper, result_receiver)
     }
-
-    pub async fn update_last_used_block_timestamp(
-        &self,
-        custom_id: CustomId,
-        last_used_block_timestamp: BlockTimestamp,
-    ) -> Result<(), JobManagerError> {
-        let (result_sender, result_receiver) = oneshot::channel();
-
-        ensure!(
-            self.last_used_block_timestamp_sender
-                .send((custom_id, last_used_block_timestamp, result_sender))
-                .is_ok(),
-            JobManagerError::FailedToSendUpdateLastTimestampSecondsUsed
-        );
-
-        result_receiver
-            .await
-            .map_err(|_| JobManagerError::FailedToUpdateLastTimestampSecondsUsed)
-    }
 }
 
 impl Drop for JobManager {
@@ -422,7 +368,7 @@ pub mod tests {
                 &self,
                 custom_id: CustomId,
                 expected_tip_id: Option<Id<GenBlock>>,
-            ) -> Result<(JobKey, Option<BlockTimestamp>, UnboundedReceiver<()>), JobManagerError>;
+            ) -> Result<(JobKey, UnboundedReceiver<()>), JobManagerError>;
 
             async fn stop_all_jobs(&mut self) -> Result<usize, JobManagerError>;
 
@@ -431,12 +377,6 @@ pub mod tests {
             fn make_job_stopper_function(
                 &self,
             ) -> (Box<dyn FnOnce(JobKey) + Send>, oneshot::Receiver<usize>);
-
-            async fn update_last_used_block_timestamp(
-                &self,
-                custom_id: CustomId,
-                last_used_block_timestamp: BlockTimestamp,
-            ) -> Result<(), JobManagerError>;
         }
     }
 }

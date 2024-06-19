@@ -13,34 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    pos::{error::ConsensusPoSError, target::calculate_target_required_from_block_index},
-    ConsensusCreationError,
-};
-use chainstate_types::{
-    pos_randomness::PoSRandomness, vrf_tools::construct_transcript, BlockIndex, GenBlockIndex,
-};
-use common::{
-    chain::{
-        block::{
-            consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward,
-            BlockRewardTransactable,
+use crate::{pos::error::ConsensusPoSError, ConsensusCreationError};
+use common::chain::{
+    block::{BlockReward, BlockRewardTransactable},
+    signature::{
+        inputsig::{
+            authorize_pubkey_spend::sign_pubkey_spending,
+            standard_signature::StandardInputSignature, InputWitness,
         },
-        config::EpochIndex,
-        signature::{
-            inputsig::{
-                authorize_pubkey_spend::sign_pubkey_spending,
-                standard_signature::StandardInputSignature, InputWitness,
-            },
-            sighash::{sighashtype::SigHashType, signature_hash},
-        },
-        ChainConfig, Destination, PoSStatus, PoolId, TxInput, TxOutput,
+        sighash::{sighashtype::SigHashType, signature_hash},
     },
-    primitives::{Amount, BlockHeight},
+    Destination, PoolId, TxInput, TxOutput,
 };
 use crypto::{
     key::{PrivateKey, PublicKey},
-    vrf::{VRFPrivateKey, VRFPublicKey},
+    vrf::VRFPrivateKey,
 };
 use randomness::{CryptoRng, Rng};
 use serialization::{Decode, Encode};
@@ -146,112 +133,42 @@ impl PoSTimestampSearchInputData {
     }
 }
 
-/// Input needed to finalize PoS consensus data
-///
-/// This struct is an internal data structure that will be created by
-/// `blockprod`, and will be used when finalizing Proof-of-Stake consensus
-/// data (see ConsensusData::PoS for more info) during PoS block creation.
+/// The part of PoSData that can be calculated before the parent or a timestamp of a
+/// new block is known.
 #[derive(Debug, Clone)]
-pub struct PoSFinalizeBlockInputData {
-    /// The private key of the staker
-    stake_private_key: PrivateKey,
-    /// The VRF private key (i.e used for sealed epoch data)
-    vrf_private_key: VRFPrivateKey,
-    /// The epoch index of the height of the new block
-    epoch_index: EpochIndex,
-    /// The sealed epoch randomness (i.e used in producing VRF data)
-    sealed_epoch_randomness: PoSRandomness,
-    /// The amount pledged to the pool
-    pledge_amount: Amount,
-    /// The current pool balance of the stake pool
-    pool_balance: Amount,
+pub struct PoSPartialConsensusData {
+    /// Inputs for block reward
+    pub kernel_inputs: Vec<TxInput>,
+    pub kernel_witness: Vec<InputWitness>,
+
+    /// Pool id.
+    pub pool_id: PoolId,
 }
 
-impl PoSFinalizeBlockInputData {
-    pub fn new(
-        stake_private_key: PrivateKey,
-        vrf_private_key: VRFPrivateKey,
-        epoch_index: EpochIndex,
-        sealed_epoch_randomness: PoSRandomness,
-        pledge_amount: Amount,
-        pool_balance: Amount,
-    ) -> Self {
-        Self {
-            stake_private_key,
-            vrf_private_key,
-            epoch_index,
-            sealed_epoch_randomness,
-            pledge_amount,
-            pool_balance,
-        }
-    }
-
-    pub fn epoch_index(&self) -> EpochIndex {
-        self.epoch_index
-    }
-
-    pub fn pool_balance(&self) -> Amount {
-        self.pool_balance
-    }
-
-    pub fn sealed_epoch_randomness(&self) -> &PoSRandomness {
-        &self.sealed_epoch_randomness
-    }
-
-    pub fn stake_private_key(&self) -> &PrivateKey {
-        &self.stake_private_key
-    }
-
-    pub fn vrf_private_key(&self) -> &VRFPrivateKey {
-        &self.vrf_private_key
-    }
-
-    pub fn vrf_public_key(&self) -> VRFPublicKey {
-        VRFPublicKey::from_private_key(&self.vrf_private_key)
-    }
-
-    pub fn pledge_amount(&self) -> Amount {
-        self.pledge_amount
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn generate_pos_consensus_data_and_reward<G, R: Rng + CryptoRng>(
-    chain_config: &ChainConfig,
-    prev_block_index: &GenBlockIndex,
-    pos_input_data: &PoSGenerateBlockInputData,
-    pos_status: &PoSStatus,
-    sealed_epoch_randomness: PoSRandomness,
-    block_timestamp: BlockTimestamp,
-    block_height: BlockHeight,
-    get_ancestor: G,
+pub fn generate_pos_consensus_data_and_reward<R: Rng + CryptoRng>(
+    input_data: PoSGenerateBlockInputData,
     rng: R,
-) -> Result<(PoSData, BlockReward), ConsensusCreationError>
-where
-    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, crate::ChainstateError>,
-{
-    let reward_destination = Destination::PublicKey(pos_input_data.stake_public_key());
+) -> Result<(PoSPartialConsensusData, BlockReward), ConsensusCreationError> {
+    let stake_public_key = input_data.stake_public_key();
+    let reward_destination = Destination::PublicKey(stake_public_key.clone());
 
     let kernel_output =
-        vec![TxOutput::ProduceBlockFromStake(reward_destination, pos_input_data.pool_id())];
+        vec![TxOutput::ProduceBlockFromStake(reward_destination, input_data.pool_id)];
 
-    let block_reward_transactable = BlockRewardTransactable::new(
-        Some(pos_input_data.kernel_inputs()),
-        Some(&kernel_output),
-        None,
-    );
+    let block_reward_transactable =
+        BlockRewardTransactable::new(Some(&input_data.kernel_inputs), Some(&kernel_output), None);
 
     let sighash = signature_hash(
         SigHashType::default(),
         &block_reward_transactable,
-        &pos_input_data.kernel_input_utxos().iter().map(Some).collect::<Vec<_>>(),
+        &input_data.kernel_input_utxos.iter().map(Some).collect::<Vec<_>>(),
         0,
     )
     .map_err(|_| ConsensusPoSError::FailedToSignKernel)?;
 
     let signature = sign_pubkey_spending(
-        pos_input_data.stake_private_key(),
-        &pos_input_data.stake_public_key(),
+        &input_data.stake_private_key,
+        &stake_public_key,
         &sighash,
         rng,
     )
@@ -262,32 +179,14 @@ where
         signature.encode(),
     ));
 
-    let vrf_data = {
-        let transcript = construct_transcript(
-            chain_config.epoch_index_from_height(&block_height),
-            &sealed_epoch_randomness.value(),
-            block_timestamp,
-        );
-
-        pos_input_data.vrf_private_key().produce_vrf_data(transcript)
-    };
-
-    let target_required = calculate_target_required_from_block_index(
-        chain_config,
-        pos_status,
-        prev_block_index,
-        get_ancestor,
-    )?;
-
-    let consensus_data = PoSData::new(
-        pos_input_data.kernel_inputs().clone(),
-        vec![input_witness],
-        pos_input_data.pool_id(),
-        vrf_data,
-        target_required,
-    );
-
     let block_reward = BlockReward::new(kernel_output);
 
-    Ok((consensus_data, block_reward))
+    Ok((
+        PoSPartialConsensusData {
+            kernel_inputs: input_data.kernel_inputs,
+            kernel_witness: vec![input_witness],
+            pool_id: input_data.pool_id,
+        },
+        block_reward,
+    ))
 }

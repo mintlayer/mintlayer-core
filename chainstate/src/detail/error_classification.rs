@@ -610,7 +610,13 @@ impl BlockProcessingErrorClassification for ConsensusPoSError {
             | ConsensusPoSError::FailedToSignBlockHeader
             | ConsensusPoSError::FailedReadingBlock(_)
             | ConsensusPoSError::FutureTimestampInThePast
-            | ConsensusPoSError::FailedToSignKernel => BlockProcessingErrorClass::General,
+            | ConsensusPoSError::FailedToSignKernel
+            // This error happens during block production.
+            | ConsensusPoSError::BlockProofCalculationError { .. }
+            // This error happens during block production.
+            | ConsensusPoSError::ChainTrustCalculationOverflow { .. } => {
+                BlockProcessingErrorClass::General
+            }
 
             ConsensusPoSError::StakeKernelHashTooHigh
             | ConsensusPoSError::TimestampViolation(_, _)
@@ -668,7 +674,14 @@ impl BlockProcessingErrorClassification for consensus::ChainstateError {
             | ChainstateError::FailedToObtainBlockIdFromHeight(_, _err)
             | ChainstateError::FailedToObtainAncestor(_, _, _err)
             | ChainstateError::StakePoolDataReadError(_, _err)
-            | ChainstateError::PoolBalanceReadError(_, _err) => BlockProcessingErrorClass::General,
+            | ChainstateError::PoolBalanceReadError(_, _err)
+            | ChainstateError::FailedToObtainBlockTreeFromTimestamp(_, _err)
+            | ChainstateError::FailedToConnectBlockTrees(_err)
+            | ChainstateError::FailedToObtainMinHeightWithAllowedReorg(_err)
+            | ChainstateError::FailedToDetermineIfBlockInMainchain(_, _err)
+            | ChainstateError::FailedToObtainPoolBalancesForTree(_err) => {
+                BlockProcessingErrorClass::General
+            }
         }
     }
 }

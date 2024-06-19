@@ -13,8 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use chainstate::{
-    chainstate_interface::ChainstateInterface, BlockIndex, GenBlockIndex, NonZeroPoolBalances,
+    chainstate_interface::ChainstateInterface, BlockIndex, BlockValidity, GenBlockIndex,
+    InMemoryBlockTreeRef, InMemoryBlockTrees, NonZeroPoolBalances,
 };
 use chainstate_types::{pos_randomness::PoSRandomness, EpochData};
 use common::{
@@ -42,29 +45,28 @@ pub enum PoSAccountingError {
     StakerBalanceRetrievalError(String),
 }
 
-pub fn get_pool_staker_balance<CS: ChainstateInterface + ?Sized>(
+pub fn get_block_tree_top_starting_from_timestamp<CS: ChainstateInterface + ?Sized>(
     chainstate: &CS,
-    pool_id: &PoolId,
-) -> Result<Amount, BlockProductionError> {
-    let balance = chainstate
-        .get_stake_pool_data(*pool_id)
+    min_timestamp: BlockTimestamp,
+    block_validity: BlockValidity,
+) -> Result<InMemoryBlockTrees, BlockProductionError> {
+    chainstate
+        .get_block_tree_top_starting_from_timestamp(min_timestamp, block_validity)
         .map_err(|err| {
             BlockProductionError::ChainstateError(
-                consensus::ChainstateError::StakePoolDataReadError(*pool_id, err.to_string()),
+                consensus::ChainstateError::FailedToObtainBlockTreeFromTimestamp(
+                    min_timestamp,
+                    err.to_string(),
+                ),
             )
-        })?
-        .ok_or(BlockProductionError::PoolDataNotFound(*pool_id))?
-        .staker_balance()
-        .map_err(|err| PoSAccountingError::StakerBalanceRetrievalError(err.to_string()))?;
-
-    Ok(balance)
+        })
 }
 
-pub fn get_pool_total_balance<CS: ChainstateInterface + ?Sized>(
+pub fn get_stake_pool_balances_at_tip<CS: ChainstateInterface + ?Sized>(
     chainstate: &CS,
     pool_id: &PoolId,
-) -> Result<Amount, BlockProductionError> {
-    let pool_balance = chainstate
+) -> Result<Option<NonZeroPoolBalances>, BlockProductionError> {
+    let total_balance = chainstate
         .get_stake_pool_balance(*pool_id)
         .map_err(|err| {
             BlockProductionError::ChainstateError(consensus::ChainstateError::PoolBalanceReadError(
@@ -72,9 +74,21 @@ pub fn get_pool_total_balance<CS: ChainstateInterface + ?Sized>(
                 err.to_string(),
             ))
         })?
-        .ok_or(BlockProductionError::PoolBalanceNotFound(*pool_id))?;
+        .unwrap_or(Amount::ZERO);
 
-    Ok(pool_balance)
+    let staker_balance = chainstate
+        .get_stake_pool_data(*pool_id)
+        .map_err(|err| {
+            BlockProductionError::ChainstateError(
+                consensus::ChainstateError::StakePoolDataReadError(*pool_id, err.to_string()),
+            )
+        })?
+        .map(|data| data.staker_balance())
+        .transpose()
+        .map_err(|err| PoSAccountingError::StakerBalanceRetrievalError(err.to_string()))?
+        .unwrap_or(Amount::ZERO);
+
+    Ok(NonZeroPoolBalances::new(total_balance, staker_balance))
 }
 
 pub fn get_pool_balances_at_heights<CS: ChainstateInterface + ?Sized>(
@@ -115,6 +129,21 @@ pub fn get_pool_balances_at_height<CS: ChainstateInterface + ?Sized>(
     Ok(balances)
 }
 
+pub fn get_stake_pool_balances_for_tree<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
+    pool_ids: &[PoolId],
+    tree: InMemoryBlockTreeRef<'_>,
+    include_tree_root_parent: bool,
+) -> Result<BTreeMap<Id<GenBlock>, BTreeMap<PoolId, NonZeroPoolBalances>>, BlockProductionError> {
+    chainstate
+        .get_stake_pool_balances_for_tree(pool_ids, tree, include_tree_root_parent)
+        .map_err(|err| {
+            BlockProductionError::ChainstateError(
+                consensus::ChainstateError::FailedToObtainPoolBalancesForTree(err.to_string()),
+            )
+        })
+}
+
 pub fn get_epoch_data<CS: ChainstateInterface + ?Sized>(
     chainstate: &CS,
     epoch_index: u64,
@@ -124,6 +153,42 @@ pub fn get_epoch_data<CS: ChainstateInterface + ?Sized>(
             epoch_index,
             error: err.to_string(),
         })
+    })
+}
+
+pub fn get_min_height_with_allowed_reorg<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
+) -> Result<BlockHeight, BlockProductionError> {
+    chainstate.get_min_height_with_allowed_reorg().map_err(|err| {
+        BlockProductionError::ChainstateError(
+            consensus::ChainstateError::FailedToObtainMinHeightWithAllowedReorg(err.to_string()),
+        )
+    })
+}
+
+pub fn is_block_in_main_chain<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
+    block_id: &Id<GenBlock>,
+) -> Result<bool, BlockProductionError> {
+    chainstate.is_block_in_main_chain(block_id).map_err(|err| {
+        BlockProductionError::ChainstateError(
+            consensus::ChainstateError::FailedToDetermineIfBlockInMainchain(
+                *block_id,
+                err.to_string(),
+            ),
+        )
+    })
+}
+
+pub fn try_connect_block_trees<CS: ChainstateInterface + ?Sized>(
+    chainstate: &CS,
+    trees: InMemoryBlockTrees,
+    min_height: BlockHeight,
+) -> Result<InMemoryBlockTrees, BlockProductionError> {
+    chainstate.try_connect_block_trees(trees, min_height).map_err(|err| {
+        BlockProductionError::ChainstateError(
+            consensus::ChainstateError::FailedToConnectBlockTrees(err.to_string()),
+        )
     })
 }
 

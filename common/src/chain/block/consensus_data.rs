@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    chain::{chaintrust, signature::inputsig::InputWitness, PoolId, TxInput},
+    chain::{get_pos_block_proof, signature::inputsig::InputWitness, PoolId, TxInput},
     primitives::Compact,
     Uint256,
 };
@@ -47,12 +47,7 @@ impl ConsensusData {
             ConsensusData::None => Some(1u64.into()),
             ConsensusData::PoW(ref pow_data) => pow_data.get_block_proof(),
             ConsensusData::PoS(_) => {
-                let timestamp_diff = this_block_timestamp
-                    .as_int_seconds()
-                    .checked_sub(prev_block_timestamp.as_int_seconds())?;
-
-                let block_proof = chaintrust::asymptote::calculate_block_proof(timestamp_diff);
-                Some(block_proof)
+                get_pos_block_proof(prev_block_timestamp, this_block_timestamp)
             }
         }
     }
