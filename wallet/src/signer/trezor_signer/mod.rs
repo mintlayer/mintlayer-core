@@ -19,10 +19,12 @@ use common::{
     address::Address,
     chain::{
         output_value::OutputValue,
+        partially_signed_transaction::PartiallySignedTransaction,
         signature::{
             inputsig::{
                 arbitrary_message::ArbitraryMessageSignature,
                 authorize_pubkey_spend::AuthorizedPublicKeySpend,
+                authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
                 standard_signature::StandardInputSignature, InputWitness,
             },
             sighash::{sighashtype::SigHashType, signature_hash},
@@ -30,7 +32,6 @@ use common::{
         ChainConfig, Destination, OutPointSourceId, SignedTransactionIntent, Transaction, TxInput,
         TxOutput,
     },
-    partially_signed_transaction::PartiallySignedTransaction,
 };
 use crypto::key::{
     extended::{ExtendedPrivateKey, ExtendedPublicKey},
@@ -40,6 +41,7 @@ use crypto::key::{
 use itertools::Itertools;
 use randomness::make_true_rng;
 use serialization::Encode;
+#[allow(clippy::all)]
 use trezor_client::{
     protos::{MintlayerTransferTxOutput, MintlayerUtxoTxInput},
     Trezor,
@@ -111,8 +113,32 @@ impl TrezorSigner {
                 Some(InputWitness::NoSignature(None)),
                 SignatureStatus::FullySigned,
             )),
-            Destination::PublicKey(_) | Destination::PublicKeyHash(_) => {
+            Destination::PublicKeyHash(_) => {
                 if let Some(signature) = signature {
+                    eprintln!("some signature pkh");
+                    let pk =
+                        key_chain.find_public_key(destination).expect("found").into_public_key();
+                    eprintln!("pk {:?}", pk.encode());
+                    let mut signature = signature.clone();
+                    signature.insert(0, 0);
+                    let sig = Signature::from_data(signature)?;
+                    let sig = AuthorizedPublicKeyHashSpend::new(pk, sig);
+                    let sig = InputWitness::Standard(StandardInputSignature::new(
+                        sighash_type,
+                        sig.encode(),
+                    ));
+
+                    Ok((Some(sig), SignatureStatus::FullySigned))
+                } else {
+                    eprintln!("empty signature");
+                    Ok((None, SignatureStatus::NotSigned))
+                }
+            }
+            Destination::PublicKey(_) => {
+                if let Some(signature) = signature {
+                    eprintln!("some signature pk");
+                    let mut signature = signature.clone();
+                    signature.insert(0, 0);
                     let sig = Signature::from_data(signature)?;
                     let sig = AuthorizedPublicKeySpend::new(sig);
                     let sig = InputWitness::Standard(StandardInputSignature::new(
@@ -122,6 +148,7 @@ impl TrezorSigner {
 
                     Ok((Some(sig), SignatureStatus::FullySigned))
                 } else {
+                    eprintln!("empty signature");
                     Ok((None, SignatureStatus::NotSigned))
                 }
             }
@@ -144,26 +171,21 @@ impl TrezorSigner {
             .tx()
             .outputs()
             .iter()
-            .map(|out| {
-                match out {
-                    TxOutput::Transfer(value, dest) => {
-                        match value {
-                            OutputValue::Coin(amount) => {
-                                let mut out_req = MintlayerTransferTxOutput::new();
-                                // TODO: change to u128 in trezor
-                                out_req.set_amount(amount.into_atoms() as u64);
-                                out_req.set_address(
-                                    Address::new(&self.chain_config, dest.clone())
-                                        .expect("addressable")
-                                        .into_string(),
-                                );
-                                out_req
-                            }
-                            _ => unimplemented!("support transfer of tokens in trezor"),
-                        }
+            .map(|out| match out {
+                TxOutput::Transfer(value, dest) => match value {
+                    OutputValue::Coin(amount) => {
+                        let mut out_req = MintlayerTransferTxOutput::new();
+                        out_req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
+                        out_req.set_address(
+                            Address::new(&self.chain_config, dest.clone())
+                                .expect("addressable")
+                                .into_string(),
+                        );
+                        out_req
                     }
-                    _ => unimplemented!("support other output types in trezor"),
-                }
+                    _ => unimplemented!("support transfer of tokens in trezor"),
+                },
+                _ => unimplemented!("support other output types in trezor"),
             })
             .collect();
         outputs
@@ -237,11 +259,13 @@ impl Signer for TrezorSigner {
                     (Some(destination), Some(sig)) => {
                         let sighash_type =
                             SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
+                        eprintln!("making sig for {i}");
                         let (sig, status) =
                             self.make_signature(sig, destination, sighash_type, key_chain)?;
                         Ok((sig, SignatureStatus::NotSigned, status))
                     }
                     (Some(_) | None, None) | (None, Some(_)) => {
+                        eprintln!("no signature!");
                         Ok((None, SignatureStatus::NotSigned, SignatureStatus::NotSigned))
                     }
                 },
@@ -303,8 +327,7 @@ fn to_trezor_input_msgs(ptx: &PartiallySignedTransaction) -> Vec<MintlayerUtxoTx
                 inp_req.set_prev_index(outpoint.output_index());
                 match value {
                     OutputValue::Coin(amount) => {
-                        // TODO:
-                        inp_req.set_amount(amount.into_atoms() as u64);
+                        inp_req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
                     }
                     OutputValue::TokenV1(_, _) | OutputValue::TokenV0(_) => {
                         unimplemented!("support for tokens")
@@ -338,8 +361,7 @@ fn to_trezor_utxo_msgs(
                         let mut out_req = MintlayerTransferTxOutput::new();
                         match value {
                             OutputValue::Coin(amount) => {
-                                // TODO: change to u128 in trezor
-                                out_req.set_amount(amount.into_atoms() as u64);
+                                out_req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
                             }
                             OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => {
                                 unimplemented!("support tokens in trezor")
