@@ -38,6 +38,10 @@ pub struct HtlcSecret {
 }
 
 impl HtlcSecret {
+    pub fn new(secret: [u8; 32]) -> Self {
+        Self { secret }
+    }
+
     pub fn new_from_rng(rng: &mut impl Rng) -> Self {
         let secret: [u8; 32] = std::array::from_fn(|_| rng.gen::<u8>());
         Self { secret }

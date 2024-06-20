@@ -18,13 +18,17 @@ use self::mocks::MockSigInfoProvider;
 use super::*;
 use common::{
     chain::{
-        block::BlockRewardTransactable, stakelock::StakePoolData, tokens, AccountNonce,
-        AccountSpending,
+        block::BlockRewardTransactable,
+        htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
+        signature::inputsig::authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
+        stakelock::StakePoolData,
+        tokens, AccountNonce, AccountSpending,
     },
     primitives::per_thousand::PerThousand,
 };
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
 use pos_accounting::{DelegationData, PoolData};
+use serialization::Encode;
 use tokens_accounting::TokenData;
 
 mod mocks;
@@ -85,6 +89,10 @@ fn dest_pk(pk_seed: u64) -> Destination {
     Destination::PublicKey(keypair(pk_seed).1)
 }
 
+fn dest_ms(pk_seed: u64) -> Destination {
+    Destination::ClassicMultisig((&keypair(pk_seed).1).into())
+}
+
 fn outpoint_tx(tx_id_byte: u8, index: u32) -> UtxoOutPoint {
     UtxoOutPoint::new(fake_id::<Transaction>(tx_id_byte).into(), index)
 }
@@ -142,6 +150,17 @@ fn delegate(amount: u128, del_id_byte: u8) -> TestInputInfo {
     ))
 }
 
+fn htlc(spend_seed: u64, refund_seed: u64, timelock: OutputTimeLock) -> TestInputInfo {
+    let amt = coins(1333);
+    let htlc = HashedTimelockContract {
+        secret_hash: HtlcSecretHash::from_low_u64_be(13),
+        spend_key: dest_pk(spend_seed),
+        refund_timelock: timelock,
+        refund_key: dest_ms(refund_seed),
+    };
+    tii(TxOutput::Htlc(amt, Box::new(htlc)))
+}
+
 fn nosig() -> InputWitness {
     InputWitness::NoSignature(None)
 }
@@ -149,6 +168,25 @@ fn nosig() -> InputWitness {
 fn stdsig(byte: u8) -> InputWitness {
     let sht = SigHashType::default();
     InputWitness::Standard(StandardInputSignature::new(sht, vec![byte; 2]))
+}
+
+fn htlc_stdsig(byte: u8) -> InputWitness {
+    let sht = SigHashType::default();
+    let raw_sig = vec![byte; 2];
+    let secret = HtlcSecret::new([6; 32]);
+    let sig_with_secret = AuthorizedHashedTimelockContractSpend::Secret(secret, raw_sig);
+    let serialized_sig = sig_with_secret.encode();
+
+    InputWitness::Standard(StandardInputSignature::new(sht, serialized_sig))
+}
+
+fn htlc_multisig(byte: u8) -> InputWitness {
+    let sht = SigHashType::default();
+    let raw_sig = vec![byte; 2];
+    let sig_with_secret = AuthorizedHashedTimelockContractSpend::Multisig(raw_sig);
+    let serialized_sig = sig_with_secret.encode();
+
+    InputWitness::Standard(StandardInputSignature::new(sht, serialized_sig))
 }
 
 fn deleg0() -> (DelegationId, DelegationData) {
@@ -284,6 +322,11 @@ fn mode_name<'a, T: TranslationMode<'a>>(_: &T) -> &'static str {
 #[case("mint_00", mint(fake_id(0xa1), 581), stdsig(0x56))]
 #[case("mint_01", mint(token0().0, 582), stdsig(0x57))]
 #[case("mint_02", mint(token0().0, 582), nosig())]
+#[case("htlc_00", htlc(11, 12, tl_until_height(999_999)), htlc_stdsig(0x54))]
+#[case("htlc_01", htlc(13, 14, tl_for_secs(1111)), htlc_stdsig(0x58))]
+#[case("htlc_02", htlc(15, 16, tl_until_time(99)), htlc_stdsig(0x53))]
+#[case("htlc_03", htlc(17, 18, tl_for_secs(124)), htlc_multisig(0x54))]
+#[case("htlc_04", htlc(19, 20, tl_for_blocks(1000)), htlc_multisig(0x55))]
 fn translate_snap(
     #[values(TxnMode, RewardMode, TimelockOnly)] mode: impl for<'a> TranslationMode<'a>,
     #[case] name: &str,
@@ -304,5 +347,3 @@ fn translate_snap(
 
     expect_test::expect_file![format!("snap.translate.{mode_str}.{name}.txt")].assert_eq(&result);
 }
-
-//FIXME: htlc translation tests
