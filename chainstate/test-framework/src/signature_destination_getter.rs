@@ -116,7 +116,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                                 // but this is just a double-check.
                                 Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
                             }
-                            TxOutput::Htlc(_, _) => todo!(),
+                            TxOutput::Htlc(_, _) => unimplemented!(),
                         }
                     }
                     TxInput::Account(outpoint) => match outpoint.account() {

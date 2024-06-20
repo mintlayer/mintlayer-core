@@ -123,7 +123,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
             )
             .add_output(TxOutput::Htlc(
                 OutputValue::Coin(Amount::from_atoms(100)),
-                htlc,
+                Box::new(htlc),
             ))
             .build();
         let tx_1_id = tx_1.transaction().get_id();
@@ -328,7 +328,7 @@ fn refund_htlc(#[case] seed: Seed) {
             )
             .add_output(TxOutput::Htlc(
                 OutputValue::Coin(Amount::from_atoms(100)),
-                htlc,
+                Box::new(htlc),
             ))
             .build();
         let tx_1_id = tx_1.transaction().get_id();
@@ -632,7 +632,7 @@ fn fork_activation(#[case] seed: Seed) {
                     )
                     .add_output(TxOutput::Htlc(
                         OutputValue::Coin(Amount::from_atoms(100)),
-                        htlc.clone(),
+                        Box::new(htlc.clone()),
                     ))
                     .build(),
             )
@@ -662,7 +662,7 @@ fn fork_activation(#[case] seed: Seed) {
                     )
                     .add_output(TxOutput::Htlc(
                         OutputValue::Coin(Amount::from_atoms(100)),
-                        htlc,
+                        Box::new(htlc),
                     ))
                     .build(),
             )
@@ -751,7 +751,7 @@ fn spend_tokens(#[case] seed: Seed) {
                     token_id: token_v0_id,
                     amount: Amount::from_atoms(1),
                 }))),
-                htlc.clone(),
+                Box::new(htlc.clone()),
             ))
             .build();
         let tx_id = tx.transaction().get_id();
@@ -808,7 +808,7 @@ fn spend_tokens(#[case] seed: Seed) {
             )
             .add_output(TxOutput::Htlc(
                 OutputValue::TokenV1(token_v1_id, amount_to_mint),
-                htlc,
+                Box::new(htlc),
             ))
             .build();
         let mint_token_v1_tx_id = mint_token_v1_tx.transaction().get_id();

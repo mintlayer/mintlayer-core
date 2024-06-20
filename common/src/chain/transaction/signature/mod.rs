@@ -139,7 +139,7 @@ pub fn verify_signature<T: Signable>(
         InputWitness::Standard(witness) => verify_standard_input_signature(
             chain_config,
             outpoint_destination,
-            &witness,
+            witness,
             tx,
             inputs_utxos,
             input_num,

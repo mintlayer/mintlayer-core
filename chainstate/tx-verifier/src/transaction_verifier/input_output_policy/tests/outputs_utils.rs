@@ -151,12 +151,12 @@ pub fn transfer() -> TxOutput {
 pub fn htlc() -> TxOutput {
     TxOutput::Htlc(
         OutputValue::Coin(Amount::ZERO),
-        HashedTimelockContract {
+        Box::new(HashedTimelockContract {
             secret_hash: HtlcSecretHash::zero(),
             spend_key: Destination::AnyoneCanSpend,
             refund_timelock: OutputTimeLock::ForSeconds(1),
             refund_key: Destination::AnyoneCanSpend,
-        },
+        }),
     )
 }
 

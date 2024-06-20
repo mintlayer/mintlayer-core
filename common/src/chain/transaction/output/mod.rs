@@ -146,8 +146,9 @@ pub enum TxOutput {
     /// Deposit data into the blockchain. This output cannot be spent.
     #[codec(index = 9)]
     DataDeposit(Vec<u8>),
+    /// Transfer an output under Hashed TimeLock Contract.
     #[codec(index = 10)]
-    Htlc(OutputValue, HashedTimelockContract),
+    Htlc(OutputValue, Box<HashedTimelockContract>),
 }
 
 impl TxOutput {
