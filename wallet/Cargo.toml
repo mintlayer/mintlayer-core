@@ -26,6 +26,7 @@ utils-networking = { path = "../utils/networking" }
 utxo = { path = "../utxo" }
 wallet-storage = { path = "./storage" }
 wallet-types = { path = "./types" }
+trezor-client = { path = "./trezor-client", features = ["bitcoin", "mintlayer"], optional = true }
 
 bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
 hex.workspace = true
