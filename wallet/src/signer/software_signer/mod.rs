@@ -247,7 +247,6 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
                     )),
                     InputWitness::Standard(sig) => match destination {
                         Some(destination) => {
-                            // FIXME: do it via tx-verifier
                             let sighash =
                                 signature_hash(sig.sighash_type(), ptx.tx(), &inputs_utxo_refs, i)?;
 

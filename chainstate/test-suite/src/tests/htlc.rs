@@ -20,7 +20,7 @@ use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
         classic_multisig::ClassicMultisigChallenge,
-        htlc::{self, HashedTimelockContract, HtlcSecret, HtlcSecretHash},
+        htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         output_value::OutputValue,
         signature::{
             inputsig::{
