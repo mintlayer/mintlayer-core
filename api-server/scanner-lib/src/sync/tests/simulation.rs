@@ -236,7 +236,7 @@ async fn simulation(
             let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
             for _ in 0..rng.gen_range(10..max_tx_per_block) {
-                block_builder = block_builder.add_test_transaction(&mut rng);
+                block_builder = block_builder.add_test_transaction(&mut rng, false);
             }
 
             let block = block_builder.build(&mut rng);
@@ -335,11 +335,11 @@ async fn simulation(
                             .and_modify(|amount| *amount = (*amount + *to_stake).unwrap())
                             .or_insert(*to_stake);
                     }
-                    TxOutput::Htlc(_, _) => unimplemented!(),
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::ProduceBlockFromStake(_, _) => {}
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::Htlc(_, _) => {}
                 });
 
                 tx.inputs().iter().for_each(|inp| match inp {

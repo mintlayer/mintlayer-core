@@ -144,6 +144,8 @@ pub struct RandomTxMaker<'a> {
 
     account_command_used: bool,
 
+    support_htlc: bool,
+
     // There can be only one Unmint operation per transaction.
     // But it's unknown in advance which token burn would be utilized by unmint operation
     // so we have to collect all burns for all tokens just in case.
@@ -161,6 +163,7 @@ impl<'a> RandomTxMaker<'a> {
         pos_accounting_store: &'a InMemoryPoSAccounting,
         staking_pool: Option<PoolId>,
         account_nonce_getter: Box<dyn Fn(AccountType) -> Option<AccountNonce> + 'a>,
+        support_htlc: bool,
     ) -> Self {
         Self {
             chainstate,
@@ -174,6 +177,7 @@ impl<'a> RandomTxMaker<'a> {
             stake_pool_can_be_created: true,
             delegation_can_be_created: true,
             account_command_used: false,
+            support_htlc,
             unmint_for: None,
             total_tokens_burned: BTreeMap::new(),
             fee_input: None,
@@ -815,18 +819,25 @@ impl<'a> RandomTxMaker<'a> {
                                 destination,
                                 timelock,
                             ),
-                            1 => TxOutput::Htlc(
-                                OutputValue::Coin(new_value),
-                                Box::new(HashedTimelockContract {
-                                    secret_hash: HtlcSecretHash::zero(),
-                                    spend_key: destination,
-                                    refund_timelock: timelock,
-                                    refund_key: key_manager.new_2_of_2_multisig_destination(
-                                        self.chainstate.get_chain_config(),
-                                        rng,
-                                    ),
-                                }),
-                            ),
+                            1 => {
+                                if self.support_htlc {
+                                    TxOutput::Htlc(
+                                        OutputValue::Coin(new_value),
+                                        Box::new(HashedTimelockContract {
+                                            secret_hash: HtlcSecretHash::zero(),
+                                            spend_key: destination,
+                                            refund_timelock: timelock,
+                                            refund_key: key_manager
+                                                .new_2_of_2_multisig_destination(
+                                                    self.chainstate.get_chain_config(),
+                                                    rng,
+                                                ),
+                                        }),
+                                    )
+                                } else {
+                                    TxOutput::Transfer(OutputValue::Coin(new_value), destination)
+                                }
+                            }
                             _ => TxOutput::Transfer(OutputValue::Coin(new_value), destination),
                         }
                     }
