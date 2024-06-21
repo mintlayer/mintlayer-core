@@ -26,6 +26,7 @@ use common::{
                     sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
                     ClassicalMultisigCompletionStatus,
                 },
+                htlc::produce_classical_multisig_signature_for_htlc_input,
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
@@ -117,6 +118,31 @@ impl KeyManager {
         }
     }
 
+    pub fn new_2_of_2_multisig_destination(
+        &mut self,
+        chain_config: &ChainConfig,
+        rng: &mut (impl Rng + CryptoRng),
+    ) -> Destination {
+        let min_required_signatures = 2;
+        let num_pub_keys = 2;
+        let keys: Vec<_> = (0..num_pub_keys)
+            .map(|_| PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr))
+            .collect();
+        let pub_keys = keys.iter().map(|k| k.1.clone()).collect();
+        let min_required_signatures = NonZeroU8::new(min_required_signatures).unwrap();
+        let challenge =
+            ClassicMultisigChallenge::new(chain_config, min_required_signatures, pub_keys).unwrap();
+        let multisig_hash: PublicKeyHash = (&challenge).into();
+        self.multisigs.insert(
+            multisig_hash,
+            Multisig {
+                keys,
+                min_required_signatures,
+            },
+        );
+        Destination::ClassicMultisig(multisig_hash)
+    }
+
     pub fn get_signature(
         &self,
         rng: &mut (impl Rng + CryptoRng),
@@ -188,10 +214,21 @@ impl KeyManager {
 
                     match res {
                         ClassicalMultisigCompletionStatus::Complete(sigs) => {
-                            return Some(InputWitness::Standard(StandardInputSignature::new(
-                                sighash_type,
-                                sigs.encode(),
-                            )));
+                            let sig = if inputs_utxos[input_num].is_some_and(is_htlc_output) {
+                                produce_classical_multisig_signature_for_htlc_input(
+                                    chain_config,
+                                    &sigs,
+                                    sighash_type,
+                                    tx,
+                                    inputs_utxos,
+                                    input_num,
+                                )
+                                .unwrap()
+                            } else {
+                                StandardInputSignature::new(sighash_type, sigs.encode())
+                            };
+
+                            return Some(InputWitness::Standard(sig));
                         }
                         ClassicalMultisigCompletionStatus::Incomplete(sigs) => {
                             current_signatures = sigs;
@@ -202,5 +239,21 @@ impl KeyManager {
             }
             Destination::ScriptHash(_) => None,
         }
+    }
+}
+
+fn is_htlc_output(output: &TxOutput) -> bool {
+    match output {
+        TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::Burn(_)
+        | TxOutput::CreateStakePool(_, _)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::IssueNft(_, _, _)
+        | TxOutput::DataDeposit(_) => false,
+        TxOutput::Htlc(_, _) => true,
     }
 }

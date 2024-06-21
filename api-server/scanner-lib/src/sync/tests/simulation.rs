@@ -335,7 +335,7 @@ async fn simulation(
                             .and_modify(|amount| *amount = (*amount + *to_stake).unwrap())
                             .or_insert(*to_stake);
                     }
-                    TxOutput::Htlc(_, _) => todo!(),
+                    TxOutput::Htlc(_, _) => unimplemented!(),
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)

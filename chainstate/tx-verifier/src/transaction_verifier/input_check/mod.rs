@@ -534,16 +534,3 @@ where
 
     Ok(())
 }
-
-//pub fn verify_signature<T: Transactable>(
-//    chain_config: &ChainConfig,
-//    outpoint_destination: &Destination,
-//    tx: &T,
-//    inputs_utxos: &[Option<&TxOutput>],
-//    input_num: usize,
-//) -> Result<(), ConnectTransactionError> {
-//    let mut checker = mintscript::checker::StandardSignatureChecker;
-//    checker.check_signature(ctx, destination, signature)?;
-//
-//    Ok(())
-//}
