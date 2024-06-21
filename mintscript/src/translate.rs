@@ -23,9 +23,10 @@ use common::chain::{
         DestinationSigError,
     },
     tokens::TokenId,
-    AccountCommand, AccountOutPoint, AccountSpending, DelegationId, Destination, PoolId,
+    AccountCommand, AccountOutPoint, AccountSpending, DelegationId, Destination, OrderId, PoolId,
     SignedTransaction, TxOutput, UtxoOutPoint,
 };
+use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
 use utxo::Utxo;
@@ -51,6 +52,9 @@ pub enum TranslationError {
     TokensAccounting(#[from] tokens_accounting::Error),
 
     #[error(transparent)]
+    OrdersAccounting(#[from] orders_accounting::Error),
+
+    #[error(transparent)]
     SignatureError(#[from] DestinationSigError),
 
     #[error("Stake pool {0} does not exist")]
@@ -61,6 +65,9 @@ pub enum TranslationError {
 
     #[error("Token with id {0} does not exist")]
     TokenNotFound(TokenId),
+
+    #[error("Order with id {0} does not exist")]
+    OrderNotFound(OrderId),
 }
 
 /// Contextual information about given input
@@ -95,9 +102,11 @@ pub trait InputInfoProvider {
 pub trait SignatureInfoProvider: InputInfoProvider {
     type PoSAccounting: PoSAccountingView<Error = pos_accounting::Error>;
     type Tokens: TokensAccountingView<Error = tokens_accounting::Error>;
+    type Orders: OrdersAccountingView<Error = orders_accounting::Error>;
 
     fn pos_accounting(&self) -> &Self::PoSAccounting;
     fn tokens(&self) -> &Self::Tokens;
+    fn orders(&self) -> &Self::Orders;
 }
 
 pub trait TranslateInput<C> {
@@ -206,8 +215,14 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                     };
                     Ok(checksig(dest))
                 }
-                AccountCommand::CancelOrder(_) => todo!(),
-                AccountCommand::FillOrder(_, _, _) => todo!(),
+                AccountCommand::CancelOrder(order_id) => {
+                    let order_data = ctx
+                        .orders()
+                        .get_order_data(order_id)?
+                        .ok_or(TranslationError::OrderNotFound(*order_id))?;
+                    Ok(checksig(order_data.cancel_key()))
+                }
+                AccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
             },
         }
     }

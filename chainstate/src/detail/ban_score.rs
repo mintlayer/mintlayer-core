@@ -172,11 +172,13 @@ impl BanScore for mintscript::translate::TranslationError {
             | Self::IllegalOutputSpend
             | Self::PoolNotFound(_)
             | Self::DelegationNotFound(_)
-            | Self::TokenNotFound(_) => 100,
+            | Self::TokenNotFound(_)
+            | Self::OrderNotFound(_) => 100,
 
             Self::SignatureError(_) => 100,
             Self::PoSAccounting(e) => e.ban_score(),
             Self::TokensAccounting(e) => e.ban_score(),
+            Self::OrdersAccounting(e) => e.ban_score(),
         }
     }
 }

@@ -1103,7 +1103,11 @@ where
         median_time_past: BlockTimestamp,
     ) -> Result<(), input_check::InputCheckError>
     where
-        Tx: input_check::FullyVerifiable<PoSAccountingDelta<A>, TokensAccountingCache<T>>,
+        Tx: input_check::FullyVerifiable<
+            PoSAccountingDelta<A>,
+            TokensAccountingCache<T>,
+            OrdersAccountingCache<O>,
+        >,
     {
         input_check::verify_full(
             tx,
@@ -1111,6 +1115,7 @@ where
             &self.utxo_cache,
             self.pos_accounting_adapter.accounting_delta(),
             &self.tokens_accounting_cache,
+            &self.orders_accounting_cache,
             &self.storage,
             tx_source,
             median_time_past,

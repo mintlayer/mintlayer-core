@@ -4208,6 +4208,7 @@ dependencies = [
  "crypto",
  "expect-test",
  "hex",
+ "orders-accounting",
  "pos-accounting",
  "rstest",
  "serialization",

@@ -60,12 +60,17 @@ impl crate::translate::InputInfoProvider for MockSigInfoProvider<'_> {
 impl crate::translate::SignatureInfoProvider for MockSigInfoProvider<'_> {
     type PoSAccounting = Self;
     type Tokens = Self;
+    type Orders = Self;
 
     fn pos_accounting(&self) -> &Self::PoSAccounting {
         self
     }
 
     fn tokens(&self) -> &Self::Tokens {
+        self
+    }
+
+    fn orders(&self) -> &Self::Orders {
         self
     }
 }
@@ -118,5 +123,24 @@ impl tokens_accounting::TokensAccountingView for MockSigInfoProvider<'_> {
 
     fn get_circulating_supply(&self, _id: &TokenId) -> Result<Option<Amount>, Self::Error> {
         unreachable!("not used in these tests")
+    }
+}
+
+impl orders_accounting::OrdersAccountingView for MockSigInfoProvider<'_> {
+    type Error = orders_accounting::Error;
+
+    fn get_order_data(
+        &self,
+        id: &common::chain::OrderId,
+    ) -> Result<Option<common::chain::OrderData>, Self::Error> {
+        todo!()
+    }
+
+    fn get_ask_balance(&self, id: &common::chain::OrderId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
+    }
+
+    fn get_give_balance(&self, id: &common::chain::OrderId) -> Result<Option<Amount>, Self::Error> {
+        todo!()
     }
 }

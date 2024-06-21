@@ -348,10 +348,12 @@ impl BlockProcessingErrorClassification for mintscript::translate::TranslationEr
             | Self::IllegalOutputSpend
             | Self::PoolNotFound(_)
             | Self::DelegationNotFound(_)
-            | Self::TokenNotFound(_) => BlockProcessingErrorClass::BadBlock,
+            | Self::TokenNotFound(_)
+            | Self::OrderNotFound(_) => BlockProcessingErrorClass::BadBlock,
 
             Self::PoSAccounting(e) => e.classify(),
             Self::TokensAccounting(e) => e.classify(),
+            Self::OrdersAccounting(e) => e.classify(),
             Self::SignatureError(e) => e.classify(),
         }
     }
