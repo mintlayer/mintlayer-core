@@ -50,9 +50,9 @@ const TESTNET_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78440);
 // The fork, at which we upgrade chainstate to distribute reward to staker proportionally to their balance
 // and change various tokens fees
 const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(138244);
-// The fork, at which txs with htlc outputs become valid
-const TESTNET_HTLC_FORK_HEIGHT: BlockHeight = BlockHeight::new(99999999);
-const MAINNET_HTLC_FORK_HEIGHT: BlockHeight = BlockHeight::new(99999999);
+// The fork, at which txs with htlc and orders outputs become valid
+const TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(99999999);
+const MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(99999999);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -170,7 +170,7 @@ impl ChainType {
                         ),
                     ),
                     (
-                        MAINNET_HTLC_FORK_HEIGHT,
+                        MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT,
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V1,
@@ -223,7 +223,7 @@ impl ChainType {
                         ),
                     ),
                     (
-                        TESTNET_HTLC_FORK_HEIGHT,
+                        TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT,
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V1,

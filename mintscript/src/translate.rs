@@ -258,7 +258,9 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                     Ok(WitnessScript::timelock(*timelock))
                 }
                 TxOutput::Htlc(_, htlc) => match ctx.witness() {
-                    InputWitness::NoSignature(_) => Ok(WitnessScript::TRUE),
+                    InputWitness::NoSignature(_) => Err(TranslationError::SignatureError(
+                        DestinationSigError::SignatureNotFound,
+                    )),
                     InputWitness::Standard(sig) => {
                         let htlc_spend =
                             AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())?;

@@ -1201,7 +1201,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             )
                             .await;
                         }
-                        TxOutput::Htlc(_, _) => {} // TODO: support htlc
+                        TxOutput::Htlc(_, _) => {} // TODO(HTLC)
                         TxOutput::LockThenTransfer(output_value, destination, _)
                         | TxOutput::Transfer(output_value, destination) => {
                             let address = Address::<Destination>::new(&chain_config, destination)
@@ -1616,7 +1616,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                         .expect("Unable to set locked utxo");
                 }
             }
-            TxOutput::Htlc(_, _) => {} // TODO: support htlc
+            TxOutput::Htlc(_, _) => {} // TODO(HTLC)
         }
     }
 
@@ -1816,6 +1816,6 @@ fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         | TxOutput::Burn(_)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_) => None,
-        TxOutput::Htlc(_, _) => None, // TODO: support htlc
+        TxOutput::Htlc(_, _) => None, // TODO(HTLC)
     }
 }

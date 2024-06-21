@@ -42,15 +42,6 @@ pub mod output_value;
 pub mod stakelock;
 pub mod timelock;
 
-fixed_hash::construct_fixed_hash! {
-    #[derive(Encode, Decode, serde::Serialize, serde::Deserialize)]
-    pub struct SecretHash(20);
-}
-
-impl rpc_description::HasValueHint for SecretHash {
-    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, VariantCount)]
 pub enum Destination {
     #[codec(index = 0)]
