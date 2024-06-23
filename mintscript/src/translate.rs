@@ -238,13 +238,13 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_>
                     TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::Htlc(_, _)
-                    | TxOutput::AnyoneCanTake(_) => Err(TranslationError::IllegalOutputSpend),
+                    | TxOutput::Htlc(_, _) => Err(TranslationError::IllegalOutputSpend),
                     TxOutput::CreateDelegationId(_, _)
                     | TxOutput::Burn(_)
                     | TxOutput::DataDeposit(_)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::IssueFungibleToken(_) => Err(TranslationError::Unspendable),
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::AnyoneCanTake(_) => Err(TranslationError::Unspendable),
 
                     TxOutput::ProduceBlockFromStake(d, _) => {
                         // Spending an output of a block creation output is only allowed to
@@ -296,13 +296,13 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 TxOutput::Transfer(_, _)
                 | TxOutput::CreateStakePool(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::IssueNft(_, _, _)
-                | TxOutput::AnyoneCanTake(_) => Ok(WitnessScript::TRUE),
+                | TxOutput::IssueNft(_, _, _) => Ok(WitnessScript::TRUE),
                 TxOutput::CreateDelegationId(_, _)
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::Burn(_)
-                | TxOutput::DataDeposit(_) => Err(TranslationError::Unspendable),
+                | TxOutput::DataDeposit(_)
+                | TxOutput::AnyoneCanTake(_) => Err(TranslationError::Unspendable),
             },
             InputInfo::Account { outpoint } => match outpoint.account() {
                 AccountSpending::DelegationBalance(_deleg_id, _amt) => Ok(WitnessScript::TRUE),

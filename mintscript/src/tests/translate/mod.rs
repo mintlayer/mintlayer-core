@@ -22,7 +22,7 @@ use common::{
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         signature::inputsig::authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
         stakelock::StakePoolData,
-        tokens, AccountNonce, AccountSpending,
+        tokens, AccountNonce, AccountSpending, OrderData, OrderId,
     },
     primitives::per_thousand::PerThousand,
 };
@@ -210,6 +210,19 @@ fn pool0() -> (PoolId, PoolData) {
     (fake_id(0xbc), data)
 }
 
+fn order0() -> (OrderId, OrderData) {
+    let data = OrderData::new(
+        dest_pk(0x33),
+        OutputValue::Coin(Amount::from_atoms(100)),
+        OutputValue::Coin(Amount::from_atoms(200)),
+    );
+    (fake_id(0x44), data)
+}
+
+fn anyonecantake(data: OrderData) -> TestInputInfo {
+    tii(TxOutput::AnyoneCanTake(data))
+}
+
 fn account_spend(deleg: DelegationId, amount: u128) -> TestInputInfo {
     let spend = AccountSpending::DelegationBalance(deleg, Amount::from_atoms(amount));
     let outpoint = AccountOutPoint::new(AccountNonce::new(7), spend);
@@ -232,6 +245,17 @@ fn token0() -> (TokenId, TokenData) {
 
 fn mint(id: TokenId, amount: u128) -> TestInputInfo {
     let command = AccountCommand::MintTokens(id, Amount::from_atoms(amount));
+    TestInputInfo::AccountCommand { command }
+}
+
+fn cancel_order(id: OrderId) -> TestInputInfo {
+    let command = AccountCommand::CancelOrder(id);
+    TestInputInfo::AccountCommand { command }
+}
+
+fn fill_order(id: OrderId) -> TestInputInfo {
+    let command =
+        AccountCommand::FillOrder(id, OutputValue::Coin(Amount::from_atoms(1)), dest_pk(0x4));
     TestInputInfo::AccountCommand { command }
 }
 
@@ -327,6 +351,15 @@ fn mode_name<'a, T: TranslationMode<'a>>(_: &T) -> &'static str {
 #[case("htlc_02", htlc(15, 16, tl_until_time(99)), htlc_stdsig(0x53))]
 #[case("htlc_03", htlc(17, 18, tl_for_secs(124)), htlc_multisig(0x54))]
 #[case("htlc_04", htlc(19, 20, tl_for_blocks(1000)), htlc_multisig(0x55))]
+#[case("anyonecantake_00", anyonecantake(order0().1), nosig())]
+#[case("anyonecantake_01", anyonecantake(order0().1), stdsig(0x57))]
+#[case("cancelorder_00", cancel_order(order0().0), nosig())]
+#[case("cancelorder_01", cancel_order(fake_id(0x88)), nosig())]
+#[case("cancelorder_02", cancel_order(order0().0), stdsig(0x44))]
+#[case("cancelorder_03", cancel_order(order0().0), stdsig(0x45))]
+#[case("fillorder_00", fill_order(order0().0), nosig())]
+#[case("fillorder_01", fill_order(fake_id(0x77)), nosig())]
+#[case("fillorder_00", fill_order(order0().0), stdsig(0x45))]
 fn translate_snap(
     #[values(TxnMode, RewardMode, TimelockOnly)] mode: impl for<'a> TranslationMode<'a>,
     #[case] name: &str,
@@ -337,7 +370,9 @@ fn translate_snap(
     let tokens = [token0()];
     let delegs = [deleg0()];
     let pools = [pool0()];
-    let sig_info = mocks::MockSigInfoProvider::new(input_info, witness, tokens, pools, delegs);
+    let orders = [order0()];
+    let sig_info =
+        mocks::MockSigInfoProvider::new(input_info, witness, tokens, pools, delegs, orders);
     let mode_str = mode_name(&mode);
 
     let result = match mode.translate_input_and_witness(&sig_info) {
