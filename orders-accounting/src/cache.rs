@@ -28,10 +28,16 @@ use crate::{
         CancelOrderUndo, CreateOrderUndo, FillOrderUndo, OrdersAccountingOperations,
         OrdersAccountingUndo,
     },
-    output_value_amount,
     view::OrdersAccountingView,
     FlushableOrdersAccountingView, OrdersAccountingDeltaUndoData,
 };
+
+fn output_value_amount(value: &OutputValue) -> Result<Amount> {
+    match value {
+        OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => Ok(*amount),
+        OutputValue::TokenV0(_) => Err(Error::UnsupportedTokenVersion),
+    }
+}
 
 pub struct OrdersAccountingCache<P> {
     parent: P,

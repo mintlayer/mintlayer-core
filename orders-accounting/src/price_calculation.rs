@@ -19,7 +19,7 @@ use common::{
 };
 use utils::ensure;
 
-use crate::{error::Result, output_value_amount, Error, OrdersAccountingView};
+use crate::{error::Result, Error, OrdersAccountingView};
 
 pub fn calculate_fill_order(
     view: &impl OrdersAccountingView,
@@ -49,7 +49,12 @@ pub fn calculate_fill_order(
         ensure_currencies_and_amounts_match(order_id, &ask_balance, fill_value)?;
     }
 
-    calculate_filled_amount_impl(ask_balance, give_balance, output_value_amount(fill_value)?)
+    let fill_amount = match fill_value {
+        OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => *amount,
+        OutputValue::TokenV0(_) => return Err(Error::UnsupportedTokenVersion),
+    };
+
+    calculate_filled_amount_impl(ask_balance, give_balance, fill_amount)
         .ok_or(Error::OrderOverflow(order_id))
 }
 
@@ -115,6 +120,13 @@ mod tests {
         ($value:expr) => {
             OutputValue::TokenV1(H256::from_low_u64_be(1).into(), Amount::from_atoms($value))
         };
+    }
+
+    fn output_value_amount(value: &OutputValue) -> Amount {
+        match value {
+            OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => *amount,
+            OutputValue::TokenV0(_) => panic!("unsupported token"),
+        }
     }
 
     #[rstest]
@@ -191,8 +203,8 @@ mod tests {
                 order_id,
                 OrderData::new(Destination::AnyoneCanSpend, ask.clone(), give.clone()),
             )]),
-            BTreeMap::from_iter([(order_id, output_value_amount(&ask).unwrap())]),
-            BTreeMap::from_iter([(order_id, output_value_amount(&give).unwrap())]),
+            BTreeMap::from_iter([(order_id, output_value_amount(&ask))]),
+            BTreeMap::from_iter([(order_id, output_value_amount(&give))]),
         );
         let orders_db = OrdersAccountingDB::new(&orders_store);
 
@@ -223,8 +235,8 @@ mod tests {
                 order_id,
                 OrderData::new(Destination::AnyoneCanSpend, ask.clone(), give.clone()),
             )]),
-            BTreeMap::from_iter([(order_id, output_value_amount(&ask).unwrap())]),
-            BTreeMap::from_iter([(order_id, output_value_amount(&give).unwrap())]),
+            BTreeMap::from_iter([(order_id, output_value_amount(&ask))]),
+            BTreeMap::from_iter([(order_id, output_value_amount(&give))]),
         );
         let orders_db = OrdersAccountingDB::new(&orders_store);
 

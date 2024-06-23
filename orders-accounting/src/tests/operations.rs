@@ -24,7 +24,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
-    cache::OrdersAccountingCache, operations::OrdersAccountingOperations, output_value_amount,
+    cache::OrdersAccountingCache, operations::OrdersAccountingOperations,
     view::FlushableOrdersAccountingView, Error, InMemoryOrdersAccounting, OrdersAccountingDB,
     OrdersAccountingView,
 };
@@ -36,6 +36,13 @@ fn make_order_data(rng: &mut impl Rng) -> OrderData {
         OutputValue::Coin(Amount::from_atoms(rng.gen_range(1u128..1000))),
         OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen_range(1u128..1000))),
     )
+}
+
+fn output_value_amount(value: &OutputValue) -> Amount {
+    match value {
+        OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => *amount,
+        OutputValue::TokenV0(_) => panic!("unsupported token"),
+    }
 }
 
 #[rstest]
@@ -57,8 +64,8 @@ fn create_order_and_flush(#[case] seed: Seed) {
 
     let expected_storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()))]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()))]),
     );
 
     assert_eq!(expected_storage, storage);
@@ -89,8 +96,8 @@ fn create_order_twice(#[case] seed: Seed) {
     {
         let storage = InMemoryOrdersAccounting::from_values(
             BTreeMap::from_iter([(order_id, order_data.clone())]),
-            BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
-            BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
+            BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()))]),
+            BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()))]),
         );
         let db = OrdersAccountingDB::new(&storage);
         let mut cache = OrdersAccountingCache::new(&db);
@@ -122,11 +129,11 @@ fn create_order_and_undo(#[case] seed: Seed) {
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
     assert_eq!(
-        Some(output_value_amount(order_data.ask()).unwrap()),
+        Some(output_value_amount(order_data.ask())),
         cache.get_ask_balance(&order_id).unwrap()
     );
     assert_eq!(
-        Some(output_value_amount(order_data.give()).unwrap()),
+        Some(output_value_amount(order_data.give())),
         cache.get_give_balance(&order_id).unwrap()
     );
 
@@ -152,8 +159,8 @@ fn cancel_order_and_flush(#[case] seed: Seed) {
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()))]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()))]),
     );
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
@@ -186,8 +193,8 @@ fn cancel_order_twice(#[case] seed: Seed) {
 
     let storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()))]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()))]),
     );
     let db = OrdersAccountingDB::new(&storage);
     let mut cache = OrdersAccountingCache::new(&db);
@@ -211,8 +218,8 @@ fn cancel_order_and_undo(#[case] seed: Seed) {
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()))]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()))]),
     );
     let original_storage = storage.clone();
     let mut db = OrdersAccountingDB::new(&mut storage);
@@ -237,11 +244,11 @@ fn cancel_order_and_undo(#[case] seed: Seed) {
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
     assert_eq!(
-        Some(output_value_amount(order_data.ask()).unwrap()),
+        Some(output_value_amount(order_data.ask())),
         cache.get_ask_balance(&order_id).unwrap()
     );
     assert_eq!(
-        Some(output_value_amount(order_data.give()).unwrap()),
+        Some(output_value_amount(order_data.give())),
         cache.get_give_balance(&order_id).unwrap()
     );
 
@@ -261,8 +268,8 @@ fn fill_order_wrong_currency(#[case] seed: Seed) {
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()))]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()))]),
     );
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
@@ -295,8 +302,8 @@ fn fill_entire_order_and_flush(#[case] seed: Seed) {
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()))]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()))]),
     );
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
@@ -310,7 +317,7 @@ fn fill_entire_order_and_flush(#[case] seed: Seed) {
 
     // try to overbid
     {
-        let ask_amount = output_value_amount(order_data.ask()).unwrap();
+        let ask_amount = output_value_amount(order_data.ask());
         let fill = OutputValue::Coin((ask_amount + Amount::from_atoms(1)).unwrap());
         let result = cache.fill_order(order_id, fill);
         assert_eq!(
@@ -346,8 +353,8 @@ fn fill_order_partially_and_flush(#[case] seed: Seed) {
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()))]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()))]),
     );
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
@@ -420,8 +427,8 @@ fn fill_order_partially_and_undo(#[case] seed: Seed) {
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()))]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()))]),
     );
     let original_storage = storage.clone();
     let mut db = OrdersAccountingDB::new(&mut storage);
@@ -524,8 +531,8 @@ fn fill_order_partially_and_cancel(#[case] seed: Seed) {
 
     let mut storage = InMemoryOrdersAccounting::from_values(
         BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()))]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()))]),
     );
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
