@@ -253,6 +253,40 @@ fn cancel_order_and_undo(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn fill_order_wrong_currency(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let order_id = OrderId::random_using(&mut rng);
+    let order_data = make_order_data(&mut rng);
+
+    let mut storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data.clone())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()).unwrap())]),
+        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()).unwrap())]),
+    );
+    let mut db = OrdersAccountingDB::new(&mut storage);
+    let mut cache = OrdersAccountingCache::new(&db);
+
+    // try to fill with random token instead of a coin
+    {
+        let random_token_id = TokenId::random_using(&mut rng);
+        let result = cache.fill_order(
+            order_id,
+            OutputValue::TokenV1(random_token_id, Amount::from_atoms(1)),
+        );
+        assert_eq!(result.unwrap_err(), Error::CurrencyMismatch);
+    }
+
+    let _ = cache.fill_order(order_id, order_data.ask().clone()).unwrap();
+
+    db.batch_write_orders_data(cache.consume()).unwrap();
+
+    assert_eq!(InMemoryOrdersAccounting::new(), storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn fill_entire_order_and_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 

@@ -118,6 +118,38 @@ mod tests {
     }
 
     #[rstest]
+    #[case(0, 0, 0, None)]
+    #[case(0, 1, 1, None)]
+    #[case(0, u128::MAX, 1, None)]
+    #[case(3, u128::MAX, 2, None)]
+    #[case(1, 0, 0, Some(0))]
+    #[case(1, 0, 1, Some(0))]
+    #[case(1, 1, 1, Some(1))]
+    #[case(1, 2, 1, Some(2))]
+    #[case(2, 100, 0, Some(0))]
+    #[case(2, 100, 1, Some(50))]
+    #[case(2, 100, 2, Some(100))]
+    #[case(3, 100, 0, Some(0))]
+    #[case(3, 100, 1, Some(33))]
+    #[case(3, 100, 2, Some(66))]
+    #[case(3, 100, 3, Some(100))]
+    fn calculate_filled_amount_impl_test(
+        #[case] ask: u128,
+        #[case] give: u128,
+        #[case] fill: u128,
+        #[case] result: Option<u128>,
+    ) {
+        assert_eq!(
+            result.map(Amount::from_atoms),
+            calculate_filled_amount_impl(
+                Amount::from_atoms(ask),
+                Amount::from_atoms(give),
+                Amount::from_atoms(fill)
+            )
+        );
+    }
+
+    #[rstest]
     #[case(token!(1), coin!(0), token!(0), 0)]
     #[case(token!(1), coin!(0), token!(1), 0)]
     #[case(token!(3), coin!(100), token!(0), 0)]
@@ -147,7 +179,7 @@ mod tests {
     #[case(coin!(3), coin!(100), coin!(2), 66)]
     #[case(coin!(3), coin!(100), coin!(3), 100)]
     #[case(coin!(1), token!(u128::MAX), coin!(1), u128::MAX)]
-    fn valid_values(
+    fn fill_order_valid_values(
         #[case] ask: OutputValue,
         #[case] give: OutputValue,
         #[case] fill: OutputValue,
@@ -179,7 +211,7 @@ mod tests {
     #[case(coin!(1), token!(1), token!(1), Error::CurrencyMismatch)]
     #[case(coin!(1), token!(1), token!(1), Error::CurrencyMismatch)]
     #[case(token!(1), token2!(1), token2!(1), Error::CurrencyMismatch)]
-    fn invalid_values(
+    fn fill_order_invalid_values(
         #[case] ask: OutputValue,
         #[case] give: OutputValue,
         #[case] fill: OutputValue,
