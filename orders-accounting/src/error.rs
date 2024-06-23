@@ -47,6 +47,10 @@ pub enum Error {
     InvariantOrderAskBalanceExistForCancelUndo(OrderId),
     #[error("Give balance for order {0}` still exist on cancel undo")]
     InvariantOrderGiveBalanceExistForCancelUndo(OrderId),
+    #[error("Ask balance for non-existing order {0}` is not zero")]
+    InvariantNonzeroAskBalanceForMissingOrder(OrderId),
+    #[error("Give balance for non-existing order {0}` is not zero")]
+    InvariantNonzeroGiveBalanceForMissingOrder(OrderId),
     #[error("Fill operation for order {0}` left a change")]
     FillOrderChangeLeft(OrderId),
     #[error("Coin type mismatch")]

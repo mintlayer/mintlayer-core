@@ -682,6 +682,8 @@ impl BanScore for orders_accounting::Error {
             Error::AttemptedCancelNonexistingOrderData(_) => 100,
             Error::AttemptedCancelNonexistingAskBalance(_) => 100,
             Error::AttemptedCancelNonexistingGiveBalance(_) => 100,
+            Error::InvariantNonzeroAskBalanceForMissingOrder(_) => 100,
+            Error::InvariantNonzeroGiveBalanceForMissingOrder(_) => 100,
             Error::UnsupportedTokenVersion => 100,
             Error::ViewFail => 0,
             Error::StorageWrite => 0,

@@ -18,6 +18,7 @@ use common::{
     chain::{output_value::OutputValue, OrderData, OrderId},
     primitives::Amount,
 };
+use logging::log;
 use utils::ensure;
 
 use crate::{
@@ -61,12 +62,6 @@ impl<P: OrdersAccountingView> OrdersAccountingCache<P> {
     }
 
     fn undo_create_order(&mut self, undo: CreateOrderUndo) -> Result<()> {
-        ensure!(
-            self.get_order_data(&undo.id)?.is_some(),
-            Error::InvariantOrderDataNotFoundForUndo(undo.id)
-        );
-        self.data.order_data.undo_merge_delta_data_element(undo.id, undo.undo_data)?;
-
         match self.get_ask_balance(&undo.id)? {
             Some(balance) => {
                 if balance != undo.ask_balance {
@@ -86,6 +81,12 @@ impl<P: OrdersAccountingView> OrdersAccountingCache<P> {
             None => return Err(Error::InvariantOrderGiveBalanceNotFoundForUndo(undo.id)),
         }
         self.data.give_balances.sub_unsigned(undo.id, undo.give_balance)?;
+
+        ensure!(
+            self.get_order_data(&undo.id)?.is_some(),
+            Error::InvariantOrderDataNotFoundForUndo(undo.id)
+        );
+        self.data.order_data.undo_merge_delta_data_element(undo.id, undo.undo_data)?;
 
         Ok(())
     }
@@ -144,18 +145,46 @@ impl<P: OrdersAccountingView> OrdersAccountingView for OrdersAccountingCache<P> 
     fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>> {
         let parent_supply = self.parent.get_ask_balance(id).map_err(|_| Error::ViewFail)?;
         let local_delta = self.data.ask_balances.data().get(id).cloned();
-        combine_amount_delta(&parent_supply, &local_delta).map_err(Error::AccountingError)
+        let balance =
+            combine_amount_delta(&parent_supply, &local_delta).map_err(Error::AccountingError)?;
+
+        // When combining deltas with amounts it's impossible to distinguish None from Some(Amount::ZERO).
+        // Use information from DeltaData to make the decision.
+        if self.get_order_data(id)?.is_some() {
+            Ok(balance)
+        } else {
+            utils::ensure!(
+                balance.unwrap_or(Amount::ZERO) == Amount::ZERO,
+                Error::InvariantNonzeroAskBalanceForMissingOrder(*id)
+            );
+            Ok(None)
+        }
     }
 
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>> {
         let parent_supply = self.parent.get_give_balance(id).map_err(|_| Error::ViewFail)?;
         let local_delta = self.data.give_balances.data().get(id).cloned();
-        combine_amount_delta(&parent_supply, &local_delta).map_err(Error::AccountingError)
+        let balance =
+            combine_amount_delta(&parent_supply, &local_delta).map_err(Error::AccountingError)?;
+
+        // When combining deltas with amounts it's impossible to distinguish None from Some(Amount::ZERO).
+        // Use information from DeltaData to make the decision.
+        if self.get_order_data(id)?.is_some() {
+            Ok(balance)
+        } else {
+            utils::ensure!(
+                balance.unwrap_or(Amount::ZERO) == Amount::ZERO,
+                Error::InvariantNonzeroGiveBalanceForMissingOrder(*id)
+            );
+            Ok(None)
+        }
     }
 }
 
 impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCache<P> {
     fn create_order(&mut self, id: OrderId, data: OrderData) -> Result<OrdersAccountingUndo> {
+        log::debug!("Creating an order: {:?} {:?}", id, data);
+
         ensure!(
             self.get_order_data(&id)?.is_none(),
             Error::OrderAlreadyExists(id)
@@ -191,6 +220,8 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
     }
 
     fn cancel_order(&mut self, id: OrderId) -> Result<OrdersAccountingUndo> {
+        log::debug!("Canceling an order: {:?}", id);
+
         let order_data = self
             .get_order_data(&id)?
             .ok_or(Error::AttemptedCancelNonexistingOrderData(id))?;
@@ -218,6 +249,8 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
     }
 
     fn fill_order(&mut self, id: OrderId, fill_value: OutputValue) -> Result<OrdersAccountingUndo> {
+        log::debug!("Filling an order: {:?} {:?}", id, fill_value);
+
         let fill_amount = output_value_amount(&fill_value)?;
         let filled_amount = calculate_fill_order(self, id, &fill_value)?;
 
@@ -254,6 +287,7 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
     }
 
     fn undo(&mut self, undo_data: OrdersAccountingUndo) -> Result<()> {
+        log::debug!("Uno an order: {:?}", undo_data);
         match undo_data {
             OrdersAccountingUndo::CreateOrder(undo) => self.undo_create_order(undo),
             OrdersAccountingUndo::CancelOrder(undo) => self.undo_cancel_order(undo),

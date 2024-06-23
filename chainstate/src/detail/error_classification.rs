@@ -918,7 +918,11 @@ impl BlockProcessingErrorClassification for orders_accounting::Error {
             | Error::AttemptedCancelNonexistingOrderData(_)
             | Error::AttemptedCancelNonexistingAskBalance(_)
             | Error::AttemptedCancelNonexistingGiveBalance(_)
-            | Error::UnsupportedTokenVersion => BlockProcessingErrorClass::BadBlock,
+            | Error::UnsupportedTokenVersion
+            | Error::InvariantNonzeroAskBalanceForMissingOrder(_)
+            | Error::InvariantNonzeroGiveBalanceForMissingOrder(_) => {
+                BlockProcessingErrorClass::BadBlock
+            }
 
             Error::StorageError(err) => err.classify(),
             Error::AccountingError(err) => err.classify(),

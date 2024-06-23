@@ -228,14 +228,8 @@ fn cancel_order_and_undo(#[case] seed: Seed) {
     let undo = cache.cancel_order(order_id).unwrap();
 
     assert_eq!(None, cache.get_order_data(&order_id).unwrap().as_ref());
-    assert_eq!(
-        Some(Amount::ZERO),
-        cache.get_ask_balance(&order_id).unwrap()
-    );
-    assert_eq!(
-        Some(Amount::ZERO),
-        cache.get_give_balance(&order_id).unwrap()
-    );
+    assert_eq!(None, cache.get_ask_balance(&order_id).unwrap());
+    assert_eq!(None, cache.get_give_balance(&order_id).unwrap());
 
     cache.undo(undo).unwrap();
 
@@ -456,14 +450,8 @@ fn fill_order_partially_and_undo(#[case] seed: Seed) {
         .unwrap();
 
     assert_eq!(None, cache.get_order_data(&order_id).unwrap().as_ref());
-    assert_eq!(
-        Some(Amount::ZERO),
-        cache.get_ask_balance(&order_id).unwrap()
-    );
-    assert_eq!(
-        Some(Amount::ZERO),
-        cache.get_give_balance(&order_id).unwrap()
-    );
+    assert_eq!(None, cache.get_ask_balance(&order_id).unwrap());
+    assert_eq!(None, cache.get_give_balance(&order_id).unwrap());
 
     cache.undo(undo3).unwrap();
 

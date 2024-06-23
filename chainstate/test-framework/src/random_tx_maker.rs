@@ -667,7 +667,12 @@ impl<'a> RandomTxMaker<'a> {
                         Amount::from_atoms(i128::MAX as u128)
                     }
                 };
+
                 let supply_left = (supply_limit - circulating_supply).unwrap();
+                if supply_left == Amount::ZERO {
+                    return (Vec::new(), Vec::new());
+                }
+
                 let mint_limit = std::cmp::min(100_000, supply_left.into_atoms());
                 let to_mint = Amount::from_atoms(rng.gen_range(1..=mint_limit));
 
