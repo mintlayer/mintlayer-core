@@ -58,7 +58,7 @@ pub(crate) fn group_outputs<T, Grouped: Clone>(
                     get_tx_output(&output).clone(),
                 )))
             }
-            // TODO: support orders
+            // TODO(orders)
             TxOutput::AnyoneCanTake(_) => unimplemented!(),
         };
 
@@ -114,7 +114,7 @@ pub fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
                     get_tx_output(&output).clone(),
                 )))
             }
-            // TODO: support orders
+            // TODO(orders)
             TxOutput::AnyoneCanTake(_) => unimplemented!(),
         };
 

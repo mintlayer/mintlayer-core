@@ -238,11 +238,11 @@ pub fn data_deposit() -> TxOutput {
 }
 
 pub fn create_order() -> TxOutput {
-    TxOutput::AnyoneCanTake(OrderData::new(
+    TxOutput::AnyoneCanTake(Box::new(OrderData::new(
         Destination::AnyoneCanSpend,
         OutputValue::Coin(Amount::ZERO),
         OutputValue::Coin(Amount::ZERO),
-    ))
+    )))
 }
 
 pub fn issue_nft() -> TxOutput {

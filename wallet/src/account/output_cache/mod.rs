@@ -721,7 +721,7 @@ impl OutputCache {
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::ProduceBlockFromStake(_, _) => false,
-                    // TODO: support orders
+                    // TODO(orders)
                     TxOutput::AnyoneCanTake(_) => unimplemented!(),
                 }
             }),
@@ -732,7 +732,7 @@ impl OutputCache {
                 | AccountCommand::UnfreezeToken(token_id)
                 | AccountCommand::ChangeTokenAuthority(token_id, _)
                 | AccountCommand::UnmintTokens(token_id) => frozen_token_id == token_id,
-                // TODO: support orders
+                // TODO(orders)
                 AccountCommand::CancelOrder(_) => unimplemented!(),
                 AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
@@ -837,7 +837,7 @@ impl OutputCache {
                     }
                 }
                 TxOutput::IssueNft(_, _, _) => {}
-                // TODO: support orders
+                // TODO(orders)
                 TxOutput::AnyoneCanTake(_) => unimplemented!(),
             };
         }
@@ -927,7 +927,7 @@ impl OutputCache {
                             self.token_issuance.insert(*token_id, data);
                         }
                     }
-                    // TODO: support orders
+                    // TODO(orders)
                     AccountCommand::CancelOrder(_) => unimplemented!(),
                     AccountCommand::FillOrder(_, _, _) => unimplemented!(),
                 },
@@ -1030,7 +1030,7 @@ impl OutputCache {
                                 data.unconfirmed_txs.remove(tx_id);
                             }
                         }
-                        // TODO: support orders
+                        // TODO(orders)
                         AccountCommand::CancelOrder(_) => unimplemented!(),
                         AccountCommand::FillOrder(_, _, _) => unimplemented!(),
                     },
@@ -1058,7 +1058,7 @@ impl OutputCache {
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::Htlc(_, _) => {}
-                    // TODO: support orders
+                    // TODO(orders)
                     TxOutput::AnyoneCanTake(_) => unimplemented!(),
                 }
             }
@@ -1323,7 +1323,7 @@ impl OutputCache {
                                                 data.unconfirmed_txs.remove(&tx_id.into());
                                             }
                                         }
-                                        // TODO: support orders
+                                        // TODO(orders)
                                         AccountCommand::CancelOrder(_) => unimplemented!(),
                                         AccountCommand::FillOrder(_, _, _) => unimplemented!(),
                                     },
@@ -1532,7 +1532,7 @@ fn apply_freeze_mutations_from_tx(
                 | AccountCommand::UnmintTokens(_)
                 | AccountCommand::LockTokenSupply(_)
                 | AccountCommand::ChangeTokenAuthority(_, _) => {}
-                // TODO: support orders
+                // TODO(orders)
                 AccountCommand::CancelOrder(_) => unimplemented!(),
                 AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
@@ -1574,7 +1574,7 @@ fn apply_total_supply_mutations_from_tx(
                 AccountCommand::FreezeToken(_, _)
                 | AccountCommand::UnfreezeToken(_)
                 | AccountCommand::ChangeTokenAuthority(_, _) => {}
-                // TODO: support orders
+                // TODO(orders)
                 AccountCommand::CancelOrder(_) => unimplemented!(),
                 AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },

@@ -964,7 +964,7 @@ impl<'a> RandomTxMaker<'a> {
                     // Transfer output is created intentionally besides order output to not waste utxo
                     // (e.g. single genesis output on issuance)
                     let outputs = vec![
-                        TxOutput::AnyoneCanTake(order_data),
+                        TxOutput::AnyoneCanTake(Box::new(order_data)),
                         TxOutput::Transfer(
                             OutputValue::Coin(change),
                             key_manager.new_destination(self.chainstate.get_chain_config(), rng),
@@ -1287,7 +1287,7 @@ impl<'a> RandomTxMaker<'a> {
 
                 let give_value = OutputValue::TokenV1(token_id, Amount::from_atoms(atoms));
                 let order_data = OrderData::new(Destination::AnyoneCanSpend, ask_value, give_value);
-                result_outputs.push(TxOutput::AnyoneCanTake(order_data));
+                result_outputs.push(TxOutput::AnyoneCanTake(Box::new(order_data)));
                 self.order_can_be_created = false;
             } else {
                 // burn
@@ -1377,7 +1377,7 @@ impl<'a> RandomTxMaker<'a> {
                 }
                 TxOutput::AnyoneCanTake(data) => {
                     let order_id = make_order_id(inputs[0].utxo_outpoint().unwrap());
-                    let _ = orders_cache.create_order(order_id, data.clone()).unwrap();
+                    let _ = orders_cache.create_order(order_id, *data.clone()).unwrap();
                     Some(output)
                 }
             })

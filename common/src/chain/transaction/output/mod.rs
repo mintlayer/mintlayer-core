@@ -142,7 +142,7 @@ pub enum TxOutput {
     #[codec(index = 10)]
     Htlc(OutputValue, Box<HashedTimelockContract>),
     #[codec(index = 11)]
-    AnyoneCanTake(OrderData),
+    AnyoneCanTake(Box<OrderData>),
 }
 
 impl TxOutput {

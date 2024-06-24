@@ -737,7 +737,7 @@ async fn tx_fees<T: ApiServerStorageWrite>(
     let pools = prefetch_pool_data(&inputs_utxos, db_tx).await?;
     let pos_accounting_adapter = PoSAccountingAdapterToCheckFees { pools };
 
-    // TODO: support orders
+    // TODO(orders)
     let orders_store = orders_accounting::InMemoryOrdersAccounting::new();
     let orders_db = orders_accounting::OrdersAccountingDB::new(&orders_store);
 
@@ -1107,7 +1107,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     .await;
                 }
                 AccountCommand::CancelOrder(_) | AccountCommand::FillOrder(_, _, _) => {
-                    // TODO: support orders
+                    // TODO(orders)
                 }
             },
             TxInput::Account(outpoint) => {
@@ -1674,7 +1674,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
             }
             TxOutput::Htlc(_, _) => {} // TODO(HTLC)
             TxOutput::AnyoneCanTake(_) => {
-                // TODO: support orders
+                // TODO(orders)
             }
         }
     }

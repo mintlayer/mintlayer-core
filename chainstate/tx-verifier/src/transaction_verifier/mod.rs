@@ -796,7 +796,7 @@ where
                         let order_id = make_order_id(input_utxo_outpoint);
                         let result = self
                             .orders_accounting_cache
-                            .create_order(order_id, order_data.clone())
+                            .create_order(order_id, *order_data.clone())
                             .map_err(ConnectTransactionError::OrdersAccountingError);
                         Some(result)
                     }

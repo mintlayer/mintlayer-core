@@ -211,7 +211,7 @@ async fn simulation(
     let mut delegations = BTreeSet::new();
     let mut token_ids = BTreeSet::new();
 
-    // FIXME: proper  impl
+    // TODO(orders)
     let orders_store = orders_accounting::InMemoryOrdersAccounting::new();
     let orders_db = orders_accounting::OrdersAccountingDB::new(&orders_store);
 
@@ -406,7 +406,7 @@ async fn simulation(
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::Htlc(_, _) => {}
-                    TxOutput::AnyoneCanTake(_) => unimplemented!(), // TODO: support orders
+                    TxOutput::AnyoneCanTake(_) => unimplemented!(), // TODO(orders)
                 });
 
                 tx.inputs().iter().for_each(|inp| match inp {
@@ -454,7 +454,7 @@ async fn simulation(
                             burn_coins(&mut statistics, token_change_authority_fee);
                         }
                         AccountCommand::CancelOrder(_) | AccountCommand::FillOrder(_, _, _) => {
-                            unimplemented!() // TODO: support orders
+                            unimplemented!() // TODO(orders)
                         }
                     },
                 });

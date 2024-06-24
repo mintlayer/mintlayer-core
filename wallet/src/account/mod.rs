@@ -1347,7 +1347,7 @@ impl Account {
                             .token_data(token_id)
                             .map(|data| (None, Some(data.authority.clone())))
                             .ok_or(WalletError::UnknownTokenId(*token_id)),
-                        // TODO: support orders
+                        // TODO(orders)
                         AccountCommand::CancelOrder(_) => unimplemented!(),
                         AccountCommand::FillOrder(_, _, _) => unimplemented!(),
                     }
@@ -1828,7 +1828,7 @@ impl Account {
                     self.find_token(token_id).is_ok()
                         || self.is_destination_mine_or_watched(address)
                 }
-                // TODO: support orders
+                // TODO(orders)
                 AccountCommand::CancelOrder(_) => unimplemented!(),
                 AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
@@ -2194,7 +2194,7 @@ fn group_preselected_inputs(
                             output.clone(),
                         )))
                     }
-                    // TODO: support orders
+                    // TODO(orders)
                     TxOutput::AnyoneCanTake(_) => unimplemented!(),
                 };
                 update_preselected_inputs(currency, value, *fee)?;
@@ -2239,7 +2239,7 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
-                // TODO: support orders
+                // TODO(orders)
                 AccountCommand::CancelOrder(_) => unimplemented!(),
                 AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },

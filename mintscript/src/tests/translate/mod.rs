@@ -220,7 +220,7 @@ fn order0() -> (OrderId, OrderData) {
 }
 
 fn anyonecantake(data: OrderData) -> TestInputInfo {
-    tii(TxOutput::AnyoneCanTake(data))
+    tii(TxOutput::AnyoneCanTake(Box::new(data)))
 }
 
 fn account_spend(deleg: DelegationId, amount: u128) -> TestInputInfo {

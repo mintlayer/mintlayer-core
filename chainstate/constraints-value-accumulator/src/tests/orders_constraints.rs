@@ -46,11 +46,11 @@ fn create_order_constraints(#[case] seed: Seed) {
     let give_amount = Amount::from_atoms(rng.gen_range(100..1000));
     let token_id = TokenId::random_using(&mut rng);
     let ask_amount = Amount::from_atoms(rng.gen_range(100..1000));
-    let order_data = OrderData::new(
+    let order_data = Box::new(OrderData::new(
         Destination::AnyoneCanSpend,
         OutputValue::TokenV1(token_id, ask_amount),
         OutputValue::Coin(give_amount),
-    );
+    ));
 
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
