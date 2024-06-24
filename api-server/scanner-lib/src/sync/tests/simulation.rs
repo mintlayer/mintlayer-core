@@ -406,7 +406,7 @@ async fn simulation(
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::Htlc(_, _) => {}
-                    TxOutput::AnyoneCanTake(_) => todo!(),
+                    TxOutput::AnyoneCanTake(_) => unimplemented!(), // TODO: support orders
                 });
 
                 tx.inputs().iter().for_each(|inp| match inp {
@@ -427,7 +427,9 @@ async fn simulation(
                             statistics
                                 .entry(CoinOrTokenStatistic::CirculatingSupply)
                                 .or_default()
-                                .insert(CoinOrTokenId::TokenId(*token_id), *to_mint);
+                                .entry(CoinOrTokenId::TokenId(*token_id))
+                                .and_modify(|amount| *amount = (*amount + *to_mint).unwrap())
+                                .or_insert(*to_mint);
                             let token_supply_change_fee =
                                 chain_config.token_supply_change_fee(block_height);
                             burn_coins(&mut statistics, token_supply_change_fee);
@@ -451,8 +453,9 @@ async fn simulation(
                                 chain_config.token_change_authority_fee(block_height);
                             burn_coins(&mut statistics, token_change_authority_fee);
                         }
-                        AccountCommand::CancelOrder(_) => todo!(),
-                        AccountCommand::FillOrder(_, _, _) => todo!(),
+                        AccountCommand::CancelOrder(_) | AccountCommand::FillOrder(_, _, _) => {
+                            unimplemented!() // TODO: support orders
+                        }
                     },
                 });
             }
@@ -471,6 +474,8 @@ async fn simulation(
                 .and_modify(|amount| *amount = (*amount + block_subsidy).unwrap())
                 .or_insert(block_subsidy);
 
+            let pos_store = PoSAccountingAdapterToCheckFees::new(tf.chainstate.as_ref());
+
             let mut total_fees = AccumulatedFee::new();
             for tx in block.transactions().iter() {
                 let inputs_utxos: Vec<_> = tx
@@ -483,8 +488,6 @@ async fn simulation(
                         None => None,
                     })
                     .collect();
-
-                let pos_store = PoSAccountingAdapterToCheckFees::new(tf.chainstate.as_ref());
 
                 let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
                     &chain_config,

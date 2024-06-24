@@ -21,6 +21,7 @@ use common::{
     },
     primitives::Amount,
 };
+use logging::log;
 
 use crate::{
     data::{TokenData, TokensAccountingDeltaData},
@@ -101,6 +102,8 @@ impl<P> FlushableTokensAccountingView for TokensAccountingCache<P> {
 
 impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCache<P> {
     fn issue_token(&mut self, id: TokenId, data: TokenData) -> Result<TokenAccountingUndo, Error> {
+        log::debug!("Issuing a token: {:?} {:?}", id, data);
+
         if self.get_token_data(&id)?.is_some() {
             return Err(Error::TokenAlreadyExists(id));
         }
@@ -125,6 +128,8 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         id: TokenId,
         amount_to_add: Amount,
     ) -> Result<TokenAccountingUndo, Error> {
+        log::debug!("Minting tokens: {:?} {:?}", id, amount_to_add);
+
         let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
         let circulating_supply = self.get_circulating_supply(&id)?.unwrap_or(Amount::ZERO);
 
@@ -165,6 +170,8 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         id: TokenId,
         amount_to_burn: Amount,
     ) -> Result<TokenAccountingUndo, Error> {
+        log::debug!("Unminting tokens: {:?} {:?}", id, amount_to_burn);
+
         let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
         let circulating_supply =
             self.get_circulating_supply(&id)?.ok_or(Error::CirculatingSupplyNotFound(id))?;
@@ -199,6 +206,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         &mut self,
         id: TokenId,
     ) -> crate::error::Result<TokenAccountingUndo> {
+        log::debug!("Locking token supply: {:?}", id);
         let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
 
         let undo_data = match token_data {
@@ -231,6 +239,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         id: TokenId,
         is_unfreezable: IsTokenUnfreezable,
     ) -> Result<TokenAccountingUndo, Error> {
+        log::debug!("Freezing token: {:?} {:?}", id, is_unfreezable);
         let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
 
         let undo_data = match token_data {
@@ -258,6 +267,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
     }
 
     fn unfreeze_token(&mut self, id: TokenId) -> Result<TokenAccountingUndo, Error> {
+        log::debug!("Unfreezing token supply: {:?}", id);
         let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
 
         let undo_data = match token_data {
@@ -289,6 +299,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         id: TokenId,
         new_authority: Destination,
     ) -> Result<TokenAccountingUndo, Error> {
+        log::debug!("Changing token authority: {:?}", id);
         let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
 
         let undo_data = match token_data {
@@ -313,6 +324,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
     }
 
     fn undo(&mut self, undo_data: TokenAccountingUndo) -> Result<(), Error> {
+        log::debug!("Undo in tokens: {:?}", undo_data);
         match undo_data {
             TokenAccountingUndo::IssueToken(undo) => {
                 let _ = self

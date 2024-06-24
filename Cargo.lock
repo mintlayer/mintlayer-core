@@ -7558,6 +7558,7 @@ dependencies = [
  "chainstate-types",
  "common",
  "crypto",
+ "logging",
  "parity-scale-codec",
  "randomness",
  "rstest",

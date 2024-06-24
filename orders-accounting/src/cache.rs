@@ -287,7 +287,7 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
     }
 
     fn undo(&mut self, undo_data: OrdersAccountingUndo) -> Result<()> {
-        log::debug!("Uno an order: {:?}", undo_data);
+        log::debug!("Undo an order: {:?}", undo_data);
         match undo_data {
             OrdersAccountingUndo::CreateOrder(undo) => self.undo_create_order(undo),
             OrdersAccountingUndo::CancelOrder(undo) => self.undo_cancel_order(undo),
