@@ -123,7 +123,7 @@ impl<'f> BlockBuilder<'f> {
     pub fn add_test_transaction(
         mut self,
         rng: &mut (impl Rng + CryptoRng),
-        supper_htlc: bool,
+        support_htlc: bool,
     ) -> Self {
         let utxo_set = self
             .framework
@@ -152,7 +152,7 @@ impl<'f> BlockBuilder<'f> {
                 &self.pos_accounting_store,
                 None,
                 account_nonce_getter,
-                supper_htlc,
+                support_htlc,
             )
             .make(
                 rng,

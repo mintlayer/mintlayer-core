@@ -838,7 +838,8 @@ impl<'a> RandomTxMaker<'a> {
                                     TxOutput::Transfer(OutputValue::Coin(new_value), destination)
                                 }
                             }
-                            _ => TxOutput::Transfer(OutputValue::Coin(new_value), destination),
+                            2..=4 => TxOutput::Transfer(OutputValue::Coin(new_value), destination),
+                            _ => unreachable!(),
                         }
                     }
                 })

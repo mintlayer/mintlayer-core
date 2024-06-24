@@ -21,15 +21,6 @@ use serialization::{Decode, Encode};
 
 use super::{timelock::OutputTimeLock, Destination};
 
-fixed_hash::construct_fixed_hash! {
-    #[derive(Encode, Decode, serde::Serialize, serde::Deserialize)]
-    pub struct SecretHash(20);
-}
-
-impl rpc_description::HasValueHint for SecretHash {
-    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct HashedTimelockContract {
     // can be spent either by a specific address that knows the secret
