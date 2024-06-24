@@ -15,6 +15,7 @@
 
 use common::{
     chain::{
+        htlc::{HashedTimelockContract, HtlcSecretHash},
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -45,12 +46,14 @@ fn update_functions_below_if_new_outputs_were_added(output: TxOutput) {
         TxOutput::IssueFungibleToken(_) => unimplemented!(),
         TxOutput::IssueNft(_, _, _) => unimplemented!(),
         TxOutput::DataDeposit(_) => unimplemented!(),
+        TxOutput::Htlc(_, _) => unimplemented!(),
     }
 }
 
-pub fn all_outputs() -> [TxOutput; 10] {
+pub fn all_outputs() -> [TxOutput; 11] {
     [
         transfer(),
+        htlc(),
         burn(),
         lock_then_transfer(),
         stake_pool(),
@@ -63,9 +66,10 @@ pub fn all_outputs() -> [TxOutput; 10] {
     ]
 }
 
-pub fn valid_tx_outputs() -> [TxOutput; 9] {
+pub fn valid_tx_outputs() -> [TxOutput; 10] {
     [
         transfer(),
+        htlc(),
         burn(),
         lock_then_transfer(),
         stake_pool(),
@@ -77,17 +81,25 @@ pub fn valid_tx_outputs() -> [TxOutput; 9] {
     ]
 }
 
-pub fn valid_tx_inputs_utxos() -> [TxOutput; 5] {
-    [transfer(), lock_then_transfer(), stake_pool(), produce_block(), issue_nft()]
+pub fn valid_tx_inputs_utxos() -> [TxOutput; 6] {
+    [
+        transfer(),
+        htlc(),
+        lock_then_transfer(),
+        stake_pool(),
+        produce_block(),
+        issue_nft(),
+    ]
 }
 
 pub fn invalid_tx_inputs_utxos() -> [TxOutput; 5] {
     [burn(), delegate_staking(), create_delegation(), issue_tokens(), data_deposit()]
 }
 
-pub fn invalid_block_reward_for_pow() -> [TxOutput; 9] {
+pub fn invalid_block_reward_for_pow() -> [TxOutput; 10] {
     [
         transfer(),
+        htlc(),
         burn(),
         stake_pool(),
         produce_block(),
@@ -134,6 +146,18 @@ pub fn all_account_inputs() -> [TxInput; 7] {
 
 pub fn transfer() -> TxOutput {
     TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)
+}
+
+pub fn htlc() -> TxOutput {
+    TxOutput::Htlc(
+        OutputValue::Coin(Amount::ZERO),
+        Box::new(HashedTimelockContract {
+            secret_hash: HtlcSecretHash::zero(),
+            spend_key: Destination::AnyoneCanSpend,
+            refund_timelock: OutputTimeLock::ForSeconds(1),
+            refund_key: Destination::AnyoneCanSpend,
+        }),
+    )
 }
 
 pub fn burn() -> TxOutput {
@@ -219,7 +243,8 @@ pub fn is_stake_pool(output: &TxOutput) -> bool {
         | TxOutput::DelegateStaking(..)
         | TxOutput::IssueFungibleToken(..)
         | TxOutput::IssueNft(..)
-        | TxOutput::DataDeposit(..) => false,
+        | TxOutput::DataDeposit(..)
+        | TxOutput::Htlc(..) => false,
         TxOutput::CreateStakePool(..) => true,
     }
 }
@@ -234,7 +259,8 @@ pub fn is_produce_block(output: &TxOutput) -> bool {
         | TxOutput::DelegateStaking(..)
         | TxOutput::IssueFungibleToken(..)
         | TxOutput::IssueNft(..)
-        | TxOutput::DataDeposit(..) => false,
+        | TxOutput::DataDeposit(..)
+        | TxOutput::Htlc(..) => false,
         TxOutput::ProduceBlockFromStake(..) => true,
     }
 }

@@ -14,7 +14,15 @@
 // limitations under the License.
 
 use common::chain::{
-    block::BlockRewardTransactable, signature::inputsig::InputWitness, tokens::TokenId,
+    block::BlockRewardTransactable,
+    signature::{
+        inputsig::{
+            authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
+            standard_signature::StandardInputSignature, InputWitness,
+        },
+        DestinationSigError,
+    },
+    tokens::TokenId,
     AccountCommand, AccountOutPoint, AccountSpending, DelegationId, Destination, PoolId,
     SignedTransaction, TxOutput, UtxoOutPoint,
 };
@@ -22,7 +30,7 @@ use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
 use utxo::Utxo;
 
-use crate::WitnessScript;
+use crate::{script::HashChallenge, WitnessScript};
 
 /// An error that can happen during translation of an input to a script
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
@@ -41,6 +49,9 @@ pub enum TranslationError {
 
     #[error(transparent)]
     TokensAccounting(#[from] tokens_accounting::Error),
+
+    #[error(transparent)]
+    SignatureError(#[from] DestinationSigError),
 
     #[error("Stake pool {0} does not exist")]
     PoolNotFound(PoolId),
@@ -118,6 +129,51 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                         .ok_or(TranslationError::PoolNotFound(*pool_id))?;
                     Ok(checksig(pool_data.decommission_destination()))
                 }
+                TxOutput::Htlc(_, htlc) => {
+                    let script = match ctx.witness() {
+                        InputWitness::NoSignature(_) => {
+                            return Err(TranslationError::SignatureError(
+                                DestinationSigError::SignatureNotFound,
+                            ))
+                        }
+                        InputWitness::Standard(sig) => {
+                            let htlc_spend = AuthorizedHashedTimelockContractSpend::from_data(
+                                sig.raw_signature(),
+                            )?;
+                            match htlc_spend {
+                                AuthorizedHashedTimelockContractSpend::Secret(
+                                    secret,
+                                    raw_signature,
+                                ) => WitnessScript::satisfied_conjunction([
+                                    WitnessScript::hashlock(
+                                        HashChallenge::Hash160(htlc.secret_hash.to_fixed_bytes()),
+                                        secret.consume(),
+                                    ),
+                                    WitnessScript::signature(
+                                        htlc.spend_key.clone(),
+                                        InputWitness::Standard(StandardInputSignature::new(
+                                            sig.sighash_type(),
+                                            raw_signature,
+                                        )),
+                                    ),
+                                ]),
+                                AuthorizedHashedTimelockContractSpend::Multisig(raw_signature) => {
+                                    WitnessScript::satisfied_conjunction([
+                                        WitnessScript::timelock(htlc.refund_timelock),
+                                        WitnessScript::signature(
+                                            htlc.refund_key.clone(),
+                                            InputWitness::Standard(StandardInputSignature::new(
+                                                sig.sighash_type(),
+                                                raw_signature,
+                                            )),
+                                        ),
+                                    ])
+                                }
+                            }
+                        }
+                    };
+                    Ok(script)
+                }
                 TxOutput::IssueNft(_id, _issuance, dest) => Ok(checksig(dest)),
                 TxOutput::DelegateStaking(_amount, _deleg_id) => Err(TranslationError::Unspendable),
                 TxOutput::CreateDelegationId(_dest, _pool_id) => Err(TranslationError::Unspendable),
@@ -163,7 +219,8 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_>
                 match utxo.output() {
                     TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::IssueNft(_, _, _) => Err(TranslationError::IllegalOutputSpend),
+                    | TxOutput::IssueNft(_, _, _)
+                    | TxOutput::Htlc(_, _) => Err(TranslationError::IllegalOutputSpend),
                     TxOutput::CreateDelegationId(_, _)
                     | TxOutput::Burn(_)
                     | TxOutput::DataDeposit(_)
@@ -200,6 +257,23 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 TxOutput::LockThenTransfer(_val, _dest, timelock) => {
                     Ok(WitnessScript::timelock(*timelock))
                 }
+                TxOutput::Htlc(_, htlc) => match ctx.witness() {
+                    InputWitness::NoSignature(_) => Err(TranslationError::SignatureError(
+                        DestinationSigError::SignatureNotFound,
+                    )),
+                    InputWitness::Standard(sig) => {
+                        let htlc_spend =
+                            AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())?;
+                        match htlc_spend {
+                            AuthorizedHashedTimelockContractSpend::Secret(_, _) => {
+                                Ok(WitnessScript::TRUE)
+                            }
+                            AuthorizedHashedTimelockContractSpend::Multisig(_) => {
+                                Ok(WitnessScript::timelock(htlc.refund_timelock))
+                            }
+                        }
+                    }
+                },
                 TxOutput::Transfer(_, _)
                 | TxOutput::CreateStakePool(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)

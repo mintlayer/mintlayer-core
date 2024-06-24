@@ -1017,7 +1017,8 @@ impl Account {
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::IssueNft(_, _, _)
-                | TxOutput::DataDeposit(_) => None,
+                | TxOutput::DataDeposit(_)
+                | TxOutput::Htlc(_, _) => None,
             })
             .expect("find output with dummy_pool_id");
         *old_pool_id = new_pool_id;
@@ -1071,7 +1072,8 @@ impl Account {
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::IssueFungibleToken(_)
-                | TxOutput::DataDeposit(_) => None,
+                | TxOutput::DataDeposit(_)
+                | TxOutput::Htlc(_, _) => None,
                 TxOutput::IssueNft(token_id, _, _) => {
                     (*token_id == dummy_token_id).then_some(token_id)
                 }
@@ -1539,6 +1541,7 @@ impl Account {
             TxOutput::CreateStakePool(_, data) => {
                 vec![data.decommission_key().clone(), data.staker().clone()]
             }
+            TxOutput::Htlc(_, htlc) => vec![htlc.spend_key.clone(), htlc.refund_key.clone()],
             TxOutput::IssueFungibleToken(_)
             | TxOutput::Burn(_)
             | TxOutput::DelegateStaking(_, _)
@@ -2155,7 +2158,9 @@ fn group_preselected_inputs(
             TxInput::Utxo(_) => {
                 let output = utxo.as_ref().expect("must be present");
                 let (currency, value) = match output {
-                    TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => match v {
+                    TxOutput::Transfer(v, _)
+                    | TxOutput::LockThenTransfer(v, _, _)
+                    | TxOutput::Htlc(v, _) => match v {
                         OutputValue::Coin(output_amount) => (Currency::Coin, *output_amount),
                         OutputValue::TokenV0(_) => {
                             return Err(WalletError::UnsupportedTransactionOutput(Box::new(

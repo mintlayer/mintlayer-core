@@ -14,14 +14,18 @@
 // limitations under the License.
 
 pub mod arbitrary_message;
+pub mod authorize_hashed_timelock_contract_spend;
 pub mod authorize_pubkey_spend;
 pub mod authorize_pubkeyhash_spend;
 pub mod classical_multisig;
+pub mod htlc;
 pub mod standard_signature;
 
 use serialization::{Decode, Encode};
 
 use standard_signature::StandardInputSignature;
+
+use super::{DestinationSigError, Signable};
 
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum InputWitness {

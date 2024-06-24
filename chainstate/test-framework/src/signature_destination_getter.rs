@@ -116,6 +116,10 @@ impl<'a> SignatureDestinationGetter<'a> {
                                 // but this is just a double-check.
                                 Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)
                             }
+                            TxOutput::Htlc(_, htlc) => {
+                                // TODO: consider spending with spend key + secret not only multisig
+                                Ok(htlc.refund_key.clone())
+                            }
                         }
                     }
                     TxInput::Account(outpoint) => match outpoint.account() {

@@ -236,7 +236,7 @@ async fn simulation(
             let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
             for _ in 0..rng.gen_range(10..max_tx_per_block) {
-                block_builder = block_builder.add_test_transaction(&mut rng);
+                block_builder = block_builder.add_test_transaction(&mut rng, false);
             }
 
             let block = block_builder.build(&mut rng);
@@ -259,7 +259,8 @@ async fn simulation(
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::IssueNft(_, _, _) => None,
+                    | TxOutput::IssueNft(_, _, _)
+                    | TxOutput::Htlc(_, _) => None,
                 });
                 staking_pools.extend(new_pools);
 
@@ -277,7 +278,8 @@ async fn simulation(
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::IssueNft(_, _, _) => None,
+                    | TxOutput::IssueNft(_, _, _)
+                    | TxOutput::Htlc(_, _) => None,
                 });
                 delegations.extend(new_delegations);
 
@@ -292,7 +294,8 @@ async fn simulation(
                     | TxOutput::DataDeposit(_)
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::ProduceBlockFromStake(_, _) => None,
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::Htlc(_, _) => None,
                 });
                 token_ids.extend(new_tokens);
 
@@ -335,7 +338,8 @@ async fn simulation(
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::ProduceBlockFromStake(_, _) => {}
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::Htlc(_, _) => {}
                 });
 
                 tx.inputs().iter().for_each(|inp| match inp {

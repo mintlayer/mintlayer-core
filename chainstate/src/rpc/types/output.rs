@@ -16,8 +16,9 @@
 use common::{
     address::{AddressError, RpcAddress},
     chain::{
-        output_value::OutputValue, stakelock::StakePoolData, timelock::OutputTimeLock,
-        tokens::TokenId, ChainConfig, DelegationId, Destination, PoolId, TxOutput,
+        htlc::HashedTimelockContract, output_value::OutputValue, stakelock::StakePoolData,
+        timelock::OutputTimeLock, tokens::TokenId, ChainConfig, DelegationId, Destination, PoolId,
+        TxOutput,
     },
     primitives::amount::RpcAmountOut,
 };
@@ -82,6 +83,29 @@ impl RpcStakePoolData {
 }
 
 #[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
+pub struct RpcHashedTimelockContract {
+    secret_hash: RpcHexString,
+    spend_key: RpcAddress<Destination>,
+    refund_timelock: OutputTimeLock,
+    refund_key: RpcAddress<Destination>,
+}
+
+impl RpcHashedTimelockContract {
+    fn new(
+        chain_config: &ChainConfig,
+        htlc: &HashedTimelockContract,
+    ) -> Result<Self, AddressError> {
+        let result = Self {
+            secret_hash: RpcHexString::from_bytes(htlc.secret_hash.as_bytes().to_owned()),
+            spend_key: RpcAddress::new(chain_config, htlc.spend_key.clone())?,
+            refund_timelock: htlc.refund_timelock,
+            refund_key: RpcAddress::new(chain_config, htlc.refund_key.clone())?,
+        };
+        Ok(result)
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RpcTxOutput {
     Transfer {
@@ -123,6 +147,10 @@ pub enum RpcTxOutput {
     DataDeposit {
         data: RpcHexString,
     },
+    Htlc {
+        value: RpcOutputValue,
+        htlc: RpcHashedTimelockContract,
+    },
 }
 
 impl RpcTxOutput {
@@ -139,6 +167,10 @@ impl RpcTxOutput {
                     timelock,
                 }
             }
+            TxOutput::Htlc(value, htlc) => RpcTxOutput::Htlc {
+                value: RpcOutputValue::new(chain_config, value)?,
+                htlc: RpcHashedTimelockContract::new(chain_config, &htlc)?,
+            },
             TxOutput::Burn(value) => RpcTxOutput::Burn {
                 value: RpcOutputValue::new(chain_config, value)?,
             },

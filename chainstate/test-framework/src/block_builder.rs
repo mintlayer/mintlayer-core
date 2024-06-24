@@ -120,7 +120,11 @@ impl<'f> BlockBuilder<'f> {
     }
 
     /// Adds a transaction that uses random utxos and accounts
-    pub fn add_test_transaction(mut self, rng: &mut (impl Rng + CryptoRng)) -> Self {
+    pub fn add_test_transaction(
+        mut self,
+        rng: &mut (impl Rng + CryptoRng),
+        support_htlc: bool,
+    ) -> Self {
         let utxo_set = self
             .framework
             .storage
@@ -148,6 +152,7 @@ impl<'f> BlockBuilder<'f> {
                 &self.pos_accounting_store,
                 None,
                 account_nonce_getter,
+                support_htlc,
             )
             .make(
                 rng,

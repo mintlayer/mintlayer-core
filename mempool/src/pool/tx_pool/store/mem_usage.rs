@@ -18,6 +18,7 @@
 use std::{cmp, mem};
 
 use common::chain::{
+    htlc::HashedTimelockContract,
     signature::inputsig::InputWitness,
     stakelock::StakePoolData,
     tokens::{NftIssuance, TokenIssuance},
@@ -346,6 +347,7 @@ impl MemoryUsage for TxOutput {
             TxOutput::IssueFungibleToken(issuance) => issuance.indirect_memory_usage(),
             TxOutput::IssueNft(_, issuance, _) => issuance.indirect_memory_usage(),
             TxOutput::DataDeposit(v) => v.indirect_memory_usage(),
+            TxOutput::Htlc(_, htlc) => htlc.indirect_memory_usage(),
         }
     }
 }
@@ -364,7 +366,8 @@ impl_no_indirect_memory_usage!(
     TxDependency,
     TxInput,
     TokenIssuance,
-    NftIssuance
+    NftIssuance,
+    HashedTimelockContract
 );
 
 /// Types where the object created by T::default() takes no indirect memory.

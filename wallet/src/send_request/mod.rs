@@ -307,6 +307,7 @@ where
         | TxOutput::Burn(_)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_) => None,
+        TxOutput::Htlc(_, _) => None, // TODO(HTLC)
     }
 }
 

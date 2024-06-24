@@ -20,6 +20,7 @@ use crate::{key_manager::KeyManager, TestChainstate};
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{
+        htlc::{HashedTimelockContract, HtlcSecretHash},
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -77,6 +78,40 @@ fn get_random_delegation_data<'a>(
         })
 }
 
+fn get_random_timelock(
+    rng: &mut impl Rng,
+    chainstate: &impl ChainstateInterface,
+) -> OutputTimeLock {
+    const MAX_LOCK_FOR_NUM_BLOCKS: u64 = 5;
+    let target_block_spacing_sec = chainstate.get_chain_config().target_block_spacing().as_secs();
+    match rng.gen_range(0..4) {
+        0 => OutputTimeLock::ForBlockCount(rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)),
+        1 => OutputTimeLock::UntilHeight(
+            chainstate
+                .get_best_block_height()
+                .unwrap()
+                .checked_add(rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS))
+                .unwrap(),
+        ),
+        2 => OutputTimeLock::ForSeconds(
+            target_block_spacing_sec * rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)
+                + rng.gen_range(0..=target_block_spacing_sec),
+        ),
+        3 => OutputTimeLock::UntilTime(
+            chainstate
+                .get_best_block_index()
+                .unwrap()
+                .block_timestamp()
+                .add_int_seconds(
+                    target_block_spacing_sec * rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)
+                        + rng.gen_range(0..=target_block_spacing_sec),
+                )
+                .unwrap(),
+        ),
+        _ => unreachable!(),
+    }
+}
+
 pub trait StakingPoolsObserver {
     fn on_pool_created(
         &mut self,
@@ -109,6 +144,8 @@ pub struct RandomTxMaker<'a> {
 
     account_command_used: bool,
 
+    support_htlc: bool,
+
     // There can be only one Unmint operation per transaction.
     // But it's unknown in advance which token burn would be utilized by unmint operation
     // so we have to collect all burns for all tokens just in case.
@@ -126,6 +163,7 @@ impl<'a> RandomTxMaker<'a> {
         pos_accounting_store: &'a InMemoryPoSAccounting,
         staking_pool: Option<PoolId>,
         account_nonce_getter: Box<dyn Fn(AccountType) -> Option<AccountNonce> + 'a>,
+        support_htlc: bool,
     ) -> Self {
         Self {
             chainstate,
@@ -139,6 +177,7 @@ impl<'a> RandomTxMaker<'a> {
             stake_pool_can_be_created: true,
             delegation_can_be_created: true,
             account_command_used: false,
+            support_htlc,
             unmint_for: None,
             total_tokens_burned: BTreeMap::new(),
             fee_input: None,
@@ -240,7 +279,8 @@ impl<'a> RandomTxMaker<'a> {
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::IssueFungibleToken(_)
             | TxOutput::IssueNft(_, _, _)
-            | TxOutput::DataDeposit(_) => { /* do nothing */ }
+            | TxOutput::DataDeposit(_)
+            | TxOutput::Htlc(_, _) => { /* do nothing */ }
             TxOutput::CreateStakePool(pool_id, _) => {
                 let (staker_sk, vrf_sk) = new_staking_pools.get(pool_id).unwrap();
                 staking_pools_observer.on_pool_created(
@@ -566,45 +606,7 @@ impl<'a> RandomTxMaker<'a> {
                     key_manager,
                 ),
                 TxOutput::LockThenTransfer(v, _, timelock) => {
-                    let utxo_block_height = self
-                        .chainstate
-                        .utxo(input.utxo_outpoint().unwrap())
-                        .unwrap()
-                        .unwrap()
-                        .source()
-                        .clone()
-                        .blockchain_height()
-                        .unwrap();
-                    let utxo_block_id = self
-                        .chainstate
-                        .get_block_id_from_height(&utxo_block_height)
-                        .unwrap()
-                        .unwrap()
-                        .classify(self.chainstate.get_chain_config());
-
-                    let time_of_tx = match utxo_block_id {
-                        GenBlockId::Block(id) => {
-                            self.chainstate.get_block_header(id).unwrap().unwrap().timestamp()
-                        }
-                        GenBlockId::Genesis(_) => {
-                            self.chainstate.get_chain_config().genesis_block().timestamp()
-                        }
-                    };
-                    let current_time = self
-                        .chainstate
-                        .calculate_median_time_past(&self.chainstate.get_best_block_id().unwrap())
-                        .unwrap();
-                    let current_height = self.chainstate.get_best_block_height().unwrap();
-
-                    let timelock_passed = tx_verifier::timelock_check::check_timelock(
-                        &utxo_block_height,
-                        &time_of_tx,
-                        timelock,
-                        &current_height,
-                        &current_time,
-                        input.utxo_outpoint().unwrap(),
-                    )
-                    .is_ok();
+                    let timelock_passed = self.check_timelock(&input, timelock);
 
                     if timelock_passed {
                         self.spend_output_value(
@@ -660,6 +662,23 @@ impl<'a> RandomTxMaker<'a> {
                     );
                     new_inputs.push(input);
                     (new_inputs, new_outputs)
+                }
+                TxOutput::Htlc(v, htlc) => {
+                    // TODO: currently only refund spending is supported
+                    let timelock_passed = self.check_timelock(&input, &htlc.refund_timelock);
+
+                    if timelock_passed {
+                        self.spend_output_value(
+                            rng,
+                            tokens_cache,
+                            pos_accounting_cache,
+                            input,
+                            v,
+                            key_manager,
+                        )
+                    } else {
+                        (Vec::new(), Vec::new())
+                    }
                 }
                 TxOutput::Burn(_)
                 | TxOutput::CreateDelegationId(_, _)
@@ -777,7 +796,6 @@ impl<'a> RandomTxMaker<'a> {
                         );
                         TxOutput::CreateStakePool(dummy_pool_id, Box::new(pool_data))
                     } else {
-                        const MAX_LOCK_FOR_NUM_BLOCKS: u64 = 5;
                         if rng.gen_bool(0.3) {
                             // Send coins to random delegation
                             if let Some((delegation_id, _)) = get_random_delegation_data(
@@ -794,53 +812,34 @@ impl<'a> RandomTxMaker<'a> {
 
                         let destination =
                             key_manager.new_destination(self.chainstate.get_chain_config(), rng);
-                        let target_block_spacing_sec =
-                            self.chainstate.get_chain_config().target_block_spacing().as_secs();
+                        let timelock = get_random_timelock(rng, self.chainstate);
                         match rng.gen_range(0..5) {
                             0 => TxOutput::LockThenTransfer(
                                 OutputValue::Coin(new_value),
                                 destination,
-                                OutputTimeLock::ForBlockCount(
-                                    rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS),
-                                ),
+                                timelock,
                             ),
-                            1 => TxOutput::LockThenTransfer(
-                                OutputValue::Coin(new_value),
-                                destination,
-                                OutputTimeLock::UntilHeight(
-                                    self.chainstate
-                                        .get_best_block_height()
-                                        .unwrap()
-                                        .checked_add(rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS))
-                                        .unwrap(),
-                                ),
-                            ),
-                            2 => TxOutput::LockThenTransfer(
-                                OutputValue::Coin(new_value),
-                                destination,
-                                OutputTimeLock::ForSeconds(
-                                    target_block_spacing_sec
-                                        * rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)
-                                        + rng.gen_range(0..=target_block_spacing_sec),
-                                ),
-                            ),
-                            3 => TxOutput::LockThenTransfer(
-                                OutputValue::Coin(new_value),
-                                destination,
-                                OutputTimeLock::UntilTime(
-                                    self.chainstate
-                                        .get_best_block_index()
-                                        .unwrap()
-                                        .block_timestamp()
-                                        .add_int_seconds(
-                                            target_block_spacing_sec
-                                                * rng.gen_range(0..=MAX_LOCK_FOR_NUM_BLOCKS)
-                                                + rng.gen_range(0..=target_block_spacing_sec),
-                                        )
-                                        .unwrap(),
-                                ),
-                            ),
-                            _ => TxOutput::Transfer(OutputValue::Coin(new_value), destination),
+                            1 => {
+                                if self.support_htlc {
+                                    TxOutput::Htlc(
+                                        OutputValue::Coin(new_value),
+                                        Box::new(HashedTimelockContract {
+                                            secret_hash: HtlcSecretHash::zero(),
+                                            spend_key: destination,
+                                            refund_timelock: timelock,
+                                            refund_key: key_manager
+                                                .new_2_of_2_multisig_destination(
+                                                    self.chainstate.get_chain_config(),
+                                                    rng,
+                                                ),
+                                        }),
+                                    )
+                                } else {
+                                    TxOutput::Transfer(OutputValue::Coin(new_value), destination)
+                                }
+                            }
+                            2..=4 => TxOutput::Transfer(OutputValue::Coin(new_value), destination),
+                            _ => unreachable!(),
                         }
                     }
                 })
@@ -1005,7 +1004,8 @@ impl<'a> RandomTxMaker<'a> {
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::IssueFungibleToken(_)
-                | TxOutput::DataDeposit(_) => Some(output),
+                | TxOutput::DataDeposit(_)
+                | TxOutput::Htlc(_, _) => Some(output),
                 TxOutput::CreateStakePool(dummy_pool_id, pool_data) => {
                     let pool_id = make_pool_id(inputs[0].utxo_outpoint().unwrap());
                     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
@@ -1051,5 +1051,47 @@ impl<'a> RandomTxMaker<'a> {
             .collect();
 
         (outputs, new_staking_pools)
+    }
+
+    fn check_timelock(&self, input: &TxInput, timelock: &OutputTimeLock) -> bool {
+        let utxo_block_height = self
+            .chainstate
+            .utxo(input.utxo_outpoint().unwrap())
+            .unwrap()
+            .unwrap()
+            .source()
+            .clone()
+            .blockchain_height()
+            .unwrap();
+        let utxo_block_id = self
+            .chainstate
+            .get_block_id_from_height(&utxo_block_height)
+            .unwrap()
+            .unwrap()
+            .classify(self.chainstate.get_chain_config());
+
+        let time_of_tx = match utxo_block_id {
+            GenBlockId::Block(id) => {
+                self.chainstate.get_block_header(id).unwrap().unwrap().timestamp()
+            }
+            GenBlockId::Genesis(_) => {
+                self.chainstate.get_chain_config().genesis_block().timestamp()
+            }
+        };
+        let current_time = self
+            .chainstate
+            .calculate_median_time_past(&self.chainstate.get_best_block_id().unwrap())
+            .unwrap();
+        let current_height = self.chainstate.get_best_block_height().unwrap();
+
+        tx_verifier::timelock_check::check_timelock(
+            &utxo_block_height,
+            &time_of_tx,
+            timelock,
+            &current_height,
+            &current_time,
+            input.utxo_outpoint().unwrap(),
+        )
+        .is_ok()
     }
 }

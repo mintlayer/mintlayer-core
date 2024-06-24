@@ -557,7 +557,8 @@ impl OutputCache {
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::IssueFungibleToken(_) => false,
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::Htlc(_, _) => false,
         }
     }
 
@@ -705,7 +706,8 @@ impl OutputCache {
                 match output {
                     TxOutput::Transfer(v, _)
                     | TxOutput::LockThenTransfer(v, _, _)
-                    | TxOutput::Burn(v) => match v {
+                    | TxOutput::Burn(v)
+                    | TxOutput::Htlc(v, _) => match v {
                         OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
                         OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
                     },
@@ -811,7 +813,8 @@ impl OutputCache {
                 | TxOutput::Burn(_)
                 | TxOutput::DataDeposit(_)
                 | TxOutput::Transfer(_, _)
-                | TxOutput::LockThenTransfer(_, _, _) => {}
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::Htlc(_, _) => {}
                 TxOutput::IssueFungibleToken(issuance) => {
                     if already_present {
                         continue;
@@ -1037,7 +1040,8 @@ impl OutputCache {
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::IssueFungibleToken(_) => {}
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::Htlc(_, _) => {}
                 }
             }
         }
@@ -1359,7 +1363,8 @@ impl OutputCache {
                     | TxOutput::IssueNft(_, _, _)
                     | TxOutput::Burn(_)
                     | TxOutput::Transfer(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _) => None,
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::Htlc(_, _) => None,
                     TxOutput::ProduceBlockFromStake(_, pool_id)
                     | TxOutput::CreateStakePool(pool_id, _) => {
                         self.pools.get(pool_id).and_then(|pool_data| {
@@ -1389,7 +1394,9 @@ fn wallet_tx_order(x: &WalletTx, y: &WalletTx) -> std::cmp::Ordering {
 /// Check if the TxOutput is a v0 token
 fn is_v0_token_output(output: &TxOutput) -> bool {
     match output {
-        TxOutput::LockThenTransfer(out, _, _) | TxOutput::Transfer(out, _) => match out {
+        TxOutput::LockThenTransfer(out, _, _)
+        | TxOutput::Transfer(out, _)
+        | TxOutput::Htlc(out, _) => match out {
             OutputValue::TokenV0(_) => true,
             OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
         },

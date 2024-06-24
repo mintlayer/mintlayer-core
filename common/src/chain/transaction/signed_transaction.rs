@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{signature::inputsig::InputWitness, Transaction, TransactionSize, TxOutput};
+use super::{
+    signature::{inputsig::InputWitness, Signable, Transactable},
+    Transaction, TransactionSize, TxOutput,
+};
 use crate::{
     chain::{TransactionCreationError, TxInput},
     primitives::id::{self, H256},
@@ -89,6 +92,30 @@ impl SignedTransaction {
     /// provides the hash of a transaction including the witness (malleable)
     pub fn serialized_hash(&self) -> H256 {
         id::hash_encoded(self)
+    }
+}
+
+impl Signable for SignedTransaction {
+    fn inputs(&self) -> Option<&[TxInput]> {
+        Some(self.inputs())
+    }
+
+    fn outputs(&self) -> Option<&[TxOutput]> {
+        Some(self.outputs())
+    }
+
+    fn version_byte(&self) -> Option<u8> {
+        Some(self.version_byte())
+    }
+
+    fn flags(&self) -> Option<u128> {
+        Some(self.flags())
+    }
+}
+
+impl Transactable for SignedTransaction {
+    fn signatures(&self) -> Vec<Option<InputWitness>> {
+        self.signatures.iter().map(|s| Some(s.clone())).collect()
     }
 }
 

@@ -171,6 +171,7 @@ impl BanScore for mintscript::translate::TranslationError {
             | Self::DelegationNotFound(_)
             | Self::TokenNotFound(_) => 100,
 
+            Self::SignatureError(_) => 100,
             Self::PoSAccounting(e) => e.ban_score(),
             Self::TokensAccounting(e) => e.ban_score(),
         }
@@ -351,6 +352,7 @@ impl BanScore for CheckTransactionError {
             CheckTransactionError::DataDepositMaxSizeExceeded(_, _, _) => 100,
             CheckTransactionError::TxSizeTooLarge(_, _, _) => 100,
             CheckTransactionError::DeprecatedTokenOperationVersion(_, _) => 100,
+            CheckTransactionError::HtlcsAreNotActivated => 100,
         }
     }
 }

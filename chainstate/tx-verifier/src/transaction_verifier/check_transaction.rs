@@ -21,8 +21,8 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{get_tokens_issuance_count, NftIssuance},
-        ChainConfig, SignedTransaction, TokenIssuanceVersion, Transaction, TransactionSize,
-        TxOutput,
+        ChainConfig, HtlcActivated, SignedTransaction, TokenIssuanceVersion, Transaction,
+        TransactionSize, TxOutput,
     },
     primitives::{BlockHeight, Id, Idable},
 };
@@ -56,6 +56,8 @@ pub enum CheckTransactionError {
     TxSizeTooLarge(Id<Transaction>, usize, usize),
     #[error("Token version {0:?} from tx {1} is deprecated")]
     DeprecatedTokenOperationVersion(TokenIssuanceVersion, Id<Transaction>),
+    #[error("Htlcs are not activated yet")]
+    HtlcsAreNotActivated,
 }
 
 pub fn check_transaction(
@@ -69,6 +71,7 @@ pub fn check_transaction(
     check_tokens_tx(chain_config, block_height, tx)?;
     check_no_signature_size(chain_config, tx)?;
     check_data_deposit_outputs(chain_config, tx)?;
+    check_htlc_outputs(chain_config, block_height, tx)?;
     Ok(())
 }
 
@@ -148,7 +151,8 @@ fn check_tokens_tx(
             let has_tokens_v0_op = tx.outputs().iter().any(|output| match output {
                 TxOutput::Transfer(output_value, _)
                 | TxOutput::Burn(output_value)
-                | TxOutput::LockThenTransfer(output_value, _, _) => match output_value {
+                | TxOutput::LockThenTransfer(output_value, _, _)
+                | TxOutput::Htlc(output_value, _) => match output_value {
                     OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
                     OutputValue::TokenV0(_) => true,
                 },
@@ -196,7 +200,8 @@ fn check_tokens_tx(
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::DataDeposit(_) => Ok(()),
+            | TxOutput::DataDeposit(_)
+            | TxOutput::Htlc(_, _) => Ok(()),
         })
         .map_err(CheckTransactionError::TokensError)?;
 
@@ -248,7 +253,8 @@ fn check_data_deposit_outputs(
             | TxOutput::CreateDelegationId(..)
             | TxOutput::DelegateStaking(..)
             | TxOutput::IssueFungibleToken(..)
-            | TxOutput::IssueNft(..) => { /* Do nothing */ }
+            | TxOutput::IssueNft(..)
+            | TxOutput::Htlc(_, _) => { /* Do nothing */ }
             TxOutput::DataDeposit(v) => {
                 // Ensure the size of the data doesn't exceed the max allowed
                 if v.len() > chain_config.data_deposit_max_size() {
@@ -262,5 +268,39 @@ fn check_data_deposit_outputs(
         }
     }
 
+    Ok(())
+}
+
+fn check_htlc_outputs(
+    chain_config: &ChainConfig,
+    block_height: BlockHeight,
+    tx: &SignedTransaction,
+) -> Result<(), CheckTransactionError> {
+    match chain_config
+        .as_ref()
+        .chainstate_upgrades()
+        .version_at_height(block_height)
+        .1
+        .htlc_activated()
+    {
+        HtlcActivated::Yes => { /* do nothing */ }
+        HtlcActivated::No => {
+            let htlc_output = tx.outputs().iter().any(|output| match output {
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::Burn(_)
+                | TxOutput::CreateStakePool(_, _)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_) => false,
+                TxOutput::Htlc(_, _) => true,
+            });
+
+            ensure!(!htlc_output, CheckTransactionError::HtlcsAreNotActivated);
+        }
+    };
     Ok(())
 }

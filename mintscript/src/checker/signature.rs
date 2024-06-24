@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::chain::{
-    signature::{inputsig::InputWitness, verify_signature, DestinationSigError, Transactable},
+    signature::{inputsig::InputWitness, DestinationSigError, Transactable},
     ChainConfig, Destination, TxOutput,
 };
 
@@ -78,16 +78,13 @@ impl<C: SignatureContext> SignatureChecker<C> for StandardSignatureChecker {
         let input_num = ctx.input_num();
         let chain_config = ctx.chain_config();
 
-        // Note: The verify_signature function below looks up the signature in the transaction
-        // itself. In the future, the logic to find signature may not be so easy, so the signature
-        // from the script should be taken and passed to the signature verification code. This
-        // assertion should then go away. This goes hand in hand with turning Destinations, not
-        // just outputs/input pairs into script.
-        assert_eq!(
-            tx.signatures().and_then(|ins| ins.get(input_num)),
-            Some(signature),
-        );
-
-        verify_signature(chain_config, destination, tx, ctx.input_utxos(), input_num)
+        common::chain::signature::verify_signature(
+            chain_config,
+            destination,
+            tx,
+            signature,
+            ctx.input_utxos(),
+            input_num,
+        )
     }
 }

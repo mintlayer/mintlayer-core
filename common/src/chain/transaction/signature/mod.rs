@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::chain::{ChainConfig, SignedTransaction, TxInput};
+use crate::chain::{ChainConfig, TxInput};
 
 use self::{
     inputsig::{
@@ -31,8 +31,9 @@ pub mod inputsig;
 pub mod sighash;
 
 use thiserror::Error;
+use utils::ensure;
 
-use super::{Destination, Transaction, TxOutput};
+use super::{Destination, TxOutput};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum DestinationSigError {
@@ -108,64 +109,22 @@ pub trait Signable {
 }
 
 pub trait Transactable: Signable {
-    fn signatures(&self) -> Option<&[InputWitness]>;
+    fn signatures(&self) -> Vec<Option<InputWitness>>;
 }
 
-impl Signable for Transaction {
-    fn inputs(&self) -> Option<&[TxInput]> {
-        Some(self.inputs())
-    }
-
-    fn outputs(&self) -> Option<&[TxOutput]> {
-        Some(self.outputs())
-    }
-
-    fn version_byte(&self) -> Option<u8> {
-        Some(self.version_byte())
-    }
-
-    fn flags(&self) -> Option<u128> {
-        Some(self.flags())
-    }
-}
-
-impl Signable for SignedTransaction {
-    fn inputs(&self) -> Option<&[TxInput]> {
-        Some(self.inputs())
-    }
-
-    fn outputs(&self) -> Option<&[TxOutput]> {
-        Some(self.outputs())
-    }
-
-    fn version_byte(&self) -> Option<u8> {
-        Some(self.version_byte())
-    }
-
-    fn flags(&self) -> Option<u128> {
-        Some(self.flags())
-    }
-}
-
-impl Transactable for SignedTransaction {
-    fn signatures(&self) -> Option<&[InputWitness]> {
-        Some(self.signatures())
-    }
-}
-
-pub fn verify_signature<T: Transactable>(
+pub fn verify_signature<T: Signable>(
     chain_config: &ChainConfig,
     outpoint_destination: &Destination,
     tx: &T,
+    input_witness: &InputWitness,
     inputs_utxos: &[Option<&TxOutput>],
     input_num: usize,
 ) -> Result<(), DestinationSigError> {
     let inputs = tx.inputs().ok_or(DestinationSigError::SignatureVerificationWithoutInputs)?;
-    let sigs = tx.signatures().ok_or(DestinationSigError::SignatureVerificationWithoutSigs)?;
-    let input_witness = sigs.get(input_num).ok_or(DestinationSigError::InvalidSignatureIndex(
-        input_num,
-        inputs.len(),
-    ))?;
+    ensure!(
+        input_num < inputs.len(),
+        DestinationSigError::InvalidSignatureIndex(input_num, inputs.len(),)
+    );
 
     match input_witness {
         InputWitness::NoSignature(_) => match outpoint_destination {
@@ -189,7 +148,7 @@ pub fn verify_signature<T: Transactable>(
     Ok(())
 }
 
-fn verify_standard_input_signature<T: Transactable>(
+fn verify_standard_input_signature<T: Signable>(
     chain_config: &ChainConfig,
     outpoint_destination: &Destination,
     witness: &StandardInputSignature,

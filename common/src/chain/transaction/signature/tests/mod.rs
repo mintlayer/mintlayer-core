@@ -102,6 +102,7 @@ fn verify_no_signature(#[case] seed: Seed) {
                 &chain_config,
                 &destination,
                 &signed_tx,
+                &signed_tx.signatures()[0],
                 &inputs_utxos_refs,
                 0
             ),
@@ -146,6 +147,7 @@ fn verify_invalid_signature(#[case] seed: Seed) {
                 &chain_config,
                 &destination,
                 &signed_tx,
+                &signed_tx.signatures()[0],
                 &inputs_utxos_refs,
                 0
             ),
@@ -186,6 +188,7 @@ fn verify_signature_invalid_signature_index(#[case] seed: Seed) {
                 &chain_config,
                 &destination,
                 &tx,
+                &tx.signatures()[0],
                 &inputs_utxos_refs,
                 INVALID_SIGNATURE_INDEX
             ),
@@ -230,6 +233,7 @@ fn verify_signature_wrong_destination(#[case] seed: Seed) {
                 &chain_config,
                 &different_outpoint,
                 &tx,
+                &tx.signatures()[0],
                 &inputs_utxos_refs,
                 0
             ),
@@ -619,7 +623,14 @@ fn check_change_flags(
     let tx = tx_updater.generate_tx().unwrap();
     for (input_num, _) in tx.inputs().iter().enumerate() {
         assert_eq!(
-            verify_signature(chain_config, destination, &tx, inputs_utxos, input_num),
+            verify_signature(
+                chain_config,
+                destination,
+                &tx,
+                &tx.signatures()[input_num],
+                inputs_utxos,
+                input_num
+            ),
             Err(DestinationSigError::SignatureVerificationFailed)
         );
     }
@@ -647,7 +658,14 @@ fn check_insert_input(
     tx_updater.inputs.push(TxInput::from_utxo(outpoint_source_id, 1));
     tx_updater.witness.push(InputWitness::NoSignature(Some(vec![1, 2, 3])));
     let tx = tx_updater.generate_tx().unwrap();
-    let res = verify_signature(chain_config, destination, &tx, &inputs_utxos, 0);
+    let res = verify_signature(
+        chain_config,
+        destination,
+        &tx,
+        &tx.signatures()[0],
+        &inputs_utxos,
+        0,
+    );
     if should_fail {
         assert_eq!(res, Err(DestinationSigError::SignatureVerificationFailed));
     } else {
@@ -675,7 +693,14 @@ fn check_mutate_witness(
         let tx = tx_updater.generate_tx().unwrap();
 
         assert!(matches!(
-            verify_signature(chain_config, outpoint_dest, &tx, inputs_utxos, input),
+            verify_signature(
+                chain_config,
+                outpoint_dest,
+                &tx,
+                &tx.signatures()[input],
+                inputs_utxos,
+                input
+            ),
             Err(DestinationSigError::SignatureVerificationFailed
                 | DestinationSigError::InvalidSignatureEncoding)
         ));
@@ -697,7 +722,14 @@ fn check_insert_output(
         Destination::PublicKey(pub_key),
     ));
     let tx = tx_updater.generate_tx().unwrap();
-    let res = verify_signature(chain_config, destination, &tx, inputs_utxos, 0);
+    let res = verify_signature(
+        chain_config,
+        destination,
+        &tx,
+        &tx.signatures()[0],
+        inputs_utxos,
+        0,
+    );
     if should_fail {
         assert_eq!(res, Err(DestinationSigError::SignatureVerificationFailed));
     } else {
@@ -735,10 +767,18 @@ fn check_mutate_output(
         TxOutput::IssueFungibleToken(_) => unreachable!(),
         TxOutput::IssueNft(_, _, _) => unreachable!(),
         TxOutput::DataDeposit(_) => unreachable!(),
+        TxOutput::Htlc(_, _) => unreachable!(),
     };
 
     let tx = tx_updater.generate_tx().unwrap();
-    let res = verify_signature(chain_config, destination, &tx, inputs_utxos, 0);
+    let res = verify_signature(
+        chain_config,
+        destination,
+        &tx,
+        &tx.signatures()[0],
+        inputs_utxos,
+        0,
+    );
     if should_fail {
         assert_eq!(res, Err(DestinationSigError::SignatureVerificationFailed));
     } else {
@@ -761,7 +801,14 @@ fn check_mutate_input(
         9999,
     );
     let tx = tx_updater.generate_tx().unwrap();
-    let res = verify_signature(chain_config, destination, &tx, inputs_utxos, 0);
+    let res = verify_signature(
+        chain_config,
+        destination,
+        &tx,
+        &tx.signatures()[0],
+        inputs_utxos,
+        0,
+    );
     if should_fail {
         assert_eq!(res, Err(DestinationSigError::SignatureVerificationFailed));
     } else {
@@ -789,6 +836,7 @@ fn check_mutate_inputs_utxos(
                 chain_config,
                 outpoint_dest,
                 original_tx,
+                &original_tx.signatures()[input],
                 &inputs_utxos,
                 input
             ),

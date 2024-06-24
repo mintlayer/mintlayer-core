@@ -63,7 +63,8 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::DelegateStaking(..)
                     | TxOutput::IssueFungibleToken(..)
                     | TxOutput::IssueNft(..)
-                    | TxOutput::DataDeposit(..) => Err(ConnectTransactionError::IOPolicyError(
+                    | TxOutput::DataDeposit(..)
+                    | TxOutput::Htlc(..) => Err(ConnectTransactionError::IOPolicyError(
                         IOPolicyError::InvalidInputTypeInReward,
                         block_id.into(),
                     )),
@@ -86,7 +87,8 @@ pub fn check_reward_inputs_outputs_purposes(
                                 | TxOutput::DelegateStaking(..)
                                 | TxOutput::IssueFungibleToken(..)
                                 | TxOutput::IssueNft(..)
-                                | TxOutput::DataDeposit(..) => {
+                                | TxOutput::DataDeposit(..)
+                                | TxOutput::Htlc(..) => {
                                     Err(ConnectTransactionError::IOPolicyError(
                                         IOPolicyError::InvalidOutputTypeInReward,
                                         block_id.into(),
@@ -136,7 +138,8 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::DelegateStaking(..)
                     | TxOutput::IssueFungibleToken(..)
                     | TxOutput::IssueNft(..)
-                    | TxOutput::DataDeposit(..) => false,
+                    | TxOutput::DataDeposit(..)
+                    | TxOutput::Htlc(..) => false,
                 });
             ensure!(
                 all_lock_then_transfer,
@@ -161,7 +164,8 @@ pub fn check_tx_inputs_outputs_purposes(
         | TxOutput::LockThenTransfer(..)
         | TxOutput::CreateStakePool(..)
         | TxOutput::ProduceBlockFromStake(..)
-        | TxOutput::IssueNft(..) => true,
+        | TxOutput::IssueNft(..)
+        | TxOutput::Htlc(..) => true,
         TxOutput::Burn(..)
         | TxOutput::CreateDelegationId(..)
         | TxOutput::DelegateStaking(..)
@@ -197,7 +201,8 @@ pub fn check_tx_inputs_outputs_purposes(
         | TxOutput::DelegateStaking(..)
         | TxOutput::IssueFungibleToken(..)
         | TxOutput::IssueNft(..)
-        | TxOutput::DataDeposit(..) => { /* do nothing */ }
+        | TxOutput::DataDeposit(..)
+        | TxOutput::Htlc(..) => { /* do nothing */ }
         TxOutput::CreateStakePool(..) => {
             stake_pool_outputs_count += 1;
         }

@@ -456,7 +456,14 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         };
         let tx = mutate_first_input(&mut rng, &tx);
         assert_eq!(
-            verify_signature(&chain_config, &destination, &tx.tx, &inputs_utxos_refs, 0),
+            verify_signature(
+                &chain_config,
+                &destination,
+                &tx.tx,
+                &tx.tx.signatures()[0],
+                &inputs_utxos_refs,
+                0
+            ),
             Err(DestinationSigError::SignatureVerificationFailed),
         );
     }
@@ -566,7 +573,14 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         let inputs = tx.tx.inputs().len();
 
         assert_eq!(
-            verify_signature(&chain_config, &destination, &tx.tx, &inputs_utxos_refs, 0),
+            verify_signature(
+                &chain_config,
+                &destination,
+                &tx.tx,
+                &tx.tx.signatures()[0],
+                &inputs_utxos_refs,
+                0
+            ),
             Err(DestinationSigError::SignatureVerificationFailed),
         );
         for input in 1..inputs {
@@ -575,6 +589,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
                     &chain_config,
                     &destination,
                     &tx.tx,
+                    &tx.tx.signatures()[input],
                     &inputs_utxos_refs,
                     input
                 ),
@@ -666,6 +681,7 @@ fn mutate_single(#[case] seed: Seed) {
                     &chain_config,
                     &destination,
                     &tx.tx,
+                    &tx.tx.signatures()[input],
                     &inputs_utxos_refs,
                     input
                 ),
@@ -677,6 +693,7 @@ fn mutate_single(#[case] seed: Seed) {
                 &chain_config,
                 &destination,
                 &tx.tx,
+                &tx.tx.signatures()[0],
                 &inputs_utxos_refs,
                 total_inputs
             ),
@@ -700,6 +717,7 @@ fn mutate_single(#[case] seed: Seed) {
                     &chain_config,
                     &destination,
                     &tx.tx,
+                    &tx.tx.signatures()[input],
                     &inputs_utxos_refs,
                     input
                 ),
@@ -711,6 +729,7 @@ fn mutate_single(#[case] seed: Seed) {
                 &chain_config,
                 &destination,
                 &tx.tx,
+                &tx.tx.signatures()[0],
                 &inputs_utxos_refs,
                 inputs
             ),
@@ -726,7 +745,14 @@ fn mutate_single(#[case] seed: Seed) {
 
         // Mutation of the first output makes signature invalid.
         assert_eq!(
-            verify_signature(&chain_config, &destination, &tx.tx, &inputs_utxos_refs, 0),
+            verify_signature(
+                &chain_config,
+                &destination,
+                &tx.tx,
+                &tx.tx.signatures()[0],
+                &inputs_utxos_refs,
+                0
+            ),
             Err(DestinationSigError::SignatureVerificationFailed),
         );
         for input in 1..total_inputs - 1 {
@@ -735,6 +761,7 @@ fn mutate_single(#[case] seed: Seed) {
                     &chain_config,
                     &destination,
                     &tx.tx,
+                    &tx.tx.signatures()[input],
                     &inputs_utxos_refs,
                     input
                 ),
@@ -746,6 +773,7 @@ fn mutate_single(#[case] seed: Seed) {
                 &chain_config,
                 &destination,
                 &tx.tx,
+                &tx.tx.signatures()[0],
                 &inputs_utxos_refs,
                 total_inputs
             ),
@@ -800,6 +828,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                     &chain_config,
                     &destination,
                     &tx.tx,
+                    &tx.tx.signatures()[input],
                     &inputs_utxos_refs,
                     input
                 ),
@@ -812,6 +841,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 &chain_config,
                 &destination,
                 &tx.tx,
+                &tx.tx.signatures()[0],
                 &inputs_utxos_refs,
                 total_inputs
             ),
@@ -830,7 +860,14 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
             tx.inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
         assert_eq!(
-            verify_signature(&chain_config, &destination, &tx.tx, &inputs_utxos_refs, 0),
+            verify_signature(
+                &chain_config,
+                &destination,
+                &tx.tx,
+                &tx.tx.signatures()[0],
+                &inputs_utxos_refs,
+                0
+            ),
             Err(DestinationSigError::SignatureVerificationFailed),
         );
         for input in 1..total_inputs - 1 {
@@ -839,6 +876,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                     &chain_config,
                     &destination,
                     &tx.tx,
+                    &tx.tx.signatures()[input],
                     &inputs_utxos_refs,
                     input
                 ),
@@ -851,6 +889,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 &chain_config,
                 &destination,
                 &tx.tx,
+                &tx.tx.signatures()[0],
                 &inputs_utxos_refs,
                 total_inputs
             ),
@@ -876,6 +915,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                     &chain_config,
                     &destination,
                     &tx.tx,
+                    &tx.tx.signatures()[input],
                     &inputs_utxos_refs,
                     input
                 ),
@@ -888,6 +928,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 &chain_config,
                 &destination,
                 &tx.tx,
+                &tx.tx.signatures()[0],
                 &inputs_utxos_refs,
                 total_inputs
             ),
@@ -928,6 +969,7 @@ fn check_mutations<M, R>(
                 chain_config,
                 destination,
                 &tx.tx,
+                &tx.tx.signatures()[0],
                 &inputs_utxos_refs,
                 INVALID_INPUT
             ),
@@ -938,7 +980,14 @@ fn check_mutations<M, R>(
         );
         for input in 0..inputs {
             assert_eq!(
-                verify_signature(chain_config, destination, &tx.tx, &inputs_utxos_refs, input),
+                verify_signature(
+                    chain_config,
+                    destination,
+                    &tx.tx,
+                    &tx.tx.signatures()[input],
+                    &inputs_utxos_refs,
+                    input
+                ),
                 expected
             );
         }
@@ -1088,6 +1137,7 @@ fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedT
         TxOutput::IssueFungibleToken(_) => unreachable!(), // TODO: come back to this later
         TxOutput::IssueNft(_, _, _) => unreachable!(),     // TODO: come back to this later
         TxOutput::DataDeposit(_) => unreachable!(),
+        TxOutput::Htlc(_, _) => unreachable!(),
     };
     SignedTransactionWithUtxo {
         tx: updater.generate_tx().unwrap(),
