@@ -25,14 +25,17 @@ use crate::{
         tx_verification_strategy::TransactionVerificationStrategy,
         BlockSource, OrphanBlocksRef,
     },
-    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
-    NonZeroPoolBalances,
+    BlockValidity, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent,
+    ChainstateInterface, InMemoryBlockTrees, Locator, NonZeroPoolBalances,
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
+        block::{
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, Block, BlockReward,
+            GenBlock,
+        },
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, DelegationId, PoolId, Transaction, TxInput, TxOutput,
@@ -561,6 +564,32 @@ where
             .query()
             .map_err(ChainstateError::from)?
             .get_block_id_tree_as_list()
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn get_block_tree_top_starting_from_height(
+        &self,
+        min_height: BlockHeight,
+        block_validity: BlockValidity,
+    ) -> Result<InMemoryBlockTrees, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_block_tree_top_starting_from_height(min_height, block_validity)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn get_block_tree_top_starting_from_timestamp(
+        &self,
+        min_timestamp: BlockTimestamp,
+        block_validity: BlockValidity,
+    ) -> Result<InMemoryBlockTrees, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_block_tree_top_starting_from_timestamp(min_timestamp, block_validity)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 

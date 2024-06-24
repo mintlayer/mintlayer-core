@@ -28,8 +28,7 @@ pub use crate::{
     epoch_data_cache::{
         ConsumedEpochDataCache, EpochDataCache, EpochStorageRead, EpochStorageWrite,
     },
-    error::GetAncestorError,
-    error::PropertyQueryError,
+    error::{GetAncestorError, InMemoryBlockTreeError, PropertyQueryError},
     gen_block_index::GenBlockIndex,
     height_skip::get_skip_height,
     locator::Locator,

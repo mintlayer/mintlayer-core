@@ -19,7 +19,7 @@ use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, BlockReward},
+        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
         tokens::{
             NftIssuance, RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo,
             RPCTokenInfo, TokenAuxiliaryData, TokenId,
@@ -31,7 +31,12 @@ use common::{
 use tokens_accounting::TokensAccountingStorageRead;
 use utils::ensure;
 
-use super::{chainstateref, tx_verification_strategy::TransactionVerificationStrategy};
+use crate::BlockValidity;
+
+use super::{
+    chainstateref, in_memory_block_tree::InMemoryBlockTrees,
+    tx_verification_strategy::TransactionVerificationStrategy,
+};
 
 pub fn locator_tip_distances() -> impl Iterator<Item = BlockDistance> {
     itertools::iterate(0, |&i| std::cmp::max(1, i * 2)).map(BlockDistance::new)
@@ -386,6 +391,24 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     pub fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, PropertyQueryError> {
         self.chainstate_ref.get_block_id_tree_as_list()
+    }
+
+    pub fn get_block_tree_top_starting_from_height(
+        &self,
+        min_height: BlockHeight,
+        block_validity: BlockValidity,
+    ) -> Result<InMemoryBlockTrees, PropertyQueryError> {
+        self.chainstate_ref
+            .get_block_tree_top_starting_from_height(min_height, block_validity)
+    }
+
+    pub fn get_block_tree_top_starting_from_timestamp(
+        &self,
+        min_timestamp: BlockTimestamp,
+        block_validity: BlockValidity,
+    ) -> Result<InMemoryBlockTrees, PropertyQueryError> {
+        self.chainstate_ref
+            .get_block_tree_top_starting_from_timestamp(min_timestamp, block_validity)
     }
 
     pub fn get_token_data(

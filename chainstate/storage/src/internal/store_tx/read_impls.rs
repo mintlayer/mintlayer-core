@@ -37,7 +37,10 @@ use tokens_accounting::{TokenAccountingUndo, TokensAccountingStorageRead};
 use utils::log_error;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead};
 
-use crate::{BlockchainStorageRead, ChainstateStorageVersion, SealedStorageTag, TipStorageTag};
+use crate::{
+    schema::DBLeafBlockIdsMapKey, BlockchainStorageRead, ChainstateStorageVersion,
+    SealedStorageTag, TipStorageTag,
+};
 
 use super::well_known;
 
@@ -146,6 +149,22 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
     }
 
     #[log_error]
+    fn get_leaf_block_ids(&self, min_height: BlockHeight) -> crate::Result<BTreeSet<Id<Block>>> {
+        let map = self.0.get::<db::DBLeafBlockIds, _>();
+        let items = map
+            .greater_equal_iter_keys(&DBLeafBlockIdsMapKey::with_zero_id(min_height))?
+            .map(|key| *key.block_id());
+        Ok(items.collect::<BTreeSet<_>>())
+    }
+
+    #[log_error]
+    fn is_leaf_block(&self, block_index: &BlockIndex) -> crate::Result<bool> {
+        Ok(self
+            .read::<db::DBLeafBlockIds, _, _>(DBLeafBlockIdsMapKey::from_block_index(block_index))?
+            .is_some())
+    }
+
+    #[log_error]
     fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
         self.read::<db::DBUtxosBlockUndo, _, _>(id)
     }
@@ -169,21 +188,11 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRo<'st, B
     }
 
     #[log_error]
-    fn get_block_tree_by_height(
-        &self,
-        start_from: BlockHeight,
-    ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>> {
+    fn iterate_block_index(&self) -> crate::Result<impl Iterator<Item = BlockIndex>> {
         let map = self.0.get::<db::DBBlockIndex, _>();
-        let items = map.prefix_iter_decoded(&())?;
+        let iter = map.prefix_iter_decoded(&())?.map(|(_, block_index)| block_index);
 
-        let mut result = BTreeMap::<BlockHeight, Vec<Id<Block>>>::new();
-        for (_, bi) in items {
-            if bi.block_height() >= start_from {
-                result.entry(bi.block_height()).or_default().push(*bi.block_id());
-            }
-        }
-
-        Ok(result)
+        Ok(iter)
     }
 
     #[log_error]
@@ -427,6 +436,22 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     }
 
     #[log_error]
+    fn get_leaf_block_ids(&self, min_height: BlockHeight) -> crate::Result<BTreeSet<Id<Block>>> {
+        let map = self.get_map::<db::DBLeafBlockIds, _>()?;
+        let items = map
+            .greater_equal_iter_keys(&DBLeafBlockIdsMapKey::with_zero_id(min_height))?
+            .map(|key| *key.block_id());
+        Ok(items.collect::<BTreeSet<_>>())
+    }
+
+    #[log_error]
+    fn is_leaf_block(&self, block_index: &BlockIndex) -> crate::Result<bool> {
+        Ok(self
+            .read::<db::DBLeafBlockIds, _, _>(DBLeafBlockIdsMapKey::from_block_index(block_index))?
+            .is_some())
+    }
+
+    #[log_error]
     fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {
         self.read::<db::DBUtxosBlockUndo, _, _>(id)
     }
@@ -450,21 +475,11 @@ impl<'st, B: storage::Backend> BlockchainStorageRead for super::StoreTxRw<'st, B
     }
 
     #[log_error]
-    fn get_block_tree_by_height(
-        &self,
-        start_from: BlockHeight,
-    ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>> {
+    fn iterate_block_index(&self) -> crate::Result<impl Iterator<Item = BlockIndex>> {
         let map = self.get_map::<db::DBBlockIndex, _>()?;
-        let items = map.prefix_iter_decoded(&())?;
+        let iter = map.prefix_iter_decoded(&())?.map(|(_, block_index)| block_index);
 
-        let mut result = BTreeMap::<BlockHeight, Vec<Id<Block>>>::new();
-        for (_, bi) in items {
-            if bi.block_height() >= start_from {
-                result.entry(bi.block_height()).or_default().push(*bi.block_id());
-            }
-        }
-
-        Ok(result)
+        Ok(iter)
     }
 
     #[log_error]

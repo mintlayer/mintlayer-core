@@ -103,6 +103,12 @@ pub trait BlockchainStorageRead:
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
 
+    /// Get ids of all leaf blocks, whose height is not less than the specified minimum.
+    fn get_leaf_block_ids(&self, min_height: BlockHeight) -> Result<BTreeSet<Id<Block>>>;
+
+    /// Return true if the specified block is in the leaf block ids set.
+    fn is_leaf_block(&self, block_index: &BlockIndex) -> Result<bool>;
+
     fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
 
     /// Get token creation tx
@@ -111,11 +117,8 @@ pub trait BlockchainStorageRead:
     /// Get token id by id of the creation tx
     fn get_token_id(&self, tx_id: &Id<Transaction>) -> crate::Result<Option<TokenId>>;
 
-    /// Get block tree as height vs ids
-    fn get_block_tree_by_height(
-        &self,
-        start_from: BlockHeight,
-    ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
+    /// Iterate the entire block index.
+    fn iterate_block_index(&self) -> crate::Result<impl Iterator<Item = BlockIndex>>;
 
     /// Get tokens accounting undo for specific block
     fn get_tokens_accounting_undo(
@@ -197,6 +200,9 @@ pub trait BlockchainStorageWrite:
         height: &BlockHeight,
         block_id: &Id<GenBlock>,
     ) -> Result<()>;
+
+    /// Mark the specified block as a leaf or non-leaf, depending on the `is_leaf` parameter.
+    fn mark_as_leaf(&mut self, block_index: &BlockIndex, is_leaf: bool) -> Result<()>;
 
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> Result<()>;

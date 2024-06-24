@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
@@ -500,13 +503,8 @@ impl TestFramework {
         tx_rw.commit().unwrap();
     }
 
-    // Delete the block and its index
-    pub fn purge_block(&mut self, block_id: &Id<Block>) {
-        let mut tx_rw = self.storage.transaction_rw(None).unwrap();
-
-        tx_rw.del_block(*block_id).unwrap();
-        tx_rw.del_block_index(*block_id).unwrap();
-        tx_rw.commit().unwrap();
+    pub fn leaf_block_ids(&self, min_height: BlockHeight) -> BTreeSet<Id<Block>> {
+        self.storage.transaction_ro().unwrap().get_leaf_block_ids(min_height).unwrap()
     }
 
     pub fn on_pool_created(

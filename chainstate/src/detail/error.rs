@@ -25,7 +25,7 @@ use super::{
     },
 };
 use chainstate_storage::ChainstateStorageVersion;
-use chainstate_types::{GetAncestorError, PropertyQueryError};
+use chainstate_types::{GetAncestorError, InMemoryBlockTreeError, PropertyQueryError};
 use common::{
     chain::{
         block::{block_body::BlockMerkleTreeError, timestamp::BlockTimestamp},
@@ -111,6 +111,9 @@ pub enum BlockError {
 
     #[error("Unexpected block height range: first = {0}, second = {1}")]
     UnexpectedHeightRange(BlockHeight, BlockHeight),
+
+    #[error("In-memory block tree error: {0}")]
+    InMemoryBlockTreeError(#[from] InMemoryBlockTreeError),
 }
 
 // Note: this enum isn't supposed to represent a complete error; this is why its elements

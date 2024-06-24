@@ -919,9 +919,8 @@ fn test_reset_bad_stale_tip_status_and_add_blocks(#[case] seed: Seed, #[case] sb
         assert!(result.is_ok());
 
         // Add a "temporary" block on top of a1 to trigger a reorg to it, so that it is marked as invalid.
-        let (tmp_id, result) = process_block(&mut tf, &a1_id.into(), &mut rng);
+        let (_tmp_id, result) = process_block(&mut tf, &a1_id.into(), &mut rng);
         assert!(result.is_err());
-        tf.purge_block(&tmp_id);
 
         let (m2_id, result) = process_block(&mut tf, &m1_id.into(), &mut rng);
         assert!(result.is_ok());

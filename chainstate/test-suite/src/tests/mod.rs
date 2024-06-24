@@ -29,6 +29,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 mod basic_tests;
 mod block_invalidation;
 mod block_status;
+mod block_tree_retrieval;
 mod bootstrap;
 mod chainstate_accounting_storage_tests;
 mod chainstate_storage_tests;

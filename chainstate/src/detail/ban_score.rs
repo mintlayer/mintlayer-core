@@ -84,6 +84,7 @@ impl BanScore for BlockError {
             BlockError::UnexpectedHeightRange(_, _) => 0,
 
             BlockError::TokensAccountingError(err) => err.ban_score(),
+            BlockError::InMemoryBlockTreeError(_) => 0,
         }
     }
 }

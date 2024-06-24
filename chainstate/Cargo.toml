@@ -30,6 +30,7 @@ utxo = { path = "../utxo" }
 async-trait.workspace = true
 derive_more.workspace = true
 hex.workspace = true
+indextree.workspace = true
 itertools.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }
 mockall.workspace = true

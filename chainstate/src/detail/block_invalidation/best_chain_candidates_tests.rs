@@ -355,8 +355,8 @@ mod test_framework {
         fn get_higher_block_ids_sorted_by_height(
             &self,
             start_from: BlockHeight,
-        ) -> Result<Vec<Id<Block>>, PropertyQueryError> {
-            let mut ids_heights: Vec<_> = self
+        ) -> Result<impl DoubleEndedIterator<Item = Id<Block>>, PropertyQueryError> {
+            let mut ids_heights = self
                 .nodes
                 .iter()
                 .filter_map(|(id, data)| {
@@ -366,9 +366,9 @@ mod test_framework {
                         None
                     }
                 })
-                .collect();
+                .collect::<Vec<_>>();
             ids_heights.sort_by(|(_, height1), (_, height2)| height1.cmp(height2));
-            Ok(ids_heights.iter().map(|(id, _)| *id).collect())
+            Ok(ids_heights.into_iter().map(|(id, _)| id))
         }
 
         fn get_block_info(

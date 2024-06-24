@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 
 use thiserror::Error;
 
-use crate::{detail::chainstateref::ChainstateRef, TransactionVerificationStrategy};
+use crate::{detail::chainstateref::ChainstateRef, BlockValidity, TransactionVerificationStrategy};
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, BlockStatus, GenBlockIndex, PropertyQueryError};
 use common::{
@@ -85,9 +85,8 @@ impl BestChainCandidates {
     ) -> Result<BestChainCandidates, BestChainCandidatesError> {
         let min_height_with_allowed_reorg = chs.min_height_with_allowed_reorg()?;
 
-        // Note: currently, this call has linear complexity with respect to the total number of
-        // blocks, see the TODO near the function itself.
-        let block_ids_by_height = chs
+        // TODO: use get_block_tree_top_starting_from_height directly here.
+        let block_ids_by_height_iter = chs
             .get_higher_block_ids_sorted_by_height(min_height_with_allowed_reorg)
             .log_err()?;
 
@@ -101,13 +100,13 @@ impl BestChainCandidates {
         // tip and the current best block). The latter part can be improved a little by
         // optimizing last_common_ancestor_in_main_chain, see the comment below.
         // TODO: is there a way to make the complexity "more linear" in general?
-        for block_id in block_ids_by_height.iter().rev() {
-            let block_info = chs.get_block_info(block_id).log_err()?;
+        for block_id in block_ids_by_height_iter.rev() {
+            let block_info = chs.get_block_info(&block_id).log_err()?;
 
             // Only consider valid blocks with enough chain trust.
             if block_info.status().is_ok() && block_info.chain_trust() >= min_chain_trust {
                 // Only add the tips of branches to the list of candidates.
-                if !seen_parents.contains(block_id.into()) {
+                if !seen_parents.contains(&block_id.into()) {
                     let gen_block_info = Chs::block_info_to_gen(block_info.clone());
                     // Note: this function can be optimized, see the TODO near it.
                     let last_common_ancestor =
@@ -130,11 +129,11 @@ impl BestChainCandidates {
     // from the set and add the block's parent block to the set if its chain trust is not less than
     // the specified minimum.
     #[log_error]
-    pub fn remove_tree_add_parent<Chs: ChainstateAccessor>(
+    pub fn remove_tree_add_parent<'a, Chs: ChainstateAccessor>(
         &mut self,
-        chs: &Chs,
-        root_block_info: &Chs::BlockInfo,
-        descendant_block_infos: &[Chs::BlockInfo],
+        chs: &'a Chs,
+        root_block_info: &'a Chs::BlockInfo,
+        descendant_block_infos: impl Iterator<Item = &'a Chs::BlockInfo>,
         min_chain_trust: Uint256,
     ) -> Result<(), BestChainCandidatesError> {
         self.remove(root_block_info);
@@ -187,7 +186,7 @@ pub trait ChainstateAccessor {
     fn get_higher_block_ids_sorted_by_height(
         &self,
         start_from: BlockHeight,
-    ) -> Result<Vec<Id<Block>>, PropertyQueryError>;
+    ) -> Result<impl DoubleEndedIterator<Item = Id<Block>>, PropertyQueryError>;
 
     fn get_block_info(&self, block_id: &Id<Block>) -> Result<Self::BlockInfo, PropertyQueryError>;
 
@@ -231,8 +230,8 @@ where
     fn get_higher_block_ids_sorted_by_height(
         &self,
         start_from: BlockHeight,
-    ) -> Result<Vec<Id<Block>>, PropertyQueryError> {
-        self.get_higher_block_ids_sorted_by_height(start_from)
+    ) -> Result<impl DoubleEndedIterator<Item = Id<Block>>, PropertyQueryError> {
+        self.get_higher_block_ids_sorted_by_height(start_from, BlockValidity::Any)
     }
 
     #[log_error]

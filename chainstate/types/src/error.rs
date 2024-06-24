@@ -56,6 +56,39 @@ pub enum PropertyQueryError {
         start: BlockHeight,
         end: BlockHeight,
     },
+    #[error(transparent)]
+    InMemoryBlockTreeError(#[from] InMemoryBlockTreeError),
+}
+
+// TODO: ideally, this error shouldn't be here, it should be in the `chainstate` crate itself;
+// it only exists here because we need to include it into `PropertyQueryError`.
+// Perhaps the latter should also be put inside the `chainstate` crate.
+#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
+pub enum InMemoryBlockTreeError {
+    // Note: `PropertyQueryError` itself may contain `InMemoryBlockTreeError`, so here we must box it.
+    #[error("Error querying property: {0}")]
+    PropertyQueryError(Box<PropertyQueryError>),
+    // Note: String is used to avoid putting indextree::NodeError here, which is non-comparable.
+    #[error("Index tree node error: {0}")]
+    IndexTreeNodeError(String),
+    #[error("Node for id {0} is not in the arena")]
+    NodeNotInArena(indextree::NodeId),
+    #[error("Non-root node {0} has no parent")]
+    NonRootWithoutParent(indextree::NodeId),
+    #[error("Node {node_id} belongs to the branch at {nodes_branch_root} but this branch is at {actual_branch_root}")]
+    NodeNotInBranch {
+        node_id: indextree::NodeId,
+        nodes_branch_root: indextree::NodeId,
+        actual_branch_root: indextree::NodeId,
+    },
+    #[error("Block id {0} doesn't correspond to any root node")]
+    BlockIdDoesntCorrespondToRoot(Id<Block>),
+}
+
+impl From<PropertyQueryError> for InMemoryBlockTreeError {
+    fn from(value: PropertyQueryError) -> Self {
+        InMemoryBlockTreeError::PropertyQueryError(Box::new(value))
+    }
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
