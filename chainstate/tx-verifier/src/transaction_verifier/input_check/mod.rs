@@ -20,7 +20,8 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         signature::{inputsig::InputWitness, DestinationSigError, Transactable},
-        ChainConfig, GenBlock, TxInput, TxOutput,
+        tokens::TokenId,
+        ChainConfig, DelegationId, Destination, GenBlock, PoolId, TxInput, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -32,6 +33,8 @@ use mintscript::{
 use crate::TransactionVerifierStorageRef;
 
 use super::TransactionSourceForConnect;
+
+pub mod signature_only_check;
 
 pub type HashlockError = mintscript::checker::HashlockError;
 pub type TimelockError = mintscript::checker::TimelockError<TimelockContextError>;
@@ -58,6 +61,22 @@ impl From<mintscript::script::ScriptError<Infallible, TimelockError, Infallible>
 {
     fn from(value: mintscript::script::ScriptError<Infallible, TimelockError, Infallible>) -> Self {
         Self::Verification(value.errs_into())
+    }
+}
+
+impl From<mintscript::script::ScriptError<DestinationSigError, Infallible, Infallible>>
+    for InputCheckErrorPayload
+{
+    fn from(
+        value: mintscript::script::ScriptError<DestinationSigError, Infallible, Infallible>,
+    ) -> Self {
+        let err = match value {
+            mintscript::script::ScriptError::Signature(e) => ScriptError::Signature(e.into()),
+            mintscript::script::ScriptError::Timelock(_e) => unreachable!(),
+            mintscript::script::ScriptError::Hashlock(e) => ScriptError::Hashlock(e.into()),
+            mintscript::script::ScriptError::Threshold(e) => ScriptError::Threshold(e.into()),
+        };
+        Self::Verification(err)
     }
 }
 
@@ -177,20 +196,45 @@ where
     TV: tokens_accounting::TokensAccountingView<Error = tokens_accounting::Error>,
     OV: orders_accounting::OrdersAccountingView<Error = orders_accounting::Error>,
 {
-    type PoSAccounting = AV;
-    type Tokens = TV;
-    type Orders = OV;
-
-    fn pos_accounting(&self) -> &Self::PoSAccounting {
-        &self.pos_accounting
+    fn get_pool_decommission_destination(
+        &self,
+        pool_id: &PoolId,
+    ) -> Result<Option<Destination>, pos_accounting::Error> {
+        Ok(self
+            .pos_accounting
+            .get_pool_data(*pool_id)?
+            .map(|pool| pool.decommission_destination().clone()))
     }
 
-    fn tokens(&self) -> &Self::Tokens {
-        &self.tokens_accounting
+    fn get_delegation_spend_destination(
+        &self,
+        delegation_id: &DelegationId,
+    ) -> Result<Option<Destination>, pos_accounting::Error> {
+        Ok(self
+            .pos_accounting
+            .get_delegation_data(*delegation_id)?
+            .map(|delegation| delegation.spend_destination().clone()))
     }
 
-    fn orders(&self) -> &Self::Orders {
-        &self.orders_accounting
+    fn get_tokens_authority(
+        &self,
+        token_id: &TokenId,
+    ) -> Result<Option<Destination>, tokens_accounting::Error> {
+        Ok(
+            self.tokens_accounting.get_token_data(token_id)?.map(|token| match token {
+                tokens_accounting::TokenData::FungibleToken(data) => data.authority().clone(),
+            }),
+        )
+    }
+
+    fn get_orders_conclude_destination(
+        &self,
+        order_id: &common::chain::OrderId,
+    ) -> Result<Option<Destination>, orders_accounting::Error> {
+        Ok(self
+            .orders_accounting
+            .get_order_data(order_id)?
+            .map(|data| data.conclude_key().clone()))
     }
 }
 

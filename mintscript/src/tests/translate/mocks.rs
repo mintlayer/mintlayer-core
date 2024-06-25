@@ -62,86 +62,36 @@ impl crate::translate::InputInfoProvider for MockSigInfoProvider<'_> {
 }
 
 impl crate::translate::SignatureInfoProvider for MockSigInfoProvider<'_> {
-    type PoSAccounting = Self;
-    type Tokens = Self;
-    type Orders = Self;
-
-    fn pos_accounting(&self) -> &Self::PoSAccounting {
-        self
-    }
-
-    fn tokens(&self) -> &Self::Tokens {
-        self
-    }
-
-    fn orders(&self) -> &Self::Orders {
-        self
-    }
-}
-
-impl pos_accounting::PoSAccountingView for MockSigInfoProvider<'_> {
-    type Error = pos_accounting::Error;
-
-    fn pool_exists(&self, id: PoolId) -> Result<bool, Self::Error> {
-        Ok(self.pools.contains_key(&id))
-    }
-
-    fn get_pool_balance(&self, _id: PoolId) -> Result<Amount, Self::Error> {
-        unreachable!("not used in these tests")
-    }
-
-    fn get_pool_data(&self, id: PoolId) -> Result<Option<PoolData>, Self::Error> {
-        Ok(self.pools.get(&id).cloned())
-    }
-
-    fn get_pool_delegations_shares(
+    fn get_pool_decommission_destination(
         &self,
-        _id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
-        unreachable!("not used in these tests")
+        pool_id: &PoolId,
+    ) -> Result<Option<Destination>, pos_accounting::Error> {
+        Ok(self.pools.get(pool_id).map(|pool| pool.decommission_destination().clone()))
     }
 
-    fn get_delegation_balance(&self, _id: DelegationId) -> Result<Amount, Self::Error> {
-        unreachable!("not used in these tests")
-    }
-
-    fn get_delegation_data(&self, id: DelegationId) -> Result<Option<DelegationData>, Self::Error> {
-        Ok(self.delegations.get(&id).cloned())
-    }
-
-    fn get_pool_delegation_share(
+    fn get_delegation_spend_destination(
         &self,
-        _pid: PoolId,
-        _did: DelegationId,
-    ) -> Result<Amount, Self::Error> {
-        unreachable!("not used in these tests")
-    }
-}
-
-impl tokens_accounting::TokensAccountingView for MockSigInfoProvider<'_> {
-    type Error = tokens_accounting::Error;
-
-    fn get_token_data(&self, id: &TokenId) -> Result<Option<TokenData>, Self::Error> {
-        Ok(self.tokens.get(id).cloned())
+        delegation_id: &DelegationId,
+    ) -> Result<Option<Destination>, pos_accounting::Error> {
+        Ok(self
+            .delegations
+            .get(delegation_id)
+            .map(|delegation| delegation.spend_destination().clone()))
     }
 
-    fn get_circulating_supply(&self, _id: &TokenId) -> Result<Amount, Self::Error> {
-        unreachable!("not used in these tests")
-    }
-}
-
-impl orders_accounting::OrdersAccountingView for MockSigInfoProvider<'_> {
-    type Error = orders_accounting::Error;
-
-    fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
-        Ok(self.orders.get(id).cloned())
+    fn get_tokens_authority(
+        &self,
+        token_id: &TokenId,
+    ) -> Result<Option<Destination>, tokens_accounting::Error> {
+        Ok(self.tokens.get(token_id).map(|token| match token {
+            TokenData::FungibleToken(data) => data.authority().clone(),
+        }))
     }
 
-    fn get_ask_balance(&self, _id: &OrderId) -> Result<Amount, Self::Error> {
-        unreachable!()
-    }
-
-    fn get_give_balance(&self, _id: &OrderId) -> Result<Amount, Self::Error> {
-        unreachable!()
+    fn get_orders_conclude_destination(
+        &self,
+        order_id: &OrderId,
+    ) -> Result<Option<Destination>, orders_accounting::Error> {
+        Ok(self.orders.get(order_id).map(|data| data.conclude_key().clone()))
     }
 }

@@ -91,3 +91,13 @@ impl<C: TimelockContext> TimelockChecker<C> for StandardTimelockChecker {
         }
     }
 }
+
+pub struct NoOpTimelockChecker;
+
+impl<C> TimelockChecker<C> for NoOpTimelockChecker {
+    type Error = std::convert::Infallible;
+
+    fn check_timelock(&mut self, _ctx: &mut C, _lock: &OutputTimeLock) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
