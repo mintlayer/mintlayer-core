@@ -61,6 +61,7 @@ members = [
   "test-utils",                         # Various utilities for tests.
   "tokens-accounting",                  # Tokens accounting
   "utils",                              # Various utilities.
+  "utils/in_mem_item_tree",             # Tree of items that already have parent-child relationship, e.g. BlockIndex.
   "utils/networking",                   # Various async/tokio utilities.
   "utxo",                               # Utxo and related utilities (cache, undo, etc.).
   "wallet",                             # Wallet primitives.
@@ -169,6 +170,7 @@ hex-literal = "0.4"
 hmac = "0.12"
 iced = "0.12"
 iced_aw = "0.9"
+indextree = "4.6"
 indoc = "2.0"
 itertools = "0.13"
 jsonrpsee = { version = "0.22", default-features = false }

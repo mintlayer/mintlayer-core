@@ -1302,6 +1302,7 @@ dependencies = [
  "static_assertions",
  "storage",
  "thiserror",
+ "utils-in-mem-item-tree",
 ]
 
 [[package]]
@@ -3454,6 +3455,12 @@ dependencies = [
  "hashbrown 0.14.5",
  "serde",
 ]
+
+[[package]]
+name = "indextree"
+version = "4.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a6f7e29c1619ec492f411b021ac9f30649d5f522ca6f287f2467ee48c8dfe10"
 
 [[package]]
 name = "indoc"
@@ -8178,6 +8185,19 @@ dependencies = [
  "tokio",
  "tracing",
  "zeroize",
+]
+
+[[package]]
+name = "utils-in-mem-item-tree"
+version = "0.5.1"
+dependencies = [
+ "derive_more",
+ "indextree",
+ "itertools 0.13.0",
+ "logging",
+ "test-utils",
+ "thiserror",
+ "utils",
 ]
 
 [[package]]
