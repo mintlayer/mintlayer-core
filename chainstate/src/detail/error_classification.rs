@@ -908,16 +908,16 @@ impl BlockProcessingErrorClassification for orders_accounting::Error {
             | Error::InvariantOrderAskBalanceChangedForUndo(_)
             | Error::InvariantOrderGiveBalanceNotFoundForUndo(_)
             | Error::InvariantOrderGiveBalanceChangedForUndo(_)
-            | Error::InvariantOrderDataExistForCancelUndo(_)
-            | Error::InvariantOrderAskBalanceExistForCancelUndo(_)
-            | Error::InvariantOrderGiveBalanceExistForCancelUndo(_)
+            | Error::InvariantOrderDataExistForConcludeUndo(_)
+            | Error::InvariantOrderAskBalanceExistForConcludeUndo(_)
+            | Error::InvariantOrderGiveBalanceExistForConcludeUndo(_)
             | Error::FillOrderChangeLeft(_)
             | Error::CurrencyMismatch
             | Error::OrderOverflow(_)
             | Error::OrderOverbid(_, _, _)
-            | Error::AttemptedCancelNonexistingOrderData(_)
-            | Error::AttemptedCancelNonexistingAskBalance(_)
-            | Error::AttemptedCancelNonexistingGiveBalance(_)
+            | Error::AttemptedConcludeNonexistingOrderData(_)
+            | Error::AttemptedConcludeNonexistingAskBalance(_)
+            | Error::AttemptedConcludeNonexistingGiveBalance(_)
             | Error::UnsupportedTokenVersion
             | Error::InvariantNonzeroAskBalanceForMissingOrder(_)
             | Error::InvariantNonzeroGiveBalanceForMissingOrder(_) => {

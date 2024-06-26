@@ -41,12 +41,12 @@ pub enum Error {
     InvariantOrderGiveBalanceNotFoundForUndo(OrderId),
     #[error("Give balance for order {0}` changed for undo")]
     InvariantOrderGiveBalanceChangedForUndo(OrderId),
-    #[error("Data for order {0}` still exist on cancel undo")]
-    InvariantOrderDataExistForCancelUndo(OrderId),
-    #[error("Ask balance for order {0}` still exist on cancel undo")]
-    InvariantOrderAskBalanceExistForCancelUndo(OrderId),
-    #[error("Give balance for order {0}` still exist on cancel undo")]
-    InvariantOrderGiveBalanceExistForCancelUndo(OrderId),
+    #[error("Data for order {0}` still exist on conclude undo")]
+    InvariantOrderDataExistForConcludeUndo(OrderId),
+    #[error("Ask balance for order {0}` still exist on conclude undo")]
+    InvariantOrderAskBalanceExistForConcludeUndo(OrderId),
+    #[error("Give balance for order {0}` still exist on conclude undo")]
+    InvariantOrderGiveBalanceExistForConcludeUndo(OrderId),
     #[error("Ask balance for non-existing order {0}` is not zero")]
     InvariantNonzeroAskBalanceForMissingOrder(OrderId),
     #[error("Give balance for non-existing order {0}` is not zero")]
@@ -59,12 +59,12 @@ pub enum Error {
     OrderOverflow(OrderId),
     #[error("Order `{0}` can provide `{1:?}` amount; but attempted to fill `{2:?}`")]
     OrderOverbid(OrderId, Amount, Amount),
-    #[error("Attempt to cancel non-existing order data `{0}`")]
-    AttemptedCancelNonexistingOrderData(OrderId),
-    #[error("Attempt to cancel non-existing ask balance `{0}`")]
-    AttemptedCancelNonexistingAskBalance(OrderId),
-    #[error("Attempt to cancel non-existing give balance `{0}`")]
-    AttemptedCancelNonexistingGiveBalance(OrderId),
+    #[error("Attempt to conclude non-existing order data `{0}`")]
+    AttemptedConcludeNonexistingOrderData(OrderId),
+    #[error("Attempt to conclude non-existing ask balance `{0}`")]
+    AttemptedConcludeNonexistingAskBalance(OrderId),
+    #[error("Attempt to conclude non-existing give balance `{0}`")]
+    AttemptedConcludeNonexistingGiveBalance(OrderId),
     #[error("Unsupported token version")]
     UnsupportedTokenVersion,
 

@@ -403,7 +403,7 @@ fn create_order_tokens_for_tokens(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn cancel_order_check_storage(#[case] seed: Seed) {
+fn conclude_order_check_storage(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -429,7 +429,7 @@ fn cancel_order_check_storage(#[case] seed: Seed) {
             .add_input(
                 TxInput::AccountCommand(
                     AccountNonce::new(0),
-                    AccountCommand::CancelOrder(order_id),
+                    AccountCommand::ConcludeOrder(order_id),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -565,7 +565,7 @@ fn fill_order_check_storage(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn fill_partially_then_cancel(#[case] seed: Seed) {
+fn fill_partially_then_conclude(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -618,12 +618,12 @@ fn fill_partially_then_cancel(#[case] seed: Seed) {
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        // cancel the order
+        // conclude the order
         let tx = TransactionBuilder::new()
             .add_input(
                 TxInput::AccountCommand(
                     AccountNonce::new(1),
-                    AccountCommand::CancelOrder(order_id),
+                    AccountCommand::ConcludeOrder(order_id),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -653,7 +653,7 @@ fn fill_partially_then_cancel(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn cancel_order_check_signature(#[case] seed: Seed) {
+fn conclude_order_check_signature(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -677,13 +677,13 @@ fn cancel_order_check_signature(#[case] seed: Seed) {
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        // try cancel without signature
+        // try conclude without signature
         {
             let tx = TransactionBuilder::new()
                 .add_input(
                     TxInput::AccountCommand(
                         AccountNonce::new(0),
-                        AccountCommand::CancelOrder(order_id),
+                        AccountCommand::ConcludeOrder(order_id),
                     ),
                     InputWitness::NoSignature(None),
                 )
@@ -707,13 +707,13 @@ fn cancel_order_check_signature(#[case] seed: Seed) {
             )
         }
 
-        // try cancel with wrong signature
+        // try conclude with wrong signature
         {
             let tx = TransactionBuilder::new()
                 .add_input(
                     TxInput::AccountCommand(
                         AccountNonce::new(0),
-                        AccountCommand::CancelOrder(order_id),
+                        AccountCommand::ConcludeOrder(order_id),
                     ),
                     InputWitness::NoSignature(None),
                 )
@@ -765,7 +765,7 @@ fn cancel_order_check_signature(#[case] seed: Seed) {
             .add_input(
                 TxInput::AccountCommand(
                     AccountNonce::new(0),
-                    AccountCommand::CancelOrder(order_id),
+                    AccountCommand::ConcludeOrder(order_id),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -886,7 +886,7 @@ fn reorg_before_create(#[case] seed: Seed) {
     });
 }
 
-// Create a chain with an order which is filled partially and then canceled.
+// Create a chain with an order which is filled partially and then concluded.
 // Reorg from a point after the order was created, so that after reorg storage has original information on the order
 #[rstest]
 #[trace]
@@ -965,7 +965,7 @@ fn reorg_after_create(#[case] seed: Seed) {
                     .add_input(
                         TxInput::AccountCommand(
                             AccountNonce::new(1),
-                            AccountCommand::CancelOrder(order_id),
+                            AccountCommand::ConcludeOrder(order_id),
                         ),
                         InputWitness::NoSignature(None),
                     )

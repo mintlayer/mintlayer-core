@@ -453,7 +453,7 @@ async fn simulation(
                                 chain_config.token_change_authority_fee(block_height);
                             burn_coins(&mut statistics, token_change_authority_fee);
                         }
-                        AccountCommand::CancelOrder(_) | AccountCommand::FillOrder(_, _, _) => {
+                        AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
                             unimplemented!() // TODO(orders)
                         }
                     },

@@ -151,7 +151,7 @@ fn create_order_and_undo(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn cancel_order_and_flush(#[case] seed: Seed) {
+fn conclude_order_and_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let order_id = OrderId::random_using(&mut rng);
@@ -165,17 +165,17 @@ fn cancel_order_and_flush(#[case] seed: Seed) {
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
 
-    // try to cancel non-existing order
+    // try to conclude non-existing order
     {
         let random_order = OrderId::random_using(&mut rng);
-        let result = cache.cancel_order(random_order);
+        let result = cache.conclude_order(random_order);
         assert_eq!(
             result.unwrap_err(),
-            Error::AttemptedCancelNonexistingOrderData(random_order)
+            Error::AttemptedConcludeNonexistingOrderData(random_order)
         );
     }
 
-    let _ = cache.cancel_order(order_id).unwrap();
+    let _ = cache.conclude_order(order_id).unwrap();
 
     db.batch_write_orders_data(cache.consume()).unwrap();
 
@@ -185,7 +185,7 @@ fn cancel_order_and_flush(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn cancel_order_twice(#[case] seed: Seed) {
+fn conclude_order_twice(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let order_id = OrderId::random_using(&mut rng);
@@ -199,18 +199,18 @@ fn cancel_order_twice(#[case] seed: Seed) {
     let db = OrdersAccountingDB::new(&storage);
     let mut cache = OrdersAccountingCache::new(&db);
 
-    let _ = cache.cancel_order(order_id).unwrap();
+    let _ = cache.conclude_order(order_id).unwrap();
 
     assert_eq!(
-        cache.cancel_order(order_id,),
-        Err(Error::AttemptedCancelNonexistingOrderData(order_id))
+        cache.conclude_order(order_id,),
+        Err(Error::AttemptedConcludeNonexistingOrderData(order_id))
     );
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn cancel_order_and_undo(#[case] seed: Seed) {
+fn conclude_order_and_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let order_id = OrderId::random_using(&mut rng);
@@ -225,7 +225,7 @@ fn cancel_order_and_undo(#[case] seed: Seed) {
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
 
-    let undo = cache.cancel_order(order_id).unwrap();
+    let undo = cache.conclude_order(order_id).unwrap();
 
     assert_eq!(None, cache.get_order_data(&order_id).unwrap().as_ref());
     assert_eq!(None, cache.get_ask_balance(&order_id).unwrap());
@@ -506,7 +506,7 @@ fn fill_order_partially_and_undo(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn fill_order_partially_and_cancel(#[case] seed: Seed) {
+fn fill_order_partially_and_conclude(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let order_id = OrderId::random_using(&mut rng);
@@ -545,7 +545,7 @@ fn fill_order_partially_and_cancel(#[case] seed: Seed) {
         cache.get_give_balance(&order_id).unwrap()
     );
 
-    let _ = cache.cancel_order(order_id).unwrap();
+    let _ = cache.conclude_order(order_id).unwrap();
 
     db.batch_write_orders_data(cache.consume()).unwrap();
 

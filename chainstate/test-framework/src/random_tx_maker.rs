@@ -516,7 +516,7 @@ impl<'a> RandomTxMaker<'a> {
                 }
                 AccountType::Order(order_id) => {
                     if !self.account_command_used {
-                        // cancel an order
+                        // conclude an order
                         let order_data = orders_cache.get_order_data(&order_id).unwrap().unwrap();
                         if token_not_frozen(order_data.ask(), tokens_cache)
                             && token_not_frozen(order_data.give(), tokens_cache)
@@ -524,7 +524,7 @@ impl<'a> RandomTxMaker<'a> {
                             let new_nonce = self.get_next_nonce(AccountType::Order(order_id));
                             result_inputs.push(TxInput::AccountCommand(
                                 new_nonce,
-                                AccountCommand::CancelOrder(order_id),
+                                AccountCommand::ConcludeOrder(order_id),
                             ));
 
                             let available_give_balance =
@@ -540,7 +540,7 @@ impl<'a> RandomTxMaker<'a> {
                             let filled_output =
                                 output_value_with_amount(order_data.ask(), filled_amount);
 
-                            let _ = orders_cache.cancel_order(order_id).unwrap();
+                            let _ = orders_cache.conclude_order(order_id).unwrap();
                             self.account_command_used = true;
 
                             result_outputs.extend(vec![

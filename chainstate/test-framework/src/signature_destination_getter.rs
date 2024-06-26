@@ -168,7 +168,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             };
                             Ok(destination)
                         }
-                        AccountCommand::CancelOrder(order_id) => {
+                        AccountCommand::ConcludeOrder(order_id) => {
                             let order_data = orders_view
                                 .get_order_data(order_id)
                                 .map_err(|_| {
@@ -179,7 +179,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                                 .ok_or(SignatureDestinationGetterError::OrderDataNotFound(
                                     *order_id,
                                 ))?;
-                            Ok(order_data.cancel_key().clone())
+                            Ok(order_data.conclude_key().clone())
                         }
                         AccountCommand::FillOrder(_, _, d) => Ok(d.clone()),
                     },

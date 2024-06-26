@@ -74,7 +74,7 @@ pub enum RpcAccountCommand {
         token_id: RpcAddress<TokenId>,
         new_authority: RpcAddress<Destination>,
     },
-    CancelOrder {
+    ConcludeOrder {
         order_id: RpcAddress<OrderId>,
     },
     FillOrder {
@@ -113,7 +113,7 @@ impl RpcAccountCommand {
                     new_authority: RpcAddress::new(chain_config, destination.clone())?,
                 }
             }
-            AccountCommand::CancelOrder(id) => RpcAccountCommand::CancelOrder {
+            AccountCommand::ConcludeOrder(id) => RpcAccountCommand::ConcludeOrder {
                 order_id: RpcAddress::new(chain_config, *id)?,
             },
             AccountCommand::FillOrder(id, fill, dest) => RpcAccountCommand::FillOrder {

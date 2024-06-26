@@ -215,12 +215,12 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                     };
                     Ok(checksig(dest))
                 }
-                AccountCommand::CancelOrder(order_id) => {
+                AccountCommand::ConcludeOrder(order_id) => {
                     let order_data = ctx
                         .orders()
                         .get_order_data(order_id)?
                         .ok_or(TranslationError::OrderNotFound(*order_id))?;
-                    Ok(checksig(order_data.cancel_key()))
+                    Ok(checksig(order_data.conclude_key()))
                 }
                 AccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
             },
@@ -314,7 +314,7 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 | AccountCommand::FreezeToken(_token_id, _)
                 | AccountCommand::UnfreezeToken(_token_id)
                 | AccountCommand::ChangeTokenAuthority(_token_id, _) => Ok(WitnessScript::TRUE),
-                AccountCommand::CancelOrder(_) | AccountCommand::FillOrder(_, _, _) => {
+                AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
                     Ok(WitnessScript::TRUE)
                 }
             },

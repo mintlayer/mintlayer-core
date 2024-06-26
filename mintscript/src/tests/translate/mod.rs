@@ -248,8 +248,8 @@ fn mint(id: TokenId, amount: u128) -> TestInputInfo {
     TestInputInfo::AccountCommand { command }
 }
 
-fn cancel_order(id: OrderId) -> TestInputInfo {
-    let command = AccountCommand::CancelOrder(id);
+fn conclude_order(id: OrderId) -> TestInputInfo {
+    let command = AccountCommand::ConcludeOrder(id);
     TestInputInfo::AccountCommand { command }
 }
 
@@ -353,10 +353,10 @@ fn mode_name<'a, T: TranslationMode<'a>>(_: &T) -> &'static str {
 #[case("htlc_04", htlc(19, 20, tl_for_blocks(1000)), htlc_multisig(0x55))]
 #[case("anyonecantake_00", anyonecantake(order0().1), nosig())]
 #[case("anyonecantake_01", anyonecantake(order0().1), stdsig(0x57))]
-#[case("cancelorder_00", cancel_order(order0().0), nosig())]
-#[case("cancelorder_01", cancel_order(fake_id(0x88)), nosig())]
-#[case("cancelorder_02", cancel_order(order0().0), stdsig(0x44))]
-#[case("cancelorder_03", cancel_order(order0().0), stdsig(0x45))]
+#[case("concludeorder_00", conclude_order(order0().0), nosig())]
+#[case("concludeorder_01", conclude_order(fake_id(0x88)), nosig())]
+#[case("concludeorder_02", conclude_order(order0().0), stdsig(0x44))]
+#[case("concludeorder_03", conclude_order(order0().0), stdsig(0x45))]
 #[case("fillorder_00", fill_order(order0().0), nosig())]
 #[case("fillorder_01", fill_order(fake_id(0x77)), nosig())]
 #[case("fillorder_00", fill_order(order0().0), stdsig(0x45))]

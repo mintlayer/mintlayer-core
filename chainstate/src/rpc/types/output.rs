@@ -209,7 +209,7 @@ impl RpcTxOutput {
                 data: RpcHexString::from_bytes(data),
             },
             TxOutput::AnyoneCanTake(data) => RpcTxOutput::AnyoneCanTake {
-                authority: RpcAddress::new(chain_config, data.cancel_key().clone())?,
+                authority: RpcAddress::new(chain_config, data.conclude_key().clone())?,
                 ask_value: RpcOutputValue::new(chain_config, data.ask().clone())?,
                 give_value: RpcOutputValue::new(chain_config, data.give().clone())?,
             },

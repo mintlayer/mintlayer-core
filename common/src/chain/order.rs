@@ -83,8 +83,8 @@ pub fn make_order_id(input0_outpoint: &UtxoOutPoint) -> OrderId {
 /// The fields represent currencies and amounts to be exchanged and the trading pair can be deducted from it.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct OrderData {
-    /// The key that can authorize cancellation of an order
-    cancel_key: Destination,
+    /// The key that can authorize conclusion of an order
+    conclude_key: Destination,
     /// `Ask` and `give` fields represent amounts of currencies
     /// that an order maker wants to exchange, e.g. 5 coins for 10 tokens
     ask: OutputValue,
@@ -92,16 +92,16 @@ pub struct OrderData {
 }
 
 impl OrderData {
-    pub fn new(cancel_key: Destination, ask: OutputValue, give: OutputValue) -> Self {
+    pub fn new(conclude_key: Destination, ask: OutputValue, give: OutputValue) -> Self {
         Self {
-            cancel_key,
+            conclude_key,
             ask,
             give,
         }
     }
 
-    pub fn cancel_key(&self) -> &Destination {
-        &self.cancel_key
+    pub fn conclude_key(&self) -> &Destination {
+        &self.conclude_key
     }
 
     pub fn ask(&self) -> &OutputValue {

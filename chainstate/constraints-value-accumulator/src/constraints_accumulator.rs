@@ -266,7 +266,7 @@ impl ConstrainedValueAccumulator {
                 CoinOrTokenId::Coin,
                 chain_config.token_change_authority_fee(block_height),
             )),
-            AccountCommand::CancelOrder(id) => {
+            AccountCommand::ConcludeOrder(id) => {
                 let order_data = orders_accounting_view
                     .get_order_data(id)
                     .map_err(|_| orders_accounting::Error::ViewFail)?

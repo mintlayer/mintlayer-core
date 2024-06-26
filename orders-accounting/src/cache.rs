@@ -26,7 +26,7 @@ use crate::{
     data::OrdersAccountingDeltaData,
     error::{Error, Result},
     operations::{
-        CancelOrderUndo, CreateOrderUndo, FillOrderUndo, OrdersAccountingOperations,
+        ConcludeOrderUndo, CreateOrderUndo, FillOrderUndo, OrdersAccountingOperations,
         OrdersAccountingUndo,
     },
     view::OrdersAccountingView,
@@ -91,22 +91,22 @@ impl<P: OrdersAccountingView> OrdersAccountingCache<P> {
         Ok(())
     }
 
-    fn undo_cancel_order(&mut self, undo: CancelOrderUndo) -> Result<()> {
+    fn undo_conclude_order(&mut self, undo: ConcludeOrderUndo) -> Result<()> {
         ensure!(
             self.get_order_data(&undo.id)?.is_none(),
-            Error::InvariantOrderDataExistForCancelUndo(undo.id)
+            Error::InvariantOrderDataExistForConcludeUndo(undo.id)
         );
         self.data.order_data.undo_merge_delta_data_element(undo.id, undo.undo_data)?;
 
         ensure!(
             self.get_ask_balance(&undo.id)?.unwrap_or(Amount::ZERO) == Amount::ZERO,
-            Error::InvariantOrderAskBalanceExistForCancelUndo(undo.id)
+            Error::InvariantOrderAskBalanceExistForConcludeUndo(undo.id)
         );
         self.data.ask_balances.add_unsigned(undo.id, undo.ask_balance)?;
 
         ensure!(
             self.get_give_balance(&undo.id)?.unwrap_or(Amount::ZERO) == Amount::ZERO,
-            Error::InvariantOrderGiveBalanceExistForCancelUndo(undo.id)
+            Error::InvariantOrderGiveBalanceExistForConcludeUndo(undo.id)
         );
         self.data.give_balances.add_unsigned(undo.id, undo.give_balance)?;
 
@@ -117,7 +117,7 @@ impl<P: OrdersAccountingView> OrdersAccountingCache<P> {
         if let Some(undo_data) = undo.undo_data {
             ensure!(
                 self.get_order_data(&undo.id)?.is_none(),
-                Error::InvariantOrderDataExistForCancelUndo(undo.id)
+                Error::InvariantOrderDataExistForConcludeUndo(undo.id)
             );
             self.data.order_data.undo_merge_delta_data_element(undo.id, undo_data)?;
         }
@@ -219,18 +219,18 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
         }))
     }
 
-    fn cancel_order(&mut self, id: OrderId) -> Result<OrdersAccountingUndo> {
-        log::debug!("Canceling an order: {:?}", id);
+    fn conclude_order(&mut self, id: OrderId) -> Result<OrdersAccountingUndo> {
+        log::debug!("Concluding an order: {:?}", id);
 
         let order_data = self
             .get_order_data(&id)?
-            .ok_or(Error::AttemptedCancelNonexistingOrderData(id))?;
+            .ok_or(Error::AttemptedConcludeNonexistingOrderData(id))?;
         let ask_balance = self
             .get_ask_balance(&id)?
-            .ok_or(Error::AttemptedCancelNonexistingAskBalance(id))?;
+            .ok_or(Error::AttemptedConcludeNonexistingAskBalance(id))?;
         let give_balance = self
             .get_give_balance(&id)?
-            .ok_or(Error::AttemptedCancelNonexistingGiveBalance(id))?;
+            .ok_or(Error::AttemptedConcludeNonexistingGiveBalance(id))?;
 
         let undo_data = self
             .data
@@ -240,7 +240,7 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
         self.data.ask_balances.sub_unsigned(id, ask_balance)?;
         self.data.give_balances.sub_unsigned(id, give_balance)?;
 
-        Ok(OrdersAccountingUndo::CancelOrder(CancelOrderUndo {
+        Ok(OrdersAccountingUndo::ConcludeOrder(ConcludeOrderUndo {
             id,
             undo_data,
             ask_balance,
@@ -290,7 +290,7 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
         log::debug!("Undo an order: {:?}", undo_data);
         match undo_data {
             OrdersAccountingUndo::CreateOrder(undo) => self.undo_create_order(undo),
-            OrdersAccountingUndo::CancelOrder(undo) => self.undo_cancel_order(undo),
+            OrdersAccountingUndo::ConcludeOrder(undo) => self.undo_conclude_order(undo),
             OrdersAccountingUndo::FillOrder(undo) => self.undo_fill_order(undo),
         }
     }

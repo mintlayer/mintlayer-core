@@ -567,7 +567,7 @@ fn fill_order_constraints(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn cancel_order_constraints(#[case] seed: Seed) {
+fn conclude_order_constraints(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = create_unit_test_config();
@@ -597,7 +597,7 @@ fn cancel_order_constraints(#[case] seed: Seed) {
     {
         let inputs = vec![TxInput::AccountCommand(
             AccountNonce::new(0),
-            AccountCommand::CancelOrder(order_id),
+            AccountCommand::ConcludeOrder(order_id),
         )];
         let input_utxos = vec![None];
 
@@ -632,7 +632,7 @@ fn cancel_order_constraints(#[case] seed: Seed) {
     {
         let inputs = vec![TxInput::AccountCommand(
             AccountNonce::new(0),
-            AccountCommand::CancelOrder(order_id),
+            AccountCommand::ConcludeOrder(order_id),
         )];
         let input_utxos = vec![None];
 
@@ -669,7 +669,7 @@ fn cancel_order_constraints(#[case] seed: Seed) {
         // partially use input in command
         let inputs = vec![TxInput::AccountCommand(
             AccountNonce::new(0),
-            AccountCommand::CancelOrder(order_id),
+            AccountCommand::ConcludeOrder(order_id),
         )];
         let input_utxos = vec![None];
 
@@ -704,7 +704,7 @@ fn cancel_order_constraints(#[case] seed: Seed) {
     // valid case
     let inputs = vec![TxInput::AccountCommand(
         AccountNonce::new(0),
-        AccountCommand::CancelOrder(order_id),
+        AccountCommand::ConcludeOrder(order_id),
     )];
     let input_utxos = vec![None];
 

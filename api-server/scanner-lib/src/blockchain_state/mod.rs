@@ -617,7 +617,7 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
                     | AccountCommand::UnfreezeToken(token_id)
                     | AccountCommand::LockTokenSupply(token_id)
                     | AccountCommand::ChangeTokenAuthority(token_id, _) => Some(*token_id),
-                    AccountCommand::CancelOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
+                    AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
                 },
             })
             .collect();
@@ -1106,7 +1106,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     )
                     .await;
                 }
-                AccountCommand::CancelOrder(_) | AccountCommand::FillOrder(_, _, _) => {
+                AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
                     // TODO(orders)
                 }
             },
