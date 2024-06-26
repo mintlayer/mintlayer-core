@@ -274,11 +274,11 @@ impl ConstrainedValueAccumulator {
                 let ask_balance = orders_accounting_view
                     .get_ask_balance(id)
                     .map_err(|_| orders_accounting::Error::ViewFail)?
-                    .ok_or(orders_accounting::Error::OrderAskBalanceNotFound(*id))?;
+                    .unwrap_or(Amount::ZERO);
                 let give_balance = orders_accounting_view
                     .get_give_balance(id)
                     .map_err(|_| orders_accounting::Error::ViewFail)?
-                    .ok_or(orders_accounting::Error::OrderGiveBalanceNotFound(*id))?;
+                    .unwrap_or(Amount::ZERO);
 
                 let initially_asked = output_value_amount(order_data.ask())?;
                 let filled_amount = (initially_asked - ask_balance)

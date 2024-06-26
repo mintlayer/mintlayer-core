@@ -114,14 +114,6 @@ impl<P: OrdersAccountingView> OrdersAccountingCache<P> {
     }
 
     fn undo_fill_order(&mut self, undo: FillOrderUndo) -> Result<()> {
-        if let Some(undo_data) = undo.undo_data {
-            ensure!(
-                self.get_order_data(&undo.id)?.is_none(),
-                Error::InvariantOrderDataExistForConcludeUndo(undo.id)
-            );
-            self.data.order_data.undo_merge_delta_data_element(undo.id, undo_data)?;
-        }
-
         self.data.ask_balances.add_unsigned(undo.id, undo.ask_balance)?;
         self.data.give_balances.add_unsigned(undo.id, undo.give_balance)?;
 
@@ -225,12 +217,8 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
         let order_data = self
             .get_order_data(&id)?
             .ok_or(Error::AttemptedConcludeNonexistingOrderData(id))?;
-        let ask_balance = self
-            .get_ask_balance(&id)?
-            .ok_or(Error::AttemptedConcludeNonexistingAskBalance(id))?;
-        let give_balance = self
-            .get_give_balance(&id)?
-            .ok_or(Error::AttemptedConcludeNonexistingGiveBalance(id))?;
+        let ask_balance = self.get_ask_balance(&id)?.unwrap_or(Amount::ZERO);
+        let give_balance = self.get_give_balance(&id)?.unwrap_or(Amount::ZERO);
 
         let undo_data = self
             .data
@@ -254,33 +242,11 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
         let fill_amount = output_value_amount(&fill_value)?;
         let filled_amount = calculate_fill_order(self, id, &fill_value)?;
 
-        let ask_balance = self.get_ask_balance(&id)?.ok_or(Error::OrderAskBalanceNotFound(id))?;
-        let give_balance =
-            self.get_give_balance(&id)?.ok_or(Error::OrderGiveBalanceNotFound(id))?;
-
-        // in case the order is completely filled it can be removed
-        let undo_data = if fill_amount == ask_balance {
-            ensure!(
-                filled_amount == give_balance,
-                Error::FillOrderChangeLeft(id)
-            );
-
-            let order_data = self.get_order_data(&id)?.ok_or(Error::OrderDataNotFound(id))?;
-            let undo = self
-                .data
-                .order_data
-                .merge_delta_data_element(id, accounting::DataDelta::new(Some(order_data), None))?;
-            Some(undo)
-        } else {
-            None
-        };
-
         self.data.give_balances.sub_unsigned(id, filled_amount)?;
         self.data.ask_balances.sub_unsigned(id, fill_amount)?;
 
         Ok(OrdersAccountingUndo::FillOrder(FillOrderUndo {
             id,
-            undo_data,
             ask_balance: fill_amount,
             give_balance: filled_amount,
         }))

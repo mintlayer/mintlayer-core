@@ -29,7 +29,7 @@ use common::{
         AccountCommand, AccountNonce, ChainstateUpgrade, Destination, OrderData, SignedTransaction,
         TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Idable},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
 };
 use crypto::key::{KeyKind, PrivateKey};
 use orders_accounting::OrdersAccountingDB;
@@ -511,7 +511,7 @@ fn fill_order_check_storage(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         assert_eq!(
-            Some(order_data),
+            Some(order_data.clone()),
             tf.chainstate.get_order_data(&order_id).unwrap()
         );
         assert_eq!(
@@ -550,7 +550,10 @@ fn fill_order_check_storage(#[case] seed: Seed) {
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
-        assert_eq!(None, tf.chainstate.get_order_data(&order_id).unwrap());
+        assert_eq!(
+            Some(order_data),
+            tf.chainstate.get_order_data(&order_id).unwrap()
+        );
         assert_eq!(
             None,
             tf.chainstate.get_order_ask_balance(&order_id).unwrap()
@@ -618,6 +621,79 @@ fn fill_partially_then_conclude(#[case] seed: Seed) {
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
+        {
+            // Try overspend give in conclude order
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::AccountCommand(
+                        AccountNonce::new(1),
+                        AccountCommand::ConcludeOrder(order_id),
+                    ),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(
+                        token_id,
+                        (give_amount - filled_amount)
+                            .and_then(|v| v + Amount::from_atoms(1))
+                            .unwrap(),
+                    ),
+                    Destination::AnyoneCanSpend,
+                ))
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(output_value_amount(&fill_value)),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            assert_eq!(res.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(chainstate::BlockError::StateUpdateFailed(
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(
+                        constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                            CoinOrTokenId::TokenId(token_id)
+                        ),
+                        tx_id.into()
+                    )
+                ))
+            );
+        }
+
+        {
+            // Try overspend ask in conclude order
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::AccountCommand(
+                        AccountNonce::new(1),
+                        AccountCommand::ConcludeOrder(order_id),
+                    ),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, (give_amount - filled_amount).unwrap()),
+                    Destination::AnyoneCanSpend,
+                ))
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(
+                        (output_value_amount(&fill_value) + Amount::from_atoms(1)).unwrap(),
+                    ),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            assert_eq!(res.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(chainstate::BlockError::StateUpdateFailed(
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(
+                        constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                            CoinOrTokenId::Coin
+                        ),
+                        tx_id.into()
+                    )
+                ))
+            );
+        }
+
         // conclude the order
         let tx = TransactionBuilder::new()
             .add_input(
@@ -633,6 +709,190 @@ fn fill_partially_then_conclude(#[case] seed: Seed) {
             ))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(output_value_amount(&fill_value)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        assert_eq!(None, tf.chainstate.get_order_data(&order_id).unwrap());
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_ask_balance(&order_id).unwrap()
+        );
+        assert_eq!(
+            None,
+            tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn fill_completely_then_conclude(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (token_id, tokens_outpoint, coins_outpoint) =
+            issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+
+        let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(ask_amount),
+            OutputValue::TokenV1(token_id, give_amount),
+        );
+
+        let order_id = make_order_id(&tokens_outpoint);
+        let tx = TransactionBuilder::new()
+            .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::AnyoneCanTake(Box::new(order_data)))
+            .build();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        {
+            // Try overspend complete fill order
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    coins_outpoint.clone().into(),
+                    InputWitness::NoSignature(None),
+                )
+                .add_input(
+                    TxInput::AccountCommand(
+                        AccountNonce::new(0),
+                        AccountCommand::FillOrder(
+                            order_id,
+                            OutputValue::Coin(ask_amount),
+                            Destination::AnyoneCanSpend,
+                        ),
+                    ),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, (give_amount + Amount::from_atoms(1)).unwrap()),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            assert_eq!(res.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(chainstate::BlockError::StateUpdateFailed(
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(
+                        constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                            CoinOrTokenId::TokenId(token_id)
+                        ),
+                        tx_id.into()
+                    )
+                ))
+            );
+        }
+
+        {
+            // Try overbid complete fill order
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    coins_outpoint.clone().into(),
+                    InputWitness::NoSignature(None),
+                )
+                .add_input(
+                    TxInput::AccountCommand(
+                        AccountNonce::new(0),
+                        AccountCommand::FillOrder(
+                            order_id,
+                            OutputValue::Coin((ask_amount + Amount::from_atoms(1)).unwrap()),
+                            Destination::AnyoneCanSpend,
+                        ),
+                    ),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, give_amount),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            assert_eq!(
+                res.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(
+                    chainstate::BlockError::StateUpdateFailed(
+                        ConnectTransactionError::ConstrainedValueAccumulatorError(
+                            orders_accounting::Error::OrderOverbid(
+                                order_id,
+                                ask_amount,
+                                (ask_amount + Amount::from_atoms(1)).unwrap()
+                            )
+                            .into(),
+                            tx_id.into()
+                        )
+                    )
+                )
+            );
+        }
+
+        // Fill the order completely
+        let tx = TransactionBuilder::new()
+            .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
+            .add_input(
+                TxInput::AccountCommand(
+                    AccountNonce::new(0),
+                    AccountCommand::FillOrder(
+                        order_id,
+                        OutputValue::Coin(ask_amount),
+                        Destination::AnyoneCanSpend,
+                    ),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, give_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        {
+            // Try overspend conclude order
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::AccountCommand(
+                        AccountNonce::new(1),
+                        AccountCommand::ConcludeOrder(order_id),
+                    ),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin((ask_amount + Amount::from_atoms(1)).unwrap()),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            assert_eq!(res.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(chainstate::BlockError::StateUpdateFailed(
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(
+                        constraints_value_accumulator::Error::AttemptToPrintMoneyOrViolateTimelockConstraints(
+                            CoinOrTokenId::Coin
+                        ),
+                        tx_id.into()
+                    )
+                ))
+            );
+        }
+
+        // conclude the order
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::AccountCommand(
+                    AccountNonce::new(1),
+                    AccountCommand::ConcludeOrder(order_id),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(ask_amount),
                 Destination::AnyoneCanSpend,
             ))
             .build();

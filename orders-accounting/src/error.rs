@@ -51,8 +51,6 @@ pub enum Error {
     InvariantNonzeroAskBalanceForMissingOrder(OrderId),
     #[error("Give balance for non-existing order {0}` is not zero")]
     InvariantNonzeroGiveBalanceForMissingOrder(OrderId),
-    #[error("Fill operation for order {0}` left a change")]
-    FillOrderChangeLeft(OrderId),
     #[error("Coin type mismatch")]
     CurrencyMismatch,
     #[error("Order overflow: `{0}`")]
@@ -61,10 +59,6 @@ pub enum Error {
     OrderOverbid(OrderId, Amount, Amount),
     #[error("Attempt to conclude non-existing order data `{0}`")]
     AttemptedConcludeNonexistingOrderData(OrderId),
-    #[error("Attempt to conclude non-existing ask balance `{0}`")]
-    AttemptedConcludeNonexistingAskBalance(OrderId),
-    #[error("Attempt to conclude non-existing give balance `{0}`")]
-    AttemptedConcludeNonexistingGiveBalance(OrderId),
     #[error("Unsupported token version")]
     UnsupportedTokenVersion,
 

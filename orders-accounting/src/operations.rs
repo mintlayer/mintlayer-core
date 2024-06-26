@@ -42,7 +42,6 @@ pub struct ConcludeOrderUndo {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct FillOrderUndo {
     pub(crate) id: OrderId,
-    pub(crate) undo_data: Option<DataDeltaUndo<OrderData>>,
     pub(crate) ask_balance: Amount,
     pub(crate) give_balance: Amount,
 }

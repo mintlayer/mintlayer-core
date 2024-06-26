@@ -282,7 +282,12 @@ fn fill_order_wrong_currency(#[case] seed: Seed) {
 
     db.batch_write_orders_data(cache.consume()).unwrap();
 
-    assert_eq!(InMemoryOrdersAccounting::new(), storage);
+    let expected_storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data)]),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    );
+    assert_eq!(expected_storage, storage);
 }
 
 #[rstest]
@@ -328,7 +333,12 @@ fn fill_entire_order_and_flush(#[case] seed: Seed) {
 
     db.batch_write_orders_data(cache.consume()).unwrap();
 
-    assert_eq!(InMemoryOrdersAccounting::new(), storage);
+    let expected_storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data)]),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    );
+    assert_eq!(expected_storage, storage);
 }
 
 #[rstest]
@@ -402,7 +412,12 @@ fn fill_order_partially_and_flush(#[case] seed: Seed) {
 
     db.batch_write_orders_data(cache.consume()).unwrap();
 
-    assert_eq!(InMemoryOrdersAccounting::new(), storage);
+    let expected_storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data)]),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    );
+    assert_eq!(expected_storage, storage);
 }
 
 #[rstest]
@@ -449,9 +464,18 @@ fn fill_order_partially_and_undo(#[case] seed: Seed) {
         )
         .unwrap();
 
-    assert_eq!(None, cache.get_order_data(&order_id).unwrap().as_ref());
-    assert_eq!(None, cache.get_ask_balance(&order_id).unwrap());
-    assert_eq!(None, cache.get_give_balance(&order_id).unwrap());
+    assert_eq!(
+        Some(&order_data),
+        cache.get_order_data(&order_id).unwrap().as_ref()
+    );
+    assert_eq!(
+        Some(Amount::ZERO),
+        cache.get_ask_balance(&order_id).unwrap()
+    );
+    assert_eq!(
+        Some(Amount::ZERO),
+        cache.get_give_balance(&order_id).unwrap()
+    );
 
     cache.undo(undo3).unwrap();
 
@@ -583,5 +607,10 @@ fn fill_order_must_converge(#[case] seed: Seed) {
 
     db.batch_write_orders_data(cache.consume()).unwrap();
 
-    assert_eq!(InMemoryOrdersAccounting::new(), storage);
+    let expected_storage = InMemoryOrdersAccounting::from_values(
+        BTreeMap::from_iter([(order_id, order_data)]),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    );
+    assert_eq!(expected_storage, storage);
 }
