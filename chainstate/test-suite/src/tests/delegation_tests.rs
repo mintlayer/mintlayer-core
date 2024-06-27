@@ -1257,7 +1257,7 @@ fn delegate_and_spend_share_same_block(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn try_overspend_delegation(#[case] seed: Seed) {
+fn try_overspend_delegation_single_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -1323,6 +1323,91 @@ fn try_overspend_delegation(#[case] seed: Seed) {
         let tx_id = tx.transaction().get_id();
 
         let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+
+        assert_eq!(
+            res.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::PoSAccountingError(
+                        pos_accounting::Error::AccountingError(
+                            accounting::Error::ArithmeticErrorSumToUnsignedFailed
+                        )
+                    ),
+                    tx_id.into()
+                )
+            ))
+        );
+    });
+}
+
+// Prepare a pool with delegation.
+// Delegate some coins.
+// Try spend from delegation using 2 transactions to check that delegation balance across
+// transactions is validated.
+// Check an error.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_overspend_delegation_multiple_tx(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (_, _, delegation_id, _, transfer_outpoint) = prepare_delegation(&mut rng, &mut tf);
+        let available_amount = get_coin_amount_from_outpoint(&tf.storage, &transfer_outpoint);
+        let amount_to_delegate = available_amount;
+
+        // Delegate staking
+        let tx = TransactionBuilder::new()
+            .add_input(transfer_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
+            .build();
+
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
+            &tf.storage,
+            delegation_id,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(amount_to_delegate, delegation_balance);
+
+        // try overspend delegation balance in second tx
+        let tx1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::Account(AccountOutPoint::new(
+                    AccountNonce::new(0),
+                    AccountSpending::DelegationBalance(delegation_id, delegation_balance),
+                )),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(delegation_balance),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(1),
+            ))
+            .build();
+        let tx2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::Account(AccountOutPoint::new(
+                    AccountNonce::new(0),
+                    AccountSpending::DelegationBalance(delegation_id, Amount::from_atoms(1)),
+                )),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(Amount::from_atoms(1)),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(1),
+            ))
+            .build();
+        let tx_id = tx2.transaction().get_id();
+
+        let res = tf
+            .make_block_builder()
+            .with_transactions(vec![tx1, tx2])
+            .build_and_process(&mut rng);
 
         assert_eq!(
             res.unwrap_err(),
