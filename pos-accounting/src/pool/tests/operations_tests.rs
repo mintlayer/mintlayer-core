@@ -260,7 +260,7 @@ fn spend_share_unknown_id(#[case] seed: Seed) {
         delta
             .spend_share_from_delegation_id(delegation_id, delegated_amount)
             .unwrap_err(),
-        Error::InvariantErrorDelegationUndoFailedDataNotFound(delegation_id)
+        Error::SpendingShareOfNonexistingDelegation(delegation_id)
     );
 }
 

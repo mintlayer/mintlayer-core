@@ -35,7 +35,7 @@ use common::{
         AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
         Genesis, PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable},
+    primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable, H256},
 };
 use futures::{stream::FuturesOrdered, TryStreamExt};
 use pos_accounting::{make_delegation_id, PoSAccountingView, PoolData};
@@ -707,14 +707,18 @@ impl PoSAccountingView for PoSAccountingAdapterToCheckFees {
         _delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
         // only used for checks for attempted to print money but we don't need to check that here
-        Ok(Some(Amount::MAX))
+        Ok(Some(Amount::from_atoms(i128::MAX as u128)))
     }
 
     fn get_delegation_data(
         &self,
         _delegation_id: DelegationId,
     ) -> Result<Option<pos_accounting::DelegationData>, Self::Error> {
-        unimplemented!()
+        // we don't care about actual data
+        Ok(Some(pos_accounting::DelegationData::new(
+            PoolId::new(H256::zero()),
+            Destination::AnyoneCanSpend,
+        )))
     }
 
     fn get_pool_delegation_share(
@@ -726,11 +730,11 @@ impl PoSAccountingView for PoSAccountingAdapterToCheckFees {
     }
 }
 
-async fn tx_fees<T: ApiServerStorageWrite>(
+async fn tx_fees<T: ApiServerStorageRead>(
     chain_config: &ChainConfig,
     block_height: BlockHeight,
     tx: &SignedTransaction,
-    db_tx: &mut T,
+    db_tx: &T,
     new_outputs: &BTreeMap<UtxoOutPoint, &TxOutput>,
 ) -> Result<AccumulatedFee, ApiServerStorageError> {
     let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs(), new_outputs).await?;
@@ -758,9 +762,9 @@ async fn tx_fees<T: ApiServerStorageWrite>(
     Ok(consumed_accumulator)
 }
 
-async fn prefetch_pool_data<T: ApiServerStorageWrite>(
+async fn prefetch_pool_data<T: ApiServerStorageRead>(
     inputs_utxos: &Vec<Option<TxOutput>>,
-    db_tx: &mut T,
+    db_tx: &T,
 ) -> Result<BTreeMap<PoolId, PoolData>, ApiServerStorageError> {
     let mut pools = BTreeMap::new();
     for output in inputs_utxos {
@@ -789,8 +793,8 @@ async fn prefetch_pool_data<T: ApiServerStorageWrite>(
     Ok(pools)
 }
 
-async fn collect_inputs_utxos<T: ApiServerStorageWrite>(
-    db_tx: &mut T,
+async fn collect_inputs_utxos<T: ApiServerStorageRead>(
+    db_tx: &T,
     inputs: &[TxInput],
     new_outputs: &BTreeMap<UtxoOutPoint, &TxOutput>,
 ) -> Result<Vec<Option<TxOutput>>, ApiServerStorageError> {

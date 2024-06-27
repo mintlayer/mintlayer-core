@@ -74,6 +74,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
 
     let pool_id = PoolId::new(H256::random_using(&mut rng));
     let delegation_id = DelegationId::new(H256::random_using(&mut rng));
+    let delegation_data = pos_accounting::DelegationData::new(pool_id, Destination::AnyoneCanSpend);
 
     let transferred_atoms = rng.gen_range(0..1000);
     let staked_atoms = rng.gen_range(100..1000);
@@ -98,7 +99,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::from_iter([(delegation_id, delegation_balance)]),
-        BTreeMap::new(),
+        BTreeMap::from([(delegation_id, delegation_data)]),
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 

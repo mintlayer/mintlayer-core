@@ -828,6 +828,7 @@ impl BlockProcessingErrorClassification for pos_accounting::Error {
             | Error::InvariantErrorDelegationCreationFailedIdAlreadyExists
             | Error::DelegateToNonexistingId
             | Error::DelegateToNonexistingPool
+            | Error::SpendingShareOfNonexistingDelegation(_)
             | Error::AdditionError
             | Error::SubError
             | Error::DelegationBalanceAdditionError

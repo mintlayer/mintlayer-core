@@ -1576,6 +1576,7 @@ dependencies = [
 name = "constraints-value-accumulator"
 version = "0.5.1"
 dependencies = [
+ "accounting",
  "common",
  "crypto",
  "orders-accounting",

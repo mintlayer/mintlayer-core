@@ -22,11 +22,9 @@ use common::{
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Subsidy},
 };
-use orders_accounting::OrdersAccountingView;
-use pos_accounting::PoSAccountingView;
+use orders_accounting::{OrdersAccountingOperations, OrdersAccountingView};
+use pos_accounting::{PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView};
 use utils::ensure;
-
-use crate::accounts_balances_tracker::AccountsBalancesTracker;
 
 use super::{accumulated_fee::AccumulatedFee, insert_or_increase, Error};
 
@@ -72,7 +70,11 @@ impl ConstrainedValueAccumulator {
 
         let mut accumulator = Self::new();
         let mut total_to_deduct = BTreeMap::<CoinOrTokenId, Amount>::new();
-        let mut accounts_balances_tracker = AccountsBalancesTracker::new(pos_accounting_view);
+
+        // Temp deltas are used to check accounting errors like overspends across multiple inputs
+        let mut temp_pos_accounting = pos_accounting::PoSAccountingDelta::new(pos_accounting_view);
+        let mut temp_orders_accounting =
+            orders_accounting::OrdersAccountingCache::new(orders_accounting_view);
 
         for (input, input_utxo) in inputs.iter().zip(inputs_utxos.iter()) {
             match input {
@@ -82,7 +84,7 @@ impl ConstrainedValueAccumulator {
                     accumulator.process_input_utxo(
                         chain_config,
                         block_height,
-                        pos_accounting_view,
+                        &temp_pos_accounting,
                         outpoint.clone(),
                         input_utxo,
                     )?;
@@ -92,7 +94,7 @@ impl ConstrainedValueAccumulator {
                         chain_config,
                         block_height,
                         outpoint.account(),
-                        &mut accounts_balances_tracker,
+                        &mut temp_pos_accounting,
                     )?;
                 }
                 TxInput::AccountCommand(_, command) => {
@@ -100,7 +102,7 @@ impl ConstrainedValueAccumulator {
                         chain_config,
                         block_height,
                         command,
-                        orders_accounting_view,
+                        &mut temp_orders_accounting,
                     )?;
 
                     insert_or_increase(&mut total_to_deduct, id, to_deduct)?;
@@ -198,16 +200,25 @@ impl ConstrainedValueAccumulator {
         Ok(())
     }
 
-    fn process_input_account<P: PoSAccountingView>(
+    fn process_input_account<P>(
         &mut self,
         chain_config: &ChainConfig,
         block_height: BlockHeight,
         account: &AccountSpending,
-        accounts_balances_tracker: &mut AccountsBalancesTracker<P>,
-    ) -> Result<(), Error> {
+        pos_accounting_delta: &mut P,
+    ) -> Result<(), Error>
+    where
+        P: PoSAccountingOperations<PoSAccountingUndo>
+            + PoSAccountingView<Error = pos_accounting::Error>,
+    {
         match account {
-            AccountSpending::DelegationBalance(_, spend_amount) => {
-                accounts_balances_tracker.spend_from_account(account.clone())?;
+            AccountSpending::DelegationBalance(delegation_id, spend_amount) => {
+                {
+                    // Ensure that spending won't result in negative balance
+                    let _ = pos_accounting_delta
+                        .spend_share_from_delegation_id(*delegation_id, *spend_amount)?;
+                    let _ = pos_accounting_delta.get_delegation_balance(*delegation_id)?;
+                }
 
                 let maturity_distance =
                     chain_config.staking_pool_spend_maturity_block_count(block_height);
@@ -235,13 +246,16 @@ impl ConstrainedValueAccumulator {
         Ok(())
     }
 
-    fn process_input_account_command(
+    fn process_input_account_command<O>(
         &mut self,
         chain_config: &ChainConfig,
         block_height: BlockHeight,
         command: &AccountCommand,
-        orders_accounting_view: &impl OrdersAccountingView,
-    ) -> Result<(CoinOrTokenId, Amount), Error> {
+        orders_accounting_delta: &mut O,
+    ) -> Result<(CoinOrTokenId, Amount), Error>
+    where
+        O: OrdersAccountingOperations + OrdersAccountingView<Error = orders_accounting::Error>,
+    {
         match command {
             AccountCommand::MintTokens(token_id, amount) => {
                 insert_or_increase(
@@ -267,18 +281,25 @@ impl ConstrainedValueAccumulator {
                 chain_config.token_change_authority_fee(block_height),
             )),
             AccountCommand::ConcludeOrder(id) => {
-                let order_data = orders_accounting_view
+                let order_data = orders_accounting_delta
                     .get_order_data(id)
                     .map_err(|_| orders_accounting::Error::ViewFail)?
                     .ok_or(orders_accounting::Error::OrderDataNotFound(*id))?;
-                let ask_balance = orders_accounting_view
+                let ask_balance = orders_accounting_delta
                     .get_ask_balance(id)
                     .map_err(|_| orders_accounting::Error::ViewFail)?
                     .unwrap_or(Amount::ZERO);
-                let give_balance = orders_accounting_view
+                let give_balance = orders_accounting_delta
                     .get_give_balance(id)
                     .map_err(|_| orders_accounting::Error::ViewFail)?
                     .unwrap_or(Amount::ZERO);
+
+                {
+                    // Ensure that spending won't result in negative balance
+                    let _ = orders_accounting_delta.conclude_order(*id)?;
+                    let _ = orders_accounting_delta.get_ask_balance(id)?;
+                    let _ = orders_accounting_delta.get_give_balance(id)?;
+                }
 
                 let initially_asked = output_value_amount(order_data.ask())?;
                 let filled_amount = (initially_asked - ask_balance)
@@ -291,25 +312,34 @@ impl ConstrainedValueAccumulator {
                 let give_currency = CoinOrTokenId::from_output_value(order_data.give())
                     .ok_or(Error::UnsupportedTokenVersion)?;
                 insert_or_increase(&mut self.unconstrained_value, give_currency, give_balance)?;
+
                 Ok((CoinOrTokenId::Coin, Amount::ZERO))
             }
-            AccountCommand::FillOrder(order_id, fill_value, _) => {
+            AccountCommand::FillOrder(id, fill_value, _) => {
+                let order_data = orders_accounting_delta
+                    .get_order_data(id)
+                    .map_err(|_| orders_accounting::Error::ViewFail)?
+                    .ok_or(orders_accounting::Error::OrderDataNotFound(*id))?;
                 let filled_amount = orders_accounting::calculate_fill_order(
-                    &orders_accounting_view,
-                    *order_id,
+                    &orders_accounting_delta,
+                    *id,
                     fill_value,
                 )?;
 
-                let order_data = orders_accounting_view
-                    .get_order_data(order_id)
-                    .map_err(|_| orders_accounting::Error::ViewFail)?
-                    .ok_or(orders_accounting::Error::OrderDataNotFound(*order_id))?;
+                {
+                    // Ensure that spending won't result in negative balance
+                    let _ = orders_accounting_delta.fill_order(*id, fill_value.clone())?;
+                    let _ = orders_accounting_delta.get_ask_balance(id)?;
+                    let _ = orders_accounting_delta.get_give_balance(id)?;
+                }
+
                 let give_currency = CoinOrTokenId::from_output_value(order_data.give())
                     .ok_or(Error::UnsupportedTokenVersion)?;
                 insert_or_increase(&mut self.unconstrained_value, give_currency, filled_amount)?;
 
                 let ask_currency = CoinOrTokenId::from_output_value(fill_value)
                     .ok_or(Error::UnsupportedTokenVersion)?;
+
                 Ok((ask_currency, output_value_amount(fill_value)?))
             }
         }

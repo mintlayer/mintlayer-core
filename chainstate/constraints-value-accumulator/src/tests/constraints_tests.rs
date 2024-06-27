@@ -18,9 +18,9 @@ use std::collections::BTreeMap;
 use common::{
     chain::{
         config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
-        timelock::OutputTimeLock, AccountNonce, AccountSpending, AccountType, ConsensusUpgrade,
-        DelegationId, Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId,
-        TxInput, TxOutput, UtxoOutPoint,
+        timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade, DelegationId,
+        Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{
         per_thousand::PerThousand, Amount, BlockCount, BlockHeight, CoinOrTokenId, Fee, Id, H256,
@@ -28,7 +28,7 @@ use common::{
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
-use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB, PoolData};
+use pos_accounting::{DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoolData};
 use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -132,6 +132,8 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
         chain_config.staking_pool_spend_maturity_block_count(block_height);
 
     let delegation_id = DelegationId::new(H256::zero());
+    let delegation_data =
+        DelegationData::new(PoolId::new(H256::zero()), Destination::AnyoneCanSpend);
     let delegated_atoms = rng.gen_range(100..1000);
     let fee_atoms = rng.gen_range(1..100);
 
@@ -140,7 +142,7 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::from_iter([(delegation_id, Amount::from_atoms(delegated_atoms))]),
-        BTreeMap::new(),
+        BTreeMap::from([(delegation_id, delegation_data)]),
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
@@ -449,6 +451,8 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
     let delegation_id = DelegationId::new(H256::zero());
+    let delegation_data =
+        DelegationData::new(PoolId::new(H256::zero()), Destination::AnyoneCanSpend);
     let delegated_atoms = rng.gen_range(1..1000);
 
     let transferred_atoms = rng.gen_range(100..1000);
@@ -458,7 +462,7 @@ fn check_timelock_saturation(#[case] seed: Seed) {
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::from_iter([(delegation_id, Amount::from_atoms(delegated_atoms))]),
-        BTreeMap::new(),
+        BTreeMap::from([(delegation_id, delegation_data)]),
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
@@ -569,6 +573,8 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
     let block_height = BlockHeight::new(1);
 
     let delegation_id = DelegationId::new(H256::zero());
+    let delegation_data =
+        DelegationData::new(PoolId::new(H256::zero()), Destination::AnyoneCanSpend);
     let delegation_balance = Amount::from_atoms(rng.gen_range(100..1000));
     let overspent_amount = (delegation_balance + Amount::from_atoms(1)).unwrap();
 
@@ -577,7 +583,7 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::from_iter([(delegation_id, delegation_balance)]),
-        BTreeMap::new(),
+        BTreeMap::from([(delegation_id, delegation_data)]),
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
@@ -603,7 +609,9 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
 
         assert_eq!(
             inputs_accumulator.unwrap_err(),
-            Error::NegativeAccountBalance(AccountType::Delegation(delegation_id))
+            Error::PoSAccountingError(pos_accounting::Error::AccountingError(
+                accounting::Error::ArithmeticErrorSumToUnsignedFailed
+            ))
         );
     }
 

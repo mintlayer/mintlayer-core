@@ -1049,8 +1049,10 @@ fn delegate_and_spend_share_same_tx(#[case] seed: Seed) {
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::ConstrainedValueAccumulatorError(
-                    constraints_value_accumulator::Error::NegativeAccountBalance(
-                        AccountType::Delegation(delegation_id)
+                    constraints_value_accumulator::Error::PoSAccountingError(
+                        pos_accounting::Error::AccountingError(
+                            accounting::Error::ArithmeticErrorSumToUnsignedFailed
+                        )
                     ),
                     tx_id.into()
                 )
@@ -1061,9 +1063,9 @@ fn delegate_and_spend_share_same_tx(#[case] seed: Seed) {
 
 // Prepare a pool with delegation.
 // Delegate some coins.
-// In a single tx delegate more coins and spend original balance + some new coins using 2 input
-// which individually aren't greater than current balance
-// Check ok.
+// In a single tx delegate more coins and spend original balance + some new coins using 2 inputs
+// which individually aren't greater than original balance.
+// Check an error.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -1144,8 +1146,10 @@ fn delegate_and_spend_share_same_tx_no_overspend_per_input(#[case] seed: Seed) {
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::ConstrainedValueAccumulatorError(
-                    constraints_value_accumulator::Error::NegativeAccountBalance(
-                        AccountType::Delegation(delegation_id)
+                    constraints_value_accumulator::Error::PoSAccountingError(
+                        pos_accounting::Error::AccountingError(
+                            accounting::Error::ArithmeticErrorSumToUnsignedFailed
+                        )
                     ),
                     tx_id.into()
                 )
@@ -1233,8 +1237,10 @@ fn delegate_and_spend_share_same_block(#[case] seed: Seed) {
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::ConstrainedValueAccumulatorError(
-                    constraints_value_accumulator::Error::NegativeAccountBalance(
-                        AccountType::Delegation(delegation_id)
+                    constraints_value_accumulator::Error::PoSAccountingError(
+                        pos_accounting::Error::AccountingError(
+                            accounting::Error::ArithmeticErrorSumToUnsignedFailed
+                        )
                     ),
                     tx1_id.into()
                 )
@@ -1322,8 +1328,10 @@ fn try_overspend_delegation(#[case] seed: Seed) {
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::ConstrainedValueAccumulatorError(
-                    constraints_value_accumulator::Error::NegativeAccountBalance(
-                        AccountType::Delegation(delegation_id)
+                    constraints_value_accumulator::Error::PoSAccountingError(
+                        pos_accounting::Error::AccountingError(
+                            accounting::Error::ArithmeticErrorSumToUnsignedFailed
+                        )
                     ),
                     tx_id.into()
                 )
@@ -1462,8 +1470,10 @@ fn delegate_and_spend_share_same_block_multiple_delegations(#[case] seed: Seed) 
             res.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::ConstrainedValueAccumulatorError(
-                    constraints_value_accumulator::Error::NegativeAccountBalance(
-                        AccountType::Delegation(delegation_id_1)
+                    constraints_value_accumulator::Error::PoSAccountingError(
+                        pos_accounting::Error::AccountingError(
+                            accounting::Error::ArithmeticErrorSumToUnsignedFailed
+                        )
                     ),
                     tx_id_1.into()
                 )

@@ -94,14 +94,18 @@ impl<'a> PoSAccountingView for PoSAccountingAdapterToCheckFees<'a> {
         _delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
         // only used for checks for attempted to print money but we don't need to check that here
-        Ok(Some(Amount::MAX))
+        Ok(Some(Amount::from_atoms(i128::MAX as u128)))
     }
 
     fn get_delegation_data(
         &self,
         _delegation_id: DelegationId,
     ) -> Result<Option<pos_accounting::DelegationData>, Self::Error> {
-        unimplemented!()
+        // we don't care about actual data
+        Ok(Some(pos_accounting::DelegationData::new(
+            PoolId::new(H256::zero()),
+            Destination::AnyoneCanSpend,
+        )))
     }
 
     fn get_pool_delegation_share(

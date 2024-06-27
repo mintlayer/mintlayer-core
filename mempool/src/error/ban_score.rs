@@ -324,6 +324,7 @@ impl MempoolBanScore for pos_accounting::Error {
             E::DelegationDeletionFailedPoolStillExists => 0,
             E::DelegateToNonexistingId => 0,
             E::DelegateToNonexistingPool => 0,
+            E::SpendingShareOfNonexistingDelegation(_) => 0,
             E::IncreaseStakerRewardsOfNonexistingPool => 0,
 
             // Accounting error has to be inspected further

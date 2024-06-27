@@ -25,6 +25,7 @@ use common::{
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
+use pos_accounting::DelegationData;
 use randomness::{CryptoRng, Rng, SliceRandom};
 use rstest::rstest;
 use test_utils::{
@@ -239,6 +240,8 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
     let number_of_outputs = rng.gen_range(0..10);
 
     let delegation_id = DelegationId::new(H256::zero());
+    let delegation_data =
+        DelegationData::new(PoolId::new(H256::zero()), Destination::AnyoneCanSpend);
     let delegated_atoms = rng.gen_range(1..1000);
     let atoms_to_spend = rng.gen_range(1..=delegated_atoms);
 
@@ -247,7 +250,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::from([(delegation_id, Amount::from_atoms(delegated_atoms))]),
-        BTreeMap::new(),
+        BTreeMap::from([(delegation_id, delegation_data)]),
     );
     let pos_db = pos_accounting::PoSAccountingDB::new(&pos_store);
     let utxo_db = UtxosDBInMemoryImpl::new(Id::<GenBlock>::new(H256::zero()), BTreeMap::new());

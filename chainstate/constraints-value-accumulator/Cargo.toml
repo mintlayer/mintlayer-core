@@ -19,6 +19,7 @@ utxo = { path = "../../utxo" }
 thiserror.workspace = true
 
 [dev-dependencies]
+accounting = { path = "../../accounting" }
 test-utils = { path = "../../test-utils" }
 
 rstest.workspace = true
