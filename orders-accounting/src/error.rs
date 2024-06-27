@@ -19,37 +19,37 @@ use common::{chain::OrderId, primitives::Amount};
 pub enum Error {
     #[error("Accounting storage error")]
     StorageError(#[from] chainstate_types::storage_result::Error),
-    #[error("Base accounting error: {0}")]
+    #[error("Base accounting error: `{0}`")]
     AccountingError(#[from] accounting::Error),
-    #[error("Order already exist: `{0}`")]
+    #[error("Order already exists: `{0}`")]
     OrderAlreadyExists(OrderId),
-    #[error("Data for order {0}` not found")]
+    #[error("Data for order `{0}` not found")]
     OrderDataNotFound(OrderId),
-    #[error("Ask balance for order {0}` not found")]
+    #[error("Ask balance for order `{0}` not found")]
     OrderAskBalanceNotFound(OrderId),
-    #[error("Give balance for order {0}` not found")]
+    #[error("Give balance for order `{0}` not found")]
     OrderGiveBalanceNotFound(OrderId),
     #[error("Attempt to create an order with zero exchange value `{0}`")]
     OrderWithZeroValue(OrderId),
-    #[error("Data for order {0}` not found for undo")]
+    #[error("Data for order `{0}` not found for undo")]
     InvariantOrderDataNotFoundForUndo(OrderId),
-    #[error("Ask balance for order {0}` not found for undo")]
+    #[error("Ask balance for order `{0}` not found for undo")]
     InvariantOrderAskBalanceNotFoundForUndo(OrderId),
-    #[error("Ask balance for order {0}` changed for undo")]
+    #[error("Ask balance for order `{0}` changed for undo")]
     InvariantOrderAskBalanceChangedForUndo(OrderId),
-    #[error("Give balance for order {0}` not found for undo")]
+    #[error("Give balance for order `{0}` not found for undo")]
     InvariantOrderGiveBalanceNotFoundForUndo(OrderId),
-    #[error("Give balance for order {0}` changed for undo")]
+    #[error("Give balance for order `{0}` changed for undo")]
     InvariantOrderGiveBalanceChangedForUndo(OrderId),
-    #[error("Data for order {0}` still exist on conclude undo")]
+    #[error("Data for order `{0}` still exist on conclude undo")]
     InvariantOrderDataExistForConcludeUndo(OrderId),
-    #[error("Ask balance for order {0}` still exist on conclude undo")]
+    #[error("Ask balance for order `{0}` still exist on conclude undo")]
     InvariantOrderAskBalanceExistForConcludeUndo(OrderId),
-    #[error("Give balance for order {0}` still exist on conclude undo")]
+    #[error("Give balance for order `{0}` still exist on conclude undo")]
     InvariantOrderGiveBalanceExistForConcludeUndo(OrderId),
-    #[error("Ask balance for non-existing order {0}` is not zero")]
+    #[error("Ask balance for non-existing order `{0}` is not zero")]
     InvariantNonzeroAskBalanceForMissingOrder(OrderId),
-    #[error("Give balance for non-existing order {0}` is not zero")]
+    #[error("Give balance for non-existing order `{0}` is not zero")]
     InvariantNonzeroGiveBalanceForMissingOrder(OrderId),
     #[error("Coin type mismatch")]
     CurrencyMismatch,

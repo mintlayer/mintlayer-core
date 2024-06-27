@@ -16,6 +16,7 @@
 use common::{
     chain::{output_value::OutputValue, OrderId},
     primitives::Amount,
+    Uint256,
 };
 use utils::ensure;
 
@@ -59,34 +60,35 @@ pub fn calculate_fill_order(
 }
 
 fn calculate_filled_amount_impl(ask: Amount, give: Amount, fill: Amount) -> Option<Amount> {
-    (give * fill.into_atoms()).and_then(|v| v / ask.into_atoms())
+    let give = Uint256::from_u128(give.into_atoms());
+    let fill = Uint256::from_u128(fill.into_atoms());
+    let ask = Uint256::from_u128(ask.into_atoms());
+
+    let result = ((give * fill).expect("cannot overflow") / ask)?;
+    let result: u128 = result.try_into().ok()?;
+
+    Some(Amount::from_atoms(result))
 }
 
 fn ensure_currencies_and_amounts_match(
     order_id: OrderId,
-    left: &OutputValue,
-    right: &OutputValue,
+    ask: &OutputValue,
+    fill: &OutputValue,
 ) -> Result<()> {
-    match (left, right) {
-        (OutputValue::Coin(amount1), OutputValue::Coin(amount2)) => {
-            ensure!(
-                amount1 >= amount2,
-                Error::OrderOverbid(order_id, *amount1, *amount2)
-            );
+    match (ask, fill) {
+        (OutputValue::Coin(ask), OutputValue::Coin(fill)) => {
+            ensure!(ask >= fill, Error::OrderOverbid(order_id, *ask, *fill));
             Ok(())
         }
-        (OutputValue::TokenV1(id1, amount1), OutputValue::TokenV1(id2, amount2)) => {
-            ensure!(
-                amount1 >= amount2,
-                Error::OrderOverbid(order_id, *amount1, *amount2)
-            );
+        (OutputValue::TokenV1(id1, ask), OutputValue::TokenV1(id2, fill)) => {
+            ensure!(ask >= fill, Error::OrderOverbid(order_id, *ask, *fill));
             ensure!(id1 == id2, Error::CurrencyMismatch);
             Ok(())
         }
         (OutputValue::Coin(_), OutputValue::TokenV1(_, _))
         | (OutputValue::TokenV1(_, _), OutputValue::Coin(_)) => Err(Error::CurrencyMismatch),
         (OutputValue::TokenV0(_), _) | (_, OutputValue::TokenV0(_)) => {
-            unreachable!()
+            Err(Error::UnsupportedTokenVersion)
         }
     }
 }
@@ -133,7 +135,7 @@ mod tests {
     #[case(0, 0, 0, None)]
     #[case(0, 1, 1, None)]
     #[case(0, u128::MAX, 1, None)]
-    #[case(3, u128::MAX, 2, None)]
+    #[case(2, u128::MAX, 2, Some(u128::MAX))]
     #[case(1, 0, 0, Some(0))]
     #[case(1, 0, 1, Some(0))]
     #[case(1, 1, 1, Some(1))]
@@ -191,6 +193,7 @@ mod tests {
     #[case(coin!(3), coin!(100), coin!(2), 66)]
     #[case(coin!(3), coin!(100), coin!(3), 100)]
     #[case(coin!(1), token!(u128::MAX), coin!(1), u128::MAX)]
+    #[case(coin!(2), token!(u128::MAX), coin!(2), u128::MAX)]
     fn fill_order_valid_values(
         #[case] ask: OutputValue,
         #[case] give: OutputValue,
@@ -219,7 +222,6 @@ mod tests {
     #[case(token!(0), coin!(1), token!(1), Error::OrderOverbid(OrderId::zero(), Amount::from_atoms(0), Amount::from_atoms(1)))]
     #[case(coin!(1), token!(1), coin!(2), Error::OrderOverbid(OrderId::zero(), Amount::from_atoms(1), Amount::from_atoms(2)))]
     #[case(coin!(1), token!(u128::MAX), coin!(2), Error::OrderOverbid(OrderId::zero(), Amount::from_atoms(1), Amount::from_atoms(2)))]
-    #[case(coin!(2), token!(u128::MAX), coin!(2), Error::OrderOverflow(OrderId::zero()))]
     #[case(coin!(1), token!(1), token!(1), Error::CurrencyMismatch)]
     #[case(coin!(1), token!(1), token!(1), Error::CurrencyMismatch)]
     #[case(token!(1), token2!(1), token2!(1), Error::CurrencyMismatch)]
