@@ -44,6 +44,7 @@ use std::{
     ops::{Add, Sub},
     sync::Arc,
 };
+use tokens_accounting::TokensAccountingView;
 use tx_verifier::transaction_verifier::{
     calculate_tokens_burned_in_outputs, distribute_pos_reward,
 };
@@ -730,6 +731,34 @@ impl PoSAccountingView for PoSAccountingAdapterToCheckFees {
     }
 }
 
+struct StubTokensAccounting;
+
+impl TokensAccountingView for StubTokensAccounting {
+    type Error = tokens_accounting::Error;
+
+    fn get_token_data(
+        &self,
+        _id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
+        let data = tokens_accounting::TokenData::FungibleToken(
+            tokens_accounting::FungibleTokenData::new_unchecked(
+                "tkn1".into(),
+                0,
+                Vec::new(),
+                common::chain::tokens::TokenTotalSupply::Unlimited,
+                false,
+                IsTokenFrozen::No(common::chain::tokens::IsTokenFreezable::No),
+                Destination::AnyoneCanSpend,
+            ),
+        );
+        Ok(Some(data))
+    }
+
+    fn get_circulating_supply(&self, _id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+        Ok(None)
+    }
+}
+
 async fn tx_fees<T: ApiServerStorageRead>(
     chain_config: &ChainConfig,
     block_height: BlockHeight,
@@ -740,8 +769,9 @@ async fn tx_fees<T: ApiServerStorageRead>(
     let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs(), new_outputs).await?;
     let pools = prefetch_pool_data(&inputs_utxos, db_tx).await?;
     let pos_accounting_adapter = PoSAccountingAdapterToCheckFees { pools };
+    let tokens_view = StubTokensAccounting;
 
-    // TODO(orders)
+    // Provide empty stores for orders as they are irrelevant for fee calculation
     let orders_store = orders_accounting::InMemoryOrdersAccounting::new();
     let orders_db = orders_accounting::OrdersAccountingDB::new(&orders_store);
 
@@ -750,6 +780,7 @@ async fn tx_fees<T: ApiServerStorageRead>(
         block_height,
         &orders_db,
         &pos_accounting_adapter,
+        &tokens_view,
         tx.inputs(),
         &inputs_utxos,
     )

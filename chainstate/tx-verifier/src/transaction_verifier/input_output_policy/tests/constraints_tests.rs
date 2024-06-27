@@ -106,6 +106,9 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
 
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
+
     let decommission_pool_utxo = if rng.gen::<bool>() {
         TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data))
     } else {
@@ -165,6 +168,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
             BlockHeight::new(1),
             &orders_db,
             &pos_db,
+            &tokens_db,
             &utxo_db,
         )
         .unwrap_err();
@@ -217,6 +221,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
             BlockHeight::new(1),
             &orders_db,
             &pos_db,
+            &tokens_db,
             &utxo_db,
         )
         .unwrap();
@@ -257,6 +262,9 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
 
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
+
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
 
     // make timelock outputs but total atoms that locked is less than required
     {
@@ -304,6 +312,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
             BlockHeight::new(1),
             &orders_db,
             &pos_db,
+            &tokens_db,
             &utxo_db,
         )
         .unwrap_err();
@@ -361,6 +370,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
             BlockHeight::new(1),
             &orders_db,
             &pos_db,
+            &tokens_db,
             &utxo_db,
         )
         .unwrap();

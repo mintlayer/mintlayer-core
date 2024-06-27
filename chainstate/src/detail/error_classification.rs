@@ -889,6 +889,7 @@ impl BlockProcessingErrorClassification for constraints_value_accumulator::Error
 
             Error::PoSAccountingError(err) => err.classify(),
             Error::OrdersAccountingError(err) => err.classify(),
+            Error::TokensAccountingError(err) => err.classify(),
         }
     }
 }

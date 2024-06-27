@@ -279,6 +279,7 @@ dependencies = [
  "serialization",
  "test-utils",
  "thiserror",
+ "tokens-accounting",
  "tokio",
  "tx-verifier",
  "utils",
@@ -1585,6 +1586,7 @@ dependencies = [
  "rstest",
  "test-utils",
  "thiserror",
+ "tokens-accounting",
  "utils",
  "utxo",
 ]

@@ -596,6 +596,7 @@ impl BanScore for constraints_value_accumulator::Error {
             constraints_value_accumulator::Error::NegativeAccountBalance(_) => 100,
             constraints_value_accumulator::Error::UnsupportedTokenVersion => 100,
             constraints_value_accumulator::Error::OrdersAccountingError(err) => err.ban_score(),
+            constraints_value_accumulator::Error::TokensAccountingError(err) => err.ban_score(),
         }
     }
 }

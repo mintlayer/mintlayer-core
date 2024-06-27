@@ -54,6 +54,8 @@ fn create_order_constraints(#[case] seed: Seed) {
 
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
 
     // not enough input coins
     {
@@ -73,6 +75,7 @@ fn create_order_constraints(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             &inputs,
             &input_utxos,
         )
@@ -108,6 +111,7 @@ fn create_order_constraints(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             &inputs,
             &input_utxos,
         )
@@ -149,6 +153,7 @@ fn create_order_constraints(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             &inputs,
             &input_utxos,
         )
@@ -190,6 +195,7 @@ fn create_order_constraints(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             &inputs,
             &input_utxos,
         )
@@ -226,6 +232,7 @@ fn create_order_constraints(#[case] seed: Seed) {
         block_height,
         &orders_db,
         &pos_db,
+        &tokens_db,
         &inputs,
         &input_utxos,
     )
@@ -254,6 +261,9 @@ fn fill_order_constraints(#[case] seed: Seed) {
 
     let pos_store = InMemoryPoSAccounting::new();
     let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
 
     let order_id = OrderId::random_using(&mut rng);
     let give_amount = Amount::from_atoms(rng.gen_range(100..1000));
@@ -301,6 +311,7 @@ fn fill_order_constraints(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             &inputs,
             &input_utxos,
         );
@@ -344,6 +355,7 @@ fn fill_order_constraints(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             &inputs,
             &input_utxos,
         );
@@ -388,6 +400,7 @@ fn fill_order_constraints(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             &inputs,
             &input_utxos,
         )
@@ -442,6 +455,7 @@ fn fill_order_constraints(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             &inputs,
             &input_utxos,
         )
@@ -498,6 +512,7 @@ fn fill_order_constraints(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             &inputs,
             &input_utxos,
         )
@@ -547,6 +562,7 @@ fn fill_order_constraints(#[case] seed: Seed) {
         block_height,
         &orders_db,
         &pos_db,
+        &tokens_db,
         &inputs,
         &input_utxos,
     )
@@ -575,6 +591,9 @@ fn conclude_order_constraints(#[case] seed: Seed) {
 
     let pos_store = InMemoryPoSAccounting::new();
     let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
 
     let order_id = OrderId::random_using(&mut rng);
     let give_amount = Amount::from_atoms(rng.gen_range(100..1000));
@@ -611,6 +630,7 @@ fn conclude_order_constraints(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             &inputs,
             &input_utxos,
         )
@@ -646,6 +666,7 @@ fn conclude_order_constraints(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             &inputs,
             &input_utxos,
         )
@@ -683,6 +704,7 @@ fn conclude_order_constraints(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             &inputs,
             &input_utxos,
         )
@@ -716,6 +738,7 @@ fn conclude_order_constraints(#[case] seed: Seed) {
         block_height,
         &orders_db,
         &pos_db,
+        &tokens_db,
         &inputs,
         &input_utxos,
     )

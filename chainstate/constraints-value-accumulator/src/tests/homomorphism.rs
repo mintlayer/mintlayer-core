@@ -106,6 +106,9 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
 
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
+
     let (decommission_tx, decommission_tx_inputs_utxos) = {
         let decommission_pool_utxo = if rng.gen::<bool>() {
             TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data))
@@ -228,6 +231,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             &inputs,
             &inputs_utxos,
         )
@@ -252,6 +256,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             decommission_tx.inputs(),
             &decommission_tx_inputs_utxos,
         )
@@ -269,6 +274,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             spend_share_tx.inputs(),
             &spend_share_inputs_utxos,
         )

@@ -48,7 +48,7 @@ use test_utils::{
 };
 use tokens_accounting::TokensAccountingStorageRead;
 use tx_verifier::{
-    error::{InputCheckError, ScriptError, TimelockError, TranslationError},
+    error::{InputCheckError, ScriptError, TimelockError},
     transaction_verifier::error::TokenIssuanceError,
     CheckTransactionError,
 };
@@ -550,38 +550,39 @@ fn mint_unmint_fixed_supply(#[case] seed: Seed) {
         let amount_to_unmint_over_limit = (amount_to_mint + Amount::from_atoms(1)).unwrap();
 
         // Mint over the limit
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(
-                            nonce,
-                            AccountCommand::MintTokens(token_id, amount_to_mint_over_limit),
-                        ),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        utxo_with_change.clone().into(),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, amount_to_mint_over_limit),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    nonce,
+                    AccountCommand::MintTokens(token_id, amount_to_mint_over_limit),
+                ),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process(&mut rng);
+            .add_input(
+                utxo_with_change.clone().into(),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, amount_to_mint_over_limit),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensAccountingError(
-                    tokens_accounting::Error::MintExceedsSupplyLimit(
-                        amount_to_mint_over_limit,
-                        total_supply,
-                        token_id
-                    )
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::TokensAccountingError(
+                        tokens_accounting::Error::MintExceedsSupplyLimit(
+                            amount_to_mint_over_limit,
+                            total_supply,
+                            token_id
+                        )
+                    ),
+                    tx_id.into()
                 )
             ))
         );
@@ -984,38 +985,38 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
         );
 
         // Mint 1 tokens over the limit
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(
-                            AccountNonce::new(1),
-                            AccountCommand::MintTokens(token_id, Amount::from_atoms(1)),
-                        ),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(mint_total_supply_tx_id.into(), 1),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(1),
+                    AccountCommand::MintTokens(token_id, Amount::from_atoms(1)),
+                ),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process(&mut rng);
+            .add_input(
+                TxInput::from_utxo(mint_total_supply_tx_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensAccountingError(
-                    tokens_accounting::Error::MintExceedsSupplyLimit(
-                        Amount::from_atoms(1),
-                        total_supply,
-                        token_id
-                    )
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::TokensAccountingError(
+                        tokens_accounting::Error::MintExceedsSupplyLimit(
+                            Amount::from_atoms(1),
+                            total_supply,
+                            token_id
+                        )
+                    ),
+                    tx_id.into()
                 )
             ))
         );
@@ -1033,38 +1034,39 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
         );
 
         // Try mint 2 tokens which is still over the limit
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(
-                            AccountNonce::new(2),
-                            AccountCommand::MintTokens(token_id, Amount::from_atoms(2)),
-                        ),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(unmint_1_token_tx_id.into(), 2),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, Amount::from_atoms(2)),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(2),
+                    AccountCommand::MintTokens(token_id, Amount::from_atoms(2)),
+                ),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process(&mut rng);
+            .add_input(
+                TxInput::from_utxo(unmint_1_token_tx_id.into(), 2),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, Amount::from_atoms(2)),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensAccountingError(
-                    tokens_accounting::Error::MintExceedsSupplyLimit(
-                        Amount::from_atoms(2),
-                        total_supply,
-                        token_id
-                    )
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::TokensAccountingError(
+                        tokens_accounting::Error::MintExceedsSupplyLimit(
+                            Amount::from_atoms(2),
+                            total_supply,
+                            token_id
+                        )
+                    ),
+                    tx_id.into()
                 )
             ))
         );
@@ -1086,38 +1088,39 @@ fn mint_unmint_fixed_supply_repeatedly(#[case] seed: Seed) {
         // Try mint n+1 tokens which is still over the limit
         // Note: +2 below because 1 was unminted previously and 1 to get over the limit
         let amount_to_unmint_plus_1 = (amount_to_unmint + Amount::from_atoms(2)).unwrap();
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(
-                            AccountNonce::new(3),
-                            AccountCommand::MintTokens(token_id, amount_to_unmint_plus_1),
-                        ),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(unmint_n_tokens_tx_id.into(), 2),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, amount_to_unmint_plus_1),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(3),
+                    AccountCommand::MintTokens(token_id, amount_to_unmint_plus_1),
+                ),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process(&mut rng);
+            .add_input(
+                TxInput::from_utxo(unmint_n_tokens_tx_id.into(), 2),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, amount_to_unmint_plus_1),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensAccountingError(
-                    tokens_accounting::Error::MintExceedsSupplyLimit(
-                        amount_to_unmint_plus_1,
-                        total_supply,
-                        token_id
-                    )
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::TokensAccountingError(
+                        tokens_accounting::Error::MintExceedsSupplyLimit(
+                            amount_to_unmint_plus_1,
+                            total_supply,
+                            token_id
+                        )
+                    ),
+                    tx_id.into()
                 )
             ))
         );
@@ -1201,15 +1204,19 @@ fn mint_unlimited_supply(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
+        let mint_tx_id = mint_tx.transaction().get_id();
         let result = tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensAccountingError(
-                    tokens_accounting::Error::AccountingError(
-                        accounting::Error::ArithmeticErrorToSignedFailed
-                    )
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::TokensAccountingError(
+                        tokens_accounting::Error::AccountingError(
+                            accounting::Error::ArithmeticErrorToSignedFailed
+                        )
+                    ),
+                    mint_tx_id.into()
                 )
             ))
         );
@@ -1303,34 +1310,43 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
         .unwrap();
         assert_eq!(actual_supply, Some(max_amount_to_mint));
 
-        // Try mint one more over i128::MAX
-        let mint_tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::from_command(
-                    AccountNonce::new(1),
-                    AccountCommand::MintTokens(token_id, Amount::from_atoms(1)),
-                ),
-                InputWitness::NoSignature(None),
-            )
-            .add_input(
-                TxInput::from_utxo(mint_tx_id.into(), 0),
-                InputWitness::NoSignature(None),
-            )
-            .add_output(TxOutput::Transfer(
-                OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
-                Destination::AnyoneCanSpend,
-            ))
-            .build();
-        let result = tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
-
-        assert_eq!(
-            result.unwrap_err(),
-            ChainstateError::ProcessBlockError(BlockError::TransactionVerifierError(
-                tx_verifier::TransactionVerifierStorageError::TokensAccountingError(
-                    tokens_accounting::Error::StorageWrite
+        {
+            // Try mint one more over i128::MAX
+            let mint_tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::from_command(
+                        AccountNonce::new(1),
+                        AccountCommand::MintTokens(token_id, Amount::from_atoms(1)),
+                    ),
+                    InputWitness::NoSignature(None),
                 )
-            ))
-        );
+                .add_input(
+                    TxInput::from_utxo(mint_tx_id.into(), 0),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            let mint_tx_id = mint_tx.transaction().get_id();
+            let result =
+                tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
+
+            assert_eq!(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(
+                        constraints_value_accumulator::Error::TokensAccountingError(
+                            tokens_accounting::Error::AccountingError(
+                                accounting::Error::ArithmeticErrorDeltaAdditionFailed
+                            )
+                        ),
+                        mint_tx_id.into()
+                    )
+                ))
+            );
+        }
 
         // Try mint random number over i128::MAX
         let random_amount = Amount::from_atoms(rng.gen_range(0..i128::MAX as u128));
@@ -1351,13 +1367,19 @@ fn mint_unlimited_supply_max(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
+        let mint_tx_id = mint_tx.transaction().get_id();
         let result = tf.make_block_builder().add_transaction(mint_tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
-            ChainstateError::ProcessBlockError(BlockError::TransactionVerifierError(
-                tx_verifier::TransactionVerifierStorageError::TokensAccountingError(
-                    tokens_accounting::Error::StorageWrite
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::TokensAccountingError(
+                        tokens_accounting::Error::AccountingError(
+                            accounting::Error::ArithmeticErrorDeltaAdditionFailed
+                        )
+                    ),
+                    mint_tx_id.into()
                 )
             ))
         );
@@ -2132,34 +2154,31 @@ fn check_lockable_supply(#[case] seed: Seed) {
         assert_eq!(actual_supply, Some(amount_to_mint));
 
         // Try to mint some tokens
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(
-                            nonce,
-                            AccountCommand::MintTokens(token_id, amount_to_mint),
-                        ),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(lock_tx_id.into(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_output(TxOutput::Transfer(
-                        OutputValue::TokenV1(token_id, amount_to_mint),
-                        Destination::AnyoneCanSpend,
-                    ))
-                    .build(),
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(nonce, AccountCommand::MintTokens(token_id, amount_to_mint)),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process(&mut rng);
+            .add_input(
+                TxInput::from_utxo(lock_tx_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, amount_to_mint),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensAccountingError(
-                    tokens_accounting::Error::CannotMintFromLockedSupply(token_id)
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::TokensAccountingError(
+                        tokens_accounting::Error::CannotMintFromLockedSupply(token_id)
+                    ),
+                    tx_id.into()
                 )
             ))
         );
@@ -2852,16 +2871,19 @@ fn issue_and_mint_same_tx(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
+        let tx_id = tx.transaction().get_id();
         let token_id = make_token_id(tx.transaction().inputs()).unwrap();
         let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::InputCheck(InputCheckError::new(
-                    1,
-                    TranslationError::TokenNotFound(token_id)
-                ))
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::TokensAccountingError(
+                        tokens_accounting::Error::TokenDataNotFound(token_id)
+                    ),
+                    tx_id.into()
+                )
             ))
         );
     });
@@ -4044,30 +4066,31 @@ fn check_freezable_supply(#[case] seed: Seed) {
         };
 
         // Try to mint some tokens
-        let result = tf
-            .make_block_builder()
-            .add_transaction(
-                TransactionBuilder::new()
-                    .add_input(
-                        TxInput::from_command(
-                            AccountNonce::new(2),
-                            AccountCommand::MintTokens(token_id, amount_to_mint),
-                        ),
-                        InputWitness::NoSignature(None),
-                    )
-                    .add_input(
-                        TxInput::from_utxo(freeze_tx_id.into(), 0),
-                        InputWitness::NoSignature(None),
-                    )
-                    .build(),
+
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(2),
+                    AccountCommand::MintTokens(token_id, amount_to_mint),
+                ),
+                InputWitness::NoSignature(None),
             )
-            .build_and_process(&mut rng);
+            .add_input(
+                TxInput::from_utxo(freeze_tx_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .build();
+        let tx_id = tx.transaction().get_id();
+        let result = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
 
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensAccountingError(
-                    tokens_accounting::Error::CannotMintFrozenToken(token_id)
+                ConnectTransactionError::ConstrainedValueAccumulatorError(
+                    constraints_value_accumulator::Error::TokensAccountingError(
+                        tokens_accounting::Error::CannotMintFrozenToken(token_id)
+                    ),
+                    tx_id.into()
                 )
             ))
         );

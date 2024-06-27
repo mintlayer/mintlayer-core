@@ -24,6 +24,7 @@ use common::{
 };
 use orders_accounting::{OrdersAccountingOperations, OrdersAccountingView};
 use pos_accounting::{PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView};
+use tokens_accounting::{TokensAccountingOperations, TokensAccountingView};
 use utils::ensure;
 
 use super::{accumulated_fee::AccumulatedFee, insert_or_increase, Error};
@@ -60,6 +61,7 @@ impl ConstrainedValueAccumulator {
         block_height: BlockHeight,
         orders_accounting_view: &impl OrdersAccountingView,
         pos_accounting_view: &impl PoSAccountingView,
+        tokens_accounting_view: &impl TokensAccountingView,
         inputs: &[TxInput],
         inputs_utxos: &[Option<TxOutput>],
     ) -> Result<Self, Error> {
@@ -73,6 +75,8 @@ impl ConstrainedValueAccumulator {
 
         // Temp deltas are used to check accounting errors like overspends across multiple inputs
         let mut temp_pos_accounting = pos_accounting::PoSAccountingDelta::new(pos_accounting_view);
+        let mut temp_tokens_accounting =
+            tokens_accounting::TokensAccountingCache::new(tokens_accounting_view);
         let mut temp_orders_accounting =
             orders_accounting::OrdersAccountingCache::new(orders_accounting_view);
 
@@ -103,6 +107,7 @@ impl ConstrainedValueAccumulator {
                         block_height,
                         command,
                         &mut temp_orders_accounting,
+                        &mut temp_tokens_accounting,
                     )?;
 
                     insert_or_increase(&mut total_to_deduct, id, to_deduct)?;
@@ -246,21 +251,26 @@ impl ConstrainedValueAccumulator {
         Ok(())
     }
 
-    fn process_input_account_command<O>(
+    fn process_input_account_command<O, T>(
         &mut self,
         chain_config: &ChainConfig,
         block_height: BlockHeight,
         command: &AccountCommand,
         orders_accounting_delta: &mut O,
+        tokens_accounting_delta: &mut T,
     ) -> Result<(CoinOrTokenId, Amount), Error>
     where
         O: OrdersAccountingOperations + OrdersAccountingView<Error = orders_accounting::Error>,
+        T: TokensAccountingOperations + TokensAccountingView<Error = tokens_accounting::Error>,
     {
         match command {
-            AccountCommand::MintTokens(token_id, amount) => {
+            AccountCommand::MintTokens(id, amount) => {
+                let _ = tokens_accounting_delta.mint_tokens(*id, *amount)?;
+                let _ = tokens_accounting_delta.get_circulating_supply(id)?;
+
                 insert_or_increase(
                     &mut self.unconstrained_value,
-                    CoinOrTokenId::TokenId(*token_id),
+                    CoinOrTokenId::TokenId(*id),
                     *amount,
                 )?;
                 Ok((
