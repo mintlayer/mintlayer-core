@@ -632,21 +632,21 @@ where
         // header updates when we're downloading blocks from them, as mentioned above) that
         // would only complicate the logic.
 
-        let first_header_prev_block_index = self
+        let first_header_prev_block_height = self
             .chainstate_handle
             // Use get_gen_block_index_for_any_block instead of get_gen_block_index_for_persisted_block
             // to avoid bailing out with the DisconnectedHeaders error early (the appropriate error will
             // be generated when checking the header later and its ban score will be bigger).
             .call(move |c| Ok(c.get_gen_block_index_for_any_block(&first_header_prev_id)?))
             .await?
-            .ok_or(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders))?;
+            .ok_or(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders))?
+            .block_height();
 
         let last_header = headers.last().expect("Headers shouldn't be empty");
-        self.wait_for_clock_diff(
-            last_header.timestamp(),
-            first_header_prev_block_index.block_height(),
-        )
-        .await;
+        let last_header_height = first_header_prev_block_height
+            .checked_add(headers.len() as u64)
+            .expect("cannot overflow");
+        self.wait_for_clock_diff(last_header.timestamp(), last_header_height).await;
 
         let peer_may_have_more_headers =
             headers.len() == *self.p2p_config.protocol_config.msg_header_count_limit;
@@ -692,12 +692,7 @@ where
         {
             let new_block_headers = new_block_headers.clone();
             self.chainstate_handle
-                .call(move |c| {
-                    Ok(c.preliminary_headers_check(
-                        &new_block_headers,
-                        first_header_prev_block_index.block_height(),
-                    )?)
-                })
+                .call(move |c| Ok(c.preliminary_headers_check(&new_block_headers)?))
                 .await?;
         }
 
@@ -742,18 +737,7 @@ where
             self.peer_activity.set_expecting_blocks_since(Some(self.time_getter.get_time()));
         }
 
-        let prev_block_id = block.prev_block_id();
-        let prev_block_height = self
-            .chainstate_handle
-            .call(move |c| Ok(c.get_gen_block_index_for_any_block(&prev_block_id)?))
-            .await?
-            .ok_or(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders))?
-            .block_height();
-
-        let block = self
-            .chainstate_handle
-            .call(move |c| Ok(c.preliminary_block_check(block, prev_block_height.next_height())?))
-            .await?;
+        let block = self.chainstate_handle.call(|c| Ok(c.preliminary_block_check(block)?)).await?;
 
         // Process the block and also determine the new value for peers_best_block_that_we_have.
         let peer_id = self.id();

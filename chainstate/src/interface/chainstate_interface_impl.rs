@@ -102,21 +102,16 @@ where
     fn preliminary_headers_check(
         &self,
         headers: &[SignedBlockHeader],
-        block_height: BlockHeight,
     ) -> Result<(), ChainstateError> {
         BlockChecker::new(&self.chainstate)
-            .preliminary_headers_check(headers, block_height)
+            .preliminary_headers_check(headers)
             .map_err(ChainstateError::ProcessBlockError)
     }
 
     #[tracing::instrument(skip_all, fields(block_id = %block.get_id()))]
-    fn preliminary_block_check(
-        &self,
-        block: Block,
-        block_height: BlockHeight,
-    ) -> Result<Block, ChainstateError> {
+    fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError> {
         let block = BlockChecker::new(&self.chainstate)
-            .preliminary_block_check(block.into(), block_height)
+            .preliminary_block_check(block.into())
             .map_err(ChainstateError::ProcessBlockError)?;
         Ok(WithId::take(block))
     }

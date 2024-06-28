@@ -18,7 +18,7 @@ use crate::{BlockError, TransactionVerificationStrategy};
 use chainstate_storage::BlockchainStorage;
 use common::{
     chain::{block::signed_block_header::SignedBlockHeader, Block},
-    primitives::{id::WithId, BlockHeight},
+    primitives::id::WithId,
 };
 use utils::tap_log::TapLog;
 
@@ -34,22 +34,20 @@ impl<'a, S: BlockchainStorage, V: TransactionVerificationStrategy> BlockChecker<
     pub fn preliminary_block_check(
         &self,
         block: WithId<Block>,
-        block_height: BlockHeight,
     ) -> Result<WithId<Block>, BlockError> {
         let chainstate_ref = self.chainstate.make_db_tx_ro().map_err(BlockError::from)?;
-        chainstate_ref.check_block(&block, block_height).log_err()?;
+        chainstate_ref.check_block(&block).log_err()?;
         Ok(block)
     }
 
     pub fn preliminary_headers_check(
         &self,
         headers: &[SignedBlockHeader],
-        block_height: BlockHeight,
     ) -> Result<(), BlockError> {
         if let Some((first_header, other_headers)) = headers.split_first() {
             let chainstate_ref = self.chainstate.make_db_tx_ro().map_err(BlockError::from)?;
 
-            chainstate_ref.check_block_header(first_header, block_height)?;
+            chainstate_ref.check_block_header(first_header)?;
             chainstate_ref.enforce_checkpoints_for_header_chain(first_header, other_headers)?;
         }
 

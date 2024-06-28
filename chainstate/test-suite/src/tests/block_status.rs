@@ -19,7 +19,7 @@ use super::helpers::{block_creation_helpers::*, block_status_helpers::*};
 use chainstate::{BlockError, BlockSource, ChainstateError, CheckBlockError};
 use chainstate_test_framework::TestFramework;
 use chainstate_types::BlockValidationStage;
-use common::primitives::{BlockHeight, Idable};
+use common::primitives::Idable;
 use test_utils::random::{make_seedable_rng, Seed};
 
 // Check processing of a good block.
@@ -177,7 +177,7 @@ fn test_preliminary_headers_check_with_bad_parent(#[case] seed: Seed) {
 
         let error = tf
             .chainstate
-            .preliminary_headers_check(std::slice::from_ref(block.header()), BlockHeight::zero())
+            .preliminary_headers_check(std::slice::from_ref(block.header()))
             .unwrap_err();
         assert_eq!(
             error,
