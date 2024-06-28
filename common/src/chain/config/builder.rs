@@ -278,7 +278,7 @@ pub struct Builder {
     dns_seeds: Vec<&'static str>,
     predefined_peer_addresses: Vec<SocketAddr>,
     default_rpc_port: u16,
-    max_future_block_time_offset: Duration,
+    max_future_block_time_offset: Option<Duration>,
     software_version: SemVer,
     target_block_spacing: Duration,
     coin_decimals: u8,
@@ -334,7 +334,7 @@ impl Builder {
             data_in_no_signature_witness_allowed: chain_type
                 .default_data_in_no_signature_witness_allowed(),
             data_in_no_signature_witness_max_size: super::TX_DATA_IN_NO_SIG_WITNESS_MAX_SIZE,
-            max_future_block_time_offset: super::DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
+            max_future_block_time_offset: None,
             max_depth_for_reorg: super::DEFAULT_MAX_DEPTH_FOR_REORG,
             epoch_length: super::DEFAULT_EPOCH_LENGTH,
             sealed_epoch_distance_from_tip: super::DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP,
@@ -523,7 +523,7 @@ impl Builder {
     builder_method!(p2p_port: u16);
     builder_method!(dns_seeds: Vec<&'static str>);
     builder_method!(predefined_peer_addresses: Vec<SocketAddr>);
-    builder_method!(max_future_block_time_offset: Duration);
+    builder_method!(max_future_block_time_offset: Option<Duration>);
     builder_method!(software_version: SemVer);
     builder_method!(target_block_spacing: Duration);
     builder_method!(coin_decimals: u8);

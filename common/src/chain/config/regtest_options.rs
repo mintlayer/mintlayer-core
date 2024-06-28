@@ -144,7 +144,11 @@ pub fn regtest_chain_config_builder(options: &ChainConfigOptions) -> Result<Buil
         Ok(MagicBytes::new(result))
     };
     update_builder!(magic_bytes, magic_bytes_from_string, map_err);
-    update_builder!(max_future_block_time_offset, Duration::from_secs);
+    if let Some(chain_max_future_block_time_offset) = chain_max_future_block_time_offset {
+        builder = builder.max_future_block_time_offset(Some(Duration::from_secs(
+            *chain_max_future_block_time_offset,
+        )));
+    }
     update_builder!(software_version, SemVer::try_from, map_err);
     update_builder!(target_block_spacing, Duration::from_secs);
     update_builder!(coin_decimals);

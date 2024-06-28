@@ -52,7 +52,11 @@ pub trait ChainstateInterface: Send + Sync {
     ) -> Result<Option<BlockIndex>, ChainstateError>;
     fn invalidate_block(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
     fn reset_block_failure_flags(&mut self, block_id: &Id<Block>) -> Result<(), ChainstateError>;
-    fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
+    fn preliminary_block_check(
+        &self,
+        block: Block,
+        block_height: BlockHeight,
+    ) -> Result<Block, ChainstateError>;
 
     /// Check the headers. The first header's parent block must be known.
     /// Each following header must be connected to the previous one.
@@ -61,6 +65,7 @@ pub trait ChainstateInterface: Send + Sync {
     fn preliminary_headers_check(
         &self,
         headers: &[SignedBlockHeader],
+        block_height: BlockHeight,
     ) -> Result<(), ChainstateError>;
 
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;

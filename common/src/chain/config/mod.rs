@@ -57,6 +57,7 @@ use super::{
 };
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);
+const MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(30);
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 
 const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
@@ -264,7 +265,7 @@ pub struct ChainConfig {
     predefined_peer_addresses: Vec<SocketAddr>,
     default_rpc_port: u16,
     genesis_block: Arc<WithId<Genesis>>,
-    max_future_block_time_offset: Duration,
+    max_future_block_time_offset: Option<Duration>,
     software_version: SemVer,
     target_block_spacing: Duration,
     coin_decimals: u8,
@@ -467,8 +468,13 @@ impl ChainConfig {
 
     /// The maximum offset of time from the current time the timestamp of a new block can be
     #[must_use]
-    pub fn max_future_block_time_offset(&self) -> &Duration {
-        &self.max_future_block_time_offset
+    pub fn max_future_block_time_offset(&self, height: BlockHeight) -> Duration {
+        self.max_future_block_time_offset.unwrap_or_else(|| {
+            match self.as_ref().chainstate_upgrades().version_at_height(height).1.htlc_activated() {
+                HtlcActivated::Yes => MAX_FUTURE_BLOCK_TIME_OFFSET,
+                HtlcActivated::No => DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
+            }
+        })
     }
 
     /// Length of an epoch in blocks

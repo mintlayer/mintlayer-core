@@ -47,6 +47,7 @@ use ::utils::atomics::SeqCstAtomicBool;
 use ::utils::ensure;
 use common::{
     chain::{config::ChainType, ChainConfig},
+    primitives::BlockHeight,
     time_getter::TimeGetter,
 };
 use interface::p2p_interface::P2pInterface;
@@ -340,7 +341,7 @@ pub fn make_p2p<S: PeerDbStorage + 'static>(
             );
             assert!(
                 p2p_config.effective_max_clock_diff()
-                    < *chain_config.max_future_block_time_offset(),
+                    < chain_config.max_future_block_time_offset(BlockHeight::zero()),
                 "Effective max clock diff exceeds future block tolerance",
             );
         }

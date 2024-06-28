@@ -550,7 +550,9 @@ impl BlockProduction {
     ) -> Result<(), BlockProductionError> {
         let max_block_timestamp_for_pos = {
             let current_timestamp = BlockTimestamp::from_time(self.time_getter().get_time());
-            let max_offset = self.chain_config.max_future_block_time_offset().as_secs();
+            let current_block_height = current_tip_index.block_height().next_height();
+            let max_offset =
+                self.chain_config.max_future_block_time_offset(current_block_height).as_secs();
             timestamp_add_secs(current_timestamp, max_offset)?
         };
 

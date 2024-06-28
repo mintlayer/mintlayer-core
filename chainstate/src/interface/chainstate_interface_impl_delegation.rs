@@ -72,15 +72,20 @@ where
         self.deref_mut().reset_block_failure_flags(block_id)
     }
 
-    fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError> {
-        self.deref().preliminary_block_check(block)
+    fn preliminary_block_check(
+        &self,
+        block: Block,
+        block_height: BlockHeight,
+    ) -> Result<Block, ChainstateError> {
+        self.deref().preliminary_block_check(block, block_height)
     }
 
     fn preliminary_headers_check(
         &self,
         headers: &[SignedBlockHeader],
+        block_height: BlockHeight,
     ) -> Result<(), ChainstateError> {
-        self.deref().preliminary_headers_check(headers)
+        self.deref().preliminary_headers_check(headers, block_height)
     }
 
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError> {

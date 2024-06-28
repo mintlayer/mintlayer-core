@@ -599,7 +599,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     #[log_error]
-    pub fn check_block_header(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
+    pub fn check_block_header(
+        &self,
+        header: &SignedBlockHeader,
+        block_height: BlockHeight,
+    ) -> Result<(), CheckBlockError> {
         self.check_block_parent(header)?;
         self.check_header_size(header)?;
         self.enforce_checkpoints(header)?;
@@ -652,11 +656,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             CheckBlockError::BlockTimeOrderInvalid(header.timestamp(), median_time_past),
         );
 
-        let max_future_offset = self.chain_config.max_future_block_time_offset();
+        let max_future_offset = self.chain_config.max_future_block_time_offset(block_height);
         let current_time = self.current_time().as_duration_since_epoch();
         let block_timestamp = header.timestamp();
         ensure!(
-            block_timestamp.as_duration_since_epoch() <= current_time + *max_future_offset,
+            block_timestamp.as_duration_since_epoch() <= current_time + max_future_offset,
             CheckBlockError::BlockFromTheFuture(header.block_id()),
         );
         Ok(())
@@ -809,8 +813,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     #[log_error]
-    pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
-        self.check_block_header(block.header())?;
+    pub fn check_block(
+        &self,
+        block: &WithId<Block>,
+        block_height: BlockHeight,
+    ) -> Result<(), CheckBlockError> {
+        self.check_block_header(block.header(), block_height)?;
 
         self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
 
@@ -1236,7 +1244,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
                 .into();
 
             if block_status.last_valid_stage() < BlockValidationStage::CheckBlockOk {
-                self.check_block(&block)?;
+                self.check_block(&block, block_index.block_height())?;
                 block_status.advance_validation_stage_to(BlockValidationStage::CheckBlockOk);
             }
 

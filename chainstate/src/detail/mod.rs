@@ -346,7 +346,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         let mut block_status = BlockStatus::new();
 
         chainstate_ref
-            .check_block(block)
+            .check_block(block, block_index.block_height())
             .map_err(BlockError::CheckBlockFailed)
             .map_err(|err| BlockIntegrationError::BlockCheckError(err, block_status))?;
 

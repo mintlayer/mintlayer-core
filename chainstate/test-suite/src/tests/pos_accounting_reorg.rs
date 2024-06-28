@@ -33,7 +33,7 @@ use common::{
         AccountNonce, AccountOutPoint, AccountSpending, Destination, GenBlock, OutPointSourceId,
         PoolId, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, Amount, Id, Idable, H256},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -948,15 +948,15 @@ fn pos_reorg_simple(#[case] seed: Seed) {
     // Try to switch to a new branch
 
     tf1.chainstate
-        .preliminary_headers_check(std::slice::from_ref(block_b.header()))
+        .preliminary_headers_check(std::slice::from_ref(block_b.header()), BlockHeight::zero())
         .unwrap();
-    let block_b = tf1.chainstate.preliminary_block_check(block_b).unwrap();
+    let block_b = tf1.chainstate.preliminary_block_check(block_b, BlockHeight::zero()).unwrap();
     tf1.process_block(block_b, BlockSource::Peer).unwrap();
 
     tf1.chainstate
-        .preliminary_headers_check(std::slice::from_ref(block_c.header()))
+        .preliminary_headers_check(std::slice::from_ref(block_c.header()), BlockHeight::zero())
         .unwrap();
-    let block_c = tf1.chainstate.preliminary_block_check(block_c).unwrap();
+    let block_c = tf1.chainstate.preliminary_block_check(block_c, BlockHeight::zero()).unwrap();
     tf1.process_block(block_c, BlockSource::Peer).unwrap().unwrap();
 
     assert_eq!(<Id<GenBlock>>::from(block_c_id), tf1.best_block_id());
@@ -1372,9 +1372,9 @@ fn pos_submit_new_block_after_reorg(#[case] seed: Seed) {
 
     // Submit block_c that was saved and check that it's valid and reorg happened because it's a denser chain
     tf.chainstate
-        .preliminary_headers_check(std::slice::from_ref(block_c.header()))
+        .preliminary_headers_check(std::slice::from_ref(block_c.header()), BlockHeight::zero())
         .unwrap();
-    let block_c = tf.chainstate.preliminary_block_check(block_c).unwrap();
+    let block_c = tf.chainstate.preliminary_block_check(block_c, BlockHeight::zero()).unwrap();
     assert_eq!(block_b_id, block_c.prev_block_id());
     tf.process_block(block_c, BlockSource::Local).unwrap().unwrap();
 

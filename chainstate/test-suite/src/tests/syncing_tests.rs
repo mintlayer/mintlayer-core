@@ -691,7 +691,7 @@ fn header_check_for_orphan(#[case] seed: Seed) {
 
         let err = tf
             .chainstate
-            .preliminary_headers_check(std::slice::from_ref(block.header()))
+            .preliminary_headers_check(std::slice::from_ref(block.header()), BlockHeight::zero())
             .unwrap_err();
         assert_eq!(
             err,
@@ -703,7 +703,10 @@ fn header_check_for_orphan(#[case] seed: Seed) {
             ))
         );
 
-        let err = tf.chainstate.preliminary_block_check(block.clone()).unwrap_err();
+        let err = tf
+            .chainstate
+            .preliminary_block_check(block.clone(), BlockHeight::zero())
+            .unwrap_err();
         assert_eq!(
             err,
             ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
@@ -767,7 +770,9 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
                 .build();
             tf.process_block(parent_block.clone(), BlockSource::Local).unwrap();
 
-            tf.chainstate.preliminary_headers_check(&block_headers).unwrap();
+            tf.chainstate
+                .preliminary_headers_check(&block_headers, BlockHeight::zero())
+                .unwrap();
         }
 
         // A few blocks are checkpointed; all checkpoints are satisfied.
@@ -788,7 +793,9 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
                 .build();
             tf.process_block(parent_block.clone(), BlockSource::Local).unwrap();
 
-            tf.chainstate.preliminary_headers_check(&block_headers).unwrap();
+            tf.chainstate
+                .preliminary_headers_check(&block_headers, BlockHeight::zero())
+                .unwrap();
         }
 
         // All blocks are checkpointed; some checkpoints are not satisfied.
@@ -810,7 +817,10 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
                 .build();
             tf.process_block(parent_block.clone(), BlockSource::Local).unwrap();
 
-            let err = tf.chainstate.preliminary_headers_check(&block_headers).unwrap_err();
+            let err = tf
+                .chainstate
+                .preliminary_headers_check(&block_headers, BlockHeight::zero())
+                .unwrap_err();
             assert_eq!(
                 err,
                 ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
@@ -842,7 +852,10 @@ fn headers_check_with_checkpoints(#[case] seed: Seed) {
                 .build();
             tf.process_block(parent_block.clone(), BlockSource::Local).unwrap();
 
-            let err = tf.chainstate.preliminary_headers_check(&block_headers).unwrap_err();
+            let err = tf
+                .chainstate
+                .preliminary_headers_check(&block_headers, BlockHeight::zero())
+                .unwrap_err();
             assert_eq!(
                 err,
                 ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(

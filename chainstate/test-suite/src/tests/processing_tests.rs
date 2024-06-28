@@ -1063,8 +1063,11 @@ fn blocks_from_the_future(#[case] seed: Seed) {
 
         {
             // submit a block on the threshold of being rejected for being from the future
-            let max_future_offset =
-                tf.chainstate.get_chain_config().max_future_block_time_offset().as_secs();
+            let max_future_offset = tf
+                .chainstate
+                .get_chain_config()
+                .max_future_block_time_offset(BlockHeight::zero())
+                .as_secs();
 
             tf.make_block_builder()
                 .with_timestamp(BlockTimestamp::from_int_seconds(
@@ -1077,8 +1080,11 @@ fn blocks_from_the_future(#[case] seed: Seed) {
 
         {
             // submit a block a second after the allowed threshold in the future
-            let max_future_offset =
-                tf.chainstate.get_chain_config().max_future_block_time_offset().as_secs();
+            let max_future_offset = tf
+                .chainstate
+                .get_chain_config()
+                .max_future_block_time_offset(BlockHeight::zero())
+                .as_secs();
 
             assert_matches!(
                 tf.make_block_builder()
