@@ -26,8 +26,8 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction, TxInput,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderData, OrderId, PoolId,
+        Transaction, TxInput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -408,6 +408,18 @@ where
         id: &TokenId,
     ) -> Result<Option<Amount>, ChainstateError> {
         self.deref().get_token_circulating_supply(id)
+    }
+
+    fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, ChainstateError> {
+        self.deref().get_order_data(id)
+    }
+
+    fn get_order_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, ChainstateError> {
+        self.deref().get_order_ask_balance(id)
+    }
+
+    fn get_order_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, ChainstateError> {
+        self.deref().get_order_give_balance(id)
     }
 }
 

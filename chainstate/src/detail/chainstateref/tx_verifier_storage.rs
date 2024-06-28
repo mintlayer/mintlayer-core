@@ -28,10 +28,14 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, GenBlock, GenBlockId, PoolId,
-        Transaction,
+        AccountNonce, AccountType, ChainConfig, DelegationId, GenBlock, GenBlockId, OrderData,
+        OrderId, PoolId, Transaction,
     },
     primitives::{Amount, Id},
+};
+use orders_accounting::{
+    FlushableOrdersAccountingView, OrdersAccountingDB, OrdersAccountingStorageRead,
+    OrdersAccountingUndo,
 };
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDB,
@@ -137,6 +141,26 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
         self.db_tx
             .get_account_nonce_count(account)
             .map_err(TransactionVerifierStorageError::from)
+    }
+
+    #[log_error]
+    fn get_orders_accounting_undo(
+        &self,
+        tx_source: TransactionSource,
+    ) -> Result<Option<CachedBlockUndo<OrdersAccountingUndo>>, TransactionVerifierStorageError>
+    {
+        match tx_source {
+            TransactionSource::Chain(id) => {
+                let undo = self
+                    .db_tx
+                    .get_orders_accounting_undo(id)?
+                    .map(CachedBlockUndo::from_block_undo);
+                Ok(undo)
+            }
+            TransactionSource::Mempool => {
+                panic!("Mempool should not undo stuff in chainstate")
+            }
+        }
     }
 }
 
@@ -388,6 +412,41 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
             }
         }
     }
+
+    #[log_error]
+    fn set_orders_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+        undo: &CachedBlockUndo<OrdersAccountingUndo>,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
+        match tx_source {
+            TransactionSource::Chain(id) => self
+                .db_tx
+                .set_orders_accounting_undo_data(id, &undo.clone().consume())
+                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
+    }
+
+    #[log_error]
+    fn del_orders_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), TransactionVerifierStorageError> {
+        // TODO: check tx_source at compile-time (mintlayer/mintlayer-core#633)
+        match tx_source {
+            TransactionSource::Chain(id) => self
+                .db_tx
+                .del_orders_accounting_undo_data(id)
+                .map_err(TransactionVerifierStorageError::from),
+            TransactionSource::Mempool => {
+                panic!("Flushing mempool info into the storage is forbidden")
+            }
+        }
+    }
 }
 
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccountingView
@@ -492,5 +551,40 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     ) -> Result<TokensAccountingDeltaUndoData, Self::Error> {
         let mut db = TokensAccountingDB::new(&mut self.db_tx);
         db.batch_write_tokens_data(delta)
+    }
+}
+
+impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> OrdersAccountingStorageRead
+    for ChainstateRef<'a, S, V>
+{
+    type Error = storage_result::Error;
+
+    #[log_error]
+    fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
+        self.db_tx.get_order_data(id)
+    }
+
+    #[log_error]
+    fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        self.db_tx.get_ask_balance(id)
+    }
+
+    #[log_error]
+    fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        self.db_tx.get_give_balance(id)
+    }
+}
+
+impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
+    FlushableOrdersAccountingView for ChainstateRef<'a, S, V>
+{
+    type Error = orders_accounting::Error;
+
+    fn batch_write_orders_data(
+        &mut self,
+        delta: orders_accounting::OrdersAccountingDeltaData,
+    ) -> Result<orders_accounting::OrdersAccountingDeltaUndoData, Self::Error> {
+        let mut db = OrdersAccountingDB::new(&mut self.db_tx);
+        db.batch_write_orders_data(delta)
     }
 }

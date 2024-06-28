@@ -17,8 +17,8 @@ use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
 use common::chain::{
     output_value::OutputValue, signature::inputsig::InputWitness, tokens::make_token_id,
-    ChainstateUpgrade, Destination, HtlcActivated, RewardDistributionVersion, TokenIssuanceVersion,
-    TokensFeeVersion, TxInput, TxOutput,
+    ChainstateUpgrade, Destination, HtlcActivated, OrdersActivated, RewardDistributionVersion,
+    TokenIssuanceVersion, TokensFeeVersion, TxInput, TxOutput,
 };
 use common::chain::{OutPointSourceId, UtxoOutPoint};
 use common::primitives::{Amount, BlockHeight, CoinOrTokenId, Idable};
@@ -216,6 +216,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                                 RewardDistributionVersion::V1,
                                 TokensFeeVersion::V1,
                                 HtlcActivated::Yes,
+                                OrdersActivated::Yes,
                             ),
                         )])
                         .unwrap(),

@@ -23,6 +23,9 @@ use common::{
     },
     primitives::Id,
 };
+use orders_accounting::{
+    FlushableOrdersAccountingView, OrdersAccountingStorageRead, OrdersAccountingUndo,
+};
 use pos_accounting::{
     FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingUndo, PoSAccountingView,
 };
@@ -59,12 +62,14 @@ pub enum TransactionVerifierStorageError {
     AccountingBlockUndoError(#[from] accounting::BlockUndoError),
     #[error("Tokens accounting error: {0}")]
     TokensAccountingError(#[from] tokens_accounting::Error),
+    #[error("Orders accounting error: {0}")]
+    OrdersAccountingError(#[from] orders_accounting::Error),
 }
 
 // TODO(Gosha): PoSAccountingView should be replaced with PoSAccountingStorageRead in which the
 //              return error type can handle both storage_result::Error and pos_accounting::Error
 pub trait TransactionVerifierStorageRef:
-    UtxosStorageRead + PoSAccountingView + TokensAccountingStorageRead
+    UtxosStorageRead + PoSAccountingView + TokensAccountingStorageRead + OrdersAccountingStorageRead
 {
     type Error: std::error::Error;
 
@@ -113,6 +118,14 @@ pub trait TransactionVerifierStorageRef:
         &self,
         account: AccountType,
     ) -> Result<Option<AccountNonce>, <Self as TransactionVerifierStorageRef>::Error>;
+
+    fn get_orders_accounting_undo(
+        &self,
+        tx_source: TransactionSource,
+    ) -> Result<
+        Option<CachedBlockUndo<OrdersAccountingUndo>>,
+        <Self as TransactionVerifierStorageRef>::Error,
+    >;
 }
 
 pub trait TransactionVerifierStorageMut:
@@ -120,6 +133,7 @@ pub trait TransactionVerifierStorageMut:
     + FlushableUtxoView
     + FlushablePoSAccountingView
     + FlushableTokensAccountingView
+    + FlushableOrdersAccountingView
 {
     fn set_token_aux_data(
         &mut self,
@@ -191,6 +205,17 @@ pub trait TransactionVerifierStorageMut:
         &mut self,
         tx_source: TransactionSource,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
+
+    fn set_orders_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+        undo: &CachedBlockUndo<OrdersAccountingUndo>,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
+
+    fn del_orders_accounting_undo_data(
+        &mut self,
+        tx_source: TransactionSource,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 }
 
 impl<T: Deref> TransactionVerifierStorageRef for T
@@ -252,5 +277,15 @@ where
         account: AccountType,
     ) -> Result<Option<AccountNonce>, <Self as TransactionVerifierStorageRef>::Error> {
         self.deref().get_account_nonce_count(account)
+    }
+
+    fn get_orders_accounting_undo(
+        &self,
+        tx_source: TransactionSource,
+    ) -> Result<
+        Option<CachedBlockUndo<OrdersAccountingUndo>>,
+        <Self as TransactionVerifierStorageRef>::Error,
+    > {
+        self.deref().get_orders_accounting_undo(tx_source)
     }
 }

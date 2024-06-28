@@ -1018,7 +1018,8 @@ impl Account {
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
-                | TxOutput::Htlc(_, _) => None,
+                | TxOutput::Htlc(_, _)
+                | TxOutput::AnyoneCanTake(_) => None,
             })
             .expect("find output with dummy_pool_id");
         *old_pool_id = new_pool_id;
@@ -1073,7 +1074,8 @@ impl Account {
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::DataDeposit(_)
-                | TxOutput::Htlc(_, _) => None,
+                | TxOutput::Htlc(_, _)
+                | TxOutput::AnyoneCanTake(_) => None,
                 TxOutput::IssueNft(token_id, _, _) => {
                     (*token_id == dummy_token_id).then_some(token_id)
                 }
@@ -1345,6 +1347,9 @@ impl Account {
                             .token_data(token_id)
                             .map(|data| (None, Some(data.authority.clone())))
                             .ok_or(WalletError::UnknownTokenId(*token_id)),
+                        // TODO(orders)
+                        AccountCommand::ConcludeOrder(_) => unimplemented!(),
+                        AccountCommand::FillOrder(_, _, _) => unimplemented!(),
                     }
                 }
             })
@@ -1545,7 +1550,8 @@ impl Account {
             TxOutput::IssueFungibleToken(_)
             | TxOutput::Burn(_)
             | TxOutput::DelegateStaking(_, _)
-            | TxOutput::DataDeposit(_) => Vec::new(),
+            | TxOutput::DataDeposit(_)
+            | TxOutput::AnyoneCanTake(_) => Vec::new(),
         }
     }
 
@@ -1822,6 +1828,9 @@ impl Account {
                     self.find_token(token_id).is_ok()
                         || self.is_destination_mine_or_watched(address)
                 }
+                // TODO(orders)
+                AccountCommand::ConcludeOrder(_) => unimplemented!(),
+                AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
@@ -2185,6 +2194,8 @@ fn group_preselected_inputs(
                             output.clone(),
                         )))
                     }
+                    // TODO(orders)
+                    TxOutput::AnyoneCanTake(_) => unimplemented!(),
                 };
                 update_preselected_inputs(currency, value, *fee)?;
             }
@@ -2228,6 +2239,9 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
+                // TODO(orders)
+                AccountCommand::ConcludeOrder(_) => unimplemented!(),
+                AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
         }
     }

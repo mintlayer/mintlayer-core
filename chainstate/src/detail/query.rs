@@ -24,10 +24,11 @@ use common::{
             NftIssuance, RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo,
             RPCTokenInfo, TokenAuxiliaryData, TokenId,
         },
-        Block, GenBlock, Transaction, TxOutput,
+        Block, GenBlock, OrderData, OrderId, Transaction, TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
+use orders_accounting::OrdersAccountingStorageRead;
 use tokens_accounting::TokensAccountingStorageRead;
 use utils::ensure;
 
@@ -349,7 +350,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::DataDeposit(_)
-                    | TxOutput::Htlc(_, _) => None,
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::AnyoneCanTake(_) => None,
                     TxOutput::IssueNft(_, issuance, _) => match issuance.as_ref() {
                         NftIssuance::V0(nft) => {
                             Some(RPCTokenInfo::new_nonfungible(RPCNonFungibleTokenInfo::new(
@@ -400,5 +402,23 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         id: &TokenId,
     ) -> Result<Option<Amount>, PropertyQueryError> {
         self.chainstate_ref.get_circulating_supply(id).map_err(PropertyQueryError::from)
+    }
+
+    pub fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, PropertyQueryError> {
+        self.chainstate_ref.get_order_data(id).map_err(PropertyQueryError::from)
+    }
+
+    pub fn get_order_ask_balance(
+        &self,
+        id: &OrderId,
+    ) -> Result<Option<Amount>, PropertyQueryError> {
+        self.chainstate_ref.get_ask_balance(id).map_err(PropertyQueryError::from)
+    }
+
+    pub fn get_order_give_balance(
+        &self,
+        id: &OrderId,
+    ) -> Result<Option<Amount>, PropertyQueryError> {
+        self.chainstate_ref.get_give_balance(id).map_err(PropertyQueryError::from)
     }
 }

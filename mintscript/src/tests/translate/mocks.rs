@@ -16,6 +16,7 @@
 use super::super::*;
 use crate::translate::InputInfo;
 
+use common::chain::{OrderData, OrderId};
 use pos_accounting::{DelegationData, PoolData};
 use tokens_accounting::TokenData;
 
@@ -27,6 +28,7 @@ pub struct MockSigInfoProvider<'a> {
     tokens: BTreeMap<TokenId, TokenData>,
     pools: BTreeMap<PoolId, PoolData>,
     delegations: BTreeMap<DelegationId, DelegationData>,
+    orders: BTreeMap<OrderId, OrderData>,
 }
 
 impl<'a> MockSigInfoProvider<'a> {
@@ -36,6 +38,7 @@ impl<'a> MockSigInfoProvider<'a> {
         tokens: impl IntoIterator<Item = (TokenId, TokenData)>,
         pools: impl IntoIterator<Item = (PoolId, PoolData)>,
         delegations: impl IntoIterator<Item = (DelegationId, DelegationData)>,
+        orders: impl IntoIterator<Item = (OrderId, OrderData)>,
     ) -> Self {
         Self {
             input_info,
@@ -43,6 +46,7 @@ impl<'a> MockSigInfoProvider<'a> {
             tokens: tokens.into_iter().collect(),
             pools: pools.into_iter().collect(),
             delegations: delegations.into_iter().collect(),
+            orders: orders.into_iter().collect(),
         }
     }
 }
@@ -60,12 +64,17 @@ impl crate::translate::InputInfoProvider for MockSigInfoProvider<'_> {
 impl crate::translate::SignatureInfoProvider for MockSigInfoProvider<'_> {
     type PoSAccounting = Self;
     type Tokens = Self;
+    type Orders = Self;
 
     fn pos_accounting(&self) -> &Self::PoSAccounting {
         self
     }
 
     fn tokens(&self) -> &Self::Tokens {
+        self
+    }
+
+    fn orders(&self) -> &Self::Orders {
         self
     }
 }
@@ -118,5 +127,21 @@ impl tokens_accounting::TokensAccountingView for MockSigInfoProvider<'_> {
 
     fn get_circulating_supply(&self, _id: &TokenId) -> Result<Option<Amount>, Self::Error> {
         unreachable!("not used in these tests")
+    }
+}
+
+impl orders_accounting::OrdersAccountingView for MockSigInfoProvider<'_> {
+    type Error = orders_accounting::Error;
+
+    fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
+        Ok(self.orders.get(id).cloned())
+    }
+
+    fn get_ask_balance(&self, _id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        unreachable!()
+    }
+
+    fn get_give_balance(&self, _id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        unreachable!()
     }
 }

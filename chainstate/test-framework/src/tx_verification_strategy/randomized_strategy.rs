@@ -22,6 +22,7 @@ use common::{
     primitives::{id::WithId, Idable},
 };
 use constraints_value_accumulator::AccumulatedFee;
+use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
 use randomness::{Rng, RngCore};
 use test_utils::random::{make_seedable_rng, Seed};
@@ -64,7 +65,7 @@ impl RandomizedTransactionVerificationStrategy {
 }
 
 impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrategy {
-    fn connect_block<C, S, M, U, A, T>(
+    fn connect_block<C, S, M, U, A, T, O>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
@@ -72,14 +73,15 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
+    ) -> Result<TransactionVerifier<C, S, U, A, T, O>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
         T: TokensAccountingView,
-        M: TransactionVerifierMakerFn<C, S, U, A, T>,
+        O: OrdersAccountingView,
+        M: TransactionVerifierMakerFn<C, S, U, A, T, O>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_verifier = self
@@ -98,20 +100,21 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         Ok(tx_verifier)
     }
 
-    fn disconnect_block<C, S, M, U, A, T>(
+    fn disconnect_block<C, S, M, U, A, T, O>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
+    ) -> Result<TransactionVerifier<C, S, U, A, T, O>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
         T: TokensAccountingView,
-        M: TransactionVerifierMakerFn<C, S, U, A, T>,
+        O: OrdersAccountingView,
+        M: TransactionVerifierMakerFn<C, S, U, A, T, O>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_verifier =
@@ -125,7 +128,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
 
 impl RandomizedTransactionVerificationStrategy {
     #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-    fn connect_with_base<C, S, M, U, A, T>(
+    fn connect_with_base<C, S, M, U, A, T, O>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
@@ -133,14 +136,15 @@ impl RandomizedTransactionVerificationStrategy {
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: &BlockTimestamp,
-    ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
+    ) -> Result<TransactionVerifier<C, S, U, A, T, O>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig> + ShallowClone,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
         T: TokensAccountingView,
-        M: TransactionVerifierMakerFn<C, S, U, A, T>,
+        O: OrdersAccountingView,
+        M: TransactionVerifierMakerFn<C, S, U, A, T, O>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config.shallow_clone());
@@ -209,9 +213,9 @@ impl RandomizedTransactionVerificationStrategy {
         Ok(tx_verifier)
     }
 
-    fn connect_with_derived<C, S, U, A, T>(
+    fn connect_with_derived<C, S, U, A, T, O>(
         &self,
-        base_tx_verifier: &TransactionVerifier<C, S, U, A, T>,
+        base_tx_verifier: &TransactionVerifier<C, S, U, A, T, O>,
         block: &WithId<Block>,
         block_index: &BlockIndex,
         median_time_past: &BlockTimestamp,
@@ -222,6 +226,7 @@ impl RandomizedTransactionVerificationStrategy {
         U: UtxosView,
         A: PoSAccountingView,
         T: TokensAccountingView,
+        O: OrdersAccountingView,
         S: TransactionVerifierStorageRef,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
@@ -251,20 +256,21 @@ impl RandomizedTransactionVerificationStrategy {
         Ok((cache, total_fees, tx_num))
     }
 
-    fn disconnect_with_base<C, S, M, U, A, T>(
+    fn disconnect_with_base<C, S, M, U, A, T, O>(
         &self,
         tx_verifier_maker: M,
         storage_backend: S,
         chain_config: C,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U, A, T>, ConnectTransactionError>
+    ) -> Result<TransactionVerifier<C, S, U, A, T, O>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
         T: TokensAccountingView,
-        M: TransactionVerifierMakerFn<C, S, U, A, T>,
+        O: OrdersAccountingView,
+        M: TransactionVerifierMakerFn<C, S, U, A, T, O>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config);
@@ -296,9 +302,9 @@ impl RandomizedTransactionVerificationStrategy {
         Ok(tx_verifier)
     }
 
-    fn disconnect_with_derived<C, S, U, A, T>(
+    fn disconnect_with_derived<C, S, U, A, T, O>(
         &self,
-        base_tx_verifier: &TransactionVerifier<C, S, U, A, T>,
+        base_tx_verifier: &TransactionVerifier<C, S, U, A, T, O>,
         block: &WithId<Block>,
         mut tx_num: i32,
     ) -> Result<(TransactionVerifierDelta, i32), ConnectTransactionError>
@@ -307,6 +313,7 @@ impl RandomizedTransactionVerificationStrategy {
         U: UtxosView,
         A: PoSAccountingView,
         T: TokensAccountingView,
+        O: OrdersAccountingView,
         S: TransactionVerifierStorageRef,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {

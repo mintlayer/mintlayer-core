@@ -16,13 +16,13 @@
 use crate::{
     chain::{
         tokens::{IsTokenUnfreezable, TokenId},
-        AccountNonce, DelegationId,
+        AccountNonce, DelegationId, OrderId,
     },
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
 
-use super::Destination;
+use super::{output_value::OutputValue, Destination};
 
 /// Type of an account that can be used to identify series of spending from an account
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
@@ -32,6 +32,8 @@ pub enum AccountType {
     /// Token account type is used to authorize changes in token data.
     #[codec(index = 1)]
     Token(TokenId),
+    #[codec(index = 2)]
+    Order(OrderId),
 }
 
 impl From<AccountSpending> for AccountType {
@@ -51,6 +53,9 @@ impl From<AccountCommand> for AccountType {
             | AccountCommand::FreezeToken(id, _)
             | AccountCommand::UnfreezeToken(id)
             | AccountCommand::ChangeTokenAuthority(id, _) => AccountType::Token(id),
+            AccountCommand::ConcludeOrder(id) | AccountCommand::FillOrder(id, _, _) => {
+                AccountType::Order(id)
+            }
         }
     }
 }
@@ -110,6 +115,10 @@ pub enum AccountCommand {
     // Change the authority who can authorize operations for a token
     #[codec(index = 5)]
     ChangeTokenAuthority(TokenId, Destination),
+    #[codec(index = 6)]
+    ConcludeOrder(OrderId),
+    #[codec(index = 7)]
+    FillOrder(OrderId, OutputValue, Destination),
 }
 
 /// Type of OutPoint that represents spending from an account

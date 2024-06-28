@@ -19,6 +19,7 @@ use common::{
     chain::{AccountSpending, AccountType, DelegationId},
     primitives::Amount,
 };
+use pos_accounting::PoSAccountingView;
 
 use crate::Error;
 
@@ -43,20 +44,17 @@ impl From<GenericAccountId> for AccountType {
     }
 }
 
-pub struct AccountsBalancesTracker<'a, DelegationBalanceGetterFn> {
+pub struct AccountsBalancesTracker<P> {
     balances: BTreeMap<GenericAccountId, Amount>,
 
-    delegation_balance_getter: &'a DelegationBalanceGetterFn,
+    pos_accounting_view: P,
 }
 
-impl<'a, DelegationBalanceGetterFn> AccountsBalancesTracker<'a, DelegationBalanceGetterFn>
-where
-    DelegationBalanceGetterFn: Fn(DelegationId) -> Result<Option<Amount>, Error>,
-{
-    pub fn new(delegation_balance_getter: &'a DelegationBalanceGetterFn) -> Self {
+impl<P: PoSAccountingView> AccountsBalancesTracker<P> {
+    pub fn new(pos_accounting_view: P) -> Self {
         Self {
             balances: BTreeMap::new(),
-            delegation_balance_getter,
+            pos_accounting_view,
         }
     }
 
@@ -65,7 +63,10 @@ where
             Entry::Vacant(e) => {
                 let (balance, spending) = match account {
                     AccountSpending::DelegationBalance(id, spending) => {
-                        let balance = (self.delegation_balance_getter)(id)?
+                        let balance = self
+                            .pos_accounting_view
+                            .get_delegation_balance(id)
+                            .map_err(|_| pos_accounting::Error::ViewFail)?
                             .ok_or(Error::AccountBalanceNotFound(account.clone().into()))?;
                         (balance, spending)
                     }

@@ -29,8 +29,8 @@ use crate::{
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
         ChainstateUpgrade, CoinUnit, ConsensusUpgrade, Destination, GenBlock, Genesis,
-        HtlcActivated, NetUpgrades, PoSChainConfig, PoSConsensusVersion, PoWChainConfig,
-        RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
+        HtlcActivated, NetUpgrades, OrdersActivated, PoSChainConfig, PoSConsensusVersion,
+        PoWChainConfig, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
@@ -51,8 +51,8 @@ const TESTNET_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78440);
 // and change various tokens fees
 const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(138244);
 // The fork, at which txs with htlc and orders outputs become valid
-const TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(99999999);
-const MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(99999999);
+const TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
+const MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -167,6 +167,7 @@ impl ChainType {
                             RewardDistributionVersion::V1,
                             TokensFeeVersion::V1,
                             HtlcActivated::No,
+                            OrdersActivated::No,
                         ),
                     ),
                     (
@@ -176,6 +177,7 @@ impl ChainType {
                             RewardDistributionVersion::V1,
                             TokensFeeVersion::V1,
                             HtlcActivated::Yes,
+                            OrdersActivated::Yes,
                         ),
                     ),
                 ];
@@ -189,6 +191,7 @@ impl ChainType {
                         RewardDistributionVersion::V1,
                         TokensFeeVersion::V1,
                         HtlcActivated::Yes,
+                        OrdersActivated::Yes,
                     ),
                 )];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
@@ -202,6 +205,7 @@ impl ChainType {
                             RewardDistributionVersion::V0,
                             TokensFeeVersion::V0,
                             HtlcActivated::No,
+                            OrdersActivated::No,
                         ),
                     ),
                     (
@@ -211,6 +215,7 @@ impl ChainType {
                             RewardDistributionVersion::V0,
                             TokensFeeVersion::V0,
                             HtlcActivated::No,
+                            OrdersActivated::No,
                         ),
                     ),
                     (
@@ -220,6 +225,7 @@ impl ChainType {
                             RewardDistributionVersion::V1,
                             TokensFeeVersion::V1,
                             HtlcActivated::No,
+                            OrdersActivated::No,
                         ),
                     ),
                     (
@@ -229,6 +235,7 @@ impl ChainType {
                             RewardDistributionVersion::V1,
                             TokensFeeVersion::V1,
                             HtlcActivated::Yes,
+                            OrdersActivated::Yes,
                         ),
                     ),
                 ];

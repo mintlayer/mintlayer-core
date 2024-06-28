@@ -29,9 +29,14 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, DelegationId, GenBlock, PoolId, Transaction, UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, GenBlock, OrderData, OrderId, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, Id},
+};
+use orders_accounting::{
+    FlushableOrdersAccountingView, OrdersAccountingDeltaData, OrdersAccountingDeltaUndoData,
+    OrdersAccountingStorageRead, OrdersAccountingUndo,
 };
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
@@ -80,6 +85,11 @@ mockall::mock! {
             &self,
             account: AccountType,
         ) -> Result<Option<AccountNonce>, TransactionVerifierStorageError>;
+
+        fn get_orders_accounting_undo(
+            &self,
+            tx_source: TransactionSource,
+        ) -> Result<Option<CachedBlockUndo<OrdersAccountingUndo>>, TransactionVerifierStorageError>;
     }
 
     impl TransactionVerifierStorageMut for Store {
@@ -145,6 +155,17 @@ mockall::mock! {
             &mut self,
             tx_source: TransactionSource,
         ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn set_orders_accounting_undo_data(
+            &mut self,
+            tx_source: TransactionSource,
+            undo: &CachedBlockUndo<OrdersAccountingUndo>,
+        ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn del_orders_accounting_undo_data(
+            &mut self,
+            tx_source: TransactionSource,
+        ) -> Result<(), TransactionVerifierStorageError>;
     }
 
     impl UtxosStorageRead for Store {
@@ -195,5 +216,20 @@ mockall::mock! {
     impl FlushableTokensAccountingView for Store {
         type Error = tokens_accounting::Error;
         fn batch_write_tokens_data(&mut self, delta: TokensAccountingDeltaData) -> Result<TokensAccountingDeltaUndoData, tokens_accounting::Error>;
+    }
+
+    impl OrdersAccountingStorageRead for Store {
+        type Error = orders_accounting::Error;
+        fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, orders_accounting::Error>;
+        fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, orders_accounting::Error>;
+        fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, orders_accounting::Error>;
+    }
+
+    impl FlushableOrdersAccountingView for Store {
+        type Error = orders_accounting::Error;
+        fn batch_write_orders_data(
+            &mut self,
+            data: OrdersAccountingDeltaData,
+        ) -> Result<OrdersAccountingDeltaUndoData, orders_accounting::Error>;
     }
 }

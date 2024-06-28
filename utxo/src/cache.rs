@@ -504,7 +504,8 @@ fn should_include_in_utxo_set(output: &TxOutput) -> bool {
         | TxOutput::DelegateStaking(..)
         | TxOutput::Burn(..)
         | TxOutput::IssueFungibleToken(..)
-        | TxOutput::DataDeposit(..) => false,
+        | TxOutput::DataDeposit(..)
+        | TxOutput::AnyoneCanTake(..) => false,
     }
 }
 

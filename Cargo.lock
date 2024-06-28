@@ -272,6 +272,7 @@ dependencies = [
  "logging",
  "mempool",
  "node-comm",
+ "orders-accounting",
  "pos-accounting",
  "randomness",
  "rstest",
@@ -1163,6 +1164,7 @@ dependencies = [
  "mockall",
  "num",
  "oneshot",
+ "orders-accounting",
  "parity-scale-codec",
  "pos-accounting",
  "randomness",
@@ -1213,6 +1215,7 @@ dependencies = [
  "logging",
  "mockall",
  "num-traits",
+ "orders-accounting",
  "parity-scale-codec",
  "pos-accounting",
  "randomness",
@@ -1240,6 +1243,7 @@ dependencies = [
  "hex",
  "itertools 0.13.0",
  "logging",
+ "orders-accounting",
  "pos-accounting",
  "randomness",
  "rstest",
@@ -1273,6 +1277,7 @@ dependencies = [
  "hex",
  "itertools 0.13.0",
  "logging",
+ "orders-accounting",
  "pos-accounting",
  "randomness",
  "rstest",
@@ -1573,6 +1578,7 @@ version = "0.5.1"
 dependencies = [
  "common",
  "crypto",
+ "orders-accounting",
  "pos-accounting",
  "randomness",
  "rstest",
@@ -4075,6 +4081,7 @@ dependencies = [
  "mintscript",
  "mockall",
  "num-traits",
+ "orders-accounting",
  "p2p-types",
  "parking_lot 0.12.3",
  "pos-accounting",
@@ -4201,6 +4208,7 @@ dependencies = [
  "crypto",
  "expect-test",
  "hex",
+ "orders-accounting",
  "pos-accounting",
  "rstest",
  "serialization",
@@ -4894,6 +4902,25 @@ checksum = "9aa2b01e1d916879f73a53d01d1d6cee68adbb31d6d9177a8cfce093cced1d50"
 dependencies = [
  "futures-core",
  "pin-project-lite",
+]
+
+[[package]]
+name = "orders-accounting"
+version = "0.5.1"
+dependencies = [
+ "accounting",
+ "chainstate-types",
+ "common",
+ "crypto",
+ "logging",
+ "parity-scale-codec",
+ "randomness",
+ "rstest",
+ "serialization",
+ "test-utils",
+ "thiserror",
+ "utils",
+ "variant_count",
 ]
 
 [[package]]
@@ -7531,6 +7558,7 @@ dependencies = [
  "chainstate-types",
  "common",
  "crypto",
+ "logging",
  "parity-scale-codec",
  "randomness",
  "rstest",
@@ -7982,6 +8010,7 @@ dependencies = [
  "logging",
  "mintscript",
  "mockall",
+ "orders-accounting",
  "pos-accounting",
  "randomness",
  "replace_with",

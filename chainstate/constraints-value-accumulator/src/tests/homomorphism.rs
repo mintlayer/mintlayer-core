@@ -58,6 +58,11 @@ fn create_stake_pool_data(rng: &mut (impl Rng + CryptoRng), atoms_to_stake: u128
 #[trace]
 #[case(Seed::from_entropy())]
 fn accumulators_homomorphism(#[case] seed: Seed) {
+    use std::collections::BTreeMap;
+
+    use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
+    use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB, PoolData};
+
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
@@ -88,8 +93,17 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
             - spend_share_output,
     ));
 
-    let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
-    let delegation_balance_getter = |_| Ok(Some(delegation_balance));
+    let pos_store = InMemoryPoSAccounting::from_values(
+        BTreeMap::from_iter([(pool_id, PoolData::from(stake_pool_data.clone()))]),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::from_iter([(delegation_id, delegation_balance)]),
+        BTreeMap::new(),
+    );
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
 
     let (decommission_tx, decommission_tx_inputs_utxos) = {
         let decommission_pool_utxo = if rng.gen::<bool>() {
@@ -211,8 +225,8 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
-            pledge_getter,
-            delegation_balance_getter,
+            &orders_db,
+            &pos_db,
             &inputs,
             &inputs_utxos,
         )
@@ -235,8 +249,8 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
         let decommission_inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
-            pledge_getter,
-            delegation_balance_getter,
+            &orders_db,
+            &pos_db,
             decommission_tx.inputs(),
             &decommission_tx_inputs_utxos,
         )
@@ -252,8 +266,8 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
         let spend_share_inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
-            pledge_getter,
-            delegation_balance_getter,
+            &orders_db,
+            &pos_db,
             spend_share_tx.inputs(),
             &spend_share_inputs_utxos,
         )

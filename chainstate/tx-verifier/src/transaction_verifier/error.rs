@@ -18,7 +18,7 @@ use common::{
     chain::{
         block::{Block, GenBlock},
         tokens::TokenId,
-        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, Transaction,
+        AccountNonce, AccountType, DelegationId, OrderId, OutPointSourceId, PoolId, Transaction,
         UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
@@ -99,6 +99,8 @@ pub enum ConnectTransactionError {
     AttemptToCreateStakePoolFromAccounts,
     #[error("Attempt to create delegation from accounting inputs")]
     AttemptToCreateDelegationFromAccounts,
+    #[error("Attempt to create order from accounting inputs")]
+    AttemptToCreateOrderFromAccounts,
     #[error("Failed to increment account nonce")]
     FailedToIncrementAccountNonce,
     #[error("Input output policy error: `{0}` in : `{1:?}`")]
@@ -117,7 +119,8 @@ pub enum ConnectTransactionError {
     RewardDistributionError(#[from] reward_distribution::RewardDistributionError),
     #[error("Check transaction error: {0}")]
     CheckTransactionError(#[from] CheckTransactionError),
-
+    #[error("Orders accounting error: {0}")]
+    OrdersAccountingError(#[from] orders_accounting::Error),
     #[error(transparent)]
     InputCheck(#[from] InputCheckError),
 }
@@ -150,6 +153,8 @@ pub enum SignatureDestinationGetterError {
     DelegationDataNotFound(DelegationId),
     #[error("Token data not found for signature verification {0}")]
     TokenDataNotFound(TokenId),
+    #[error("Order data not found for signature verification {0}")]
+    OrderDataNotFound(OrderId),
     #[error("Utxo for the outpoint not fount: {0:?}")]
     UtxoOutputNotFound(UtxoOutPoint),
     #[error("Error accessing utxo set")]
@@ -158,6 +163,8 @@ pub enum SignatureDestinationGetterError {
     PoSAccountingViewError(#[from] pos_accounting::Error),
     #[error("During destination getting for signature verification: Tokens accounting error {0}")]
     TokensAccountingViewError(#[from] tokens_accounting::Error),
+    #[error("During destination getting for signature verification: Orders accounting error {0}")]
+    OrdersAccountingViewError(#[from] orders_accounting::Error),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use common::{
     chain::{
         config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
@@ -25,6 +27,8 @@ use common::{
     },
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
+use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
+use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB, PoolData};
 use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -63,8 +67,17 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
     let fee_atoms = rng.gen_range(1..100);
     let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
-    let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
-    let delegation_balance_getter = |_| Ok(None);
+    let pos_store = InMemoryPoSAccounting::from_values(
+        BTreeMap::from_iter([(pool_id, PoolData::from(stake_pool_data.clone()))]),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    );
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
 
     let inputs = vec![TxInput::Utxo(UtxoOutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
@@ -84,8 +97,8 @@ fn allow_fees_from_decommission(#[case] seed: Seed) {
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
-        pledge_getter,
-        delegation_balance_getter,
+        &orders_db,
+        &pos_db,
         &inputs,
         &input_utxos,
     )
@@ -122,8 +135,17 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
     let delegated_atoms = rng.gen_range(100..1000);
     let fee_atoms = rng.gen_range(1..100);
 
-    let pledge_getter = |_| Ok(None);
-    let delegation_balance_getter = |_| Ok(Some(Amount::from_atoms(delegated_atoms)));
+    let pos_store = InMemoryPoSAccounting::from_values(
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::from_iter([(delegation_id, Amount::from_atoms(delegated_atoms))]),
+        BTreeMap::new(),
+    );
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
 
     let inputs_utxos = vec![None];
     let inputs = vec![TxInput::from_account(
@@ -140,8 +162,8 @@ fn allow_fees_from_spend_share(#[case] seed: Seed) {
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
-        pledge_getter,
-        delegation_balance_getter,
+        &orders_db,
+        &pos_db,
         &inputs,
         &inputs_utxos,
     )
@@ -180,8 +202,17 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
     let less_than_staked_amount = Amount::from_atoms(rng.gen_range(1..staked_atoms));
     let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
-    let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
-    let delegation_balance_getter = |_| Ok(None);
+    let pos_store = InMemoryPoSAccounting::from_values(
+        BTreeMap::from_iter([(pool_id, PoolData::from(stake_pool_data.clone()))]),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    );
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
 
     let inputs = vec![
         TxInput::from_utxo(
@@ -214,8 +245,8 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
-            pledge_getter,
-            delegation_balance_getter,
+            &orders_db,
+            &pos_db,
             &inputs,
             &inputs_utxos,
         )
@@ -242,8 +273,8 @@ fn no_timelock_outputs_on_decommission(#[case] seed: Seed) {
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
-            pledge_getter,
-            delegation_balance_getter,
+            &orders_db,
+            &pos_db,
             &inputs,
             &inputs_utxos,
         )
@@ -279,8 +310,17 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
     let less_than_staked_amount = Amount::from_atoms(rng.gen_range(1..staked_atoms));
     let stake_pool_data = create_stake_pool_data(&mut rng, staked_atoms);
 
-    let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
-    let delegation_balance_getter = |_| Ok(None);
+    let pos_store = InMemoryPoSAccounting::from_values(
+        BTreeMap::from_iter([(pool_id, PoolData::from(stake_pool_data.clone()))]),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+    );
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
 
     let inputs = vec![
         TxInput::from_utxo(
@@ -323,8 +363,8 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
-        pledge_getter,
-        delegation_balance_getter,
+        &orders_db,
+        &pos_db,
         &inputs,
         &inputs_utxos,
     )
@@ -362,8 +402,8 @@ fn try_to_unlock_coins_with_smaller_timelock(#[case] seed: Seed) {
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
-            pledge_getter,
-            delegation_balance_getter,
+            &orders_db,
+            &pos_db,
             &inputs,
             &inputs_utxos,
         )
@@ -413,8 +453,17 @@ fn check_timelock_saturation(#[case] seed: Seed) {
 
     let transferred_atoms = rng.gen_range(100..1000);
 
-    let pledge_getter = |_| Ok(Some(Amount::from_atoms(staked_atoms)));
-    let delegation_balance_getter = |_| Ok(Some(Amount::from_atoms(delegated_atoms)));
+    let pos_store = InMemoryPoSAccounting::from_values(
+        BTreeMap::from_iter([(pool_id, PoolData::from(stake_pool_data.clone()))]),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::from_iter([(delegation_id, Amount::from_atoms(delegated_atoms))]),
+        BTreeMap::new(),
+    );
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
 
     let inputs = vec![
         TxInput::from_utxo(
@@ -457,8 +506,8 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
-        pledge_getter,
-        delegation_balance_getter,
+        &orders_db,
+        &pos_db,
         &inputs,
         &inputs_utxos,
     )
@@ -489,8 +538,8 @@ fn check_timelock_saturation(#[case] seed: Seed) {
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
         block_height,
-        pledge_getter,
-        delegation_balance_getter,
+        &orders_db,
+        &pos_db,
         &inputs,
         &inputs_utxos,
     )
@@ -523,8 +572,17 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
     let delegation_balance = Amount::from_atoms(rng.gen_range(100..1000));
     let overspent_amount = (delegation_balance + Amount::from_atoms(1)).unwrap();
 
-    let pledge_getter = |_| Ok(None);
-    let delegation_balance_getter = |_| Ok(Some(delegation_balance));
+    let pos_store = InMemoryPoSAccounting::from_values(
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::from_iter([(delegation_id, delegation_balance)]),
+        BTreeMap::new(),
+    );
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
 
     // it's an error to spend more the balance
     let inputs = vec![TxInput::from_account(
@@ -537,8 +595,8 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
-            pledge_getter,
-            delegation_balance_getter,
+            &orders_db,
+            &pos_db,
             &inputs,
             &inputs_utxos,
         );
@@ -568,8 +626,8 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
-            pledge_getter,
-            delegation_balance_getter,
+            &orders_db,
+            &pos_db,
             &inputs,
             &inputs_utxos,
         )
@@ -605,8 +663,8 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
             block_height,
-            pledge_getter,
-            delegation_balance_getter,
+            &orders_db,
+            &pos_db,
             &inputs,
             &inputs_utxos,
         )

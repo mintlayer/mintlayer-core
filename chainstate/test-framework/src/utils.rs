@@ -68,10 +68,26 @@ pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::IssueFungibleToken(_)
-        | TxOutput::DataDeposit(_) => None,
+        | TxOutput::DataDeposit(_)
+        | TxOutput::AnyoneCanTake(_) => None,
         TxOutput::IssueNft(token_id, _, _) => {
             Some(OutputValue::TokenV1(*token_id, Amount::from_atoms(1)))
         }
+    }
+}
+
+pub fn output_value_amount(value: &OutputValue) -> Amount {
+    match value {
+        OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => *amount,
+        OutputValue::TokenV0(_) => panic!("deprecated token version"),
+    }
+}
+
+pub fn output_value_with_amount(value: &OutputValue, amount: Amount) -> OutputValue {
+    match value {
+        OutputValue::Coin(_) => OutputValue::Coin(amount),
+        OutputValue::TokenV1(token_id, _) => OutputValue::TokenV1(*token_id, amount),
+        OutputValue::TokenV0(_) => panic!("deprecated token version"),
     }
 }
 
@@ -129,7 +145,8 @@ pub fn create_utxo_data(
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::DataDeposit(_)
-        | TxOutput::Htlc(_, _) => None,
+        | TxOutput::Htlc(_, _)
+        | TxOutput::AnyoneCanTake(_) => None,
     }
 }
 
@@ -386,7 +403,8 @@ pub fn find_create_pool_tx_in_genesis(genesis: &Genesis, pool_id: &PoolId) -> Op
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::DataDeposit(_)
-        | TxOutput::Htlc(_, _) => false,
+        | TxOutput::Htlc(_, _)
+        | TxOutput::AnyoneCanTake(_) => false,
         TxOutput::CreateStakePool(genesis_pool_id, _) => genesis_pool_id == pool_id,
     });
 

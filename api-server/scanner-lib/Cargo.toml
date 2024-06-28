@@ -15,6 +15,7 @@ constraints-value-accumulator = { path = "../../chainstate/constraints-value-acc
 logging = { path = "../../logging" }
 mempool = { path = "../../mempool" }
 node-comm = { path = "../../wallet/wallet-node-client" }
+orders-accounting = { path = "../../orders-accounting" }
 pos-accounting = { path = "../../pos-accounting" }
 randomness = { path = "../../randomness" }
 utils = { path = "../../utils" }

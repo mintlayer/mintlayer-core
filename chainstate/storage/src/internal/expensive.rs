@@ -145,4 +145,33 @@ impl<B: storage::Backend> StoreTxRo<'_, B> {
             circulating_supply,
         })
     }
+
+    #[log_error]
+    pub fn read_orders_accounting_data(
+        &self,
+    ) -> crate::Result<orders_accounting::OrdersAccountingData> {
+        let order_data = self
+            .0
+            .get::<db::DBOrdersData, _>()
+            .prefix_iter_decoded(&())?
+            .collect::<BTreeMap<_, _>>();
+
+        let ask_balances = self
+            .0
+            .get::<db::DBOrdersAskBalances, _>()
+            .prefix_iter_decoded(&())?
+            .collect::<BTreeMap<_, _>>();
+
+        let give_balances = self
+            .0
+            .get::<db::DBOrdersGiveBalances, _>()
+            .prefix_iter_decoded(&())?
+            .collect::<BTreeMap<_, _>>();
+
+        Ok(orders_accounting::OrdersAccountingData {
+            order_data,
+            ask_balances,
+            give_balances,
+        })
+    }
 }

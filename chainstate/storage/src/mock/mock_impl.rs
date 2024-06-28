@@ -24,9 +24,13 @@ use common::{
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::Transaction,
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderData, OrderId, PoolId,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
+};
+use orders_accounting::{
+    OrdersAccountingStorageRead, OrdersAccountingStorageWrite, OrdersAccountingUndo,
 };
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingUndo, PoolData,
@@ -75,6 +79,11 @@ mockall::mock! {
             &self,
             id: Id<Block>,
         ) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
+
+        fn get_orders_accounting_undo(
+            &self,
+            id: Id<Block>,
+        ) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>>;
 
         fn get_block_tree_by_height(
             &self,
@@ -160,6 +169,13 @@ mockall::mock! {
         fn get_circulating_supply(&self, id: &TokenId,) -> crate::Result<Option<Amount> >;
     }
 
+    impl OrdersAccountingStorageRead for Store {
+        type Error = crate::Error;
+        fn get_order_data(&self, id: &OrderId) -> crate::Result<Option<OrderData>>;
+        fn get_ask_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+        fn get_give_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+    }
+
     impl crate::BlockchainStorageWrite for Store {
         fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> crate::Result<()>;
         fn set_magic_bytes(&mut self, bytes: &MagicBytes) -> crate::Result<()>;
@@ -194,6 +210,13 @@ mockall::mock! {
             undo: &accounting::BlockUndo<TokenAccountingUndo>,
         ) -> crate::Result<()>;
         fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+
+        fn set_orders_accounting_undo_data(
+            &mut self,
+            id: Id<Block>,
+            undo: &accounting::BlockUndo<OrdersAccountingUndo>,
+        ) -> crate::Result<()>;
+        fn del_orders_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
         fn set_pos_accounting_undo_data(&mut self, id: Id<Block>, undo: &accounting::BlockUndo<PoSAccountingUndo>) -> crate::Result<()>;
         fn del_pos_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
@@ -307,6 +330,17 @@ mockall::mock! {
         fn del_circulating_supply(&mut self, id: &TokenId) -> crate::Result<()>;
     }
 
+    impl OrdersAccountingStorageWrite for Store {
+        fn set_order_data(&mut self, id: &OrderId, data: &OrderData) -> crate::Result<()>;
+        fn del_order_data(&mut self, id: &OrderId) -> crate::Result<()>;
+
+        fn set_ask_balance(&mut self, id: &OrderId, balance: &Amount) -> crate::Result<()>;
+        fn del_ask_balance(&mut self, id: &OrderId) -> crate::Result<()>;
+
+        fn set_give_balance(&mut self, id: &OrderId, balance: &Amount) -> crate::Result<()>;
+        fn del_give_balance(&mut self, id: &OrderId) -> crate::Result<()>;
+    }
+
     #[allow(clippy::extra_unused_lifetimes)]
     impl<'tx> crate::Transactional<'tx> for Store {
         type TransactionRo = MockStoreTxRo;
@@ -350,6 +384,8 @@ mockall::mock! {
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
         fn get_tokens_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<TokenAccountingUndo>>>;
+
+        fn get_orders_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>>;
 
         fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
 
@@ -430,6 +466,13 @@ mockall::mock! {
         fn get_circulating_supply(&self, id: &TokenId,) -> crate::Result<Option<Amount> >;
     }
 
+    impl OrdersAccountingStorageRead for StoreTxRo {
+        type Error = crate::Error;
+        fn get_order_data(&self, id: &OrderId) -> crate::Result<Option<OrderData>>;
+        fn get_ask_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+        fn get_give_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+    }
+
     impl crate::TransactionRo for StoreTxRo {
         fn close(self);
     }
@@ -469,6 +512,8 @@ mockall::mock! {
         ) -> crate::Result<BTreeMap<BlockHeight, Vec<Id<Block>>>>;
 
         fn get_pos_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<PoSAccountingUndo>>>;
+
+        fn get_orders_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<accounting::BlockUndo<OrdersAccountingUndo>>>;
 
         fn get_accounting_epoch_delta(
             &self,
@@ -547,6 +592,13 @@ mockall::mock! {
         fn get_circulating_supply(&self, id: &TokenId,) -> crate::Result<Option<Amount> >;
     }
 
+    impl OrdersAccountingStorageRead for StoreTxRw {
+        type Error = crate::Error;
+        fn get_order_data(&self, id: &OrderId) -> crate::Result<Option<OrderData>>;
+        fn get_ask_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+        fn get_give_balance(&self, id: &OrderId) -> crate::Result<Option<Amount>>;
+    }
+
     impl crate::BlockchainStorageWrite for StoreTxRw {
         fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> crate::Result<()>;
         fn set_magic_bytes(&mut self, bytes: &MagicBytes) -> crate::Result<()>;
@@ -581,6 +633,13 @@ mockall::mock! {
             undo: &accounting::BlockUndo<TokenAccountingUndo>,
         ) -> crate::Result<()>;
         fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+
+        fn set_orders_accounting_undo_data(
+            &mut self,
+            id: Id<Block>,
+            undo: &accounting::BlockUndo<OrdersAccountingUndo>,
+        ) -> crate::Result<()>;
+        fn del_orders_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 
         fn set_pos_accounting_undo_data(&mut self, id: Id<Block>, undo: &accounting::BlockUndo<PoSAccountingUndo>) -> crate::Result<()>;
         fn del_pos_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
@@ -692,6 +751,18 @@ mockall::mock! {
 
         fn set_circulating_supply(&mut self, id: &TokenId, supply: &Amount) -> crate::Result<() >;
         fn del_circulating_supply(&mut self, id: &TokenId) -> crate::Result<()>;
+    }
+
+
+    impl OrdersAccountingStorageWrite for StoreTxRw {
+        fn set_order_data(&mut self, id: &OrderId, data: &OrderData) -> crate::Result<()>;
+        fn del_order_data(&mut self, id: &OrderId) -> crate::Result<()>;
+
+        fn set_ask_balance(&mut self, id: &OrderId, balance: &Amount) -> crate::Result<()>;
+        fn del_ask_balance(&mut self, id: &OrderId) -> crate::Result<()>;
+
+        fn set_give_balance(&mut self, id: &OrderId, balance: &Amount) -> crate::Result<()>;
+        fn del_give_balance(&mut self, id: &OrderId) -> crate::Result<()>;
     }
 
     impl crate::TransactionRw for StoreTxRw {

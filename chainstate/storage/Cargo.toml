@@ -12,6 +12,7 @@ accounting = { path = "../../accounting" }
 chainstate-types = { path = "../types" }
 common = { path = "../../common" }
 logging = { path = "../../logging" }
+orders-accounting = { path = "../../orders-accounting" }
 pos-accounting = { path = "../../pos-accounting" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }

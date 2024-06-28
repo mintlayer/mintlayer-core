@@ -40,7 +40,8 @@ pub fn get_issuance_count_via_tokens_op(outputs: &[TxOutput]) -> usize {
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::DataDeposit(_)
-            | TxOutput::Htlc(_, _) => false,
+            | TxOutput::Htlc(_, _)
+            | TxOutput::AnyoneCanTake(_) => false,
             TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => true,
         })
         .count()
@@ -54,7 +55,9 @@ pub fn get_token_supply_change_count(inputs: &[TxInput]) -> usize {
             TxInput::AccountCommand(_, op) => match op {
                 AccountCommand::FreezeToken(_, _)
                 | AccountCommand::UnfreezeToken(_)
-                | AccountCommand::ChangeTokenAuthority(_, _) => false,
+                | AccountCommand::ChangeTokenAuthority(_, _)
+                | AccountCommand::ConcludeOrder(_)
+                | AccountCommand::FillOrder(_, _, _) => false,
                 AccountCommand::MintTokens(_, _)
                 | AccountCommand::UnmintTokens(_)
                 | AccountCommand::LockTokenSupply(_) => true,
@@ -79,7 +82,8 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_)
-        | TxOutput::Htlc(_, _) => false,
+        | TxOutput::Htlc(_, _)
+        | TxOutput::AnyoneCanTake(_) => false,
         TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => true,
     }
 }

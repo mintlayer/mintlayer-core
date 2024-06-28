@@ -19,12 +19,12 @@ use common::{
         output_value::OutputValue,
         signature::Signable,
         tokens::{get_tokens_issuance_count, TokenId},
-        Block, ChainConfig, DelegationId, PoolId, TokenIssuanceVersion, Transaction, TxInput,
-        TxOutput,
+        Block, ChainConfig, TokenIssuanceVersion, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, Fee, Id, Idable, Subsidy},
 };
 use constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
+use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
 
 use thiserror::Error;
@@ -75,7 +75,8 @@ pub fn calculate_tokens_burned_in_outputs(
             | TxOutput::IssueFungibleToken(_)
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::DataDeposit(_)
-            | TxOutput::Htlc(_, _) => None,
+            | TxOutput::Htlc(_, _)
+            | TxOutput::AnyoneCanTake(_) => None,
         })
         .sum::<Option<Amount>>()
         .ok_or(ConnectTransactionError::BurnAmountSumError(tx.get_id()))
@@ -146,6 +147,7 @@ pub fn check_tx_inputs_outputs_policy(
     tx: &Transaction,
     chain_config: &ChainConfig,
     block_height: BlockHeight,
+    orders_accounting_view: &impl OrdersAccountingView,
     pos_accounting_view: &impl PoSAccountingView,
     utxo_view: &impl utxo::UtxosView,
 ) -> Result<AccumulatedFee, ConnectTransactionError> {
@@ -181,26 +183,11 @@ pub fn check_tx_inputs_outputs_policy(
         })
         .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
 
-    let staker_balance_getter = |pool_id: PoolId| {
-        pos_accounting_view
-            .get_pool_data(pool_id)
-            .map_err(|_| pos_accounting::Error::ViewFail)?
-            .map(|pool_data| pool_data.staker_balance())
-            .transpose()
-            .map_err(constraints_value_accumulator::Error::PoSAccountingError)
-    };
-
-    let delegation_balance_getter = |delegation_id: DelegationId| {
-        Ok(pos_accounting_view
-            .get_delegation_balance(delegation_id)
-            .map_err(|_| pos_accounting::Error::ViewFail)?)
-    };
-
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         chain_config,
         block_height,
-        staker_balance_getter,
-        delegation_balance_getter,
+        orders_accounting_view,
+        pos_accounting_view,
         tx.inputs(),
         &inputs_utxos,
     )
@@ -243,7 +230,8 @@ fn check_issuance_fee_burn_v0(
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
                 | TxOutput::DelegateStaking(_, _)
-                | TxOutput::Htlc(_, _) => None,
+                | TxOutput::Htlc(_, _)
+                | TxOutput::AnyoneCanTake(_) => None,
             })
             .sum::<Option<Amount>>()
             .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;

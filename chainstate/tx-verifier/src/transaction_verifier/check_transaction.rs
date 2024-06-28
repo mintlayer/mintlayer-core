@@ -24,7 +24,7 @@ use common::{
         ChainConfig, HtlcActivated, SignedTransaction, TokenIssuanceVersion, Transaction,
         TransactionSize, TxOutput,
     },
-    primitives::{BlockHeight, Id, Idable},
+    primitives::{BlockHeight, CoinOrTokenId, Id, Idable},
 };
 use thiserror::Error;
 use utils::ensure;
@@ -58,6 +58,10 @@ pub enum CheckTransactionError {
     DeprecatedTokenOperationVersion(TokenIssuanceVersion, Id<Transaction>),
     #[error("Htlcs are not activated yet")]
     HtlcsAreNotActivated,
+    #[error("Orders from tx {0} are not yet activated")]
+    OrdersAreNotActivated(Id<Transaction>),
+    #[error("Orders currencies from tx {0} are the same")]
+    OrdersCurrenciesMustBeDifferent(Id<Transaction>),
 }
 
 pub fn check_transaction(
@@ -72,6 +76,7 @@ pub fn check_transaction(
     check_no_signature_size(chain_config, tx)?;
     check_data_deposit_outputs(chain_config, tx)?;
     check_htlc_outputs(chain_config, block_height, tx)?;
+    check_order_outputs(chain_config, block_height, tx)?;
     Ok(())
 }
 
@@ -156,6 +161,17 @@ fn check_tokens_tx(
                     OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
                     OutputValue::TokenV0(_) => true,
                 },
+                TxOutput::AnyoneCanTake(data) => {
+                    let ask_token_v0 = match data.ask() {
+                        OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
+                        OutputValue::TokenV0(_) => true,
+                    };
+                    let give_token_v0 = match data.ask() {
+                        OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
+                        OutputValue::TokenV0(_) => true,
+                    };
+                    ask_token_v0 || give_token_v0
+                }
                 TxOutput::CreateStakePool(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::CreateDelegationId(_, _)
@@ -201,7 +217,8 @@ fn check_tokens_tx(
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::DataDeposit(_)
-            | TxOutput::Htlc(_, _) => Ok(()),
+            | TxOutput::Htlc(_, _)
+            | TxOutput::AnyoneCanTake(_) => Ok(()),
         })
         .map_err(CheckTransactionError::TokensError)?;
 
@@ -254,7 +271,8 @@ fn check_data_deposit_outputs(
             | TxOutput::DelegateStaking(..)
             | TxOutput::IssueFungibleToken(..)
             | TxOutput::IssueNft(..)
-            | TxOutput::Htlc(_, _) => { /* Do nothing */ }
+            | TxOutput::Htlc(_, _)
+            | TxOutput::AnyoneCanTake(..) => { /* Do nothing */ }
             TxOutput::DataDeposit(v) => {
                 // Ensure the size of the data doesn't exceed the max allowed
                 if v.len() > chain_config.data_deposit_max_size() {
@@ -295,12 +313,60 @@ fn check_htlc_outputs(
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::IssueNft(_, _, _)
-                | TxOutput::DataDeposit(_) => false,
+                | TxOutput::DataDeposit(_)
+                | TxOutput::AnyoneCanTake(_) => false,
                 TxOutput::Htlc(_, _) => true,
             });
 
             ensure!(!htlc_output, CheckTransactionError::HtlcsAreNotActivated);
         }
     };
+    Ok(())
+}
+
+fn check_order_outputs(
+    chain_config: &ChainConfig,
+    block_height: BlockHeight,
+    tx: &SignedTransaction,
+) -> Result<(), CheckTransactionError> {
+    for output in tx.outputs() {
+        match output {
+            TxOutput::Transfer(..)
+            | TxOutput::LockThenTransfer(..)
+            | TxOutput::Burn(..)
+            | TxOutput::CreateStakePool(..)
+            | TxOutput::ProduceBlockFromStake(..)
+            | TxOutput::CreateDelegationId(..)
+            | TxOutput::DelegateStaking(..)
+            | TxOutput::IssueFungibleToken(..)
+            | TxOutput::IssueNft(..)
+            | TxOutput::DataDeposit(..)
+            | TxOutput::Htlc(..) => { /* Do nothing */ }
+            TxOutput::AnyoneCanTake(data) => {
+                let orders_activated = chain_config
+                    .chainstate_upgrades()
+                    .version_at_height(block_height)
+                    .1
+                    .orders_activated();
+                match orders_activated {
+                    common::chain::OrdersActivated::Yes => {
+                        ensure!(
+                            CoinOrTokenId::from_output_value(data.ask())
+                                != CoinOrTokenId::from_output_value(data.give()),
+                            CheckTransactionError::OrdersCurrenciesMustBeDifferent(
+                                tx.transaction().get_id()
+                            )
+                        )
+                    }
+                    common::chain::OrdersActivated::No => {
+                        return Err(CheckTransactionError::OrdersAreNotActivated(
+                            tx.transaction().get_id(),
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
     Ok(())
 }

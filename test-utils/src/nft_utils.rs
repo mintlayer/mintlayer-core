@@ -56,12 +56,34 @@ pub fn random_token_issuance_v1(
     let max_dec_count = chain_config.token_max_dec_count();
     let max_uri_len = chain_config.token_max_uri_len();
 
+    let _fix_code_below_if_enum_changes = |supply: TokenTotalSupply| match supply {
+        TokenTotalSupply::Fixed(_) => unreachable!(),
+        TokenTotalSupply::Lockable => unreachable!(),
+        TokenTotalSupply::Unlimited => unreachable!(),
+    };
+
+    let supply = match rng.gen_range(0..3) {
+        0 => {
+            let supply = Amount::from_atoms(rng.gen_range(1..1_000_000));
+            TokenTotalSupply::Fixed(supply)
+        }
+        1 => TokenTotalSupply::Lockable,
+        2 => TokenTotalSupply::Unlimited,
+        _ => unreachable!(),
+    };
+
+    let is_freezable = if rng.gen::<bool>() {
+        IsTokenFreezable::Yes
+    } else {
+        IsTokenFreezable::No
+    };
+
     TokenIssuanceV1 {
         token_ticker: random_ascii_alphanumeric_string(rng, 1..max_ticker_len).as_bytes().to_vec(),
         number_of_decimals: rng.gen_range(1..max_dec_count),
         metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
-        total_supply: TokenTotalSupply::Lockable,
-        is_freezable: IsTokenFreezable::Yes,
+        total_supply: supply,
+        is_freezable,
         authority,
     }
 }

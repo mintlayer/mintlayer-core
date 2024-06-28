@@ -558,7 +558,8 @@ impl OutputCache {
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::IssueFungibleToken(_)
-            | TxOutput::Htlc(_, _) => false,
+            | TxOutput::Htlc(_, _)
+            | TxOutput::AnyoneCanTake(_) => false,
         }
     }
 
@@ -668,7 +669,9 @@ impl OutputCache {
                 | AccountCommand::UnmintTokens(_)
                 | AccountCommand::LockTokenSupply(_)
                 | AccountCommand::ChangeTokenAuthority(_, _)
-                | AccountCommand::UnfreezeToken(_) => None,
+                | AccountCommand::UnfreezeToken(_)
+                | AccountCommand::ConcludeOrder(_)
+                | AccountCommand::FillOrder(_, _, _) => None,
                 AccountCommand::FreezeToken(frozen_token_id, _) => Some(frozen_token_id),
             },
         });
@@ -718,6 +721,8 @@ impl OutputCache {
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::ProduceBlockFromStake(_, _) => false,
+                    // TODO(orders)
+                    TxOutput::AnyoneCanTake(_) => unimplemented!(),
                 }
             }),
             TxInput::AccountCommand(_, cmd) => match cmd {
@@ -727,6 +732,9 @@ impl OutputCache {
                 | AccountCommand::UnfreezeToken(token_id)
                 | AccountCommand::ChangeTokenAuthority(token_id, _)
                 | AccountCommand::UnmintTokens(token_id) => frozen_token_id == token_id,
+                // TODO(orders)
+                AccountCommand::ConcludeOrder(_) => unimplemented!(),
+                AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
             TxInput::Account(_) => false,
         })
@@ -829,6 +837,8 @@ impl OutputCache {
                     }
                 }
                 TxOutput::IssueNft(_, _, _) => {}
+                // TODO(orders)
+                TxOutput::AnyoneCanTake(_) => unimplemented!(),
             };
         }
         Ok(())
@@ -917,6 +927,9 @@ impl OutputCache {
                             self.token_issuance.insert(*token_id, data);
                         }
                     }
+                    // TODO(orders)
+                    AccountCommand::ConcludeOrder(_) => unimplemented!(),
+                    AccountCommand::FillOrder(_, _, _) => unimplemented!(),
                 },
             }
         }
@@ -1017,6 +1030,9 @@ impl OutputCache {
                                 data.unconfirmed_txs.remove(tx_id);
                             }
                         }
+                        // TODO(orders)
+                        AccountCommand::ConcludeOrder(_) => unimplemented!(),
+                        AccountCommand::FillOrder(_, _, _) => unimplemented!(),
                     },
                 }
             }
@@ -1042,6 +1058,8 @@ impl OutputCache {
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::Htlc(_, _) => {}
+                    // TODO(orders)
+                    TxOutput::AnyoneCanTake(_) => unimplemented!(),
                 }
             }
         }
@@ -1305,6 +1323,9 @@ impl OutputCache {
                                                 data.unconfirmed_txs.remove(&tx_id.into());
                                             }
                                         }
+                                        // TODO(orders)
+                                        AccountCommand::ConcludeOrder(_) => unimplemented!(),
+                                        AccountCommand::FillOrder(_, _, _) => unimplemented!(),
                                     },
                                 }
                             }
@@ -1364,7 +1385,8 @@ impl OutputCache {
                     | TxOutput::Burn(_)
                     | TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::Htlc(_, _) => None,
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::AnyoneCanTake(_) => None,
                     TxOutput::ProduceBlockFromStake(_, pool_id)
                     | TxOutput::CreateStakePool(pool_id, _) => {
                         self.pools.get(pool_id).and_then(|pool_data| {
@@ -1407,7 +1429,8 @@ fn is_v0_token_output(output: &TxOutput) -> bool {
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::DataDeposit(_)
-        | TxOutput::ProduceBlockFromStake(_, _) => false,
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::AnyoneCanTake(_) => false,
     }
 }
 
@@ -1509,6 +1532,9 @@ fn apply_freeze_mutations_from_tx(
                 | AccountCommand::UnmintTokens(_)
                 | AccountCommand::LockTokenSupply(_)
                 | AccountCommand::ChangeTokenAuthority(_, _) => {}
+                // TODO(orders)
+                AccountCommand::ConcludeOrder(_) => unimplemented!(),
+                AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
         }
     }
@@ -1548,6 +1574,9 @@ fn apply_total_supply_mutations_from_tx(
                 AccountCommand::FreezeToken(_, _)
                 | AccountCommand::UnfreezeToken(_)
                 | AccountCommand::ChangeTokenAuthority(_, _) => {}
+                // TODO(orders)
+                AccountCommand::ConcludeOrder(_) => unimplemented!(),
+                AccountCommand::FillOrder(_, _, _) => unimplemented!(),
             },
         }
     }

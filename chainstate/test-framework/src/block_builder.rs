@@ -37,6 +37,7 @@ use common::{
 };
 use crypto::key::PrivateKey;
 use itertools::Itertools;
+use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::{InMemoryPoSAccounting, PoSAccountingDB};
 use randomness::{CryptoRng, Rng};
 use serialization::Encode;
@@ -58,6 +59,7 @@ pub struct BlockBuilder<'f> {
     account_nonce_tracker: BTreeMap<AccountType, AccountNonce>,
     tokens_accounting_store: InMemoryTokensAccounting,
     pos_accounting_store: InMemoryPoSAccounting,
+    orders_accounting_store: InMemoryOrdersAccounting,
 }
 
 impl<'f> BlockBuilder<'f> {
@@ -91,6 +93,18 @@ impl<'f> BlockBuilder<'f> {
             .unwrap();
         let pos_accounting_store = InMemoryPoSAccounting::from_data(all_pos_accounting_data);
 
+        let all_orders_data = framework
+            .storage
+            .transaction_ro()
+            .unwrap()
+            .read_orders_accounting_data()
+            .unwrap();
+        let orders_accounting_store = InMemoryOrdersAccounting::from_values(
+            all_orders_data.order_data,
+            all_orders_data.ask_balances,
+            all_orders_data.give_balances,
+        );
+
         Self {
             framework,
             transactions,
@@ -104,6 +118,7 @@ impl<'f> BlockBuilder<'f> {
             account_nonce_tracker,
             tokens_accounting_store,
             pos_accounting_store,
+            orders_accounting_store,
         }
     }
 
@@ -124,6 +139,7 @@ impl<'f> BlockBuilder<'f> {
         mut self,
         rng: &mut (impl Rng + CryptoRng),
         support_htlc: bool,
+        support_orders: bool,
     ) -> Self {
         let utxo_set = self
             .framework
@@ -144,15 +160,17 @@ impl<'f> BlockBuilder<'f> {
             })
         });
 
-        let (tx, new_tokens_delta, new_pos_accounting_delta) =
+        let (tx, new_tokens_delta, new_pos_accounting_delta, new_orders_accounting_delta) =
             super::random_tx_maker::RandomTxMaker::new(
                 &self.framework.chainstate,
                 &utxo_set,
                 &self.tokens_accounting_store,
                 &self.pos_accounting_store,
+                &self.orders_accounting_store,
                 None,
                 account_nonce_getter,
                 support_htlc,
+                support_orders,
             )
             .make(
                 rng,
@@ -165,8 +183,10 @@ impl<'f> BlockBuilder<'f> {
             // spending destinations could change
             let tokens_db = TokensAccountingDB::new(&self.tokens_accounting_store);
             let pos_db = PoSAccountingDB::new(&self.pos_accounting_store);
-            let destination_getter =
-                SignatureDestinationGetter::new_for_transaction(&tokens_db, &pos_db, &utxo_set);
+            let orders_db = OrdersAccountingDB::new(&self.orders_accounting_store);
+            let destination_getter = SignatureDestinationGetter::new_for_transaction(
+                &tokens_db, &pos_db, &orders_db, &utxo_set,
+            );
             let witnesses = sign_witnesses(
                 rng,
                 &self.framework.key_manager,
@@ -180,6 +200,10 @@ impl<'f> BlockBuilder<'f> {
             // flush new tokens info to the in-memory store
             let mut tokens_db = TokensAccountingDB::new(&mut self.tokens_accounting_store);
             tokens_db.merge_with_delta(new_tokens_delta).unwrap();
+
+            // flush new orders info to the in-memory store
+            let mut orders_db = OrdersAccountingDB::new(&mut self.orders_accounting_store);
+            orders_db.merge_with_delta(new_orders_accounting_delta).unwrap();
 
             // flush new pos accounting info to the in-memory store
             let mut pos_db = PoSAccountingDB::new(&mut self.pos_accounting_store);

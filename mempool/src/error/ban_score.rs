@@ -130,6 +130,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::RewardDistributionError(err) => err.mempool_ban_score(),
             ConnectTransactionError::CheckTransactionError(err) => err.mempool_ban_score(),
             ConnectTransactionError::InputCheck(err) => err.mempool_ban_score(),
+            ConnectTransactionError::OrdersAccountingError(err) => err.mempool_ban_score(),
 
             // Transaction definitely invalid, ban peer
             ConnectTransactionError::RewardAdditionError(_) => 100,
@@ -140,6 +141,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,
             ConnectTransactionError::AttemptToCreateStakePoolFromAccounts => 100,
             ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
+            ConnectTransactionError::AttemptToCreateOrderFromAccounts => 100,
             ConnectTransactionError::TotalFeeRequiredOverflow => 100,
             ConnectTransactionError::InsufficientCoinsFee(_, _) => 100,
 
@@ -194,11 +196,13 @@ impl MempoolBanScore for mintscript::translate::TranslationError {
             | Self::IllegalOutputSpend
             | Self::PoolNotFound(_)
             | Self::DelegationNotFound(_)
-            | Self::TokenNotFound(_) => 100,
+            | Self::TokenNotFound(_)
+            | Self::OrderNotFound(_) => 100,
 
             Self::SignatureError(_) => 100,
             Self::PoSAccounting(e) => e.ban_score(),
             Self::TokensAccounting(e) => e.ban_score(),
+            Self::OrdersAccounting(e) => e.ban_score(),
         }
     }
 }
@@ -249,6 +253,8 @@ impl MempoolBanScore for SignatureDestinationGetterError {
             SignatureDestinationGetterError::UtxoViewError(_) => 0,
             SignatureDestinationGetterError::TokenDataNotFound(_) => 0,
             SignatureDestinationGetterError::TokensAccountingViewError(_) => 100,
+            SignatureDestinationGetterError::OrdersAccountingViewError(_) => 100,
+            SignatureDestinationGetterError::OrderDataNotFound(_) => 0,
         }
     }
 }
@@ -261,6 +267,7 @@ impl MempoolBanScore for TransactionVerifierStorageError {
             TransactionVerifierStorageError::UtxoError(err) => err.mempool_ban_score(),
             TransactionVerifierStorageError::PoSAccountingError(err) => err.mempool_ban_score(),
             TransactionVerifierStorageError::TokensAccountingError(err) => err.mempool_ban_score(),
+            TransactionVerifierStorageError::OrdersAccountingError(err) => err.mempool_ban_score(),
 
             // Should not happen in mempool (no undos, no block processing, internal errors)
             TransactionVerifierStorageError::GetAncestorError(_) => 0,
@@ -480,6 +487,41 @@ impl MempoolBanScore for CheckTransactionError {
             CheckTransactionError::TxSizeTooLarge(_, _, _) => 100,
             CheckTransactionError::DeprecatedTokenOperationVersion(_, _) => 100,
             CheckTransactionError::HtlcsAreNotActivated => 100,
+            CheckTransactionError::OrdersAreNotActivated(_) => 100,
+            CheckTransactionError::OrdersCurrenciesMustBeDifferent(_) => 100,
+        }
+    }
+}
+
+impl MempoolBanScore for orders_accounting::Error {
+    fn mempool_ban_score(&self) -> u32 {
+        use orders_accounting::Error;
+
+        match self {
+            Error::StorageError(_) => 0,
+            Error::AccountingError(_) => 100,
+            Error::OrderAlreadyExists(_) => 100,
+            Error::OrderDataNotFound(_) => 0,
+            Error::OrderAskBalanceNotFound(_) => 0,
+            Error::OrderGiveBalanceNotFound(_) => 0,
+            Error::OrderWithZeroValue(_) => 100,
+            Error::InvariantOrderDataNotFoundForUndo(_) => 100,
+            Error::InvariantOrderAskBalanceNotFoundForUndo(_) => 100,
+            Error::InvariantOrderAskBalanceChangedForUndo(_) => 100,
+            Error::InvariantOrderGiveBalanceNotFoundForUndo(_) => 100,
+            Error::InvariantOrderGiveBalanceChangedForUndo(_) => 100,
+            Error::InvariantOrderDataExistForConcludeUndo(_) => 100,
+            Error::InvariantOrderAskBalanceExistForConcludeUndo(_) => 100,
+            Error::InvariantOrderGiveBalanceExistForConcludeUndo(_) => 100,
+            Error::InvariantNonzeroAskBalanceForMissingOrder(_) => 100,
+            Error::InvariantNonzeroGiveBalanceForMissingOrder(_) => 100,
+            Error::CurrencyMismatch => 100,
+            Error::OrderOverflow(_) => 100,
+            Error::OrderOverbid(_, _, _) => 100,
+            Error::AttemptedConcludeNonexistingOrderData(_) => 0,
+            Error::UnsupportedTokenVersion => 100,
+            Error::ViewFail => 0,
+            Error::StorageWrite => 0,
         }
     }
 }

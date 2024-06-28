@@ -16,6 +16,7 @@ crypto = { path = "../crypto" }
 logging = { path = "../logging" }
 mempool-types = { path = "types" }
 mintscript = { path = "../mintscript" }
+orders-accounting = { path = "../orders-accounting" }
 p2p-types = { path = "../p2p/types" }
 pos-accounting = { path = "../pos-accounting" }
 rpc = { path = "../rpc" }

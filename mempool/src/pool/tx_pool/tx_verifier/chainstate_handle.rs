@@ -27,10 +27,12 @@ use chainstate_types::storage_result;
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, DelegationId, GenBlock, PoolId, Transaction, UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, GenBlock, OrderData, OrderId, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
+use orders_accounting::{OrdersAccountingStorageRead, OrdersAccountingUndo, OrdersAccountingView};
 use pos_accounting::{DelegationData, PoSAccountingUndo, PoSAccountingView, PoolData};
 use subsystem::blocking::BlockingHandle;
 use tokens_accounting::{TokenAccountingUndo, TokensAccountingStorageRead, TokensAccountingView};
@@ -55,6 +57,12 @@ impl From<pos_accounting::Error> for Error {
 
 impl From<tokens_accounting::Error> for Error {
     fn from(e: tokens_accounting::Error) -> Self {
+        Error::from(ChainstateError::from(chainstate::BlockError::from(e)))
+    }
+}
+
+impl From<orders_accounting::Error> for Error {
+    fn from(e: orders_accounting::Error) -> Self {
         Error::from(ChainstateError::from(chainstate::BlockError::from(e)))
     }
 }
@@ -236,6 +244,13 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
     ) -> Result<Option<CachedBlockUndo<TokenAccountingUndo>>, Error> {
         Ok(None)
     }
+
+    fn get_orders_accounting_undo(
+        &self,
+        _source: TransactionSource,
+    ) -> Result<Option<CachedBlockUndo<OrdersAccountingUndo>>, Error> {
+        Ok(None)
+    }
 }
 
 impl UtxosView for ChainstateHandle {
@@ -290,5 +305,43 @@ impl TokensAccountingStorageRead for ChainstateHandle {
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
         let id = *id;
         self.call(move |c| c.get_token_circulating_supply(&id))
+    }
+}
+
+impl OrdersAccountingView for ChainstateHandle {
+    type Error = Error;
+
+    fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
+        let id = *id;
+        self.call(move |c| c.get_order_data(&id))
+    }
+
+    fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        let id = *id;
+        self.call(move |c| c.get_order_ask_balance(&id))
+    }
+
+    fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        let id = *id;
+        self.call(move |c| c.get_order_give_balance(&id))
+    }
+}
+
+impl OrdersAccountingStorageRead for ChainstateHandle {
+    type Error = Error;
+
+    fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error> {
+        let id = *id;
+        self.call(move |c| c.get_order_data(&id))
+    }
+
+    fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        let id = *id;
+        self.call(move |c| c.get_order_ask_balance(&id))
+    }
+
+    fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+        let id = *id;
+        self.call(move |c| c.get_order_give_balance(&id))
     }
 }

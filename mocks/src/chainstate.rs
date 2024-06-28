@@ -26,7 +26,8 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, PoolId, TxInput, UtxoOutPoint,
+        AccountNonce, AccountType, ChainConfig, DelegationId, OrderData, OrderId, PoolId, TxInput,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -198,6 +199,10 @@ mockall::mock! {
             &self,
             account: AccountType,
         ) -> Result<Option<AccountNonce>, ChainstateError>;
+
+        fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, ChainstateError>;
+        fn get_order_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, ChainstateError>;
+        fn get_order_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, ChainstateError>;
     }
 }
 

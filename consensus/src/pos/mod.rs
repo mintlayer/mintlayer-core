@@ -165,7 +165,8 @@ where
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::DataDeposit(_)
-        | TxOutput::Htlc(_, _) => {
+        | TxOutput::Htlc(_, _)
+        | TxOutput::AnyoneCanTake(_) => {
             // only pool outputs can be staked
             return Err(ConsensusPoSError::RandomnessError(
                 PoSRandomnessError::InvalidOutputTypeInStakeKernel(header.get_id()),

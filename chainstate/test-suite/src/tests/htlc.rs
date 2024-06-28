@@ -39,7 +39,8 @@ use common::{
         timelock::OutputTimeLock,
         tokens::{make_token_id, TokenData, TokenIssuance, TokenTransfer},
         AccountCommand, AccountNonce, ChainConfig, ChainstateUpgrade, Destination, HtlcActivated,
-        RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion, TxInput, TxOutput,
+        OrdersActivated, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
+        TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -594,6 +595,7 @@ fn fork_activation(#[case] seed: Seed) {
                                     RewardDistributionVersion::V1,
                                     TokensFeeVersion::V1,
                                     HtlcActivated::No,
+                                    OrdersActivated::No,
                                 ),
                             ),
                             (
@@ -603,6 +605,7 @@ fn fork_activation(#[case] seed: Seed) {
                                     RewardDistributionVersion::V1,
                                     TokensFeeVersion::V1,
                                     HtlcActivated::Yes,
+                                    OrdersActivated::No,
                                 ),
                             ),
                         ])
@@ -691,6 +694,7 @@ fn spend_tokens(#[case] seed: Seed) {
                                     RewardDistributionVersion::V1,
                                     TokensFeeVersion::V1,
                                     HtlcActivated::Yes,
+                                    OrdersActivated::Yes,
                                 ),
                             ),
                             (
@@ -700,6 +704,7 @@ fn spend_tokens(#[case] seed: Seed) {
                                     RewardDistributionVersion::V1,
                                     TokensFeeVersion::V1,
                                     HtlcActivated::Yes,
+                                    OrdersActivated::Yes,
                                 ),
                             ),
                         ])

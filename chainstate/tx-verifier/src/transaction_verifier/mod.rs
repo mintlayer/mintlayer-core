@@ -30,6 +30,10 @@ pub mod tokens_check;
 mod tx_source;
 use accounting::BlockRewardUndo;
 use constraints_value_accumulator::AccumulatedFee;
+use orders_accounting::{
+    OrdersAccountingCache, OrdersAccountingDB, OrdersAccountingDeltaData,
+    OrdersAccountingOperations, OrdersAccountingUndo, OrdersAccountingView,
+};
 use tokens_accounting::{
     TokenAccountingUndo, TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
     TokensAccountingOperations, TokensAccountingStorageRead, TokensAccountingView,
@@ -64,6 +68,7 @@ use chainstate_types::BlockIndex;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
+        make_order_id,
         output_value::OutputValue,
         signature::Signable,
         signed_transaction::SignedTransaction,
@@ -92,6 +97,9 @@ pub struct TransactionVerifierDelta {
     tokens_accounting_delta: TokensAccountingDeltaData,
     tokens_accounting_delta_undo:
         BTreeMap<TransactionSource, CachedBlockUndoOp<TokenAccountingUndo>>,
+    orders_accounting_delta: OrdersAccountingDeltaData,
+    orders_accounting_delta_undo:
+        BTreeMap<TransactionSource, CachedBlockUndoOp<OrdersAccountingUndo>>,
 }
 
 impl TransactionVerifierDelta {
@@ -101,7 +109,7 @@ impl TransactionVerifierDelta {
 }
 
 /// The tool used to verify transactions and cache their updated states in memory
-pub struct TransactionVerifier<C, S, U, A, T> {
+pub struct TransactionVerifier<C, S, U, A, T, O> {
     chain_config: C,
     storage: S,
     best_block: Id<GenBlock>,
@@ -117,11 +125,14 @@ pub struct TransactionVerifier<C, S, U, A, T> {
     tokens_accounting_cache: TokensAccountingCache<T>,
     tokens_accounting_block_undo: AccountingBlockUndoCache<TokenAccountingUndo>,
 
+    orders_accounting_cache: OrdersAccountingCache<O>,
+    orders_accounting_block_undo: AccountingBlockUndoCache<OrdersAccountingUndo>,
+
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
 }
 
 impl<C, S: TransactionVerifierStorageRef + ShallowClone>
-    TransactionVerifier<C, S, UtxosDB<S>, S, TokensAccountingDB<S>>
+    TransactionVerifier<C, S, UtxosDB<S>, S, TokensAccountingDB<S>, OrdersAccountingDB<S>>
 {
     pub fn new(storage: S, chain_config: C) -> Self {
         let accounting_delta_adapter = PoSAccountingDeltaAdapter::new(storage.shallow_clone());
@@ -132,6 +143,8 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone>
             .expect("Database error while reading utxos best block");
         let tokens_accounting_cache =
             TokensAccountingCache::new(TokensAccountingDB::new(storage.shallow_clone()));
+        let orders_accounting_cache =
+            OrdersAccountingCache::new(OrdersAccountingDB::new(storage.shallow_clone()));
         Self {
             storage,
             chain_config,
@@ -143,17 +156,20 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone>
             pos_accounting_block_undo: AccountingBlockUndoCache::<PoSAccountingUndo>::new(),
             tokens_accounting_cache,
             tokens_accounting_block_undo: AccountingBlockUndoCache::<TokenAccountingUndo>::new(),
+            orders_accounting_cache,
+            orders_accounting_block_undo: AccountingBlockUndoCache::<OrdersAccountingUndo>::new(),
             account_nonce: BTreeMap::new(),
         }
     }
 }
 
-impl<C, S, U, A, T> TransactionVerifier<C, S, U, A, T>
+impl<C, S, U, A, T, O> TransactionVerifier<C, S, U, A, T, O>
 where
     S: TransactionVerifierStorageRef,
     U: UtxosView + Send + Sync,
     A: PoSAccountingView + Send + Sync,
     T: TokensAccountingView + Send + Sync,
+    O: OrdersAccountingView + Send + Sync,
 {
     pub fn new_generic(
         storage: S,
@@ -161,6 +177,7 @@ where
         utxos: U,
         accounting: A,
         tokens_accounting: T,
+        orders_accounting: O,
     ) -> Self {
         // TODO: both "expect"s in this function may fire when exiting the node-gui app;
         // get rid of them and return a proper Result.
@@ -179,29 +196,33 @@ where
             pos_accounting_block_undo: AccountingBlockUndoCache::<PoSAccountingUndo>::new(),
             tokens_accounting_cache: TokensAccountingCache::new(tokens_accounting),
             tokens_accounting_block_undo: AccountingBlockUndoCache::<TokenAccountingUndo>::new(),
+            orders_accounting_cache: OrdersAccountingCache::new(orders_accounting),
+            orders_accounting_block_undo: AccountingBlockUndoCache::<OrdersAccountingUndo>::new(),
             account_nonce: BTreeMap::new(),
         }
     }
 }
 
-impl<C, S, U, A, T> TransactionVerifier<C, S, U, A, T>
+type DerivedTxVerifier<'a, C, S, U, A, T, O> = TransactionVerifier<
+    &'a ChainConfig,
+    &'a TransactionVerifier<C, S, U, A, T, O>,
+    &'a UtxosCache<U>,
+    &'a PoSAccountingDelta<A>,
+    &'a TokensAccountingCache<T>,
+    &'a OrdersAccountingCache<O>,
+>;
+
+impl<C, S, U, A, T, O> TransactionVerifier<C, S, U, A, T, O>
 where
     C: AsRef<ChainConfig>,
     S: TransactionVerifierStorageRef,
     U: UtxosView,
     A: PoSAccountingView,
     T: TokensAccountingView,
+    O: OrdersAccountingView,
     <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {
-    pub fn derive_child(
-        &self,
-    ) -> TransactionVerifier<
-        &ChainConfig,
-        &Self,
-        &UtxosCache<U>,
-        &PoSAccountingDelta<A>,
-        &TokensAccountingCache<T>,
-    > {
+    pub fn derive_child(&self) -> DerivedTxVerifier<C, S, U, A, T, O> {
         TransactionVerifier {
             storage: self,
             chain_config: self.chain_config.as_ref(),
@@ -214,6 +235,8 @@ where
             pos_accounting_block_undo: AccountingBlockUndoCache::<PoSAccountingUndo>::new(),
             tokens_accounting_cache: TokensAccountingCache::new(&self.tokens_accounting_cache),
             tokens_accounting_block_undo: AccountingBlockUndoCache::<TokenAccountingUndo>::new(),
+            orders_accounting_cache: OrdersAccountingCache::new(&self.orders_accounting_cache),
+            orders_accounting_block_undo: AccountingBlockUndoCache::<OrdersAccountingUndo>::new(),
             best_block: self.best_block,
             account_nonce: BTreeMap::new(),
         }
@@ -303,7 +326,8 @@ where
             | TxOutput::IssueFungibleToken(_)
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::DataDeposit(_)
-            | TxOutput::Htlc(_, _) => Ok(None),
+            | TxOutput::Htlc(_, _)
+            | TxOutput::AnyoneCanTake(_) => Ok(None),
         }
     }
 
@@ -423,7 +447,8 @@ where
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
-                | TxOutput::Htlc(_, _) => None,
+                | TxOutput::Htlc(_, _)
+                | TxOutput::AnyoneCanTake(_) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -472,6 +497,8 @@ where
         self.disconnect_pos_accounting_outputs(tx_source, tx)?;
 
         self.disconnect_tokens_accounting_outputs(tx_source, tx)?;
+
+        self.disconnect_orders_accounting_outputs(tx_source, tx)?;
 
         Ok(())
     }
@@ -583,6 +610,7 @@ where
                             });
                         Some(res)
                     }
+                    AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
                 },
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -600,7 +628,8 @@ where
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
-                | TxOutput::Htlc(_, _) => None,
+                | TxOutput::Htlc(_, _)
+                | TxOutput::AnyoneCanTake(_) => None,
                 TxOutput::IssueFungibleToken(issuance_data) => {
                     let result = make_token_id(tx.inputs())
                         .ok_or(ConnectTransactionError::TokensError(
@@ -672,7 +701,8 @@ where
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::IssueNft(_, _, _)
                     | TxOutput::DataDeposit(_)
-                    | TxOutput::Htlc(_, _) => Ok(()),
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::AnyoneCanTake(_) => Ok(()),
                 }
             })
     }
@@ -704,6 +734,119 @@ where
         Ok(())
     }
 
+    fn connect_orders_outputs(
+        &mut self,
+        tx_source: &TransactionSourceForConnect,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
+        let input_undos = tx
+            .inputs()
+            .iter()
+            .filter_map(|input| match input {
+                TxInput::Utxo(_) | TxInput::Account(_) => None,
+                TxInput::AccountCommand(nonce, account_op) => match account_op {
+                    AccountCommand::MintTokens(..)
+                    | AccountCommand::UnmintTokens(..)
+                    | AccountCommand::LockTokenSupply(..)
+                    | AccountCommand::FreezeToken(..)
+                    | AccountCommand::UnfreezeToken(..)
+                    | AccountCommand::ChangeTokenAuthority(..) => None,
+                    AccountCommand::ConcludeOrder(order_id) => {
+                        let res = self
+                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .and_then(|_| {
+                                self.orders_accounting_cache
+                                    .conclude_order(*order_id)
+                                    .map_err(ConnectTransactionError::OrdersAccountingError)
+                            });
+                        Some(res)
+                    }
+                    AccountCommand::FillOrder(order_id, fill, _) => {
+                        let res = self
+                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .and_then(|_| {
+                                self.orders_accounting_cache
+                                    .fill_order(*order_id, fill.clone())
+                                    .map_err(ConnectTransactionError::OrdersAccountingError)
+                            });
+                        Some(res)
+                    }
+                },
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let input_utxo_outpoint = tx.inputs().iter().find_map(|input| input.utxo_outpoint());
+        let output_undos = tx
+            .outputs()
+            .iter()
+            .filter_map(|output| match output {
+                TxOutput::Transfer(..)
+                | TxOutput::Burn(..)
+                | TxOutput::CreateStakePool(..)
+                | TxOutput::ProduceBlockFromStake(..)
+                | TxOutput::CreateDelegationId(..)
+                | TxOutput::DelegateStaking(..)
+                | TxOutput::LockThenTransfer(..)
+                | TxOutput::IssueNft(..)
+                | TxOutput::DataDeposit(..)
+                | TxOutput::IssueFungibleToken(..)
+                | TxOutput::Htlc(_, _) => None,
+                TxOutput::AnyoneCanTake(order_data) => match input_utxo_outpoint {
+                    Some(input_utxo_outpoint) => {
+                        let order_id = make_order_id(input_utxo_outpoint);
+                        let result = self
+                            .orders_accounting_cache
+                            .create_order(order_id, *order_data.clone())
+                            .map_err(ConnectTransactionError::OrdersAccountingError);
+                        Some(result)
+                    }
+                    None => Some(Err(
+                        ConnectTransactionError::AttemptToCreateOrderFromAccounts,
+                    )),
+                },
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Store accounting operations undos
+        if !input_undos.is_empty() || !output_undos.is_empty() {
+            let tx_undos = input_undos.into_iter().chain(output_undos).collect();
+            self.orders_accounting_block_undo.add_tx_undo(
+                TransactionSource::from(tx_source),
+                tx.get_id(),
+                accounting::TxUndo::new(tx_undos),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn disconnect_orders_accounting_outputs(
+        &mut self,
+        tx_source: TransactionSource,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
+        // apply undos to accounting
+        let block_undo_fetcher = |tx_source: TransactionSource| {
+            self.storage
+                .get_orders_accounting_undo(tx_source)
+                .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+        };
+        let undos = self.orders_accounting_block_undo.take_tx_undo(
+            &tx_source,
+            &tx.get_id(),
+            block_undo_fetcher,
+        )?;
+        if let Some(undos) = undos {
+            undos
+                .into_inner()
+                .into_iter()
+                .rev()
+                .try_for_each(|undo| self.orders_accounting_cache.undo(undo))?;
+        }
+
+        Ok(())
+    }
+
     pub fn connect_transaction(
         &mut self,
         tx_source: &TransactionSourceForConnect,
@@ -730,6 +873,7 @@ where
             tx.transaction(),
             self.chain_config.as_ref(),
             tx_source.expected_block_height(),
+            &self.orders_accounting_cache,
             &self.pos_accounting_adapter.accounting_delta(),
             &self.utxo_cache,
         )?;
@@ -739,6 +883,8 @@ where
         self.connect_pos_accounting_outputs(tx_source, tx.transaction())?;
 
         self.connect_tokens_outputs(tx_source, tx.transaction())?;
+
+        self.connect_orders_outputs(tx_source, tx.transaction())?;
 
         // spend utxos
         let tx_undo = self
@@ -957,7 +1103,11 @@ where
         median_time_past: BlockTimestamp,
     ) -> Result<(), input_check::InputCheckError>
     where
-        Tx: input_check::FullyVerifiable<PoSAccountingDelta<A>, TokensAccountingCache<T>>,
+        Tx: input_check::FullyVerifiable<
+            PoSAccountingDelta<A>,
+            TokensAccountingCache<T>,
+            OrdersAccountingCache<O>,
+        >,
     {
         input_check::verify_full(
             tx,
@@ -965,6 +1115,7 @@ where
             &self.utxo_cache,
             self.pos_accounting_adapter.accounting_delta(),
             &self.tokens_accounting_cache,
+            &self.orders_accounting_cache,
             &self.storage,
             tx_source,
             median_time_past,
@@ -983,6 +1134,8 @@ where
             account_nonce: self.account_nonce,
             tokens_accounting_delta: self.tokens_accounting_cache.consume(),
             tokens_accounting_delta_undo: self.tokens_accounting_block_undo.consume(),
+            orders_accounting_delta: self.orders_accounting_cache.consume(),
+            orders_accounting_delta_undo: self.orders_accounting_block_undo.consume(),
         })
     }
 }

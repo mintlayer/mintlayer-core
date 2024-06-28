@@ -175,7 +175,8 @@ where
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::DataDeposit(_)
-        | TxOutput::Htlc(_, _) => {
+        | TxOutput::Htlc(_, _)
+        | TxOutput::AnyoneCanTake(_) => {
             return Err(EpochSealError::SpendStakeError(
                 SpendStakeError::InvalidBlockRewardOutputType,
             ));

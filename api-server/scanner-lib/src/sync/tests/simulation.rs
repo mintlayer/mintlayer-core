@@ -31,7 +31,7 @@ use api_server_common::storage::{
     },
 };
 
-use chainstate::{BlockSource, ChainstateConfig};
+use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateConfig};
 use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
@@ -49,10 +49,69 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use pos_accounting::make_delegation_id;
+use pos_accounting::{make_delegation_id, PoSAccountingView};
 use randomness::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+
+struct PoSAccountingAdapterToCheckFees<'a> {
+    chainstate: &'a dyn ChainstateInterface,
+}
+
+impl<'a> PoSAccountingAdapterToCheckFees<'a> {
+    pub fn new(chainstate: &'a dyn ChainstateInterface) -> Self {
+        Self { chainstate }
+    }
+}
+
+impl<'a> PoSAccountingView for PoSAccountingAdapterToCheckFees<'a> {
+    type Error = pos_accounting::Error;
+
+    fn pool_exists(&self, _pool_id: PoolId) -> Result<bool, Self::Error> {
+        unimplemented!()
+    }
+
+    fn get_pool_balance(&self, _pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        unimplemented!()
+    }
+
+    fn get_pool_data(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<pos_accounting::PoolData>, Self::Error> {
+        Ok(self.chainstate.get_stake_pool_data(pool_id).unwrap())
+    }
+
+    fn get_pool_delegations_shares(
+        &self,
+        _pool_id: PoolId,
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
+        unimplemented!()
+    }
+
+    fn get_delegation_balance(
+        &self,
+        _delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        // only used for checks for attempted to print money but we don't need to check that here
+        Ok(Some(Amount::MAX))
+    }
+
+    fn get_delegation_data(
+        &self,
+        _delegation_id: DelegationId,
+    ) -> Result<Option<pos_accounting::DelegationData>, Self::Error> {
+        unimplemented!()
+    }
+
+    fn get_pool_delegation_share(
+        &self,
+        _pool_id: PoolId,
+        _delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        unimplemented!()
+    }
+}
 
 #[rstest]
 #[trace]
@@ -152,6 +211,10 @@ async fn simulation(
     let mut delegations = BTreeSet::new();
     let mut token_ids = BTreeSet::new();
 
+    // TODO(orders)
+    let orders_store = orders_accounting::InMemoryOrdersAccounting::new();
+    let orders_db = orders_accounting::OrdersAccountingDB::new(&orders_store);
+
     let mut data_per_block_height = BTreeMap::new();
     data_per_block_height.insert(
         BlockHeight::zero(),
@@ -236,7 +299,7 @@ async fn simulation(
             let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
             for _ in 0..rng.gen_range(10..max_tx_per_block) {
-                block_builder = block_builder.add_test_transaction(&mut rng, false);
+                block_builder = block_builder.add_test_transaction(&mut rng, false, false);
             }
 
             let block = block_builder.build(&mut rng);
@@ -260,7 +323,8 @@ async fn simulation(
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::Htlc(_, _) => None,
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::AnyoneCanTake(_) => None,
                 });
                 staking_pools.extend(new_pools);
 
@@ -279,7 +343,8 @@ async fn simulation(
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::Htlc(_, _) => None,
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::AnyoneCanTake(_) => None,
                 });
                 delegations.extend(new_delegations);
 
@@ -295,7 +360,8 @@ async fn simulation(
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::Htlc(_, _) => None,
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::AnyoneCanTake(_) => None,
                 });
                 token_ids.extend(new_tokens);
 
@@ -340,6 +406,7 @@ async fn simulation(
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::Htlc(_, _) => {}
+                    TxOutput::AnyoneCanTake(_) => unimplemented!(), // TODO(orders)
                 });
 
                 tx.inputs().iter().for_each(|inp| match inp {
@@ -360,7 +427,9 @@ async fn simulation(
                             statistics
                                 .entry(CoinOrTokenStatistic::CirculatingSupply)
                                 .or_default()
-                                .insert(CoinOrTokenId::TokenId(*token_id), *to_mint);
+                                .entry(CoinOrTokenId::TokenId(*token_id))
+                                .and_modify(|amount| *amount = (*amount + *to_mint).unwrap())
+                                .or_insert(*to_mint);
                             let token_supply_change_fee =
                                 chain_config.token_supply_change_fee(block_height);
                             burn_coins(&mut statistics, token_supply_change_fee);
@@ -384,6 +453,9 @@ async fn simulation(
                                 chain_config.token_change_authority_fee(block_height);
                             burn_coins(&mut statistics, token_change_authority_fee);
                         }
+                        AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
+                            unimplemented!() // TODO(orders)
+                        }
                     },
                 });
             }
@@ -402,6 +474,8 @@ async fn simulation(
                 .and_modify(|amount| *amount = (*amount + block_subsidy).unwrap())
                 .or_insert(block_subsidy);
 
+            let pos_store = PoSAccountingAdapterToCheckFees::new(tf.chainstate.as_ref());
+
             let mut total_fees = AccumulatedFee::new();
             for tx in block.transactions().iter() {
                 let inputs_utxos: Vec<_> = tx
@@ -415,25 +489,11 @@ async fn simulation(
                     })
                     .collect();
 
-                let staker_balance_getter = |pool_id: PoolId| {
-                    Ok(Some(
-                        tf.chainstate
-                            .get_stake_pool_data(pool_id)
-                            .unwrap()
-                            .unwrap()
-                            .staker_balance()
-                            .unwrap(),
-                    ))
-                };
-                // only used for checks for attempted to print money but we don't need to check that here
-                let delegation_balance_getter =
-                    |_delegation_id: DelegationId| Ok(Some(Amount::MAX));
-
                 let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
                     &chain_config,
                     block_height,
-                    staker_balance_getter,
-                    delegation_balance_getter,
+                    &orders_db,
+                    &pos_store,
                     tx.inputs(),
                     &inputs_utxos,
                 )

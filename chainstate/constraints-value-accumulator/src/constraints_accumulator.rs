@@ -18,10 +18,12 @@ use std::{collections::BTreeMap, num::NonZeroU64};
 use common::{
     chain::{
         output_value::OutputValue, timelock::OutputTimeLock, AccountCommand, AccountSpending,
-        ChainConfig, DelegationId, PoolId, TxInput, TxOutput, UtxoOutPoint,
+        AccountType, ChainConfig, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Fee, Subsidy},
 };
+use orders_accounting::OrdersAccountingView;
+use pos_accounting::PoSAccountingView;
 use utils::ensure;
 
 use crate::accounts_balances_tracker::AccountsBalancesTracker;
@@ -55,27 +57,22 @@ impl ConstrainedValueAccumulator {
         })
     }
 
-    pub fn from_inputs<StakerBalanceGetterFn, DelegationBalanceGetterFn>(
+    pub fn from_inputs(
         chain_config: &ChainConfig,
         block_height: BlockHeight,
-        staker_balance_getter: StakerBalanceGetterFn,
-        delegation_balance_getter: DelegationBalanceGetterFn,
+        orders_accounting_view: &impl OrdersAccountingView,
+        pos_accounting_view: &impl PoSAccountingView,
         inputs: &[TxInput],
         inputs_utxos: &[Option<TxOutput>],
-    ) -> Result<Self, Error>
-    where
-        StakerBalanceGetterFn: Fn(PoolId) -> Result<Option<Amount>, Error>,
-        DelegationBalanceGetterFn: Fn(DelegationId) -> Result<Option<Amount>, Error>,
-    {
+    ) -> Result<Self, Error> {
         ensure!(
             inputs.len() == inputs_utxos.len(),
             Error::InputsAndInputsUtxosLengthMismatch(inputs.len(), inputs_utxos.len())
         );
 
         let mut accumulator = Self::new();
-        let mut total_fee_deducted = Amount::ZERO;
-        let mut accounts_balances_tracker =
-            AccountsBalancesTracker::new(&delegation_balance_getter);
+        let mut total_to_deduct = BTreeMap::<CoinOrTokenId, Amount>::new();
+        let mut accounts_balances_tracker = AccountsBalancesTracker::new(pos_accounting_view);
 
         for (input, input_utxo) in inputs.iter().zip(inputs_utxos.iter()) {
             match input {
@@ -85,7 +82,7 @@ impl ConstrainedValueAccumulator {
                     accumulator.process_input_utxo(
                         chain_config,
                         block_height,
-                        &staker_balance_getter,
+                        pos_accounting_view,
                         outpoint.clone(),
                         input_utxo,
                     )?;
@@ -99,39 +96,38 @@ impl ConstrainedValueAccumulator {
                     )?;
                 }
                 TxInput::AccountCommand(_, command) => {
-                    let fee_to_deduct = accumulator.process_input_account_command(
+                    let (id, to_deduct) = accumulator.process_input_account_command(
                         chain_config,
                         block_height,
                         command,
+                        orders_accounting_view,
                     )?;
 
-                    total_fee_deducted = (total_fee_deducted + fee_to_deduct)
-                        .ok_or(Error::CoinOrTokenOverflow(CoinOrTokenId::Coin))?;
+                    insert_or_increase(&mut total_to_deduct, id, to_deduct)?;
                 }
             }
         }
 
-        decrease_or(
-            &mut accumulator.unconstrained_value,
-            CoinOrTokenId::Coin,
-            total_fee_deducted,
-            Error::AttemptToViolateFeeRequirements,
-        )?;
+        for (currency, amount) in total_to_deduct {
+            decrease_or(
+                &mut accumulator.unconstrained_value,
+                currency,
+                amount,
+                Error::AttemptToViolateFeeRequirements,
+            )?;
+        }
 
         Ok(accumulator)
     }
 
-    fn process_input_utxo<StakerBalanceGetterFn>(
+    fn process_input_utxo(
         &mut self,
         chain_config: &ChainConfig,
         block_height: BlockHeight,
-        staker_balance_getter: &StakerBalanceGetterFn,
+        pos_accounting_view: &impl PoSAccountingView,
         outpoint: UtxoOutPoint,
         input_utxo: &TxOutput,
-    ) -> Result<(), Error>
-    where
-        StakerBalanceGetterFn: Fn(PoolId) -> Result<Option<Amount>, Error>,
-    {
+    ) -> Result<(), Error> {
         match input_utxo {
             TxOutput::Transfer(value, _)
             | TxOutput::LockThenTransfer(value, _, _)
@@ -152,8 +148,9 @@ impl ConstrainedValueAccumulator {
             }
             TxOutput::CreateDelegationId(..)
             | TxOutput::IssueFungibleToken(..)
-            | TxOutput::Burn(_)
-            | TxOutput::DataDeposit(_) => {
+            | TxOutput::Burn(..)
+            | TxOutput::DataDeposit(..)
+            | TxOutput::AnyoneCanTake(..) => {
                 return Err(Error::SpendingNonSpendableOutput(outpoint.clone()));
             }
             TxOutput::IssueNft(token_id, _, _) => {
@@ -167,8 +164,14 @@ impl ConstrainedValueAccumulator {
                 insert_or_increase(&mut self.unconstrained_value, CoinOrTokenId::Coin, *coins)?;
             }
             TxOutput::CreateStakePool(pool_id, _) | TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                let staker_balance = staker_balance_getter(*pool_id)?
+                let staker_balance = pos_accounting_view
+                    .get_pool_data(*pool_id)
+                    .map_err(|_| pos_accounting::Error::ViewFail)?
+                    .map(|pool_data| pool_data.staker_balance())
+                    .transpose()
+                    .map_err(Error::PoSAccountingError)?
                     .ok_or(Error::PledgeAmountNotFound(*pool_id))?;
+
                 let maturity_distance =
                     chain_config.staking_pool_spend_maturity_block_count(block_height);
 
@@ -195,16 +198,13 @@ impl ConstrainedValueAccumulator {
         Ok(())
     }
 
-    fn process_input_account<DelegationBalanceGetterFn>(
+    fn process_input_account<P: PoSAccountingView>(
         &mut self,
         chain_config: &ChainConfig,
         block_height: BlockHeight,
         account: &AccountSpending,
-        accounts_balances_tracker: &mut AccountsBalancesTracker<DelegationBalanceGetterFn>,
-    ) -> Result<(), Error>
-    where
-        DelegationBalanceGetterFn: Fn(DelegationId) -> Result<Option<Amount>, Error>,
-    {
+        accounts_balances_tracker: &mut AccountsBalancesTracker<P>,
+    ) -> Result<(), Error> {
         match account {
             AccountSpending::DelegationBalance(_, spend_amount) => {
                 accounts_balances_tracker.spend_from_account(account.clone())?;
@@ -240,7 +240,8 @@ impl ConstrainedValueAccumulator {
         chain_config: &ChainConfig,
         block_height: BlockHeight,
         command: &AccountCommand,
-    ) -> Result<Amount, Error> {
+        orders_accounting_view: &impl OrdersAccountingView,
+    ) -> Result<(CoinOrTokenId, Amount), Error> {
         match command {
             AccountCommand::MintTokens(token_id, amount) => {
                 insert_or_increase(
@@ -248,16 +249,68 @@ impl ConstrainedValueAccumulator {
                     CoinOrTokenId::TokenId(*token_id),
                     *amount,
                 )?;
-                Ok(chain_config.token_supply_change_fee(block_height))
+                Ok((
+                    CoinOrTokenId::Coin,
+                    chain_config.token_supply_change_fee(block_height),
+                ))
             }
-            AccountCommand::LockTokenSupply(_) | AccountCommand::UnmintTokens(_) => {
-                Ok(chain_config.token_supply_change_fee(block_height))
+            AccountCommand::LockTokenSupply(_) | AccountCommand::UnmintTokens(_) => Ok((
+                CoinOrTokenId::Coin,
+                chain_config.token_supply_change_fee(block_height),
+            )),
+            AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => Ok((
+                CoinOrTokenId::Coin,
+                chain_config.token_freeze_fee(block_height),
+            )),
+            AccountCommand::ChangeTokenAuthority(_, _) => Ok((
+                CoinOrTokenId::Coin,
+                chain_config.token_change_authority_fee(block_height),
+            )),
+            AccountCommand::ConcludeOrder(id) => {
+                let order_data = orders_accounting_view
+                    .get_order_data(id)
+                    .map_err(|_| orders_accounting::Error::ViewFail)?
+                    .ok_or(orders_accounting::Error::OrderDataNotFound(*id))?;
+                let ask_balance = orders_accounting_view
+                    .get_ask_balance(id)
+                    .map_err(|_| orders_accounting::Error::ViewFail)?
+                    .unwrap_or(Amount::ZERO);
+                let give_balance = orders_accounting_view
+                    .get_give_balance(id)
+                    .map_err(|_| orders_accounting::Error::ViewFail)?
+                    .unwrap_or(Amount::ZERO);
+
+                let initially_asked = output_value_amount(order_data.ask())?;
+                let filled_amount = (initially_asked - ask_balance)
+                    .ok_or(Error::NegativeAccountBalance(AccountType::Order(*id)))?;
+
+                let ask_currency = CoinOrTokenId::from_output_value(order_data.ask())
+                    .ok_or(Error::UnsupportedTokenVersion)?;
+                insert_or_increase(&mut self.unconstrained_value, ask_currency, filled_amount)?;
+
+                let give_currency = CoinOrTokenId::from_output_value(order_data.give())
+                    .ok_or(Error::UnsupportedTokenVersion)?;
+                insert_or_increase(&mut self.unconstrained_value, give_currency, give_balance)?;
+                Ok((CoinOrTokenId::Coin, Amount::ZERO))
             }
-            AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => {
-                Ok(chain_config.token_freeze_fee(block_height))
-            }
-            AccountCommand::ChangeTokenAuthority(_, _) => {
-                Ok(chain_config.token_change_authority_fee(block_height))
+            AccountCommand::FillOrder(order_id, fill_value, _) => {
+                let filled_amount = orders_accounting::calculate_fill_order(
+                    &orders_accounting_view,
+                    *order_id,
+                    fill_value,
+                )?;
+
+                let order_data = orders_accounting_view
+                    .get_order_data(order_id)
+                    .map_err(|_| orders_accounting::Error::ViewFail)?
+                    .ok_or(orders_accounting::Error::OrderDataNotFound(*order_id))?;
+                let give_currency = CoinOrTokenId::from_output_value(order_data.give())
+                    .ok_or(Error::UnsupportedTokenVersion)?;
+                insert_or_increase(&mut self.unconstrained_value, give_currency, filled_amount)?;
+
+                let ask_currency = CoinOrTokenId::from_output_value(fill_value)
+                    .ok_or(Error::UnsupportedTokenVersion)?;
+                Ok((ask_currency, output_value_amount(fill_value)?))
             }
         }
     }
@@ -325,6 +378,15 @@ impl ConstrainedValueAccumulator {
                     CoinOrTokenId::Coin,
                     chain_config.nft_issuance_fee(block_height),
                 )?,
+                TxOutput::AnyoneCanTake(order_data) => {
+                    let id = CoinOrTokenId::from_output_value(order_data.give())
+                        .ok_or(Error::UnsupportedTokenVersion)?;
+                    insert_or_increase(
+                        &mut accumulator.unconstrained_value,
+                        id,
+                        output_value_amount(order_data.give())?,
+                    )?;
+                }
             };
         }
 
@@ -437,4 +499,11 @@ fn decrease_or(
         }
     }
     Ok(())
+}
+
+fn output_value_amount(value: &OutputValue) -> Result<Amount, Error> {
+    match value {
+        OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => Ok(*amount),
+        OutputValue::TokenV0(_) => Err(Error::UnsupportedTokenVersion),
+    }
 }

@@ -626,7 +626,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             | TxOutput::IssueFungibleToken(_)
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::DataDeposit(_)
-            | TxOutput::Htlc(_, _) => None,
+            | TxOutput::Htlc(_, _)
+            | TxOutput::AnyoneCanTake(_) => None,
         });
         let mut balances = BTreeMap::new();
         for pool_id in pool_ids {

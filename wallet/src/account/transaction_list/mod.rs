@@ -121,7 +121,8 @@ fn own_output(key_chain: &AccountKeyChainImpl, output: &TxOutput) -> bool {
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::IssueNft(_, _, _)
-        | TxOutput::DataDeposit(_) => false,
+        | TxOutput::DataDeposit(_)
+        | TxOutput::AnyoneCanTake(_) => false,
     }
 }
 

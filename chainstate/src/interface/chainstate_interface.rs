@@ -27,8 +27,8 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, ChainConfig, DelegationId, PoolId, Transaction, TxInput,
-        UtxoOutPoint,
+        AccountNonce, AccountType, ChainConfig, DelegationId, OrderData, OrderId, PoolId,
+        Transaction, TxInput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -219,6 +219,10 @@ pub trait ChainstateInterface: Send + Sync {
     ) -> Result<Option<tokens_accounting::TokenData>, ChainstateError>;
     fn get_token_circulating_supply(&self, id: &TokenId)
         -> Result<Option<Amount>, ChainstateError>;
+
+    fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, ChainstateError>;
+    fn get_order_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, ChainstateError>;
+    fn get_order_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, ChainstateError>;
 
     /// Returns the coin amounts of the outpoints spent by a transaction.
     /// If a utxo for an input was not found or contains tokens the result is `None`.

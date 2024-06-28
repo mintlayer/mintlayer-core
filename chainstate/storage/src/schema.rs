@@ -20,11 +20,12 @@ use common::{
     chain::{
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderData, OrderId, PoolId,
+        Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
+use orders_accounting::OrdersAccountingUndo;
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingUndo, PoolData,
 };
@@ -58,6 +59,11 @@ storage::decl_schema! {
         pub DBTokensData: Map<TokenId, tokens_accounting::TokenData>,
         pub DBTokensCirculatingSupply: Map<TokenId, Amount>,
         pub DBTokensAccountingBlockUndo: Map<Id<Block>, accounting::BlockUndo<TokenAccountingUndo>>,
+
+        pub DBOrdersData: Map<OrderId, OrderData>,
+        pub DBOrdersAskBalances: Map<OrderId, Amount>,
+        pub DBOrdersGiveBalances: Map<OrderId, Amount>,
+        pub DBOrdersAccountingBlockUndo: Map<Id<Block>, accounting::BlockUndo<OrdersAccountingUndo>>,
 
         /// Store for accounting BlockUndo
         pub DBAccountingBlockUndo: Map<Id<Block>, accounting::BlockUndo<PoSAccountingUndo>>,

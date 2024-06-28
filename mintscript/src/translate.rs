@@ -23,9 +23,10 @@ use common::chain::{
         DestinationSigError,
     },
     tokens::TokenId,
-    AccountCommand, AccountOutPoint, AccountSpending, DelegationId, Destination, PoolId,
+    AccountCommand, AccountOutPoint, AccountSpending, DelegationId, Destination, OrderId, PoolId,
     SignedTransaction, TxOutput, UtxoOutPoint,
 };
+use orders_accounting::OrdersAccountingView;
 use pos_accounting::PoSAccountingView;
 use tokens_accounting::TokensAccountingView;
 use utxo::Utxo;
@@ -51,6 +52,9 @@ pub enum TranslationError {
     TokensAccounting(#[from] tokens_accounting::Error),
 
     #[error(transparent)]
+    OrdersAccounting(#[from] orders_accounting::Error),
+
+    #[error(transparent)]
     SignatureError(#[from] DestinationSigError),
 
     #[error("Stake pool {0} does not exist")]
@@ -61,6 +65,9 @@ pub enum TranslationError {
 
     #[error("Token with id {0} does not exist")]
     TokenNotFound(TokenId),
+
+    #[error("Order with id {0} does not exist")]
+    OrderNotFound(OrderId),
 }
 
 /// Contextual information about given input
@@ -95,9 +102,11 @@ pub trait InputInfoProvider {
 pub trait SignatureInfoProvider: InputInfoProvider {
     type PoSAccounting: PoSAccountingView<Error = pos_accounting::Error>;
     type Tokens: TokensAccountingView<Error = tokens_accounting::Error>;
+    type Orders: OrdersAccountingView<Error = orders_accounting::Error>;
 
     fn pos_accounting(&self) -> &Self::PoSAccounting;
     fn tokens(&self) -> &Self::Tokens;
+    fn orders(&self) -> &Self::Orders;
 }
 
 pub trait TranslateInput<C> {
@@ -180,6 +189,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                 TxOutput::IssueFungibleToken(_issuance) => Err(TranslationError::Unspendable),
                 TxOutput::Burn(_val) => Err(TranslationError::Unspendable),
                 TxOutput::DataDeposit(_data) => Err(TranslationError::Unspendable),
+                TxOutput::AnyoneCanTake(_) => Err(TranslationError::Unspendable),
             },
             InputInfo::Account { outpoint } => match outpoint.account() {
                 AccountSpending::DelegationBalance(delegation_id, _amount) => {
@@ -205,6 +215,14 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                     };
                     Ok(checksig(dest))
                 }
+                AccountCommand::ConcludeOrder(order_id) => {
+                    let order_data = ctx
+                        .orders()
+                        .get_order_data(order_id)?
+                        .ok_or(TranslationError::OrderNotFound(*order_id))?;
+                    Ok(checksig(order_data.conclude_key()))
+                }
+                AccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
             },
         }
     }
@@ -225,7 +243,8 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_>
                     | TxOutput::Burn(_)
                     | TxOutput::DataDeposit(_)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::IssueFungibleToken(_) => Err(TranslationError::Unspendable),
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::AnyoneCanTake(_) => Err(TranslationError::Unspendable),
 
                     TxOutput::ProduceBlockFromStake(d, _) => {
                         // Spending an output of a block creation output is only allowed to
@@ -282,7 +301,8 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::Burn(_)
-                | TxOutput::DataDeposit(_) => Err(TranslationError::Unspendable),
+                | TxOutput::DataDeposit(_)
+                | TxOutput::AnyoneCanTake(_) => Err(TranslationError::Unspendable),
             },
             InputInfo::Account { outpoint } => match outpoint.account() {
                 AccountSpending::DelegationBalance(_deleg_id, _amt) => Ok(WitnessScript::TRUE),
@@ -294,6 +314,9 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 | AccountCommand::FreezeToken(_token_id, _)
                 | AccountCommand::UnfreezeToken(_token_id)
                 | AccountCommand::ChangeTokenAuthority(_token_id, _) => Ok(WitnessScript::TRUE),
+                AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
+                    Ok(WitnessScript::TRUE)
+                }
             },
         }
     }

@@ -76,6 +76,8 @@ impl OrphanType {
             | CTE::ConstrainedValueAccumulatorError(_, _)
             | CTE::RewardDistributionError(_)
             | CTE::CheckTransactionError(_)
+            | CTE::OrdersAccountingError(_)
+            | CTE::AttemptToCreateOrderFromAccounts
             | CTE::IOPolicyError(_, _) => Err(err),
         }
     }

@@ -130,6 +130,7 @@ impl BlockProcessingErrorClassification for BlockError {
 
             BlockError::BestChainCandidatesAccessorError(err) => err.classify(),
             BlockError::TokensAccountingError(err) => err.classify(),
+            BlockError::OrdersAccountingError(err) => err.classify(),
             BlockError::StorageError(err) => err.classify(),
             BlockError::OrphanCheckFailed(err) => err.classify(),
             BlockError::CheckBlockFailed(err) => err.classify(),
@@ -296,6 +297,7 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             | ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _)
             | ConnectTransactionError::AttemptToCreateStakePoolFromAccounts
             | ConnectTransactionError::AttemptToCreateDelegationFromAccounts
+            | ConnectTransactionError::AttemptToCreateOrderFromAccounts
             | ConnectTransactionError::IOPolicyError(_, _)
             | ConnectTransactionError::TotalFeeRequiredOverflow
             | ConnectTransactionError::InsufficientCoinsFee(_, _)
@@ -316,6 +318,7 @@ impl BlockProcessingErrorClassification for ConnectTransactionError {
             ConnectTransactionError::PoSAccountingError(err) => err.classify(),
             ConnectTransactionError::ConstrainedValueAccumulatorError(err, _) => err.classify(),
             ConnectTransactionError::InputCheck(err) => err.classify(),
+            ConnectTransactionError::OrdersAccountingError(err) => err.classify(),
         }
     }
 }
@@ -345,10 +348,12 @@ impl BlockProcessingErrorClassification for mintscript::translate::TranslationEr
             | Self::IllegalOutputSpend
             | Self::PoolNotFound(_)
             | Self::DelegationNotFound(_)
-            | Self::TokenNotFound(_) => BlockProcessingErrorClass::BadBlock,
+            | Self::TokenNotFound(_)
+            | Self::OrderNotFound(_) => BlockProcessingErrorClass::BadBlock,
 
             Self::PoSAccounting(e) => e.classify(),
             Self::TokensAccounting(e) => e.classify(),
+            Self::OrdersAccounting(e) => e.classify(),
             Self::SignatureError(e) => e.classify(),
         }
     }
@@ -489,6 +494,7 @@ impl BlockProcessingErrorClassification for TransactionVerifierStorageError {
             TransactionVerifierStorageError::PoSAccountingError(err) => err.classify(),
             TransactionVerifierStorageError::AccountingBlockUndoError(err) => err.classify(),
             TransactionVerifierStorageError::TokensAccountingError(err) => err.classify(),
+            TransactionVerifierStorageError::OrdersAccountingError(err) => err.classify(),
         }
     }
 }
@@ -539,13 +545,15 @@ impl BlockProcessingErrorClassification for SignatureDestinationGetterError {
             | SignatureDestinationGetterError::PoolDataNotFound(_)
             | SignatureDestinationGetterError::DelegationDataNotFound(_)
             | SignatureDestinationGetterError::TokenDataNotFound(_)
-            | SignatureDestinationGetterError::UtxoOutputNotFound(_) => {
+            | SignatureDestinationGetterError::UtxoOutputNotFound(_)
+            | SignatureDestinationGetterError::OrderDataNotFound(_) => {
                 BlockProcessingErrorClass::BadBlock
             }
 
             SignatureDestinationGetterError::UtxoViewError(err) => err.classify(),
             SignatureDestinationGetterError::PoSAccountingViewError(err) => err.classify(),
             SignatureDestinationGetterError::TokensAccountingViewError(err) => err.classify(),
+            SignatureDestinationGetterError::OrdersAccountingViewError(err) => err.classify(),
         }
     }
 }
@@ -788,7 +796,11 @@ impl BlockProcessingErrorClassification for CheckTransactionError {
             | CheckTransactionError::DataDepositMaxSizeExceeded(_, _, _)
             | CheckTransactionError::TxSizeTooLarge(_, _, _)
             | CheckTransactionError::DeprecatedTokenOperationVersion(_, _)
-            | CheckTransactionError::HtlcsAreNotActivated => BlockProcessingErrorClass::BadBlock,
+            | CheckTransactionError::HtlcsAreNotActivated
+            | CheckTransactionError::OrdersAreNotActivated(_)
+            | CheckTransactionError::OrdersCurrenciesMustBeDifferent(_) => {
+                BlockProcessingErrorClass::BadBlock
+            }
 
             CheckTransactionError::PropertyQueryError(err) => err.classify(),
             CheckTransactionError::TokensError(err) => err.classify(),
@@ -871,9 +883,46 @@ impl BlockProcessingErrorClassification for constraints_value_accumulator::Error
             | Error::MissingOutputOrSpent(_)
             | Error::PledgeAmountNotFound(_)
             | Error::SpendingNonSpendableOutput(_)
-            | Error::NegativeAccountBalance(_) => BlockProcessingErrorClass::BadBlock,
+            | Error::NegativeAccountBalance(_)
+            | Error::UnsupportedTokenVersion => BlockProcessingErrorClass::BadBlock,
 
             Error::PoSAccountingError(err) => err.classify(),
+            Error::OrdersAccountingError(err) => err.classify(),
+        }
+    }
+}
+
+impl BlockProcessingErrorClassification for orders_accounting::Error {
+    fn classify(&self) -> BlockProcessingErrorClass {
+        use orders_accounting::Error;
+        match self {
+            Error::ViewFail | Error::StorageWrite => BlockProcessingErrorClass::General,
+
+            Error::OrderAlreadyExists(_)
+            | Error::OrderDataNotFound(_)
+            | Error::OrderAskBalanceNotFound(_)
+            | Error::OrderGiveBalanceNotFound(_)
+            | Error::OrderWithZeroValue(_)
+            | Error::InvariantOrderDataNotFoundForUndo(_)
+            | Error::InvariantOrderAskBalanceNotFoundForUndo(_)
+            | Error::InvariantOrderAskBalanceChangedForUndo(_)
+            | Error::InvariantOrderGiveBalanceNotFoundForUndo(_)
+            | Error::InvariantOrderGiveBalanceChangedForUndo(_)
+            | Error::InvariantOrderDataExistForConcludeUndo(_)
+            | Error::InvariantOrderAskBalanceExistForConcludeUndo(_)
+            | Error::InvariantOrderGiveBalanceExistForConcludeUndo(_)
+            | Error::CurrencyMismatch
+            | Error::OrderOverflow(_)
+            | Error::OrderOverbid(_, _, _)
+            | Error::AttemptedConcludeNonexistingOrderData(_)
+            | Error::UnsupportedTokenVersion
+            | Error::InvariantNonzeroAskBalanceForMissingOrder(_)
+            | Error::InvariantNonzeroGiveBalanceForMissingOrder(_) => {
+                BlockProcessingErrorClass::BadBlock
+            }
+
+            Error::StorageError(err) => err.classify(),
+            Error::AccountingError(err) => err.classify(),
         }
     }
 }

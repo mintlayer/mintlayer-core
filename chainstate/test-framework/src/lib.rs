@@ -40,7 +40,7 @@ pub use {
         anyonecanspend_address, create_chain_config_with_default_staking_pool,
         create_chain_config_with_staking_pool, create_custom_genesis_with_stake_pool,
         create_stake_pool_data_with_all_reward_to_staker, empty_witness, get_output_value,
-        pos_mine, produce_kernel_signature,
+        output_value_amount, pos_mine, produce_kernel_signature,
     },
     block_builder::BlockBuilder,
     framework::TestFramework,

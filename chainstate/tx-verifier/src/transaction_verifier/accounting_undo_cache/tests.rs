@@ -24,6 +24,7 @@ use common::{
     chain::{config::Builder as ConfigBuilder, Block},
     primitives::H256,
 };
+use orders_accounting::OrdersAccountingDeltaUndoData;
 use pos_accounting::{DeltaMergeUndo, PoSAccountingUndo};
 use test_utils::random::Seed;
 use tokens_accounting::TokensAccountingDeltaUndoData;
@@ -89,6 +90,10 @@ fn connect_txs_in_hierarchy_default(#[case] seed: Seed) {
         .expect_batch_write_tokens_data()
         .times(1)
         .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
+        .expect_batch_write_orders_data()
+        .times(1)
+        .return_const(Ok(OrdersAccountingDeltaUndoData::new()));
     store
         .expect_batch_write_delta()
         .times(1)
@@ -193,6 +198,10 @@ fn connect_txs_in_hierarchy_disposable(#[case] seed: Seed) {
         .times(1)
         .return_const(Ok(TokensAccountingDeltaUndoData::new()));
     store
+        .expect_batch_write_orders_data()
+        .times(1)
+        .return_const(Ok(OrdersAccountingDeltaUndoData::new()));
+    store
         .expect_batch_write_delta()
         .times(1)
         .return_const(Ok(DeltaMergeUndo::new()));
@@ -273,6 +282,10 @@ fn connect_txs_in_hierarchy_twice(#[case] seed: Seed) {
         .expect_batch_write_tokens_data()
         .times(1)
         .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
+        .expect_batch_write_orders_data()
+        .times(1)
+        .return_const(Ok(OrdersAccountingDeltaUndoData::new()));
     store
         .expect_batch_write_delta()
         .times(1)
@@ -355,6 +368,10 @@ fn connect_reward_in_hierarchy_twice(#[case] seed: Seed) {
         .expect_batch_write_tokens_data()
         .times(1)
         .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
+        .expect_batch_write_orders_data()
+        .times(1)
+        .return_const(Ok(OrdersAccountingDeltaUndoData::new()));
     store
         .expect_batch_write_delta()
         .times(1)
@@ -466,6 +483,10 @@ fn disconnect_txs_in_hierarchy_default(#[case] seed: Seed) {
         .times(1)
         .return_const(Ok(TokensAccountingDeltaUndoData::new()));
     store
+        .expect_batch_write_orders_data()
+        .times(1)
+        .return_const(Ok(OrdersAccountingDeltaUndoData::new()));
+    store
         .expect_batch_write_delta()
         .times(1)
         .return_const(Ok(DeltaMergeUndo::new()));
@@ -566,6 +587,10 @@ fn disconnect_txs_in_hierarchy_disposable(#[case] seed: Seed) {
         .expect_batch_write_tokens_data()
         .times(1)
         .return_const(Ok(TokensAccountingDeltaUndoData::new()));
+    store
+        .expect_batch_write_orders_data()
+        .times(1)
+        .return_const(Ok(OrdersAccountingDeltaUndoData::new()));
     store
         .expect_batch_write_delta()
         .times(1)

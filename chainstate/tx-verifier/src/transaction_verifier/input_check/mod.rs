@@ -132,26 +132,35 @@ impl mintscript::translate::InputInfoProvider for PerInputData<'_> {
     }
 }
 
-pub struct TranslationContextFull<'a, AV, TV> {
+pub struct TranslationContextFull<'a, AV, TV, OV> {
     // Sources of additional information, should it be required.
     pos_accounting: AV,
     tokens_accounting: TV,
+    orders_accounting: OV,
 
     // Information about the input
     input: &'a PerInputData<'a>,
 }
 
-impl<'a, AV, TV> TranslationContextFull<'a, AV, TV> {
-    fn new(pos_accounting: AV, tokens_accounting: TV, input: &'a PerInputData<'a>) -> Self {
+impl<'a, AV, TV, OV> TranslationContextFull<'a, AV, TV, OV> {
+    fn new(
+        pos_accounting: AV,
+        tokens_accounting: TV,
+        orders_accounting: OV,
+        input: &'a PerInputData<'a>,
+    ) -> Self {
         Self {
             pos_accounting,
             tokens_accounting,
+            orders_accounting,
             input,
         }
     }
 }
 
-impl<AV, TV> mintscript::translate::InputInfoProvider for TranslationContextFull<'_, AV, TV> {
+impl<AV, TV, OV> mintscript::translate::InputInfoProvider
+    for TranslationContextFull<'_, AV, TV, OV>
+{
     fn input_info(&self) -> &InputInfo {
         self.input.input_info()
     }
@@ -161,13 +170,16 @@ impl<AV, TV> mintscript::translate::InputInfoProvider for TranslationContextFull
     }
 }
 
-impl<AV, TV> mintscript::translate::SignatureInfoProvider for TranslationContextFull<'_, AV, TV>
+impl<AV, TV, OV> mintscript::translate::SignatureInfoProvider
+    for TranslationContextFull<'_, AV, TV, OV>
 where
     AV: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
     TV: tokens_accounting::TokensAccountingView<Error = tokens_accounting::Error>,
+    OV: orders_accounting::OrdersAccountingView<Error = orders_accounting::Error>,
 {
     type PoSAccounting = AV;
     type Tokens = TV;
+    type Orders = OV;
 
     fn pos_accounting(&self) -> &Self::PoSAccounting {
         &self.pos_accounting
@@ -176,12 +188,17 @@ where
     fn tokens(&self) -> &Self::Tokens {
         &self.tokens_accounting
     }
+
+    fn orders(&self) -> &Self::Orders {
+        &self.orders_accounting
+    }
 }
 
-impl<AV, TV> TranslationContextFull<'_, AV, TV>
+impl<AV, TV, OV> TranslationContextFull<'_, AV, TV, OV>
 where
     AV: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
     TV: tokens_accounting::TokensAccountingView<Error = tokens_accounting::Error>,
+    OV: orders_accounting::OrdersAccountingView<Error = orders_accounting::Error>,
 {
     fn to_script<T: TranslateInput<Self>>(&self) -> Result<WitnessScript, InputCheckErrorPayload> {
         Ok(T::translate_input(self)?)
@@ -439,34 +456,36 @@ impl<T: Transactable, S> SignatureContext for InputVerifyContextFull<'_, T, S> {
     }
 }
 
-pub trait FullyVerifiable<AV, TV>:
-    Transactable + for<'a> TranslateInput<TranslationContextFull<'a, &'a AV, &'a TV>>
+pub trait FullyVerifiable<AV, TV, OV>:
+    Transactable + for<'a> TranslateInput<TranslationContextFull<'a, &'a AV, &'a TV, &'a OV>>
 {
 }
 
-impl<T, AV, TV> FullyVerifiable<AV, TV> for T where
-    T: Transactable + for<'a> TranslateInput<TranslationContextFull<'a, &'a AV, &'a TV>>
+impl<T, AV, TV, OV> FullyVerifiable<AV, TV, OV> for T where
+    T: Transactable + for<'a> TranslateInput<TranslationContextFull<'a, &'a AV, &'a TV, &'a OV>>
 {
 }
 
 /// Perform full verification of given input.
 #[allow(clippy::too_many_arguments)]
-pub fn verify_full<T, S, UV, AV, TV>(
+pub fn verify_full<T, S, UV, AV, TV, OV>(
     transaction: &T,
     chain_config: &ChainConfig,
     utxos_view: &UV,
     pos_accounting: &AV,
     tokens_accounting: &TV,
+    orders_accounting: &OV,
     storage: &S,
     tx_source: &TransactionSourceForConnect,
     spending_time: BlockTimestamp,
 ) -> Result<(), InputCheckError>
 where
-    T: FullyVerifiable<AV, TV>,
+    T: FullyVerifiable<AV, TV, OV>,
     S: TransactionVerifierStorageRef,
     UV: utxo::UtxosView,
     AV: pos_accounting::PoSAccountingView<Error = pos_accounting::Error>,
     TV: tokens_accounting::TokensAccountingView<Error = tokens_accounting::Error>,
+    OV: orders_accounting::OrdersAccountingView<Error = orders_accounting::Error>,
 {
     let core_ctx = CoreContext::new(utxos_view, transaction)?;
     let tl_ctx = VerifyContextTimelock::for_verifier(
@@ -479,9 +498,10 @@ where
     let ctx = VerifyContextFull::new(transaction, &tl_ctx);
 
     for (n, inp) in core_ctx.inputs_iter() {
-        let script = TranslationContextFull::new(pos_accounting, tokens_accounting, inp)
-            .to_script::<T>()
-            .map_err(|e| InputCheckError::new(n, e))?;
+        let script =
+            TranslationContextFull::new(pos_accounting, tokens_accounting, orders_accounting, inp)
+                .to_script::<T>()
+                .map_err(|e| InputCheckError::new(n, e))?;
         let mut checker = mintscript::ScriptChecker::full(InputVerifyContextFull::new(&ctx, n));
         script.verify(&mut checker).map_err(|e| InputCheckError::new(n, e))?;
     }

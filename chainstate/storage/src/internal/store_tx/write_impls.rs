@@ -20,11 +20,12 @@ use common::{
     chain::{
         config::{EpochIndex, MagicBytes},
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, Transaction,
-        UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderData, OrderId, PoolId,
+        Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
+use orders_accounting::{OrdersAccountingStorageWrite, OrdersAccountingUndo};
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageWrite,
     PoSAccountingUndo, PoolData,
@@ -145,6 +146,20 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     #[log_error]
     fn del_tokens_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
         self.del::<db::DBTokensAccountingBlockUndo, _, _>(id)
+    }
+
+    #[log_error]
+    fn set_orders_accounting_undo_data(
+        &mut self,
+        id: Id<Block>,
+        undo: &accounting::BlockUndo<OrdersAccountingUndo>,
+    ) -> crate::Result<()> {
+        self.write::<db::DBOrdersAccountingBlockUndo, _, _, _>(id, undo)
+    }
+
+    #[log_error]
+    fn del_orders_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
+        self.del::<db::DBOrdersAccountingBlockUndo, _, _>(id)
     }
 
     #[log_error]
@@ -400,5 +415,37 @@ impl<'st, B: storage::Backend> TokensAccountingStorageWrite for StoreTxRw<'st, B
     #[log_error]
     fn del_circulating_supply(&mut self, id: &TokenId) -> crate::Result<()> {
         self.del::<db::DBTokensCirculatingSupply, _, _>(id)
+    }
+}
+
+impl<'st, B: storage::Backend> OrdersAccountingStorageWrite for StoreTxRw<'st, B> {
+    #[log_error]
+    fn set_order_data(&mut self, id: &OrderId, data: &OrderData) -> crate::Result<()> {
+        self.write::<db::DBOrdersData, _, _, _>(id, data)
+    }
+
+    #[log_error]
+    fn del_order_data(&mut self, id: &OrderId) -> crate::Result<()> {
+        self.del::<db::DBOrdersData, _, _>(id)
+    }
+
+    #[log_error]
+    fn set_ask_balance(&mut self, id: &OrderId, balance: &Amount) -> crate::Result<()> {
+        self.write::<db::DBOrdersAskBalances, _, _, _>(id, balance)
+    }
+
+    #[log_error]
+    fn del_ask_balance(&mut self, id: &OrderId) -> crate::Result<()> {
+        self.del::<db::DBOrdersAskBalances, _, _>(id)
+    }
+
+    #[log_error]
+    fn set_give_balance(&mut self, id: &OrderId, balance: &Amount) -> crate::Result<()> {
+        self.write::<db::DBOrdersGiveBalances, _, _, _>(id, balance)
+    }
+
+    #[log_error]
+    fn del_give_balance(&mut self, id: &OrderId) -> crate::Result<()> {
+        self.del::<db::DBOrdersGiveBalances, _, _>(id)
     }
 }
