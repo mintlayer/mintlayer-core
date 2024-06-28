@@ -502,6 +502,7 @@ impl BanScore for pos_accounting::Error {
             E::InvariantErrorDelegationCreationFailedIdAlreadyExists => 100,
             E::DelegateToNonexistingId => 100,
             E::DelegateToNonexistingPool => 100,
+            E::SpendingShareOfNonexistingDelegation(_) => 100,
             E::AdditionError => 100,
             E::SubError => 100,
             E::DelegationBalanceAdditionError => 100,
@@ -595,6 +596,7 @@ impl BanScore for constraints_value_accumulator::Error {
             constraints_value_accumulator::Error::NegativeAccountBalance(_) => 100,
             constraints_value_accumulator::Error::UnsupportedTokenVersion => 100,
             constraints_value_accumulator::Error::OrdersAccountingError(err) => err.ban_score(),
+            constraints_value_accumulator::Error::TokensAccountingError(err) => err.ban_score(),
         }
     }
 }

@@ -45,6 +45,8 @@ pub enum Error {
     DelegateToNonexistingId,
     #[error("Delegate to a non-existing pool")]
     DelegateToNonexistingPool,
+    #[error("Spending share of non-existing pool")]
+    SpendingShareOfNonexistingDelegation(DelegationId),
     #[error("Addition error")]
     AdditionError,
     #[error("Subtraction error")]

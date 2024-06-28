@@ -37,7 +37,10 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         config::create_unit_test_config,
-        tokens::{make_token_id, NftIssuance, RPCNonFungibleTokenMetadata, RPCTokenInfo, TokenId},
+        tokens::{
+            make_token_id, IsTokenFrozen, NftIssuance, RPCNonFungibleTokenMetadata, RPCTokenInfo,
+            TokenId,
+        },
         AccountCommand, AccountNonce, AccountSpending, AccountType, ConsensusUpgrade, DelegationId,
         GenBlockId, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxOutput,
         UtxoOutPoint,
@@ -53,6 +56,7 @@ use pos_accounting::{make_delegation_id, PoSAccountingView};
 use randomness::Rng;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+use tokens_accounting::TokensAccountingView;
 
 struct PoSAccountingAdapterToCheckFees<'a> {
     chainstate: &'a dyn ChainstateInterface,
@@ -94,14 +98,18 @@ impl<'a> PoSAccountingView for PoSAccountingAdapterToCheckFees<'a> {
         _delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
         // only used for checks for attempted to print money but we don't need to check that here
-        Ok(Some(Amount::MAX))
+        Ok(Some(Amount::from_atoms(i128::MAX as u128)))
     }
 
     fn get_delegation_data(
         &self,
         _delegation_id: DelegationId,
     ) -> Result<Option<pos_accounting::DelegationData>, Self::Error> {
-        unimplemented!()
+        // we don't care about actual data
+        Ok(Some(pos_accounting::DelegationData::new(
+            PoolId::new(H256::zero()),
+            Destination::AnyoneCanSpend,
+        )))
     }
 
     fn get_pool_delegation_share(
@@ -110,6 +118,34 @@ impl<'a> PoSAccountingView for PoSAccountingAdapterToCheckFees<'a> {
         _delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
         unimplemented!()
+    }
+}
+
+struct StubTokensAccounting;
+
+impl TokensAccountingView for StubTokensAccounting {
+    type Error = tokens_accounting::Error;
+
+    fn get_token_data(
+        &self,
+        _id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
+        let data = tokens_accounting::TokenData::FungibleToken(
+            tokens_accounting::FungibleTokenData::new_unchecked(
+                "tkn1".into(),
+                0,
+                Vec::new(),
+                common::chain::tokens::TokenTotalSupply::Unlimited,
+                false,
+                IsTokenFrozen::No(common::chain::tokens::IsTokenFreezable::No),
+                Destination::AnyoneCanSpend,
+            ),
+        );
+        Ok(Some(data))
+    }
+
+    fn get_circulating_supply(&self, _id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+        Ok(None)
     }
 }
 
@@ -211,7 +247,7 @@ async fn simulation(
     let mut delegations = BTreeSet::new();
     let mut token_ids = BTreeSet::new();
 
-    // TODO(orders)
+    // Provide empty stores for orders as they are irrelevant for fee calculation
     let orders_store = orders_accounting::InMemoryOrdersAccounting::new();
     let orders_db = orders_accounting::OrdersAccountingDB::new(&orders_store);
 
@@ -475,6 +511,7 @@ async fn simulation(
                 .or_insert(block_subsidy);
 
             let pos_store = PoSAccountingAdapterToCheckFees::new(tf.chainstate.as_ref());
+            let tokens_store = StubTokensAccounting;
 
             let mut total_fees = AccumulatedFee::new();
             for tx in block.transactions().iter() {
@@ -494,6 +531,7 @@ async fn simulation(
                     block_height,
                     &orders_db,
                     &pos_store,
+                    &tokens_store,
                     tx.inputs(),
                     &inputs_utxos,
                 )

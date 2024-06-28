@@ -215,9 +215,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
     ) -> Result<PoSAccountingUndo, Error> {
         let pool_id = *self
             .get_delegation_data(delegation_id)?
-            .ok_or(Error::InvariantErrorDelegationUndoFailedDataNotFound(
-                delegation_id,
-            ))?
+            .ok_or(Error::SpendingShareOfNonexistingDelegation(delegation_id))?
             .source_pool();
 
         self.sub_delegation_from_pool_share(pool_id, delegation_id, amount)?;

@@ -455,6 +455,78 @@ fn conclude_order_check_storage(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn conclude_order_multiple_txs(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+
+        let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(ask_amount),
+            OutputValue::TokenV1(token_id, give_amount),
+        );
+
+        let order_id = make_order_id(&tokens_outpoint);
+        let tx = TransactionBuilder::new()
+            .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::AnyoneCanTake(Box::new(order_data)))
+            .build();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        let tx1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::AccountCommand(
+                    AccountNonce::new(0),
+                    AccountCommand::ConcludeOrder(order_id),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, give_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::AccountCommand(
+                    AccountNonce::new(1),
+                    AccountCommand::ConcludeOrder(order_id),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, give_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx2_id = tx2.transaction().get_id();
+
+        let res = tf
+            .make_block_builder()
+            .with_transactions(vec![tx1, tx2])
+            .build_and_process(&mut rng);
+
+        assert_eq!(
+            res.unwrap_err(),
+            chainstate::ChainstateError::ProcessBlockError(
+                chainstate::BlockError::StateUpdateFailed(
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(
+                        orders_accounting::Error::OrderDataNotFound(order_id).into(),
+                        tx2_id.into()
+                    )
+                )
+            )
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn fill_order_check_storage(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
@@ -722,6 +794,107 @@ fn fill_partially_then_conclude(#[case] seed: Seed) {
         assert_eq!(
             None,
             tf.chainstate.get_order_give_balance(&order_id).unwrap()
+        );
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_overbid_order_in_multiple_txs(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (token_id, tokens_outpoint, coins_outpoint) =
+            issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+
+        let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(ask_amount),
+            OutputValue::TokenV1(token_id, give_amount),
+        );
+
+        let order_id = make_order_id(&tokens_outpoint);
+        let tx = TransactionBuilder::new()
+            .add_input(tokens_outpoint.into(), InputWitness::NoSignature(None))
+            .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
+            .add_output(TxOutput::AnyoneCanTake(Box::new(order_data)))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(ask_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(ask_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx_id = tx.transaction().get_id();
+        tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
+
+        let tx1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(tx_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::AccountCommand(
+                    AccountNonce::new(0),
+                    AccountCommand::FillOrder(
+                        order_id,
+                        OutputValue::Coin(ask_amount),
+                        Destination::AnyoneCanSpend,
+                    ),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, give_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+
+        let tx2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(tx_id.into(), 2),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::AccountCommand(
+                    AccountNonce::new(1),
+                    AccountCommand::FillOrder(
+                        order_id,
+                        OutputValue::Coin(ask_amount),
+                        Destination::AnyoneCanSpend,
+                    ),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, give_amount),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let tx2_id = tx2.transaction().get_id();
+
+        let res = tf
+            .make_block_builder()
+            .with_transactions(vec![tx1, tx2])
+            .build_and_process(&mut rng);
+
+        assert_eq!(
+            res.unwrap_err(),
+            chainstate::ChainstateError::ProcessBlockError(
+                chainstate::BlockError::StateUpdateFailed(
+                    ConnectTransactionError::ConstrainedValueAccumulatorError(
+                        orders_accounting::Error::OrderOverbid(order_id, Amount::ZERO, ask_amount)
+                            .into(),
+                        tx2_id.into()
+                    )
+                )
+            )
         );
     });
 }

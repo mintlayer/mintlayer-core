@@ -74,6 +74,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
 
     let pool_id = PoolId::new(H256::random_using(&mut rng));
     let delegation_id = DelegationId::new(H256::random_using(&mut rng));
+    let delegation_data = pos_accounting::DelegationData::new(pool_id, Destination::AnyoneCanSpend);
 
     let transferred_atoms = rng.gen_range(0..1000);
     let staked_atoms = rng.gen_range(100..1000);
@@ -98,12 +99,15 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::from_iter([(delegation_id, delegation_balance)]),
-        BTreeMap::new(),
+        BTreeMap::from([(delegation_id, delegation_data)]),
     );
     let pos_db = PoSAccountingDB::new(&pos_store);
 
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
+
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
 
     let (decommission_tx, decommission_tx_inputs_utxos) = {
         let decommission_pool_utxo = if rng.gen::<bool>() {
@@ -227,6 +231,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             &inputs,
             &inputs_utxos,
         )
@@ -251,6 +256,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             decommission_tx.inputs(),
             &decommission_tx_inputs_utxos,
         )
@@ -268,6 +274,7 @@ fn accumulators_homomorphism(#[case] seed: Seed) {
             block_height,
             &orders_db,
             &pos_db,
+            &tokens_db,
             spend_share_tx.inputs(),
             &spend_share_inputs_utxos,
         )

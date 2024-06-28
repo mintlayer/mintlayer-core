@@ -279,6 +279,7 @@ dependencies = [
  "serialization",
  "test-utils",
  "thiserror",
+ "tokens-accounting",
  "tokio",
  "tx-verifier",
  "utils",
@@ -1576,6 +1577,7 @@ dependencies = [
 name = "constraints-value-accumulator"
 version = "0.5.1"
 dependencies = [
+ "accounting",
  "common",
  "crypto",
  "orders-accounting",
@@ -1584,6 +1586,7 @@ dependencies = [
  "rstest",
  "test-utils",
  "thiserror",
+ "tokens-accounting",
  "utils",
  "utxo",
 ]

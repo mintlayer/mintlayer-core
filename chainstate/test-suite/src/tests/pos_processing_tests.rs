@@ -1919,8 +1919,10 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
                 ConnectTransactionError::ConstrainedValueAccumulatorError(
-                    constraints_value_accumulator::Error::NegativeAccountBalance(
-                        common::chain::AccountType::Delegation(delegation_id)
+                    constraints_value_accumulator::Error::PoSAccountingError(
+                        pos_accounting::Error::AccountingError(
+                            accounting::Error::ArithmeticErrorSumToUnsignedFailed
+                        )
                     ),
                     tx_id.into()
                 )

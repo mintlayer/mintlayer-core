@@ -25,6 +25,7 @@ use common::{
 };
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
+use pos_accounting::DelegationData;
 use randomness::{CryptoRng, Rng, SliceRandom};
 use rstest::rstest;
 use test_utils::{
@@ -105,6 +106,9 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
 
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
+
     let decommission_pool_utxo = if rng.gen::<bool>() {
         TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data))
     } else {
@@ -164,6 +168,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
             BlockHeight::new(1),
             &orders_db,
             &pos_db,
+            &tokens_db,
             &utxo_db,
         )
         .unwrap_err();
@@ -216,6 +221,7 @@ fn timelock_constraints_on_decommission_in_tx(#[case] seed: Seed) {
             BlockHeight::new(1),
             &orders_db,
             &pos_db,
+            &tokens_db,
             &utxo_db,
         )
         .unwrap();
@@ -239,6 +245,8 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
     let number_of_outputs = rng.gen_range(0..10);
 
     let delegation_id = DelegationId::new(H256::zero());
+    let delegation_data =
+        DelegationData::new(PoolId::new(H256::zero()), Destination::AnyoneCanSpend);
     let delegated_atoms = rng.gen_range(1..1000);
     let atoms_to_spend = rng.gen_range(1..=delegated_atoms);
 
@@ -247,13 +255,16 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::from([(delegation_id, Amount::from_atoms(delegated_atoms))]),
-        BTreeMap::new(),
+        BTreeMap::from([(delegation_id, delegation_data)]),
     );
     let pos_db = pos_accounting::PoSAccountingDB::new(&pos_store);
     let utxo_db = UtxosDBInMemoryImpl::new(Id::<GenBlock>::new(H256::zero()), BTreeMap::new());
 
     let orders_store = InMemoryOrdersAccounting::new();
     let orders_db = OrdersAccountingDB::new(&orders_store);
+
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
 
     // make timelock outputs but total atoms that locked is less than required
     {
@@ -301,6 +312,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
             BlockHeight::new(1),
             &orders_db,
             &pos_db,
+            &tokens_db,
             &utxo_db,
         )
         .unwrap_err();
@@ -358,6 +370,7 @@ fn timelock_constraints_on_spend_share_in_tx(#[case] seed: Seed) {
             BlockHeight::new(1),
             &orders_db,
             &pos_db,
+            &tokens_db,
             &utxo_db,
         )
         .unwrap();

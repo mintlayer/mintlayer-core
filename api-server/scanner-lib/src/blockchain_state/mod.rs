@@ -35,7 +35,7 @@ use common::{
         AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
         Genesis, PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable},
+    primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable, H256},
 };
 use futures::{stream::FuturesOrdered, TryStreamExt};
 use pos_accounting::{make_delegation_id, PoSAccountingView, PoolData};
@@ -44,6 +44,7 @@ use std::{
     ops::{Add, Sub},
     sync::Arc,
 };
+use tokens_accounting::TokensAccountingView;
 use tx_verifier::transaction_verifier::{
     calculate_tokens_burned_in_outputs, distribute_pos_reward,
 };
@@ -707,14 +708,18 @@ impl PoSAccountingView for PoSAccountingAdapterToCheckFees {
         _delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
         // only used for checks for attempted to print money but we don't need to check that here
-        Ok(Some(Amount::MAX))
+        Ok(Some(Amount::from_atoms(i128::MAX as u128)))
     }
 
     fn get_delegation_data(
         &self,
         _delegation_id: DelegationId,
     ) -> Result<Option<pos_accounting::DelegationData>, Self::Error> {
-        unimplemented!()
+        // we don't care about actual data
+        Ok(Some(pos_accounting::DelegationData::new(
+            PoolId::new(H256::zero()),
+            Destination::AnyoneCanSpend,
+        )))
     }
 
     fn get_pool_delegation_share(
@@ -726,18 +731,47 @@ impl PoSAccountingView for PoSAccountingAdapterToCheckFees {
     }
 }
 
-async fn tx_fees<T: ApiServerStorageWrite>(
+struct StubTokensAccounting;
+
+impl TokensAccountingView for StubTokensAccounting {
+    type Error = tokens_accounting::Error;
+
+    fn get_token_data(
+        &self,
+        _id: &TokenId,
+    ) -> Result<Option<tokens_accounting::TokenData>, Self::Error> {
+        let data = tokens_accounting::TokenData::FungibleToken(
+            tokens_accounting::FungibleTokenData::new_unchecked(
+                "tkn1".into(),
+                0,
+                Vec::new(),
+                common::chain::tokens::TokenTotalSupply::Unlimited,
+                false,
+                IsTokenFrozen::No(common::chain::tokens::IsTokenFreezable::No),
+                Destination::AnyoneCanSpend,
+            ),
+        );
+        Ok(Some(data))
+    }
+
+    fn get_circulating_supply(&self, _id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+        Ok(None)
+    }
+}
+
+async fn tx_fees<T: ApiServerStorageRead>(
     chain_config: &ChainConfig,
     block_height: BlockHeight,
     tx: &SignedTransaction,
-    db_tx: &mut T,
+    db_tx: &T,
     new_outputs: &BTreeMap<UtxoOutPoint, &TxOutput>,
 ) -> Result<AccumulatedFee, ApiServerStorageError> {
     let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs(), new_outputs).await?;
     let pools = prefetch_pool_data(&inputs_utxos, db_tx).await?;
     let pos_accounting_adapter = PoSAccountingAdapterToCheckFees { pools };
+    let tokens_view = StubTokensAccounting;
 
-    // TODO(orders)
+    // Provide empty stores for orders as they are irrelevant for fee calculation
     let orders_store = orders_accounting::InMemoryOrdersAccounting::new();
     let orders_db = orders_accounting::OrdersAccountingDB::new(&orders_store);
 
@@ -746,6 +780,7 @@ async fn tx_fees<T: ApiServerStorageWrite>(
         block_height,
         &orders_db,
         &pos_accounting_adapter,
+        &tokens_view,
         tx.inputs(),
         &inputs_utxos,
     )
@@ -758,9 +793,9 @@ async fn tx_fees<T: ApiServerStorageWrite>(
     Ok(consumed_accumulator)
 }
 
-async fn prefetch_pool_data<T: ApiServerStorageWrite>(
+async fn prefetch_pool_data<T: ApiServerStorageRead>(
     inputs_utxos: &Vec<Option<TxOutput>>,
-    db_tx: &mut T,
+    db_tx: &T,
 ) -> Result<BTreeMap<PoolId, PoolData>, ApiServerStorageError> {
     let mut pools = BTreeMap::new();
     for output in inputs_utxos {
@@ -789,8 +824,8 @@ async fn prefetch_pool_data<T: ApiServerStorageWrite>(
     Ok(pools)
 }
 
-async fn collect_inputs_utxos<T: ApiServerStorageWrite>(
-    db_tx: &mut T,
+async fn collect_inputs_utxos<T: ApiServerStorageRead>(
+    db_tx: &T,
     inputs: &[TxInput],
     new_outputs: &BTreeMap<UtxoOutPoint, &TxOutput>,
 ) -> Result<Vec<Option<TxOutput>>, ApiServerStorageError> {

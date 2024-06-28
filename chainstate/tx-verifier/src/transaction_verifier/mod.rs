@@ -875,6 +875,7 @@ where
             tx_source.expected_block_height(),
             &self.orders_accounting_cache,
             &self.pos_accounting_adapter.accounting_delta(),
+            &self.tokens_accounting_cache,
             &self.utxo_cache,
         )?;
 
