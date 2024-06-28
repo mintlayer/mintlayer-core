@@ -584,3 +584,94 @@ impl Builder {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use randomness::Rng;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
+
+    use crate::chain::config::{
+        DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET, MAX_FUTURE_BLOCK_TIME_OFFSET,
+    };
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_max_future_block_offset(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        // Mainnet
+        {
+            let config = Builder::new(ChainType::Mainnet).build();
+
+            let before_the_fork =
+                BlockHeight::new(rng.gen_range(0..MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT.into_int()));
+            assert_eq!(
+                DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
+                config.max_future_block_time_offset(before_the_fork)
+            );
+
+            assert_eq!(
+                MAX_FUTURE_BLOCK_TIME_OFFSET,
+                config.max_future_block_time_offset(MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT)
+            );
+
+            let after_the_fork = BlockHeight::new(
+                rng.gen_range(MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT.into_int()..u64::MAX),
+            );
+            assert_eq!(
+                MAX_FUTURE_BLOCK_TIME_OFFSET,
+                config.max_future_block_time_offset(after_the_fork)
+            );
+        }
+
+        // Testnet
+        {
+            let config = Builder::new(ChainType::Testnet).build();
+
+            let before_the_fork =
+                BlockHeight::new(rng.gen_range(0..TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT.into_int()));
+            assert_eq!(
+                DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
+                config.max_future_block_time_offset(before_the_fork)
+            );
+
+            assert_eq!(
+                MAX_FUTURE_BLOCK_TIME_OFFSET,
+                config.max_future_block_time_offset(TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT)
+            );
+
+            let after_the_fork = BlockHeight::new(
+                rng.gen_range(TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT.into_int()..u64::MAX),
+            );
+            assert_eq!(
+                MAX_FUTURE_BLOCK_TIME_OFFSET,
+                config.max_future_block_time_offset(after_the_fork)
+            );
+        }
+
+        // Regtest
+        {
+            let config = Builder::new(ChainType::Regtest).build();
+
+            let height = BlockHeight::new(rng.gen::<u64>());
+            assert_eq!(
+                MAX_FUTURE_BLOCK_TIME_OFFSET,
+                config.max_future_block_time_offset(height)
+            );
+        }
+
+        // Custom
+        {
+            let custom_offset = Duration::from_secs(rng.gen::<u64>());
+            let config = Builder::new(ChainType::Regtest)
+                .max_future_block_time_offset(Some(custom_offset))
+                .build();
+
+            let height = BlockHeight::new(rng.gen::<u64>());
+            assert_eq!(custom_offset, config.max_future_block_time_offset(height));
+        }
+    }
+}
