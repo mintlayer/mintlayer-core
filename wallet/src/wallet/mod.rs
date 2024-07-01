@@ -68,13 +68,13 @@ use tx_verifier::{check_transaction, CheckTransactionError};
 use utils::ensure;
 pub use wallet_storage::Error;
 use wallet_storage::{
-    DefaultBackend, Store, StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked, TransactionRwLocked,
-    TransactionRwUnlocked, Transactional, WalletStorageReadLocked, WalletStorageReadUnlocked,
-    WalletStorageWriteLocked, WalletStorageWriteUnlocked,
+    DefaultBackend, Store, StoreTxRo, StoreTxRw, StoreTxRwUnlocked, TransactionRoLocked,
+    TransactionRwLocked, TransactionRwUnlocked, Transactional, WalletStorageReadLocked,
+    WalletStorageReadUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::chain_info::ChainInfo;
-use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
+use wallet_types::seed_phrase::SerializableSeedPhrase;
 use wallet_types::signature_status::SignatureStatus;
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::{TxData, TxState};
@@ -249,7 +249,6 @@ pub enum WalletPoolsFilter {
 pub struct Wallet<B: storage::Backend + 'static, P> {
     chain_config: Arc<ChainConfig>,
     db: Store<B>,
-    key_chain: MasterKeyChain,
     accounts: BTreeMap<U31, Account>,
     latest_median_time: BlockTimestamp,
     next_unused_account: (U31, Account),
@@ -275,90 +274,57 @@ where
     B: storage::Backend + 'static,
     P: SignerProvider,
 {
-    #[allow(clippy::too_many_arguments)]
-    pub fn create_new_wallet(
+    pub fn create_new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
-        mnemonic: &str,
-        passphrase: Option<&str>,
-        save_seed_phrase: StoreSeedPhrase,
         best_block: (BlockHeight, Id<GenBlock>),
         wallet_type: WalletType,
-        signer_provider: P,
+        signer_provider: F,
     ) -> WalletResult<Self> {
-        let mut wallet = Self::new_wallet(
-            chain_config,
-            db,
-            mnemonic,
-            passphrase,
-            save_seed_phrase,
-            wallet_type,
-            signer_provider,
-        )?;
+        let mut wallet = Self::new_wallet(chain_config, db, wallet_type, signer_provider)?;
 
         wallet.set_best_block(best_block.0, best_block.1)?;
 
         Ok(wallet)
     }
 
-    pub fn recover_wallet(
+    pub fn recover_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
-        mnemonic: &str,
-        passphrase: Option<&str>,
-        save_seed_phrase: StoreSeedPhrase,
         wallet_type: WalletType,
-        signer_provider: P,
+        signer_provider: F,
     ) -> WalletResult<Self> {
-        Self::new_wallet(
-            chain_config,
-            db,
-            mnemonic,
-            passphrase,
-            save_seed_phrase,
-            wallet_type,
-            signer_provider,
-        )
+        Self::new_wallet(chain_config, db, wallet_type, signer_provider)
     }
 
-    fn new_wallet(
+    fn new_wallet<F: FnOnce(&mut StoreTxRwUnlocked<B>) -> WalletResult<P>>(
         chain_config: Arc<ChainConfig>,
         db: Store<B>,
-        mnemonic: &str,
-        passphrase: Option<&str>,
-        save_seed_phrase: StoreSeedPhrase,
         wallet_type: WalletType,
-        signer_provider: P,
+        signer_provider: F,
     ) -> WalletResult<Self> {
         let mut db_tx = db.transaction_rw_unlocked(None)?;
-
-        let key_chain = MasterKeyChain::new_from_mnemonic(
-            chain_config.clone(),
-            &mut db_tx,
-            mnemonic,
-            passphrase,
-            save_seed_phrase,
-        )?;
 
         db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
         db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
         db_tx.set_lookahead_size(LOOKAHEAD_SIZE)?;
         db_tx.set_wallet_type(wallet_type)?;
+        let mut signer_provider = signer_provider(&mut db_tx)?;
 
         let default_account = Wallet::<B, P>::create_next_unused_account(
             U31::ZERO,
             chain_config.clone(),
-            &key_chain,
             &mut db_tx,
             None,
+            &mut signer_provider,
         )?;
 
         let next_unused_account = Wallet::<B, P>::create_next_unused_account(
             U31::ONE,
             chain_config.clone(),
-            &key_chain,
             &mut db_tx,
             None,
+            &mut signer_provider,
         )?;
 
         db_tx.commit()?;
@@ -367,7 +333,6 @@ where
         let wallet = Wallet {
             chain_config,
             db,
-            key_chain,
             accounts: [default_account].into(),
             latest_median_time,
             next_unused_account,
@@ -380,7 +345,11 @@ where
     /// Migrate the wallet DB from version 1 to version 2
     /// * save the chain info in the DB based on the chain type specified by the user
     /// * reset transactions
-    fn migration_v2(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
+    fn migration_v2(
+        db: &Store<B>,
+        chain_config: Arc<ChainConfig>,
+        signer_provider: &mut P,
+    ) -> WalletResult<()> {
         let mut db_tx = db.transaction_rw_unlocked(None)?;
         // set new chain info to the one provided by the user assuming it is the correct one
         db_tx.set_chain_info(&ChainInfo::new(chain_config.as_ref()))?;
@@ -390,7 +359,7 @@ where
         Self::reset_wallet_transactions(chain_config.clone(), &mut db_tx)?;
 
         // Create the next unused account
-        Self::migrate_next_unused_account(chain_config, &mut db_tx)?;
+        Self::migrate_next_unused_account(chain_config, &mut db_tx, signer_provider)?;
 
         db_tx.set_storage_version(WALLET_VERSION_V2)?;
         db_tx.commit()?;
@@ -521,47 +490,58 @@ where
     }
 
     /// Check the wallet DB version and perform any migrations needed
-    fn check_and_migrate_db<F: Fn(u32) -> Result<(), WalletError>>(
+    fn check_and_migrate_db<
+        F: Fn(u32) -> Result<(), WalletError>,
+        F2: FnOnce(&StoreTxRo<B>) -> WalletResult<P>,
+    >(
         db: &Store<B>,
         chain_config: Arc<ChainConfig>,
         pre_migration: F,
         wallet_type: WalletType,
-    ) -> WalletResult<()> {
+        signer_provider: F2,
+    ) -> WalletResult<P> {
         let version = db.transaction_ro()?.get_storage_version()?;
+        ensure!(
+            version != WALLET_VERSION_UNINITIALIZED,
+            WalletError::WalletNotInitialized
+        );
+        let mut signer_provider = signer_provider(&db.transaction_ro()?)?;
 
-        match version {
-            WALLET_VERSION_UNINITIALIZED => return Err(WalletError::WalletNotInitialized),
-            WALLET_VERSION_V1 => {
-                pre_migration(WALLET_VERSION_V1)?;
-                Self::migration_v2(db, chain_config.clone())?;
-            }
-            WALLET_VERSION_V2 => {
-                pre_migration(WALLET_VERSION_V2)?;
-                Self::migration_v3(db, chain_config.clone())?;
-            }
-            WALLET_VERSION_V3 => {
-                pre_migration(WALLET_VERSION_V3)?;
-                Self::migration_v4(db)?;
-            }
-            WALLET_VERSION_V4 => {
-                pre_migration(WALLET_VERSION_V4)?;
-                Self::migration_v5(db, chain_config.clone())?;
-            }
-            WALLET_VERSION_V5 => {
-                pre_migration(WALLET_VERSION_V5)?;
-                Self::migration_v6(db, chain_config.clone())?;
-            }
-            WALLET_VERSION_V6 => {
-                pre_migration(WALLET_VERSION_V6)?;
-                Self::migration_v7(db, chain_config.clone(), wallet_type)?;
-            }
-            CURRENT_WALLET_VERSION => return Ok(()),
-            unsupported_version => {
-                return Err(WalletError::UnsupportedWalletVersion(unsupported_version))
+        loop {
+            let version = db.transaction_ro()?.get_storage_version()?;
+
+            match version {
+                WALLET_VERSION_UNINITIALIZED => return Err(WalletError::WalletNotInitialized),
+                WALLET_VERSION_V1 => {
+                    pre_migration(WALLET_VERSION_V1)?;
+                    Self::migration_v2(db, chain_config.clone(), &mut signer_provider)?;
+                }
+                WALLET_VERSION_V2 => {
+                    pre_migration(WALLET_VERSION_V2)?;
+                    Self::migration_v3(db, chain_config.clone())?;
+                }
+                WALLET_VERSION_V3 => {
+                    pre_migration(WALLET_VERSION_V3)?;
+                    Self::migration_v4(db)?;
+                }
+                WALLET_VERSION_V4 => {
+                    pre_migration(WALLET_VERSION_V4)?;
+                    Self::migration_v5(db, chain_config.clone())?;
+                }
+                WALLET_VERSION_V5 => {
+                    pre_migration(WALLET_VERSION_V5)?;
+                    Self::migration_v6(db, chain_config.clone())?;
+                }
+                WALLET_VERSION_V6 => {
+                    pre_migration(WALLET_VERSION_V6)?;
+                    Self::migration_v7(db, chain_config.clone(), wallet_type)?;
+                }
+                CURRENT_WALLET_VERSION => return Ok(signer_provider),
+                unsupported_version => {
+                    return Err(WalletError::UnsupportedWalletVersion(unsupported_version))
+                }
             }
         }
-
-        Self::check_and_migrate_db(db, chain_config, pre_migration, wallet_type)
     }
 
     fn validate_chain_info(
@@ -688,8 +668,8 @@ where
     fn migrate_next_unused_account(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut impl WalletStorageWriteUnlocked,
+        signer_provider: &mut P,
     ) -> Result<(), WalletError> {
-        let key_chain = MasterKeyChain::new_from_existing_database(chain_config.clone(), db_tx)?;
         let accounts_info = db_tx.get_accounts_info()?;
         let mut accounts: BTreeMap<U31, Account> = accounts_info
             .keys()
@@ -706,26 +686,35 @@ where
         Wallet::<B, P>::create_next_unused_account(
             next_account_index,
             chain_config.clone(),
-            &key_chain,
             db_tx,
             None,
+            signer_provider,
         )?;
         Ok(())
     }
 
-    pub fn load_wallet<F: Fn(u32) -> WalletResult<()>>(
+    pub fn load_wallet<
+        F: Fn(u32) -> WalletResult<()>,
+        F2: FnOnce(&StoreTxRo<B>) -> WalletResult<P>,
+    >(
         chain_config: Arc<ChainConfig>,
         mut db: Store<B>,
         password: Option<String>,
         pre_migration: F,
         wallet_type: WalletType,
         force_change_wallet_type: bool,
-        signer_provider: P,
+        signer_provider: F2,
     ) -> WalletResult<Self> {
         if let Some(password) = password {
             db.unlock_private_keys(&password)?;
         }
-        Self::check_and_migrate_db(&db, chain_config.clone(), pre_migration, wallet_type)?;
+        let signer_provider = Self::check_and_migrate_db(
+            &db,
+            chain_config.clone(),
+            pre_migration,
+            wallet_type,
+            signer_provider,
+        )?;
         if force_change_wallet_type {
             Self::force_migrate_wallet_type(wallet_type, &db, chain_config.clone())?;
         }
@@ -735,8 +724,6 @@ where
         let db_tx = db.transaction_ro()?;
 
         Self::validate_chain_info(chain_config.as_ref(), &db_tx, wallet_type)?;
-
-        let key_chain = MasterKeyChain::new_from_existing_database(chain_config.clone(), &db_tx)?;
 
         let accounts_info = db_tx.get_accounts_info()?;
 
@@ -760,7 +747,6 @@ where
         Ok(Wallet {
             chain_config,
             db,
-            key_chain,
             accounts,
             latest_median_time,
             next_unused_account,
@@ -845,20 +831,21 @@ where
     fn create_next_unused_account(
         next_account_index: U31,
         chain_config: Arc<ChainConfig>,
-        master_key_chain: &MasterKeyChain,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         name: Option<String>,
+        signer_provider: &mut P,
     ) -> WalletResult<(U31, Account)> {
         ensure!(
             name.as_ref().map_or(true, |name| !name.is_empty()),
             WalletError::EmptyAccountName
         );
 
-        let lookahead_size = db_tx.get_lookahead_size()?;
-        let account_key_chain =
-            master_key_chain.create_account_key_chain(db_tx, next_account_index, lookahead_size)?;
-
-        let account = Account::new(chain_config, db_tx, account_key_chain, name)?;
+        let account = signer_provider.make_new_account(
+            chain_config.clone(),
+            next_account_index,
+            name,
+            db_tx,
+        )?;
 
         Ok((next_account_index, account))
     }
@@ -892,9 +879,9 @@ where
         let mut next_unused_account = Self::create_next_unused_account(
             next_account_index,
             self.chain_config.clone(),
-            &self.key_chain,
             &mut db_tx,
             None,
+            &mut self.signer_provider,
         )?;
 
         self.next_unused_account.1.set_name(name.clone(), &mut db_tx)?;

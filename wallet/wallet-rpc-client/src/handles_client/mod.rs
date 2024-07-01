@@ -55,8 +55,8 @@ use wallet_types::{
 
 use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, WalletInterface};
 
-pub struct WalletRpcHandlesClient<N: Clone, P: Clone> {
-    wallet_rpc: WalletRpc<N, P>,
+pub struct WalletRpcHandlesClient<N: Clone> {
+    wallet_rpc: WalletRpc<N>,
     server_rpc: Option<rpc::Rpc>,
 }
 
@@ -75,12 +75,11 @@ pub enum WalletRpcHandlesClientError<N: NodeInterface> {
     AddressError(#[from] AddressError),
 }
 
-impl<N, P> WalletRpcHandlesClient<N, P>
+impl<N> WalletRpcHandlesClient<N>
 where
     N: NodeInterface + Clone + Send + Sync + 'static + Debug,
-    P: SignerProvider + Clone + Send + Sync + 'static,
 {
-    pub fn new(wallet_rpc: WalletRpc<N, P>, server_rpc: Option<rpc::Rpc>) -> Self {
+    pub fn new(wallet_rpc: WalletRpc<N>, server_rpc: Option<rpc::Rpc>) -> Self {
         Self {
             wallet_rpc,
             server_rpc,
@@ -89,10 +88,9 @@ where
 }
 
 #[async_trait::async_trait]
-impl<N, P> WalletInterface for WalletRpcHandlesClient<N, P>
+impl<N> WalletInterface for WalletRpcHandlesClient<N>
 where
     N: NodeInterface + Clone + Send + Sync + 'static + Debug,
-    P: SignerProvider + Clone + Send + Sync + 'static,
 {
     type Error = WalletRpcHandlesClientError<N>;
 
