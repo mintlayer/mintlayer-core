@@ -46,10 +46,13 @@ use trezor_client::{
     protos::{MintlayerTransferTxOutput, MintlayerUtxoTxInput},
     Trezor,
 };
-use wallet_storage::WalletStorageReadUnlocked;
+use wallet_storage::{WalletStorageReadUnlocked, WalletStorageWriteUnlocked};
 use wallet_types::signature_status::SignatureStatus;
 
-use crate::key_chain::{make_account_path, AccountKeyChains, FoundPubKey, MasterKeyChain};
+use crate::{
+    key_chain::{make_account_path, AccountKeyChains, FoundPubKey, MasterKeyChain},
+    Account, WalletResult,
+};
 
 use super::{Signer, SignerError, SignerProvider, SignerResult};
 
@@ -274,7 +277,7 @@ impl Signer for TrezorSigner {
             .into_iter()
             .multiunzip();
 
-        Ok((ptx.new_witnesses(witnesses), prev_statuses, new_statuses))
+        Ok((ptx.with_witnesses(witnesses), prev_statuses, new_statuses))
     }
 
     fn sign_challenge(
@@ -437,6 +440,16 @@ impl SignerProvider for TrezorSignerProvider {
 
     fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S {
         TrezorSigner::new(chain_config, account_index, self.client.clone())
+    }
+
+    fn make_new_account(
+        &mut self,
+        _chain_config: Arc<ChainConfig>,
+        _account_index: U31,
+        _name: Option<String>,
+        _db_tx: &mut impl WalletStorageWriteUnlocked,
+    ) -> WalletResult<Account> {
+        unimplemented!("hehe");
     }
 }
 

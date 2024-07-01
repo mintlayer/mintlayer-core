@@ -4630,6 +4630,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serialization",
+ "storage",
  "subsystem",
  "test-utils",
  "thiserror",
@@ -4640,6 +4641,7 @@ dependencies = [
  "wallet-controller",
  "wallet-rpc-client",
  "wallet-rpc-lib",
+ "wallet-storage",
  "wallet-types",
 ]
 
