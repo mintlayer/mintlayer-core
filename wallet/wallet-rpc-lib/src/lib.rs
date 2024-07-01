@@ -26,7 +26,6 @@ pub use service::{
     CreatedWallet, Event, EventStream, TxState, WalletHandle,
     /* WalletResult, */ WalletService,
 };
-use wallet::signer::{software_signer::SoftwareSignerProvider, SignerProvider};
 use wallet_controller::{NodeInterface, NodeRpcClient};
 
 use std::{fmt::Debug, time::Duration};
@@ -77,27 +76,15 @@ pub async fn run(
                 StartupError::WalletService(service::InitError::<NodeRpcClient>::NodeRpc(err))
             })?;
 
-            let (wallet_service, rpc_server) = start_services(
-                wallet_config,
-                rpc_config,
-                node_rpc,
-                false,
-                SoftwareSignerProvider::new(),
-            )
-            .await?;
+            let (wallet_service, rpc_server) =
+                start_services(wallet_config, rpc_config, node_rpc, false).await?;
             wait_for_shutdown(wallet_service, rpc_server).await;
         }
         NodeRpc::ColdWallet => {
             let node_rpc =
                 wallet_controller::make_cold_wallet_rpc_client(wallet_config.chain_config.clone());
-            let (wallet_service, rpc_server) = start_services(
-                wallet_config,
-                rpc_config,
-                node_rpc,
-                true,
-                SoftwareSignerProvider::new(),
-            )
-            .await?;
+            let (wallet_service, rpc_server) =
+                start_services(wallet_config, rpc_config, node_rpc, true).await?;
             wait_for_shutdown(wallet_service, rpc_server).await;
         }
     }
@@ -105,16 +92,14 @@ pub async fn run(
     Ok(())
 }
 
-pub async fn start_services<N, P>(
+pub async fn start_services<N>(
     wallet_config: WalletServiceConfig,
     rpc_config: WalletRpcConfig,
     node_rpc: N,
     cold_wallet: bool,
-    signer_provider: P,
-) -> Result<(WalletService<N, P>, rpc::Rpc), StartupError<N>>
+) -> Result<(WalletService<N>, rpc::Rpc), StartupError<N>>
 where
     N: NodeInterface + Clone + Sync + Send + 'static + Debug,
-    P: SignerProvider + Clone + Send + Sync + 'static,
 {
     // Start the wallet service
     let wallet_service = WalletService::start(
@@ -123,7 +108,6 @@ where
         wallet_config.force_change_wallet_type,
         wallet_config.start_staking_for_account,
         node_rpc,
-        signer_provider.clone(),
     )
     .await?;
 
@@ -138,7 +122,6 @@ where
             rpc_config,
             chain_config,
             cold_wallet,
-            signer_provider,
         )
         .await
         .map_err(StartupError::Rpc)?
@@ -148,10 +131,9 @@ where
 }
 
 /// Run a wallet daemon with RPC interface
-pub async fn wait_for_shutdown<N, P>(wallet_service: WalletService<N, P>, rpc_server: rpc::Rpc)
+pub async fn wait_for_shutdown<N>(wallet_service: WalletService<N>, rpc_server: rpc::Rpc)
 where
     N: NodeInterface + Clone + Send + Sync + 'static,
-    P: SignerProvider + Clone + Send + Sync + 'static,
 {
     // Start the wallet service
     let wallet_handle = wallet_service.handle();
