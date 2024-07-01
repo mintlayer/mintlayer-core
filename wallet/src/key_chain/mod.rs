@@ -35,6 +35,7 @@ mod with_purpose;
 pub use account_key_chain::AccountKeyChainImpl;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use crypto::key::hdkd::u31::U31;
+use crypto::key::PublicKey;
 use crypto::vrf::VRFKeyKind;
 pub use master_key_chain::MasterKeyChain;
 
@@ -110,6 +111,15 @@ pub enum KeyChainError {
 pub enum FoundPubKey {
     Hierarchy(ExtendedPublicKey),
     Standalone(AccountPublicKey),
+}
+
+impl FoundPubKey {
+    pub fn into_public_key(self) -> PublicKey {
+        match self {
+            Self::Hierarchy(xpub) => xpub.into_public_key(),
+            Self::Standalone(acc_pk) => acc_pk.into_item_id(),
+        }
+    }
 }
 
 pub trait AccountKeyChains {

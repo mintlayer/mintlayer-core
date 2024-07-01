@@ -13,14 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common::chain::{
     signature::{
         inputsig::arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
         DestinationSigError,
     },
-    Destination,
+    ChainConfig, Destination,
 };
-use crypto::key::hdkd::derivable::DerivationError;
+use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
+use wallet_storage::WalletStorageReadUnlocked;
 use wallet_types::signature_status::SignatureStatus;
 
 use crate::{
@@ -29,6 +32,8 @@ use crate::{
 };
 
 pub mod software_signer;
+#[cfg(feature = "trezor")]
+pub mod trezor_signer;
 
 /// KeyChain errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -47,6 +52,8 @@ pub enum SignerError {
     DestinationNotFromThisWallet,
     #[error("{0}")]
     SignArbitraryMessageError(#[from] SignArbitraryMessageError),
+    #[error("{0}")]
+    SerializationError(#[from] serialization::Error),
 }
 
 type SignerResult<T> = Result<T, SignerError>;
@@ -56,9 +63,10 @@ type SignerResult<T> = Result<T, SignerError>;
 pub trait Signer {
     /// sign a partially signed transaction and return the before and after signature statuses
     fn sign_tx(
-        &self,
+        &mut self,
         tx: PartiallySignedTransaction,
         key_chain: &impl AccountKeyChains,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
@@ -67,9 +75,16 @@ pub trait Signer {
 
     /// sign an arbitrary message for a destination known to this key chain
     fn sign_challenge(
-        &self,
+        &mut self,
         message: Vec<u8>,
         destination: Destination,
         key_chain: &impl AccountKeyChains,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<ArbitraryMessageSignature>;
+}
+
+pub trait SignerProvider {
+    type S: Signer;
+
+    fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S;
 }

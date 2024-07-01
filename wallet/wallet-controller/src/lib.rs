@@ -43,6 +43,7 @@ use types::{
     Balances, InspectTransaction, SeedWithPassPhrase, SignatureStats, TransactionToInspect,
     ValidatedSignatures, WalletInfo,
 };
+use wallet_storage::DefaultBackend;
 
 use read::ReadOnlyController;
 use sync::InSync;
@@ -83,9 +84,10 @@ use wallet::{
         PartiallySignedTransaction, TransactionToSign,
     },
     get_tx_output_destination,
+    signer::SignerProvider,
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
-    DefaultWallet, WalletError, WalletResult,
+    Wallet, WalletError, WalletResult,
 };
 pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
@@ -144,33 +146,42 @@ pub struct ControllerConfig {
     pub broadcast_to_mempool: bool,
 }
 
-pub struct Controller<T, W> {
+pub struct Controller<T, W, B: storage::Backend + 'static, P> {
     chain_config: Arc<ChainConfig>,
 
     rpc_client: T,
 
-    wallet: DefaultWallet,
+    wallet: Wallet<B, P>,
 
     staking_started: BTreeSet<U31>,
 
     wallet_events: W,
 }
 
-impl<T, WalletEvents> std::fmt::Debug for Controller<T, WalletEvents> {
+impl<T, WalletEvents, B: storage::Backend, P> std::fmt::Debug
+    for Controller<T, WalletEvents, B, P>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Controller").finish()
     }
 }
 
-pub type RpcController<N, WalletEvents> = Controller<N, WalletEvents>;
-pub type HandlesController<WalletEvents> = Controller<WalletHandlesClient, WalletEvents>;
-pub type ColdController<WalletEvents> = Controller<ColdWalletClient, WalletEvents>;
+pub type RpcController<N, WalletEvents, P> = Controller<N, WalletEvents, DefaultBackend, P>;
+pub type HandlesController<WalletEvents, P> =
+    Controller<WalletHandlesClient, WalletEvents, DefaultBackend, P>;
+pub type ColdController<WalletEvents, P> =
+    Controller<ColdWalletClient, WalletEvents, DefaultBackend, P>;
 
-impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controller<T, W> {
+impl<T, W, P> Controller<T, W, DefaultBackend, P>
+where
+    T: NodeInterface + Clone + Send + Sync + 'static,
+    W: WalletEvents,
+    P: SignerProvider,
+{
     pub async fn new(
         chain_config: Arc<ChainConfig>,
         rpc_client: T,
-        wallet: DefaultWallet,
+        wallet: Wallet<DefaultBackend, P>,
         wallet_events: W,
     ) -> Result<Self, ControllerError<T>> {
         let mut controller = Self {
@@ -190,7 +201,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
     pub fn new_unsynced(
         chain_config: Arc<ChainConfig>,
         rpc_client: T,
-        wallet: DefaultWallet,
+        wallet: Wallet<DefaultBackend, P>,
         wallet_events: W,
     ) -> Self {
         Self {
@@ -202,6 +213,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
@@ -210,7 +222,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         whether_to_store_seed_phrase: StoreSeedPhrase,
         best_block: (BlockHeight, Id<GenBlock>),
         wallet_type: WalletType,
-    ) -> Result<DefaultWallet, ControllerError<T>> {
+        signer_provider: P,
+    ) -> Result<Wallet<DefaultBackend, P>, ControllerError<T>> {
         utils::ensure!(
             !file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -229,6 +242,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             whether_to_store_seed_phrase,
             best_block,
             wallet_type,
+            signer_provider,
         )
         .map_err(ControllerError::WalletError)?;
 
@@ -242,7 +256,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         passphrase: Option<&str>,
         whether_to_store_seed_phrase: StoreSeedPhrase,
         wallet_type: WalletType,
-    ) -> Result<DefaultWallet, ControllerError<T>> {
+        signer_provider: P,
+    ) -> Result<Wallet<DefaultBackend, P>, ControllerError<T>> {
         utils::ensure!(
             !file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -260,6 +275,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             passphrase,
             whether_to_store_seed_phrase,
             wallet_type,
+            signer_provider,
         )
         .map_err(ControllerError::WalletError)?;
 
@@ -299,7 +315,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         password: Option<String>,
         wallet_type: WalletType,
         force_change_wallet_type: bool,
-    ) -> Result<DefaultWallet, ControllerError<T>> {
+        signer_provider: P,
+    ) -> Result<Wallet<DefaultBackend, P>, ControllerError<T>> {
         utils::ensure!(
             file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -318,6 +335,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
             wallet_type,
             force_change_wallet_type,
+            signer_provider,
         )
         .map_err(ControllerError::WalletError)?;
 
@@ -675,7 +693,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &mut self,
         account_index: U31,
         config: ControllerConfig,
-    ) -> Result<SyncedController<T, W>, ControllerError<T>> {
+    ) -> Result<SyncedController<'_, T, W, DefaultBackend, P>, ControllerError<T>> {
         self.sync_once().await?;
         Ok(SyncedController::new(
             &mut self.wallet,
@@ -688,7 +706,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         ))
     }
 
-    pub fn readonly_controller(&self, account_index: U31) -> ReadOnlyController<T> {
+    pub fn readonly_controller(
+        &self,
+        account_index: U31,
+    ) -> ReadOnlyController<'_, T, DefaultBackend, P> {
         ReadOnlyController::new(
             &self.wallet,
             self.rpc_client.clone(),

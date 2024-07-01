@@ -18,6 +18,7 @@
 use futures::future::{BoxFuture, Future};
 
 use utils::shallow_clone::ShallowClone;
+use wallet::signer::SignerProvider;
 use wallet_controller::NodeInterface;
 
 use crate::{
@@ -29,13 +30,17 @@ pub use crate::service::worker::EventStream;
 
 /// Wallet handle allows the user to control the wallet service, perform queries etc.
 #[derive(Clone)]
-pub struct WalletHandle<N: Clone>(worker::CommandSender<N>);
+pub struct WalletHandle<N: Clone, P: Clone>(worker::CommandSender<N, P>);
 
-impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletHandle<N> {
+impl<N, P> WalletHandle<N, P>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static,
+    P: SignerProvider + Clone + Sync + Send + 'static,
+{
     /// Asynchronous wallet service call
     pub fn call_async<R: Send + 'static, E: Into<RpcError<N>> + Send + 'static>(
         &self,
-        action: impl FnOnce(&mut WalletController<N>) -> BoxFuture<Result<R, E>> + Send + 'static,
+        action: impl FnOnce(&mut WalletController<N, P>) -> BoxFuture<Result<R, E>> + Send + 'static,
     ) -> impl Future<Output = Result<Result<R, RpcError<N>>, SubmitError>> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let command = WalletCommand::Call(Box::new(move |opt_controller| match opt_controller {
@@ -58,7 +63,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletHandle<N> {
     /// Wallet service call
     pub fn call<R: Send + 'static, E: Into<RpcError<N>> + Send + 'static>(
         &self,
-        action: impl FnOnce(&mut WalletController<N>) -> Result<R, E> + Send + 'static,
+        action: impl FnOnce(&mut WalletController<N, P>) -> Result<R, E> + Send + 'static,
     ) -> impl Future<Output = Result<Result<R, RpcError<N>>, SubmitError>> {
         self.call_async(|controller| {
             let res = action(controller);
@@ -68,7 +73,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletHandle<N> {
 
     pub fn manage_async<R: Send + 'static>(
         &self,
-        action_fn: impl FnOnce(&mut WalletWorker<N>) -> BoxFuture<R> + Send + 'static,
+        action_fn: impl FnOnce(&mut WalletWorker<N, P>) -> BoxFuture<R> + Send + 'static,
     ) -> impl Future<Output = Result<R, SubmitError>> {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let command = WalletCommand::Manage(Box::new(move |wallet_manager| {
@@ -106,16 +111,16 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletHandle<N> {
         self.0.closed().await
     }
 
-    fn send_raw(&self, cmd: WalletCommand<N>) -> Result<(), SubmitError> {
+    fn send_raw(&self, cmd: WalletCommand<N, P>) -> Result<(), SubmitError> {
         self.0.send(cmd).map_err(|_| SubmitError::Send)
     }
 }
 
-pub fn create<N: Clone>(sender: worker::CommandSender<N>) -> WalletHandle<N> {
+pub fn create<N: Clone, P: Clone>(sender: worker::CommandSender<N, P>) -> WalletHandle<N, P> {
     WalletHandle(sender)
 }
 
-impl<N: Clone> ShallowClone for WalletHandle<N> {
+impl<N: Clone, P: Clone> ShallowClone for WalletHandle<N, P> {
     fn shallow_clone(&self) -> Self {
         Self(worker::CommandSender::clone(&self.0))
     }
