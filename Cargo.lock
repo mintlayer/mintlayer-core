@@ -4587,6 +4587,7 @@ dependencies = [
  "p2p",
  "rfd",
  "serialization",
+ "storage",
  "subsystem",
  "thiserror",
  "tokio",
@@ -4597,6 +4598,7 @@ dependencies = [
  "wallet-controller",
  "wallet-rpc-client",
  "wallet-rpc-lib",
+ "wallet-storage",
  "wallet-types",
  "winres",
 ]

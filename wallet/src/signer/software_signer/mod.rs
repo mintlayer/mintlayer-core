@@ -44,10 +44,16 @@ use crypto::key::{
 };
 use itertools::Itertools;
 use randomness::make_true_rng;
-use wallet_storage::WalletStorageReadUnlocked;
-use wallet_types::signature_status::SignatureStatus;
+use wallet_storage::{
+    StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
+    WalletStorageWriteUnlocked,
+};
+use wallet_types::{seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus};
 
-use crate::key_chain::{make_account_path, AccountKeyChains, FoundPubKey, MasterKeyChain};
+use crate::{
+    key_chain::{make_account_path, AccountKeyChains, FoundPubKey, MasterKeyChain},
+    Account, WalletResult,
+};
 
 use super::{Signer, SignerError, SignerProvider, SignerResult};
 
@@ -93,6 +99,7 @@ impl SoftwareSigner {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn sign_input(
         &self,
         tx: &Transaction,
@@ -383,11 +390,35 @@ fn get_private_key(
 }
 
 #[derive(Clone, Debug)]
-pub struct SoftwareSignerProvider;
+pub struct SoftwareSignerProvider {
+    master_key_chain: MasterKeyChain,
+}
 
 impl SoftwareSignerProvider {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new_from_mnemonic<B: storage::Backend>(
+        chain_config: Arc<ChainConfig>,
+        db_tx: &mut StoreTxRwUnlocked<B>,
+        mnemonic_str: &str,
+        passphrase: Option<&str>,
+        save_seed_phrase: StoreSeedPhrase,
+    ) -> SignerResult<Self> {
+        let master_key_chain = MasterKeyChain::new_from_mnemonic(
+            chain_config,
+            db_tx,
+            mnemonic_str,
+            passphrase,
+            save_seed_phrase,
+        )?;
+
+        Ok(Self { master_key_chain })
+    }
+
+    pub fn load_from_database(
+        chain_config: Arc<ChainConfig>,
+        db_tx: &impl WalletStorageReadLocked,
+    ) -> SignerResult<Self> {
+        let master_key_chain = MasterKeyChain::new_from_existing_database(chain_config, db_tx)?;
+        Ok(Self { master_key_chain })
     }
 }
 
@@ -396,6 +427,23 @@ impl SignerProvider for SoftwareSignerProvider {
 
     fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S {
         SoftwareSigner::new(chain_config, account_index)
+    }
+
+    fn make_new_account(
+        &mut self,
+        chain_config: Arc<ChainConfig>,
+        next_account_index: U31,
+        name: Option<String>,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+    ) -> WalletResult<Account> {
+        let lookahead_size = db_tx.get_lookahead_size()?;
+        let account_key_chain = self.master_key_chain.create_account_key_chain(
+            db_tx,
+            next_account_index,
+            lookahead_size,
+        )?;
+
+        Account::new(chain_config, db_tx, account_key_chain, name)
     }
 }
 
