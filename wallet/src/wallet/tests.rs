@@ -51,8 +51,7 @@ use test_utils::{
 use wallet_storage::{schema, WalletStorageEncryptionRead};
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
-    seed_phrase::PassPhrase,
-    seed_phrase::SeedPhraseLanguage,
+    seed_phrase::{PassPhrase, StoreSeedPhrase},
     utxo_types::{UtxoState, UtxoType},
     AccountWalletTxId, Currency,
 };
@@ -274,7 +273,12 @@ fn verify_wallet_balance<B, P>(
         |_| Ok(()),
         WalletType::Hot,
         false,
-        SoftwareSignerProvider::new(),
+        |db_tx| {
+            Ok(SoftwareSignerProvider::load_from_database(
+                chain_config.clone(),
+                db_tx,
+            )?)
+        },
     )
     .unwrap();
 
@@ -295,14 +299,19 @@ fn create_wallet_with_mnemonic(chain_config: Arc<ChainConfig>, mnemonic: &str) -
     let db = create_wallet_in_memory().unwrap();
     let genesis_block_id = chain_config.genesis_block_id();
     Wallet::create_new_wallet(
-        chain_config,
+        chain_config.clone(),
         db,
-        mnemonic,
-        None,
-        StoreSeedPhrase::DoNotStore,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
-        SoftwareSignerProvider::new(),
+        |db_tx| {
+            Ok(SoftwareSignerProvider::new_from_mnemonic(
+                chain_config,
+                db_tx,
+                mnemonic,
+                None,
+                StoreSeedPhrase::DoNotStore,
+            )?)
+        },
     )
     .unwrap()
 }
@@ -356,6 +365,7 @@ fn test_balance_from_genesis(
 fn wallet_creation_in_memory() {
     let chain_config = Arc::new(create_regtest());
     let empty_db = create_wallet_in_memory().unwrap();
+    let chain_config2 = chain_config.clone();
 
     // fail to load an empty wallet
     match Wallet::load_wallet(
@@ -365,7 +375,12 @@ fn wallet_creation_in_memory() {
         |_| Ok(()),
         WalletType::Hot,
         false,
-        SoftwareSignerProvider::new(),
+        |db_tx| {
+            Ok(SoftwareSignerProvider::load_from_database(
+                chain_config2,
+                db_tx,
+            )?)
+        },
     ) {
         Ok(_) => panic!("Wallet loading should fail"),
         Err(err) => assert_eq!(err, WalletError::WalletNotInitialized),
@@ -377,13 +392,18 @@ fn wallet_creation_in_memory() {
 
     // successfully load a wallet from initialized db
     let _wallet = Wallet::load_wallet(
-        chain_config,
+        chain_config.clone(),
         initialized_db,
         None,
         |_| Ok(()),
         WalletType::Hot,
         false,
-        SoftwareSignerProvider::new(),
+        |db_tx| {
+            Ok(SoftwareSignerProvider::load_from_database(
+                chain_config.clone(),
+                db_tx,
+            )?)
+        },
     )
     .unwrap();
 }
@@ -413,12 +433,17 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
     let mut wallet = Wallet::create_new_wallet(
         Arc::clone(&chain_config),
         db,
-        MNEMONIC,
-        None,
-        StoreSeedPhrase::DoNotStore,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
-        SoftwareSignerProvider::new(),
+        |db_tx| {
+            Ok(SoftwareSignerProvider::new_from_mnemonic(
+                chain_config.clone(),
+                db_tx,
+                MNEMONIC,
+                None,
+                StoreSeedPhrase::DoNotStore,
+            )?)
+        },
     )
     .unwrap();
     verify_wallet_balance(&chain_config, &wallet, genesis_amount);
@@ -469,7 +494,12 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
         |_| Ok(()),
         WalletType::Hot,
         false,
-        SoftwareSignerProvider::new(),
+        |db_tx| {
+            Ok(SoftwareSignerProvider::load_from_database(
+                chain_config.clone(),
+                db_tx,
+            )?)
+        },
     )
     .unwrap();
 
@@ -513,12 +543,17 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
     let mut wallet = Wallet::create_new_wallet(
         Arc::clone(&chain_config),
         db,
-        MNEMONIC,
-        wallet_passphrase.as_ref().map(|p| p.as_ref()),
-        StoreSeedPhrase::Store,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
-        SoftwareSignerProvider::new(),
+        |db_tx| {
+            Ok(SoftwareSignerProvider::new_from_mnemonic(
+                chain_config.clone(),
+                db_tx,
+                MNEMONIC,
+                wallet_passphrase.as_ref().map(|p| p.as_ref()),
+                StoreSeedPhrase::Store,
+            )?)
+        },
     )
     .unwrap();
 
@@ -603,12 +638,17 @@ fn wallet_seed_phrase_check_address() {
     let mut wallet = Wallet::create_new_wallet(
         Arc::clone(&chain_config),
         db,
-        MNEMONIC,
-        wallet_passphrase.as_ref().map(|p| p.as_ref()),
-        StoreSeedPhrase::Store,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
-        SoftwareSignerProvider::new(),
+        |db_tx| {
+            Ok(SoftwareSignerProvider::new_from_mnemonic(
+                chain_config.clone(),
+                db_tx,
+                MNEMONIC,
+                wallet_passphrase.as_ref().map(|p| p.as_ref()),
+                StoreSeedPhrase::Store,
+            )?)
+        },
     )
     .unwrap();
 
@@ -624,12 +664,17 @@ fn wallet_seed_phrase_check_address() {
     let mut wallet = Wallet::create_new_wallet(
         Arc::clone(&chain_config),
         db,
-        MNEMONIC,
-        wallet_passphrase.as_ref().map(|p| p.as_ref()),
-        StoreSeedPhrase::Store,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
-        SoftwareSignerProvider::new(),
+        |db_tx| {
+            Ok(SoftwareSignerProvider::new_from_mnemonic(
+                chain_config.clone(),
+                db_tx,
+                MNEMONIC,
+                wallet_passphrase.as_ref().map(|p| p.as_ref()),
+                StoreSeedPhrase::Store,
+            )?)
+        },
     )
     .unwrap();
 
@@ -933,7 +978,12 @@ fn test_wallet_accounts<B, P>(
         |_| Ok(()),
         WalletType::Hot,
         false,
-        SoftwareSignerProvider::new(),
+        |db_tx| {
+            Ok(SoftwareSignerProvider::load_from_database(
+                chain_config.clone(),
+                db_tx,
+            )?)
+        },
     )
     .unwrap();
     let accounts = wallet.account_indexes().cloned().collect::<Vec<_>>();

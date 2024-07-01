@@ -4912,6 +4912,7 @@ dependencies = [
  "p2p",
  "rfd",
  "serialization",
+ "storage",
  "strum",
  "thiserror",
  "tokio",
@@ -4919,6 +4920,7 @@ dependencies = [
  "wallet",
  "wallet-cli-commands",
  "wallet-controller",
+ "wallet-storage",
  "wallet-types",
  "winres",
 ]

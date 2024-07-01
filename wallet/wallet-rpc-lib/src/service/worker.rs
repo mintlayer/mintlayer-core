@@ -21,7 +21,6 @@ use tokio::{sync::mpsc, task::JoinHandle};
 
 use logging::log;
 use utils_networking::broadcaster::Broadcaster;
-use wallet::signer::SignerProvider;
 use wallet::wallet::Mnemonic;
 use wallet_controller::{ControllerError, NodeInterface};
 use wallet_types::scan_blockchain::ScanBlockchain;
@@ -33,23 +32,22 @@ use crate::Event;
 
 use super::WalletServiceEvents;
 
-pub type WalletController<N, P> =
-    wallet_controller::RpcController<N, super::WalletServiceEvents, P>;
+pub type WalletController<N> = wallet_controller::RpcController<N, super::WalletServiceEvents>;
 pub type WalletControllerError<N> = wallet_controller::ControllerError<N>;
-pub type CommandReceiver<N, P> = mpsc::UnboundedReceiver<WalletCommand<N, P>>;
-pub type CommandSender<N, P> = mpsc::UnboundedSender<WalletCommand<N, P>>;
+pub type CommandReceiver<N> = mpsc::UnboundedReceiver<WalletCommand<N>>;
+pub type CommandSender<N> = mpsc::UnboundedSender<WalletCommand<N>>;
 pub type EventStream = utils_networking::broadcaster::Receiver<Event>;
 
-type CommandFn<N, P> = dyn Send + FnOnce(&mut Option<WalletController<N, P>>) -> BoxFuture<()>;
-type ManageFn<N, P> = dyn Send + FnOnce(&mut WalletWorker<N, P>) -> BoxFuture<()>;
+type CommandFn<N> = dyn Send + FnOnce(&mut Option<WalletController<N>>) -> BoxFuture<()>;
+type ManageFn<N> = dyn Send + FnOnce(&mut WalletWorker<N>) -> BoxFuture<()>;
 
 /// Commands to control the wallet task
-pub enum WalletCommand<N, P> {
+pub enum WalletCommand<N> {
     /// Make the controller perform an action
-    Call(Box<CommandFn<N, P>>),
+    Call(Box<CommandFn<N>>),
 
     /// Manage the Wallet itself, i.e. Create/Open/Close
-    Manage(Box<ManageFn<N, P>>),
+    Manage(Box<ManageFn<N>>),
 
     /// Shutdown the wallet service task
     Stop,
@@ -61,9 +59,9 @@ pub enum CreatedWallet {
 }
 
 /// Represents the wallet worker task. It handles external commands and keeps the wallet in sync.
-pub struct WalletWorker<N, P> {
-    controller: Option<WalletController<N, P>>,
-    command_rx: CommandReceiver<N, P>,
+pub struct WalletWorker<N> {
+    controller: Option<WalletController<N>>,
+    command_rx: CommandReceiver<N>,
     chain_config: Arc<ChainConfig>,
     node_rpc: N,
     events_bcast: Broadcaster<Event>,
@@ -71,16 +69,15 @@ pub struct WalletWorker<N, P> {
     wallet_events: WalletServiceEvents,
 }
 
-impl<N, P> WalletWorker<N, P>
+impl<N> WalletWorker<N>
 where
     N: NodeInterface + Clone + Send + Sync + 'static,
-    P: SignerProvider + Sync + Send + 'static,
 {
     fn new(
-        controller: Option<WalletController<N, P>>,
+        controller: Option<WalletController<N>>,
         chain_config: Arc<ChainConfig>,
         node_rpc: N,
-        command_rx: CommandReceiver<N, P>,
+        command_rx: CommandReceiver<N>,
         events_rx: mpsc::UnboundedReceiver<Event>,
         wallet_events: WalletServiceEvents,
     ) -> Self {
@@ -129,10 +126,7 @@ where
         }
     }
 
-    pub async fn process_command(
-        &mut self,
-        command: Option<WalletCommand<N, P>>,
-    ) -> ControlFlow<()> {
+    pub async fn process_command(&mut self, command: Option<WalletCommand<N>>) -> ControlFlow<()> {
         match command {
             Some(WalletCommand::Call(call)) => {
                 call(&mut self.controller).await;
@@ -178,7 +172,6 @@ where
             password,
             self.node_rpc.is_cold_wallet_node(),
             force_migrate_wallet_type,
-            signer_provider,
         )?;
 
         let controller = if scan_blockchain.should_wait_for_blockchain_scanning() {
@@ -209,7 +202,6 @@ where
         mnemonic: Option<String>,
         passphrase: Option<String>,
         scan_blockchain: ScanBlockchain,
-        signer_provider: P,
     ) -> Result<CreatedWallet, RpcError<N>> {
         utils::ensure!(
             self.controller.is_none(),
@@ -236,7 +228,6 @@ where
                     whether_to_store_seed_phrase,
                     (info.best_block_height, info.best_block_id),
                     self.node_rpc.is_cold_wallet_node(),
-                    signer_provider,
                 )
             } else {
                 WalletController::recover_wallet(
@@ -246,7 +237,6 @@ where
                     passphrase_ref,
                     whether_to_store_seed_phrase,
                     self.node_rpc.is_cold_wallet_node(),
-                    signer_provider,
                 )
             }
             .map_err(RpcError::Controller)?;
@@ -283,7 +273,7 @@ where
     }
 
     async fn background_task(
-        controller_opt: &mut Option<WalletController<N, P>>,
+        controller_opt: &mut Option<WalletController<N>>,
     ) -> Result<Never, WalletControllerError<N>> {
         match controller_opt.as_mut() {
             Some(controller) => controller.run().await,
@@ -292,16 +282,15 @@ where
     }
 }
 
-impl<N, P> WalletWorker<N, P>
+impl<N> WalletWorker<N>
 where
     N: NodeInterface + Clone + Send + Sync + 'static,
-    P: SignerProvider + Sync + Send + 'static,
 {
     pub fn spawn(
-        controller: Option<WalletController<N, P>>,
+        controller: Option<WalletController<N>>,
         chain_config: Arc<ChainConfig>,
         node_rpc: N,
-        command_rx: CommandReceiver<N, P>,
+        command_rx: CommandReceiver<N>,
         events_rx: mpsc::UnboundedReceiver<Event>,
         wallet_events: WalletServiceEvents,
     ) -> JoinHandle<()> {
