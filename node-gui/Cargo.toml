@@ -18,6 +18,7 @@ mempool = { path = "../mempool" }
 node-lib = { path = "../node-lib" }
 node-comm = { path = "../wallet/wallet-node-client" }
 p2p = { path = "../p2p" }
+storage = { path = "../storage" }
 serialization = { path = "../serialization" }
 subsystem = { path = "../subsystem" }
 utils = { path = "../utils" }
@@ -27,6 +28,7 @@ wallet-types = { path = "../wallet/types" }
 wallet-rpc-lib = { path = "../wallet/wallet-rpc-lib"}
 wallet-rpc-client = { path = "../wallet/wallet-rpc-client"}
 wallet-cli-commands = { path = "../wallet/wallet-cli-commands"}
+wallet-storage = { path = "../wallet/storage" }
 
 anyhow.workspace = true
 chrono.workspace = true

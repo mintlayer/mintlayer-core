@@ -57,10 +57,9 @@ use crate::{
 use super::types::RpcHashedTimelockContract;
 
 #[async_trait::async_trait]
-impl<N, P> WalletEventsRpcServer for WalletRpc<N, P>
+impl<N> WalletEventsRpcServer for WalletRpc<N>
 where
     N: NodeInterface + Clone + Send + Sync + 'static + Debug,
-    P: SignerProvider + Clone + Send + Sync + 'static,
 {
     async fn subscribe_wallet_events(
         &self,
@@ -72,10 +71,9 @@ where
 }
 
 #[async_trait::async_trait]
-impl<N, P> ColdWalletRpcServer for WalletRpc<N, P>
+impl<N> ColdWalletRpcServer for WalletRpc<N>
 where
     N: NodeInterface + Clone + Send + Sync + 'static + Debug,
-    P: SignerProvider + Clone + Send + Sync + 'static,
 {
     async fn shutdown(&self) -> rpc::RpcResult<()> {
         rpc::handle_result(self.shutdown())
@@ -307,10 +305,9 @@ where
 }
 
 #[async_trait::async_trait]
-impl<N, P> WalletRpcServer for WalletRpc<N, P>
+impl<N> WalletRpcServer for WalletRpc<N>
 where
     N: NodeInterface + Clone + Send + Sync + 'static + Debug,
-    P: SignerProvider + Clone + Sync + Send + 'static,
 {
     async fn rescan(&self) -> rpc::RpcResult<()> {
         rpc::handle_result(self.rescan().await)

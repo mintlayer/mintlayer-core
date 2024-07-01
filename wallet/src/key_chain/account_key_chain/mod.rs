@@ -53,9 +53,6 @@ pub struct AccountKeyChainImpl {
     /// The account public key from which all the addresses are derived
     account_public_key: ConstValue<ExtendedPublicKey>,
 
-    /// The account vrf public key from which all the pool addresses are derived
-    account_vrf_public_key: ConstValue<ExtendedVRFPublicKey>,
-
     /// Key chains for receiving and change funds
     sub_chains: WithPurpose<LeafKeySoftChain>,
 
@@ -142,7 +139,6 @@ impl AccountKeyChainImpl {
             chain_config,
             account_index,
             account_public_key: account_pubkey.into(),
-            account_vrf_public_key: account_vrf_pub_key.into(),
             sub_chains,
             vrf_chain,
             standalone_watch_only_keys: BTreeMap::new(),
@@ -234,7 +230,6 @@ impl AccountKeyChainImpl {
             chain_config,
             account_index: account_info.account_index(),
             account_public_key: pubkey_id,
-            account_vrf_public_key: vrf_chain.get_account_vrf_public_key().clone().into(),
             sub_chains,
             vrf_chain,
             standalone_watch_only_keys,
@@ -254,10 +249,6 @@ impl AccountKeyChainImpl {
 
     pub fn account_public_key(&self) -> &ExtendedPublicKey {
         self.account_public_key.as_ref()
-    }
-
-    pub fn account_vrf_public_key(&self) -> &ExtendedVRFPublicKey {
-        self.account_vrf_public_key.as_ref()
     }
 
     /// Return the next unused address and don't mark it as issued
