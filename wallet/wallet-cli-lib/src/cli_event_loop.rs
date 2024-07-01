@@ -17,7 +17,6 @@ use std::{fmt::Debug, sync::Arc};
 
 use common::chain::ChainConfig;
 use tokio::sync::{mpsc, oneshot};
-use wallet::signer::software_signer::SoftwareSignerProvider;
 use wallet_cli_commands::{CommandHandler, ConsoleCommand, ManageableWalletCommand};
 use wallet_rpc_client::{handles_client::WalletRpcHandlesClient, rpc_client::ClientWalletRpc};
 use wallet_rpc_lib::types::{ControllerConfig, NodeInterface};
@@ -59,28 +58,16 @@ pub async fn run<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
             node_rpc,
             wallet_rpc_config,
         } => {
-            let signer_provider = SoftwareSignerProvider::new();
-            let wallet_service = WalletService::start(
-                chain_config.clone(),
-                None,
-                false,
-                vec![],
-                node_rpc,
-                signer_provider.clone(),
-            )
-            .await
-            .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?;
+            let wallet_service =
+                WalletService::start(chain_config.clone(), None, false, vec![], node_rpc)
+                    .await
+                    .map_err(|err| WalletCliError::InvalidConfig(err.to_string()))?;
 
             let wallet_handle = wallet_service.handle();
             let node_rpc = wallet_service.node_rpc().clone();
             let chain_config = wallet_service.chain_config().clone();
 
-            let wallet_rpc = WalletRpc::new(
-                wallet_handle,
-                node_rpc.clone(),
-                chain_config.clone(),
-                signer_provider,
-            );
+            let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc.clone(), chain_config.clone());
             let server_rpc = if let Some(rpc_config) = wallet_rpc_config {
                 let builder = rpc::Builder::new(rpc_config.bind_addr, rpc_config.auth_credentials)
                     .with_method_list("list_methods")

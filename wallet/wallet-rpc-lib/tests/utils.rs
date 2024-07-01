@@ -34,13 +34,13 @@ pub use randomness::Rng;
 pub use rpc::test_support::{ClientT, Subscription, SubscriptionClientT};
 pub use serde_json::Value as JsonValue;
 pub use test_utils::random::{make_seedable_rng, Seed};
-use wallet_types::wallet_type::WalletType;
+use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType};
 
 pub const ACCOUNT0_ARG: AccountArg = AccountArg(0);
 pub const ACCOUNT1_ARG: AccountArg = AccountArg(1);
 
 pub struct TestFramework {
-    pub wallet_service: WalletService<NodeRpcClient, SoftwareSignerProvider>,
+    pub wallet_service: WalletService<NodeRpcClient>,
     pub shutdown_trigger: subsystem::ShutdownTrigger,
     pub node_manager_task: subsystem::ManagerJoinHandle,
     pub test_root: TestRoot,
@@ -68,12 +68,17 @@ impl TestFramework {
             let _wallet = wallet::Wallet::create_new_wallet(
                 Arc::clone(&chain_config),
                 db,
-                wallet_test_node::MNEMONIC,
-                None,
-                wallet_types::seed_phrase::StoreSeedPhrase::DoNotStore,
                 (BlockHeight::new(0), chain_config.genesis_block_id()),
                 WalletType::Hot,
-                SoftwareSignerProvider::new(),
+                |db_tx| {
+                    Ok(SoftwareSignerProvider::new_from_mnemonic(
+                        chain_config.clone(),
+                        db_tx,
+                        wallet_test_node::MNEMONIC,
+                        None,
+                        StoreSeedPhrase::DoNotStore,
+                    )?)
+                },
             )
             .unwrap();
 
@@ -127,15 +132,9 @@ impl TestFramework {
             .await
             .unwrap();
 
-            wallet_rpc_lib::start_services(
-                ws_config,
-                rpc_config,
-                node_rpc,
-                false,
-                SoftwareSignerProvider::new(),
-            )
-            .await
-            .unwrap()
+            wallet_rpc_lib::start_services(ws_config, rpc_config, node_rpc, false)
+                .await
+                .unwrap()
         };
 
         TestFramework {
@@ -163,7 +162,7 @@ impl TestFramework {
         rpc::new_ws_client(rpc_addr, rpc_auth).await.unwrap()
     }
 
-    pub fn handle(&self) -> WalletHandle<NodeRpcClient, SoftwareSignerProvider> {
+    pub fn handle(&self) -> WalletHandle<NodeRpcClient> {
         self.wallet_service.handle()
     }
 
