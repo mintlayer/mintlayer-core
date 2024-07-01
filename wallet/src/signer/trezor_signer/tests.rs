@@ -21,7 +21,6 @@ use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
 use crate::{Account, SendRequest};
 use common::chain::config::create_regtest;
 use common::chain::output_value::OutputValue;
-use common::chain::signature::verify_signature;
 use common::chain::{Transaction, TxInput};
 use common::primitives::{Amount, Id, H256};
 use randomness::{Rng, RngCore};
@@ -140,15 +139,23 @@ fn sign_transaction(#[case] seed: Seed) {
     let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).unwrap();
 
     eprintln!("num inputs in tx: {}", inputs.len());
-    assert!(ptx.is_fully_signed(&chain_config));
+    assert!(ptx.all_signatures_available());
 
-    let sig_tx = ptx.into_signed_tx(&chain_config).unwrap();
+    let sig_tx = ptx.into_signed_tx().unwrap();
 
     let utxos_ref = utxos.iter().map(Some).collect::<Vec<_>>();
 
     for i in 0..sig_tx.inputs().len() {
         let destination =
             crate::get_tx_output_destination(utxos_ref[i].unwrap(), &|_| None).unwrap();
-        verify_signature(&chain_config, &destination, &sig_tx, &utxos_ref, i).unwrap();
+        common::chain::signature::verify_signature(
+            &chain_config,
+            &destination,
+            &sig_tx,
+            &sig_tx.signatures()[i],
+            &utxos_ref,
+            i,
+        )
+        .unwrap();
     }
 }

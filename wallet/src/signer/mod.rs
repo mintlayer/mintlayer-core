@@ -24,10 +24,13 @@ use common::chain::{
     ChainConfig, Destination,
 };
 use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
-use wallet_storage::WalletStorageReadUnlocked;
+use wallet_storage::{WalletStorageReadUnlocked, WalletStorageWriteUnlocked};
 use wallet_types::signature_status::SignatureStatus;
 
-use crate::key_chain::{AccountKeyChains, KeyChainError};
+use crate::{
+    key_chain::{AccountKeyChains, KeyChainError},
+    Account, WalletResult,
+};
 
 pub mod software_signer;
 #[cfg(feature = "trezor")]
@@ -85,4 +88,12 @@ pub trait SignerProvider {
     type S: Signer;
 
     fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S;
+
+    fn make_new_account(
+        &mut self,
+        chain_config: Arc<ChainConfig>,
+        account_index: U31,
+        name: Option<String>,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+    ) -> WalletResult<Account>;
 }
