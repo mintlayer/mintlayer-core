@@ -593,7 +593,7 @@ mod tests {
     use test_utils::random::{make_seedable_rng, Seed};
 
     use crate::chain::config::{
-        DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET, MAX_FUTURE_BLOCK_TIME_OFFSET,
+        DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1, DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
     };
 
     #[rstest]
@@ -609,12 +609,12 @@ mod tests {
             let before_the_fork =
                 BlockHeight::new(rng.gen_range(0..MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT.into_int()));
             assert_eq!(
-                DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
+                DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1,
                 config.max_future_block_time_offset(before_the_fork)
             );
 
             assert_eq!(
-                MAX_FUTURE_BLOCK_TIME_OFFSET,
+                DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
                 config.max_future_block_time_offset(MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT)
             );
 
@@ -622,7 +622,7 @@ mod tests {
                 rng.gen_range(MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT.into_int()..u64::MAX),
             );
             assert_eq!(
-                MAX_FUTURE_BLOCK_TIME_OFFSET,
+                DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
                 config.max_future_block_time_offset(after_the_fork)
             );
         }
@@ -634,12 +634,12 @@ mod tests {
             let before_the_fork =
                 BlockHeight::new(rng.gen_range(0..TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT.into_int()));
             assert_eq!(
-                DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
+                DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1,
                 config.max_future_block_time_offset(before_the_fork)
             );
 
             assert_eq!(
-                MAX_FUTURE_BLOCK_TIME_OFFSET,
+                DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
                 config.max_future_block_time_offset(TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT)
             );
 
@@ -647,7 +647,7 @@ mod tests {
                 rng.gen_range(TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT.into_int()..u64::MAX),
             );
             assert_eq!(
-                MAX_FUTURE_BLOCK_TIME_OFFSET,
+                DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
                 config.max_future_block_time_offset(after_the_fork)
             );
         }
@@ -658,7 +658,7 @@ mod tests {
 
             let height = BlockHeight::new(rng.gen::<u64>());
             assert_eq!(
-                MAX_FUTURE_BLOCK_TIME_OFFSET,
+                DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
                 config.max_future_block_time_offset(height)
             );
         }

@@ -56,8 +56,8 @@ use super::{
     TokenIssuanceVersion, TokensFeeVersion,
 };
 
-const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);
-const MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(30);
+const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1: Duration = Duration::from_secs(120);
+const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2: Duration = Duration::from_secs(30);
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 
 const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
@@ -471,8 +471,9 @@ impl ChainConfig {
     pub fn max_future_block_time_offset(&self, height: BlockHeight) -> Duration {
         self.max_future_block_time_offset.unwrap_or_else(|| {
             match self.as_ref().chainstate_upgrades().version_at_height(height).1.htlc_activated() {
-                HtlcActivated::Yes => MAX_FUTURE_BLOCK_TIME_OFFSET,
-                HtlcActivated::No => DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
+                // Change of the offset has nothing to do with htlc, they just come in the same upgrade height
+                HtlcActivated::Yes => DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
+                HtlcActivated::No => DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1,
             }
         })
     }
