@@ -29,6 +29,7 @@ use wallet_types::seed_phrase::{SerializableSeedPhrase, StoreSeedPhrase};
 
 use super::DEFAULT_VRF_KEY_KIND;
 
+#[derive(Clone, Debug)]
 pub struct MasterKeyChain {
     /// The specific chain this KeyChain is based on, this will affect the address format
     chain_config: Arc<ChainConfig>,

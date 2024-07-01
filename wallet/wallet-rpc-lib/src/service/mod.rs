@@ -25,7 +25,6 @@ use utils::shallow_clone::ShallowClone;
 
 pub use events::{Event, TxState};
 pub use handle::{EventStream, SubmitError, WalletHandle};
-use wallet::signer::SignerProvider;
 use wallet_controller::{ControllerConfig, NodeInterface};
 pub use worker::{CreatedWallet, WalletController, WalletControllerError};
 
@@ -34,9 +33,9 @@ use events::WalletServiceEvents;
 // pub type WalletResult<T> = Result<T, WalletControllerError>;
 
 /// Wallet service
-pub struct WalletService<N, P> {
+pub struct WalletService<N> {
     task: tokio::task::JoinHandle<()>,
-    command_tx: worker::CommandSender<N, P>,
+    command_tx: worker::CommandSender<N>,
     node_rpc: N,
     chain_config: Arc<ChainConfig>,
 }
@@ -51,10 +50,9 @@ pub enum InitError<N: NodeInterface> {
     Controller(#[from] WalletControllerError<N>),
 }
 
-impl<N, P> WalletService<N, P>
+impl<N> WalletService<N>
 where
     N: NodeInterface + Clone + Send + Sync + 'static,
-    P: SignerProvider + Clone + Send + Sync + 'static,
 {
     pub async fn start(
         chain_config: Arc<ChainConfig>,
@@ -62,7 +60,6 @@ where
         force_change_wallet_type: bool,
         start_staking_for_account: Vec<U31>,
         node_rpc: N,
-        signer_provider: P,
     ) -> Result<Self, InitError<N>> {
         let (wallet_events, events_rx) = WalletServiceEvents::new();
         let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -77,7 +74,6 @@ where
                     wallet_password,
                     node_rpc.is_cold_wallet_node(),
                     force_change_wallet_type,
-                    signer_provider,
                 )?
             };
 
@@ -129,7 +125,7 @@ where
     }
 
     /// Get wallet service handle
-    pub fn handle(&self) -> WalletHandle<N, P> {
+    pub fn handle(&self) -> WalletHandle<N> {
         handle::create(worker::CommandSender::clone(&self.command_tx))
     }
 
