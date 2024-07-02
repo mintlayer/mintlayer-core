@@ -36,8 +36,9 @@ use wallet_cli_commands::{
     WalletCommand,
 };
 use wallet_controller::{
-    make_cold_wallet_rpc_client, types::Balances, ControllerConfig, NodeInterface, UtxoState,
-    WalletHandlesClient,
+    make_cold_wallet_rpc_client,
+    types::{Balances, WalletTypeArgs},
+    ControllerConfig, NodeInterface, UtxoState, WalletHandlesClient,
 };
 use wallet_rpc_client::handles_client::WalletRpcHandlesClient;
 use wallet_rpc_lib::{EventStream, WalletRpc, WalletService};
@@ -368,14 +369,14 @@ impl Backend {
         let node_rpc = wallet_service.node_rpc().clone();
         let chain_config = wallet_service.chain_config().clone();
         let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc.clone(), chain_config.clone());
+        let args = WalletTypeArgs::Software {
+            mnemonic: Some(mnemonic.to_string()),
+            passphrase: None,
+            store_seed_phrase: StoreSeedPhrase::Store,
+        };
+
         wallet_rpc
-            .create_wallet(
-                file_path,
-                StoreSeedPhrase::Store,
-                Some(mnemonic.to_string()),
-                None,
-                import.skip_syncing(),
-            )
+            .create_wallet(file_path, args, import.skip_syncing())
             .await
             .map_err(|err| BackendError::WalletError(err.to_string()))?;
         tokio::spawn(forward_events(
