@@ -200,6 +200,18 @@ impl Secp256k1ExtendedPublicKey {
                 .into(),
         }
     }
+
+    pub fn from_hardware_wallet(
+        derivation_path: DerivationPath,
+        chain_code: ChainCode,
+        public_key: Secp256k1PublicKey,
+    ) -> Self {
+        Self {
+            derivation_path,
+            chain_code,
+            public_key,
+        }
+    }
 }
 
 impl Derivable for Secp256k1ExtendedPublicKey {
