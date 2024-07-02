@@ -24,8 +24,8 @@ use crate::account::{
     UtxoSelectorError,
 };
 use crate::key_chain::{
-    make_account_path, make_path_to_vrf_key, KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE,
-    VRF_INDEX,
+    make_account_path, make_path_to_vrf_key, AccountKeyChainImplSoftware, KeyChainError,
+    MasterKeyChain, LOOKAHEAD_SIZE, VRF_INDEX,
 };
 use crate::send_request::{
     make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolDataArguments,
@@ -263,12 +263,12 @@ pub enum WalletPoolsFilter {
     Stake,
 }
 
-pub struct Wallet<B: storage::Backend + 'static, P> {
+pub struct Wallet<B: storage::Backend + 'static, P: SignerProvider> {
     chain_config: Arc<ChainConfig>,
     db: Store<B>,
-    accounts: BTreeMap<U31, Account>,
+    accounts: BTreeMap<U31, Account<P::K>>,
     latest_median_time: BlockTimestamp,
-    next_unused_account: (U31, Account),
+    next_unused_account: (U31, Account<P::K>),
     signer_provider: P,
 }
 
@@ -424,7 +424,11 @@ where
 
     /// Migrate the wallet DB from version 4 to version 5
     /// * set vrf key_chain usage
-    fn migration_v5(db: &Store<B>, chain_config: Arc<ChainConfig>) -> WalletResult<()> {
+    fn migration_v5(
+        db: &Store<B>,
+        chain_config: Arc<ChainConfig>,
+        signer_provider: &P,
+    ) -> WalletResult<()> {
         let mut db_tx = db.transaction_rw_unlocked(None)?;
 
         for (id, info) in db_tx.get_accounts_info()? {
@@ -453,7 +457,11 @@ where
             )?;
         }
 
-        Self::reset_wallet_transactions_and_load(chain_config.clone(), &mut db_tx)?;
+        Self::reset_wallet_transactions_and_load(
+            chain_config.clone(),
+            &mut db_tx,
+            signer_provider,
+        )?;
 
         db_tx.set_storage_version(WALLET_VERSION_V5)?;
         db_tx.commit()?;
@@ -543,7 +551,7 @@ where
                 }
                 WALLET_VERSION_V4 => {
                     pre_migration(WALLET_VERSION_V4)?;
-                    Self::migration_v5(db, chain_config.clone())?;
+                    Self::migration_v5(db, chain_config.clone(), &signer_provider)?;
                 }
                 WALLET_VERSION_V5 => {
                     pre_migration(WALLET_VERSION_V5)?;
@@ -591,10 +599,11 @@ where
     fn migrate_hot_to_cold_wallet(
         db: &Store<B>,
         chain_config: Arc<ChainConfig>,
+        signer_provider: &P,
     ) -> WalletResult<()> {
         let mut db_tx = db.transaction_rw(None)?;
         db_tx.set_wallet_type(WalletType::Cold)?;
-        Self::reset_wallet_transactions_and_load(chain_config, &mut db_tx)?;
+        Self::reset_wallet_transactions_and_load(chain_config, &mut db_tx, signer_provider)?;
         db_tx.commit()?;
         Ok(())
     }
@@ -603,12 +612,13 @@ where
         wallet_type: WalletType,
         db: &Store<B>,
         chain_config: Arc<ChainConfig>,
+        signer_provider: &P,
     ) -> Result<(), WalletError> {
         let current_wallet_type = db.transaction_ro()?.get_wallet_type()?;
         match (current_wallet_type, wallet_type) {
             (WalletType::Cold, WalletType::Hot) => Self::migrate_cold_to_hot_wallet(db)?,
             (WalletType::Hot, WalletType::Cold) => {
-                Self::migrate_hot_to_cold_wallet(db, chain_config)?
+                Self::migrate_hot_to_cold_wallet(db, chain_config, signer_provider)?
             }
             (WalletType::Cold, WalletType::Cold) => {}
             (WalletType::Hot, WalletType::Hot) => {}
@@ -623,8 +633,11 @@ where
             "Resetting the wallet to genesis and starting to rescan the blockchain"
         );
         let mut db_tx = self.db.transaction_rw(None)?;
-        let mut accounts =
-            Self::reset_wallet_transactions_and_load(self.chain_config.clone(), &mut db_tx)?;
+        let mut accounts = Self::reset_wallet_transactions_and_load(
+            self.chain_config.clone(),
+            &mut db_tx,
+            &self.signer_provider,
+        )?;
         self.next_unused_account = accounts.pop_last().expect("not empty accounts");
         self.accounts = accounts;
         db_tx.commit()?;
@@ -665,7 +678,8 @@ where
     fn reset_wallet_transactions_and_load(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut impl WalletStorageWriteLocked,
-    ) -> WalletResult<BTreeMap<U31, Account>> {
+        signer_provider: &P,
+    ) -> WalletResult<BTreeMap<U31, Account<P::K>>> {
         Self::reset_wallet_transactions(chain_config.clone(), db_tx)?;
 
         // set all accounts best block to genesis
@@ -673,7 +687,8 @@ where
             .get_accounts_info()?
             .into_keys()
             .map(|id| {
-                let mut account = Account::load_from_database(chain_config.clone(), db_tx, &id)?;
+                let mut account =
+                    signer_provider.load_account_from_database(chain_config.clone(), db_tx, &id)?;
                 account.top_up_addresses(db_tx)?;
                 account.scan_genesis(db_tx, &WalletEventsNoOp)?;
 
@@ -688,9 +703,11 @@ where
         signer_provider: &mut P,
     ) -> Result<(), WalletError> {
         let accounts_info = db_tx.get_accounts_info()?;
-        let mut accounts: BTreeMap<U31, Account> = accounts_info
+        let mut accounts: BTreeMap<U31, Account<P::K>> = accounts_info
             .keys()
-            .map(|account_id| Account::load_from_database(chain_config.clone(), db_tx, account_id))
+            .map(|account_id| {
+                signer_provider.load_account_from_database(chain_config.clone(), db_tx, account_id)
+            })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .map(|account| (account.account_index(), account))
@@ -733,7 +750,12 @@ where
             signer_provider,
         )?;
         if force_change_wallet_type {
-            Self::force_migrate_wallet_type(wallet_type, &db, chain_config.clone())?;
+            Self::force_migrate_wallet_type(
+                wallet_type,
+                &db,
+                chain_config.clone(),
+                &signer_provider,
+            )?;
         }
 
         // Please continue to use read-only transaction here.
@@ -744,10 +766,14 @@ where
 
         let accounts_info = db_tx.get_accounts_info()?;
 
-        let mut accounts: BTreeMap<U31, Account> = accounts_info
+        let mut accounts: BTreeMap<U31, Account<P::K>> = accounts_info
             .keys()
             .map(|account_id| {
-                Account::load_from_database(Arc::clone(&chain_config), &db_tx, account_id)
+                signer_provider.load_account_from_database(
+                    Arc::clone(&chain_config),
+                    &db_tx,
+                    account_id,
+                )
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
@@ -822,8 +848,11 @@ where
 
         let mut db_tx = self.db.transaction_rw(None)?;
         db_tx.set_lookahead_size(lookahead_size)?;
-        let mut accounts =
-            Self::reset_wallet_transactions_and_load(self.chain_config.clone(), &mut db_tx)?;
+        let mut accounts = Self::reset_wallet_transactions_and_load(
+            self.chain_config.clone(),
+            &mut db_tx,
+            &self.signer_provider,
+        )?;
         self.next_unused_account = accounts.pop_last().expect("not empty accounts");
         self.accounts = accounts;
         db_tx.commit()?;
@@ -851,7 +880,7 @@ where
         db_tx: &mut impl WalletStorageWriteUnlocked,
         name: Option<String>,
         signer_provider: &mut P,
-    ) -> WalletResult<(U31, Account)> {
+    ) -> WalletResult<(U31, Account<P::K>)> {
         ensure!(
             name.as_ref().map_or(true, |name| !name.is_empty()),
             WalletError::EmptyAccountName
@@ -939,7 +968,7 @@ where
     fn for_account_rw<T>(
         &mut self,
         account_index: U31,
-        f: impl FnOnce(&mut Account, &mut StoreTxRw<B>) -> WalletResult<T>,
+        f: impl FnOnce(&mut Account<P::K>, &mut StoreTxRw<B>) -> WalletResult<T>,
     ) -> WalletResult<T> {
         let mut db_tx = self.db.transaction_rw(None)?;
         let account = Self::get_account_mut(&mut self.accounts, account_index)?;
@@ -955,7 +984,12 @@ where
     fn for_account_rw_unlocked<T>(
         &mut self,
         account_index: U31,
-        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>, &ChainConfig, &mut P) -> WalletResult<T>,
+        f: impl FnOnce(
+            &mut Account<P::K>,
+            &mut StoreTxRwUnlocked<B>,
+            &ChainConfig,
+            &mut P,
+        ) -> WalletResult<T>,
     ) -> WalletResult<T> {
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
         let account = Self::get_account_mut(&mut self.accounts, account_index)?;
@@ -984,7 +1018,10 @@ where
     fn for_account_rw_unlocked_and_check_tx_generic<AddlData>(
         &mut self,
         account_index: U31,
-        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<(SendRequest, AddlData)>,
+        f: impl FnOnce(
+            &mut Account<P::K>,
+            &mut StoreTxRwUnlocked<B>,
+        ) -> WalletResult<(SendRequest, AddlData)>,
         error_mapper: impl FnOnce(WalletError) -> WalletError,
     ) -> WalletResult<(SignedTransaction, AddlData)> {
         let (_, block_height) = self.get_best_block_for_account(account_index)?;
@@ -1038,7 +1075,7 @@ where
     fn for_account_rw_unlocked_and_check_tx(
         &mut self,
         account_index: U31,
-        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<SendRequest>,
+        f: impl FnOnce(&mut Account<P::K>, &mut StoreTxRwUnlocked<B>) -> WalletResult<SendRequest>,
     ) -> WalletResult<SignedTransaction> {
         Ok(self
             .for_account_rw_unlocked_and_check_tx_generic(
@@ -1049,16 +1086,16 @@ where
             .0)
     }
 
-    fn get_account(&self, account_index: U31) -> WalletResult<&Account> {
+    fn get_account(&self, account_index: U31) -> WalletResult<&Account<P::K>> {
         self.accounts
             .get(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))
     }
 
     fn get_account_mut(
-        accounts: &mut BTreeMap<U31, Account>,
+        accounts: &mut BTreeMap<U31, Account<P::K>>,
         account_index: U31,
-    ) -> WalletResult<&mut Account> {
+    ) -> WalletResult<&mut Account<P::K>> {
         accounts
             .get_mut(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))
@@ -1123,7 +1160,7 @@ where
         &self,
         outpoint: &UtxoOutPoint,
     ) -> Option<(TxOutput, Destination)> {
-        self.accounts.values().find_map(|acc: &Account| {
+        self.accounts.values().find_map(|acc: &Account<P::K>| {
             let current_block_info = BlockInfo {
                 height: acc.best_block().1,
                 timestamp: self.latest_median_time,
@@ -1167,8 +1204,7 @@ where
         account_index: U31,
         filter: WalletPoolsFilter,
     ) -> WalletResult<Vec<(PoolId, PoolData)>> {
-        let db_tx = self.db.transaction_ro_unlocked()?;
-        let pool_ids = self.get_account(account_index)?.get_pool_ids(filter, &db_tx);
+        let pool_ids = self.get_account(account_index)?.get_pool_ids(filter);
         Ok(pool_ids)
     }
 
@@ -1249,15 +1285,6 @@ where
         })
     }
 
-    pub fn get_vrf_key(
-        &mut self,
-        account_index: U31,
-    ) -> WalletResult<(ChildNumber, Address<VRFPublicKey>)> {
-        self.for_account_rw(account_index, |account, db_tx| {
-            account.get_new_vrf_key(db_tx)
-        })
-    }
-
     pub fn find_public_key(
         &mut self,
         account_index: U31,
@@ -1326,22 +1353,6 @@ where
     )> {
         let account = self.get_account(account_index)?;
         account.get_all_standalone_address_details(address, self.latest_median_time)
-    }
-
-    pub fn get_all_issued_vrf_public_keys(
-        &self,
-        account_index: U31,
-    ) -> WalletResult<BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)>> {
-        let account = self.get_account(account_index)?;
-        Ok(account.get_all_issued_vrf_public_keys())
-    }
-
-    pub fn get_legacy_vrf_public_key(
-        &self,
-        account_index: U31,
-    ) -> WalletResult<Address<VRFPublicKey>> {
-        let account = self.get_account(account_index)?;
-        Ok(account.get_legacy_vrf_public_key())
     }
 
     pub fn get_addresses_usage(&self, account_index: U31) -> WalletResult<&KeychainUsageState> {
@@ -1799,27 +1810,6 @@ where
         Ok((token_id, signed_transaction))
     }
 
-    pub fn create_stake_pool_tx(
-        &mut self,
-        account_index: U31,
-        current_fee_rate: FeeRate,
-        consolidate_fee_rate: FeeRate,
-        stake_pool_arguments: StakePoolDataArguments,
-    ) -> WalletResult<SignedTransaction> {
-        let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
-            account.create_stake_pool_tx(
-                db_tx,
-                stake_pool_arguments,
-                latest_median_time,
-                CurrentFeeRate {
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                },
-            )
-        })
-    }
-
     pub fn decommission_stake_pool(
         &mut self,
         account_index: U31,
@@ -2031,30 +2021,6 @@ where
         )
     }
 
-    pub fn get_pos_gen_block_data(
-        &self,
-        account_index: U31,
-        pool_id: PoolId,
-    ) -> WalletResult<PoSGenerateBlockInputData> {
-        let db_tx = self.db.transaction_ro_unlocked()?;
-        self.get_account(account_index)?.get_pos_gen_block_data(&db_tx, pool_id)
-    }
-
-    pub fn get_pos_gen_block_data_by_pool_id(
-        &self,
-        pool_id: PoolId,
-    ) -> WalletResult<PoSGenerateBlockInputData> {
-        let db_tx = self.db.transaction_ro_unlocked()?;
-
-        for acc in self.accounts.values() {
-            if acc.pool_exists(pool_id) {
-                return acc.get_pos_gen_block_data(&db_tx, pool_id);
-            }
-        }
-
-        Err(WalletError::UnknownPoolId(pool_id))
-    }
-
     /// Returns the last scanned block hash and height for all accounts.
     /// Returns genesis block when the wallet is just created.
     pub fn get_best_block(&self) -> BTreeMap<U31, (Id<GenBlock>, BlockHeight)> {
@@ -2219,6 +2185,81 @@ where
         db_tx.set_median_time(median_time)?;
         db_tx.commit()?;
         Ok(())
+    }
+}
+
+impl<B, P> Wallet<B, P>
+where
+    B: storage::Backend + 'static,
+    P: SignerProvider<K = AccountKeyChainImplSoftware>,
+{
+    pub fn get_vrf_key(
+        &mut self,
+        account_index: U31,
+    ) -> WalletResult<(ChildNumber, Address<VRFPublicKey>)> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.get_new_vrf_key(db_tx)
+        })
+    }
+
+    pub fn get_all_issued_vrf_public_keys(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)>> {
+        let account = self.get_account(account_index)?;
+        Ok(account.get_all_issued_vrf_public_keys())
+    }
+
+    pub fn get_legacy_vrf_public_key(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<Address<VRFPublicKey>> {
+        let account = self.get_account(account_index)?;
+        Ok(account.get_legacy_vrf_public_key())
+    }
+
+    pub fn create_stake_pool_tx(
+        &mut self,
+        account_index: U31,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+        stake_pool_arguments: StakePoolDataArguments,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
+            account.create_stake_pool_tx(
+                db_tx,
+                stake_pool_arguments,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+    pub fn get_pos_gen_block_data(
+        &self,
+        account_index: U31,
+        pool_id: PoolId,
+    ) -> WalletResult<PoSGenerateBlockInputData> {
+        let db_tx = self.db.transaction_ro_unlocked()?;
+        self.get_account(account_index)?.get_pos_gen_block_data(&db_tx, pool_id)
+    }
+
+    pub fn get_pos_gen_block_data_by_pool_id(
+        &self,
+        pool_id: PoolId,
+    ) -> WalletResult<PoSGenerateBlockInputData> {
+        let db_tx = self.db.transaction_ro_unlocked()?;
+
+        for acc in self.accounts.values() {
+            if acc.pool_exists(pool_id) {
+                return acc.get_pos_gen_block_data(&db_tx, pool_id);
+            }
+        }
+
+        Err(WalletError::UnknownPoolId(pool_id))
     }
 }
 

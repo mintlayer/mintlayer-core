@@ -4827,6 +4827,7 @@ dependencies = [
  "p2p",
  "rfd",
  "serialization",
+ "storage",
  "strum",
  "thiserror",
  "tokio",
@@ -4834,6 +4835,7 @@ dependencies = [
  "wallet",
  "wallet-cli-commands",
  "wallet-controller",
+ "wallet-storage",
  "wallet-types",
  "winres",
 ]
@@ -4858,7 +4860,6 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serialization",
- "storage",
  "subsystem",
  "test-utils",
  "thiserror",
@@ -4869,7 +4870,6 @@ dependencies = [
  "wallet-controller",
  "wallet-rpc-client",
  "wallet-rpc-lib",
- "wallet-storage",
  "wallet-types",
 ]
 

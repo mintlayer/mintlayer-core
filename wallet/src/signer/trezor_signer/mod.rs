@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 use common::{
     address::Address,
@@ -35,7 +38,8 @@ use common::{
 };
 use crypto::key::{
     extended::{ExtendedPrivateKey, ExtendedPublicKey},
-    hdkd::{derivable::Derivable, u31::U31},
+    hdkd::{chain_code::ChainCode, derivable::Derivable, u31::U31},
+    secp256k1::{extended_keys::Secp256k1ExtendedPublicKey, Secp256k1PublicKey},
     PrivateKey, Signature,
 };
 use itertools::Itertools;
@@ -46,11 +50,16 @@ use trezor_client::{
     protos::{MintlayerTransferTxOutput, MintlayerUtxoTxInput},
     Trezor,
 };
-use wallet_storage::{WalletStorageReadUnlocked, WalletStorageWriteUnlocked};
-use wallet_types::signature_status::SignatureStatus;
+use wallet_storage::{
+    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
+};
+use wallet_types::{signature_status::SignatureStatus, AccountId};
 
 use crate::{
-    key_chain::{make_account_path, AccountKeyChains, FoundPubKey, MasterKeyChain},
+    key_chain::{
+        make_account_path, AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey,
+        MasterKeyChain,
+    },
     Account, WalletResult,
 };
 
@@ -59,14 +68,14 @@ use super::{Signer, SignerError, SignerProvider, SignerResult};
 pub struct TrezorSigner {
     chain_config: Arc<ChainConfig>,
     account_index: U31,
-    client: Rc<RefCell<Trezor>>,
+    client: Arc<Mutex<Trezor>>,
 }
 
 impl TrezorSigner {
     pub fn new(
         chain_config: Arc<ChainConfig>,
         account_index: U31,
-        client: Rc<RefCell<Trezor>>,
+        client: Arc<Mutex<Trezor>>,
     ) -> Self {
         Self {
             chain_config,
@@ -210,8 +219,12 @@ impl Signer for TrezorSigner {
         let outputs = self.to_trezor_output_msgs(&ptx);
         let utxos = to_trezor_utxo_msgs(&ptx, key_chain);
 
-        let new_signatures =
-            self.client.borrow_mut().mintlayer_sign_tx(inputs, outputs, utxos).expect("");
+        let new_signatures = self
+            .client
+            .lock()
+            .expect("")
+            .mintlayer_sign_tx(inputs, outputs, utxos)
+            .expect("");
 
         let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
 
@@ -418,7 +431,7 @@ fn get_private_key(
 
 #[derive(Clone)]
 pub struct TrezorSignerProvider {
-    client: Rc<RefCell<Trezor>>,
+    client: Arc<Mutex<Trezor>>,
 }
 
 impl std::fmt::Debug for TrezorSignerProvider {
@@ -430,13 +443,14 @@ impl std::fmt::Debug for TrezorSignerProvider {
 impl TrezorSignerProvider {
     pub fn new(client: Trezor) -> Self {
         Self {
-            client: Rc::new(RefCell::new(client)),
+            client: Arc::new(Mutex::new(client)),
         }
     }
 }
 
 impl SignerProvider for TrezorSignerProvider {
     type S = TrezorSigner;
+    type K = AccountKeyChainImplHardware;
 
     fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S {
         TrezorSigner::new(chain_config, account_index, self.client.clone())
@@ -444,12 +458,52 @@ impl SignerProvider for TrezorSignerProvider {
 
     fn make_new_account(
         &mut self,
-        _chain_config: Arc<ChainConfig>,
-        _account_index: U31,
-        _name: Option<String>,
-        _db_tx: &mut impl WalletStorageWriteUnlocked,
-    ) -> WalletResult<Account> {
-        unimplemented!("hehe");
+        chain_config: Arc<ChainConfig>,
+        account_index: U31,
+        name: Option<String>,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+    ) -> WalletResult<Account<Self::K>> {
+        let derivation_path = make_account_path(&chain_config, account_index);
+        let account_path =
+            derivation_path.as_slice().iter().map(|c| c.into_encoded_index()).collect();
+
+        let xpub = self
+            .client
+            .lock()
+            .expect("")
+            .mintlayer_get_public_key(account_path)
+            .expect("")
+            .ok()
+            .expect("");
+
+        let chain_code = ChainCode::from(xpub.chain_code.0);
+        let account_pubkey = Secp256k1ExtendedPublicKey::from_hardware_wallet(
+            derivation_path,
+            chain_code,
+            Secp256k1PublicKey::from_bytes(&xpub.public_key.serialize()).expect(""),
+        );
+        let account_pubkey = ExtendedPublicKey::from_hardware_public_key(account_pubkey);
+
+        let lookahead_size = db_tx.get_lookahead_size()?;
+
+        let key_chain = AccountKeyChainImplHardware::new_from_hardware_key(
+            chain_config.clone(),
+            db_tx,
+            account_pubkey,
+            account_index,
+            lookahead_size,
+        )?;
+
+        Account::new(chain_config, db_tx, key_chain, name)
+    }
+
+    fn load_account_from_database(
+        &self,
+        chain_config: Arc<ChainConfig>,
+        db_tx: &impl WalletStorageReadLocked,
+        id: &AccountId,
+    ) -> WalletResult<Account<Self::K>> {
+        Account::load_from_database(chain_config, db_tx, id)
     }
 }
 
