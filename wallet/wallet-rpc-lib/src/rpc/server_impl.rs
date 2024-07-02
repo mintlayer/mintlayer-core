@@ -29,10 +29,15 @@ use common::{
 use crypto::key::PrivateKey;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
+#[cfg(feature = "trezor")]
+use utils::ensure;
 use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
+    types::{
+        BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo,
+        WalletTypeArgs,
+    },
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
 };
 use wallet_types::{
@@ -43,13 +48,13 @@ use crate::{
     rpc::{ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc, WalletRpcServer},
     types::{
         AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
-        CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
-        MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-        NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
-        RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
-        RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
-        StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-        UtxoInfo, VrfPublicKeyInfo,
+        CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded, JsonValue,
+        LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegation,
+        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn,
+        RpcHexString, RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint,
+        RpcUtxoState, RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance,
+        StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TransactionOptions,
+        TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError,
 };
@@ -89,22 +94,40 @@ where
         store_seed_phrase: bool,
         mnemonic: Option<String>,
         passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> rpc::RpcResult<CreatedWallet> {
-        let whether_to_store_seed_phrase = if store_seed_phrase {
+        let store_seed_phrase = if store_seed_phrase {
             StoreSeedPhrase::Store
         } else {
             StoreSeedPhrase::DoNotStore
         };
-        rpc::handle_result(
-            self.create_wallet(
-                path.into(),
-                whether_to_store_seed_phrase,
+
+        let args = match hardware_wallet {
+            None => WalletTypeArgs::Software {
                 mnemonic,
                 passphrase,
-                false,
-            )
-            .await
-            .map(Into::<CreatedWallet>::into),
+                store_seed_phrase,
+            },
+            #[cfg(feature = "trezor")]
+            Some(HardwareWalletType::Trezor) => {
+                ensure!(
+                    mnemonic.is_none()
+                        && passphrase.is_none()
+                        && store_seed_phrase == StoreSeedPhrase::DoNotStore,
+                    RpcError::HardwareWalletWithMnemonic
+                );
+                WalletTypeArgs::Trezor
+            }
+            #[cfg(not(feature = "trezor"))]
+            Some(_) => {
+                return Err(RpcError::<N>::InvalidHardwareWallet)?;
+            }
+        };
+
+        rpc::handle_result(
+            self.create_wallet(path.into(), args, false)
+                .await
+                .map(Into::<CreatedWallet>::into),
         )
     }
 

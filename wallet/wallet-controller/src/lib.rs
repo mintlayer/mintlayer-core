@@ -45,6 +45,7 @@ use std::{
 use types::{
     Balances, GenericCurrencyTransferToTxOutputConversionError, InspectTransaction,
     SeedWithPassPhrase, SignatureStats, TransactionToInspect, ValidatedSignatures, WalletInfo,
+    WalletTypeArgsComputed,
 };
 use wallet_storage::DefaultBackend;
 
@@ -81,6 +82,9 @@ pub use node_comm::{
 use randomness::{make_pseudo_rng, make_true_rng, Rng};
 #[cfg(feature = "trezor")]
 use wallet::signer::trezor_signer::TrezorSignerProvider;
+#[cfg(feature = "trezor")]
+use wallet::signer::SignerError;
+
 use wallet::{
     account::{
         currency_grouper::{self, Currency},
@@ -98,8 +102,7 @@ pub use wallet_types::{
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
 use wallet_types::{
-    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, wallet_type::WalletType,
-    with_locked::WithLocked,
+    signature_status::SignatureStatus, wallet_type::WalletType, with_locked::WithLocked,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -231,13 +234,10 @@ where
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn create_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
-        mnemonic: mnemonic::Mnemonic,
-        passphrase: Option<&str>,
-        whether_to_store_seed_phrase: StoreSeedPhrase,
+        args: WalletTypeArgsComputed,
         best_block: (BlockHeight, Id<GenBlock>),
         wallet_type: WalletType,
     ) -> Result<WalletType2<DefaultBackend>, ControllerError<T>> {
@@ -251,33 +251,51 @@ where
 
         let db = wallet::wallet::open_or_create_wallet_file(file_path)
             .map_err(ControllerError::WalletError)?;
-        let wallet = wallet::Wallet::create_new_wallet(
-            Arc::clone(&chain_config),
-            db,
-            best_block,
-            wallet_type,
-            |db_tx| {
-                Ok(SoftwareSignerProvider::new_from_mnemonic(
-                    chain_config.clone(),
-                    db_tx,
-                    &mnemonic.to_string(),
-                    passphrase,
-                    whether_to_store_seed_phrase,
-                )?)
-            },
-        )
-        .map_err(ControllerError::WalletError)?;
+        match args {
+            WalletTypeArgsComputed::Software {
+                mnemonic,
+                passphrase,
+                store_seed_phrase,
+            } => {
+                let passphrase_ref = passphrase.as_ref().map(|x| x.as_ref());
 
-        //TODO: add support for hardware wallet creation
-        Ok(WalletType2::Software(wallet))
+                let wallet = wallet::Wallet::create_new_wallet(
+                    Arc::clone(&chain_config),
+                    db,
+                    best_block,
+                    wallet_type,
+                    |db_tx| {
+                        Ok(SoftwareSignerProvider::new_from_mnemonic(
+                            chain_config.clone(),
+                            db_tx,
+                            &mnemonic.to_string(),
+                            passphrase_ref,
+                            store_seed_phrase,
+                        )?)
+                    },
+                )
+                .map_err(ControllerError::WalletError)?;
+                Ok(WalletType2::Software(wallet))
+            }
+            #[cfg(feature = "trezor")]
+            WalletTypeArgsComputed::Trezor => {
+                let wallet = wallet::Wallet::create_new_wallet(
+                    Arc::clone(&chain_config),
+                    db,
+                    best_block,
+                    wallet_type,
+                    |db_tx| Ok(TrezorSignerProvider::new().map_err(SignerError::TrezorError)?),
+                )
+                .map_err(ControllerError::WalletError)?;
+                Ok(WalletType2::Trezor(wallet))
+            }
+        }
     }
 
     pub fn recover_wallet(
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
-        mnemonic: mnemonic::Mnemonic,
-        passphrase: Option<&str>,
-        whether_to_store_seed_phrase: StoreSeedPhrase,
+        args: WalletTypeArgsComputed,
         wallet_type: WalletType,
     ) -> Result<WalletType2<DefaultBackend>, ControllerError<T>> {
         utils::ensure!(
@@ -290,20 +308,44 @@ where
 
         let db = wallet::wallet::open_or_create_wallet_file(file_path)
             .map_err(ControllerError::WalletError)?;
-        let wallet =
-            wallet::Wallet::recover_wallet(Arc::clone(&chain_config), db, wallet_type, |db_tx| {
-                Ok(SoftwareSignerProvider::new_from_mnemonic(
-                    chain_config.clone(),
-                    db_tx,
-                    &mnemonic.to_string(),
-                    passphrase,
-                    whether_to_store_seed_phrase,
-                )?)
-            })
-            .map_err(ControllerError::WalletError)?;
 
-        //TODO: add support for hardware wallet creation
-        Ok(WalletType2::Software(wallet))
+        match args {
+            WalletTypeArgsComputed::Software {
+                mnemonic,
+                passphrase,
+                store_seed_phrase,
+            } => {
+                let passphrase_ref = passphrase.as_ref().map(|x| x.as_ref());
+
+                let wallet = wallet::Wallet::recover_wallet(
+                    Arc::clone(&chain_config),
+                    db,
+                    wallet_type,
+                    |db_tx| {
+                        Ok(SoftwareSignerProvider::new_from_mnemonic(
+                            chain_config.clone(),
+                            db_tx,
+                            &mnemonic.to_string(),
+                            passphrase_ref,
+                            store_seed_phrase,
+                        )?)
+                    },
+                )
+                .map_err(ControllerError::WalletError)?;
+                Ok(WalletType2::Software(wallet))
+            }
+            #[cfg(feature = "trezor")]
+            WalletTypeArgsComputed::Trezor => {
+                let wallet = wallet::Wallet::recover_wallet(
+                    Arc::clone(&chain_config),
+                    db,
+                    wallet_type,
+                    |db_tx| Ok(TrezorSignerProvider::new().map_err(SignerError::TrezorError)?),
+                )
+                .map_err(ControllerError::WalletError)?;
+                Ok(WalletType2::Trezor(wallet))
+            }
+        }
     }
 
     fn make_backup_wallet_file(file_path: impl AsRef<Path>, version: u32) -> WalletResult<()> {
