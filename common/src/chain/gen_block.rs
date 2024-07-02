@@ -118,3 +118,24 @@ impl GenBlockId {
         }
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct GenBlockIdConverter {
+    genesis_block_id: Id<GenBlock>,
+}
+
+impl GenBlockIdConverter {
+    pub fn new(chain_config: &crate::chain::config::ChainConfig) -> Self {
+        Self {
+            genesis_block_id: chain_config.genesis_block_id(),
+        }
+    }
+
+    pub fn to_chain_block_id<'a>(&self, id: &'a Id<GenBlock>) -> Option<&'a Id<Block>> {
+        if id.to_hash() == self.genesis_block_id.to_hash() {
+            None
+        } else {
+            Some(Id::<Block>::ref_cast(id.as_hash()))
+        }
+    }
+}

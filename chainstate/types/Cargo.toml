@@ -13,6 +13,7 @@ crypto = { path = "../../crypto" }
 logging = { path = '../../logging' }
 serialization = { path = "../../serialization" }
 storage = { path = "../../storage/" }
+utils-in-mem-item-tree = { path = "../../utils/in_mem_item_tree" }
 
 derive_more.workspace = true
 enum-iterator.workspace = true

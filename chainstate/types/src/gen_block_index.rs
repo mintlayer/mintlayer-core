@@ -16,7 +16,10 @@
 use std::sync::Arc;
 
 use common::{
-    chain::{block::timestamp::BlockTimestamp, ChainConfig, GenBlock, Genesis},
+    chain::{
+        block::timestamp::BlockTimestamp, gen_block::GenBlockIdConverter, ChainConfig, GenBlock,
+        Genesis,
+    },
     primitives::{id::WithId, BlockHeight, Id, Idable},
     Uint256,
 };
@@ -123,3 +126,16 @@ impl From<BlockIndex> for GenBlockIndex {
 
 // Forbid implementing Eq and PartialEq for GenBlockIndex.
 assert_not_impl_any!(GenBlockIndex: Eq, PartialEq);
+
+impl utils_in_mem_item_tree::primitives::DataItem for BlockIndex {
+    type Id = Id<GenBlock>;
+    type IdClassifier = GenBlockIdConverter;
+
+    fn item_id(&self) -> &Id<GenBlock> {
+        self.block_id().into()
+    }
+
+    fn parent_item_id(&self, block_classifier: &Self::IdClassifier) -> Option<&Id<GenBlock>> {
+        block_classifier.to_chain_block_id(self.prev_block_id()).map(|id| id.into())
+    }
+}

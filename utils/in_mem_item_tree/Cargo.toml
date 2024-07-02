@@ -1,0 +1,19 @@
+[package]
+name = "utils-in-mem-item-tree"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+logging = { path = "../../logging/" }
+utils = { path = ".." }
+
+derive_more.workspace = true
+indextree.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+test-utils = { path = "../../test-utils" }
+
+itertools.workspace = true
