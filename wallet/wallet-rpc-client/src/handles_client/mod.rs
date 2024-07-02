@@ -33,14 +33,16 @@ use serialization::{hex::HexEncode, hex_encoded::HexEncoded, json_encoded::JsonE
 use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
-    types::{CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
+    types::{
+        CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo, WalletTypeArgs,
+    },
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
-        DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewOrder,
-        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
+        DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
+        NewOrder, NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
         RpcHashedTimelockContract, RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
@@ -124,20 +126,38 @@ where
         store_seed_phrase: bool,
         mnemonic: Option<String>,
         passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<CreatedWallet, Self::Error> {
-        let whether_to_store_seed_phrase = if store_seed_phrase {
+        let store_seed_phrase = if store_seed_phrase {
             StoreSeedPhrase::Store
         } else {
             StoreSeedPhrase::DoNotStore
         };
-        self.wallet_rpc
-            .create_wallet(
-                path,
-                whether_to_store_seed_phrase,
+
+        let args = match hardware_wallet {
+            None => WalletTypeArgs::Software {
                 mnemonic,
                 passphrase,
-                false,
-            )
+                store_seed_phrase,
+            },
+            #[cfg(feature = "trezor")]
+            Some(HardwareWalletType::Trezor) => {
+                ensure!(
+                    mnemonic.is_none()
+                        && passphrase.is_none()
+                        && store_seed_phrase == StoreSeedPhrase::DoNotStore,
+                    RpcError::HardwareWalletWithMnemonic
+                );
+                WalletTypeArgs::Trezor
+            }
+            #[cfg(not(feature = "trezor"))]
+            Some(_) => {
+                return Err(RpcError::<N>::InvalidHardwareWallet)?;
+            }
+        };
+
+        self.wallet_rpc
+            .create_wallet(path, args, false)
             .await
             .map(Into::into)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)

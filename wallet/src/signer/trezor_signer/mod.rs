@@ -45,11 +45,13 @@ use crypto::key::{
 use itertools::Itertools;
 use randomness::make_true_rng;
 use serialization::Encode;
+use trezor_client::find_devices;
 #[allow(clippy::all)]
 use trezor_client::{
     protos::{MintlayerTransferTxOutput, MintlayerUtxoTxInput},
     Trezor,
 };
+use utils::ensure;
 use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
@@ -64,6 +66,13 @@ use crate::{
 };
 
 use super::{Signer, SignerError, SignerProvider, SignerResult};
+
+/// Signer errors
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+pub enum TrezorError {
+    #[error("No connected Trezor device found")]
+    NoDeviceFound,
+}
 
 pub struct TrezorSigner {
     chain_config: Arc<ChainConfig>,
@@ -441,10 +450,15 @@ impl std::fmt::Debug for TrezorSignerProvider {
 }
 
 impl TrezorSignerProvider {
-    pub fn new(client: Trezor) -> Self {
-        Self {
+    pub fn new() -> Result<Self, TrezorError> {
+        let mut devices = find_devices(false);
+        ensure!(!devices.is_empty(), TrezorError::NoDeviceFound);
+
+        let client = devices.pop().unwrap().connect().unwrap();
+
+        Ok(Self {
             client: Arc::new(Mutex::new(client)),
-        }
+        })
     }
 }
 
