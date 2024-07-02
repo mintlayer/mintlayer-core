@@ -518,8 +518,8 @@ impl<'a> RandomTxMaker<'a> {
                     if !self.account_command_used {
                         // conclude an order
                         let order_data = orders_cache.get_order_data(&order_id).unwrap().unwrap();
-                        if token_not_frozen(order_data.ask(), tokens_cache)
-                            && token_not_frozen(order_data.give(), tokens_cache)
+                        if !is_frozen_token(order_data.ask(), tokens_cache)
+                            && !is_frozen_token(order_data.give(), tokens_cache)
                         {
                             let new_nonce = self.get_next_nonce(AccountType::Order(order_id));
                             result_inputs.push(TxInput::AccountCommand(
@@ -984,7 +984,7 @@ impl<'a> RandomTxMaker<'a> {
                     let filled_value =
                         calculate_filled_order_value(&orders_cache, order_id, &fill_value);
 
-                    if token_not_frozen(&filled_value, tokens_cache) {
+                    if !is_frozen_token(&filled_value, tokens_cache) {
                         let new_nonce = self.get_next_nonce(AccountType::Order(order_id));
                         let input = TxInput::AccountCommand(
                             new_nonce,
@@ -1205,28 +1205,30 @@ impl<'a> RandomTxMaker<'a> {
                     if let Some(order_id) =
                         get_random_order_to_fill(self.orders_store, &orders_cache, &output_value)
                     {
-                        let new_nonce = self.get_next_nonce(AccountType::Order(order_id));
-
                         let filled_value =
                             calculate_filled_order_value(&orders_cache, order_id, &output_value);
 
-                        result_outputs.push(TxOutput::Transfer(
-                            filled_value,
-                            key_manager.new_destination(self.chainstate.get_chain_config(), rng),
-                        ));
-
-                        result_inputs.push(TxInput::AccountCommand(
-                            new_nonce,
-                            AccountCommand::FillOrder(
-                                order_id,
-                                output_value.clone(),
+                        if !is_frozen_token(&filled_value, tokens_cache) {
+                            result_outputs.push(TxOutput::Transfer(
+                                filled_value,
                                 key_manager
                                     .new_destination(self.chainstate.get_chain_config(), rng),
-                            ),
-                        ));
+                            ));
 
-                        let _ = orders_cache.fill_order(order_id, output_value).unwrap();
-                        self.account_command_used = true;
+                            let new_nonce = self.get_next_nonce(AccountType::Order(order_id));
+                            result_inputs.push(TxInput::AccountCommand(
+                                new_nonce,
+                                AccountCommand::FillOrder(
+                                    order_id,
+                                    output_value.clone(),
+                                    key_manager
+                                        .new_destination(self.chainstate.get_chain_config(), rng),
+                                ),
+                            ));
+
+                            let _ = orders_cache.fill_order(order_id, output_value).unwrap();
+                            self.account_command_used = true;
+                        }
                     }
                 }
             } else if rng.gen_bool(0.4) && !self.account_command_used {
@@ -1429,12 +1431,12 @@ impl<'a> RandomTxMaker<'a> {
     }
 }
 
-fn token_not_frozen(value: &OutputValue, view: &impl TokensAccountingView) -> bool {
+fn is_frozen_token(value: &OutputValue, view: &impl TokensAccountingView) -> bool {
     match value {
-        OutputValue::Coin(_) | OutputValue::TokenV0(_) => true,
+        OutputValue::Coin(_) | OutputValue::TokenV0(_) => false,
         OutputValue::TokenV1(token_id, _) => {
             view.get_token_data(token_id).unwrap().is_some_and(|data| match data {
-                tokens_accounting::TokenData::FungibleToken(data) => !data.is_frozen(),
+                tokens_accounting::TokenData::FungibleToken(data) => data.is_frozen(),
             })
         }
     }
