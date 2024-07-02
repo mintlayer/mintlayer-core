@@ -24,8 +24,10 @@ use common::chain::{
     ChainConfig, Destination,
 };
 use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
-use wallet_storage::{WalletStorageReadUnlocked, WalletStorageWriteUnlocked};
-use wallet_types::signature_status::SignatureStatus;
+use wallet_storage::{
+    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
+};
+use wallet_types::{signature_status::SignatureStatus, AccountId};
 
 use crate::{
     key_chain::{AccountKeyChains, KeyChainError},
@@ -86,6 +88,7 @@ pub trait Signer {
 
 pub trait SignerProvider {
     type S: Signer;
+    type K: AccountKeyChains;
 
     fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S;
 
@@ -95,5 +98,12 @@ pub trait SignerProvider {
         account_index: U31,
         name: Option<String>,
         db_tx: &mut impl WalletStorageWriteUnlocked,
-    ) -> WalletResult<Account>;
+    ) -> WalletResult<Account<Self::K>>;
+
+    fn load_account_from_database(
+        &self,
+        chain_config: Arc<ChainConfig>,
+        db_tx: &impl WalletStorageReadLocked,
+        id: &AccountId,
+    ) -> WalletResult<Account<Self::K>>;
 }

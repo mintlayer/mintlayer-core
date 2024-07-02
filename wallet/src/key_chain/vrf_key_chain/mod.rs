@@ -99,72 +99,6 @@ impl VrfKeySoftChain {
         Ok(vrf_chain)
     }
 
-    pub fn load_keys(
-        chain_config: Arc<ChainConfig>,
-        db_tx: &impl WalletStorageReadLocked,
-        id: &AccountId,
-        lookahead_size: u32,
-    ) -> KeyChainResult<VrfKeySoftChain> {
-        let AccountVrfKeys {
-            account_vrf_key,
-            legacy_vrf_key,
-        } = db_tx
-            .get_account_vrf_public_keys(id)?
-            .ok_or(KeyChainError::CouldNotLoadKeyChain)?;
-
-        let usage = db_tx
-            .get_vrf_keychain_usage_state(id)?
-            .ok_or(KeyChainError::CouldNotLoadKeyChain)?;
-
-        let public_keys = (0..=usage.last_issued().map_or(0, |issued| issued.into_u32()))
-            .map(|index| {
-                let child_number = ChildNumber::from_index_with_hardened_bit(index);
-                Ok((
-                    child_number,
-                    account_vrf_key.clone().derive_child(child_number)?,
-                ))
-            })
-            .collect::<Result<_, DerivationError>>()?;
-
-        VrfKeySoftChain::new_from_parts(
-            chain_config.clone(),
-            id.clone(),
-            account_vrf_key,
-            public_keys,
-            usage,
-            legacy_vrf_key,
-            lookahead_size,
-        )
-    }
-
-    pub fn get_account_vrf_public_key(&self) -> &ExtendedVRFPublicKey {
-        &self.parent_pubkey
-    }
-
-    /// Issue a new key
-    pub fn issue_new(
-        &mut self,
-        db_tx: &mut impl WalletStorageWriteLocked,
-        lookahead_size: u32,
-    ) -> KeyChainResult<(ChildNumber, ExtendedVRFPublicKey)> {
-        let new_issued_index = self.get_new_issued_index(lookahead_size)?;
-
-        let key = self.derive_and_add_key(new_issued_index)?;
-
-        let index = ChildNumber::from_normal(new_issued_index);
-
-        logging::log::debug!(
-            "new vrf address: {}, index: {}",
-            Address::new(&self.chain_config, key.clone().into_public_key()).expect("addressable"),
-            new_issued_index,
-        );
-
-        self.usage_state.increment_up_to_last_issued(new_issued_index);
-        self.save_usage_state(db_tx)?;
-
-        Ok((index, key))
-    }
-
     /// Persist the usage state to the database
     pub fn save_usage_state(
         &self,
@@ -248,35 +182,6 @@ impl VrfKeySoftChain {
         self.derived_public_keys.keys().last().copied()
     }
 
-    /// Derive up `lookahead_size` keys starting from the last used index. If the gap from the last
-    /// used key to the last derived key is already `lookahead_size`, this method has no effect
-    pub fn top_up(&mut self, lookahead_size: u32) -> KeyChainResult<()> {
-        // Find how many keys to derive
-        let starting_index = match self.get_last_derived_index() {
-            None => 0,
-            Some(last_derived_index) => last_derived_index.get_index().into_u32() + 1,
-        };
-
-        let up_to_index = match self.last_used() {
-            None => lookahead_size,
-            Some(last_used) => last_used.into_u32() + lookahead_size + 1,
-        };
-
-        // Derive the needed keys (the loop can be )
-        for i in starting_index..up_to_index {
-            if let Some(index) = U31::from_u32(i) {
-                self.derive_and_add_key(index)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn is_public_key_mine(&self, public_key: &VRFPublicKey) -> bool {
-        self.public_key_to_index.contains_key(public_key)
-            || public_key == self.legacy_pubkey.public_key()
-    }
-
     pub fn get_derived_xpub_from_public_key(
         &self,
         pub_key: &VRFPublicKey,
@@ -308,20 +213,6 @@ impl VrfKeySoftChain {
         self.top_up(lookahead_size)
     }
 
-    pub fn mark_pubkey_as_used(
-        &mut self,
-        db_tx: &mut impl WalletStorageWriteLocked,
-        public_key: &VRFPublicKey,
-        lookahead_size: u32,
-    ) -> KeyChainResult<bool> {
-        if let Some(child_num) = self.get_child_num_from_public_key(public_key) {
-            self.mark_child_key_as_used(db_tx, child_num, lookahead_size)?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
     /// Get the index of the last used key or None if no key is used
     pub fn last_used(&self) -> Option<U31> {
         self.usage_state.last_used()
@@ -335,6 +226,30 @@ impl VrfKeySoftChain {
     pub fn get_legacy_vrf_public_key(&self) -> Address<VRFPublicKey> {
         Address::new(&self.chain_config, self.legacy_pubkey.public_key().clone())
             .expect("addressable")
+    }
+
+    /// Issue a new key
+    pub fn issue_new(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        lookahead_size: u32,
+    ) -> KeyChainResult<(ChildNumber, ExtendedVRFPublicKey)> {
+        let new_issued_index = self.get_new_issued_index(lookahead_size)?;
+
+        let key = self.derive_and_add_key(new_issued_index)?;
+
+        let index = ChildNumber::from_normal(new_issued_index);
+
+        logging::log::debug!(
+            "new vrf address: {}, index: {}",
+            Address::new(&self.chain_config, key.clone().into_public_key()).expect("addressable"),
+            new_issued_index,
+        );
+
+        self.usage_state.increment_up_to_last_issued(new_issued_index);
+        self.save_usage_state(db_tx)?;
+
+        Ok((index, key))
     }
 
     pub fn get_all_issued_keys(&self) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)> {
@@ -361,8 +276,131 @@ impl VrfKeySoftChain {
             })
             .collect()
     }
+}
 
-    pub fn usage_state(&self) -> &KeychainUsageState {
-        &self.usage_state
+pub trait VrfKeyChain
+where
+    Self: Sized,
+{
+    fn load_from_database(
+        chain_config: Arc<ChainConfig>,
+        db_tx: &impl WalletStorageReadLocked,
+        id: &AccountId,
+        lookahead_size: u32,
+    ) -> KeyChainResult<Self>;
+
+    /// Derive up `lookahead_size` keys starting from the last used index. If the gap from the last
+    /// used key to the last derived key is already `lookahead_size`, this method has no effect
+    fn top_up(&mut self, lookahead_size: u32) -> KeyChainResult<()>;
+
+    fn mark_pubkey_as_used(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        public_key: &VRFPublicKey,
+        lookahead_size: u32,
+    ) -> KeyChainResult<bool>;
+}
+
+impl VrfKeyChain for VrfKeySoftChain {
+    fn load_from_database(
+        chain_config: Arc<ChainConfig>,
+        db_tx: &impl WalletStorageReadLocked,
+        id: &AccountId,
+        lookahead_size: u32,
+    ) -> KeyChainResult<VrfKeySoftChain> {
+        let AccountVrfKeys {
+            account_vrf_key,
+            legacy_vrf_key,
+        } = db_tx
+            .get_account_vrf_public_keys(id)?
+            .ok_or(KeyChainError::CouldNotLoadKeyChain)?;
+
+        let usage = db_tx
+            .get_vrf_keychain_usage_state(id)?
+            .ok_or(KeyChainError::CouldNotLoadKeyChain)?;
+
+        let public_keys = (0..=usage.last_issued().map_or(0, |issued| issued.into_u32()))
+            .map(|index| {
+                let child_number = ChildNumber::from_index_with_hardened_bit(index);
+                Ok((
+                    child_number,
+                    account_vrf_key.clone().derive_child(child_number)?,
+                ))
+            })
+            .collect::<Result<_, DerivationError>>()?;
+
+        VrfKeySoftChain::new_from_parts(
+            chain_config.clone(),
+            id.clone(),
+            account_vrf_key,
+            public_keys,
+            usage,
+            legacy_vrf_key,
+            lookahead_size,
+        )
+    }
+
+    /// Derive up `lookahead_size` keys starting from the last used index. If the gap from the last
+    /// used key to the last derived key is already `lookahead_size`, this method has no effect
+    fn top_up(&mut self, lookahead_size: u32) -> KeyChainResult<()> {
+        // Find how many keys to derive
+        let starting_index = match self.get_last_derived_index() {
+            None => 0,
+            Some(last_derived_index) => last_derived_index.get_index().into_u32() + 1,
+        };
+
+        let up_to_index = match self.last_used() {
+            None => lookahead_size,
+            Some(last_used) => last_used.into_u32() + lookahead_size + 1,
+        };
+
+        // Derive the needed keys (the loop can be )
+        for i in starting_index..up_to_index {
+            if let Some(index) = U31::from_u32(i) {
+                self.derive_and_add_key(index)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn mark_pubkey_as_used(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+        public_key: &VRFPublicKey,
+        lookahead_size: u32,
+    ) -> KeyChainResult<bool> {
+        if let Some(child_num) = self.get_child_num_from_public_key(public_key) {
+            self.mark_child_key_as_used(db_tx, child_num, lookahead_size)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+}
+
+pub struct EmptyVrfKeyChain;
+
+impl VrfKeyChain for EmptyVrfKeyChain {
+    fn load_from_database(
+        _chain_config: Arc<ChainConfig>,
+        _db_tx: &impl WalletStorageReadLocked,
+        _id: &AccountId,
+        _lookahead_size: u32,
+    ) -> KeyChainResult<Self> {
+        Ok(Self {})
+    }
+
+    fn top_up(&mut self, _lookahead_size: u32) -> KeyChainResult<()> {
+        Ok(())
+    }
+
+    fn mark_pubkey_as_used(
+        &mut self,
+        _db_tx: &mut impl WalletStorageWriteLocked,
+        _public_key: &VRFPublicKey,
+        _lookahead_size: u32,
+    ) -> KeyChainResult<bool> {
+        Ok(false)
     }
 }

@@ -48,10 +48,13 @@ use wallet_storage::{
     StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteUnlocked,
 };
-use wallet_types::{seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus};
+use wallet_types::{seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, AccountId};
 
 use crate::{
-    key_chain::{make_account_path, AccountKeyChains, FoundPubKey, MasterKeyChain},
+    key_chain::{
+        make_account_path, AccountKeyChainImplSoftware, AccountKeyChains, FoundPubKey,
+        MasterKeyChain,
+    },
     Account, WalletResult,
 };
 
@@ -424,6 +427,7 @@ impl SoftwareSignerProvider {
 
 impl SignerProvider for SoftwareSignerProvider {
     type S = SoftwareSigner;
+    type K = AccountKeyChainImplSoftware;
 
     fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S {
         SoftwareSigner::new(chain_config, account_index)
@@ -435,7 +439,7 @@ impl SignerProvider for SoftwareSignerProvider {
         next_account_index: U31,
         name: Option<String>,
         db_tx: &mut impl WalletStorageWriteUnlocked,
-    ) -> WalletResult<Account> {
+    ) -> WalletResult<Account<AccountKeyChainImplSoftware>> {
         let lookahead_size = db_tx.get_lookahead_size()?;
         let account_key_chain = self.master_key_chain.create_account_key_chain(
             db_tx,
@@ -444,6 +448,15 @@ impl SignerProvider for SoftwareSignerProvider {
         )?;
 
         Account::new(chain_config, db_tx, account_key_chain, name)
+    }
+
+    fn load_account_from_database(
+        &self,
+        chain_config: Arc<ChainConfig>,
+        db_tx: &impl WalletStorageReadLocked,
+        id: &AccountId,
+    ) -> WalletResult<Account<Self::K>> {
+        Account::load_from_database(chain_config, db_tx, id)
     }
 }
 
