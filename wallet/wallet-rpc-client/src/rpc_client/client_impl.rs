@@ -41,9 +41,9 @@ use wallet_controller::{
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
-        DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
-        RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
+        DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
+        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
+        RpcHashedTimelockContract, RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
         VrfPublicKeyInfo,
@@ -82,6 +82,7 @@ impl WalletInterface for ClientWalletRpc {
         store_seed_phrase: bool,
         mnemonic: Option<String>,
         passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<CreatedWallet, Self::Error> {
         ColdWalletRpcClient::create_wallet(
             &self.http_client,
@@ -89,6 +90,7 @@ impl WalletInterface for ClientWalletRpc {
             store_seed_phrase,
             mnemonic,
             passphrase,
+            hardware_wallet,
         )
         .await
         .map_err(WalletRpcError::ResponseError)
