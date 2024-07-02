@@ -44,3 +44,5 @@ tempfile.workspace = true
 
 [features]
 trezor = ["trezor-client"]
+
+default = ["trezor"]
