@@ -78,6 +78,8 @@ pub use node_comm::{
     rpc_client::NodeRpcClient,
 };
 use randomness::{make_pseudo_rng, make_true_rng, Rng};
+#[cfg(feature = "trezor")]
+use wallet::signer::trezor_signer::TrezorSignerProvider;
 use wallet::{
     account::{
         currency_grouper::{self, Currency},
@@ -89,6 +91,7 @@ use wallet::{
     wallet_events::WalletEvents,
     Wallet, WalletError, WalletResult,
 };
+
 pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
@@ -132,6 +135,8 @@ pub enum ControllerError<T: NodeInterface> {
     NoWallet,
     #[error("Search for timestamps failed: {0}")]
     SearchForTimestampsFailed(BlockProductionError),
+    #[error("Unsupported operation for a Hardware wallet")]
+    UnsupportedHardwareWalletOperation,
 }
 
 #[derive(Clone, Copy)]
@@ -148,7 +153,8 @@ pub struct ControllerConfig {
 
 pub enum WalletType2<B: storage::Backend + 'static> {
     Software(Wallet<B, SoftwareSignerProvider>),
-    Trezor(Wallet<B, SoftwareSignerProvider>),
+    #[cfg(feature = "trezor")]
+    Trezor(Wallet<B, TrezorSignerProvider>),
 }
 
 pub struct Controller<T, W, B: storage::Backend + 'static> {
@@ -356,6 +362,7 @@ where
     pub fn seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<T>> {
         match &self.wallet {
             WalletType2::Software(w) => w.seed_phrase(),
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.seed_phrase(),
         }
         .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
@@ -366,6 +373,7 @@ where
     pub fn delete_seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<T>> {
         match &self.wallet {
             WalletType2::Software(w) => w.delete_seed_phrase(),
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.delete_seed_phrase(),
         }
         .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
@@ -377,6 +385,7 @@ where
     pub fn reset_wallet_to_genesis(&mut self) -> Result<(), ControllerError<T>> {
         match &mut self.wallet {
             WalletType2::Software(w) => w.reset_wallet_to_genesis(),
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.reset_wallet_to_genesis(),
         }
         .map_err(ControllerError::WalletError)
@@ -394,6 +403,7 @@ where
     pub fn encrypt_wallet(&mut self, password: &Option<String>) -> Result<(), ControllerError<T>> {
         match &mut self.wallet {
             WalletType2::Software(w) => w.encrypt_wallet(password),
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.encrypt_wallet(password),
         }
         .map_err(ControllerError::WalletError)
@@ -411,6 +421,7 @@ where
     pub fn unlock_wallet(&mut self, password: &String) -> Result<(), ControllerError<T>> {
         match &mut self.wallet {
             WalletType2::Software(w) => w.unlock_wallet(password),
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.unlock_wallet(password),
         }
         .map_err(ControllerError::WalletError)
@@ -428,6 +439,7 @@ where
         );
         match &mut self.wallet {
             WalletType2::Software(w) => w.lock_wallet(),
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.lock_wallet(),
         }
         .map_err(ControllerError::WalletError)
@@ -447,6 +459,7 @@ where
 
         match &mut self.wallet {
             WalletType2::Software(w) => w.set_lookahead_size(lookahead_size, force_reduce),
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.set_lookahead_size(lookahead_size, force_reduce),
         }
         .map_err(ControllerError::WalletError)
@@ -455,6 +468,7 @@ where
     pub fn wallet_info(&self) -> WalletInfo {
         let (wallet_id, account_names) = match &self.wallet {
             WalletType2::Software(w) => w.wallet_info(),
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.wallet_info(),
         };
         WalletInfo {
@@ -487,7 +501,10 @@ where
     ) -> Result<Block, ControllerError<T>> {
         let pos_data = match &self.wallet {
             WalletType2::Software(w) => w.get_pos_gen_block_data(account_index, pool_id),
-            WalletType2::Trezor(w) => w.get_pos_gen_block_data(account_index, pool_id),
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(_) => {
+                return Err(ControllerError::UnsupportedHardwareWalletOperation)
+            }
         }
         .map_err(ControllerError::WalletError)?;
 
@@ -528,6 +545,7 @@ where
     ) -> Result<Block, ControllerError<T>> {
         let pools = match &self.wallet {
             WalletType2::Software(w) => w.get_pool_ids(account_index, WalletPoolsFilter::Stake),
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.get_pool_ids(account_index, WalletPoolsFilter::Stake),
         }
         .map_err(ControllerError::WalletError)?;
@@ -598,7 +616,10 @@ where
     ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, ControllerError<T>> {
         let pos_data = match &self.wallet {
             WalletType2::Software(w) => w.get_pos_gen_block_data_by_pool_id(pool_id),
-            WalletType2::Trezor(w) => w.get_pos_gen_block_data_by_pool_id(pool_id),
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(_) => {
+                return Err(ControllerError::UnsupportedHardwareWalletOperation)
+            }
         }
         .map_err(ControllerError::WalletError)?;
 
@@ -628,6 +649,7 @@ where
     ) -> Result<(U31, Option<String>), ControllerError<T>> {
         match &mut self.wallet {
             WalletType2::Software(w) => w.create_next_account(name),
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.create_next_account(name),
         }
         .map_err(ControllerError::WalletError)
@@ -640,6 +662,7 @@ where
     ) -> Result<(U31, Option<String>), ControllerError<T>> {
         match &mut self.wallet {
             WalletType2::Software(w) => w.set_account_name(account_index, name),
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.set_account_name(account_index, name),
         }
         .map_err(ControllerError::WalletError)
@@ -658,6 +681,7 @@ where
     pub fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
         *match &self.wallet {
             WalletType2::Software(w) => w.get_best_block(),
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.get_best_block(),
         }
         .values()
@@ -676,6 +700,7 @@ where
                 UtxoState::Confirmed.into(),
                 WithLocked::Unlocked,
             ),
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.get_utxos(
                 account_index,
                 UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
@@ -719,6 +744,7 @@ where
             WalletType2::Software(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events).await
             }
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events).await
             }
@@ -734,12 +760,14 @@ where
         match &mut self.wallet {
             WalletType2::Software(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events)
+                    .await?;
             }
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events)
+                    .await?;
             }
         }
-        .await?;
 
         Ok(())
     }
@@ -1088,6 +1116,7 @@ where
         // search locally for the unspent utxo
         if let Some(out) = match &self.wallet {
             WalletType2::Software(w) => w.find_unspent_utxo_with_destination(input),
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.find_unspent_utxo_with_destination(input),
         } {
             return Ok(out.0);
@@ -1166,6 +1195,7 @@ where
         if get_time() >= *rebroadcast_txs_again_at {
             let txs = match &self.wallet {
                 WalletType2::Software(w) => w.get_transactions_to_be_broadcast(),
+                #[cfg(feature = "trezor")]
                 WalletType2::Trezor(w) => w.get_transactions_to_be_broadcast(),
             };
             match txs {

@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use std::ops::{Add, Div, Mul, Sub};
-use std::{cell::RefCell, rc::Rc};
 
 use super::*;
 use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
@@ -134,7 +133,7 @@ fn sign_transaction(#[case] seed: Seed) {
     let mut signer = TrezorSigner::new(
         chain_config.clone(),
         DEFAULT_ACCOUNT_INDEX,
-        Rc::new(RefCell::new(client)),
+        Arc::new(Mutex::new(client)),
     );
     let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).unwrap();
 
