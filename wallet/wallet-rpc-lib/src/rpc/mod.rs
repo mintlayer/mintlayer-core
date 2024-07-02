@@ -63,18 +63,18 @@ pub use interface::{
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{
-        Balances, BlockInfo, CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase,
-        TransactionToInspect, WalletInfo,
+        Balances, BlockInfo, CreatedBlockInfo, CreatedWallet, InspectTransaction,
+        SeedWithPassPhrase, TransactionToInspect, WalletInfo, WalletTypeArgs,
     },
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes,
     DEFAULT_ACCOUNT_INDEX,
 };
 use wallet_types::{
-    account_info::StandaloneAddressDetails, seed_phrase::StoreSeedPhrase,
-    signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked,
+    account_info::StandaloneAddressDetails, signature_status::SignatureStatus, wallet_tx::TxData,
+    with_locked::WithLocked,
 };
 
-use crate::{service::CreatedWallet, WalletHandle, WalletRpcConfig};
+use crate::{WalletHandle, WalletRpcConfig};
 
 pub use self::types::RpcError;
 use self::types::{
@@ -121,18 +121,14 @@ where
     pub async fn create_wallet(
         &self,
         path: PathBuf,
-        store_seed_phrase: StoreSeedPhrase,
-        mnemonic: Option<String>,
-        passphrase: Option<String>,
+        args: WalletTypeArgs,
         skip_syncing: bool,
     ) -> WRpcResult<CreatedWallet, N> {
         self.wallet
             .manage_async(move |wallet_manager| {
-                Box::pin(async move {
-                    wallet_manager
-                        .create_wallet(path, store_seed_phrase, mnemonic, passphrase, skip_syncing)
-                        .await
-                })
+                Box::pin(
+                    async move { wallet_manager.create_wallet(path, args, skip_syncing).await },
+                )
             })
             .await?
     }

@@ -22,6 +22,7 @@ mod standalone_key;
 mod transaction;
 
 pub use balances::Balances;
+use bip39::{Language, Mnemonic};
 pub use block_info::{BlockInfo, CreatedBlockInfo};
 pub use common::primitives::amount::RpcAmountOut;
 use common::primitives::H256;
@@ -30,9 +31,93 @@ pub use standalone_key::AccountStandaloneKeyDetails;
 pub use transaction::{
     InspectTransaction, SignatureStats, TransactionToInspect, ValidatedSignatures,
 };
+use wallet_types::seed_phrase::StoreSeedPhrase;
+
+use crate::mnemonic;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 pub struct WalletInfo {
     pub wallet_id: H256,
     pub account_names: Vec<Option<String>>,
+}
+
+pub enum CreatedWallet {
+    UserProvidedMnemonic,
+    NewlyGeneratedMnemonic(Mnemonic, Option<String>),
+}
+
+pub enum WalletTypeArgs {
+    Software {
+        mnemonic: Option<String>,
+        passphrase: Option<String>,
+        store_seed_phrase: StoreSeedPhrase,
+    },
+    #[cfg(feature = "trezor")]
+    Trezor,
+}
+
+impl WalletTypeArgs {
+    pub fn user_supplied_menmonic(&self) -> bool {
+        match self {
+            Self::Software {
+                mnemonic,
+                passphrase: _,
+                store_seed_phrase: _,
+            } => mnemonic.is_some(),
+            #[cfg(feature = "trezor")]
+            Self::Trezor => false,
+        }
+    }
+
+    pub fn parse_mnemonic(
+        self,
+    ) -> Result<(WalletTypeArgsComputed, CreatedWallet), mnemonic::Error> {
+        match self {
+            Self::Software {
+                mnemonic,
+                passphrase,
+                store_seed_phrase,
+            } => {
+                let language = Language::English;
+                let (mnemonic, created_wallet) = match &mnemonic {
+                    Some(mnemonic) => {
+                        let mnemonic = mnemonic::parse_mnemonic(language, mnemonic)?;
+                        (mnemonic, CreatedWallet::UserProvidedMnemonic)
+                    }
+                    None => {
+                        let mnemonic = mnemonic::generate_new_mnemonic(language);
+                        (
+                            mnemonic.clone(),
+                            CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase.clone()),
+                        )
+                    }
+                };
+
+                Ok((
+                    WalletTypeArgsComputed::Software {
+                        mnemonic,
+                        passphrase,
+                        store_seed_phrase,
+                    },
+                    created_wallet,
+                ))
+            }
+
+            #[cfg(feature = "trezor")]
+            Self::Trezor => Ok((
+                WalletTypeArgsComputed::Trezor,
+                CreatedWallet::UserProvidedMnemonic,
+            )),
+        }
+    }
+}
+
+pub enum WalletTypeArgsComputed {
+    Software {
+        mnemonic: Mnemonic,
+        passphrase: Option<String>,
+        store_seed_phrase: StoreSeedPhrase,
+    },
+    #[cfg(feature = "trezor")]
+    Trezor,
 }

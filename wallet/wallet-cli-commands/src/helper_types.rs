@@ -387,3 +387,9 @@ impl YesNo {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CLIHardwareWalletType {
+    #[cfg(feature = "trezor")]
+    Trezor,
+}

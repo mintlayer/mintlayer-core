@@ -36,9 +36,9 @@ use wallet_types::with_locked::WithLocked;
 
 use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
-    CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
-    MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcInspectTransaction,
+    CreatedWallet, DelegationInfo, HardwareWalletType, HexEncoded, JsonValue,
+    LegacyVrfPublicKeyInfo, MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction,
+    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcInspectTransaction,
     RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
     StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
     TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
@@ -69,6 +69,7 @@ trait ColdWalletRpc {
         store_seed_phrase: bool,
         mnemonic: Option<String>,
         passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> rpc::RpcResult<CreatedWallet>;
 
     /// Open an exiting wallet by specifying the file location of the wallet file
