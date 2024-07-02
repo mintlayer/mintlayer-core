@@ -544,7 +544,7 @@ mod produce_block {
             create_genesis_pool_txoutput,
         ) = setup_pos(&time_getter, BlockHeight::new(1), &[], &mut rng);
         let chain_config = build_chain_config_for_pos(
-            chain_config_builder.max_future_block_time_offset(Duration::MAX),
+            chain_config_builder.max_future_block_time_offset(Some(Duration::MAX)),
         );
 
         let (manager, chain_config, chainstate, mempool, p2p) =
@@ -692,7 +692,9 @@ mod produce_block {
         let chain_config = build_chain_config_for_pos(chain_config_builder);
         let time_getter = {
             let cur_time_secs = genesis_time
-                .saturating_duration_sub(*chain_config.max_future_block_time_offset())
+                .saturating_duration_sub(
+                    chain_config.max_future_block_time_offset(BlockHeight::zero()),
+                )
                 .as_secs_since_epoch();
             let time_value = Arc::new(SeqCstAtomicU64::new(cur_time_secs));
             mocked_time_getter_seconds(time_value)

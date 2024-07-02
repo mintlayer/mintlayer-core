@@ -573,12 +573,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    /// Return Ok(()) if the specified block has a valid parent and an error otherwise.
+    /// Return Ok(parent_block_index) if the specified block has a valid parent and an error otherwise.
     #[log_error]
     pub fn check_block_parent(
         &self,
         block_header: &SignedBlockHeader,
-    ) -> Result<(), CheckBlockError> {
+    ) -> Result<GenBlockIndex, CheckBlockError> {
         let parent_block_id = block_header.prev_block_id();
         let parent_block_index = self.get_gen_block_index(parent_block_id)?.ok_or_else(|| {
             CheckBlockError::ParentBlockMissing {
@@ -595,12 +595,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             }
         );
 
-        Ok(())
+        Ok(parent_block_index)
     }
 
     #[log_error]
     pub fn check_block_header(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
-        self.check_block_parent(header)?;
+        let parent_block_index = self.check_block_parent(header)?;
         self.check_header_size(header)?;
         self.enforce_checkpoints(header)?;
         self.check_block_height_vs_max_reorg_depth(header)?;
@@ -652,11 +652,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             CheckBlockError::BlockTimeOrderInvalid(header.timestamp(), median_time_past),
         );
 
-        let max_future_offset = self.chain_config.max_future_block_time_offset();
+        let max_future_offset = self
+            .chain_config
+            .max_future_block_time_offset(parent_block_index.block_height().next_height());
         let current_time = self.current_time().as_duration_since_epoch();
         let block_timestamp = header.timestamp();
         ensure!(
-            block_timestamp.as_duration_since_epoch() <= current_time + *max_future_offset,
+            block_timestamp.as_duration_since_epoch() <= current_time + max_future_offset,
             CheckBlockError::BlockFromTheFuture(header.block_id()),
         );
         Ok(())

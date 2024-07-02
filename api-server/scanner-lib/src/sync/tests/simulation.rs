@@ -185,7 +185,7 @@ async fn simulation(
     let sealed_epoch_distance_from_tip = rng.gen_range(1..10);
     let chain_config = config_builder
         .consensus_upgrades(consensus_upgrades)
-        .max_future_block_time_offset(std::time::Duration::from_secs(1_000_000))
+        .max_future_block_time_offset(Some(std::time::Duration::from_secs(1_000_000)))
         .epoch_length(epoch_length)
         .sealed_epoch_distance_from_tip(sealed_epoch_distance_from_tip)
         .build();

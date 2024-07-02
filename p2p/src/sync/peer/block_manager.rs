@@ -27,7 +27,7 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
         Block, ChainConfig, GenBlock,
     },
-    primitives::{time::Time, Id, Idable},
+    primitives::{time::Time, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -550,9 +550,13 @@ where
     // TODO: this must be removed; but at this moment this is not really possible, because
     // blockprod currently creates new blocks in the future, near the maximally allowed mark.
     // Also, see the issue #1024.
-    async fn wait_for_clock_diff(&self, block_timestamp: BlockTimestamp) {
+    async fn wait_for_clock_diff(
+        &self,
+        block_timestamp: BlockTimestamp,
+        block_height: BlockHeight,
+    ) {
         let max_accepted_time = (self.time_getter.get_time()
-            + *self.chain_config.max_future_block_time_offset())
+            + self.chain_config.max_future_block_time_offset(block_height))
         .expect("Both values come from this node's clock; so cannot fail");
         let max_block_timestamp = BlockTimestamp::from_time(max_accepted_time);
         if block_timestamp > max_block_timestamp {
@@ -606,9 +610,6 @@ where
             return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
         }
 
-        let last_header = headers.last().expect("Headers shouldn't be empty");
-        self.wait_for_clock_diff(last_header.timestamp()).await;
-
         // The first header must be connected to the chainstate.
         let first_header_prev_id = *headers
             .first()
@@ -631,18 +632,21 @@ where
         // header updates when we're downloading blocks from them, as mentioned above) that
         // would only complicate the logic.
 
-        let first_header_is_connected_to_chainstate = self
+        let first_header_prev_block_height = self
             .chainstate_handle
             // Use get_gen_block_index_for_any_block instead of get_gen_block_index_for_persisted_block
             // to avoid bailing out with the DisconnectedHeaders error early (the appropriate error will
             // be generated when checking the header later and its ban score will be bigger).
             .call(move |c| Ok(c.get_gen_block_index_for_any_block(&first_header_prev_id)?))
             .await?
-            .is_some();
+            .ok_or(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders))?
+            .block_height();
 
-        if !first_header_is_connected_to_chainstate {
-            return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
-        }
+        let last_header = headers.last().expect("Headers shouldn't be empty");
+        let last_header_height = first_header_prev_block_height
+            .checked_add(headers.len() as u64)
+            .expect("cannot overflow");
+        self.wait_for_clock_diff(last_header.timestamp(), last_header_height).await;
 
         let peer_may_have_more_headers =
             headers.len() == *self.p2p_config.protocol_config.msg_header_count_limit;

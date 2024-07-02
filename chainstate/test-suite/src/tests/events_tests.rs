@@ -193,7 +193,10 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
             .build(&mut rng);
         // Produce a block with a bad timestamp.
         let timestamp = tf.genesis().timestamp().as_int_seconds()
-            + tf.chainstate.get_chain_config().max_future_block_time_offset().as_secs()
+            + tf.chainstate
+                .get_chain_config()
+                .max_future_block_time_offset(BlockHeight::zero())
+                .as_secs()
             + 1;
         let second_block = tf
             .make_block_builder()

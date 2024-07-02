@@ -57,7 +57,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
         let sealed_epoch_distance_from_tip = rng.gen_range(1..10);
         let chain_config = config_builder
             .consensus_upgrades(consensus_upgrades)
-            .max_future_block_time_offset(std::time::Duration::from_secs(1_000_000))
+            .max_future_block_time_offset(Some(std::time::Duration::from_secs(1_000_000)))
             .epoch_length(epoch_length)
             .sealed_epoch_distance_from_tip(sealed_epoch_distance_from_tip)
             .build();
@@ -126,6 +126,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
                 tf2.process_block(block.clone(), BlockSource::Peer).unwrap();
                 tf2.progress_time_seconds_since_epoch(target_time.as_secs());
                 reference_tf.process_block(block.clone(), BlockSource::Peer).unwrap();
+                reference_tf.progress_time_seconds_since_epoch(target_time.as_secs());
 
                 tf2.staking_pools = tf.staking_pools.clone();
                 tf2.key_manager = tf.key_manager.clone();
@@ -160,6 +161,7 @@ fn simulation(#[case] seed: Seed, #[case] max_blocks: usize, #[case] max_tx_per_
             // submit alternative blocks to the original chain
             tf.process_block(block.clone(), BlockSource::Peer).unwrap();
             reference_tf.process_block(block, BlockSource::Peer).unwrap();
+            reference_tf.progress_time_seconds_since_epoch(target_time.as_secs());
         }
 
         assert_ne!(old_best_block_id, tf.best_block_id());
