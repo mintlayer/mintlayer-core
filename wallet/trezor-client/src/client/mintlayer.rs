@@ -17,7 +17,7 @@ use crate::{
 
 /// A chain code
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ChainCode([u8; 32]);
+pub struct ChainCode(pub [u8; 32]);
 // impl_array_newtype!(ChainCode, u8, 32);
 // impl_bytes_newtype!(ChainCode, 32);
 
