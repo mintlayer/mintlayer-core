@@ -34,11 +34,13 @@ use crate::{
     Account, WalletResult,
 };
 
+use self::trezor_signer::TrezorError;
+
 pub mod software_signer;
 #[cfg(feature = "trezor")]
 pub mod trezor_signer;
 
-/// KeyChain errors
+/// Signer errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum SignerError {
     #[error("The provided keys do not belong to the same hierarchy")]
@@ -59,6 +61,8 @@ pub enum SignerError {
     SignedTransactionIntentError(#[from] SignedTransactionIntentError),
     #[error("{0}")]
     SerializationError(#[from] serialization::Error),
+    #[error("Trezor error: {0}")]
+    TrezorError(#[from] TrezorError),
 }
 
 type SignerResult<T> = Result<T, SignerError>;

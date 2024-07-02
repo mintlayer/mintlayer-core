@@ -26,7 +26,7 @@ use utils::shallow_clone::ShallowClone;
 pub use events::{Event, TxState};
 pub use handle::{EventStream, SubmitError, WalletHandle};
 use wallet_controller::{ControllerConfig, NodeInterface};
-pub use worker::{CreatedWallet, WalletController, WalletControllerError};
+pub use worker::{WalletController, WalletControllerError};
 
 use events::WalletServiceEvents;
 

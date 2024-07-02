@@ -35,10 +35,10 @@ use wallet_controller::{
 };
 use wallet_rpc_lib::types::{
     AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
-    DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewOrder,
-    NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
-    RpcInspectTransaction, RpcSignatureStatus, RpcStandaloneAddresses, RpcTokenId,
-    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
+    NewOrder, NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
+    RpcHashedTimelockContract, RpcInspectTransaction, RpcSignatureStatus, RpcStandaloneAddresses,
+    RpcTokenId, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
 };
 use wallet_types::with_locked::WithLocked;
@@ -72,6 +72,7 @@ pub trait WalletInterface {
         store_seed_phrase: bool,
         mnemonic: Option<String>,
         passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<CreatedWallet, Self::Error>;
 
     async fn open_wallet(

@@ -22,10 +22,7 @@ pub use rpc::{
     types, ColdWalletRpcClient, ColdWalletRpcDescription, ColdWalletRpcServer, RpcCreds, RpcError,
     WalletEventsRpcServer, WalletRpc, WalletRpcClient, WalletRpcDescription, WalletRpcServer,
 };
-pub use service::{
-    CreatedWallet, Event, EventStream, TxState, WalletHandle,
-    /* WalletResult, */ WalletService,
-};
+pub use service::{Event, EventStream, TxState, WalletHandle, /* WalletResult, */ WalletService,};
 use wallet_controller::{NodeInterface, NodeRpcClient};
 
 use std::{fmt::Debug, time::Duration};

@@ -21,10 +21,9 @@ use tokio::{sync::mpsc, task::JoinHandle};
 
 use logging::log;
 use utils_networking::broadcaster::Broadcaster;
-use wallet::wallet::Mnemonic;
+use wallet_controller::types::{CreatedWallet, WalletTypeArgs};
 use wallet_controller::{ControllerError, NodeInterface};
 use wallet_types::scan_blockchain::ScanBlockchain;
-use wallet_types::seed_phrase::StoreSeedPhrase;
 
 use crate::types::RpcError;
 
@@ -51,11 +50,6 @@ pub enum WalletCommand<N> {
 
     /// Shutdown the wallet service task
     Stop,
-}
-
-pub enum CreatedWallet {
-    UserProvidedMnemonic,
-    NewlyGeneratedMnemonic(Mnemonic, Option<String>),
 }
 
 /// Represents the wallet worker task. It handles external commands and keeps the wallet in sync.
@@ -198,24 +192,16 @@ where
     pub async fn create_wallet(
         &mut self,
         wallet_path: PathBuf,
-        whether_to_store_seed_phrase: StoreSeedPhrase,
-        mnemonic: Option<String>,
-        passphrase: Option<String>,
+        args: WalletTypeArgs,
         scan_blockchain: ScanBlockchain,
     ) -> Result<CreatedWallet, RpcError<N>> {
         utils::ensure!(
             self.controller.is_none(),
             ControllerError::WalletFileAlreadyOpen
         );
-        // TODO: Support other languages
-        let language = wallet::wallet::Language::English;
-        let newly_generated_mnemonic = mnemonic.is_none();
-        let mnemonic = match &mnemonic {
-            Some(mnemonic) => wallet_controller::mnemonic::parse_mnemonic(language, mnemonic)
-                .map_err(RpcError::InvalidMnemonic)?,
-            None => wallet_controller::mnemonic::generate_new_mnemonic(language),
-        };
-        let passphrase_ref = passphrase.as_ref().map(|x| x.as_ref());
+        let newly_generated_mnemonic = args.user_supplied_menmonic();
+        let (computed_args, wallet_created) =
+            args.parse_mnemonic().map_err(RpcError::InvalidMnemonic)?;
 
         let wallet =
             if newly_generated_mnemonic || scan_blockchain.skip_scanning_the_blockchain() {
@@ -223,9 +209,7 @@ where
                 WalletController::create_wallet(
                     self.chain_config.clone(),
                     wallet_path,
-                    mnemonic.clone(),
-                    passphrase_ref,
-                    whether_to_store_seed_phrase,
+                    computed_args,
                     (info.best_block_height, info.best_block_id),
                     self.node_rpc.is_cold_wallet_node(),
                 )
@@ -233,9 +217,7 @@ where
                 WalletController::recover_wallet(
                     self.chain_config.clone(),
                     wallet_path,
-                    mnemonic.clone(),
-                    passphrase_ref,
-                    whether_to_store_seed_phrase,
+                    computed_args,
                     self.node_rpc.is_cold_wallet_node(),
                 )
             }
@@ -261,11 +243,7 @@ where
 
         self.controller.replace(controller);
 
-        let result = match newly_generated_mnemonic {
-            true => CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase),
-            false => CreatedWallet::UserProvidedMnemonic,
-        };
-        Ok(result)
+        Ok(wallet_created)
     }
 
     pub fn subscribe(&mut self) -> EventStream {
