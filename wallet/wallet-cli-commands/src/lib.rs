@@ -19,7 +19,7 @@ mod helper_types;
 
 pub use command_handler::CommandHandler;
 pub use errors::WalletCliCommandError;
-use helper_types::YesNo;
+use helper_types::{CLIHardwareWalletType, YesNo};
 use rpc::description::{Described, Module};
 use wallet_rpc_lib::{types::NodeInterface, ColdWalletRpcDescription, WalletRpcDescription};
 
@@ -62,6 +62,11 @@ pub enum WalletManagementCommand {
         /// Passphrase along the mnemonic
         #[arg(long = "passphrase")]
         passphrase: Option<String>,
+
+        /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
+        /// the software wallet
+        #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
+        hardware_wallet: Option<CLIHardwareWalletType>,
     },
 
     #[clap(name = "wallet-open")]

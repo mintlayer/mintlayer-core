@@ -92,6 +92,12 @@ pub enum RpcError<N: NodeInterface> {
     #[error("Invalid mnemonic: {0}")]
     InvalidMnemonic(wallet_controller::mnemonic::Error),
 
+    #[error("Cannot specify a mnemonic or passphrase when using a hardware wallet")]
+    HardwareWalletWithMnemonic,
+
+    #[error("Invalid hardware wallet selection")]
+    InvalidHardwareWallet,
+
     #[error("Invalid ip address")]
     InvalidIpAddress,
 
@@ -647,16 +653,19 @@ pub struct CreatedWallet {
     pub mnemonic: MnemonicInfo,
 }
 
-impl From<crate::CreatedWallet> for CreatedWallet {
-    fn from(value: crate::CreatedWallet) -> Self {
+impl From<wallet_controller::types::CreatedWallet> for CreatedWallet {
+    fn from(value: wallet_controller::types::CreatedWallet) -> Self {
         let mnemonic = match value {
-            crate::CreatedWallet::UserProvidedMnemonic => MnemonicInfo::UserProvided,
-            crate::CreatedWallet::NewlyGeneratedMnemonic(mnemonic, passphrase) => {
-                MnemonicInfo::NewlyGenerated {
-                    mnemonic: mnemonic.to_string(),
-                    passphrase,
-                }
+            wallet_controller::types::CreatedWallet::UserProvidedMnemonic => {
+                MnemonicInfo::UserProvided
             }
+            wallet_controller::types::CreatedWallet::NewlyGeneratedMnemonic(
+                mnemonic,
+                passphrase,
+            ) => MnemonicInfo::NewlyGenerated {
+                mnemonic: mnemonic.to_string(),
+                passphrase,
+            },
         };
         Self { mnemonic }
     }
@@ -784,6 +793,12 @@ pub struct NewOrder {
 pub enum RpcCurrency {
     Coin,
     Token { token_id: RpcAddress<TokenId> },
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub enum HardwareWalletType {
+    #[cfg(feature = "trezor")]
+    Trezor,
 }
 
 #[cfg(test)]

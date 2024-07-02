@@ -1370,6 +1370,7 @@ where
                 current_fee_rate,
                 consolidate_fee_rate,
             )?,
+            #[cfg(feature = "trezor")]
             WalletType2::Trezor(w) => w.create_htlc_tx(
                 self.account_index,
                 output_value,
