@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use common::chain::{
+    partially_signed_transaction::PartiallySignedTransaction,
     signature::{
         inputsig::arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
         DestinationSigError,
@@ -23,10 +24,7 @@ use common::chain::{
 use crypto::key::hdkd::derivable::DerivationError;
 use wallet_types::signature_status::SignatureStatus;
 
-use crate::{
-    account::PartiallySignedTransaction,
-    key_chain::{AccountKeyChains, KeyChainError},
-};
+use crate::key_chain::{AccountKeyChains, KeyChainError};
 
 pub mod software_signer;
 

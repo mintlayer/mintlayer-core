@@ -22,8 +22,8 @@ use super::{ClientWalletRpc, WalletRpcError};
 use chainstate::ChainInfo;
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, Block, GenBlock, SignedTransaction, Transaction,
-        TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
+        Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -32,7 +32,7 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use serialization::hex_encoded::HexEncoded;
 use serialization::DecodeAll;
 use utils_networking::IpOrSocketAddress;
-use wallet::account::{PartiallySignedTransaction, TxInfo};
+use wallet::account::TxInfo;
 use wallet_controller::{
     types::{Balances, CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,

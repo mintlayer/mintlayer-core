@@ -20,8 +20,8 @@ use std::sync::Arc;
 use crate::account::transaction_list::TransactionList;
 use crate::account::TxInfo;
 use crate::account::{
-    currency_grouper::Currency, CurrentFeeRate, DelegationData, PartiallySignedTransaction,
-    PoolData, TransactionToSign, UnconfirmedTokenInfo, UtxoSelectorError,
+    currency_grouper::Currency, CurrentFeeRate, DelegationData, PoolData, TransactionToSign,
+    UnconfirmedTokenInfo, UtxoSelectorError,
 };
 use crate::key_chain::{
     make_account_path, make_path_to_vrf_key, KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE,
@@ -39,6 +39,7 @@ use common::address::pubkeyhash::PublicKeyHash;
 use common::address::{Address, AddressError, RpcAddress};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
+use common::chain::partially_signed_transaction::PartiallySignedTransaction;
 use common::chain::signature::inputsig::arbitrary_message::{
     ArbitraryMessageSignature, SignArbitraryMessageError,
 };
@@ -221,8 +222,6 @@ pub enum WalletError {
     SignMessageError(#[from] SignArbitraryMessageError),
     #[error("Input cannot be spent {0:?}")]
     InputCannotBeSpent(TxOutput),
-    #[error("Failed to convert partially signed tx to signed")]
-    FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
     #[error("The specified address is not found in this wallet")]
     AddressNotFound,
     #[error("The specified standalone address {0} is not found in this wallet")]
@@ -970,8 +969,8 @@ impl<B: storage::Backend> Wallet<B> {
             let tx = signer
                 .sign_tx(ptx, account.key_chain())
                 .map(|(ptx, _, _)| ptx)?
-                .into_signed_tx(chain_config)
-                .map_err(error_mapper)?;
+                .into_signed_tx()
+                .map_err(|e| error_mapper(WalletError::TransactionCreation(e)))?;
 
             check_transaction(chain_config, block_height.next_height(), &tx)?;
             Ok(tx)
@@ -1707,7 +1706,7 @@ impl<B: storage::Backend> Wallet<B> {
             let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
             let ptx = signer.sign_tx(ptx, account.key_chain()).map(|(ptx, _, _)| ptx)?;
 
-            if ptx.is_fully_signed(chain_config) {
+            if ptx.is_fully_signed() {
                 return Err(WalletError::FullySignedTransactionInDecommissionReq);
             }
             Ok(ptx)

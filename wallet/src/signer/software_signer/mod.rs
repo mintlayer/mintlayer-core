@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common::chain::{
+    partially_signed_transaction::PartiallySignedTransaction,
     signature::{
         inputsig::{
             arbitrary_message::ArbitraryMessageSignature,
@@ -42,10 +43,7 @@ use serialization::Encode;
 use wallet_storage::WalletStorageReadUnlocked;
 use wallet_types::signature_status::SignatureStatus;
 
-use crate::{
-    account::PartiallySignedTransaction,
-    key_chain::{make_account_path, AccountKeyChains, FoundPubKey, MasterKeyChain},
-};
+use crate::key_chain::{make_account_path, AccountKeyChains, FoundPubKey, MasterKeyChain};
 
 use super::{Signer, SignerError, SignerResult};
 

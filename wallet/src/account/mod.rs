@@ -21,6 +21,7 @@ mod utxo_selector;
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
+use common::chain::partially_signed_transaction::PartiallySignedTransaction;
 use common::chain::signature::sighash::signature_hash;
 use common::chain::{AccountCommand, AccountOutPoint, AccountSpending, TransactionCreationError};
 use common::primitives::id::WithId;
@@ -104,107 +105,6 @@ impl TransactionToSign {
         match self {
             Self::Tx(tx) => HexEncoded::new(tx).to_string(),
             Self::Partial(tx) => HexEncoded::new(tx).to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
-pub struct PartiallySignedTransaction {
-    tx: Transaction,
-    witnesses: Vec<Option<InputWitness>>,
-
-    input_utxos: Vec<Option<TxOutput>>,
-    destinations: Vec<Option<Destination>>,
-}
-
-impl PartiallySignedTransaction {
-    pub fn new(
-        tx: Transaction,
-        witnesses: Vec<Option<InputWitness>>,
-        input_utxos: Vec<Option<TxOutput>>,
-        destinations: Vec<Option<Destination>>,
-    ) -> WalletResult<Self> {
-        ensure!(
-            tx.inputs().len() == witnesses.len(),
-            TransactionCreationError::InvalidWitnessCount
-        );
-
-        ensure!(
-            input_utxos.len() == witnesses.len(),
-            TransactionCreationError::InvalidWitnessCount
-        );
-
-        ensure!(
-            input_utxos.len() == destinations.len(),
-            TransactionCreationError::InvalidWitnessCount
-        );
-
-        Ok(Self {
-            tx,
-            witnesses,
-            input_utxos,
-            destinations,
-        })
-    }
-
-    pub fn new_witnesses(mut self, witnesses: Vec<Option<InputWitness>>) -> Self {
-        self.witnesses = witnesses;
-        self
-    }
-
-    pub fn tx(&self) -> &Transaction {
-        &self.tx
-    }
-
-    pub fn take_tx(self) -> Transaction {
-        self.tx
-    }
-
-    pub fn input_utxos(&self) -> &[Option<TxOutput>] {
-        self.input_utxos.as_ref()
-    }
-
-    pub fn destinations(&self) -> &[Option<Destination>] {
-        self.destinations.as_ref()
-    }
-
-    pub fn witnesses(&self) -> &[Option<InputWitness>] {
-        self.witnesses.as_ref()
-    }
-
-    pub fn count_inputs(&self) -> usize {
-        self.tx.inputs().len()
-    }
-
-    pub fn count_completed_signatures(&self) -> usize {
-        self.witnesses.iter().filter(|w| w.is_some()).count()
-    }
-
-    pub fn is_fully_signed(&self, chain_config: &ChainConfig) -> bool {
-        let inputs_utxos_refs: Vec<_> = self.input_utxos.iter().map(|out| out.as_ref()).collect();
-        self.witnesses
-            .iter()
-            .enumerate()
-            .zip(&self.destinations)
-            .all(|((input_num, w), d)| match (w, d) {
-                (Some(InputWitness::NoSignature(_)), None) => true,
-                (Some(InputWitness::NoSignature(_)), Some(_)) => false,
-                (Some(InputWitness::Standard(_)), None) => false,
-                (Some(InputWitness::Standard(sig)), Some(dest)) => {
-                    signature_hash(sig.sighash_type(), &self.tx, &inputs_utxos_refs, input_num)
-                        .and_then(|sighash| sig.verify_signature(chain_config, dest, &sighash))
-                        .is_ok()
-                }
-                (None, _) => false,
-            })
-    }
-
-    pub fn into_signed_tx(self, chain_config: &ChainConfig) -> WalletResult<SignedTransaction> {
-        if self.is_fully_signed(chain_config) {
-            let witnesses = self.witnesses.into_iter().map(|w| w.expect("cannot fail")).collect();
-            Ok(SignedTransaction::new(self.tx, witnesses)?)
-        } else {
-            Err(WalletError::FailedToConvertPartiallySignedTx(self))
         }
     }
 }
@@ -1358,7 +1258,9 @@ impl Account {
             .unzip();
 
         let num_inputs = tx.inputs().len();
-        PartiallySignedTransaction::new(tx, vec![None; num_inputs], input_utxos, destinations)
+        let ptx =
+            PartiallySignedTransaction::new(tx, vec![None; num_inputs], input_utxos, destinations)?;
+        Ok(ptx)
     }
 
     pub fn find_unspent_utxo_with_destination(

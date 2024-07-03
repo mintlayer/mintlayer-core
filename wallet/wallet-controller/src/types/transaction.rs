@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{SignedTransaction, Transaction};
+use common::chain::{
+    partially_signed_transaction::PartiallySignedTransaction, SignedTransaction, Transaction,
+};
 use serialization::hex_encoded::HexEncoded;
-use wallet::account::PartiallySignedTransaction;
 use wallet_types::signature_status::SignatureStatus;
 
 use super::Balances;

@@ -18,15 +18,16 @@ use std::{collections::BTreeMap, num::NonZeroUsize};
 use common::{
     address::RpcAddress,
     chain::{
-        block::timestamp::BlockTimestamp, tokens::TokenId, Block, DelegationId, Destination,
-        GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
+        block::timestamp::BlockTimestamp, tokens::TokenId,
+        transaction::partially_signed_transaction::PartiallySignedTransaction, Block, DelegationId,
+        Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
 use crypto::key::PrivateKey;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use rpc::types::RpcHexString;
-use wallet::account::{PartiallySignedTransaction, TxInfo};
+use wallet::account::TxInfo;
 use wallet_controller::{
     types::{BlockInfo, CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer,

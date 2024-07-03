@@ -52,6 +52,7 @@ use common::{
     address::AddressError,
     chain::{
         block::timestamp::BlockTimestamp,
+        partially_signed_transaction::PartiallySignedTransaction,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::signature_hash,
@@ -80,7 +81,7 @@ use randomness::{make_pseudo_rng, make_true_rng, Rng};
 use wallet::{
     account::{
         currency_grouper::{self, Currency},
-        PartiallySignedTransaction, TransactionToSign,
+        TransactionToSign,
     },
     get_tx_output_destination,
     wallet::WalletPoolsFilter,
@@ -107,7 +108,7 @@ pub enum ControllerError<T: NodeInterface> {
     #[error("Wallet file {0} error: {1}")]
     WalletFileError(PathBuf, String),
     #[error("Wallet error: {0}")]
-    WalletError(wallet::wallet::WalletError),
+    WalletError(#[from] wallet::wallet::WalletError),
     #[error("Encoding error: {0}")]
     AddressEncodingError(#[from] AddressError),
     #[error("No staking pool found")]
@@ -921,7 +922,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 input_utxos.into_iter().map(Option::Some).collect(),
                 destinations.into_iter().map(Option::Some).collect(),
             )
-            .map_err(ControllerError::WalletError)?;
+            .map_err(WalletError::TransactionCreation)?;
 
             TransactionToSign::Partial(tx)
         };
