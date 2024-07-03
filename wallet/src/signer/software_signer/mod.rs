@@ -245,13 +245,17 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
                     )),
                     InputWitness::Standard(sig) => match destination {
                         Some(destination) => {
-                            let sighash =
-                                signature_hash(sig.sighash_type(), ptx.tx(), &inputs_utxo_refs, i)?;
+                            let sig_verified =
+                                tx_verifier::input_check::signature_only_check::verify_signature(
+                                    &self.chain_config,
+                                    destination,
+                                    &ptx,
+                                    &inputs_utxo_refs,
+                                    i,
+                                )
+                                .is_ok();
 
-                            if sig
-                                .verify_signature(&self.chain_config, destination, &sighash)
-                                .is_ok()
-                            {
+                            if sig_verified {
                                 Ok((
                                     Some(w.clone()),
                                     SignatureStatus::FullySigned,

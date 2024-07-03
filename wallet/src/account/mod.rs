@@ -22,8 +22,7 @@ use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::partially_signed_transaction::PartiallySignedTransaction;
-use common::chain::signature::sighash::signature_hash;
-use common::chain::{AccountCommand, AccountOutPoint, AccountSpending, TransactionCreationError};
+use common::chain::{AccountCommand, AccountOutPoint, AccountSpending};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
 use common::size_estimation::{
@@ -51,7 +50,6 @@ use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{get_tx_output_destination, SendRequest, WalletError, WalletResult};
 use common::address::{Address, RpcAddress};
 use common::chain::output_value::OutputValue;
-use common::chain::signature::inputsig::InputWitness;
 use common::chain::tokens::{
     make_token_id, IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId,
 };
@@ -65,7 +63,6 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::{PrivateKey, PublicKey};
 use crypto::vrf::VRFPublicKey;
 use itertools::{izip, Itertools};
-use serialization::{Decode, Encode};
 use std::cmp::Reverse;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};

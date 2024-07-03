@@ -17,7 +17,7 @@ use super::{
     signature::{inputsig::InputWitness, Signable, Transactable},
     Destination, Transaction, TxOutput,
 };
-use crate::chain::{ChainConfig, SignedTransaction, TransactionCreationError, TxInput};
+use crate::chain::{SignedTransaction, TransactionCreationError, TxInput};
 use serialization::{Decode, Encode};
 use utils::ensure;
 

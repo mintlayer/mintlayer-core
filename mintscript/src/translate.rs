@@ -26,8 +26,7 @@ use common::chain::{
     AccountCommand, AccountOutPoint, AccountSpending, DelegationId, Destination, OrderId, PoolId,
     SignedTransaction, TxOutput, UtxoOutPoint,
 };
-use pos_accounting::{PoSAccountingView, PoolData};
-use tokens_accounting::TokensAccountingView;
+use pos_accounting::PoolData;
 use utxo::Utxo;
 
 use crate::{script::HashChallenge, WitnessScript};
