@@ -56,7 +56,8 @@ impl TestInputInfo {
         match self {
             Self::Utxo { outpoint, utxo } => InputInfo::Utxo {
                 outpoint,
-                utxo: utxo.clone(),
+                utxo: utxo.output().clone(),
+                utxo_source: Some(utxo.source().clone()),
             },
             Self::Account { outpoint } => InputInfo::Account { outpoint },
             Self::AccountCommand { command } => InputInfo::AccountCommand { command },

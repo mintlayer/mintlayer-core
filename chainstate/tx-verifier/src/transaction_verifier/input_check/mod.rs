@@ -103,6 +103,9 @@ pub enum TimelockContextError {
     #[error("Timelocks on accounts not supported")]
     TimelockedAccount,
 
+    #[error("Utxo source is missing")]
+    MissingUtxoSource,
+
     #[error("Loading ancestor header at height {1} failed: {0}")]
     HeaderLoad(chainstate_types::GetAncestorError, BlockHeight),
 }
@@ -132,7 +135,11 @@ impl<'a> PerInputData<'a> {
                         let err = InputCheckErrorPayload::MissingUtxo(outpoint.clone());
                         InputCheckError::new(input_num, err)
                     })?;
-                InputInfo::Utxo { outpoint, utxo }
+                InputInfo::Utxo {
+                    outpoint,
+                    utxo_source: Some(utxo.source().clone()),
+                    utxo: utxo.take_output(),
+                }
             }
             TxInput::Account(outpoint) => InputInfo::Account { outpoint },
             TxInput::AccountCommand(_, command) => InputInfo::AccountCommand { command },
@@ -385,7 +392,11 @@ impl<S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextTim
 
     fn source_height(&self) -> Result<BlockHeight, Self::Error> {
         match self.info() {
-            InputInfo::Utxo { outpoint: _, utxo } => match utxo.source() {
+            InputInfo::Utxo {
+                outpoint: _,
+                utxo: _,
+                utxo_source,
+            } => match utxo_source.as_ref().ok_or(TimelockContextError::MissingUtxoSource)? {
                 utxo::UtxoSource::Blockchain(height) => Ok(*height),
                 utxo::UtxoSource::Mempool => Ok(self.ctx.spending_height),
             },
@@ -397,7 +408,11 @@ impl<S: TransactionVerifierStorageRef> TimelockContext for InputVerifyContextTim
 
     fn source_time(&self) -> Result<BlockTimestamp, Self::Error> {
         match self.info() {
-            InputInfo::Utxo { outpoint: _, utxo } => match utxo.source() {
+            InputInfo::Utxo {
+                outpoint: _,
+                utxo: _,
+                utxo_source,
+            } => match utxo_source.as_ref().ok_or(TimelockContextError::MissingUtxoSource)? {
                 utxo::UtxoSource::Blockchain(height) => {
                     let block_index_getter = |db_tx: &S, _: &ChainConfig, id: &Id<GenBlock>| {
                         db_tx.get_gen_block_index(id)

@@ -27,7 +27,7 @@ use common::chain::{
     SignedTransaction, TxOutput, UtxoOutPoint,
 };
 use pos_accounting::PoolData;
-use utxo::Utxo;
+use utxo::{Utxo, UtxoSource};
 
 use crate::{script::HashChallenge, WitnessScript};
 
@@ -72,7 +72,8 @@ pub enum TranslationError {
 pub enum InputInfo<'a> {
     Utxo {
         outpoint: &'a UtxoOutPoint,
-        utxo: Utxo,
+        utxo: TxOutput,
+        utxo_source: Option<UtxoSource>,
     },
     Account {
         outpoint: &'a AccountOutPoint,
@@ -85,7 +86,11 @@ pub enum InputInfo<'a> {
 impl InputInfo<'_> {
     pub fn as_utxo_output(&self) -> Option<&TxOutput> {
         match self {
-            InputInfo::Utxo { outpoint: _, utxo } => Some(utxo.output()),
+            InputInfo::Utxo {
+                outpoint: _,
+                utxo,
+                utxo_source: _,
+            } => Some(utxo),
             InputInfo::Account { .. } | InputInfo::AccountCommand { .. } => None,
         }
     }
@@ -130,7 +135,11 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
             |dest: &Destination| WitnessScript::signature(dest.clone(), ctx.witness().clone());
 
         match ctx.input_info() {
-            InputInfo::Utxo { outpoint: _, utxo } => match utxo.output() {
+            InputInfo::Utxo {
+                outpoint: _,
+                utxo,
+                utxo_source: _,
+            } => match utxo {
                 TxOutput::Transfer(_val, dest) => Ok(checksig(dest)),
                 TxOutput::LockThenTransfer(_val, dest, timelock) => {
                     Ok(WitnessScript::satisfied_conjunction([
@@ -237,8 +246,12 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_>
         let checksig =
             |dest: &Destination| WitnessScript::signature(dest.clone(), ctx.witness().clone());
         match ctx.input_info() {
-            InputInfo::Utxo { outpoint: _, utxo } => {
-                match utxo.output() {
+            InputInfo::Utxo {
+                outpoint: _,
+                utxo,
+                utxo_source: _,
+            } => {
+                match utxo {
                     TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::IssueNft(_, _, _)
@@ -276,7 +289,11 @@ pub struct TimelockOnly;
 impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
     fn translate_input(ctx: &C) -> Result<WitnessScript, TranslationError> {
         match ctx.input_info() {
-            InputInfo::Utxo { outpoint: _, utxo } => match utxo.output() {
+            InputInfo::Utxo {
+                outpoint: _,
+                utxo,
+                utxo_source: _,
+            } => match utxo {
                 TxOutput::LockThenTransfer(_val, _dest, timelock) => {
                     Ok(WitnessScript::timelock(*timelock))
                 }
@@ -335,7 +352,11 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnly {
             |dest: &Destination| WitnessScript::signature(dest.clone(), ctx.witness().clone());
 
         match ctx.input_info() {
-            InputInfo::Utxo { outpoint: _, utxo } => match utxo.output() {
+            InputInfo::Utxo {
+                outpoint: _,
+                utxo,
+                utxo_source: _,
+            } => match utxo {
                 TxOutput::Transfer(_val, dest) | TxOutput::LockThenTransfer(_val, dest, _) => {
                     Ok(checksig(dest))
                 }

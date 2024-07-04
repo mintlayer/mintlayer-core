@@ -235,6 +235,7 @@ impl MempoolBanScore for tx_verifier::error::TimelockContextError {
     fn mempool_ban_score(&self) -> u32 {
         match self {
             Self::TimelockedAccount => 0,
+            Self::MissingUtxoSource => 0,
             Self::HeaderLoad(e, _) => e.ban_score(),
         }
     }

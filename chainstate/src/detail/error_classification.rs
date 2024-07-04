@@ -404,6 +404,7 @@ impl BlockProcessingErrorClassification for tx_verifier::error::TimelockContextE
     fn classify(&self) -> BlockProcessingErrorClass {
         match self {
             Self::TimelockedAccount => BlockProcessingErrorClass::General,
+            Self::MissingUtxoSource => BlockProcessingErrorClass::General,
             Self::HeaderLoad(e, _) => e.classify(),
         }
     }
