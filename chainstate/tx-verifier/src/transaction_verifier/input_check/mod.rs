@@ -71,10 +71,10 @@ impl From<mintscript::script::ScriptError<DestinationSigError, Infallible, Infal
         value: mintscript::script::ScriptError<DestinationSigError, Infallible, Infallible>,
     ) -> Self {
         let err = match value {
-            mintscript::script::ScriptError::Signature(e) => ScriptError::Signature(e.into()),
+            mintscript::script::ScriptError::Signature(e) => ScriptError::Signature(e),
             mintscript::script::ScriptError::Timelock(_e) => unreachable!(),
             mintscript::script::ScriptError::Hashlock(e) => ScriptError::Hashlock(e.into()),
-            mintscript::script::ScriptError::Threshold(e) => ScriptError::Threshold(e.into()),
+            mintscript::script::ScriptError::Threshold(e) => ScriptError::Threshold(e),
         };
         Self::Verification(err)
     }

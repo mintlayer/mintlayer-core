@@ -18,13 +18,14 @@ use std::convert::Infallible;
 use common::chain::{
     signature::{inputsig::InputWitness, DestinationSigError, Transactable},
     tokens::TokenId,
-    ChainConfig, DelegationId, Destination, PoolId, TxOutput,
+    ChainConfig, DelegationId, Destination, PoolId, TxInput, TxOutput,
 };
 use mintscript::{
     script::ScriptError, translate::InputInfoProvider, InputInfo, SignatureContext, TranslateInput,
 };
+use utils::ensure;
 
-use super::{InputCheckError, PerInputData, TransactionSourceForConnect};
+use super::{InputCheckError, InputCheckErrorPayload, PerInputData};
 
 struct InputVerifyContextSignature<'a, T> {
     chain_config: &'a ChainConfig,
@@ -32,7 +33,7 @@ struct InputVerifyContextSignature<'a, T> {
     outpoint_destination: &'a Destination,
     inputs_utxos: &'a [Option<&'a TxOutput>],
     input_num: usize,
-    input_witness: InputWitness,
+    input_data: PerInputData<'a>,
 }
 
 impl<T: Transactable> SignatureContext for InputVerifyContextSignature<'_, T> {
@@ -89,11 +90,11 @@ impl<T: Transactable> mintscript::translate::SignatureInfoProvider
 
 impl<T: Transactable> InputInfoProvider for InputVerifyContextSignature<'_, T> {
     fn input_info(&self) -> &InputInfo {
-        todo!()
+        self.input_data.input_info()
     }
 
     fn witness(&self) -> &InputWitness {
-        &self.input_witness
+        self.input_data.witness()
     }
 }
 
@@ -104,23 +105,63 @@ pub fn verify_signature<T: Transactable>(
     inputs_utxos: &[Option<&TxOutput>],
     input_num: usize,
 ) -> Result<(), InputCheckError> {
-    let input_witness = tx.signatures()[input_num].clone().ok_or_else(|| {
+    let map_sig_err = |e: DestinationSigError| {
         InputCheckError::new(
             input_num,
-            ScriptError::<DestinationSigError, Infallible, Infallible>::Signature(
-                DestinationSigError::SignatureNotFound,
-            ),
+            ScriptError::<DestinationSigError, Infallible, Infallible>::Signature(e),
         )
-    })?;
-    //let input_data = PerInputData::new(, n, input, witness);
+    };
 
+    let inputs = tx
+        .inputs()
+        .ok_or(DestinationSigError::SignatureVerificationWithoutInputs)
+        .map_err(map_sig_err)?;
+    let input = inputs
+        .get(input_num)
+        .ok_or(DestinationSigError::InvalidInputIndex(
+            input_num,
+            inputs.len(),
+        ))
+        .map_err(map_sig_err)?;
+
+    ensure!(
+        inputs.len() == inputs_utxos.len(),
+        map_sig_err(DestinationSigError::InvalidUtxoCountVsInputs(
+            inputs_utxos.len(),
+            inputs.len()
+        ))
+    );
+
+    let input_info = match input {
+        TxInput::Utxo(outpoint) => {
+            let utxo = inputs_utxos[input_num]
+                .ok_or(InputCheckError::new(
+                    input_num,
+                    InputCheckErrorPayload::MissingUtxo(outpoint.clone()),
+                ))?
+                .clone();
+            InputInfo::Utxo {
+                outpoint,
+                utxo,
+                utxo_source: None,
+            }
+        }
+        TxInput::Account(outpoint) => InputInfo::Account { outpoint },
+        TxInput::AccountCommand(_, command) => InputInfo::AccountCommand { command },
+    };
+    let input_witness = tx.signatures()[input_num]
+        .clone()
+        .ok_or(DestinationSigError::SignatureNotFound)
+        .map_err(map_sig_err)?;
+
+    let input_data = PerInputData::new(input_info, input_witness);
     let context = InputVerifyContextSignature {
         chain_config,
         tx,
         outpoint_destination,
         inputs_utxos,
         input_num,
-        input_witness,
+        input_data,
     };
     let script = mintscript::translate::SignatureOnly::translate_input(&context)
         .map_err(|e| InputCheckError::new(input_num, e))?;
