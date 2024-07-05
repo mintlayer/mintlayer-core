@@ -93,7 +93,7 @@ impl PartiallySignedTransaction {
         self.witnesses.iter().filter(|w| w.is_some()).count()
     }
 
-    pub fn is_fully_signed(&self) -> bool {
+    pub fn all_signatures_available(&self) -> bool {
         self.witnesses
             .iter()
             .enumerate()
@@ -108,7 +108,7 @@ impl PartiallySignedTransaction {
     }
 
     pub fn into_signed_tx(self) -> Result<SignedTransaction, TransactionCreationError> {
-        if self.is_fully_signed() {
+        if self.all_signatures_available() {
             let witnesses = self.witnesses.into_iter().map(|w| w.expect("cannot fail")).collect();
             Ok(SignedTransaction::new(self.tx, witnesses)?)
         } else {

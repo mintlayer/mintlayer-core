@@ -47,7 +47,10 @@ use wallet_rpc_lib::{
     },
     RpcError, WalletRpc,
 };
-use wallet_types::{seed_phrase::StoreSeedPhrase, utxo_types::UtxoTypes, with_locked::WithLocked};
+use wallet_types::{
+    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, utxo_types::UtxoTypes,
+    with_locked::WithLocked,
+};
 
 use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, WalletInterface};
 
@@ -1188,7 +1191,10 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             .sign_raw_transaction(account_index, RpcHexString::from_str(&raw_tx)?, config)
             .await
             .map(|(ptx, prev_signatures, cur_signatures)| {
-                let tx = if ptx.is_fully_signed() {
+                let is_fully_signed = ptx.all_signatures_available()
+                    && cur_signatures.iter().all(|s| *s == SignatureStatus::FullySigned);
+
+                let tx = if is_fully_signed {
                     PartialOrSignedTx::Signed(ptx.into_signed_tx().expect("already checked"))
                 } else {
                     PartialOrSignedTx::Partial(ptx)

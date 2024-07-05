@@ -130,7 +130,7 @@ fn sign_transaction(#[case] seed: Seed) {
     let signer = SoftwareSigner::new(&db_tx, config.clone(), DEFAULT_ACCOUNT_INDEX);
     let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain()).unwrap();
 
-    assert!(ptx.is_fully_signed());
+    assert!(ptx.all_signatures_available());
 
     let sig_tx = ptx.into_signed_tx().unwrap();
 

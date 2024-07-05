@@ -35,7 +35,9 @@ use wallet_controller::{
     types::{BlockInfo, CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
 };
-use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
+use wallet_types::{
+    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, with_locked::WithLocked,
+};
 
 use crate::{
     rpc::{ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc, WalletRpcServer},
@@ -227,7 +229,8 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> ColdWalletRpcServ
         rpc::handle_result(
             self.sign_raw_transaction(account_arg.index::<N>()?, raw_tx, config).await.map(
                 |(tx, prev_signatures, cur_signatures)| {
-                    let is_complete = tx.is_fully_signed();
+                    let is_complete = tx.all_signatures_available()
+                        && cur_signatures.iter().all(|s| *s == SignatureStatus::FullySigned);
                     let hex = if is_complete {
                         let tx = tx.into_signed_tx().expect("already checked");
                         tx.hex_encode()

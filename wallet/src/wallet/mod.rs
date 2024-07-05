@@ -1706,7 +1706,7 @@ impl<B: storage::Backend> Wallet<B> {
             let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
             let ptx = signer.sign_tx(ptx, account.key_chain()).map(|(ptx, _, _)| ptx)?;
 
-            if ptx.is_fully_signed() {
+            if ptx.all_signatures_available() {
                 return Err(WalletError::FullySignedTransactionInDecommissionReq);
             }
             Ok(ptx)
