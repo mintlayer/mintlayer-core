@@ -246,7 +246,7 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
                     InputWitness::Standard(sig) => match destination {
                         Some(destination) => {
                             let sig_verified =
-                                tx_verifier::input_check::signature_only_check::verify_signature(
+                                tx_verifier::input_check::signature_only_check::verify_tx_signature(
                                     &self.chain_config,
                                     destination,
                                     &ptx,

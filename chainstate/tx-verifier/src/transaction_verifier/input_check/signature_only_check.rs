@@ -16,9 +16,10 @@
 use std::convert::Infallible;
 
 use common::chain::{
+    partially_signed_transaction::PartiallySignedTransaction,
     signature::{inputsig::InputWitness, DestinationSigError, Transactable},
     tokens::TokenId,
-    ChainConfig, DelegationId, Destination, PoolId, TxInput, TxOutput,
+    ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, TxInput, TxOutput,
 };
 use mintscript::{
     script::ScriptError, translate::InputInfoProvider, InputInfo, SignatureContext, TranslateInput,
@@ -98,7 +99,12 @@ impl<T: Transactable> InputInfoProvider for InputVerifyContextSignature<'_, T> {
     }
 }
 
-pub fn verify_signature<T: Transactable>(
+// Prevent BlockRewardTransactable from being used here
+pub trait SignatureOnlyVerifiable {}
+impl SignatureOnlyVerifiable for SignedTransaction {}
+impl SignatureOnlyVerifiable for PartiallySignedTransaction {}
+
+pub fn verify_tx_signature<T: Transactable + SignatureOnlyVerifiable>(
     chain_config: &ChainConfig,
     outpoint_destination: &Destination,
     tx: &T,
@@ -163,7 +169,7 @@ pub fn verify_signature<T: Transactable>(
         input_num,
         input_data,
     };
-    let script = mintscript::translate::SignatureOnly::translate_input(&context)
+    let script = mintscript::translate::SignatureOnlyTx::translate_input(&context)
         .map_err(|e| InputCheckError::new(input_num, e))?;
     let mut checker = mintscript::ScriptChecker::signature_only(context);
     script.verify(&mut checker).map_err(|e| InputCheckError::new(input_num, e))?;

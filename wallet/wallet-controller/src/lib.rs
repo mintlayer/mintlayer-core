@@ -25,7 +25,9 @@ const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
 
 use blockprod::BlockProductionError;
-use chainstate::tx_verifier::{self, error::ScriptError};
+use chainstate::tx_verifier::{
+    self, error::ScriptError, input_check::signature_only_check::SignatureOnlyVerifiable,
+};
 use futures::{
     never::Never,
     stream::{FuturesOrdered, FuturesUnordered},
@@ -855,12 +857,12 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
     fn verify_tx_signature(
         &self,
-        tx: &impl Transactable,
+        tx: &(impl Transactable + SignatureOnlyVerifiable),
         inputs_utxos_refs: &[Option<&TxOutput>],
         input_num: usize,
         dest: &Destination,
     ) -> SignatureStatus {
-        let valid = tx_verifier::input_check::signature_only_check::verify_signature(
+        let valid = tx_verifier::input_check::signature_only_check::verify_tx_signature(
             &self.chain_config,
             dest,
             tx,

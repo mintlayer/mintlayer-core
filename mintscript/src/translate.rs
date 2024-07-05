@@ -342,10 +342,9 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
     }
 }
 
-// FIXME: prevent from using with block reward
-pub struct SignatureOnly;
+pub struct SignatureOnlyTx;
 
-impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnly {
+impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
     fn translate_input(ctx: &C) -> Result<WitnessScript, TranslationError> {
         let checksig =
             |dest: &Destination| WitnessScript::signature(dest.clone(), ctx.witness().clone());
@@ -440,5 +439,16 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnly {
                 AccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
             },
         }
+    }
+}
+
+pub struct SignatureOnlyReward;
+
+impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyReward {
+    fn translate_input(_ctx: &C) -> Result<WitnessScript, TranslationError> {
+        // Not used anywhere.
+        // But it's important to outline that if needed the reward implementation must be different
+        // because staking/decommissioning destinations are not the same.
+        unimplemented!()
     }
 }

@@ -291,7 +291,7 @@ impl TranslationMode<'_> for TimelockOnly {
     type Mode = Self;
 }
 
-impl TranslationMode<'_> for SignatureOnly {
+impl TranslationMode<'_> for SignatureOnlyTx {
     const NAME: &'static str = "sigonly";
     type Mode = Self;
 }
@@ -367,7 +367,7 @@ fn mode_name<'a, T: TranslationMode<'a>>(_: &T) -> &'static str {
 #[case("fillorder_01", fill_order(fake_id(0x77)), nosig())]
 #[case("fillorder_00", fill_order(order0().0), stdsig(0x45))]
 fn translate_snap(
-    #[values(TxnMode, RewardMode, TimelockOnly, SignatureOnly)] mode: impl for<'a> TranslationMode<'a>,
+    #[values(TxnMode, RewardMode, TimelockOnly, SignatureOnlyTx)] mode: impl for<'a> TranslationMode<'a>,
     #[case] name: &str,
     #[case] test_input_info: TestInputInfo,
     #[case] witness: InputWitness,
