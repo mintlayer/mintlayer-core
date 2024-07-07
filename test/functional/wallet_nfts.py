@@ -158,6 +158,7 @@ class WalletNfts(BitcoinTestFramework):
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
+            assert_in(f"Coins amount: 994", await wallet.get_balance())
 
 
             self.log.info(await wallet.get_balance())

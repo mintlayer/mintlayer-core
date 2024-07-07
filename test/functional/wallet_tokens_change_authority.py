@@ -123,6 +123,7 @@ class WalletTokens(BitcoinTestFramework):
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
+            assert_in("Coins amount: 900", await wallet.get_balance())
 
             assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, 10000))
 
@@ -130,6 +131,7 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             assert_in(f"{token_id} amount: 10000", await wallet.get_balance())
+            assert_in("Coins amount: 850", await wallet.get_balance())
 
             ## create a new account and send some tokens to it
             await wallet.create_new_account()
@@ -156,6 +158,7 @@ class WalletTokens(BitcoinTestFramework):
             if produce_block:
                 self.generate_block()
                 assert_in("Success", await wallet.sync())
+                assert_in("Coins amount: 230", await wallet.get_balance())
 
 
             # try to mint, unmint, lock, freeze and unfreeze
