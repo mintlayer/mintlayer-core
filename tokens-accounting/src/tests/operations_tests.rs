@@ -105,7 +105,10 @@ fn issue_token_and_flush(#[case] seed: Seed) {
         cache.get_token_data(&token_id).unwrap(),
         Some(token_data.clone())
     );
-    assert_eq!(cache.get_circulating_supply(&token_id).unwrap(), None);
+    assert_eq!(
+        cache.get_circulating_supply(&token_id).unwrap(),
+        Amount::ZERO
+    );
 
     let consumed_data = cache.consume();
     db.batch_write_tokens_data(consumed_data).unwrap();
@@ -136,12 +139,18 @@ fn issue_token_and_undo(#[case] seed: Seed) {
         cache.get_token_data(&token_id).unwrap(),
         Some(token_data.clone())
     );
-    assert_eq!(cache.get_circulating_supply(&token_id).unwrap(), None);
+    assert_eq!(
+        cache.get_circulating_supply(&token_id).unwrap(),
+        Amount::ZERO
+    );
 
     cache.undo(undo).unwrap();
 
     assert_eq!(cache.get_token_data(&token_id).unwrap(), None);
-    assert_eq!(cache.get_circulating_supply(&token_id).unwrap(), None);
+    assert_eq!(
+        cache.get_circulating_supply(&token_id).unwrap(),
+        Amount::ZERO
+    );
 }
 
 #[rstest]
@@ -197,7 +206,7 @@ fn mint_token_and_flush(#[case] seed: Seed) {
     );
     assert_eq!(
         cache.get_circulating_supply(&token_id).unwrap(),
-        Some(amount_to_mint)
+        amount_to_mint
     );
 
     let consumed_data = cache.consume();
@@ -246,7 +255,7 @@ fn mint_token_unlimited_max(#[case] seed: Seed) {
     );
     assert_eq!(
         cache.get_circulating_supply(&token_id).unwrap(),
-        Some(max_amount_to_mint)
+        max_amount_to_mint
     );
 }
 
@@ -279,7 +288,7 @@ fn mint_token_multiple_times_and_over_supply(#[case] seed: Seed) {
     );
     assert_eq!(
         cache.get_circulating_supply(&token_id).unwrap(),
-        Some(total_supply)
+        total_supply
     );
 
     // Try to mint over total supply
@@ -319,7 +328,7 @@ fn mint_token_undo(#[case] seed: Seed) {
     );
     assert_eq!(
         cache.get_circulating_supply(&token_id).unwrap(),
-        Some(amount_to_mint)
+        amount_to_mint
     );
 
     cache.undo(undo).unwrap();
@@ -328,7 +337,10 @@ fn mint_token_undo(#[case] seed: Seed) {
         cache.get_token_data(&token_id).unwrap(),
         Some(token_data.clone())
     );
-    assert_eq!(cache.get_circulating_supply(&token_id).unwrap(), None);
+    assert_eq!(
+        cache.get_circulating_supply(&token_id).unwrap(),
+        Amount::ZERO
+    );
 }
 
 #[rstest]
@@ -357,7 +369,7 @@ fn unmint_token_and_flush(#[case] seed: Seed) {
     );
     assert_eq!(
         cache.get_circulating_supply(&token_id).unwrap(),
-        amount_to_mint - amount_to_unmint
+        (amount_to_mint - amount_to_unmint).unwrap()
     );
 
     let consumed_data = cache.consume();
@@ -397,7 +409,7 @@ fn unmint_token_undo(#[case] seed: Seed) {
     );
     assert_eq!(
         cache.get_circulating_supply(&token_id).unwrap(),
-        amount_to_mint - amount_to_unmint
+        (amount_to_mint - amount_to_unmint).unwrap()
     );
 
     cache.undo(undo).unwrap();
@@ -408,7 +420,7 @@ fn unmint_token_undo(#[case] seed: Seed) {
     );
     assert_eq!(
         cache.get_circulating_supply(&token_id).unwrap(),
-        Some(amount_to_mint)
+        amount_to_mint
     );
 }
 
@@ -452,7 +464,7 @@ fn unmint_token_multiple_times_and_over_minted(#[case] seed: Seed) {
     );
     assert_eq!(
         cache.get_circulating_supply(&token_id).unwrap(),
-        Some(Amount::ZERO)
+        Amount::ZERO
     );
 
     // Try to unmint over circulating supply
@@ -521,7 +533,10 @@ fn lock_supply_only_if_lockable(#[case] seed: Seed) {
         cache.get_token_data(&token_id_3).unwrap(),
         Some(locked_token_data_3.clone())
     );
-    assert_eq!(cache.get_circulating_supply(&token_id_3).unwrap(), None);
+    assert_eq!(
+        cache.get_circulating_supply(&token_id_3).unwrap(),
+        Amount::ZERO
+    );
 
     let consumed_data = cache.consume();
     db.batch_write_tokens_data(consumed_data).unwrap();

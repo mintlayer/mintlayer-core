@@ -97,11 +97,11 @@ fn get_random_token<'a>(
         .and_then(|(token_id, _)| {
             tip_view.get_token_data(token_id).unwrap().is_some().then_some(*token_id)
         })
-        .and_then(|token_id| {
-            tip_view
-                .get_circulating_supply(&token_id)
-                .unwrap()
-                .map(|supply| (token_id, supply))
+        .map(|token_id| {
+            (
+                token_id,
+                tip_view.get_circulating_supply(&token_id).unwrap(),
+            )
         })
 }
 
@@ -117,11 +117,10 @@ fn get_random_order_to_fill<'a>(
         .find_map(|(order_id, data)| {
             let same_currency = CoinOrTokenId::from_output_value(data.ask())
                 == CoinOrTokenId::from_output_value(value);
-            let order_not_overbid = tip_view
-                .get_ask_balance(order_id)
-                .unwrap()
-                .is_some_and(|ask| ask >= output_value_amount(value));
-            (same_currency && order_not_overbid).then_some(*order_id)
+            let ask_balance = tip_view.get_ask_balance(order_id).unwrap();
+            let order_not_overbid = ask_balance >= output_value_amount(value);
+            ((ask_balance > Amount::ZERO) && same_currency && order_not_overbid)
+                .then_some(*order_id)
         })
 }
 
@@ -473,10 +472,8 @@ impl<'a> RandomTxMaker<'a> {
         for account_type in accounts.iter().copied() {
             match account_type {
                 AccountType::Delegation(delegation_id) => {
-                    let balance = pos_accounting_before_tx
-                        .get_delegation_balance(delegation_id)
-                        .unwrap()
-                        .unwrap();
+                    let balance =
+                        pos_accounting_before_tx.get_delegation_balance(delegation_id).unwrap();
                     if balance > Amount::ZERO {
                         let to_spend = Amount::from_atoms(rng.gen_range(1..=balance.into_atoms()));
                         let new_nonce = self.get_next_nonce(AccountType::Delegation(delegation_id));
@@ -528,12 +525,12 @@ impl<'a> RandomTxMaker<'a> {
                             ));
 
                             let available_give_balance =
-                                orders_cache.get_give_balance(&order_id).unwrap().unwrap();
+                                orders_cache.get_give_balance(&order_id).unwrap();
                             let give_output =
                                 output_value_with_amount(order_data.give(), available_give_balance);
 
                             let current_ask_balance =
-                                orders_cache.get_ask_balance(&order_id).unwrap().unwrap();
+                                orders_cache.get_ask_balance(&order_id).unwrap();
                             let filled_amount = (output_value_amount(order_data.ask())
                                 - current_ask_balance)
                                 .unwrap();
@@ -657,8 +654,7 @@ impl<'a> RandomTxMaker<'a> {
             (vec![account_input, fee_input], vec![fee_change_output])
         } else if !token_data.is_locked() {
             if rng.gen_bool(0.9) {
-                let circulating_supply =
-                    tokens_cache.get_circulating_supply(&token_id).unwrap().unwrap_or(Amount::ZERO);
+                let circulating_supply = tokens_cache.get_circulating_supply(&token_id).unwrap();
 
                 // mint
                 let supply_limit = match token_data.total_supply() {
@@ -951,29 +947,32 @@ impl<'a> RandomTxMaker<'a> {
                 if let Some((token_id, token_supply)) =
                     get_random_token(rng, self.tokens_store, tokens_cache)
                 {
-                    let ask_amount =
-                        Amount::from_atoms(rng.gen_range(1u128..=token_supply.into_atoms()));
-                    let give_amount = Amount::from_atoms(rng.gen_range(1u128..=atoms_to_spend));
-                    let order_data = OrderData::new(
-                        Destination::AnyoneCanSpend,
-                        OutputValue::TokenV1(token_id, ask_amount),
-                        OutputValue::Coin(give_amount),
-                    );
-                    let change = (amount_to_spend - give_amount).unwrap();
+                    if token_supply > Amount::ZERO {
+                        let ask_amount =
+                            Amount::from_atoms(rng.gen_range(1u128..=token_supply.into_atoms()));
+                        let give_amount = Amount::from_atoms(rng.gen_range(1u128..=atoms_to_spend));
+                        let order_data = OrderData::new(
+                            Destination::AnyoneCanSpend,
+                            OutputValue::TokenV1(token_id, ask_amount),
+                            OutputValue::Coin(give_amount),
+                        );
+                        let change = (amount_to_spend - give_amount).unwrap();
 
-                    // Transfer output is created intentionally besides order output to not waste utxo
-                    // (e.g. single genesis output on issuance)
-                    let outputs = vec![
-                        TxOutput::AnyoneCanTake(Box::new(order_data)),
-                        TxOutput::Transfer(
-                            OutputValue::Coin(change),
-                            key_manager.new_destination(self.chainstate.get_chain_config(), rng),
-                        ),
-                    ];
+                        // Transfer output is created intentionally besides order output to not waste utxo
+                        // (e.g. single genesis output on issuance)
+                        let outputs = vec![
+                            TxOutput::AnyoneCanTake(Box::new(order_data)),
+                            TxOutput::Transfer(
+                                OutputValue::Coin(change),
+                                key_manager
+                                    .new_destination(self.chainstate.get_chain_config(), rng),
+                            ),
+                        ];
 
-                    self.order_can_be_created = false;
+                        self.order_can_be_created = false;
 
-                    result_outputs.extend_from_slice(&outputs);
+                        result_outputs.extend_from_slice(&outputs);
+                    }
                 }
             } else if switch == 3 && !self.account_command_used {
                 // try fill order
@@ -1246,7 +1245,7 @@ impl<'a> RandomTxMaker<'a> {
 
                         let circulating_supply =
                             tokens_cache.get_circulating_supply(&token_id).unwrap();
-                        assert!(circulating_supply.unwrap() >= to_unmint);
+                        assert!(circulating_supply >= to_unmint);
 
                         let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
                         let account_input = TxInput::AccountCommand(
@@ -1280,12 +1279,14 @@ impl<'a> RandomTxMaker<'a> {
             } else if rng.gen_bool(0.4) && self.order_can_be_created && atoms > 0 {
                 // create order to exchange part of available tokens for coins or other tokens
                 let random_token = get_random_token(rng, self.tokens_store, tokens_cache);
-                let ask_value =
-                    if rng.gen::<bool>() && random_token.is_some_and(|(id, _)| id != token_id) {
-                        OutputValue::TokenV1(random_token.unwrap().0, random_token.unwrap().1)
-                    } else {
-                        OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..10000)))
-                    };
+                let ask_value = if rng.gen::<bool>()
+                    && random_token
+                        .is_some_and(|(id, amount)| id != token_id && amount > Amount::ZERO)
+                {
+                    OutputValue::TokenV1(random_token.unwrap().0, random_token.unwrap().1)
+                } else {
+                    OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..10000)))
+                };
 
                 let give_value = OutputValue::TokenV1(token_id, Amount::from_atoms(atoms));
                 let order_data = OrderData::new(Destination::AnyoneCanSpend, ask_value, give_value);

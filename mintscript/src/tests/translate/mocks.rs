@@ -86,7 +86,7 @@ impl pos_accounting::PoSAccountingView for MockSigInfoProvider<'_> {
         Ok(self.pools.contains_key(&id))
     }
 
-    fn get_pool_balance(&self, _id: PoolId) -> Result<Option<Amount>, Self::Error> {
+    fn get_pool_balance(&self, _id: PoolId) -> Result<Amount, Self::Error> {
         unreachable!("not used in these tests")
     }
 
@@ -101,7 +101,7 @@ impl pos_accounting::PoSAccountingView for MockSigInfoProvider<'_> {
         unreachable!("not used in these tests")
     }
 
-    fn get_delegation_balance(&self, _id: DelegationId) -> Result<Option<Amount>, Self::Error> {
+    fn get_delegation_balance(&self, _id: DelegationId) -> Result<Amount, Self::Error> {
         unreachable!("not used in these tests")
     }
 
@@ -113,7 +113,7 @@ impl pos_accounting::PoSAccountingView for MockSigInfoProvider<'_> {
         &self,
         _pid: PoolId,
         _did: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
+    ) -> Result<Amount, Self::Error> {
         unreachable!("not used in these tests")
     }
 }
@@ -125,7 +125,7 @@ impl tokens_accounting::TokensAccountingView for MockSigInfoProvider<'_> {
         Ok(self.tokens.get(id).cloned())
     }
 
-    fn get_circulating_supply(&self, _id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+    fn get_circulating_supply(&self, _id: &TokenId) -> Result<Amount, Self::Error> {
         unreachable!("not used in these tests")
     }
 }
@@ -137,11 +137,11 @@ impl orders_accounting::OrdersAccountingView for MockSigInfoProvider<'_> {
         Ok(self.orders.get(id).cloned())
     }
 
-    fn get_ask_balance(&self, _id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+    fn get_ask_balance(&self, _id: &OrderId) -> Result<Amount, Self::Error> {
         unreachable!()
     }
 
-    fn get_give_balance(&self, _id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+    fn get_give_balance(&self, _id: &OrderId) -> Result<Amount, Self::Error> {
         unreachable!()
     }
 }

@@ -182,12 +182,12 @@ mockall::mock! {
     impl PoSAccountingView for Store {
         type Error = pos_accounting::Error;
         fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error>;
-        fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error>;
+        fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, pos_accounting::Error>;
         fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error>;
         fn get_delegation_balance(
             &self,
             delegation_id: DelegationId,
-        ) -> Result<Option<Amount>, pos_accounting::Error>;
+        ) -> Result<Amount, pos_accounting::Error>;
         fn get_delegation_data(
             &self,
             delegation_id: DelegationId,
@@ -200,7 +200,7 @@ mockall::mock! {
             &self,
             pool_id: PoolId,
             delegation_id: DelegationId,
-        ) -> Result<Option<Amount>, pos_accounting::Error>;
+        ) -> Result<Amount, pos_accounting::Error>;
     }
 
     impl FlushablePoSAccountingView for Store {

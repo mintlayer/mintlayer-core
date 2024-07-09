@@ -460,7 +460,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccoun
     }
 
     #[log_error]
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, pos_accounting::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_pool_balance(pool_id)
     }
 
@@ -473,7 +473,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccoun
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, pos_accounting::Error> {
+    ) -> Result<Amount, pos_accounting::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_delegation_balance(delegation_id)
     }
 
@@ -498,7 +498,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccoun
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, pos_accounting::Error> {
+    ) -> Result<Amount, pos_accounting::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
             .get_pool_delegation_share(pool_id, delegation_id)
     }

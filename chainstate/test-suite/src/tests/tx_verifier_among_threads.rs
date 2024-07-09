@@ -15,6 +15,7 @@
 
 use chainstate_test_framework::{TestFramework, TestStore};
 use common::chain::config::Builder as ConfigBuilder;
+use common::primitives::Amount;
 use common::{
     chain::{DelegationId, OrderData, OrderId, PoolId, UtxoOutPoint},
     primitives::{Id, H256},
@@ -60,11 +61,8 @@ impl PoSAccountingView for EmptyAccountingView {
         Ok(false)
     }
 
-    fn get_pool_balance(
-        &self,
-        _pool_id: PoolId,
-    ) -> Result<Option<common::primitives::Amount>, pos_accounting::Error> {
-        Ok(None)
+    fn get_pool_balance(&self, _pool_id: PoolId) -> Result<Amount, pos_accounting::Error> {
+        Ok(Amount::ZERO)
     }
 
     fn get_pool_data(
@@ -77,18 +75,16 @@ impl PoSAccountingView for EmptyAccountingView {
     fn get_pool_delegations_shares(
         &self,
         _pool_id: PoolId,
-    ) -> Result<
-        Option<std::collections::BTreeMap<DelegationId, common::primitives::Amount>>,
-        pos_accounting::Error,
-    > {
+    ) -> Result<Option<std::collections::BTreeMap<DelegationId, Amount>>, pos_accounting::Error>
+    {
         Ok(None)
     }
 
     fn get_delegation_balance(
         &self,
         _delegation_id: DelegationId,
-    ) -> Result<Option<common::primitives::Amount>, pos_accounting::Error> {
-        Ok(None)
+    ) -> Result<Amount, pos_accounting::Error> {
+        Ok(Amount::ZERO)
     }
 
     fn get_delegation_data(
@@ -102,8 +98,8 @@ impl PoSAccountingView for EmptyAccountingView {
         &self,
         _pool_id: PoolId,
         _delegation_id: DelegationId,
-    ) -> Result<Option<common::primitives::Amount>, pos_accounting::Error> {
-        Ok(None)
+    ) -> Result<Amount, pos_accounting::Error> {
+        Ok(Amount::ZERO)
     }
 }
 
@@ -122,8 +118,8 @@ impl TokensAccountingView for EmptyTokensAccountingView {
     fn get_circulating_supply(
         &self,
         _id: &common::chain::tokens::TokenId,
-    ) -> Result<Option<common::primitives::Amount>, Self::Error> {
-        Ok(None)
+    ) -> Result<Amount, Self::Error> {
+        Ok(Amount::ZERO)
     }
 }
 
@@ -136,18 +132,12 @@ impl OrdersAccountingView for EmptyOrdersAccountingView {
         Ok(None)
     }
 
-    fn get_ask_balance(
-        &self,
-        _id: &OrderId,
-    ) -> Result<Option<common::primitives::Amount>, Self::Error> {
-        Ok(None)
+    fn get_ask_balance(&self, _id: &OrderId) -> Result<Amount, Self::Error> {
+        Ok(Amount::ZERO)
     }
 
-    fn get_give_balance(
-        &self,
-        _id: &OrderId,
-    ) -> Result<Option<common::primitives::Amount>, Self::Error> {
-        Ok(None)
+    fn get_give_balance(&self, _id: &OrderId) -> Result<Amount, Self::Error> {
+        Ok(Amount::ZERO)
     }
 }
 

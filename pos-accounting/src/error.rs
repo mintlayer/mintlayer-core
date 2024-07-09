@@ -25,8 +25,6 @@ pub enum Error {
     InvariantErrorPoolBalanceAlreadyExists,
     #[error("Pool already exists by data")]
     InvariantErrorPoolDataAlreadyExists,
-    #[error("Attempted to decommission a non-existing pool balance")]
-    AttemptedDecommissionNonexistingPoolBalance,
     #[error("Attempted to decommission a non-existing pool data")]
     AttemptedDecommissionNonexistingPoolData,
     #[error("Failed to create a delegation because the target pool doesn't exist")]
@@ -63,8 +61,6 @@ pub enum Error {
     DelegationSharesAdditionError,
     #[error("Delegation shares arithmetic sub error")]
     DelegationSharesSubtractionError,
-    #[error("Pool creation undo failed; pool balance cannot be found")]
-    InvariantErrorPoolCreationReversalFailedBalanceNotFound,
     #[error("Pool creation undo failed; pool data cannot be found")]
     InvariantErrorPoolCreationReversalFailedDataNotFound,
     #[error("Pledge amount has changed while reversal being done")]

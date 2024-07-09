@@ -62,24 +62,16 @@ impl<P: OrdersAccountingView> OrdersAccountingCache<P> {
     }
 
     fn undo_create_order(&mut self, undo: CreateOrderUndo) -> Result<()> {
-        match self.get_ask_balance(&undo.id)? {
-            Some(balance) => {
-                if balance != undo.ask_balance {
-                    return Err(Error::InvariantOrderAskBalanceChangedForUndo(undo.id));
-                }
-            }
-            None => return Err(Error::InvariantOrderAskBalanceNotFoundForUndo(undo.id)),
-        }
+        ensure!(
+            self.get_ask_balance(&undo.id)? == undo.ask_balance,
+            Error::InvariantOrderAskBalanceChangedForUndo(undo.id)
+        );
         self.data.ask_balances.sub_unsigned(undo.id, undo.ask_balance)?;
 
-        match self.get_give_balance(&undo.id)? {
-            Some(balance) => {
-                if balance != undo.give_balance {
-                    return Err(Error::InvariantOrderGiveBalanceChangedForUndo(undo.id));
-                }
-            }
-            None => return Err(Error::InvariantOrderGiveBalanceNotFoundForUndo(undo.id)),
-        }
+        ensure!(
+            self.get_give_balance(&undo.id)? == undo.give_balance,
+            Error::InvariantOrderGiveBalanceChangedForUndo(undo.id)
+        );
         self.data.give_balances.sub_unsigned(undo.id, undo.give_balance)?;
 
         ensure!(
@@ -99,13 +91,13 @@ impl<P: OrdersAccountingView> OrdersAccountingCache<P> {
         self.data.order_data.undo_merge_delta_data_element(undo.id, undo.undo_data)?;
 
         ensure!(
-            self.get_ask_balance(&undo.id)?.unwrap_or(Amount::ZERO) == Amount::ZERO,
+            self.get_ask_balance(&undo.id)? == Amount::ZERO,
             Error::InvariantOrderAskBalanceExistForConcludeUndo(undo.id)
         );
         self.data.ask_balances.add_unsigned(undo.id, undo.ask_balance)?;
 
         ensure!(
-            self.get_give_balance(&undo.id)?.unwrap_or(Amount::ZERO) == Amount::ZERO,
+            self.get_give_balance(&undo.id)? == Amount::ZERO,
             Error::InvariantOrderGiveBalanceExistForConcludeUndo(undo.id)
         );
         self.data.give_balances.add_unsigned(undo.id, undo.give_balance)?;
@@ -134,42 +126,16 @@ impl<P: OrdersAccountingView> OrdersAccountingView for OrdersAccountingCache<P> 
         }
     }
 
-    fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>> {
+    fn get_ask_balance(&self, id: &OrderId) -> Result<Amount> {
         let parent_supply = self.parent.get_ask_balance(id).map_err(|_| Error::ViewFail)?;
         let local_delta = self.data.ask_balances.data().get(id).cloned();
-        let balance =
-            combine_amount_delta(&parent_supply, &local_delta).map_err(Error::AccountingError)?;
-
-        // When combining deltas with amounts it's impossible to distinguish None from Some(Amount::ZERO).
-        // Use information from DeltaData to make the decision.
-        if self.get_order_data(id)?.is_some() {
-            Ok(balance)
-        } else {
-            utils::ensure!(
-                balance.unwrap_or(Amount::ZERO) == Amount::ZERO,
-                Error::InvariantNonzeroAskBalanceForMissingOrder(*id)
-            );
-            Ok(None)
-        }
+        combine_amount_delta(parent_supply, local_delta).map_err(Error::AccountingError)
     }
 
-    fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>> {
+    fn get_give_balance(&self, id: &OrderId) -> Result<Amount> {
         let parent_supply = self.parent.get_give_balance(id).map_err(|_| Error::ViewFail)?;
         let local_delta = self.data.give_balances.data().get(id).cloned();
-        let balance =
-            combine_amount_delta(&parent_supply, &local_delta).map_err(Error::AccountingError)?;
-
-        // When combining deltas with amounts it's impossible to distinguish None from Some(Amount::ZERO).
-        // Use information from DeltaData to make the decision.
-        if self.get_order_data(id)?.is_some() {
-            Ok(balance)
-        } else {
-            utils::ensure!(
-                balance.unwrap_or(Amount::ZERO) == Amount::ZERO,
-                Error::InvariantNonzeroGiveBalanceForMissingOrder(*id)
-            );
-            Ok(None)
-        }
+        combine_amount_delta(parent_supply, local_delta).map_err(Error::AccountingError)
     }
 }
 
@@ -183,7 +149,7 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
         );
 
         ensure!(
-            self.get_ask_balance(&id)?.is_none(),
+            self.get_ask_balance(&id)? == Amount::ZERO,
             Error::OrderAlreadyExists(id)
         );
 
@@ -217,8 +183,8 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
         let order_data = self
             .get_order_data(&id)?
             .ok_or(Error::AttemptedConcludeNonexistingOrderData(id))?;
-        let ask_balance = self.get_ask_balance(&id)?.unwrap_or(Amount::ZERO);
-        let give_balance = self.get_give_balance(&id)?.unwrap_or(Amount::ZERO);
+        let ask_balance = self.get_ask_balance(&id)?;
+        let give_balance = self.get_give_balance(&id)?;
 
         let undo_data = self
             .data

@@ -27,8 +27,8 @@ pub trait OrdersAccountingView {
     type Error: std::error::Error;
 
     fn get_order_data(&self, id: &OrderId) -> Result<Option<OrderData>, Self::Error>;
-    fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error>;
-    fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error>;
+    fn get_ask_balance(&self, id: &OrderId) -> Result<Amount, Self::Error>;
+    fn get_give_balance(&self, id: &OrderId) -> Result<Amount, Self::Error>;
 }
 
 pub trait FlushableOrdersAccountingView {
@@ -53,11 +53,11 @@ where
         self.deref().get_order_data(id)
     }
 
-    fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+    fn get_ask_balance(&self, id: &OrderId) -> Result<Amount, Self::Error> {
         self.deref().get_ask_balance(id)
     }
 
-    fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+    fn get_give_balance(&self, id: &OrderId) -> Result<Amount, Self::Error> {
         self.deref().get_give_balance(id)
     }
 }

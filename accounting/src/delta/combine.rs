@@ -47,27 +47,16 @@ pub fn combine_data_with_delta<T: Clone + Eq>(
     }
 }
 
-/// Add two numbers that can be Some or None, one unsigned and another signed
-/// If both numbers are None, then the result is none (if key not found in both parent and local)
-/// If only unsigned is present, then the unsigned is returned (only parent found)
-/// If only signed is present, we convert it to unsigned and return it (only delta found)
-/// If both found, we add them and return them as unsigned
+/// Apply a delta on top of a balance which is effectively combining unsigned amount with a signed.
 /// Errors can happen when doing conversions; which can uncover inconsistency issues
-pub fn combine_amount_delta(
-    lhs: &Option<Amount>,
-    rhs: &Option<SignedAmount>,
-) -> Result<Option<Amount>, Error> {
+pub fn combine_amount_delta(lhs: Amount, rhs: Option<SignedAmount>) -> Result<Amount, Error> {
     match (lhs, rhs) {
-        (None, None) => Ok(None),
-        (None, Some(v)) => Ok(Some(
-            (*v).into_unsigned().ok_or(Error::ArithmeticErrorToUnsignedFailed)?,
-        )),
-        (Some(v), None) => Ok(Some(*v)),
-        (Some(v1), Some(v2)) => {
+        (v, None) => Ok(v),
+        (v1, Some(v2)) => {
             let v1 = v1.into_signed().ok_or(Error::ArithmeticErrorToSignedFailed)?;
-            let sum = (v1 + *v2).ok_or(Error::ArithmeticErrorDeltaAdditionFailed)?;
+            let sum = (v1 + v2).ok_or(Error::ArithmeticErrorDeltaAdditionFailed)?;
             let sum = sum.into_unsigned().ok_or(Error::ArithmeticErrorSumToUnsignedFailed)?;
-            Ok(Some(sum))
+            Ok(sum)
         }
     }
 }
@@ -108,28 +97,28 @@ pub mod test {
 
     #[rstest]
     #[rustfmt::skip]
-    #[case(None,    None,     Ok(None))]
-    #[case(None,    Some(1),  Ok(Some(Amount::from_atoms(1))))]
-    #[case(Some(1), None,     Ok(Some(Amount::from_atoms(1))))]
-    #[case(Some(1), Some(-1), Ok(Some(Amount::from_atoms(0))))]
-    #[case(Some(2), Some(1),  Ok(Some(Amount::from_atoms(3))))]
-    #[case(Some(3), Some(-1), Ok(Some(Amount::from_atoms(2))))]
-    #[case(None,                       Some(-1),                 Err(Error::ArithmeticErrorToUnsignedFailed))]
-    #[case(Some(1),                    Some(SignedIntType::MIN), Err(Error::ArithmeticErrorSumToUnsignedFailed))]
-    #[case(Some(1),                    Some(SignedIntType::MAX), Err(Error::ArithmeticErrorDeltaAdditionFailed))]
-    #[case(Some(UnsignedIntType::MIN), Some(-1),                 Err(Error::ArithmeticErrorSumToUnsignedFailed))]
-    #[case(Some(UnsignedIntType::MAX), Some(1),                  Err(Error::ArithmeticErrorToSignedFailed))]
-    #[case(Some(1),                    Some(SignedIntType::MAX), Err(Error::ArithmeticErrorDeltaAdditionFailed))]
-    #[case(Some(SignedIntType::MAX.try_into().unwrap()), Some(1), Err(Error::ArithmeticErrorDeltaAdditionFailed))]
+    #[case(0, None,     Ok(Amount::from_atoms(0)))]
+    #[case(0, Some(1),  Ok(Amount::from_atoms(1)))]
+    #[case(1, None,     Ok(Amount::from_atoms(1)))]
+    #[case(1, Some(-1), Ok(Amount::from_atoms(0)))]
+    #[case(2, Some(1),  Ok(Amount::from_atoms(3)))]
+    #[case(3, Some(-1), Ok(Amount::from_atoms(2)))]
+    #[case(0,                    Some(-1),                 Err(Error::ArithmeticErrorSumToUnsignedFailed))]
+    #[case(1,                    Some(SignedIntType::MIN), Err(Error::ArithmeticErrorSumToUnsignedFailed))]
+    #[case(1,                    Some(SignedIntType::MAX), Err(Error::ArithmeticErrorDeltaAdditionFailed))]
+    #[case(UnsignedIntType::MIN, Some(-1),                 Err(Error::ArithmeticErrorSumToUnsignedFailed))]
+    #[case(UnsignedIntType::MAX, Some(1),                  Err(Error::ArithmeticErrorToSignedFailed))]
+    #[case(1,                    Some(SignedIntType::MAX), Err(Error::ArithmeticErrorDeltaAdditionFailed))]
+    #[case(SignedIntType::MAX.try_into().unwrap(), Some(1), Err(Error::ArithmeticErrorDeltaAdditionFailed))]
     fn test_combine_amount_delta(
-        #[case] amount: Option<UnsignedIntType>,
+        #[case] balance: UnsignedIntType,
         #[case] delta: Option<SignedIntType>,
-        #[case] expected_result: Result<Option<Amount>, Error>,
+        #[case] expected_result: Result<Amount, Error>,
     ) {
         assert_eq!(
             combine_amount_delta(
-                &amount.map(Amount::from_atoms),
-                &delta.map(SignedAmount::from_atoms)
+                Amount::from_atoms(balance),
+                delta.map(SignedAmount::from_atoms)
             ),
             expected_result
         );

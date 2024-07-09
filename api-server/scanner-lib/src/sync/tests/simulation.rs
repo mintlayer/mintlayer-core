@@ -75,7 +75,7 @@ impl<'a> PoSAccountingView for PoSAccountingAdapterToCheckFees<'a> {
         unimplemented!()
     }
 
-    fn get_pool_balance(&self, _pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+    fn get_pool_balance(&self, _pool_id: PoolId) -> Result<Amount, Self::Error> {
         unimplemented!()
     }
 
@@ -93,12 +93,9 @@ impl<'a> PoSAccountingView for PoSAccountingAdapterToCheckFees<'a> {
         unimplemented!()
     }
 
-    fn get_delegation_balance(
-        &self,
-        _delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
+    fn get_delegation_balance(&self, _delegation_id: DelegationId) -> Result<Amount, Self::Error> {
         // only used for checks for attempted to print money but we don't need to check that here
-        Ok(Some(Amount::from_atoms(i128::MAX as u128)))
+        Ok(Amount::from_atoms(i128::MAX as u128))
     }
 
     fn get_delegation_data(
@@ -116,7 +113,7 @@ impl<'a> PoSAccountingView for PoSAccountingAdapterToCheckFees<'a> {
         &self,
         _pool_id: PoolId,
         _delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
+    ) -> Result<Amount, Self::Error> {
         unimplemented!()
     }
 }
@@ -144,8 +141,8 @@ impl TokensAccountingView for StubTokensAccounting {
         Ok(Some(data))
     }
 
-    fn get_circulating_supply(&self, _id: &TokenId) -> Result<Option<Amount>, Self::Error> {
-        Ok(None)
+    fn get_circulating_supply(&self, _id: &TokenId) -> Result<Amount, Self::Error> {
+        Ok(Amount::ZERO)
     }
 }
 

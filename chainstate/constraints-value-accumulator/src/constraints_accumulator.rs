@@ -297,12 +297,10 @@ impl ConstrainedValueAccumulator {
                     .ok_or(orders_accounting::Error::OrderDataNotFound(*id))?;
                 let ask_balance = orders_accounting_delta
                     .get_ask_balance(id)
-                    .map_err(|_| orders_accounting::Error::ViewFail)?
-                    .unwrap_or(Amount::ZERO);
+                    .map_err(|_| orders_accounting::Error::ViewFail)?;
                 let give_balance = orders_accounting_delta
                     .get_give_balance(id)
-                    .map_err(|_| orders_accounting::Error::ViewFail)?
-                    .unwrap_or(Amount::ZERO);
+                    .map_err(|_| orders_accounting::Error::ViewFail)?;
 
                 {
                     // Ensure that spending won't result in negative balance

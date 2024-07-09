@@ -90,7 +90,7 @@ impl PoSAccountingView for PoSAdapter {
         db.get_pool_data(pool_id)
     }
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, Self::Error> {
         let db = PoSAccountingDB::new(&self.storage);
         db.get_pool_balance(pool_id)
     }
@@ -103,10 +103,7 @@ impl PoSAccountingView for PoSAdapter {
         db.get_delegation_data(delegation_id)
     }
 
-    fn get_delegation_balance(
-        &self,
-        delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
+    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Amount, Self::Error> {
         let db = PoSAccountingDB::new(&self.storage);
         db.get_delegation_balance(delegation_id)
     }
@@ -115,7 +112,7 @@ impl PoSAccountingView for PoSAdapter {
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
+    ) -> Result<Amount, Self::Error> {
         let db = PoSAccountingDB::new(&self.storage);
         db.get_pool_delegation_share(pool_id, delegation_id)
     }

@@ -129,19 +129,19 @@ fn create_order_and_undo(#[case] seed: Seed) {
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
     assert_eq!(
-        Some(output_value_amount(order_data.ask())),
+        output_value_amount(order_data.ask()),
         cache.get_ask_balance(&order_id).unwrap()
     );
     assert_eq!(
-        Some(output_value_amount(order_data.give())),
+        output_value_amount(order_data.give()),
         cache.get_give_balance(&order_id).unwrap()
     );
 
     cache.undo(undo).unwrap();
 
     assert_eq!(None, cache.get_order_data(&order_id).unwrap().as_ref());
-    assert_eq!(None, cache.get_ask_balance(&order_id).unwrap());
-    assert_eq!(None, cache.get_give_balance(&order_id).unwrap());
+    assert_eq!(Amount::ZERO, cache.get_ask_balance(&order_id).unwrap());
+    assert_eq!(Amount::ZERO, cache.get_give_balance(&order_id).unwrap());
 
     db.batch_write_orders_data(cache.consume()).unwrap();
 
@@ -228,8 +228,8 @@ fn conclude_order_and_undo(#[case] seed: Seed) {
     let undo = cache.conclude_order(order_id).unwrap();
 
     assert_eq!(None, cache.get_order_data(&order_id).unwrap().as_ref());
-    assert_eq!(None, cache.get_ask_balance(&order_id).unwrap());
-    assert_eq!(None, cache.get_give_balance(&order_id).unwrap());
+    assert_eq!(Amount::ZERO, cache.get_ask_balance(&order_id).unwrap());
+    assert_eq!(Amount::ZERO, cache.get_give_balance(&order_id).unwrap());
 
     cache.undo(undo).unwrap();
 
@@ -238,11 +238,11 @@ fn conclude_order_and_undo(#[case] seed: Seed) {
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
     assert_eq!(
-        Some(output_value_amount(order_data.ask())),
+        output_value_amount(order_data.ask()),
         cache.get_ask_balance(&order_id).unwrap()
     );
     assert_eq!(
-        Some(output_value_amount(order_data.give())),
+        output_value_amount(order_data.give()),
         cache.get_give_balance(&order_id).unwrap()
     );
 
@@ -375,11 +375,11 @@ fn fill_order_partially_and_flush(#[case] seed: Seed) {
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
     assert_eq!(
-        Some(Amount::from_atoms(2)),
+        Amount::from_atoms(2),
         cache.get_ask_balance(&order_id).unwrap()
     );
     assert_eq!(
-        Some(Amount::from_atoms(7)),
+        Amount::from_atoms(7),
         cache.get_give_balance(&order_id).unwrap()
     );
 
@@ -395,11 +395,11 @@ fn fill_order_partially_and_flush(#[case] seed: Seed) {
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
     assert_eq!(
-        Some(Amount::from_atoms(1)),
+        Amount::from_atoms(1),
         cache.get_ask_balance(&order_id).unwrap()
     );
     assert_eq!(
-        Some(Amount::from_atoms(4)),
+        Amount::from_atoms(4),
         cache.get_give_balance(&order_id).unwrap()
     );
 
@@ -468,14 +468,8 @@ fn fill_order_partially_and_undo(#[case] seed: Seed) {
         Some(&order_data),
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
-    assert_eq!(
-        Some(Amount::ZERO),
-        cache.get_ask_balance(&order_id).unwrap()
-    );
-    assert_eq!(
-        Some(Amount::ZERO),
-        cache.get_give_balance(&order_id).unwrap()
-    );
+    assert_eq!(Amount::ZERO, cache.get_ask_balance(&order_id).unwrap());
+    assert_eq!(Amount::ZERO, cache.get_give_balance(&order_id).unwrap());
 
     cache.undo(undo3).unwrap();
 
@@ -484,11 +478,11 @@ fn fill_order_partially_and_undo(#[case] seed: Seed) {
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
     assert_eq!(
-        Some(Amount::from_atoms(1)),
+        Amount::from_atoms(1),
         cache.get_ask_balance(&order_id).unwrap()
     );
     assert_eq!(
-        Some(Amount::from_atoms(4)),
+        Amount::from_atoms(4),
         cache.get_give_balance(&order_id).unwrap()
     );
 
@@ -499,11 +493,11 @@ fn fill_order_partially_and_undo(#[case] seed: Seed) {
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
     assert_eq!(
-        Some(Amount::from_atoms(2)),
+        Amount::from_atoms(2),
         cache.get_ask_balance(&order_id).unwrap()
     );
     assert_eq!(
-        Some(Amount::from_atoms(7)),
+        Amount::from_atoms(7),
         cache.get_give_balance(&order_id).unwrap()
     );
 
@@ -514,11 +508,11 @@ fn fill_order_partially_and_undo(#[case] seed: Seed) {
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
     assert_eq!(
-        Some(Amount::from_atoms(3)),
+        Amount::from_atoms(3),
         cache.get_ask_balance(&order_id).unwrap()
     );
     assert_eq!(
-        Some(Amount::from_atoms(10)),
+        Amount::from_atoms(10),
         cache.get_give_balance(&order_id).unwrap()
     );
 
@@ -561,11 +555,11 @@ fn fill_order_partially_and_conclude(#[case] seed: Seed) {
         cache.get_order_data(&order_id).unwrap().as_ref()
     );
     assert_eq!(
-        Some(Amount::from_atoms(2)),
+        Amount::from_atoms(2),
         cache.get_ask_balance(&order_id).unwrap()
     );
     assert_eq!(
-        Some(Amount::from_atoms(7)),
+        Amount::from_atoms(7),
         cache.get_give_balance(&order_id).unwrap()
     );
 

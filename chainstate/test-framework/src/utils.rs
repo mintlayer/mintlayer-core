@@ -291,7 +291,7 @@ pub fn pos_mine(
 ) -> Option<(PoSData, BlockTimestamp)> {
     let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&storage);
 
-    let pool_balance = pos_db.get_pool_balance(pool_id).unwrap().unwrap();
+    let pool_balance = pos_db.get_pool_balance(pool_id).unwrap();
     let pledge_amount = pos_db.get_pool_data(pool_id).unwrap().unwrap().staker_balance().unwrap();
 
     find_timestamp_for_staking(

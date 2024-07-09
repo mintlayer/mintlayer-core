@@ -182,9 +182,7 @@ where
     };
 
     let stake_pool_id = *pos_data.stake_pool_id();
-    let pool_balance = pos_accounting_view
-        .get_pool_balance(stake_pool_id)?
-        .ok_or(ConsensusPoSError::PoolBalanceNotFound(stake_pool_id))?;
+    let pool_balance = pos_accounting_view.get_pool_balance(stake_pool_id)?;
     let staker_balance = pos_accounting_view
         .get_pool_data(stake_pool_id)?
         .ok_or(ConsensusPoSError::PoolDataNotFound(stake_pool_id))?

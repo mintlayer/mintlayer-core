@@ -421,25 +421,25 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         .expect_get_pool_balance()
         .with(eq(pool_id_0))
         .times(2)
-        .return_const(Ok(Some(pool_balance0)));
+        .return_const(Ok(pool_balance0));
     store
         .expect_get_pool_balance()
         .with(eq(pool_id_1))
         .times(3)
-        .return_const(Ok(None));
+        .return_const(Ok(Amount::ZERO));
     store
         .expect_get_pool_balance()
         .with(eq(pool_id_2))
         .times(3)
-        .return_const(Ok(None));
+        .return_const(Ok(Amount::ZERO));
 
     store
         .expect_get_pool_data()
         .with(eq(pool_id_0))
-        .times(5)
+        .times(2)
         .return_const(Ok(Some(pool_data0.clone().into())));
-    store.expect_get_pool_data().with(eq(pool_id_1)).times(3).return_const(Ok(None));
-    store.expect_get_pool_data().with(eq(pool_id_2)).times(7).return_const(Ok(None));
+    store.expect_get_pool_data().with(eq(pool_id_1)).times(1).return_const(Ok(None));
+    store.expect_get_pool_data().with(eq(pool_id_2)).times(2).return_const(Ok(None));
 
     store
         .expect_get_pos_accounting_undo()
@@ -500,29 +500,26 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
 
     // fetch pool balances
     assert_eq!(
-        verifier1.get_pool_balance(pool_id_0).unwrap().as_ref(),
-        Some(&pool_balance0)
+        verifier1.get_pool_balance(pool_id_0).unwrap(),
+        pool_balance0
     );
     assert_eq!(
-        verifier1.get_pool_balance(pool_id_1).unwrap().as_ref(),
-        Some(&pool_balance1)
+        verifier1.get_pool_balance(pool_id_1).unwrap(),
+        pool_balance1
     );
-    assert_eq!(
-        verifier1.get_pool_balance(pool_id_2).unwrap().as_ref(),
-        None
-    );
+    assert_eq!(verifier1.get_pool_balance(pool_id_2).unwrap(), Amount::ZERO);
 
     assert_eq!(
-        verifier2.get_pool_balance(pool_id_0).unwrap().as_ref(),
-        Some(&pool_balance0)
+        verifier2.get_pool_balance(pool_id_0).unwrap(),
+        pool_balance0
     );
     assert_eq!(
-        verifier2.get_pool_balance(pool_id_1).unwrap().as_ref(),
-        Some(&pool_balance1)
+        verifier2.get_pool_balance(pool_id_1).unwrap(),
+        pool_balance1
     );
     assert_eq!(
-        verifier2.get_pool_balance(pool_id_2).unwrap().as_ref(),
-        Some(&pool_balance2)
+        verifier2.get_pool_balance(pool_id_2).unwrap(),
+        pool_balance2
     );
 
     // fetch pool data
@@ -703,28 +700,28 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
     store
         .expect_get_circulating_supply()
         .with(eq(token_id_1))
-        .times(4)
+        .times(3)
         .return_const(Ok(None));
     store
         .expect_get_circulating_supply()
         .with(eq(token_id_2))
-        .times(4)
+        .times(3)
         .return_const(Ok(None));
 
     store
         .expect_get_token_data()
         .with(eq(token_id_0))
-        .times(5)
+        .times(2)
         .return_const(Ok(Some(token_data0.clone())));
     store
         .expect_get_token_data()
         .with(eq(token_id_1))
-        .times(2)
+        .times(1)
         .return_const(Ok(None));
     store
         .expect_get_token_data()
         .with(eq(token_id_2))
-        .times(7)
+        .times(2)
         .return_const(Ok(None));
 
     store

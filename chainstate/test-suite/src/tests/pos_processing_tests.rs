@@ -888,7 +888,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         res,
         ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
             CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
-                ConsensusPoSError::PoolBalanceNotFound(random_pool_id)
+                ConsensusPoSError::PoolDataNotFound(random_pool_id)
             ))
         ))
     );

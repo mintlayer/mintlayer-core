@@ -27,7 +27,7 @@ pub trait TokensAccountingView {
     fn get_token_data(&self, id: &TokenId) -> Result<Option<TokenData>, Self::Error>;
 
     /// Retrieves token circulating supply.
-    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error>;
+    fn get_circulating_supply(&self, id: &TokenId) -> Result<Amount, Self::Error>;
 }
 
 pub trait FlushableTokensAccountingView {
@@ -52,7 +52,7 @@ where
         self.deref().get_token_data(id)
     }
 
-    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+    fn get_circulating_supply(&self, id: &TokenId) -> Result<Amount, Self::Error> {
         self.deref().get_circulating_supply(id)
     }
 }

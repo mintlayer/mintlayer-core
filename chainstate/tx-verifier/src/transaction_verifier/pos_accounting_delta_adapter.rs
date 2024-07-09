@@ -118,7 +118,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingOperationImpl<
         self.adapter.accounting_delta.get_pool_data(pool_id)
     }
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, Self::Error> {
         self.adapter.accounting_delta.get_pool_balance(pool_id)
     }
 
@@ -132,7 +132,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingOperationImpl<
     fn get_delegation_balance(
         &self,
         delegation_id: common::chain::DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
+    ) -> Result<Amount, Self::Error> {
         self.adapter.accounting_delta.get_delegation_balance(delegation_id)
     }
 
@@ -140,7 +140,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingView for PoSAccountingOperationImpl<
         &self,
         pool_id: PoolId,
         delegation_id: common::chain::DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
+    ) -> Result<Amount, Self::Error> {
         self.adapter.accounting_delta.get_pool_delegation_share(pool_id, delegation_id)
     }
 

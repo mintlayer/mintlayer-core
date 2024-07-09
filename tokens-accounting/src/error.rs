@@ -27,8 +27,6 @@ pub enum Error {
     TokenDataNotFound(TokenId),
     #[error("Data for token {0}` not found on reversal")]
     TokenDataNotFoundOnReversal(TokenId),
-    #[error("Circulating supply for token {0}` not found")]
-    CirculatingSupplyNotFound(TokenId),
     #[error("Minting `{0:?}` tokens would exceed supply limit `{1:?}` for token `{2}`")]
     MintExceedsSupplyLimit(Amount, Amount, TokenId),
     #[error("Amount overflow")]
