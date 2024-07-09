@@ -46,3 +46,9 @@ mod error;
 mod gen_block_index;
 mod height_skip;
 mod locator;
+
+pub struct TipStorageTag;
+impl pos_accounting::StorageTag for TipStorageTag {}
+
+pub struct SealedStorageTag;
+impl pos_accounting::StorageTag for SealedStorageTag {}

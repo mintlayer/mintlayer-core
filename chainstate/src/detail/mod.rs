@@ -41,12 +41,11 @@ use self::{
 };
 use crate::{BlockInvalidatorError, ChainstateConfig, ChainstateEvent};
 use chainstate_storage::{
-    BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag,
-    TipStorageTag, TransactionRw, Transactional,
+    BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
 use chainstate_types::{
     pos_randomness::PoSRandomness, BlockIndex, BlockStatus, BlockValidationStage, EpochData,
-    EpochStorageWrite, PropertyQueryError,
+    EpochStorageWrite, PropertyQueryError, SealedStorageTag, TipStorageTag,
 };
 use chainstateref::{ChainstateRef, ReorgError};
 use common::{

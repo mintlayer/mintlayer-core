@@ -15,7 +15,7 @@
 
 use std::ops::Deref;
 
-use chainstate_types::{storage_result, GenBlockIndex};
+use chainstate_types::{storage_result, GenBlockIndex, TipStorageTag};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
@@ -27,7 +27,7 @@ use orders_accounting::{
     FlushableOrdersAccountingView, OrdersAccountingStorageRead, OrdersAccountingUndo,
 };
 use pos_accounting::{
-    FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingUndo, PoSAccountingView,
+    FlushablePoSAccountingView, PoSAccountingDeltaData, PoSAccountingStorageRead, PoSAccountingUndo,
 };
 use thiserror::Error;
 use tokens_accounting::{
@@ -66,10 +66,11 @@ pub enum TransactionVerifierStorageError {
     OrdersAccountingError(#[from] orders_accounting::Error),
 }
 
-// TODO(Gosha): PoSAccountingView should be replaced with PoSAccountingStorageRead in which the
-//              return error type can handle both storage_result::Error and pos_accounting::Error
 pub trait TransactionVerifierStorageRef:
-    UtxosStorageRead + PoSAccountingView + TokensAccountingStorageRead + OrdersAccountingStorageRead
+    UtxosStorageRead
+    + PoSAccountingStorageRead<TipStorageTag>
+    + TokensAccountingStorageRead
+    + OrdersAccountingStorageRead
 {
     type Error: std::error::Error;
 

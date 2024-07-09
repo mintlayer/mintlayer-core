@@ -20,7 +20,7 @@ use common::{
     primitives::Amount,
 };
 
-use crate::{error::Error, DeltaMergeUndo};
+use crate::DeltaMergeUndo;
 
 use super::{delegation::DelegationData, delta::data::PoSAccountingDeltaData, pool_data::PoolData};
 
@@ -53,7 +53,12 @@ pub trait PoSAccountingView {
 }
 
 pub trait FlushablePoSAccountingView {
-    fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<DeltaMergeUndo, Error>;
+    type Error: std::error::Error;
+
+    fn batch_write_delta(
+        &mut self,
+        data: PoSAccountingDeltaData,
+    ) -> Result<DeltaMergeUndo, Self::Error>;
 }
 
 impl<T> PoSAccountingView for T

@@ -19,7 +19,6 @@ use accounting::{
     combine_amount_delta, combine_data_with_delta, DeltaAmountCollection, DeltaDataCollection,
     DeltaDataUndoCollection,
 };
-use chainstate_types::storage_result;
 use common::primitives::{amount::SignedAmount, Amount};
 
 use crate::{
@@ -147,9 +146,9 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
     ) -> Result<DeltaAmountCollection<K>, Error>
     where
         Iter: Iterator<Item = (K, SignedAmount)>,
-        Getter: Fn(&S, K) -> Result<Option<Amount>, storage_result::Error>,
-        Setter: FnMut(&mut S, K, Amount) -> Result<(), storage_result::Error>,
-        Deleter: FnMut(&mut S, K) -> Result<(), storage_result::Error>,
+        Getter: Fn(&S, K) -> Result<Option<Amount>, S::Error>,
+        Setter: FnMut(&mut S, K, Amount) -> Result<(), S::Error>,
+        Deleter: FnMut(&mut S, K) -> Result<(), S::Error>,
     {
         let mut store = BorrowedStorageValue::new(&mut self.store, getter, setter, deleter);
         let undo = iter
@@ -176,9 +175,9 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
         deleter: Deleter,
     ) -> Result<DeltaDataUndoCollection<K, V>, Error>
     where
-        Getter: Fn(&S, K) -> Result<Option<V>, storage_result::Error>,
-        Setter: FnMut(&mut S, K, &V) -> Result<(), storage_result::Error>,
-        Deleter: FnMut(&mut S, K) -> Result<(), storage_result::Error>,
+        Getter: Fn(&S, K) -> Result<Option<V>, S::Error>,
+        Setter: FnMut(&mut S, K, &V) -> Result<(), S::Error>,
+        Deleter: FnMut(&mut S, K) -> Result<(), S::Error>,
     {
         let mut store = BorrowedStorageValue::new(&mut self.store, getter, setter, deleter);
         let undo = delta
@@ -205,9 +204,9 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
         deleter: Deleter,
     ) -> Result<(), Error>
     where
-        Getter: Fn(&S, K) -> Result<Option<V>, storage_result::Error>,
-        Setter: FnMut(&mut S, K, &V) -> Result<(), storage_result::Error>,
-        Deleter: FnMut(&mut S, K) -> Result<(), storage_result::Error>,
+        Getter: Fn(&S, K) -> Result<Option<V>, S::Error>,
+        Setter: FnMut(&mut S, K, &V) -> Result<(), S::Error>,
+        Deleter: FnMut(&mut S, K) -> Result<(), S::Error>,
     {
         let mut store = BorrowedStorageValue::new(&mut self.store, getter, setter, deleter);
         undo.consume().into_iter().try_for_each(|(id, delta)| {

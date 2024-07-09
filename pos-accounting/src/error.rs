@@ -17,8 +17,6 @@ use common::chain::DelegationId;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum Error {
-    #[error("Accounting storage error")]
-    StorageError(#[from] chainstate_types::storage_result::Error),
     #[error("Base accounting error: {0}")]
     AccountingError(#[from] accounting::Error),
     #[error("Pool already exists by balance")]
@@ -102,6 +100,8 @@ pub enum Error {
     //      https://github.com/mintlayer/mintlayer-core/issues/811
     #[error("PoS accounting view query failed")]
     ViewFail,
+    #[error("PoS accounting storage write failed")]
+    StorageWrite,
 }
 
 pub type Result<T> = core::result::Result<T, Error>;

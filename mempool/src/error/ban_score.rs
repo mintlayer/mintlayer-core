@@ -364,8 +364,8 @@ impl MempoolBanScore for pos_accounting::Error {
             E::InvariantErrorIncreaseStakerRewardUndoFailedPoolBalanceNotFound => 0,
 
             // Internal errors
-            E::StorageError(_) => 0,
             E::ViewFail => 0,
+            E::StorageWrite => 0,
         }
     }
 }

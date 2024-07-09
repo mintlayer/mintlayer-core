@@ -29,7 +29,7 @@ use common::{
     primitives::H256,
 };
 use mockall::predicate::eq;
-use pos_accounting::PoSAccountingView;
+use pos_accounting::PoSAccountingStorageRead;
 use rstest::rstest;
 use test_utils::random::Seed;
 use tokens_accounting::{FungibleTokenData, TokensAccountingStorageRead};
@@ -421,17 +421,17 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         .expect_get_pool_balance()
         .with(eq(pool_id_0))
         .times(2)
-        .return_const(Ok(pool_balance0));
+        .return_const(Ok(Some(pool_balance0)));
     store
         .expect_get_pool_balance()
         .with(eq(pool_id_1))
         .times(3)
-        .return_const(Ok(Amount::ZERO));
+        .return_const(Ok(None));
     store
         .expect_get_pool_balance()
         .with(eq(pool_id_2))
         .times(3)
-        .return_const(Ok(Amount::ZERO));
+        .return_const(Ok(None));
 
     store
         .expect_get_pool_data()
@@ -501,25 +501,28 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     // fetch pool balances
     assert_eq!(
         verifier1.get_pool_balance(pool_id_0).unwrap(),
-        pool_balance0
+        Some(pool_balance0)
     );
     assert_eq!(
         verifier1.get_pool_balance(pool_id_1).unwrap(),
-        pool_balance1
+        Some(pool_balance1)
     );
-    assert_eq!(verifier1.get_pool_balance(pool_id_2).unwrap(), Amount::ZERO);
+    assert_eq!(
+        verifier1.get_pool_balance(pool_id_2).unwrap(),
+        Some(Amount::ZERO)
+    );
 
     assert_eq!(
         verifier2.get_pool_balance(pool_id_0).unwrap(),
-        pool_balance0
+        Some(pool_balance0)
     );
     assert_eq!(
         verifier2.get_pool_balance(pool_id_1).unwrap(),
-        pool_balance1
+        Some(pool_balance1)
     );
     assert_eq!(
         verifier2.get_pool_balance(pool_id_2).unwrap(),
-        pool_balance2
+        Some(pool_balance2)
     );
 
     // fetch pool data
@@ -783,29 +786,29 @@ fn hierarchy_test_tokens_v1(#[case] seed: Seed) {
 
     // fetch pool balances
     assert_eq!(
-        verifier1.get_circulating_supply(&token_id_0).unwrap().as_ref(),
-        Some(&supply0)
+        verifier1.get_circulating_supply(&token_id_0).unwrap(),
+        Some(supply0)
     );
     assert_eq!(
-        verifier1.get_circulating_supply(&token_id_1).unwrap().as_ref(),
-        Some(&supply1)
+        verifier1.get_circulating_supply(&token_id_1).unwrap(),
+        Some(supply1)
     );
     assert_eq!(
-        verifier1.get_circulating_supply(&token_id_2).unwrap().as_ref(),
-        None
+        verifier1.get_circulating_supply(&token_id_2).unwrap(),
+        Some(Amount::ZERO)
     );
 
     assert_eq!(
-        verifier2.get_circulating_supply(&token_id_0).unwrap().as_ref(),
-        Some(&supply0)
+        verifier2.get_circulating_supply(&token_id_0).unwrap(),
+        Some(supply0)
     );
     assert_eq!(
-        verifier2.get_circulating_supply(&token_id_1).unwrap().as_ref(),
-        Some(&supply1)
+        verifier2.get_circulating_supply(&token_id_1).unwrap(),
+        Some(supply1)
     );
     assert_eq!(
-        verifier2.get_circulating_supply(&token_id_2).unwrap().as_ref(),
-        Some(&supply2)
+        verifier2.get_circulating_supply(&token_id_2).unwrap(),
+        Some(supply2)
     );
 
     // fetch pool data

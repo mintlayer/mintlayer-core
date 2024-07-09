@@ -15,7 +15,6 @@
 
 use std::collections::BTreeMap;
 
-use chainstate_types::storage_result::Error;
 use common::{
     chain::{DelegationId, PoolId},
     primitives::{Amount, H256},
@@ -145,14 +144,16 @@ impl InMemoryPoSAccounting {
 }
 
 impl PoSAccountingStorageRead for InMemoryPoSAccounting {
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
+    type Error = crate::Error;
+
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
         Ok(self.pool_balances.get(&pool_id).copied())
     }
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error> {
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
         let range_start = (pool_id, DelegationId::new(H256::zero()));
         let range_end = (pool_id, DelegationId::new(H256::repeat_byte(0xFF)));
         let range = self.pool_delegation_shares.range(range_start..=range_end);
@@ -167,11 +168,14 @@ impl PoSAccountingStorageRead for InMemoryPoSAccounting {
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<DelegationData>, Error> {
+    ) -> Result<Option<DelegationData>, Self::Error> {
         Ok(self.delegation_data.get(&delegation_id).cloned())
     }
 
-    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Option<Amount>, Error> {
+    fn get_delegation_balance(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
         Ok(self.delegation_balances.get(&delegation_id).copied())
     }
 
@@ -179,22 +183,22 @@ impl PoSAccountingStorageRead for InMemoryPoSAccounting {
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Error> {
+    ) -> Result<Option<Amount>, Self::Error> {
         Ok(self.pool_delegation_shares.get(&(pool_id, delegation_id)).copied())
     }
 
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
         Ok(self.pool_data.get(&pool_id).cloned())
     }
 }
 
 impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
-    fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> Result<(), Error> {
+    fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> Result<(), Self::Error> {
         self.pool_balances.insert(pool_id, amount);
         Ok(())
     }
 
-    fn del_pool_balance(&mut self, pool_id: PoolId) -> Result<(), Error> {
+    fn del_pool_balance(&mut self, pool_id: PoolId) -> Result<(), Self::Error> {
         self.pool_balances.remove(&pool_id);
         Ok(())
     }
@@ -203,12 +207,15 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         &mut self,
         delegation_target: DelegationId,
         amount: Amount,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Self::Error> {
         self.delegation_balances.insert(delegation_target, amount);
         Ok(())
     }
 
-    fn del_delegation_balance(&mut self, delegation_target: DelegationId) -> Result<(), Error> {
+    fn del_delegation_balance(
+        &mut self,
+        delegation_target: DelegationId,
+    ) -> Result<(), Self::Error> {
         self.delegation_balances.remove(&delegation_target);
         Ok(())
     }
@@ -218,7 +225,7 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         pool_id: PoolId,
         delegation_id: DelegationId,
         amount: Amount,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Self::Error> {
         self.pool_delegation_shares.insert((pool_id, delegation_id), amount);
         Ok(())
     }
@@ -227,7 +234,7 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         &mut self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Self::Error> {
         self.pool_delegation_shares.remove(&(pool_id, delegation_id));
         Ok(())
     }
@@ -236,22 +243,22 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
         &mut self,
         delegation_id: DelegationId,
         delegation_data: &DelegationData,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Self::Error> {
         self.delegation_data.insert(delegation_id, delegation_data.clone());
         Ok(())
     }
 
-    fn del_delegation_data(&mut self, delegation_id: DelegationId) -> Result<(), Error> {
+    fn del_delegation_data(&mut self, delegation_id: DelegationId) -> Result<(), Self::Error> {
         self.delegation_data.remove(&delegation_id);
         Ok(())
     }
 
-    fn set_pool_data(&mut self, pool_id: PoolId, pool_data: &PoolData) -> Result<(), Error> {
+    fn set_pool_data(&mut self, pool_id: PoolId, pool_data: &PoolData) -> Result<(), Self::Error> {
         self.pool_data.insert(pool_id, pool_data.clone());
         Ok(())
     }
 
-    fn del_pool_data(&mut self, pool_id: PoolId) -> Result<(), Error> {
+    fn del_pool_data(&mut self, pool_id: PoolId) -> Result<(), Self::Error> {
         self.pool_data.remove(&pool_id);
         Ok(())
     }

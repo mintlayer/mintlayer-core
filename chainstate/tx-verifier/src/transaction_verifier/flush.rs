@@ -19,6 +19,7 @@ use super::{
     CachedOperation, TransactionVerifierDelta,
 };
 use orders_accounting::FlushableOrdersAccountingView;
+use pos_accounting::FlushablePoSAccountingView;
 use tokens_accounting::FlushableTokensAccountingView;
 use utxo::FlushableUtxoView;
 
@@ -68,7 +69,7 @@ where
     <S as TransactionVerifierStorageRef>::Error: From<<S as FlushableUtxoView>::Error>,
     <S as TransactionVerifierStorageRef>::Error: From<<S as FlushableTokensAccountingView>::Error>,
     <S as TransactionVerifierStorageRef>::Error: From<<S as FlushableOrdersAccountingView>::Error>,
-    <S as TransactionVerifierStorageRef>::Error: From<pos_accounting::Error>,
+    <S as TransactionVerifierStorageRef>::Error: From<<S as FlushablePoSAccountingView>::Error>,
 {
     flush_tokens(storage, &consumed.token_issuance_cache)?;
 

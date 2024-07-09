@@ -25,7 +25,7 @@ use super::{
     },
     CachedUtxosBlockUndo,
 };
-use chainstate_types::{storage_result, GenBlockIndex};
+use chainstate_types::{storage_result, GenBlockIndex, TipStorageTag};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
@@ -40,7 +40,7 @@ use orders_accounting::{
 };
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
-    PoSAccountingUndo, PoSAccountingView, PoolData,
+    PoSAccountingStorageRead, PoSAccountingUndo, PoolData,
 };
 use tokens_accounting::{
     FlushableTokensAccountingView, TokenAccountingUndo, TokenData, TokensAccountingDeltaData,
@@ -179,15 +179,14 @@ mockall::mock! {
         fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error>;
     }
 
-    impl PoSAccountingView for Store {
+    impl PoSAccountingStorageRead<TipStorageTag> for Store {
         type Error = pos_accounting::Error;
-        fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error>;
-        fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, pos_accounting::Error>;
+        fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error>;
         fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error>;
         fn get_delegation_balance(
             &self,
             delegation_id: DelegationId,
-        ) -> Result<Amount, pos_accounting::Error>;
+        ) -> Result<Option<Amount>, pos_accounting::Error>;
         fn get_delegation_data(
             &self,
             delegation_id: DelegationId,
@@ -200,10 +199,11 @@ mockall::mock! {
             &self,
             pool_id: PoolId,
             delegation_id: DelegationId,
-        ) -> Result<Amount, pos_accounting::Error>;
+        ) -> Result<Option<Amount>, pos_accounting::Error>;
     }
 
     impl FlushablePoSAccountingView for Store {
+        type Error = pos_accounting::Error;
         fn batch_write_delta(&mut self, data: PoSAccountingDeltaData) -> Result<DeltaMergeUndo, pos_accounting::Error>;
     }
 

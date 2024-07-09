@@ -23,7 +23,9 @@ pub mod schema;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use chainstate_types::{BlockIndex, EpochStorageRead, EpochStorageWrite};
+use chainstate_types::{
+    BlockIndex, EpochStorageRead, EpochStorageWrite, SealedStorageTag, TipStorageTag,
+};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
@@ -56,20 +58,14 @@ pub mod inmemory {
     pub type Store = super::Store<storage_inmemory::InMemory>;
 }
 
-pub struct TipStorageTag;
-impl pos_accounting::StorageTag for TipStorageTag {}
-
-pub struct SealedStorageTag;
-impl pos_accounting::StorageTag for SealedStorageTag {}
-
 /// Queries on persistent blockchain data
 pub trait BlockchainStorageRead:
     UtxosStorageRead<Error = crate::Error>
-    + PoSAccountingStorageRead<SealedStorageTag>
-    + PoSAccountingStorageRead<TipStorageTag>
-    + EpochStorageRead
+    + PoSAccountingStorageRead<SealedStorageTag, Error = crate::Error>
+    + PoSAccountingStorageRead<TipStorageTag, Error = crate::Error>
     + TokensAccountingStorageRead<Error = crate::Error>
     + OrdersAccountingStorageRead<Error = crate::Error>
+    + EpochStorageRead
 {
     // TODO: below (and in lots of other places too) Id is sometimes passes by ref and sometimes
     // by value. It's better to choose one "canonical" approach and use it everywhere.

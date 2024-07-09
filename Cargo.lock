@@ -1304,6 +1304,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "parity-scale-codec",
+ "pos-accounting",
  "serialization",
  "static_assertions",
  "storage",
@@ -5376,7 +5377,6 @@ name = "pos-accounting"
 version = "0.5.1"
 dependencies = [
  "accounting",
- "chainstate-types",
  "common",
  "crypto",
  "parity-scale-codec",

@@ -16,7 +16,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::db;
-use chainstate_types::{BlockIndex, EpochData, EpochStorageRead};
+use chainstate_types::{BlockIndex, EpochData, EpochStorageRead, SealedStorageTag, TipStorageTag};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
@@ -38,7 +38,7 @@ use tokens_accounting::{TokenAccountingUndo, TokensAccountingStorageRead};
 use utils::log_error;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead};
 
-use crate::{BlockchainStorageRead, ChainstateStorageVersion, SealedStorageTag, TipStorageTag};
+use crate::{BlockchainStorageRead, ChainstateStorageVersion};
 
 use super::well_known;
 
@@ -271,6 +271,8 @@ impl<'st, B: storage::Backend> UtxosStorageRead for super::StoreTxRo<'st, B> {
 impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
     for super::StoreTxRo<'st, B>
 {
+    type Error = crate::Error;
+
     #[log_error]
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingPoolBalancesTip, _, _>(pool_id)
@@ -317,6 +319,8 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
 impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
     for super::StoreTxRo<'st, B>
 {
+    type Error = crate::Error;
+
     #[log_error]
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingPoolBalancesSealed, _, _>(pool_id)
@@ -584,6 +588,8 @@ impl<'st, B: storage::Backend> UtxosStorageRead for super::StoreTxRw<'st, B> {
 impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
     for super::StoreTxRw<'st, B>
 {
+    type Error = crate::Error;
+
     #[log_error]
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingPoolBalancesTip, _, _>(pool_id)
@@ -630,6 +636,8 @@ impl<'st, B: storage::Backend> PoSAccountingStorageRead<TipStorageTag>
 impl<'st, B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag>
     for super::StoreTxRw<'st, B>
 {
+    type Error = crate::Error;
+
     #[log_error]
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         self.read::<db::DBAccountingPoolBalancesSealed, _, _>(pool_id)

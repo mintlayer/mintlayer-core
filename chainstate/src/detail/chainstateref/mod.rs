@@ -27,13 +27,11 @@ use std::{
 };
 use thiserror::Error;
 
-use chainstate_storage::{
-    BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag, TransactionRw,
-};
+use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{
     block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, BlockStatus,
     BlockValidationStage, EpochData, EpochDataCache, GenBlockIndex, GetAncestorError,
-    PropertyQueryError,
+    PropertyQueryError, TipStorageTag,
 };
 use common::{
     chain::{
@@ -53,7 +51,9 @@ use common::{
     Uint256,
 };
 use logging::log;
-use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
+use pos_accounting::{
+    PoSAccountingDB, PoSAccountingDelta, PoSAccountingStorageRead, PoSAccountingView,
+};
 use tx_verifier::transaction_verifier::TransactionVerifier;
 use utils::{debug_assert_or_log, ensure, log_error, tap_log::TapLog};
 use utxo::{UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
@@ -170,7 +170,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     pub fn make_pos_accounting_view(
         &self,
-    ) -> impl PoSAccountingView<Error = pos_accounting::Error> + '_ {
+    ) -> impl PoSAccountingView<Error = <S as PoSAccountingStorageRead<TipStorageTag>>::Error> + '_
+    {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
     }
 
@@ -1027,8 +1028,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let mut height_map = BTreeMap::new();
 
         let max_height = if max_height == best_block_height {
+            let pos_db = PoSAccountingDB::new(&self);
             let balances_at_tip =
-                Self::collect_pool_balances(pool_ids.iter(), self, best_block_height)?;
+                Self::collect_pool_balances(pool_ids.iter(), &pos_db, best_block_height)?;
             if !balances_at_tip.is_empty() {
                 height_map.insert(best_block_height, balances_at_tip);
             }
@@ -1055,8 +1057,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     .expect("Genesis can't be disconnected");
                 assert!(cur_height >= min_height);
 
-                let balances =
-                    Self::collect_pool_balances(pool_ids.iter(), &tx_verifier, cur_height)?;
+                let pos_db = PoSAccountingDB::new(&tx_verifier);
+                let balances = Self::collect_pool_balances(pool_ids.iter(), &pos_db, cur_height)?;
 
                 pool_ids.retain(|pool_id| {
                     // We didn't see this pool having balance yet.
@@ -1086,7 +1088,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     #[log_error]
     fn collect_pool_balances<'b>(
         pool_ids: impl Iterator<Item = &'b PoolId>,
-        pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
+        pos_accounting_view: &impl PoSAccountingView,
         assumed_bb_height: BlockHeight,
     ) -> Result<BTreeMap<PoolId, NonZeroPoolBalances>, BlockError> {
         let mut balances = BTreeMap::new();
@@ -1494,12 +1496,16 @@ impl NonZeroPoolBalances {
     #[log_error]
     pub fn obtain(
         pool_id: &PoolId,
-        pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
+        pos_accounting_view: &impl PoSAccountingView,
         assumed_bb_height: BlockHeight,
     ) -> Result<Option<Self>, BlockError> {
-        let total_balance = pos_accounting_view.get_pool_balance(*pool_id)?;
+        let total_balance = pos_accounting_view
+            .get_pool_balance(*pool_id)
+            .map_err(|_| pos_accounting::Error::ViewFail)?;
         let total_balance = (total_balance > Amount::ZERO).then_some(total_balance);
-        let pool_data = pos_accounting_view.get_pool_data(*pool_id)?;
+        let pool_data = pos_accounting_view
+            .get_pool_data(*pool_id)
+            .map_err(|_| pos_accounting::Error::ViewFail)?;
 
         match (total_balance, pool_data) {
             (Some(total_balance), Some(pool_data)) => {

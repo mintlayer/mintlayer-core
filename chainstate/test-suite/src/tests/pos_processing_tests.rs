@@ -21,7 +21,7 @@ use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, BlockSource, ChainstateError,
     CheckBlockError, ConnectTransactionError, SpendStakeError,
 };
-use chainstate_storage::{TipStorageTag, Transactional};
+use chainstate_storage::Transactional;
 use chainstate_test_framework::{
     anyonecanspend_address, create_stake_pool_data_with_all_reward_to_staker, empty_witness,
     TestFramework, TransactionBuilder,
@@ -29,7 +29,7 @@ use chainstate_test_framework::{
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
     vrf_tools::{construct_transcript, ProofOfStakeVRFError},
-    EpochStorageRead,
+    EpochStorageRead, TipStorageTag,
 };
 use common::{
     chain::{

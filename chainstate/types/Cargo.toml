@@ -11,6 +11,7 @@ rust-version.workspace = true
 common = { path = "../../common/" }
 crypto = { path = "../../crypto" }
 logging = { path = '../../logging' }
+pos-accounting = { path = "../../pos-accounting" }
 serialization = { path = "../../serialization" }
 storage = { path = "../../storage/" }
 

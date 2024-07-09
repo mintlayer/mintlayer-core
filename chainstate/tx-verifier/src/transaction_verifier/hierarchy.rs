@@ -25,7 +25,7 @@ use super::{
     utxos_undo_cache::CachedUtxosBlockUndo,
     CachedOperation, TransactionSource, TransactionVerifier,
 };
-use chainstate_types::{storage_result, GenBlockIndex};
+use chainstate_types::{storage_result, GenBlockIndex, TipStorageTag};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
@@ -40,7 +40,7 @@ use orders_accounting::{
 };
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDeltaData,
-    PoSAccountingUndo, PoSAccountingView, PoolData,
+    PoSAccountingStorageRead, PoSAccountingUndo, PoSAccountingView, PoolData,
 };
 use tokens_accounting::{
     FlushableTokensAccountingView, TokenAccountingUndo, TokensAccountingDeltaData,
@@ -337,27 +337,30 @@ impl<C, S, U, A, T, O> FlushableUtxoView for TransactionVerifier<C, S, U, A, T, 
     }
 }
 
-impl<C, S, U, A: PoSAccountingView, T, O> PoSAccountingView
+impl<C, S, U, A: PoSAccountingView, T, O> PoSAccountingStorageRead<TipStorageTag>
     for TransactionVerifier<C, S, U, A, T, O>
 {
     type Error = pos_accounting::Error;
 
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
-        self.pos_accounting_adapter.accounting_delta().pool_exists(pool_id)
-    }
-
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, Self::Error> {
-        self.pos_accounting_adapter.accounting_delta().get_pool_balance(pool_id)
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        self.pos_accounting_adapter
+            .accounting_delta()
+            .get_pool_balance(pool_id)
+            .map(Some)
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
         self.pos_accounting_adapter.accounting_delta().get_pool_data(pool_id)
     }
 
-    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Amount, Self::Error> {
+    fn get_delegation_balance(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
         self.pos_accounting_adapter
             .accounting_delta()
             .get_delegation_balance(delegation_id)
+            .map(Some)
     }
 
     fn get_delegation_data(
@@ -382,16 +385,19 @@ impl<C, S, U, A: PoSAccountingView, T, O> PoSAccountingView
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Amount, Self::Error> {
+    ) -> Result<Option<Amount>, Self::Error> {
         self.pos_accounting_adapter
             .accounting_delta()
             .get_pool_delegation_share(pool_id, delegation_id)
+            .map(Some)
     }
 }
 
 impl<C, S, U, A: PoSAccountingView, T, O> FlushablePoSAccountingView
     for TransactionVerifier<C, S, U, A, T, O>
 {
+    type Error = pos_accounting::Error;
+
     fn batch_write_delta(
         &mut self,
         data: PoSAccountingDeltaData,
@@ -413,9 +419,7 @@ impl<C, S, U, A, T: TokensAccountingView, O> TokensAccountingStorageRead
     }
 
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
-        self.tokens_accounting_cache
-            .get_circulating_supply(id)
-            .map(|v| (v != Amount::ZERO).then_some(v))
+        self.tokens_accounting_cache.get_circulating_supply(id).map(Some)
     }
 }
 
@@ -440,15 +444,11 @@ impl<C, S, U, A, T, O: OrdersAccountingView> OrdersAccountingStorageRead
     }
 
     fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        self.orders_accounting_cache
-            .get_ask_balance(id)
-            .map(|v| (v != Amount::ZERO).then_some(v))
+        self.orders_accounting_cache.get_ask_balance(id).map(Some)
     }
 
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        self.orders_accounting_cache
-            .get_give_balance(id)
-            .map(|v| (v != Amount::ZERO).then_some(v))
+        self.orders_accounting_cache.get_give_balance(id).map(Some)
     }
 }
 

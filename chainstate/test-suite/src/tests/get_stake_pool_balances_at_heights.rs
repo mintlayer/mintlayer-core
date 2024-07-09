@@ -18,11 +18,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use rstest::rstest;
 
 use chainstate::ChainstateConfig;
-use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
     create_custom_genesis_with_stake_pool, create_stake_pool_data_with_all_reward_to_staker,
     empty_witness, PoSBlockBuilder, TestFramework, TransactionBuilder, UtxoForSpending,
 };
+use chainstate_types::TipStorageTag;
 use common::{
     chain::{
         self, config::ChainType, output_value::OutputValue, timelock::OutputTimeLock, AccountNonce,

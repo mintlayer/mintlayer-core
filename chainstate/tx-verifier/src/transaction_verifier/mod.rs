@@ -64,7 +64,7 @@ use self::{
 use ::utils::{ensure, shallow_clone::ShallowClone};
 pub use reward_distribution::{distribute_pos_reward, RewardDistributionError};
 
-use chainstate_types::BlockIndex;
+use chainstate_types::{BlockIndex, TipStorageTag};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
@@ -79,8 +79,8 @@ use common::{
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
 use pos_accounting::{
-    PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo,
-    PoSAccountingView,
+    PoSAccountingDB, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations,
+    PoSAccountingUndo, PoSAccountingView,
 };
 use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
 
@@ -132,10 +132,18 @@ pub struct TransactionVerifier<C, S, U, A, T, O> {
 }
 
 impl<C, S: TransactionVerifierStorageRef + ShallowClone>
-    TransactionVerifier<C, S, UtxosDB<S>, S, TokensAccountingDB<S>, OrdersAccountingDB<S>>
+    TransactionVerifier<
+        C,
+        S,
+        UtxosDB<S>,
+        PoSAccountingDB<S, TipStorageTag>,
+        TokensAccountingDB<S>,
+        OrdersAccountingDB<S>,
+    >
 {
     pub fn new(storage: S, chain_config: C) -> Self {
-        let accounting_delta_adapter = PoSAccountingDeltaAdapter::new(storage.shallow_clone());
+        let accounting_delta_adapter =
+            PoSAccountingDeltaAdapter::new(PoSAccountingDB::new(storage.shallow_clone()));
         let utxo_cache = UtxosCache::new(UtxosDB::new(storage.shallow_clone()))
             .expect("Utxo cache setup failed");
         let best_block = storage
