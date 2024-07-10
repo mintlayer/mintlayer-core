@@ -116,6 +116,7 @@ class WalletDataDeposit(BitcoinTestFramework):
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
+            assert_in(f"Coins amount: 99", await wallet.get_balance())
 
 
 if __name__ == '__main__':

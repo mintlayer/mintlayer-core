@@ -150,12 +150,14 @@ class WalletTokens(BitcoinTestFramework):
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
+            assert_in("Coins amount: 100", await wallet.get_balance())
 
             amount_to_mint = random.randint(1, 10000)
             assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, amount_to_mint))
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
+            assert_in("Coins amount: 50", await wallet.get_balance())
 
             assert_in(f"{token_id} amount: {amount_to_mint}", await wallet.get_balance())
 

@@ -123,12 +123,15 @@ class WalletTokens(BitcoinTestFramework):
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
+            assert_in("Coins amount: 400", await wallet.get_balance())
 
             assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, 10000))
+
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
+            assert_in("Coins amount: 350", await wallet.get_balance())
             assert_in(f"{token_id} amount: 10000", await wallet.get_balance())
 
             ## create a new account and send some tokens to it
@@ -152,6 +155,7 @@ class WalletTokens(BitcoinTestFramework):
             if random.choice([True, False]):
                 self.generate_block()
                 assert_in("Success", await wallet.sync())
+                assert_in("Coins amount: 300", await wallet.get_balance())
 
             # try to send tokens should fail
             output = await wallet.send_tokens_to_address(token_id, address, 1)
@@ -168,6 +172,7 @@ class WalletTokens(BitcoinTestFramework):
             if random.choice([True, False]):
                 self.generate_block()
                 assert_in("Success", await wallet.sync())
+                assert_in("Coins amount: 250", await wallet.get_balance())
 
             # sending tokens should work again
             output = await wallet.send_tokens_to_address(token_id, address, 1)

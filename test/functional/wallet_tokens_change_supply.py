@@ -146,6 +146,7 @@ class WalletTokens(BitcoinTestFramework):
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
+            assert_in("Coins amount: 1900", await wallet.get_balance())
 
             tokens_to_mint = random.randrange(2, 10000)
             total_tokens_supply = tokens_to_mint
@@ -153,19 +154,23 @@ class WalletTokens(BitcoinTestFramework):
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
+            assert_in("Coins amount: 1850", await wallet.get_balance())
 
             # randomize minting and unminting
+            expected_coins_balance = 1850
             for _ in range(10):
                 if random.choice([True, False]):
                     # mint some more tokens
                     tokens_to_mint = random.randrange(1, 10000)
                     total_tokens_supply = total_tokens_supply + tokens_to_mint
+                    expected_coins_balance -= 50
                     assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, tokens_to_mint))
                 else:
                     # unmint some tokens
                     tokens_to_unmint = random.randrange(1, 20000)
                     if tokens_to_unmint <= total_tokens_supply:
                         total_tokens_supply = total_tokens_supply - tokens_to_unmint
+                        expected_coins_balance -= 50
                         assert_in("The transaction was submitted successfully", await wallet.unmint_tokens(token_id, tokens_to_unmint))
                     else:
                         assert_in(f"Trying to unmint Amount {{ atoms: {tokens_to_unmint * 10**number_of_decimals} }} but the current supply is Amount {{ atoms: {total_tokens_supply * 10**number_of_decimals} }}", await wallet.unmint_tokens(token_id, tokens_to_unmint))
@@ -175,6 +180,7 @@ class WalletTokens(BitcoinTestFramework):
                 if random.choice([True, False]):
                     self.generate_block()
                     assert_in("Success", await wallet.sync())
+                    assert_in(f"Coins amount: {expected_coins_balance}", await wallet.get_balance())
 
                 # check total supply is correct
                 if total_tokens_supply > 0:
@@ -187,6 +193,7 @@ class WalletTokens(BitcoinTestFramework):
             assert_in("The transaction was submitted successfully", await wallet.lock_token_supply(token_id))
             self.generate_block()
             assert_in("Success", await wallet.sync())
+            assert_in(f"Coins amount: {expected_coins_balance - 50}", await wallet.get_balance())
             if total_tokens_supply > 0:
                 assert_in(f"{token_id} amount: {total_tokens_supply}", await wallet.get_balance())
             else:

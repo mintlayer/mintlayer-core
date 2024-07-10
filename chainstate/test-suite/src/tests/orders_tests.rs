@@ -106,9 +106,12 @@ fn create_order_check_storage(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
@@ -185,9 +188,12 @@ fn create_two_orders_same_tx(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
         let amount1 = Amount::from_atoms(rng.gen_range(1u128..1000));
-        let amount2 = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let amount2 =
+            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
         let order_data_1 = OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(amount1),
@@ -230,9 +236,12 @@ fn create_two_orders_same_block(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
         let order_data = Box::new(OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
@@ -276,9 +285,12 @@ fn create_order_check_currencies(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
 
         // Check coins for coins trade
         {
@@ -409,9 +421,12 @@ fn conclude_order_check_storage(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
@@ -461,9 +476,12 @@ fn conclude_order_multiple_txs(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
@@ -534,9 +552,12 @@ fn fill_order_check_storage(#[case] seed: Seed) {
 
         let (token_id, tokens_outpoint, coins_outpoint) =
             issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
         let ask_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(10u128..=tokens_circulating_supply.into_atoms()));
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
@@ -647,9 +668,12 @@ fn fill_partially_then_conclude(#[case] seed: Seed) {
 
         let (token_id, tokens_outpoint, coins_outpoint) =
             issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
@@ -808,9 +832,12 @@ fn try_overbid_order_in_multiple_txs(#[case] seed: Seed) {
 
         let (token_id, tokens_outpoint, coins_outpoint) =
             issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
@@ -909,9 +936,12 @@ fn fill_completely_then_conclude(#[case] seed: Seed) {
 
         let (token_id, tokens_outpoint, coins_outpoint) =
             issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
@@ -1094,9 +1124,12 @@ fn conclude_order_check_signature(#[case] seed: Seed) {
         let (order_sk, order_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
         let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
         let order_data = OrderData::new(
             Destination::PublicKey(order_pk.clone()),
             OutputValue::Coin(ask_amount),
@@ -1242,10 +1275,13 @@ fn reorg_before_create(#[case] seed: Seed) {
 
         let (token_id, tokens_outpoint, coins_outpoint) =
             issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
         let reorg_common_ancestor = tf.best_block_id();
 
         let ask_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
@@ -1331,9 +1367,12 @@ fn reorg_after_create(#[case] seed: Seed) {
 
         let (token_id, tokens_outpoint, coins_outpoint) =
             issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
         let ask_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(10u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms()));
         let order_data = OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
@@ -1477,11 +1516,16 @@ fn test_activation(#[case] seed: Seed) {
             .build();
 
         let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
 
         let order_data = Box::new(OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(Amount::from_atoms(rng.gen_range(1u128..1000))),
-            OutputValue::TokenV1(token_id, Amount::from_atoms(rng.gen_range(1u128..1000))),
+            OutputValue::TokenV1(
+                token_id,
+                Amount::from_atoms(rng.gen_range(1u128..=tokens_circulating_supply.into_atoms())),
+            ),
         ));
 
         // Try to produce order output before activation, check an error

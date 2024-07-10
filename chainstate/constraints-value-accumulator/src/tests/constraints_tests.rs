@@ -17,10 +17,14 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{
-        config::ChainType, output_value::OutputValue, stakelock::StakePoolData,
-        timelock::OutputTimeLock, AccountNonce, AccountSpending, ConsensusUpgrade, DelegationId,
-        Destination, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxInput,
-        TxOutput, UtxoOutPoint,
+        config::ChainType,
+        output_value::OutputValue,
+        stakelock::StakePoolData,
+        timelock::OutputTimeLock,
+        tokens::{NftIssuance, TokenId, TokenIssuance},
+        AccountCommand, AccountNonce, AccountSpending, ConsensusUpgrade, DelegationId, Destination,
+        NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{
         per_thousand::PerThousand, Amount, BlockCount, BlockHeight, CoinOrTokenId, Fee, Id, H256,
@@ -31,7 +35,10 @@ use orders_accounting::{InMemoryOrdersAccounting, OrdersAccountingDB};
 use pos_accounting::{DelegationData, InMemoryPoSAccounting, PoSAccountingDB, PoolData};
 use randomness::{CryptoRng, Rng};
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    nft_utils::random_nft_issuance,
+    random::{make_seedable_rng, Seed},
+};
 
 use crate::{ConstrainedValueAccumulator, Error};
 
@@ -713,4 +720,566 @@ fn try_to_overspend_on_spending_delegation(#[case] seed: Seed) {
 
         inputs_accumulator.satisfy_with(outputs_accumulator).unwrap();
     }
+}
+
+// Check that token issuance fee is not accounted in accumulated fee and is burned rather then goes to staker.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn calculate_fee_for_token_issuance(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
+        .consensus_upgrades(NetUpgrades::regtest_with_pos())
+        .build();
+    let block_height = BlockHeight::new(1);
+    let token_issuance_fee = chain_config.fungible_token_issuance_fee();
+
+    let pos_store = InMemoryPoSAccounting::new();
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
+
+    let inputs = vec![TxInput::Utxo(UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+        0,
+    ))];
+    let input_utxos = vec![Some(TxOutput::Transfer(
+        OutputValue::Coin((token_issuance_fee * 2).unwrap()),
+        Destination::AnyoneCanSpend,
+    ))];
+
+    let outputs = vec![TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
+        test_utils::nft_utils::random_token_issuance_v1(
+            &chain_config,
+            Destination::AnyoneCanSpend,
+            &mut rng,
+        ),
+    )))];
+
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        &chain_config,
+        block_height,
+        &orders_db,
+        &pos_db,
+        &tokens_db,
+        &inputs,
+        &input_utxos,
+    )
+    .unwrap();
+
+    let outputs_accumulator =
+        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
+
+    let accumulated_fee = inputs_accumulator
+        .satisfy_with(outputs_accumulator)
+        .unwrap()
+        .map_into_block_fees(&chain_config, block_height)
+        .unwrap();
+
+    assert_eq!(accumulated_fee, Fee(token_issuance_fee));
+}
+
+// Check that token supply change fee is not accounted in accumulated fee and is burned rather then goes to staker.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn calculate_token_supply_change_fee(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
+        .consensus_upgrades(NetUpgrades::regtest_with_pos())
+        .build();
+    let block_height = BlockHeight::new(1);
+    let supply_change_fee = chain_config.token_supply_change_fee(BlockHeight::zero());
+
+    let pos_store = InMemoryPoSAccounting::new();
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
+    let token_data = tokens_accounting::TokenData::FungibleToken(
+        TokenIssuance::V1(test_utils::nft_utils::random_token_issuance_v1(
+            &chain_config,
+            Destination::AnyoneCanSpend,
+            &mut rng,
+        ))
+        .into(),
+    );
+    let token_id = TokenId::random_using(&mut rng);
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data)]),
+        BTreeMap::new(),
+    );
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
+
+    // Mint
+    {
+        let inputs = vec![
+            TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::MintTokens(token_id, Amount::from_atoms(1)),
+            ),
+            TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+                0,
+            )),
+        ];
+        let input_utxos = vec![
+            None,
+            Some(TxOutput::Transfer(
+                OutputValue::Coin((supply_change_fee * 2).unwrap()),
+                Destination::AnyoneCanSpend,
+            )),
+        ];
+
+        let outputs =
+            vec![TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)];
+
+        let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+            &chain_config,
+            block_height,
+            &orders_db,
+            &pos_db,
+            &tokens_db,
+            &inputs,
+            &input_utxos,
+        )
+        .unwrap();
+
+        let outputs_accumulator =
+            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
+                .unwrap();
+
+        let accumulated_fee = inputs_accumulator
+            .satisfy_with(outputs_accumulator)
+            .unwrap()
+            .map_into_block_fees(&chain_config, block_height)
+            .unwrap();
+
+        assert_eq!(accumulated_fee, Fee(supply_change_fee));
+    }
+
+    // Unmint
+    {
+        let inputs = vec![
+            TxInput::AccountCommand(AccountNonce::new(0), AccountCommand::UnmintTokens(token_id)),
+            TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+                0,
+            )),
+        ];
+        let input_utxos = vec![
+            None,
+            Some(TxOutput::Transfer(
+                OutputValue::Coin((supply_change_fee * 2).unwrap()),
+                Destination::AnyoneCanSpend,
+            )),
+        ];
+
+        let outputs =
+            vec![TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)];
+
+        let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+            &chain_config,
+            block_height,
+            &orders_db,
+            &pos_db,
+            &tokens_db,
+            &inputs,
+            &input_utxos,
+        )
+        .unwrap();
+
+        let outputs_accumulator =
+            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
+                .unwrap();
+
+        let accumulated_fee = inputs_accumulator
+            .satisfy_with(outputs_accumulator)
+            .unwrap()
+            .map_into_block_fees(&chain_config, block_height)
+            .unwrap();
+
+        assert_eq!(accumulated_fee, Fee(supply_change_fee));
+    }
+
+    // Lock supply
+    {
+        let inputs = vec![
+            TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::LockTokenSupply(token_id),
+            ),
+            TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+                0,
+            )),
+        ];
+        let input_utxos = vec![
+            None,
+            Some(TxOutput::Transfer(
+                OutputValue::Coin((supply_change_fee * 2).unwrap()),
+                Destination::AnyoneCanSpend,
+            )),
+        ];
+
+        let outputs =
+            vec![TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)];
+
+        let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+            &chain_config,
+            block_height,
+            &orders_db,
+            &pos_db,
+            &tokens_db,
+            &inputs,
+            &input_utxos,
+        )
+        .unwrap();
+
+        let outputs_accumulator =
+            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
+                .unwrap();
+
+        let accumulated_fee = inputs_accumulator
+            .satisfy_with(outputs_accumulator)
+            .unwrap()
+            .map_into_block_fees(&chain_config, block_height)
+            .unwrap();
+
+        assert_eq!(accumulated_fee, Fee(supply_change_fee));
+    }
+}
+
+// Check that token freeze fee is not accounted in accumulated fee and is burned rather then goes to staker.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn calculate_token_fee_freeze(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
+        .consensus_upgrades(NetUpgrades::regtest_with_pos())
+        .build();
+    let block_height = BlockHeight::new(1);
+    let supply_change_fee = chain_config.token_freeze_fee(BlockHeight::zero());
+
+    let pos_store = InMemoryPoSAccounting::new();
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
+    let token_data = tokens_accounting::TokenData::FungibleToken(
+        TokenIssuance::V1(test_utils::nft_utils::random_token_issuance_v1(
+            &chain_config,
+            Destination::AnyoneCanSpend,
+            &mut rng,
+        ))
+        .into(),
+    );
+    let token_id = TokenId::random_using(&mut rng);
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data)]),
+        BTreeMap::new(),
+    );
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
+
+    // Freeze
+    {
+        let inputs = vec![
+            TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::FreezeToken(
+                    token_id,
+                    common::chain::tokens::IsTokenUnfreezable::Yes,
+                ),
+            ),
+            TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+                0,
+            )),
+        ];
+        let input_utxos = vec![
+            None,
+            Some(TxOutput::Transfer(
+                OutputValue::Coin((supply_change_fee * 2).unwrap()),
+                Destination::AnyoneCanSpend,
+            )),
+        ];
+
+        let outputs =
+            vec![TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)];
+
+        let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+            &chain_config,
+            block_height,
+            &orders_db,
+            &pos_db,
+            &tokens_db,
+            &inputs,
+            &input_utxos,
+        )
+        .unwrap();
+
+        let outputs_accumulator =
+            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
+                .unwrap();
+
+        let accumulated_fee = inputs_accumulator
+            .satisfy_with(outputs_accumulator)
+            .unwrap()
+            .map_into_block_fees(&chain_config, block_height)
+            .unwrap();
+
+        assert_eq!(accumulated_fee, Fee(supply_change_fee));
+    }
+
+    // Unfreeze
+    {
+        let inputs = vec![
+            TxInput::AccountCommand(
+                AccountNonce::new(0),
+                AccountCommand::UnfreezeToken(token_id),
+            ),
+            TxInput::Utxo(UtxoOutPoint::new(
+                OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+                0,
+            )),
+        ];
+        let input_utxos = vec![
+            None,
+            Some(TxOutput::Transfer(
+                OutputValue::Coin((supply_change_fee * 2).unwrap()),
+                Destination::AnyoneCanSpend,
+            )),
+        ];
+
+        let outputs =
+            vec![TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)];
+
+        let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+            &chain_config,
+            block_height,
+            &orders_db,
+            &pos_db,
+            &tokens_db,
+            &inputs,
+            &input_utxos,
+        )
+        .unwrap();
+
+        let outputs_accumulator =
+            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
+                .unwrap();
+
+        let accumulated_fee = inputs_accumulator
+            .satisfy_with(outputs_accumulator)
+            .unwrap()
+            .map_into_block_fees(&chain_config, block_height)
+            .unwrap();
+
+        assert_eq!(accumulated_fee, Fee(supply_change_fee));
+    }
+}
+
+// Check that token authority change fee is not accounted in accumulated fee and is burned rather then goes to staker.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn calculate_token_fee_change_authority(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
+        .consensus_upgrades(NetUpgrades::regtest_with_pos())
+        .build();
+    let block_height = BlockHeight::new(1);
+    let supply_change_fee = chain_config.token_change_authority_fee(BlockHeight::zero());
+
+    let pos_store = InMemoryPoSAccounting::new();
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
+    let token_data = tokens_accounting::TokenData::FungibleToken(
+        TokenIssuance::V1(test_utils::nft_utils::random_token_issuance_v1(
+            &chain_config,
+            Destination::AnyoneCanSpend,
+            &mut rng,
+        ))
+        .into(),
+    );
+    let token_id = TokenId::random_using(&mut rng);
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data)]),
+        BTreeMap::new(),
+    );
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
+
+    let inputs = vec![
+        TxInput::AccountCommand(
+            AccountNonce::new(0),
+            AccountCommand::ChangeTokenAuthority(token_id, Destination::AnyoneCanSpend),
+        ),
+        TxInput::Utxo(UtxoOutPoint::new(
+            OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+            0,
+        )),
+    ];
+    let input_utxos = vec![
+        None,
+        Some(TxOutput::Transfer(
+            OutputValue::Coin((supply_change_fee * 2).unwrap()),
+            Destination::AnyoneCanSpend,
+        )),
+    ];
+
+    let outputs =
+        vec![TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)];
+
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        &chain_config,
+        block_height,
+        &orders_db,
+        &pos_db,
+        &tokens_db,
+        &inputs,
+        &input_utxos,
+    )
+    .unwrap();
+
+    let outputs_accumulator =
+        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
+
+    let accumulated_fee = inputs_accumulator
+        .satisfy_with(outputs_accumulator)
+        .unwrap()
+        .map_into_block_fees(&chain_config, block_height)
+        .unwrap();
+
+    assert_eq!(accumulated_fee, Fee(supply_change_fee));
+}
+
+// Check that data deposit fee is not accounted in accumulated fee and is burned rather then goes to staker.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn calculate_data_deposit_fee(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
+        .consensus_upgrades(NetUpgrades::regtest_with_pos())
+        .build();
+    let block_height = BlockHeight::new(1);
+    let data_deposit_fee = chain_config.data_deposit_fee();
+
+    let pos_store = InMemoryPoSAccounting::new();
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
+
+    let inputs = vec![TxInput::Utxo(UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+        0,
+    ))];
+    let input_utxos = vec![Some(TxOutput::Transfer(
+        OutputValue::Coin((data_deposit_fee * 2).unwrap()),
+        Destination::AnyoneCanSpend,
+    ))];
+
+    let outputs = vec![TxOutput::DataDeposit(Vec::new())];
+
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        &chain_config,
+        block_height,
+        &orders_db,
+        &pos_db,
+        &tokens_db,
+        &inputs,
+        &input_utxos,
+    )
+    .unwrap();
+
+    let outputs_accumulator =
+        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
+
+    let accumulated_fee = inputs_accumulator
+        .satisfy_with(outputs_accumulator)
+        .unwrap()
+        .map_into_block_fees(&chain_config, block_height)
+        .unwrap();
+
+    assert_eq!(accumulated_fee, Fee(data_deposit_fee));
+}
+
+// Check that nft issuance fee is not accounted in accumulated fee and is burned rather then goes to staker.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn calculate_nft_issuance_fee(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
+        .consensus_upgrades(NetUpgrades::regtest_with_pos())
+        .build();
+    let block_height = BlockHeight::new(1);
+    let nft_issuance_fee = chain_config.nft_issuance_fee(BlockHeight::zero());
+
+    let pos_store = InMemoryPoSAccounting::new();
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
+
+    let inputs = vec![TxInput::Utxo(UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+        0,
+    ))];
+    let input_utxos = vec![Some(TxOutput::Transfer(
+        OutputValue::Coin((nft_issuance_fee * 2).unwrap()),
+        Destination::AnyoneCanSpend,
+    ))];
+
+    let issuance = random_nft_issuance(&chain_config, &mut rng);
+    let outputs = vec![TxOutput::IssueNft(
+        TokenId::zero(),
+        Box::new(NftIssuance::V0(issuance)),
+        Destination::AnyoneCanSpend,
+    )];
+
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        &chain_config,
+        block_height,
+        &orders_db,
+        &pos_db,
+        &tokens_db,
+        &inputs,
+        &input_utxos,
+    )
+    .unwrap();
+
+    let outputs_accumulator =
+        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
+
+    let accumulated_fee = inputs_accumulator
+        .satisfy_with(outputs_accumulator)
+        .unwrap()
+        .map_into_block_fees(&chain_config, block_height)
+        .unwrap();
+
+    assert_eq!(accumulated_fee, Fee(nft_issuance_fee));
 }
