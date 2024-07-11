@@ -14,11 +14,12 @@
 // limitations under the License.
 
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
-use chainstate_storage::{TipStorageTag, Transactional};
+use chainstate_storage::Transactional;
 use chainstate_test_framework::{
     create_stake_pool_data_with_all_reward_to_staker, empty_witness, get_output_value,
     TestFramework, TestStore, TransactionBuilder,
 };
+use chainstate_types::TipStorageTag;
 use common::{
     chain::{
         config::create_unit_test_config,

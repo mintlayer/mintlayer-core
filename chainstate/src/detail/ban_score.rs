@@ -492,7 +492,6 @@ impl BanScore for pos_accounting::Error {
     fn ban_score(&self) -> u32 {
         use pos_accounting::Error as E;
         match self {
-            E::StorageError(_) => 0,
             E::AccountingError(_) => 100,
             E::InvariantErrorPoolBalanceAlreadyExists => 100,
             E::InvariantErrorPoolDataAlreadyExists => 100,
@@ -524,6 +523,7 @@ impl BanScore for pos_accounting::Error {
             E::InvariantErrorDelegationUndoFailedDataNotFound(_) => 100,
             E::DuplicatesInDeltaAndUndo => 100,
             E::ViewFail => 0,
+            E::StorageWrite => 0,
             E::IncreaseStakerRewardsOfNonexistingPool => 100,
             E::StakerBalanceOverflow => 100,
             E::InvariantErrorIncreasePledgeUndoFailedPoolBalanceNotFound => 100,

@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_storage::{BlockchainStorageWrite, SealedStorageTag};
+use chainstate_storage::BlockchainStorageWrite;
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
-    EpochData, EpochStorageRead, EpochStorageWrite,
+    EpochData, EpochStorageRead, EpochStorageWrite, SealedStorageTag,
 };
 use common::{
     chain::{
@@ -158,7 +158,8 @@ fn create_randomness_from_block<S, P>(
 ) -> Result<PoSRandomness, EpochSealError>
 where
     S: EpochStorageRead,
-    P: PoSAccountingView<Error = pos_accounting::Error>,
+    P: PoSAccountingView,
+    EpochSealError: From<<P as PoSAccountingView>::Error>,
 {
     let reward_output = block
         .block_reward()
@@ -222,7 +223,8 @@ pub fn update_epoch_data<S, P>(
 ) -> Result<(), EpochSealError>
 where
     S: EpochStorageWrite,
-    P: PoSAccountingView<Error = pos_accounting::Error>,
+    P: PoSAccountingView,
+    EpochSealError: From<<P as PoSAccountingView>::Error>,
 {
     match block_op {
         BlockStateEventWithIndex::Connect(tip_height, tip) => {
@@ -271,8 +273,8 @@ mod tests {
     use std::num::NonZeroU64;
 
     use super::*;
-    use chainstate_storage::{mock::MockStoreTxRw, TipStorageTag};
-    use chainstate_types::{vrf_tools::construct_transcript, EpochDataCache};
+    use chainstate_storage::mock::MockStoreTxRw;
+    use chainstate_types::{vrf_tools::construct_transcript, EpochDataCache, TipStorageTag};
     use common::{
         chain::{
             block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward},

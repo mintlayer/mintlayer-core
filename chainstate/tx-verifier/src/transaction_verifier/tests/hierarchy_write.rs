@@ -701,12 +701,12 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
         .expect_get_pool_balance()
         .with(eq(pool_id_1))
         .times(1)
-        .return_const(Ok(Amount::ZERO));
+        .return_const(Ok(None));
     store
         .expect_get_pool_balance()
         .with(eq(pool_id_2))
         .times(1)
-        .return_const(Ok(Amount::ZERO));
+        .return_const(Ok(None));
 
     store.expect_get_pool_data().with(eq(pool_id_1)).times(1).return_const(Ok(None));
     store.expect_get_pool_data().with(eq(pool_id_2)).times(1).return_const(Ok(None));
@@ -772,7 +772,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
         .times(1)
         .return_const(Ok(DeltaMergeUndo::new()));
 
-    store.expect_get_pool_balance().return_const(Ok(Amount::ZERO));
+    store.expect_get_pool_balance().return_const(Ok(None));
     store.expect_get_pool_data().return_const(Ok(None));
     store.expect_get_delegation_data().return_const(Ok(None));
 
@@ -883,7 +883,7 @@ fn pos_accounting_stake_pool_and_delegation_undo_set_hierarchy(#[case] seed: See
         .times(1)
         .return_const(Ok(DeltaMergeUndo::new()));
 
-    store.expect_get_pool_balance().return_const(Ok(Amount::ZERO));
+    store.expect_get_pool_balance().return_const(Ok(None));
     store.expect_get_pool_data().return_const(Ok(None));
     store.expect_get_delegation_data().return_const(Ok(None));
 
@@ -1001,7 +1001,7 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
         .times(1)
         .return_const(Ok(DeltaMergeUndo::new()));
 
-    store.expect_get_pool_balance().return_const(Ok(Amount::ZERO));
+    store.expect_get_pool_balance().return_const(Ok(None));
     store.expect_get_pool_data().return_const(Ok(None));
 
     store

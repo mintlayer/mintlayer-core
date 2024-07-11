@@ -18,12 +18,14 @@ use std::error::Error;
 use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{
     BlockIndex, ConsumedEpochDataCache, EpochDataCache, GenBlockIndex, PropertyQueryError,
+    TipStorageTag,
 };
 use common::{
     chain::{Block, ChainConfig, GenBlock, GenBlockId},
     primitives::{id::WithId, Id},
 };
 use orders_accounting::OrdersAccountingDB;
+use pos_accounting::PoSAccountingDB;
 use thiserror::Error;
 use tokens_accounting::TokensAccountingDB;
 use tx_verifier::{
@@ -93,9 +95,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
             flush_to_storage(&mut tx_verifier, connected_txs)?;
 
+            let pos_db = PoSAccountingDB::new(&tx_verifier);
             epoch_seal::update_epoch_data(
                 &mut epoch_data_cache,
-                &tx_verifier,
+                &pos_db,
                 self.chain_config,
                 epoch_seal::BlockStateEventWithIndex::Connect(
                     new_tip_block_index.block_height(),
@@ -167,9 +170,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     .get_previous_block_index(&cur_index)
                     .expect("Previous block index retrieval failed");
 
+                let pos_db = PoSAccountingDB::new(&tx_verifier);
                 epoch_seal::update_epoch_data(
                     &mut epoch_data_cache,
-                    &tx_verifier,
+                    &pos_db,
                     self.chain_config,
                     epoch_seal::BlockStateEventWithIndex::Disconnect(
                         next_gen_index_to_disconnect.block_height(),
@@ -196,7 +200,7 @@ type TxVerifier<'a, 'b, S, V> = TransactionVerifier<
     &'a ChainConfig,
     &'b ChainstateRef<'a, S, V>,
     UtxosDB<&'b ChainstateRef<'a, S, V>>,
-    &'b ChainstateRef<'a, S, V>,
+    PoSAccountingDB<&'b ChainstateRef<'a, S, V>, TipStorageTag>,
     TokensAccountingDB<&'b ChainstateRef<'a, S, V>>,
     OrdersAccountingDB<&'b ChainstateRef<'a, S, V>>,
 >;

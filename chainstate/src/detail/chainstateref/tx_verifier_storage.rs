@@ -23,8 +23,8 @@ use crate::detail::{
     },
     tx_verification_strategy::TransactionVerificationStrategy,
 };
-use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag};
-use chainstate_types::{storage_result, GenBlockIndex};
+use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
+use chainstate_types::{storage_result, GenBlockIndex, TipStorageTag};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
@@ -39,7 +39,7 @@ use orders_accounting::{
 };
 use pos_accounting::{
     DelegationData, DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDB,
-    PoSAccountingDeltaData, PoSAccountingUndo, PoSAccountingView, PoolData,
+    PoSAccountingDeltaData, PoSAccountingStorageRead, PoSAccountingUndo, PoolData,
 };
 use tokens_accounting::{
     FlushableTokensAccountingView, TokenAccountingUndo, TokensAccountingDB,
@@ -449,48 +449,53 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     }
 }
 
-impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccountingView
-    for ChainstateRef<'a, S, V>
+impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy>
+    PoSAccountingStorageRead<TipStorageTag> for ChainstateRef<'a, S, V>
 {
-    type Error = pos_accounting::Error;
+    type Error = storage_result::Error;
 
     #[log_error]
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
-        self.get_pool_data(pool_id).map(|v| v.is_some())
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
+            .get_pool_balance(pool_id)
+            .map_err(Self::Error::from)
     }
 
     #[log_error]
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, pos_accounting::Error> {
-        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_pool_balance(pool_id)
-    }
-
-    #[log_error]
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error> {
-        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_pool_data(pool_id)
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
+            .get_pool_data(pool_id)
+            .map_err(Self::Error::from)
     }
 
     #[log_error]
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Amount, pos_accounting::Error> {
-        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_delegation_balance(delegation_id)
+    ) -> Result<Option<Amount>, Self::Error> {
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
+            .get_delegation_balance(delegation_id)
+            .map_err(Self::Error::from)
     }
 
     #[log_error]
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<DelegationData>, pos_accounting::Error> {
-        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_delegation_data(delegation_id)
+    ) -> Result<Option<DelegationData>, Self::Error> {
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
+            .get_delegation_data(delegation_id)
+            .map_err(Self::Error::from)
     }
 
     #[log_error]
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, pos_accounting::Error> {
-        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx).get_pool_delegations_shares(pool_id)
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
+            .get_pool_delegations_shares(pool_id)
+            .map_err(Self::Error::from)
     }
 
     #[log_error]
@@ -498,20 +503,23 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccoun
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Amount, pos_accounting::Error> {
+    ) -> Result<Option<Amount>, Self::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
             .get_pool_delegation_share(pool_id, delegation_id)
+            .map_err(Self::Error::from)
     }
 }
 
 impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> FlushablePoSAccountingView
     for ChainstateRef<'a, S, V>
 {
+    type Error = pos_accounting::Error;
+
     #[log_error]
     fn batch_write_delta(
         &mut self,
         data: PoSAccountingDeltaData,
-    ) -> Result<DeltaMergeUndo, pos_accounting::Error> {
+    ) -> Result<DeltaMergeUndo, Self::Error> {
         let mut db = PoSAccountingDB::<_, TipStorageTag>::new(&mut self.db_tx);
         db.batch_write_delta(data)
     }

@@ -14,11 +14,9 @@
 // limitations under the License.
 
 use crate::{
-    error::Error,
     storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
     StorageTag,
 };
-use chainstate_types::storage_result;
 
 pub struct BorrowedStorageValue<'a, T, S, Getter, Setter, Deleter> {
     store: &'a mut S,
@@ -44,28 +42,28 @@ impl<'a, T, S, Getter, Setter, Deleter> BorrowedStorageValue<'a, T, S, Getter, S
 impl<'a, T: StorageTag, S: PoSAccountingStorageRead<T>, Getter, Setter, Deleter>
     BorrowedStorageValue<'a, T, S, Getter, Setter, Deleter>
 {
-    pub fn get<K: Ord + Copy, V: Clone>(&self, id: K) -> Result<Option<V>, Error>
+    pub fn get<K: Ord + Copy, V: Clone>(&self, id: K) -> Result<Option<V>, crate::Error>
     where
-        Getter: Fn(&S, K) -> Result<Option<V>, storage_result::Error>,
+        Getter: Fn(&S, K) -> Result<Option<V>, S::Error>,
     {
-        (self.getter)(self.store, id).map_err(Error::StorageError)
+        (self.getter)(self.store, id).map_err(|_| crate::Error::ViewFail)
     }
 }
 
 impl<'a, T: StorageTag, S: PoSAccountingStorageWrite<T>, Getter, Setter, Deleter>
     BorrowedStorageValue<'a, T, S, Getter, Setter, Deleter>
 {
-    pub fn set<K: Ord + Copy, V: Clone>(&mut self, id: K, value: V) -> Result<(), Error>
+    pub fn set<K: Ord + Copy, V: Clone>(&mut self, id: K, value: V) -> Result<(), crate::Error>
     where
-        Setter: FnMut(&mut S, K, V) -> Result<(), storage_result::Error>,
+        Setter: FnMut(&mut S, K, V) -> Result<(), S::Error>,
     {
-        (self.setter)(self.store, id, value).map_err(Error::StorageError)
+        (self.setter)(self.store, id, value).map_err(|_| crate::Error::StorageWrite)
     }
 
-    pub fn delete<K: Ord + Copy>(&mut self, id: K) -> Result<(), Error>
+    pub fn delete<K: Ord + Copy>(&mut self, id: K) -> Result<(), crate::Error>
     where
-        Deleter: FnMut(&mut S, K) -> Result<(), storage_result::Error>,
+        Deleter: FnMut(&mut S, K) -> Result<(), S::Error>,
     {
-        (self.deleter)(self.store, id).map_err(Error::StorageError)
+        (self.deleter)(self.store, id).map_err(|_| crate::Error::StorageWrite)
     }
 }

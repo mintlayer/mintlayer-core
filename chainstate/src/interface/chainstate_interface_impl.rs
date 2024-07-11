@@ -40,7 +40,7 @@ use common::{
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
-use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
+use pos_accounting::{DelegationData, PoSAccountingStorageRead, PoolData};
 use utils::{displayable_option::DisplayableOption, eventhandler::EventHandler};
 use utils_networking::broadcaster;
 use utxo::{Utxo, UtxosView};
@@ -624,11 +624,7 @@ where
 
     #[tracing::instrument(skip_all, fields(pool_id = %pool_id))]
     fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError> {
-        self.chainstate
-            .make_db_tx_ro()
-            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
-            .pool_exists(pool_id)
-            .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
+        self.get_stake_pool_data(pool_id).map(|v| v.is_some())
     }
 
     #[tracing::instrument(skip_all, fields(pool_id = %pool_id))]
@@ -637,7 +633,6 @@ where
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_pool_balance(pool_id)
-            .map(|v| (v != Amount::ZERO).then_some(v))
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
@@ -685,7 +680,6 @@ where
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_delegation_balance(delegation_id)
-            .map(|v| (v != Amount::ZERO).then_some(v))
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
@@ -711,7 +705,6 @@ where
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_pool_delegation_share(pool_id, delegation_id)
-            .map(|v| (v != Amount::ZERO).then_some(v))
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
@@ -802,7 +795,7 @@ where
 // TODO: remove this function. The value of an output cannot be generalized and exposed from ChainstateInterface in such way
 // because it can be invalid for certain contexts.
 fn get_output_coin_amount(
-    pos_accounting_view: &impl PoSAccountingView,
+    pos_accounting_view: &impl pos_accounting::PoSAccountingView,
     output: &TxOutput,
 ) -> Result<Option<Amount>, ChainstateError> {
     let amount = match output {

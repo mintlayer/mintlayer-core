@@ -15,11 +15,11 @@
 
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError, IOPolicyError};
 use chainstate::{BlockSource, CheckBlockError};
-use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
     anyonecanspend_address, create_stake_pool_data_with_all_reward_to_staker, empty_witness,
     get_output_value, TestFramework, TransactionBuilder,
 };
+use chainstate_types::TipStorageTag;
 use common::primitives::BlockHeight;
 use common::{
     chain::{

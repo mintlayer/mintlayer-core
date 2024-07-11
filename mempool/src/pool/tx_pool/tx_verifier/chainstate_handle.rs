@@ -23,7 +23,7 @@ use chainstate::{
     },
     ChainstateError,
 };
-use chainstate_types::storage_result;
+use chainstate_types::{storage_result, TipStorageTag};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
@@ -33,7 +33,9 @@ use common::{
     primitives::{Amount, Id},
 };
 use orders_accounting::{OrdersAccountingStorageRead, OrdersAccountingUndo, OrdersAccountingView};
-use pos_accounting::{DelegationData, PoSAccountingUndo, PoSAccountingView, PoolData};
+use pos_accounting::{
+    DelegationData, PoSAccountingStorageRead, PoSAccountingUndo, PoSAccountingView, PoolData,
+};
 use subsystem::blocking::BlockingHandle;
 use tokens_accounting::{TokenAccountingUndo, TokensAccountingStorageRead, TokensAccountingView};
 use utils::shallow_clone::ShallowClone;
@@ -182,6 +184,44 @@ impl PoSAccountingView for ChainstateHandle {
             c.get_stake_pool_delegation_share(pool_id, delegation_id)
                 .map(|v| v.unwrap_or(Amount::ZERO))
         })
+    }
+}
+
+impl PoSAccountingStorageRead<TipStorageTag> for ChainstateHandle {
+    type Error = Error;
+
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
+        self.call(move |c| c.get_stake_pool_balance(pool_id))
+    }
+
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
+        self.call(move |c| c.get_stake_pool_data(pool_id))
+    }
+
+    fn get_pool_delegations_shares(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error> {
+        self.call(move |c| c.get_stake_pool_delegations_shares(pool_id))
+    }
+
+    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Option<Amount>, Error> {
+        self.call(move |c| c.get_stake_delegation_balance(delegation_id))
+    }
+
+    fn get_delegation_data(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<DelegationData>, Error> {
+        self.call(move |c| c.get_stake_delegation_data(delegation_id))
+    }
+
+    fn get_pool_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Error> {
+        self.call(move |c| c.get_stake_pool_delegation_share(pool_id, delegation_id))
     }
 }
 

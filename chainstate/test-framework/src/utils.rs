@@ -18,8 +18,8 @@ use crate::{
     signature_destination_getter::SignatureDestinationGetter, TestFramework,
 };
 use chainstate::{BlockIndex, GenBlockIndex};
-use chainstate_storage::{BlockchainStorageRead, TipStorageTag};
-use chainstate_types::pos_randomness::PoSRandomness;
+use chainstate_storage::BlockchainStorageRead;
+use chainstate_types::{pos_randomness::PoSRandomness, TipStorageTag};
 use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable},

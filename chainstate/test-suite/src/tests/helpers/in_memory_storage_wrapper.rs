@@ -18,9 +18,9 @@ use std::collections::BTreeMap;
 use ::tx_verifier::transaction_verifier::storage::{
     TransactionVerifierStorageError, TransactionVerifierStorageRef,
 };
-use chainstate_storage::{BlockchainStorageRead, TipStorageTag, Transactional};
+use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::TestStore;
-use chainstate_types::{storage_result, GenBlockIndex};
+use chainstate_types::{storage_result, GenBlockIndex, TipStorageTag};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
@@ -31,7 +31,7 @@ use common::{
 };
 use orders_accounting::{OrdersAccountingStorageRead, OrdersAccountingUndo};
 use pos_accounting::{
-    DelegationData, PoSAccountingDB, PoSAccountingUndo, PoSAccountingView, PoolData,
+    DelegationData, PoSAccountingDB, PoSAccountingStorageRead, PoSAccountingUndo, PoolData,
 };
 use tokens_accounting::{TokenAccountingUndo, TokensAccountingStorageRead};
 use tx_verifier::{
@@ -196,25 +196,21 @@ impl UtxosStorageRead for InMemoryStorageWrapper {
     }
 }
 
-impl PoSAccountingView for InMemoryStorageWrapper {
-    type Error = pos_accounting::Error;
+impl PoSAccountingStorageRead<TipStorageTag> for InMemoryStorageWrapper {
+    type Error = storage_result::Error;
 
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
-        self.get_pool_data(pool_id).map(|v| v.is_some())
-    }
-
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, pos_accounting::Error> {
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.storage).get_pool_balance(pool_id)
     }
 
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error> {
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.storage).get_pool_data(pool_id)
     }
 
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Amount, pos_accounting::Error> {
+    ) -> Result<Option<Amount>, Self::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.storage)
             .get_delegation_balance(delegation_id)
     }
@@ -222,14 +218,14 @@ impl PoSAccountingView for InMemoryStorageWrapper {
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<DelegationData>, pos_accounting::Error> {
+    ) -> Result<Option<DelegationData>, Self::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.storage).get_delegation_data(delegation_id)
     }
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, pos_accounting::Error> {
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.storage).get_pool_delegations_shares(pool_id)
     }
 
@@ -237,7 +233,7 @@ impl PoSAccountingView for InMemoryStorageWrapper {
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Amount, pos_accounting::Error> {
+    ) -> Result<Option<Amount>, Self::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.storage)
             .get_pool_delegation_share(pool_id, delegation_id)
     }

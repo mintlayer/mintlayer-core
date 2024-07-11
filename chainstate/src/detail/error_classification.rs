@@ -812,7 +812,7 @@ impl BlockProcessingErrorClassification for pos_accounting::Error {
 
         match self {
             // Use "General" for consistency with the zero ban score.
-            Error::ViewFail => BlockProcessingErrorClass::General,
+            Error::ViewFail | Error::StorageWrite => BlockProcessingErrorClass::General,
 
             Error::InvariantErrorPoolBalanceAlreadyExists
             | Error::InvariantErrorPoolDataAlreadyExists
@@ -855,7 +855,6 @@ impl BlockProcessingErrorClassification for pos_accounting::Error {
                 BlockProcessingErrorClass::BadBlock
             }
 
-            Error::StorageError(err) => err.classify(),
             Error::AccountingError(err) => err.classify(),
         }
     }

@@ -20,6 +20,7 @@ mod expensive;
 
 use std::collections::BTreeMap;
 
+use chainstate_types::{SealedStorageTag, TipStorageTag};
 use common::{
     chain::{ChainConfig, DelegationId, PoolId},
     primitives::Amount,
@@ -31,7 +32,7 @@ use utils::log_error;
 
 use crate::{
     schema::Schema, BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite,
-    SealedStorageTag, TipStorageTag, TransactionRw, Transactional,
+    TransactionRw, Transactional,
 };
 
 pub use store_tx::{StoreTxRo, StoreTxRw};
@@ -113,6 +114,8 @@ impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
 impl<B: storage::Backend + 'static> BlockchainStorage for Store<B> {}
 
 impl<B: storage::Backend> PoSAccountingStorageRead<TipStorageTag> for Store<B> {
+    type Error = crate::Error;
+
     #[log_error]
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         let tx = self.transaction_ro()?;
@@ -160,6 +163,8 @@ impl<B: storage::Backend> PoSAccountingStorageRead<TipStorageTag> for Store<B> {
 }
 
 impl<B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag> for Store<B> {
+    type Error = crate::Error;
+
     #[log_error]
     fn get_pool_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
         let tx = self.transaction_ro()?;
