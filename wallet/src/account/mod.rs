@@ -1282,8 +1282,13 @@ impl Account {
             .unzip();
 
         let num_inputs = tx.inputs().len();
-        let ptx =
-            PartiallySignedTransaction::new(tx, vec![None; num_inputs], input_utxos, destinations)?;
+        let ptx = PartiallySignedTransaction::new(
+            tx,
+            vec![None; num_inputs],
+            input_utxos,
+            destinations,
+            None,
+        )?;
         Ok(ptx)
     }
 

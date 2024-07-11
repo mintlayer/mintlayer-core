@@ -286,8 +286,13 @@ impl SendRequest {
         let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
         let destinations = self.destinations.into_iter().map(Some).collect();
 
-        let ptx =
-            PartiallySignedTransaction::new(tx, vec![None; num_inputs], self.utxos, destinations)?;
+        let ptx = PartiallySignedTransaction::new(
+            tx,
+            vec![None; num_inputs],
+            self.utxos,
+            destinations,
+            None,
+        )?;
         Ok(ptx)
     }
 }

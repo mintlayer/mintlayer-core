@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::{
+    htlc::HtlcSecret,
     signature::{inputsig::InputWitness, Signable, Transactable},
     Destination, Transaction, TxOutput,
 };
@@ -28,6 +29,8 @@ pub struct PartiallySignedTransaction {
 
     input_utxos: Vec<Option<TxOutput>>,
     destinations: Vec<Option<Destination>>,
+
+    htlc_secrets: Vec<Option<HtlcSecret>>,
 }
 
 impl PartiallySignedTransaction {
@@ -36,6 +39,7 @@ impl PartiallySignedTransaction {
         witnesses: Vec<Option<InputWitness>>,
         input_utxos: Vec<Option<TxOutput>>,
         destinations: Vec<Option<Destination>>,
+        htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
     ) -> Result<Self, TransactionCreationError> {
         ensure!(
             tx.inputs().len() == witnesses.len(),
@@ -43,13 +47,19 @@ impl PartiallySignedTransaction {
         );
 
         ensure!(
-            input_utxos.len() == witnesses.len(),
-            TransactionCreationError::InvalidWitnessCount
+            tx.inputs().len() == input_utxos.len(),
+            TransactionCreationError::InvalidInputUtxosCount,
         );
 
         ensure!(
-            input_utxos.len() == destinations.len(),
-            TransactionCreationError::InvalidWitnessCount
+            tx.inputs().len() == destinations.len(),
+            TransactionCreationError::InvalidDestinationsCount
+        );
+
+        let htlc_secrets = htlc_secrets.unwrap_or_else(|| vec![None; tx.inputs().len()]);
+        ensure!(
+            htlc_secrets.len() == tx.inputs().len(),
+            TransactionCreationError::InvalidHtlcSecretsCount
         );
 
         Ok(Self {
@@ -57,6 +67,7 @@ impl PartiallySignedTransaction {
             witnesses,
             input_utxos,
             destinations,
+            htlc_secrets,
         })
     }
 
@@ -83,6 +94,10 @@ impl PartiallySignedTransaction {
 
     pub fn witnesses(&self) -> &[Option<InputWitness>] {
         self.witnesses.as_ref()
+    }
+
+    pub fn htlc_secrets(&self) -> &[Option<HtlcSecret>] {
+        self.htlc_secrets.as_ref()
     }
 
     pub fn count_inputs(&self) -> usize {

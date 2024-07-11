@@ -102,6 +102,12 @@ impl Eq for WithId<Transaction> {}
 pub enum TransactionCreationError {
     #[error("The number of signatures does not match the number of inputs")]
     InvalidWitnessCount,
+    #[error("The number of input utxos does not match the number of inputs")]
+    InvalidInputUtxosCount,
+    #[error("The number of destinations does not match the number of inputs")]
+    InvalidDestinationsCount,
+    #[error("The number of htlc secrets does not match the number of inputs")]
+    InvalidHtlcSecretsCount,
     #[error("Failed to convert partially signed tx to signed")]
     FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
 }
