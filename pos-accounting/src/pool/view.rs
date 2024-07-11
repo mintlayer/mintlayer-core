@@ -29,7 +29,7 @@ pub trait PoSAccountingView {
 
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Self::Error>;
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error>;
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, Self::Error>;
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error>;
 
@@ -38,10 +38,7 @@ pub trait PoSAccountingView {
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error>;
 
-    fn get_delegation_balance(
-        &self,
-        delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error>;
+    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Amount, Self::Error>;
 
     fn get_delegation_data(
         &self,
@@ -52,7 +49,7 @@ pub trait PoSAccountingView {
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error>;
+    ) -> Result<Amount, Self::Error>;
 }
 
 pub trait FlushablePoSAccountingView {
@@ -70,7 +67,7 @@ where
         self.deref().pool_exists(pool_id)
     }
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, Self::Error> {
         self.deref().get_pool_balance(pool_id)
     }
 
@@ -85,10 +82,7 @@ where
         self.deref().get_pool_delegations_shares(pool_id)
     }
 
-    fn get_delegation_balance(
-        &self,
-        delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
+    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Amount, Self::Error> {
         self.deref().get_delegation_balance(delegation_id)
     }
 
@@ -103,7 +97,7 @@ where
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
+    ) -> Result<Amount, Self::Error> {
         self.deref().get_pool_delegation_share(pool_id, delegation_id)
     }
 }

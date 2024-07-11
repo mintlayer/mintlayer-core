@@ -178,8 +178,7 @@ fn perform_random_operation(
         10 => {
             if let Some((delegation_id, delegation_data)) = random_delegation {
                 if !op.pool_exists(*delegation_data.source_pool()).unwrap()
-                    && op.get_delegation_balance(delegation_id).unwrap().unwrap_or(Amount::ZERO)
-                        == Amount::ZERO
+                    && op.get_delegation_balance(delegation_id).unwrap() == Amount::ZERO
                 {
                     let undo = op.delete_delegation_id(delegation_id).unwrap();
                     undos.push(undo);

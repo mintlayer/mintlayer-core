@@ -145,8 +145,8 @@ impl PoSAccountingView for ChainstateHandle {
         self.call(move |c| c.stake_pool_exists(pool_id))
     }
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
-        self.call(move |c| c.get_stake_pool_balance(pool_id))
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, Error> {
+        self.call(move |c| c.get_stake_pool_balance(pool_id).map(|v| v.unwrap_or(Amount::ZERO)))
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
@@ -160,8 +160,10 @@ impl PoSAccountingView for ChainstateHandle {
         self.call(move |c| c.get_stake_pool_delegations_shares(pool_id))
     }
 
-    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Option<Amount>, Error> {
-        self.call(move |c| c.get_stake_delegation_balance(delegation_id))
+    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Amount, Error> {
+        self.call(move |c| {
+            c.get_stake_delegation_balance(delegation_id).map(|v| v.unwrap_or(Amount::ZERO))
+        })
     }
 
     fn get_delegation_data(
@@ -175,8 +177,11 @@ impl PoSAccountingView for ChainstateHandle {
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Error> {
-        self.call(move |c| c.get_stake_pool_delegation_share(pool_id, delegation_id))
+    ) -> Result<Amount, Error> {
+        self.call(move |c| {
+            c.get_stake_pool_delegation_share(pool_id, delegation_id)
+                .map(|v| v.unwrap_or(Amount::ZERO))
+        })
     }
 }
 
@@ -285,9 +290,9 @@ impl TokensAccountingView for ChainstateHandle {
         self.call(move |c| c.get_token_data(&id))
     }
 
-    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+    fn get_circulating_supply(&self, id: &TokenId) -> Result<Amount, Self::Error> {
         let id = *id;
-        self.call(move |c| c.get_token_circulating_supply(&id))
+        self.call(move |c| c.get_token_circulating_supply(&id).map(|v| v.unwrap_or(Amount::ZERO)))
     }
 }
 
@@ -316,14 +321,14 @@ impl OrdersAccountingView for ChainstateHandle {
         self.call(move |c| c.get_order_data(&id))
     }
 
-    fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+    fn get_ask_balance(&self, id: &OrderId) -> Result<Amount, Self::Error> {
         let id = *id;
-        self.call(move |c| c.get_order_ask_balance(&id))
+        self.call(move |c| c.get_order_ask_balance(&id).map(|v| v.unwrap_or(Amount::ZERO)))
     }
 
-    fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
+    fn get_give_balance(&self, id: &OrderId) -> Result<Amount, Self::Error> {
         let id = *id;
-        self.call(move |c| c.get_order_give_balance(&id))
+        self.call(move |c| c.get_order_give_balance(&id).map(|v| v.unwrap_or(Amount::ZERO)))
     }
 }
 

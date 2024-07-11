@@ -637,6 +637,7 @@ where
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_pool_balance(pool_id)
+            .map(|v| (v != Amount::ZERO).then_some(v))
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
@@ -684,6 +685,7 @@ where
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_delegation_balance(delegation_id)
+            .map(|v| (v != Amount::ZERO).then_some(v))
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
@@ -709,6 +711,7 @@ where
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_pool_delegation_share(pool_id, delegation_id)
+            .map(|v| (v != Amount::ZERO).then_some(v))
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 

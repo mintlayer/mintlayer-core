@@ -25,20 +25,12 @@ pub enum Error {
     OrderAlreadyExists(OrderId),
     #[error("Data for order `{0}` not found")]
     OrderDataNotFound(OrderId),
-    #[error("Ask balance for order `{0}` not found")]
-    OrderAskBalanceNotFound(OrderId),
-    #[error("Give balance for order `{0}` not found")]
-    OrderGiveBalanceNotFound(OrderId),
     #[error("Attempt to create an order with zero exchange value `{0}`")]
     OrderWithZeroValue(OrderId),
     #[error("Data for order `{0}` not found for undo")]
     InvariantOrderDataNotFoundForUndo(OrderId),
-    #[error("Ask balance for order `{0}` not found for undo")]
-    InvariantOrderAskBalanceNotFoundForUndo(OrderId),
     #[error("Ask balance for order `{0}` changed for undo")]
     InvariantOrderAskBalanceChangedForUndo(OrderId),
-    #[error("Give balance for order `{0}` not found for undo")]
-    InvariantOrderGiveBalanceNotFoundForUndo(OrderId),
     #[error("Give balance for order `{0}` changed for undo")]
     InvariantOrderGiveBalanceChangedForUndo(OrderId),
     #[error("Data for order `{0}` still exist on conclude undo")]

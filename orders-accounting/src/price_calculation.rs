@@ -31,14 +31,8 @@ pub fn calculate_fill_order(
         .get_order_data(&order_id)
         .map_err(|_| crate::Error::ViewFail)?
         .ok_or(Error::OrderDataNotFound(order_id))?;
-    let ask_balance = view
-        .get_ask_balance(&order_id)
-        .map_err(|_| crate::Error::ViewFail)?
-        .ok_or(Error::OrderAskBalanceNotFound(order_id))?;
-    let give_balance = view
-        .get_give_balance(&order_id)
-        .map_err(|_| crate::Error::ViewFail)?
-        .ok_or(Error::OrderGiveBalanceNotFound(order_id))?;
+    let ask_balance = view.get_ask_balance(&order_id).map_err(|_| crate::Error::ViewFail)?;
+    let give_balance = view.get_give_balance(&order_id).map_err(|_| crate::Error::ViewFail)?;
 
     {
         let ask_balance = match order_data.ask() {

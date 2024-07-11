@@ -18,6 +18,7 @@ use common::{
     chain::{DelegationId, Destination, PoolId, UtxoOutPoint},
     primitives::Amount,
 };
+use utils::ensure;
 
 use crate::{
     error::Error,
@@ -49,7 +50,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
             return Err(Error::InvariantErrorPoolDataAlreadyExists);
         }
 
-        if self.get_pool_balance(pool_id).map_err(|_| Error::ViewFail)?.is_some() {
+        if self.get_pool_balance(pool_id).map_err(|_| Error::ViewFail)? > Amount::ZERO {
             // This should never happen since it's based on an unspent input
             return Err(Error::InvariantErrorPoolBalanceAlreadyExists);
         }
@@ -73,9 +74,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
             .get_pool_data(pool_id)?
             .ok_or(Error::AttemptedDecommissionNonexistingPoolData)?;
 
-        let last_amount = self
-            .get_pool_balance(pool_id)?
-            .ok_or(Error::AttemptedDecommissionNonexistingPoolBalance)?;
+        let last_amount = self.get_pool_balance(pool_id)?;
 
         self.data.pool_balances.sub_unsigned(pool_id, last_amount)?;
         let data_undo = self
@@ -157,13 +156,11 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
             .get_delegation_data(delegation_id)?
             .ok_or(Error::DelegationDeletionFailedIdDoesNotExist)?;
 
-        if self.get_delegation_balance(delegation_id)?.unwrap_or(Amount::ZERO) > Amount::ZERO {
+        if self.get_delegation_balance(delegation_id)? > Amount::ZERO {
             return Err(Error::DelegationDeletionFailedBalanceNonZero);
         }
 
-        if self
-            .get_pool_delegation_share(*delegation_data.source_pool(), delegation_id)?
-            .unwrap_or(Amount::ZERO)
+        if self.get_pool_delegation_share(*delegation_data.source_pool(), delegation_id)?
             > Amount::ZERO
         {
             return Err(Error::DelegationDeletionFailedPoolsShareNonZero);
@@ -252,14 +249,10 @@ impl<P: PoSAccountingView> PoSAccountingOperations<PoSAccountingUndo> for PoSAcc
 
 impl<P: PoSAccountingView> PoSAccountingDelta<P> {
     fn undo_create_pool(&mut self, undo: CreatePoolUndo) -> Result<(), Error> {
-        match self.get_pool_balance(undo.pool_id)? {
-            Some(pool_balance) => {
-                if pool_balance != undo.pledge_amount {
-                    return Err(Error::InvariantErrorPoolCreationReversalFailedAmountChanged);
-                }
-            }
-            None => return Err(Error::InvariantErrorPoolCreationReversalFailedBalanceNotFound),
-        }
+        ensure!(
+            self.get_pool_balance(undo.pool_id)? == undo.pledge_amount,
+            Error::InvariantErrorPoolCreationReversalFailedAmountChanged
+        );
 
         self.data.pool_balances.sub_unsigned(undo.pool_id, undo.pledge_amount)?;
 
@@ -278,7 +271,7 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists);
         }
 
-        if self.get_pool_balance(undo.pool_id)?.is_some() {
+        if self.get_pool_balance(undo.pool_id)? > Amount::ZERO {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists);
         }
 
@@ -302,7 +295,7 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
     }
 
     fn undo_delete_delegation_id(&mut self, undo: DeleteDelegationIdUndo) -> Result<(), Error> {
-        if self.get_delegation_balance(undo.delegation_id)?.is_some() {
+        if self.get_delegation_balance(undo.delegation_id)? > Amount::ZERO {
             return Err(Error::DelegationDeletionFailedBalanceNonZero);
         }
 

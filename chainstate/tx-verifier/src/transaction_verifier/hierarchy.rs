@@ -346,7 +346,7 @@ impl<C, S, U, A: PoSAccountingView, T, O> PoSAccountingView
         self.pos_accounting_adapter.accounting_delta().pool_exists(pool_id)
     }
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, Self::Error> {
         self.pos_accounting_adapter.accounting_delta().get_pool_balance(pool_id)
     }
 
@@ -354,10 +354,7 @@ impl<C, S, U, A: PoSAccountingView, T, O> PoSAccountingView
         self.pos_accounting_adapter.accounting_delta().get_pool_data(pool_id)
     }
 
-    fn get_delegation_balance(
-        &self,
-        delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
+    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Amount, Self::Error> {
         self.pos_accounting_adapter
             .accounting_delta()
             .get_delegation_balance(delegation_id)
@@ -385,7 +382,7 @@ impl<C, S, U, A: PoSAccountingView, T, O> PoSAccountingView
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
+    ) -> Result<Amount, Self::Error> {
         self.pos_accounting_adapter
             .accounting_delta()
             .get_pool_delegation_share(pool_id, delegation_id)
@@ -416,7 +413,9 @@ impl<C, S, U, A, T: TokensAccountingView, O> TokensAccountingStorageRead
     }
 
     fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
-        self.tokens_accounting_cache.get_circulating_supply(id)
+        self.tokens_accounting_cache
+            .get_circulating_supply(id)
+            .map(|v| (v != Amount::ZERO).then_some(v))
     }
 }
 
@@ -441,11 +440,15 @@ impl<C, S, U, A, T, O: OrdersAccountingView> OrdersAccountingStorageRead
     }
 
     fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        self.orders_accounting_cache.get_ask_balance(id)
+        self.orders_accounting_cache
+            .get_ask_balance(id)
+            .map(|v| (v != Amount::ZERO).then_some(v))
     }
 
     fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        self.orders_accounting_cache.get_give_balance(id)
+        self.orders_accounting_cache
+            .get_give_balance(id)
+            .map(|v| (v != Amount::ZERO).then_some(v))
     }
 }
 

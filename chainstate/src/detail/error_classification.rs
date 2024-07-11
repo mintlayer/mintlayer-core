@@ -720,7 +720,6 @@ impl BlockProcessingErrorClassification for tokens_accounting::Error {
             Error::TokenAlreadyExists(_)
             | Error::TokenDataNotFound(_)
             | Error::TokenDataNotFoundOnReversal(_)
-            | Error::CirculatingSupplyNotFound(_)
             | Error::MintExceedsSupplyLimit(_, _, _)
             | Error::AmountOverflow
             | Error::CannotMintFromLockedSupply(_)
@@ -764,8 +763,7 @@ impl BlockProcessingErrorClassification for RewardDistributionError {
     fn classify(&self) -> BlockProcessingErrorClass {
         match self {
             // Use "General" for consistency with the zero ban score.
-            RewardDistributionError::PoolDataNotFound(_)
-            | RewardDistributionError::PoolBalanceNotFound(_) => BlockProcessingErrorClass::General,
+            RewardDistributionError::PoolDataNotFound(_) => BlockProcessingErrorClass::General,
 
             RewardDistributionError::InvariantPoolBalanceIsZero(_)
             | RewardDistributionError::InvariantStakerBalanceGreaterThanPoolBalance(_, _, _)
@@ -818,7 +816,6 @@ impl BlockProcessingErrorClassification for pos_accounting::Error {
 
             Error::InvariantErrorPoolBalanceAlreadyExists
             | Error::InvariantErrorPoolDataAlreadyExists
-            | Error::AttemptedDecommissionNonexistingPoolBalance
             | Error::AttemptedDecommissionNonexistingPoolData
             | Error::DelegationCreationFailedPoolDoesNotExist
             | Error::DelegationDeletionFailedIdDoesNotExist
@@ -837,7 +834,6 @@ impl BlockProcessingErrorClassification for pos_accounting::Error {
             | Error::PoolBalanceSubtractionError
             | Error::DelegationSharesAdditionError
             | Error::DelegationSharesSubtractionError
-            | Error::InvariantErrorPoolCreationReversalFailedBalanceNotFound
             | Error::InvariantErrorPoolCreationReversalFailedDataNotFound
             | Error::InvariantErrorPoolCreationReversalFailedAmountChanged
             | Error::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists
@@ -902,13 +898,9 @@ impl BlockProcessingErrorClassification for orders_accounting::Error {
 
             Error::OrderAlreadyExists(_)
             | Error::OrderDataNotFound(_)
-            | Error::OrderAskBalanceNotFound(_)
-            | Error::OrderGiveBalanceNotFound(_)
             | Error::OrderWithZeroValue(_)
             | Error::InvariantOrderDataNotFoundForUndo(_)
-            | Error::InvariantOrderAskBalanceNotFoundForUndo(_)
             | Error::InvariantOrderAskBalanceChangedForUndo(_)
-            | Error::InvariantOrderGiveBalanceNotFoundForUndo(_)
             | Error::InvariantOrderGiveBalanceChangedForUndo(_)
             | Error::InvariantOrderDataExistForConcludeUndo(_)
             | Error::InvariantOrderAskBalanceExistForConcludeUndo(_)

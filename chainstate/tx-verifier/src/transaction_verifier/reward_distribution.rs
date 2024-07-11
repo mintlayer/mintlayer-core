@@ -44,8 +44,6 @@ pub enum RewardDistributionError {
     TotalDelegationBalanceZero(PoolId),
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
-    #[error("Balance of pool {0} not found")]
-    PoolBalanceNotFound(PoolId),
     #[error("Failed to calculate reward for block {0} for staker of the pool {1}")]
     StakerRewardCalculationFailed(Id<Block>, PoolId),
     #[error(
@@ -76,9 +74,7 @@ pub fn distribute_pos_reward<
     let pool_data = accounting_adapter
         .get_pool_data(pool_id)?
         .ok_or(RewardDistributionError::PoolDataNotFound(pool_id))?;
-    let pool_balance = accounting_adapter
-        .get_pool_balance(pool_id)?
-        .ok_or(RewardDistributionError::PoolBalanceNotFound(pool_id))?;
+    let pool_balance = accounting_adapter.get_pool_balance(pool_id)?;
 
     let staker_reward = match reward_distribution_version {
         RewardDistributionVersion::V0 => calculate_staker_reward_v0(
@@ -252,6 +248,7 @@ fn distribute_delegations_pos_reward<U, P: PoSAccountingView + PoSAccountingOper
     // increase the delegation balances
     let delegation_undos = rewards_per_delegation
         .iter()
+        .filter(|(_, reward)| *reward > Amount::ZERO)
         .map(|(delegation_id, reward)| {
             accounting_adapter
                 .delegate_staking(*delegation_id, *reward)
@@ -895,11 +892,7 @@ mod tests {
         let expected_pool_balance = (original_pool_balance + reward).unwrap();
         assert_eq!(
             expected_pool_balance,
-            accounting_adapter
-                .accounting_delta()
-                .get_pool_balance(pool_id)
-                .unwrap()
-                .unwrap()
+            accounting_adapter.accounting_delta().get_pool_balance(pool_id).unwrap()
         );
 
         let (consumed_data, _) = accounting_adapter.consume();

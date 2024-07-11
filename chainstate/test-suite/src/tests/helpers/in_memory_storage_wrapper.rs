@@ -203,7 +203,7 @@ impl PoSAccountingView for InMemoryStorageWrapper {
         self.get_pool_data(pool_id).map(|v| v.is_some())
     }
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, pos_accounting::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.storage).get_pool_balance(pool_id)
     }
 
@@ -214,7 +214,7 @@ impl PoSAccountingView for InMemoryStorageWrapper {
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, pos_accounting::Error> {
+    ) -> Result<Amount, pos_accounting::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.storage)
             .get_delegation_balance(delegation_id)
     }
@@ -237,7 +237,7 @@ impl PoSAccountingView for InMemoryStorageWrapper {
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, pos_accounting::Error> {
+    ) -> Result<Amount, pos_accounting::Error> {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.storage)
             .get_pool_delegation_share(pool_id, delegation_id)
     }

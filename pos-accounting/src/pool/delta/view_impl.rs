@@ -71,21 +71,11 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
         Ok(self.get_pool_data(pool_id)?.is_some())
     }
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Amount, Self::Error> {
         let parent_balance =
             self.parent.get_pool_balance(pool_id).log_err().map_err(|_| Error::ViewFail)?;
         let local_delta = self.data.pool_balances.data().get(&pool_id).cloned();
-        let balance =
-            combine_amount_delta(&parent_balance, &local_delta).map_err(Error::AccountingError)?;
-
-        // When combining deltas with amounts it's impossible to distinguish None from Some(Amount::ZERO).
-        // Use information from DeltaData to make the decision.
-        // Note: if a pool doesn't exist the balance can be non-zero  because of delegations
-        if self.pool_exists(pool_id)? || balance.unwrap_or(Amount::ZERO) != Amount::ZERO {
-            Ok(balance)
-        } else {
-            Ok(None)
-        }
+        combine_amount_delta(parent_balance, local_delta).map_err(Error::AccountingError)
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
@@ -109,63 +99,26 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
             .map_err(|_| Error::ViewFail)?;
         let local_shares = self.get_cached_delegations_shares(pool_id);
 
-        let shares = match (parent_shares, local_shares) {
-            (None, None) => return Ok(None),
-            (None, Some(m)) => m
-                .into_iter()
-                .map(signed_to_unsigned_pair)
-                .collect::<Result<BTreeMap<DelegationId, Amount>, Error>>()?,
-            (Some(m), None) => m,
-            (Some(m1), Some(m2)) => sum_maps(m1, m2)?,
-        };
-
-        // When combining deltas with amounts it's impossible to distinguish None from Some(Amount::ZERO).
-        // Use information from DeltaData to make the decision and filter out zero balances for non-existing delegations.
-        let result = shares
-            .into_iter()
-            .filter_map(|(id, share)| match self.get_delegation_data(id) {
-                Ok(data) => {
-                    if data.is_some() {
-                        Some(Ok((id, share)))
-                    } else if share != Amount::ZERO {
-                        Some(Err(
-                            Error::InvariantErrorNonZeroBalanceForNonExistingDelegation,
-                        ))
-                    } else {
-                        None
-                    }
-                }
-                Err(e) => Some(Err(e)),
-            })
-            .collect::<Result<BTreeMap<_, _>, _>>()?;
-
-        Ok(Some(result))
+        match (parent_shares, local_shares) {
+            (None, None) => Ok(None),
+            (None, Some(m)) => Ok(Some(
+                m.into_iter()
+                    .map(signed_to_unsigned_pair)
+                    .collect::<Result<BTreeMap<DelegationId, Amount>, Error>>()?,
+            )),
+            (Some(m), None) => Ok(Some(m)),
+            (Some(m1), Some(m2)) => Ok(Some(sum_maps(m1, m2)?)),
+        }
     }
 
-    fn get_delegation_balance(
-        &self,
-        delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
+    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Amount, Self::Error> {
         let parent_amount = self
             .parent
             .get_delegation_balance(delegation_id)
             .log_err()
             .map_err(|_| Error::ViewFail)?;
         let local_amount = self.data.delegation_balances.data().get(&delegation_id).copied();
-        let balance =
-            combine_amount_delta(&parent_amount, &local_amount).map_err(Error::AccountingError)?;
-
-        // When combining deltas with amounts it's impossible to distinguish None from Some(Amount::ZERO).
-        // Use information from DeltaData to make the decision.
-        if self.get_delegation_data(delegation_id)?.is_some() {
-            Ok(balance)
-        } else {
-            utils::ensure!(
-                balance.unwrap_or(Amount::ZERO) == Amount::ZERO,
-                Error::InvariantErrorNonZeroBalanceForNonExistingDelegation
-            );
-            Ok(None)
-        }
+        combine_amount_delta(parent_amount, local_amount).map_err(Error::AccountingError)
     }
 
     fn get_delegation_data(
@@ -187,7 +140,7 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Self::Error> {
+    ) -> Result<Amount, Self::Error> {
         let parent_amount = self
             .parent
             .get_pool_delegation_share(pool_id, delegation_id)
@@ -195,20 +148,7 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
             .map_err(|_| Error::ViewFail)?;
         let local_amount =
             self.data.pool_delegation_shares.data().get(&(pool_id, delegation_id)).copied();
-        let balance =
-            combine_amount_delta(&parent_amount, &local_amount).map_err(Error::AccountingError)?;
-
-        // When combining deltas with amounts it's impossible to distinguish None from Some(Amount::ZERO).
-        // Use information from DeltaData to make the decision.
-        if self.get_delegation_data(delegation_id)?.is_some() {
-            Ok(balance)
-        } else {
-            utils::ensure!(
-                balance.unwrap_or(Amount::ZERO) == Amount::ZERO,
-                Error::InvariantErrorNonZeroBalanceForNonExistingDelegation
-            );
-            Ok(None)
-        }
+        combine_amount_delta(parent_amount, local_amount).map_err(Error::AccountingError)
     }
 }
 

@@ -1497,9 +1497,8 @@ impl NonZeroPoolBalances {
         pos_accounting_view: &impl PoSAccountingView<Error = pos_accounting::Error>,
         assumed_bb_height: BlockHeight,
     ) -> Result<Option<Self>, BlockError> {
-        let total_balance = pos_accounting_view
-            .get_pool_balance(*pool_id)?
-            .and_then(|balance| (balance != Amount::ZERO).then_some(balance));
+        let total_balance = pos_accounting_view.get_pool_balance(*pool_id)?;
+        let total_balance = (total_balance > Amount::ZERO).then_some(total_balance);
         let pool_data = pos_accounting_view.get_pool_data(*pool_id)?;
 
         match (total_balance, pool_data) {

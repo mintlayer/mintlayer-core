@@ -154,17 +154,13 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
         let mut store = BorrowedStorageValue::new(&mut self.store, getter, setter, deleter);
         let undo = iter
             .map(|(id, delta)| -> Result<_, Error> {
-                let balance = store.get(id)?;
-                match combine_amount_delta(&balance, &Some(delta))? {
-                    Some(result) => {
-                        if result > Amount::ZERO {
-                            store.set(id, result)?
-                        } else {
-                            store.delete(id)?
-                        }
-                    }
-                    None => store.delete(id)?,
-                };
+                let balance = store.get(id)?.unwrap_or(Amount::ZERO);
+                let result = combine_amount_delta(balance, Some(delta))?;
+                if result > Amount::ZERO {
+                    store.set(id, result)?
+                } else {
+                    store.delete(id)?
+                }
                 let balance_undo = delta.neg().expect("amount negation some");
                 Ok((id, balance_undo))
             })

@@ -72,24 +72,20 @@ impl<S: OrdersAccountingStorageWrite> OrdersAccountingDB<S> {
             .consume()
             .into_iter()
             .map(|(id, delta)| -> Result<_, Error> {
-                let balance = self.0.get_ask_balance(&id).log_err().map_err(|_| Error::ViewFail)?;
-                match combine_amount_delta(&balance, &Some(delta))? {
-                    Some(result) => {
-                        if result > Amount::ZERO {
-                            self.0
-                                .set_ask_balance(&id, &result)
-                                .log_err()
-                                .map_err(|_| Error::StorageWrite)?
-                        } else {
-                            self.0
-                                .del_ask_balance(&id)
-                                .log_err()
-                                .map_err(|_| Error::StorageWrite)?
-                        }
-                    }
-                    None => {
-                        self.0.del_ask_balance(&id).log_err().map_err(|_| Error::StorageWrite)?
-                    }
+                let balance = self
+                    .0
+                    .get_ask_balance(&id)
+                    .log_err()
+                    .map_err(|_| Error::ViewFail)?
+                    .unwrap_or(Amount::ZERO);
+                let result = combine_amount_delta(balance, Some(delta))?;
+                if result > Amount::ZERO {
+                    self.0
+                        .set_ask_balance(&id, &result)
+                        .log_err()
+                        .map_err(|_| Error::StorageWrite)?
+                } else {
+                    self.0.del_ask_balance(&id).log_err().map_err(|_| Error::StorageWrite)?
                 };
                 let balance_undo = delta.neg().expect("amount negation some");
                 Ok((id, balance_undo))
@@ -101,25 +97,20 @@ impl<S: OrdersAccountingStorageWrite> OrdersAccountingDB<S> {
             .consume()
             .into_iter()
             .map(|(id, delta)| -> Result<_, Error> {
-                let balance =
-                    self.0.get_give_balance(&id).log_err().map_err(|_| Error::ViewFail)?;
-                match combine_amount_delta(&balance, &Some(delta))? {
-                    Some(result) => {
-                        if result > Amount::ZERO {
-                            self.0
-                                .set_give_balance(&id, &result)
-                                .log_err()
-                                .map_err(|_| Error::StorageWrite)?
-                        } else {
-                            self.0
-                                .del_give_balance(&id)
-                                .log_err()
-                                .map_err(|_| Error::StorageWrite)?
-                        }
-                    }
-                    None => {
-                        self.0.del_give_balance(&id).log_err().map_err(|_| Error::StorageWrite)?
-                    }
+                let balance = self
+                    .0
+                    .get_give_balance(&id)
+                    .log_err()
+                    .map_err(|_| Error::ViewFail)?
+                    .unwrap_or(Amount::ZERO);
+                let result = combine_amount_delta(balance, Some(delta))?;
+                if result > Amount::ZERO {
+                    self.0
+                        .set_give_balance(&id, &result)
+                        .log_err()
+                        .map_err(|_| Error::StorageWrite)?
+                } else {
+                    self.0.del_give_balance(&id).log_err().map_err(|_| Error::StorageWrite)?
                 };
                 let balance_undo = delta.neg().expect("amount negation some");
                 Ok((id, balance_undo))
@@ -141,12 +132,12 @@ impl<S: OrdersAccountingStorageRead> OrdersAccountingView for OrdersAccountingDB
         self.0.get_order_data(id)
     }
 
-    fn get_ask_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        self.0.get_ask_balance(id)
+    fn get_ask_balance(&self, id: &OrderId) -> Result<Amount, Self::Error> {
+        self.0.get_ask_balance(id).map(|v| v.unwrap_or(Amount::ZERO))
     }
 
-    fn get_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, Self::Error> {
-        self.0.get_give_balance(id)
+    fn get_give_balance(&self, id: &OrderId) -> Result<Amount, Self::Error> {
+        self.0.get_give_balance(id).map(|v| v.unwrap_or(Amount::ZERO))
     }
 }
 

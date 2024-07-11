@@ -69,23 +69,10 @@ impl<P: TokensAccountingView> TokensAccountingView for TokensAccountingCache<P> 
         }
     }
 
-    fn get_circulating_supply(&self, id: &TokenId) -> Result<Option<Amount>, Self::Error> {
+    fn get_circulating_supply(&self, id: &TokenId) -> Result<Amount, Self::Error> {
         let parent_supply = self.parent.get_circulating_supply(id).map_err(|_| Error::ViewFail)?;
         let local_delta = self.data.circulating_supply.data().get(id).cloned();
-        let supply =
-            combine_amount_delta(&parent_supply, &local_delta).map_err(Error::AccountingError)?;
-
-        // When combining deltas with amounts it's impossible to distinguish None from Some(Amount::ZERO).
-        // Use information from DeltaData to make the decision.
-        if self.get_token_data(id)?.is_some() {
-            Ok(supply)
-        } else {
-            utils::ensure!(
-                supply.unwrap_or(Amount::ZERO) == Amount::ZERO,
-                Error::InvariantErrorNonZeroSupplyForNonExistingToken
-            );
-            Ok(None)
-        }
+        combine_amount_delta(parent_supply, local_delta).map_err(Error::AccountingError)
     }
 }
 
@@ -108,7 +95,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
             return Err(Error::TokenAlreadyExists(id));
         }
 
-        if self.get_circulating_supply(&id)?.is_some() {
+        if self.get_circulating_supply(&id)? > Amount::ZERO {
             return Err(Error::TokenAlreadyExists(id));
         }
 
@@ -131,7 +118,6 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         log::debug!("Minting tokens: {:?} {:?}", id, amount_to_add);
 
         let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
-        let circulating_supply = self.get_circulating_supply(&id)?.unwrap_or(Amount::ZERO);
 
         match token_data {
             TokenData::FungibleToken(data) => {
@@ -141,6 +127,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
 
                 match data.total_supply() {
                     TokenTotalSupply::Fixed(limit) => {
+                        let circulating_supply = self.get_circulating_supply(&id)?;
                         let expected_circulating_supply =
                             (circulating_supply + amount_to_add).ok_or(Error::AmountOverflow)?;
                         if expected_circulating_supply > *limit {
@@ -173,9 +160,6 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
         log::debug!("Unminting tokens: {:?} {:?}", id, amount_to_burn);
 
         let token_data = self.get_token_data(&id)?.ok_or(Error::TokenDataNotFound(id))?;
-        let circulating_supply =
-            self.get_circulating_supply(&id)?.ok_or(Error::CirculatingSupplyNotFound(id))?;
-
         match token_data {
             TokenData::FungibleToken(data) => {
                 if data.is_locked() {
@@ -186,6 +170,7 @@ impl<P: TokensAccountingView> TokensAccountingOperations for TokensAccountingCac
             }
         };
 
+        let circulating_supply = self.get_circulating_supply(&id)?;
         if circulating_supply < amount_to_burn {
             return Err(Error::NotEnoughCirculatingSupplyToUnmint(
                 circulating_supply,

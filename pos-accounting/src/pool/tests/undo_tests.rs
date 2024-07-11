@@ -47,10 +47,7 @@ fn create_pool_delta_undo_no_flush(#[case] seed: Seed) {
     let pledged_amount = Amount::from_atoms(100);
     let (pool_id, pool_data, undo) = create_pool(&mut rng, &mut delta, pledged_amount).unwrap();
 
-    assert_eq!(
-        delta.get_pool_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
-    );
+    assert_eq!(delta.get_pool_balance(pool_id).expect("ok"), pledged_amount);
     assert_eq!(
         delta.get_pool_data(pool_id).expect("ok").expect("some"),
         pool_data
@@ -59,7 +56,7 @@ fn create_pool_delta_undo_no_flush(#[case] seed: Seed) {
 
     delta.undo(undo).unwrap();
 
-    assert_eq!(delta.get_pool_balance(pool_id).unwrap(), None);
+    assert_eq!(delta.get_pool_balance(pool_id).unwrap(), Amount::ZERO);
     assert_eq!(delta.get_pool_data(pool_id).unwrap(), None);
     assert_eq!(delta.get_pool_delegations_shares(pool_id).unwrap(), None);
 }
@@ -131,7 +128,7 @@ fn decommission_pool_delta_undo_no_flush(#[case] seed: Seed) {
 
     let undo = delta.decommission_pool(pool_id).unwrap();
 
-    assert_eq!(delta.get_pool_balance(pool_id).expect("ok"), None);
+    assert_eq!(delta.get_pool_balance(pool_id).expect("ok"), Amount::ZERO);
     assert_eq!(delta.get_pool_data(pool_id).expect("ok"), None);
     assert_eq!(
         delta.get_pool_delegations_shares(pool_id).expect("ok"),
@@ -140,10 +137,7 @@ fn decommission_pool_delta_undo_no_flush(#[case] seed: Seed) {
 
     delta.undo(undo).unwrap();
 
-    assert_eq!(
-        delta.get_pool_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
-    );
+    assert_eq!(delta.get_pool_balance(pool_id).expect("ok"), pledged_amount);
     assert_eq!(
         delta.get_pool_data(pool_id).expect("ok").expect("some"),
         pool_data
@@ -211,32 +205,29 @@ fn create_delegation_id_delta_undo_no_flush(#[case] seed: Seed) {
     );
     assert_eq!(
         delta.get_delegation_balance(delegation_id).expect("ok"),
-        None
+        Amount::ZERO
     );
     assert_eq!(
         delta.get_pool_delegation_share(pool_id, delegation_id).expect("ok"),
-        None
+        Amount::ZERO
     );
 
     delta.undo(undo).unwrap();
 
     assert_eq!(delta.get_delegation_data(delegation_id).expect("ok"), None);
 
-    assert_eq!(
-        delta.get_pool_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
-    );
+    assert_eq!(delta.get_pool_balance(pool_id).expect("ok"), pledged_amount);
     assert_eq!(
         delta.get_pool_data(pool_id).expect("ok").expect("some"),
         pool_data
     );
     assert_eq!(
         delta.get_delegation_balance(delegation_id).expect("ok"),
-        None
+        Amount::ZERO
     );
     assert_eq!(
         delta.get_pool_delegation_share(pool_id, delegation_id).expect("ok"),
-        None
+        Amount::ZERO
     );
 }
 
@@ -303,18 +294,15 @@ fn delegate_staking_delta_undo_no_flush(#[case] seed: Seed) {
     let undo = delta.delegate_staking(delegation_id, delegated_amount).unwrap();
 
     assert_eq!(
-        delta.get_delegation_balance(delegation_id).expect("ok").expect("some"),
+        delta.get_delegation_balance(delegation_id).expect("ok"),
         delegated_amount
     );
     assert_eq!(
-        delta
-            .get_pool_delegation_share(pool_id, delegation_id)
-            .expect("ok")
-            .expect("some"),
+        delta.get_pool_delegation_share(pool_id, delegation_id).expect("ok"),
         delegated_amount
     );
     assert_eq!(
-        delta.get_pool_balance(pool_id).expect("ok").expect("some"),
+        delta.get_pool_balance(pool_id).expect("ok"),
         (pledged_amount + delegated_amount).unwrap()
     );
 
@@ -324,17 +312,14 @@ fn delegate_staking_delta_undo_no_flush(#[case] seed: Seed) {
         delta.get_delegation_data(delegation_id).expect("ok").expect("some"),
         DelegationData::new(pool_id, del_pub_key)
     );
-    assert_eq!(
-        delta.get_pool_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
-    );
+    assert_eq!(delta.get_pool_balance(pool_id).expect("ok"), pledged_amount);
     assert_eq!(
         delta.get_pool_data(pool_id).expect("ok").expect("some"),
         pool_data
     );
     assert_eq!(
         delta.get_delegation_balance(delegation_id).expect("ok"),
-        None
+        Amount::ZERO
     );
 }
 
@@ -409,11 +394,11 @@ fn spend_share_delta_undo_no_flush(#[case] seed: Seed) {
     let undo = delta.spend_share_from_delegation_id(delegation_id, spent_amount).unwrap();
 
     assert_eq!(
-        delta.get_delegation_balance(delegation_id).expect("ok").expect("some"),
+        delta.get_delegation_balance(delegation_id).expect("ok"),
         (delegated_amount - spent_amount).unwrap()
     );
     assert_eq!(
-        delta.get_pool_balance(pool_id).expect("ok").expect("some"),
+        delta.get_pool_balance(pool_id).expect("ok"),
         ((pledged_amount + delegated_amount).unwrap() - spent_amount).unwrap()
     );
     assert_eq!(
@@ -425,21 +410,18 @@ fn spend_share_delta_undo_no_flush(#[case] seed: Seed) {
         DelegationData::new(pool_id, del_pub_key.clone())
     );
     assert_eq!(
-        delta
-            .get_pool_delegation_share(pool_id, delegation_id)
-            .expect("ok")
-            .expect("some"),
+        delta.get_pool_delegation_share(pool_id, delegation_id).expect("ok"),
         (delegated_amount - spent_amount).unwrap()
     );
 
     delta.undo(undo).unwrap();
 
     assert_eq!(
-        delta.get_delegation_balance(delegation_id).expect("ok").expect("some"),
+        delta.get_delegation_balance(delegation_id).expect("ok"),
         delegated_amount
     );
     assert_eq!(
-        delta.get_pool_balance(pool_id).expect("ok").expect("some"),
+        delta.get_pool_balance(pool_id).expect("ok"),
         (pledged_amount + delegated_amount).unwrap()
     );
     assert_eq!(
@@ -451,10 +433,7 @@ fn spend_share_delta_undo_no_flush(#[case] seed: Seed) {
         DelegationData::new(pool_id, del_pub_key)
     );
     assert_eq!(
-        delta
-            .get_pool_delegation_share(pool_id, delegation_id)
-            .expect("ok")
-            .expect("some"),
+        delta.get_pool_delegation_share(pool_id, delegation_id).expect("ok"),
         delegated_amount
     );
 }
