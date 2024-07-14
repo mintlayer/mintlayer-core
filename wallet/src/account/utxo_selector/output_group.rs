@@ -22,7 +22,7 @@ use super::UtxoSelectorError;
 
 /// A group of UTXOs paid to the same output script.
 /// This helps reduce privacy leaks resulting from address reuse.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OutputGroup {
     /// The list of UTXOs contained in this output group.
     pub outputs: Vec<(TxInput, TxOutput)>,

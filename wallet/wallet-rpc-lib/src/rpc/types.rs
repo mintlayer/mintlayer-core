@@ -20,6 +20,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallengeError,
+        partially_signed_transaction::PartiallySignedTransaction,
         signature::DestinationSigError,
         tokens::{self, IsTokenFreezable, Metadata, TokenCreator, TokenId},
         ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
@@ -35,6 +36,7 @@ use crypto::{
     vrf::VRFPublicKey,
 };
 use rpc::description::HasValueHint;
+use serialization::hex::{HexDecode as _, HexEncode as _, HexError};
 use wallet::account::PoolData;
 
 pub use chainstate::{
@@ -68,6 +70,10 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("Invalid address")]
     InvalidAddress,
+
+    // Same as InvalidAddress, but for cases when it's not clear which address is invalid.
+    #[error("Invalid address: {0}")]
+    InvalidAddressWithAddr(String),
 
     #[error("Failed to parse margin_ratio_per_thousand. The decimal must be in the range [0.001,1.000] or [0.1%,100%]")]
     InvalidMarginRatio,
@@ -128,6 +134,17 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error(transparent)]
     Address(#[from] AddressError),
+
+    #[error("The specified address {0} is not a multisig address")]
+    NotMultisigAddress(String),
+
+    #[error(
+        "There are no UTXOs corresponding to the specified multisig address for tokens: {0:?}"
+    )]
+    NoUtxosForMultisigAddressForTokens(Vec<TokenId>),
+
+    #[error("No outputs specified")]
+    NoOutputsSpecified,
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
@@ -675,6 +692,45 @@ pub struct MaybeSignedTransaction {
     pub is_complete: bool,
     pub previous_signatures: Vec<RpcSignatureStatus>,
     pub current_signatures: Vec<RpcSignatureStatus>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct SendTokensFromMultisigAddressResult {
+    transaction_hex: String,
+    current_signatures: Vec<RpcSignatureStatus>,
+    fees: Balances,
+}
+
+impl SendTokensFromMultisigAddressResult {
+    pub fn from_tx_signatures_fees(
+        tx: PartiallySignedTransaction,
+        current_signatures: Vec<RpcSignatureStatus>,
+        fees: Balances,
+    ) -> Self {
+        let transaction_hex = tx.hex_encode();
+
+        Self {
+            transaction_hex,
+            current_signatures,
+            fees,
+        }
+    }
+
+    pub fn transaction_hex(&self) -> &str {
+        &self.transaction_hex
+    }
+
+    pub fn current_signatures(&self) -> &[RpcSignatureStatus] {
+        &self.current_signatures
+    }
+
+    pub fn fees(&self) -> &Balances {
+        &self.fees
+    }
+
+    pub fn decode_transaction(&self) -> Result<PartiallySignedTransaction, HexError> {
+        PartiallySignedTransaction::hex_decode_all(&self.transaction_hex)
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]

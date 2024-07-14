@@ -13,14 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::key::PrivateKey;
+use std::{
+    collections::BTreeMap,
+    num::{NonZeroU8, NonZeroUsize},
+};
+
+use crypto::key::{PrivateKey, PublicKey, Signature};
 use serialization::Encode;
 
 use crate::chain::{
+    classic_multisig::ClassicMultisigChallenge,
     signature::{
         inputsig::{
             authorize_pubkey_spend::AuthorizedPublicKeySpend,
             authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
+            classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
             standard_signature::StandardInputSignature, InputWitness,
         },
         sighash::sighashtype::SigHashType,
@@ -35,21 +42,43 @@ pub enum SizeEstimationError {
     UnsupportedInputDestination(Destination),
 }
 
-/// Return the encoded size of an input signature
-pub fn input_signature_size(txo: &TxOutput) -> Result<usize, SizeEstimationError> {
-    get_tx_output_destination(txo).map_or(Ok(0), input_signature_size_from_destination)
+/// Return the encoded size of an input signature.
+///
+/// ScriptHash destinations are not supported. ClassicMultisig destinations are only supported
+/// if dest_info_provider is not None and it is able to return MultisigInfo for the
+/// provided destination.
+pub fn input_signature_size(
+    txo: &TxOutput,
+    dest_info_provider: Option<&dyn DestinationInfoProvider>,
+) -> Result<usize, SizeEstimationError> {
+    get_tx_output_destination(txo).map_or(Ok(0), |dest| {
+        input_signature_size_from_destination(dest, dest_info_provider)
+    })
 }
 
-fn no_signature_size() -> usize {
-    InputWitness::NoSignature(None).encoded_size()
+lazy_static::lazy_static! {
+    static ref BOGUS_KEY_PAIR_AND_SIGNATURE: (PrivateKey, PublicKey, Signature) = {
+        let (private_key, public_key) =
+            PrivateKey::new_from_entropy(crypto::key::KeyKind::Secp256k1Schnorr);
+        let signature = private_key
+            .sign_message(&[0; 32], randomness::make_true_rng())
+            .expect("should not fail");
+        (private_key, public_key, signature)
+    };
 }
 
-fn public_key_signature_size() -> usize {
-    let (private_key, _) = PrivateKey::new_from_entropy(crypto::key::KeyKind::Secp256k1Schnorr);
-    let signature = private_key
-        .sign_message(&[0; 32], randomness::make_true_rng())
-        .expect("should not fail");
-    let raw_signature = AuthorizedPublicKeySpend::new(signature).encode();
+fn multisig_signature_size(info: &MultisigInfo) -> usize {
+    // FIXME need to cache this somehow to avoid allocations on every call.
+    let signatures = (0..info.min_required_signatures.get())
+        .map(|i| (i, BOGUS_KEY_PAIR_AND_SIGNATURE.2.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let challenge = ClassicMultisigChallenge::new_unchecked(
+        info.min_required_signatures,
+        vec![BOGUS_KEY_PAIR_AND_SIGNATURE.1.clone(); info.total_keys.get()],
+    );
+
+    let raw_signature = AuthorizedClassicalMultisigSpend::new(signatures, challenge).encode();
+
     let standard = StandardInputSignature::new(
         SigHashType::try_from(SigHashType::ALL).expect("should not fail"),
         raw_signature,
@@ -57,32 +86,86 @@ fn public_key_signature_size() -> usize {
     InputWitness::Standard(standard).encoded_size()
 }
 
-fn address_signature_size() -> usize {
-    let (private_key, public_key) =
-        PrivateKey::new_from_entropy(crypto::key::KeyKind::Secp256k1Schnorr);
-    let signature = private_key
-        .sign_message(&[0; 32], randomness::make_true_rng())
-        .expect("should not fail");
-    let raw_signature = AuthorizedPublicKeyHashSpend::new(public_key, signature).encode();
-    let standard = StandardInputSignature::new(
-        SigHashType::try_from(SigHashType::ALL).expect("should not fail"),
-        raw_signature,
-    );
-    InputWitness::Standard(standard).encoded_size()
+lazy_static::lazy_static! {
+    static ref NO_SIGNATURE_SIZE: usize = {
+        InputWitness::NoSignature(None).encoded_size()
+    };
 }
 
-/// Return the encoded size of an input signature
+lazy_static::lazy_static! {
+    static ref PUB_KEY_SIGNATURE_SIZE: usize = {
+        let raw_signature =
+            AuthorizedPublicKeySpend::new(BOGUS_KEY_PAIR_AND_SIGNATURE.2.clone()).encode();
+        let standard = StandardInputSignature::new(
+            SigHashType::try_from(SigHashType::ALL).expect("should not fail"),
+            raw_signature,
+        );
+        InputWitness::Standard(standard).encoded_size()
+    };
+}
+
+lazy_static::lazy_static! {
+    static ref ADDRESS_SIGNATURE_SIZE: usize = {
+        let raw_signature = AuthorizedPublicKeyHashSpend::new(
+            BOGUS_KEY_PAIR_AND_SIGNATURE.1.clone(),
+            BOGUS_KEY_PAIR_AND_SIGNATURE.2.clone(),
+        )
+        .encode();
+        let standard = StandardInputSignature::new(
+            SigHashType::try_from(SigHashType::ALL).expect("should not fail"),
+            raw_signature,
+        );
+        InputWitness::Standard(standard).encoded_size()
+    };
+}
+
+pub struct MultisigInfo {
+    total_keys: NonZeroUsize,
+    min_required_signatures: NonZeroU8,
+}
+
+impl MultisigInfo {
+    pub fn from_challenge(challenge: &ClassicMultisigChallenge) -> Self {
+        Self {
+            total_keys: challenge.public_keys_count_as_non_zero(),
+            min_required_signatures: challenge.min_required_signatures_as_non_zero(),
+        }
+    }
+
+    pub fn total_keys(&self) -> NonZeroUsize {
+        self.total_keys
+    }
+
+    pub fn min_required_signatures(&self) -> NonZeroU8 {
+        self.min_required_signatures
+    }
+}
+
+pub trait DestinationInfoProvider {
+    fn get_multisig_info(&self, destination: &Destination) -> Option<MultisigInfo>;
+}
+
+/// Return the encoded size of an input signature.
+///
+/// ScriptHash destinations are not supported. ClassicMultisig destinations are only supported
+/// if dest_info_provider is not None and it is able to return MultisigInfo for the
+/// provided destination.
 pub fn input_signature_size_from_destination(
     destination: &Destination,
+    dest_info_provider: Option<&dyn DestinationInfoProvider>,
 ) -> Result<usize, SizeEstimationError> {
     // Sizes calculated upfront
     match destination {
-        Destination::PublicKeyHash(_) => Ok(address_signature_size()),
-        Destination::PublicKey(_) => Ok(public_key_signature_size()),
-        Destination::AnyoneCanSpend => Ok(no_signature_size()),
-        Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => Err(
-            SizeEstimationError::UnsupportedInputDestination(destination.clone()),
-        ),
+        Destination::PublicKeyHash(_) => Ok(*ADDRESS_SIGNATURE_SIZE),
+        Destination::PublicKey(_) => Ok(*PUB_KEY_SIGNATURE_SIZE),
+        Destination::AnyoneCanSpend => Ok(*NO_SIGNATURE_SIZE),
+        Destination::ScriptHash(_) => Err(SizeEstimationError::UnsupportedInputDestination(
+            destination.clone(),
+        )),
+        Destination::ClassicMultisig(_) => dest_info_provider
+            .and_then(|dest_info_provider| dest_info_provider.get_multisig_info(destination))
+            .map(|info| multisig_signature_size(&info))
+            .ok_or_else(|| SizeEstimationError::UnsupportedInputDestination(destination.clone())),
     }
 }
 

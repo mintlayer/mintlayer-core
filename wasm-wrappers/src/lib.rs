@@ -763,6 +763,7 @@ pub fn encode_input_for_withdraw_from_delegation(
 /// for Account inputs that spend from a delegation it is the owning address of that delegation,
 /// and in the case of AccountCommand inputs which change a token it is the token's authority destination)
 /// and the outputs, estimate the transaction size.
+/// ScriptHash and ClassicMultisig destinations are not supported.
 #[wasm_bindgen]
 pub fn estimate_transaction_size(
     inputs: &[u8],
@@ -784,8 +785,9 @@ pub fn estimate_transaction_size(
 
     for destination in input_utxos_destinations {
         let destination = parse_addressable::<Destination>(&chain_config, &destination)?;
-        let signature_size = input_signature_size_from_destination(&destination)
-            .map_err(|_| Error::InvalidAddressable)?;
+        let signature_size =
+            input_signature_size_from_destination(&destination, Option::<&_>::None)
+                .map_err(|_| Error::InvalidAddressable)?;
 
         total_size += signature_size;
     }

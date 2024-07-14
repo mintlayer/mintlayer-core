@@ -35,7 +35,10 @@ use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
-    account::{transaction_list::TransactionList, PoolData, TransactionToSign, TxInfo},
+    account::{
+        currency_grouper::Currency, transaction_list::TransactionList, PoolData, TransactionToSign,
+        TxInfo,
+    },
     WalletError,
 };
 
@@ -44,6 +47,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
+        output_value::OutputValue,
         partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
@@ -63,11 +67,11 @@ pub use interface::{
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{
-        Balances, BlockInfo, CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase,
-        TransactionToInspect, WalletInfo,
+        Balances, BlockInfo, CreatedBlockInfo, GenericTxTokenOutput, InspectTransaction,
+        SeedWithPassPhrase, TransactionToInspect, WalletInfo,
     },
-    ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes,
-    DEFAULT_ACCOUNT_INDEX,
+    ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoState, UtxoStates,
+    UtxoType, UtxoTypes, DEFAULT_ACCOUNT_INDEX,
 };
 use wallet_types::{
     account_info::StandaloneAddressDetails, seed_phrase::StoreSeedPhrase,
@@ -1050,6 +1054,126 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 })
             })
             .await?
+    }
+
+    pub async fn make_tx_to_send_tokens_from_multisig_address(
+        &self,
+        account_index: U31,
+        from_rpc_address: RpcAddress<Destination>,
+        fee_change_rpc_address: Option<RpcAddress<Destination>>,
+        outputs: Vec<GenericTxTokenOutput>,
+        config: ControllerConfig,
+    ) -> WRpcResult<(PartiallySignedTransaction, Vec<SignatureStatus>, Balances), N> {
+        let from_address = from_rpc_address
+            .clone()
+            .into_address(&self.chain_config)
+            .map_err(|_| RpcError::InvalidAddressWithAddr(from_rpc_address.into_string()))?;
+
+        ensure!(
+            matches!(from_address.as_object(), Destination::ClassicMultisig(_)),
+            RpcError::NotMultisigAddress(from_address.as_str().to_owned())
+        );
+
+        ensure!(!outputs.is_empty(), RpcError::NoOutputsSpecified);
+
+        let outputs_by_token_id = {
+            let mut result = BTreeMap::<_, Vec<_>>::new();
+
+            for output in outputs {
+                result.entry(output.token_id).or_default().push(output.output);
+            }
+
+            result
+        };
+
+        let inputs = self
+            .get_multisig_utxos(
+                account_index,
+                UtxoType::Transfer | UtxoType::LockThenTransfer,
+                UtxoState::Confirmed | UtxoState::InMempool,
+                WithLocked::Unlocked,
+            )
+            .await?;
+
+        let inputs = inputs
+            .into_iter()
+            .filter(|(_, txo)| {
+                let (val, dest) = match txo {
+                    TxOutput::Transfer(val, dest) | TxOutput::LockThenTransfer(val, dest, _) => {
+                        (val, dest)
+                    }
+                    TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::IssueNft(_, _, _)
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::CreateStakePool(_, _)
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::Burn(_)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::DataDeposit(_)
+                    | TxOutput::AnyoneCanTake(_) => return false,
+                };
+
+                let src_token_id = match val {
+                    OutputValue::Coin(_) | OutputValue::TokenV0(_) => return false,
+                    OutputValue::TokenV1(token_id, _) => token_id,
+                };
+
+                outputs_by_token_id.contains_key(src_token_id) && dest == from_address.as_object()
+            })
+            .collect::<Vec<_>>();
+
+        ensure!(
+            !inputs.is_empty(),
+            RpcError::NoUtxosForMultisigAddressForTokens(
+                outputs_by_token_id.keys().copied().collect()
+            )
+        );
+
+        let change_addresses = {
+            let mut change_addresses = BTreeMap::new();
+
+            if let Some(fee_change_rpc_address) = fee_change_rpc_address {
+                let fee_change_addr =
+                    fee_change_rpc_address.clone().into_address(&self.chain_config).map_err(
+                        |_| RpcError::InvalidAddressWithAddr(fee_change_rpc_address.into_string()),
+                    )?;
+
+                change_addresses.insert(Currency::Coin, fee_change_addr);
+            }
+
+            for token_id in outputs_by_token_id.keys() {
+                change_addresses.insert(Currency::Token(*token_id), from_address.clone());
+            }
+
+            change_addresses
+        };
+
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    let mut synced_controller =
+                        controller.synced_controller(account_index, config).await?;
+
+                    let (tx, fees) = synced_controller
+                        .make_unsigned_tx_to_send_tokens_to_addresses(
+                            inputs,
+                            outputs_by_token_id,
+                            change_addresses,
+                        )
+                        .await
+                        .map_err(RpcError::Controller)?;
+
+                    let (tx, _, cur_signatures) = synced_controller
+                        .sign_raw_transaction(TransactionToSign::Partial(tx))
+                        .map_err(RpcError::Controller)?;
+
+                    Ok::<_, RpcError<N>>((tx, cur_signatures, fees))
+                })
+            })
+            .await?
+
+        // FIXME validate the produced transaction
     }
 
     pub async fn create_stake_pool(

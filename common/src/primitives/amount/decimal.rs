@@ -33,7 +33,7 @@ const TEN: UnsignedIntType = 10;
 /// 2. Compare the implied textual representation, e.g. "1.0" and "1.000" are considered different
 /// The user is expected to convert to a number or a string before comparing to explicitly state
 /// which for of comparison is desired in any given situation.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DecimalAmount {
     mantissa: UnsignedIntType,
     decimals: u8,
@@ -86,6 +86,14 @@ impl DecimalAmount {
     /// Check this is the same number presented with the same precision
     pub fn is_same(&self, other: &Self) -> bool {
         (self.mantissa, self.decimals) == (other.mantissa, other.decimals)
+    }
+
+    pub fn mantissa(&self) -> UnsignedIntType {
+        self.mantissa
+    }
+
+    pub fn decimals(&self) -> u8 {
+        self.decimals
     }
 }
 

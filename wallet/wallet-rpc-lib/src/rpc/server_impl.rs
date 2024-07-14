@@ -32,7 +32,7 @@ use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
+    types::{BlockInfo, CreatedBlockInfo, GenericTxTokenOutput, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
 };
 use wallet_types::{
@@ -47,8 +47,9 @@ use crate::{
         MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
         NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
         RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
-        RpcUtxoType, StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
-        TransactionOptions, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
+        RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+        StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
+        UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError,
 };
@@ -937,6 +938,37 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         rpc::handle_result(
             self.send_tokens(account_arg.index::<N>()?, token_id, address, amount, config)
                 .await,
+        )
+    }
+
+    async fn make_tx_to_send_tokens_from_multisig_address(
+        &self,
+        account_arg: AccountArg,
+        from_address: RpcAddress<Destination>,
+        fee_change_address: Option<RpcAddress<Destination>>,
+        outputs: Vec<GenericTxTokenOutput>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<SendTokensFromMultisigAddressResult> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb(),
+            broadcast_to_mempool: true,
+        };
+        rpc::handle_result(
+            self.make_tx_to_send_tokens_from_multisig_address(
+                account_arg.index::<N>()?,
+                from_address,
+                fee_change_address,
+                outputs,
+                config,
+            )
+            .await
+            .map(|(tx, cur_signatures, fees)| {
+                SendTokensFromMultisigAddressResult::from_tx_signatures_fees(
+                    tx,
+                    cur_signatures.into_iter().map(Into::into).collect(),
+                    fees,
+                )
+            }),
         )
     }
 

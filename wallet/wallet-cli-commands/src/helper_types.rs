@@ -16,11 +16,12 @@
 use std::{fmt::Display, str::FromStr};
 
 use clap::ValueEnum;
+use wallet_controller::types::{GenericTxOutput, GenericTxTokenOutput};
 use wallet_types::utxo_types::{UtxoState, UtxoType};
 
 use common::{
     address::Address,
-    chain::{output_value::OutputValue, ChainConfig, OutPointSourceId, TxOutput, UtxoOutPoint},
+    chain::{ChainConfig, OutPointSourceId, TxOutput, UtxoOutPoint},
     primitives::{DecimalAmount, Id, H256},
 };
 use wallet_rpc_lib::types::{NodeInterface, PoolInfo, TokenTotalSupply};
@@ -161,32 +162,26 @@ impl EnableOrDisable {
 /// e.g tx(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,1)
 /// e.g block(000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c,2)
 pub fn parse_utxo_outpoint<N: NodeInterface>(
-    mut input: String,
+    input: &str,
 ) -> Result<UtxoOutPoint, WalletCliCommandError<N>> {
-    if !input.ends_with(')') {
-        return Err(WalletCliCommandError::<N>::InvalidInput(
-            "Invalid input format".into(),
-        ));
-    }
-    input.pop();
+    let (name, mut args) = parse_funclike_expr(input).ok_or(
+        WalletCliCommandError::<N>::InvalidInput("Invalid output format".into()),
+    )?;
 
-    let mut parts: Vec<&str> = input.split('(').collect();
-    let last = parts.pop().ok_or(WalletCliCommandError::<N>::InvalidInput(
-        "Invalid input format".to_owned(),
-    ))?;
-    parts.extend(last.split(','));
+    let (h256_str, output_index_str) = match (args.next(), args.next(), args.next()) {
+        (Some(h256_str), Some(output_index_str), None) => (h256_str, output_index_str),
+        (_, _, _) => {
+            return Err(WalletCliCommandError::<N>::InvalidInput(
+                "Invalid output format".into(),
+            ));
+        }
+    };
 
-    if parts.len() != 3 {
-        return Err(WalletCliCommandError::<N>::InvalidInput(
-            "Invalid input format".into(),
-        ));
-    }
-
-    let h256 = H256::from_str(parts[1])
+    let h256 = H256::from_str(h256_str)
         .map_err(|err| WalletCliCommandError::<N>::InvalidInput(err.to_string()))?;
-    let output_index = u32::from_str(parts[2])
+    let output_index = u32::from_str(output_index_str)
         .map_err(|err| WalletCliCommandError::<N>::InvalidInput(err.to_string()))?;
-    let source_id = match parts[0] {
+    let source_id = match name {
         "tx" => OutPointSourceId::Transaction(Id::new(h256)),
         "block" => OutPointSourceId::BlockReward(Id::new(h256)),
         _ => {
@@ -199,51 +194,38 @@ pub fn parse_utxo_outpoint<N: NodeInterface>(
     Ok(UtxoOutPoint::new(source_id, output_index))
 }
 
-/// Parses a string into UtxoOutPoint
-/// The string format is expected to be
-/// transfer(address,amount)
-///
-/// e.g transfer(tmt1qy7y8ra99sgmt97lu2kn249yds23pnp7xsv62p77,10.1)
-pub fn parse_output<N: NodeInterface>(
-    mut input: String,
+/// Parses a string into `GenericTxOutput`.
+/// The string format is expected to be `transfer(address,amount)`
+/// e.g `transfer(tmt1qy7y8ra99sgmt97lu2kn249yds23pnp7xsv62p77,10.1)`.
+pub fn parse_generic_output<N: NodeInterface>(
+    input: &str,
     chain_config: &ChainConfig,
-) -> Result<TxOutput, WalletCliCommandError<N>> {
-    if !input.ends_with(')') {
-        return Err(WalletCliCommandError::<N>::InvalidInput(
-            "Invalid output format".into(),
-        ));
-    }
-    input.pop();
+) -> Result<GenericTxOutput, WalletCliCommandError<N>> {
+    let (name, mut args) = parse_funclike_expr(input).ok_or(
+        WalletCliCommandError::<N>::InvalidInput("Invalid output format".into()),
+    )?;
 
-    let mut parts: Vec<&str> = input.split('(').collect();
-    let last = parts.pop().ok_or(WalletCliCommandError::<N>::InvalidInput(
-        "Invalid output format".to_owned(),
-    ))?;
-    parts.extend(last.split(','));
+    let (dest_str, amount_str) = match (args.next(), args.next(), args.next()) {
+        (Some(dest_str), Some(amount_str), None) => (dest_str, amount_str),
+        (_, _, _) => {
+            return Err(WalletCliCommandError::<N>::InvalidInput(
+                "Invalid output format".into(),
+            ));
+        }
+    };
 
-    if parts.len() != 3 {
-        return Err(WalletCliCommandError::<N>::InvalidInput(
-            "Invalid output format".into(),
-        ));
-    }
-
-    let dest = Address::from_string(chain_config, parts[1])
+    let dest = Address::from_string(chain_config, dest_str)
         .map_err(|err| {
-            WalletCliCommandError::<N>::InvalidInput(format!("invalid address {} {err}", parts[1]))
+            WalletCliCommandError::<N>::InvalidInput(format!("invalid address {dest_str} {err}"))
         })?
         .into_object();
 
-    let amount = DecimalAmount::from_str(parts[2])
-        .map_err(|err| {
-            WalletCliCommandError::<N>::InvalidInput(format!("invalid amount {} {err}", parts[2]))
-        })?
-        .to_amount(chain_config.coin_decimals())
-        .ok_or(WalletCliCommandError::<N>::InvalidInput(
-            "invalid coins amount".to_string(),
-        ))?;
+    let amount = DecimalAmount::from_str(amount_str).map_err(|err| {
+        WalletCliCommandError::<N>::InvalidInput(format!("invalid amount {amount_str} {err}"))
+    })?;
 
-    let output = match parts[0] {
-        "transfer" => TxOutput::Transfer(OutputValue::Coin(amount), dest),
+    let output = match name {
+        "transfer" => GenericTxOutput::Transfer(amount, dest),
         _ => {
             return Err(WalletCliCommandError::<N>::InvalidInput(
                 "Invalid output: unknown type".into(),
@@ -252,6 +234,111 @@ pub fn parse_output<N: NodeInterface>(
     };
 
     Ok(output)
+}
+
+/// Parses a string into `GenericTxTokenOutput`.
+/// The string format is expected to be `transfer(token_id,address,amount)`
+pub fn parse_generic_token_output<N: NodeInterface>(
+    input: &str,
+    chain_config: &ChainConfig,
+) -> Result<GenericTxTokenOutput, WalletCliCommandError<N>> {
+    let (name, mut args) = parse_funclike_expr(input).ok_or(
+        WalletCliCommandError::<N>::InvalidInput("Invalid output format".into()),
+    )?;
+
+    let (token_id_str, dest_str, amount_str) =
+        match (args.next(), args.next(), args.next(), args.next()) {
+            (Some(dest_str), Some(amount_str), Some(token_id_str), None) => {
+                (dest_str, amount_str, token_id_str)
+            }
+            (_, _, _, _) => {
+                return Err(WalletCliCommandError::<N>::InvalidInput(
+                    "Invalid output format".into(),
+                ));
+            }
+        };
+
+    let token_id = Address::from_string(chain_config, token_id_str)
+        .map_err(|err| {
+            WalletCliCommandError::<N>::InvalidInput(format!(
+                "invalid token id {token_id_str} {err}"
+            ))
+        })?
+        .into_object();
+
+    let dest = Address::from_string(chain_config, dest_str)
+        .map_err(|err| {
+            WalletCliCommandError::<N>::InvalidInput(format!("invalid address {dest_str} {err}"))
+        })?
+        .into_object();
+
+    let amount = DecimalAmount::from_str(amount_str).map_err(|err| {
+        WalletCliCommandError::<N>::InvalidInput(format!("invalid amount {amount_str} {err}"))
+    })?;
+
+    let output = match name {
+        "transfer" => GenericTxTokenOutput {
+            token_id,
+            output: GenericTxOutput::Transfer(amount, dest),
+        },
+
+        _ => {
+            return Err(WalletCliCommandError::<N>::InvalidInput(
+                "Invalid output: unknown type".into(),
+            ));
+        }
+    };
+
+    Ok(output)
+}
+
+// FIXME tests for parse_funclike_expr and calling funcs
+
+/// Parse simple strings of the form "foo(x,y,z)".
+fn parse_funclike_expr(input: &str) -> Option<(&str, impl Iterator<Item = &'_ str>)> {
+    let input = input.trim();
+    let (last_char, input) = pop_char_from_str(input);
+
+    if last_char != Some(')') {
+        return None;
+    }
+
+    let parens_pos = input.find('(')?;
+
+    // Note: parens_pos is known to be at the character boundary.
+    #[allow(clippy::string_slice)]
+    let (func_name, input) = {
+        (
+            &input[..parens_pos].trim(),
+            skip_char_from_str(&input[parens_pos..]).1,
+        )
+    };
+
+    let args = input.split(',').map(|s| s.trim());
+
+    Some((func_name, args))
+}
+
+fn skip_char_from_str(s: &str) -> (Option<char>, &str) {
+    let mut chars = s.chars();
+    let last_ch = chars.next();
+    (last_ch, chars.as_str())
+}
+
+fn pop_char_from_str(s: &str) -> (Option<char>, &str) {
+    let mut chars = s.chars();
+    let last_ch = chars.next_back();
+    (last_ch, chars.as_str())
+}
+
+/// Same as `parse_generic_output`, but produce a concrete TxOutput that transfers coins.
+pub fn parse_coin_output<N: NodeInterface>(
+    input: &str,
+    chain_config: &ChainConfig,
+) -> Result<TxOutput, WalletCliCommandError<N>> {
+    parse_generic_output(input, chain_config)?
+        .into_coin_output(chain_config)
+        .map_err(WalletCliCommandError::<N>::InvalidGenericTxOutput)
 }
 
 /// Try to parse a total token supply from a string
@@ -306,7 +393,7 @@ mod tests {
     #[trace]
     #[case(Seed::from_entropy())]
     fn test_parse_utxo_outpoint(#[case] seed: Seed) {
-        fn check(input: String, is_tx: bool, idx: u32, hash: H256) {
+        fn check(input: &str, is_tx: bool, idx: u32, hash: H256) {
             let utxo_outpoint = parse_utxo_outpoint::<ColdWalletClient>(input).unwrap();
 
             match utxo_outpoint.source_id() {
@@ -333,7 +420,7 @@ mod tests {
             } else {
                 ("block", false)
             };
-            check(format!("{id}({h256:x},{idx})"), is_tx, idx, h256);
+            check(&format!("{id}({h256:x},{idx})"), is_tx, idx, h256);
         }
     }
 }

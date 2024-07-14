@@ -29,7 +29,7 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use rpc::types::RpcHexString;
 use wallet::account::TxInfo;
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
+    types::{BlockInfo, CreatedBlockInfo, GenericTxTokenOutput, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer,
 };
 use wallet_types::with_locked::WithLocked;
@@ -40,8 +40,9 @@ use crate::types::{
     MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
     NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcInspectTransaction,
     RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
-    StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
-    TransactionOptions, TxOptionsOverrides, VrfPublicKeyInfo,
+    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
+    VrfPublicKeyInfo,
 };
 
 #[rpc::rpc(server)]
@@ -625,6 +626,22 @@ trait WalletRpc {
         amount: RpcAmountIn,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
+
+    /// Create a transaction for sending tokens from a multisig address to other addresses, returning the change to
+    /// the original multisig address.
+    ///
+    /// The utxos to pay fees from will be selected automatically; these will be normal, single-sig utxos.
+    /// The `fee_change_address` parameter specifies the destination for the change for the fee payment;
+    /// If it's `None`, the destination will be taken from one of existing single-sig utxos.
+    #[method(name = "make_tx_to_send_tokens_from_multisig_address")]
+    async fn make_tx_to_send_tokens_from_multisig_address(
+        &self,
+        account_arg: AccountArg,
+        from_address: RpcAddress<Destination>,
+        fee_change_address: Option<RpcAddress<Destination>>,
+        outputs: Vec<GenericTxTokenOutput>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<SendTokensFromMultisigAddressResult>;
 
     /// Store data on the blockchain, the data is provided as hex encoded string.
     /// Note that there is a high fee for storing data on the blockchain.

@@ -43,8 +43,8 @@ use std::{
     time::Duration,
 };
 use types::{
-    Balances, InspectTransaction, SeedWithPassPhrase, SignatureStats, TransactionToInspect,
-    ValidatedSignatures, WalletInfo,
+    Balances, GenericTxOutputError, InspectTransaction, SeedWithPassPhrase, SignatureStats,
+    TransactionToInspect, ValidatedSignatures, WalletInfo,
 };
 
 use read::ReadOnlyController;
@@ -130,6 +130,16 @@ pub enum ControllerError<T: NodeInterface> {
     NoWallet,
     #[error("Search for timestamps failed: {0}")]
     SearchForTimestampsFailed(BlockProductionError),
+    #[error("Expecting non-empty inputs")]
+    ExpectingNonEmptyInputs,
+    #[error("Expecting non-empty outputs")]
+    ExpectingNonEmptyOutputs,
+    #[error("No coin UTXOs to pay fee from")]
+    NoCoinUtxosToPayFeeFrom,
+    #[error("Invalid tx output: {0:?}")]
+    InvalidGenericTxOutput(GenericTxOutputError),
+    #[error("The specified token {0} is not a fungible token")]
+    NotFungibleToken(TokenId),
 }
 
 #[derive(Clone, Copy)]

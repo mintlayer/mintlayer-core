@@ -33,7 +33,7 @@ use serialization::{hex::HexEncode, hex_encoded::HexEncoded, json_encoded::JsonE
 use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
-    types::{CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
+    types::{CreatedBlockInfo, GenericTxTokenOutput, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
@@ -41,8 +41,8 @@ use wallet_rpc_lib::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
         NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcInspectTransaction,
-        RpcStandaloneAddresses, RpcTokenId, StakePoolBalance, StakingStatus,
-        StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
+        RpcStandaloneAddresses, RpcTokenId, SendTokensFromMultisigAddressResult, StakePoolBalance,
+        StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
         VrfPublicKeyInfo,
     },
     RpcError, WalletRpc,
@@ -968,6 +968,33 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
                 config,
             )
             .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn make_tx_to_send_tokens_from_multisig_address(
+        &self,
+        account_index: U31,
+        from_address: String,
+        fee_change_address: Option<String>,
+        outputs: Vec<GenericTxTokenOutput>,
+        config: ControllerConfig,
+    ) -> Result<SendTokensFromMultisigAddressResult, Self::Error> {
+        self.wallet_rpc
+            .make_tx_to_send_tokens_from_multisig_address(
+                account_index,
+                from_address.into(),
+                fee_change_address.map(Into::into),
+                outputs,
+                config,
+            )
+            .await
+            .map(|(tx, cur_signatures, fees)| {
+                SendTokensFromMultisigAddressResult::from_tx_signatures_fees(
+                    tx,
+                    cur_signatures.into_iter().map(Into::into).collect(),
+                    fees,
+                )
+            })
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
