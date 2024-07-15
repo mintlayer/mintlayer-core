@@ -41,12 +41,15 @@ use wallet_rpc_lib::types::{
     RpcValidatedSignatures, TokenMetadata,
 };
 
-#[cfg(feature = "trezor")]
-use crate::helper_types::CLIHardwareWalletType;
+// #[cfg(feature = "trezor")]
+// use crate::helper_types::CLIHardwareWalletType;
 #[cfg(feature = "trezor")]
 use wallet_rpc_lib::types::HardwareWalletType;
 
-use crate::{errors::WalletCliCommandError, ManageableWalletCommand, WalletManagementCommand};
+use crate::{
+    errors::WalletCliCommandError, helper_types::CLIHardwareWalletType, ManageableWalletCommand,
+    WalletManagementCommand,
+};
 
 use self::local_state::WalletWithState;
 
@@ -148,9 +151,10 @@ where
                 passphrase,
                 hardware_wallet,
             } => {
-                let hardware_wallet = hardware_wallet.map(|t| match t {
+                let hardware_wallet = hardware_wallet.and_then(|t| match t {
                     #[cfg(feature = "trezor")]
-                    CLIHardwareWalletType::Trezor => HardwareWalletType::Trezor,
+                    CLIHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
+                    CLIHardwareWalletType::None => None,
                 });
 
                 let newly_generated_mnemonic = self
