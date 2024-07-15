@@ -44,3 +44,8 @@ test-utils = { path = "../../test-utils" }
 
 anyhow.workspace = true
 rstest.workspace = true
+
+[features]
+trezor = []
+
+default = ["trezor"]

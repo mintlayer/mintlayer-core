@@ -21,8 +21,14 @@ use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
 use crate::{Account, SendRequest};
 use common::chain::config::create_regtest;
 use common::chain::output_value::OutputValue;
-use common::chain::{Transaction, TxInput};
+use common::chain::signature::verify_signature;
+use common::chain::timelock::OutputTimeLock;
+use common::chain::tokens::TokenId;
+use common::chain::{
+    AccountNonce, AccountOutPoint, DelegationId, GenBlock, PoolId, Transaction, TxInput,
+};
 use common::primitives::{Amount, Id, H256};
+use crypto::key::KeyKind;
 use randomness::{Rng, RngCore};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -59,7 +65,7 @@ fn sign_transaction(#[case] seed: Seed) {
         .unwrap();
     let mut account = Account::new(chain_config.clone(), &mut db_tx, key_chain, None).unwrap();
 
-    let amounts: Vec<Amount> = (0..1) //(0..(2 + rng.next_u32() % 5))
+    let amounts: Vec<Amount> = (0..3) //(0..(2 + rng.next_u32() % 5))
         // .map(|_| Amount::from_atoms(rng.next_u32() as UnsignedIntType))
         .map(|_| Amount::from_atoms(1))
         .collect();
@@ -82,15 +88,41 @@ fn sign_transaction(#[case] seed: Seed) {
         })
         .collect();
 
-    let inputs: Vec<TxInput> = utxos
-        .iter()
-        .map(|_txo| {
-            // let source_id = if rng.gen_bool(0.5) {
-            let source_id = Id::<Transaction>::new(H256::random_using(&mut rng)).into();
-            // } else {
-            //     Id::<GenBlock>::new(H256::random_using(&mut rng)).into()
-            // };
+    let inputs: Vec<TxInput> = (0..utxos.len())
+        .into_iter()
+        .map(|_| {
+            let source_id = if rng.gen_bool(0.5) {
+                Id::<Transaction>::new(H256::random_using(&mut rng)).into()
+            } else {
+                Id::<GenBlock>::new(H256::random_using(&mut rng)).into()
+            };
             TxInput::from_utxo(source_id, rng.next_u32())
+        })
+        .collect();
+
+    let acc_inputs = vec![
+        TxInput::Account(AccountOutPoint::new(
+            AccountNonce::new(1),
+            AccountSpending::DelegationBalance(
+                DelegationId::new(H256::random_using(&mut rng)).into(),
+                Amount::from_atoms(rng.next_u32() as u128),
+            ),
+        )),
+        TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
+            AccountCommand::UnmintTokens(TokenId::new(H256::random_using(&mut rng)).into()),
+        ),
+    ];
+    let acc_dests: Vec<Destination> = acc_inputs
+        .iter()
+        .map(|_| {
+            let purpose = if rng.gen_bool(0.5) {
+                ReceiveFunds
+            } else {
+                Change
+            };
+
+            account.get_new_address(&mut db_tx, purpose).unwrap().1.into_object()
         })
         .collect();
 
@@ -103,28 +135,38 @@ fn sign_transaction(#[case] seed: Seed) {
         .fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
     let _fee_amount = total_amount.sub(outputs_amounts_sum).unwrap();
 
-    // let (_dest_prv, dest_pub) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let (_dest_prv, dest_pub) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
     let outputs = vec![
-        // TxOutput::Transfer(
-        //     OutputValue::Coin(dest_amount),
-        //     Destination::PublicKey(dest_pub),
-        // ),
-        // TxOutput::LockThenTransfer(
-        //     OutputValue::Coin(lock_amount),
-        //     Destination::AnyoneCanSpend,
-        //     OutputTimeLock::ForSeconds(rng.next_u64()),
-        // ),
-        // TxOutput::Burn(OutputValue::Coin(burn_amount)),
+        TxOutput::Transfer(
+            OutputValue::Coin(dest_amount),
+            Destination::PublicKey(dest_pub),
+        ),
+        TxOutput::LockThenTransfer(
+            OutputValue::Coin(lock_amount),
+            Destination::AnyoneCanSpend,
+            OutputTimeLock::ForSeconds(rng.next_u64()),
+        ),
+        TxOutput::Burn(OutputValue::Coin(burn_amount)),
         TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(100_000_000_000)),
             account.get_new_address(&mut db_tx, Change).unwrap().1.into_object(),
         ),
+        TxOutput::CreateDelegationId(
+            Destination::AnyoneCanSpend,
+            PoolId::new(H256::random_using(&mut rng)).into(),
+        ),
+        TxOutput::DelegateStaking(
+            Amount::from_atoms(200),
+            DelegationId::new(H256::random_using(&mut rng)).into(),
+        ),
     ];
 
-    let tx = Transaction::new(0, inputs.clone(), outputs).unwrap();
-
-    let req = SendRequest::from_transaction(tx, utxos.clone(), &|_| None).unwrap();
+    let req = SendRequest::new()
+        .with_inputs(inputs.clone().into_iter().zip(utxos.clone()), &|_| None)
+        .unwrap()
+        .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
+        .with_outputs(outputs);
     let ptx = req.into_partially_signed_tx().unwrap();
 
     let mut devices = find_devices(false);
@@ -138,12 +180,13 @@ fn sign_transaction(#[case] seed: Seed) {
     );
     let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).unwrap();
 
-    eprintln!("num inputs in tx: {}", inputs.len());
+    eprintln!("num inputs in tx: {} {:?}", inputs.len(), ptx.witnesses());
     assert!(ptx.all_signatures_available());
 
     let sig_tx = ptx.into_signed_tx().unwrap();
 
-    let utxos_ref = utxos.iter().map(Some).collect::<Vec<_>>();
+    let utxos_ref =
+        utxos.iter().map(Some).chain(acc_dests.iter().map(|_| None)).collect::<Vec<_>>();
 
     for i in 0..sig_tx.inputs().len() {
         let destination = get_tx_output_destination(

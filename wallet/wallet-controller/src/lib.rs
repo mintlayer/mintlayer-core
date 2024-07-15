@@ -285,7 +285,7 @@ where
                     db,
                     best_block,
                     wallet_type,
-                    |db_tx| Ok(TrezorSignerProvider::new().map_err(SignerError::TrezorError)?),
+                    |_db_tx| Ok(TrezorSignerProvider::new().map_err(SignerError::TrezorError)?),
                 )
                 .map_err(ControllerError::WalletError)?;
                 Ok(WalletType2::Trezor(wallet))
@@ -341,7 +341,7 @@ where
                     Arc::clone(&chain_config),
                     db,
                     wallet_type,
-                    |db_tx| Ok(TrezorSignerProvider::new().map_err(SignerError::TrezorError)?),
+                    |_db_tx| Ok(TrezorSignerProvider::new().map_err(SignerError::TrezorError)?),
                 )
                 .map_err(ControllerError::WalletError)?;
                 Ok(WalletType2::Trezor(wallet))
