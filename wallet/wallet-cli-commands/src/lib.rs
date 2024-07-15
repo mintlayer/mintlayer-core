@@ -65,7 +65,7 @@ pub enum WalletManagementCommand {
 
         /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
         /// the software wallet
-        #[arg(long, conflicts_with_all(["mnemonic", "passphrase", "whether_to_store_seed_phrase"]))]
+        #[arg(long, conflicts_with_all(["mnemonic", "passphrase"]))]
         hardware_wallet: Option<CLIHardwareWalletType>,
     },
 

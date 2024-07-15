@@ -4,7 +4,6 @@
 // This significantly improves compile times.
 // See https://github.com/joshieDo/rust-trezor-api/pull/9 for more details.
 #[allow(ambiguous_glob_reexports, unreachable_pub)]
-#[allow(clippy::all)]
 mod generated {
     macro_rules! modules {
         ($($($feature:literal =>)? $module:ident)+) => {$(
