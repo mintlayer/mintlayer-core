@@ -11,13 +11,11 @@
 //! We use the log package interface, so any logger that supports log can be attached.
 //! Please be aware that `trace` logging can contain sensitive data.
 
-#![allow(clippy::all)]
 #![warn(unreachable_pub, rustdoc::all)]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 #![deny(unused_must_use, rust_2018_idioms)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
-#[allow(clippy::all)]
 mod messages;
 
 pub mod client;
@@ -27,7 +25,6 @@ pub mod transport;
 #[cfg(feature = "bitcoin")]
 pub mod utils;
 
-#[allow(clippy::all)]
 mod flows {
     #[cfg(feature = "bitcoin")]
     pub(crate) mod sign_tx;
@@ -86,11 +83,7 @@ pub struct AvailableDevice {
 
 impl fmt::Display for AvailableDevice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{} (transport: {}) (debug: {})",
-            self.model, &self.transport, self.debug
-        )
+        write!(f, "{} (transport: {}) (debug: {})", self.model, &self.transport, self.debug)
     }
 }
 
@@ -166,7 +159,7 @@ mod tests {
     #[serial]
     fn test_emulator_find() {
         let trezors = find_devices(false);
-        assert!(!trezors.is_empty());
+        assert!(trezors.len() > 0);
         assert!(trezors.iter().any(|t| t.model == Model::TrezorEmulator));
     }
 
@@ -176,11 +169,11 @@ mod tests {
         let emulator = init_emulator();
         let features = emulator.features().expect("Failed to get features");
         assert_eq!(features.vendor(), "trezor.io");
-        assert!(features.initialized());
-        assert!(!features.firmware_present());
-        assert!(features.initialized());
-        assert!(!features.pin_protection());
-        assert!(!features.passphrase_protection());
+        assert_eq!(features.initialized(), true);
+        assert_eq!(features.firmware_present(), false);
+        assert_eq!(features.initialized(), true);
+        assert_eq!(features.pin_protection(), false);
+        assert_eq!(features.passphrase_protection(), false);
         assert!(["T", "Safe 3"].contains(&features.model()));
     }
 
@@ -188,23 +181,12 @@ mod tests {
     #[serial]
     fn test_bitcoin_address() {
         let mut emulator = init_emulator();
-        assert_eq!(
-            emulator.features().expect("Failed to get features").label(),
-            "SLIP-0014"
-        );
+        assert_eq!(emulator.features().expect("Failed to get features").label(), "SLIP-0014");
         let path = DerivationPath::from_str("m/44'/1'/0'/0/0").expect("Failed to parse path");
         let address = emulator
-            .get_address(
-                &path,
-                InputScriptType::SPENDADDRESS,
-                bitcoin::Network::Testnet,
-                false,
-            )
+            .get_address(&path, InputScriptType::SPENDADDRESS, bitcoin::Network::Testnet, false)
             .expect("Failed to get address");
-        assert_eq!(
-            address.ok().unwrap().to_string(),
-            "mvbu1Gdy8SUjTenqerxUaZyYjmveZvt33q"
-        );
+        assert_eq!(address.ok().unwrap().to_string(), "mvbu1Gdy8SUjTenqerxUaZyYjmveZvt33q");
     }
 
     #[ignore]
@@ -214,10 +196,7 @@ mod tests {
         tracing_subscriber::fmt().with_max_level(tracing::Level::TRACE).init();
 
         let mut emulator = init_emulator();
-        assert_eq!(
-            emulator.features().expect("Failed to get features").label(),
-            "SLIP-0014"
-        );
+        assert_eq!(emulator.features().expect("Failed to get features").label(), "SLIP-0014");
 
         let mut ident = IdentityType::new();
         ident.set_proto("gpg".to_owned());

@@ -8806,6 +8806,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tower",
+ "utils",
  "utils-networking",
  "wallet",
  "wallet-controller",
