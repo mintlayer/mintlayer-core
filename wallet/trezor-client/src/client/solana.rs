@@ -7,10 +7,9 @@ impl Trezor {
         let mut req = protos::SolanaGetAddress::new();
         req.address_n = path;
         req.show_display = Some(true);
-        let address = handle_interaction(self.call(
-            req,
-            Box::new(|_, m: protos::SolanaAddress| Ok(m.address().into())),
-        )?)?;
+        let address = handle_interaction(
+            self.call(req, Box::new(|_, m: protos::SolanaAddress| Ok(m.address().into())))?,
+        )?;
         Ok(address)
     }
 }
