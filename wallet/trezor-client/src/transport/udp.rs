@@ -48,7 +48,7 @@ impl Link for UdpLink {
         let timeout = Duration::from_millis(WRITE_TIMEOUT_MS);
         self.socket.set_write_timeout(Some(timeout))?;
         if let Err(e) = self.socket.send(&chunk) {
-            return Err(e.into());
+            return Err(e.into())
         }
         Ok(())
     }
@@ -100,15 +100,11 @@ impl UdpTransport {
         let mut devices = Vec::new();
         let mut dest = String::new();
         match path {
-            Some(p) => p.clone_into(&mut dest),
+            Some(p) => dest = p.to_owned(),
             None => {
                 dest.push_str(DEFAULT_HOST);
                 dest.push(':');
-                dest.push_str(if debug {
-                    DEFAULT_DEBUG_PORT
-                } else {
-                    DEFAULT_PORT
-                });
+                dest.push_str(if debug { DEFAULT_DEBUG_PORT } else { DEFAULT_PORT });
             }
         };
         let link = UdpLink::open(&dest)?;
@@ -136,9 +132,7 @@ impl UdpTransport {
         path.push(':');
         path.push_str(&transport.port);
         let link = UdpLink::open(&path)?;
-        Ok(Box::new(UdpTransport {
-            protocol: ProtocolV1 { link },
-        }))
+        Ok(Box::new(UdpTransport { protocol: ProtocolV1 { link } }))
     }
 }
 

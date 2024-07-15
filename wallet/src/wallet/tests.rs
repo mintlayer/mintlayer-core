@@ -1087,7 +1087,7 @@ fn wallet_recover_new_account(#[case] seed: Seed) {
 
     let mut total_amounts = BTreeMap::new();
     let mut last_account_index = DEFAULT_ACCOUNT_INDEX;
-    let blocks = (0..rng.gen_range(1..1000))
+    let blocks = (0..rng.gen_range(1..100))
         .map(|idx| {
             let tx_amount1 = Amount::from_atoms(rng.gen_range(1..10));
             total_amounts

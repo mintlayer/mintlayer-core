@@ -30,6 +30,8 @@ use node_comm::node_traits::NodeInterface;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use rpc::types::RpcHexString;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded, json_encoded::JsonEncoded};
+#[cfg(feature = "trezor")]
+use utils::ensure;
 use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
