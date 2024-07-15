@@ -9142,6 +9142,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tower 0.4.13",
+ "utils",
  "utils-networking",
  "wallet",
  "wallet-controller",

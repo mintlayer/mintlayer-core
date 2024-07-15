@@ -30,10 +30,9 @@ impl Trezor {
     pub fn ethereum_get_address(&mut self, path: Vec<u32>) -> Result<String> {
         let mut req = protos::EthereumGetAddress::new();
         req.address_n = path;
-        let address = handle_interaction(self.call(
-            req,
-            Box::new(|_, m: protos::EthereumAddress| Ok(m.address().into())),
-        )?)?;
+        let address = handle_interaction(
+            self.call(req, Box::new(|_, m: protos::EthereumAddress| Ok(m.address().into())))?,
+        )?;
         Ok(address)
     }
 
@@ -46,7 +45,7 @@ impl Trezor {
             Box::new(|_, m: protos::EthereumMessageSignature| {
                 let signature = m.signature();
                 if signature.len() != 65 {
-                    return Err(Error::MalformedSignature);
+                    return Err(Error::MalformedSignature)
                 }
                 let r = signature[0..32].try_into().unwrap();
                 let s = signature[32..64].try_into().unwrap();

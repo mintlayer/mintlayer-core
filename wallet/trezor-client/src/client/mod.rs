@@ -10,8 +10,8 @@ pub use ethereum::*;
 
 #[cfg(feature = "solana")]
 mod solana;
-// #[cfg(feature = "solana")]
-// pub use solana::*;
+#[cfg(feature = "solana")]
+pub use solana::*;
 
 pub mod common;
 pub use common::*;
@@ -40,11 +40,7 @@ pub struct Trezor {
 
 /// Create a new Trezor instance with the given transport.
 pub fn trezor_with_transport(model: Model, transport: Box<dyn Transport>) -> Trezor {
-    Trezor {
-        model,
-        transport,
-        features: None,
-    }
+    Trezor { model, transport, features: None }
 }
 
 impl Trezor {

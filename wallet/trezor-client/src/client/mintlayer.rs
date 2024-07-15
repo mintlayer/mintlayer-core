@@ -9,8 +9,8 @@ use crate::{
     protos::{
         self, mintlayer_tx_ack_output::MintlayerTxAckOutputWrapper,
         mintlayer_tx_ack_utxo_input::MintlayerTxAckInputWrapper,
-        mintlayer_tx_request::MintlayerRequestType, MintlayerTransferTxOutput,
-        MintlayerTxAckOutput, MintlayerTxAckUtxoInput, MintlayerUtxoTxInput,
+        mintlayer_tx_request::MintlayerRequestType, MintlayerTxAckOutput, MintlayerTxAckUtxoInput,
+        MintlayerTxInput, MintlayerTxOutput,
     },
     Error, TrezorResponse,
 };
@@ -51,9 +51,9 @@ impl Trezor {
 
     pub fn mintlayer_sign_tx(
         &mut self,
-        inputs: Vec<MintlayerUtxoTxInput>,
-        outputs: Vec<MintlayerTransferTxOutput>,
-        utxos: BTreeMap<[u8; 32], BTreeMap<u32, MintlayerTransferTxOutput>>,
+        inputs: Vec<MintlayerTxInput>,
+        outputs: Vec<MintlayerTxOutput>,
+        utxos: BTreeMap<[u8; 32], BTreeMap<u32, MintlayerTxOutput>>,
     ) -> Result<Vec<Option<Vec<u8>>>> {
         let mut req = protos::MintlayerSignTx::new();
         req.set_version(1);
@@ -102,7 +102,7 @@ impl Trezor {
                         req.output = MessageField::from_option(
                             outputs.get(response.details.request_index() as usize).cloned(),
                         );
-                        eprintln!("sending tx output");
+                        eprintln!("sending tx output {req:?}");
                         should_ack_button += 2;
                         if response.details.request_index() as usize == outputs.len() - 1 {
                             eprintln!("last output will wait for one more ack");

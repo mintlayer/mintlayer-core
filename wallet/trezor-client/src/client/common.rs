@@ -160,12 +160,12 @@ impl<'a, T, R: TrezorMessage> TrezorResponse<'a, T, R> {
             TrezorResponse::ButtonRequest(_) => {
                 Err(Error::UnexpectedInteractionRequest(InteractionType::Button))
             }
-            TrezorResponse::PinMatrixRequest(_) => Err(Error::UnexpectedInteractionRequest(
-                InteractionType::PinMatrix,
-            )),
-            TrezorResponse::PassphraseRequest(_) => Err(Error::UnexpectedInteractionRequest(
-                InteractionType::Passphrase,
-            )),
+            TrezorResponse::PinMatrixRequest(_) => {
+                Err(Error::UnexpectedInteractionRequest(InteractionType::PinMatrix))
+            }
+            TrezorResponse::PassphraseRequest(_) => {
+                Err(Error::UnexpectedInteractionRequest(InteractionType::Passphrase))
+            }
         }
     }
 
@@ -175,12 +175,12 @@ impl<'a, T, R: TrezorMessage> TrezorResponse<'a, T, R> {
             TrezorResponse::ButtonRequest(r) => Ok(r),
             TrezorResponse::Ok(_) => Err(Error::UnexpectedMessageType(R::MESSAGE_TYPE)),
             TrezorResponse::Failure(m) => Err(Error::FailureResponse(m)),
-            TrezorResponse::PinMatrixRequest(_) => Err(Error::UnexpectedInteractionRequest(
-                InteractionType::PinMatrix,
-            )),
-            TrezorResponse::PassphraseRequest(_) => Err(Error::UnexpectedInteractionRequest(
-                InteractionType::Passphrase,
-            )),
+            TrezorResponse::PinMatrixRequest(_) => {
+                Err(Error::UnexpectedInteractionRequest(InteractionType::PinMatrix))
+            }
+            TrezorResponse::PassphraseRequest(_) => {
+                Err(Error::UnexpectedInteractionRequest(InteractionType::Passphrase))
+            }
         }
     }
 
@@ -193,9 +193,9 @@ impl<'a, T, R: TrezorMessage> TrezorResponse<'a, T, R> {
             TrezorResponse::ButtonRequest(_) => {
                 Err(Error::UnexpectedInteractionRequest(InteractionType::Button))
             }
-            TrezorResponse::PassphraseRequest(_) => Err(Error::UnexpectedInteractionRequest(
-                InteractionType::Passphrase,
-            )),
+            TrezorResponse::PassphraseRequest(_) => {
+                Err(Error::UnexpectedInteractionRequest(InteractionType::Passphrase))
+            }
         }
     }
 
@@ -208,9 +208,9 @@ impl<'a, T, R: TrezorMessage> TrezorResponse<'a, T, R> {
             TrezorResponse::ButtonRequest(_) => {
                 Err(Error::UnexpectedInteractionRequest(InteractionType::Button))
             }
-            TrezorResponse::PinMatrixRequest(_) => Err(Error::UnexpectedInteractionRequest(
-                InteractionType::PinMatrix,
-            )),
+            TrezorResponse::PinMatrixRequest(_) => {
+                Err(Error::UnexpectedInteractionRequest(InteractionType::PinMatrix))
+            }
         }
     }
 }
@@ -237,7 +237,7 @@ impl<'a> EntropyRequest<'a> {
     /// Provide exactly 32 bytes or entropy.
     pub fn ack_entropy(self, entropy: Vec<u8>) -> Result<TrezorResponse<'a, (), protos::Success>> {
         if entropy.len() != 32 {
-            return Err(Error::InvalidEntropy);
+            return Err(Error::InvalidEntropy)
         }
 
         let mut req = protos::EntropyAck::new();
