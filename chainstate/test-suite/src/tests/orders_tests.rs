@@ -25,7 +25,7 @@ use common::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             DestinationSigError,
         },
-        tokens::{TokenId, TokenIssuance, TokenTotalSupply},
+        tokens::{IsTokenFreezable, TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply},
         AccountCommand, AccountNonce, ChainstateUpgrade, Destination, OrderData, SignedTransaction,
         TxInput, TxOutput, UtxoOutPoint,
     },
@@ -36,8 +36,8 @@ use orders_accounting::OrdersAccountingDB;
 use randomness::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::{
-    nft_utils::random_token_issuance_v1,
     random::{make_seedable_rng, Seed},
+    random_ascii_alphanumeric_string,
 };
 use tx_verifier::error::{InputCheckError, ScriptError};
 
@@ -59,25 +59,28 @@ fn issue_and_mint_token_from_best_block(
     utxo_outpoint: UtxoOutPoint,
 ) -> (TokenId, UtxoOutPoint, UtxoOutPoint) {
     let best_block_id = tf.best_block_id();
-    let issuance = TokenIssuance::V1(random_token_issuance_v1(
-        tf.chain_config(),
-        Destination::AnyoneCanSpend,
-        rng,
-    ));
+    let issuance = {
+        let max_ticker_len = tf.chain_config().token_max_ticker_len();
+        let max_dec_count = tf.chain_config().token_max_dec_count();
+        let max_uri_len = tf.chain_config().token_max_uri_len();
 
-    let mint_limit = match &issuance {
-        TokenIssuance::V1(issuance) => match issuance.total_supply {
-            TokenTotalSupply::Fixed(supply) => supply,
-            TokenTotalSupply::Lockable | TokenTotalSupply::Unlimited => {
-                Amount::from_atoms(100_000_000)
-            }
-        },
+        let issuance = TokenIssuanceV1 {
+            token_ticker: random_ascii_alphanumeric_string(rng, 1..max_ticker_len)
+                .as_bytes()
+                .to_vec(),
+            number_of_decimals: rng.gen_range(1..max_dec_count),
+            metadata_uri: random_ascii_alphanumeric_string(rng, 1..max_uri_len).as_bytes().to_vec(),
+            total_supply: TokenTotalSupply::Unlimited,
+            is_freezable: IsTokenFreezable::Yes,
+            authority: Destination::AnyoneCanSpend,
+        };
+        TokenIssuance::V1(issuance)
     };
 
     let (token_id, _, utxo_with_change) =
         issue_token_from_block(rng, tf, best_block_id, utxo_outpoint, issuance);
 
-    let to_mint = Amount::from_atoms(rng.gen_range(1..mint_limit.into_atoms()));
+    let to_mint = Amount::from_atoms(rng.gen_range(100..100_000_000));
 
     let best_block_id = tf.best_block_id();
     let (_, mint_tx_id) = mint_tokens_in_block(
@@ -149,9 +152,13 @@ fn create_two_same_orders_in_tx(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
+        let tokens_circulating_supply =
+            tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
+        let half_tokens_circulating_supply = (tokens_circulating_supply / 2).unwrap();
 
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(1u128..=half_tokens_circulating_supply.into_atoms()));
         let order_data = Box::new(OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(ask_amount),
@@ -190,6 +197,7 @@ fn create_two_orders_same_tx(#[case] seed: Seed) {
         let (token_id, tokens_outpoint, _) = issue_and_mint_token_from_genesis(&mut rng, &mut tf);
         let tokens_circulating_supply =
             tf.chainstate.get_token_circulating_supply(&token_id).unwrap().unwrap();
+        let half_tokens_circulating_supply = (tokens_circulating_supply / 2).unwrap();
 
         let amount1 = Amount::from_atoms(rng.gen_range(1u128..1000));
         let amount2 =
@@ -197,13 +205,13 @@ fn create_two_orders_same_tx(#[case] seed: Seed) {
         let order_data_1 = OrderData::new(
             Destination::AnyoneCanSpend,
             OutputValue::Coin(amount1),
-            OutputValue::TokenV1(token_id, amount2),
+            OutputValue::TokenV1(token_id, half_tokens_circulating_supply),
         );
 
         let order_data_2 = OrderData::new(
             Destination::PublicKeyHash(PublicKeyHash::random()),
             OutputValue::Coin(amount2),
-            OutputValue::TokenV1(token_id, amount1),
+            OutputValue::TokenV1(token_id, half_tokens_circulating_supply),
         );
 
         let order_id = make_order_id(&tokens_outpoint);
@@ -390,8 +398,12 @@ fn create_order_tokens_for_tokens(#[case] seed: Seed) {
         let (token_id_2, tokens_outpoint_2, _) =
             issue_and_mint_token_from_best_block(&mut rng, &mut tf, coins_outpoint);
 
+        let tokens_circulating_supply_2 =
+            tf.chainstate.get_token_circulating_supply(&token_id_2).unwrap().unwrap();
+
         let ask_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(1u128..1000));
+        let give_amount =
+            Amount::from_atoms(rng.gen_range(1u128..tokens_circulating_supply_2.into_atoms()));
 
         // Trade tokens for coins
         let order_data = OrderData::new(
@@ -689,7 +701,7 @@ fn fill_partially_then_conclude(#[case] seed: Seed) {
 
         // Fill the order partially
         let fill_value = OutputValue::Coin(Amount::from_atoms(
-            rng.gen_range(1..ask_amount.into_atoms()),
+            rng.gen_range(1..=ask_amount.into_atoms()),
         ));
         let filled_amount = {
             let db_tx = tf.storage.transaction_ro().unwrap();
