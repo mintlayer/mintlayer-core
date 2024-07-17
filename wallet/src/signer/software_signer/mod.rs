@@ -306,7 +306,7 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
             .into_iter()
             .multiunzip();
 
-        Ok((ptx.new_witnesses(witnesses), prev_statuses, new_statuses))
+        Ok((ptx.with_witnesses(witnesses), prev_statuses, new_statuses))
     }
 
     fn sign_challenge(

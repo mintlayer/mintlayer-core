@@ -222,6 +222,8 @@ pub enum WalletError {
     SignMessageError(#[from] SignArbitraryMessageError),
     #[error("Input cannot be spent {0:?}")]
     InputCannotBeSpent(TxOutput),
+    #[error("Failed to convert partially signed tx to signed")]
+    FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
     #[error("The specified address is not found in this wallet")]
     AddressNotFound,
     #[error("The specified standalone address {0} is not found in this wallet")]
@@ -966,9 +968,32 @@ impl<B: storage::Backend> Wallet<B> {
             let ptx = request.into_partially_signed_tx()?;
 
             let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
-            let tx = signer
-                .sign_tx(ptx, account.key_chain())
-                .map(|(ptx, _, _)| ptx)?
+            let ptx = signer.sign_tx(ptx, account.key_chain()).map(|(ptx, _, _)| ptx)?;
+
+            let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
+            let is_fully_signed = ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
+                |((i, destination), witness)| match (witness, destination) {
+                    (None | Some(_), None) | (None, Some(_)) => false,
+                    (Some(_), Some(destination)) => {
+                        tx_verifier::input_check::signature_only_check::verify_tx_signature(
+                            chain_config,
+                            destination,
+                            &ptx,
+                            &inputs_utxo_refs,
+                            i,
+                        )
+                        .is_ok()
+                    }
+                },
+            );
+
+            if !is_fully_signed {
+                return Err(error_mapper(WalletError::FailedToConvertPartiallySignedTx(
+                    ptx,
+                )));
+            }
+
+            let tx = ptx
                 .into_signed_tx()
                 .map_err(|e| error_mapper(WalletError::TransactionCreation(e)))?;
 

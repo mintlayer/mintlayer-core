@@ -60,7 +60,7 @@ impl PartiallySignedTransaction {
         })
     }
 
-    pub fn new_witnesses(mut self, witnesses: Vec<Option<InputWitness>>) -> Self {
+    pub fn with_witnesses(mut self, witnesses: Vec<Option<InputWitness>>) -> Self {
         self.witnesses = witnesses;
         self
     }
@@ -87,10 +87,6 @@ impl PartiallySignedTransaction {
 
     pub fn count_inputs(&self) -> usize {
         self.tx.inputs().len()
-    }
-
-    pub fn count_completed_signatures(&self) -> usize {
-        self.witnesses.iter().filter(|w| w.is_some()).count()
     }
 
     pub fn all_signatures_available(&self) -> bool {
