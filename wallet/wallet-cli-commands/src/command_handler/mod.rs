@@ -20,8 +20,9 @@ use std::{fmt::Write, str::FromStr};
 use common::{
     address::Address,
     chain::{
-        config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, ChainConfig,
-        Destination, SignedTransaction, TxOutput, UtxoOutPoint,
+        config::checkpoints_data::print_block_heights_ids_as_checkpoints_data,
+        partially_signed_transaction::PartiallySignedTransaction, ChainConfig, Destination,
+        SignedTransaction, TxOutput, UtxoOutPoint,
     },
     primitives::H256,
     text_summary::TextSummary,
@@ -32,7 +33,7 @@ use mempool::tx_options::TxOptionsOverrides;
 use node_comm::node_traits::NodeInterface;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::{QrCode, QrCodeError};
-use wallet::{account::PartiallySignedTransaction, version::get_version};
+use wallet::version::get_version;
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     Balances, ComposedTransaction, ControllerConfig, MnemonicInfo, NewTransaction, NftMetadata,

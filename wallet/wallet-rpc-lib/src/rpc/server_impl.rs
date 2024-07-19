@@ -19,6 +19,7 @@ use common::{
     address::dehexify::dehexify_all_addresses,
     chain::{
         block::timestamp::BlockTimestamp,
+        partially_signed_transaction::PartiallySignedTransaction,
         tokens::{IsTokenUnfreezable, TokenId},
         Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
         TxOutput,
@@ -29,15 +30,14 @@ use crypto::key::PrivateKey;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use utils_networking::IpOrSocketAddress;
-use wallet::{
-    account::{PartiallySignedTransaction, TxInfo},
-    version::get_version,
-};
+use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
     types::{BlockInfo, CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
 };
-use wallet_types::{seed_phrase::StoreSeedPhrase, with_locked::WithLocked};
+use wallet_types::{
+    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, with_locked::WithLocked,
+};
 
 use crate::{
     rpc::{ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc, WalletRpcServer},
@@ -229,9 +229,10 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> ColdWalletRpcServ
         rpc::handle_result(
             self.sign_raw_transaction(account_arg.index::<N>()?, raw_tx, config).await.map(
                 |(tx, prev_signatures, cur_signatures)| {
-                    let is_complete = tx.is_fully_signed(&self.chain_config);
+                    let is_complete = tx.all_signatures_available()
+                        && cur_signatures.iter().all(|s| *s == SignatureStatus::FullySigned);
                     let hex = if is_complete {
-                        let tx = tx.into_signed_tx(&self.chain_config).expect("already checked");
+                        let tx = tx.into_signed_tx().expect("already checked");
                         tx.hex_encode()
                     } else {
                         tx.hex_encode()

@@ -35,10 +35,7 @@ use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
-    account::{
-        transaction_list::TransactionList, PartiallySignedTransaction, PoolData, TransactionToSign,
-        TxInfo,
-    },
+    account::{transaction_list::TransactionList, PoolData, TransactionToSign, TxInfo},
     WalletError,
 };
 
@@ -47,6 +44,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
+        partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },

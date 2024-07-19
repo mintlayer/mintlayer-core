@@ -25,6 +25,9 @@ const NORMAL_DELAY: Duration = Duration::from_secs(1);
 const ERROR_DELAY: Duration = Duration::from_secs(10);
 
 use blockprod::BlockProductionError;
+use chainstate::tx_verifier::{
+    self, error::ScriptError, input_check::signature_only_check::SignatureOnlyVerifiable,
+};
 use futures::{
     never::Never,
     stream::{FuturesOrdered, FuturesUnordered},
@@ -52,11 +55,8 @@ use common::{
     address::AddressError,
     chain::{
         block::timestamp::BlockTimestamp,
-        signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::signature_hash,
-            DestinationSigError,
-        },
+        partially_signed_transaction::PartiallySignedTransaction,
+        signature::{inputsig::InputWitness, DestinationSigError, Transactable},
         tokens::{RPCTokenInfo, TokenId},
         Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxInput,
         TxOutput, UtxoOutPoint,
@@ -80,7 +80,7 @@ use randomness::{make_pseudo_rng, make_true_rng, Rng};
 use wallet::{
     account::{
         currency_grouper::{self, Currency},
-        PartiallySignedTransaction, TransactionToSign,
+        TransactionToSign,
     },
     get_tx_output_destination,
     wallet::WalletPoolsFilter,
@@ -107,7 +107,7 @@ pub enum ControllerError<T: NodeInterface> {
     #[error("Wallet file {0} error: {1}")]
     WalletFileError(PathBuf, String),
     #[error("Wallet error: {0}")]
-    WalletError(wallet::wallet::WalletError),
+    WalletError(#[from] wallet::wallet::WalletError),
     #[error("Encoding error: {0}")]
     AddressEncodingError(#[from] AddressError),
     #[error("No staking pool found")]
@@ -782,13 +782,9 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 (InputWitness::NoSignature(_), None) => SignatureStatus::FullySigned,
                 (InputWitness::NoSignature(_), Some(_)) => SignatureStatus::NotSigned,
                 (InputWitness::Standard(_), None) => SignatureStatus::InvalidSignature,
-                (InputWitness::Standard(sig), Some(dest)) => self.verify_tx_signature(
-                    sig,
-                    stx.transaction(),
-                    &inputs_utxos_refs,
-                    input_num,
-                    &dest,
-                ),
+                (InputWitness::Standard(_), Some(dest)) => {
+                    self.verify_tx_signature(stx, &inputs_utxos_refs, input_num, &dest)
+                }
             })
             .collect();
         Ok((fees, signature_statuses))
@@ -810,8 +806,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 (Some(InputWitness::NoSignature(_)), None) => SignatureStatus::FullySigned,
                 (Some(InputWitness::NoSignature(_)), Some(_)) => SignatureStatus::InvalidSignature,
                 (Some(InputWitness::Standard(_)), None) => SignatureStatus::UnknownSignature,
-                (Some(InputWitness::Standard(sig)), Some(dest)) => {
-                    self.verify_tx_signature(sig, ptx.tx(), &inputs_utxos_refs, input_num, dest)
+                (Some(InputWitness::Standard(_)), Some(dest)) => {
+                    self.verify_tx_signature(&ptx, &inputs_utxos_refs, input_num, dest)
                 }
                 (None, _) => SignatureStatus::NotSigned,
             })
@@ -861,30 +857,43 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
 
     fn verify_tx_signature(
         &self,
-        sig: &StandardInputSignature,
-        tx: &Transaction,
+        tx: &(impl Transactable + SignatureOnlyVerifiable),
         inputs_utxos_refs: &[Option<&TxOutput>],
         input_num: usize,
         dest: &Destination,
     ) -> SignatureStatus {
-        signature_hash(sig.sighash_type(), tx, inputs_utxos_refs, input_num).map_or(
-            SignatureStatus::InvalidSignature,
-            |sighash| {
-                let valid = sig.verify_signature(&self.chain_config, dest, &sighash);
+        let valid = tx_verifier::input_check::signature_only_check::verify_tx_signature(
+            &self.chain_config,
+            dest,
+            tx,
+            inputs_utxos_refs,
+            input_num,
+        );
 
-                match valid {
-                    Err(DestinationSigError::IncompleteClassicalMultisigSignature(
-                        required_signatures,
-                        num_signatures,
-                    )) => SignatureStatus::PartialMultisig {
-                        required_signatures,
-                        num_signatures,
-                    },
-                    Err(_) => SignatureStatus::InvalidSignature,
-                    Ok(_) => SignatureStatus::FullySigned,
+        match valid {
+            Ok(_) => SignatureStatus::FullySigned,
+            Err(e) => match e.error() {
+                tx_verifier::error::InputCheckErrorPayload::MissingUtxo(_)
+                | tx_verifier::error::InputCheckErrorPayload::UtxoView(_)
+                | tx_verifier::error::InputCheckErrorPayload::Translation(_) => {
+                    SignatureStatus::InvalidSignature
                 }
+
+                tx_verifier::error::InputCheckErrorPayload::Verification(
+                    ScriptError::Signature(
+                        DestinationSigError::IncompleteClassicalMultisigSignature(
+                            required_signatures,
+                            num_signatures,
+                        ),
+                    ),
+                ) => SignatureStatus::PartialMultisig {
+                    required_signatures: *required_signatures,
+                    num_signatures: *num_signatures,
+                },
+
+                _ => SignatureStatus::InvalidSignature,
             },
-        )
+        }
     }
 
     pub async fn compose_transaction(
@@ -921,7 +930,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 input_utxos.into_iter().map(Option::Some).collect(),
                 destinations.into_iter().map(Option::Some).collect(),
             )
-            .map_err(ControllerError::WalletError)?;
+            .map_err(WalletError::TransactionCreation)?;
 
             TransactionToSign::Partial(tx)
         };

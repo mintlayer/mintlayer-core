@@ -4008,10 +4008,10 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::from_atoms(0)),
         )
         .unwrap();
-    assert!(!decommission_partial_tx.is_fully_signed(&chain_config));
+    assert!(!decommission_partial_tx.all_signatures_available());
     matches!(
-        decommission_partial_tx.into_signed_tx(&chain_config).unwrap_err(),
-        WalletError::FailedToConvertPartiallySignedTx(_)
+        decommission_partial_tx.into_signed_tx().unwrap_err(),
+        TransactionCreationError::FailedToConvertPartiallySignedTx(_)
     );
 }
 
@@ -4067,7 +4067,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
         .sign_raw_transaction(acc_0_index, TransactionToSign::Tx(tx))
         .unwrap()
         .0
-        .into_signed_tx(&chain_config)
+        .into_signed_tx()
         .unwrap();
 
     let _ = create_block(
@@ -4103,7 +4103,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
         .unwrap()
         .0;
     // the tx is still not fully signed
-    assert!(!sign_from_acc0_res.is_fully_signed(&chain_config));
+    assert!(!sign_from_acc0_res.all_signatures_available());
 
     let signed_tx = wallet
         .sign_raw_transaction(
@@ -4112,7 +4112,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
         )
         .unwrap()
         .0
-        .into_signed_tx(&chain_config)
+        .into_signed_tx()
         .unwrap();
 
     let _ = create_block(&chain_config, &mut wallet, vec![signed_tx], Amount::ZERO, 2);
@@ -4198,7 +4198,7 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
         )
         .unwrap()
         .0;
-    assert!(partially_signed_transaction.is_fully_signed(&chain_config));
+    assert!(partially_signed_transaction.all_signatures_available());
 
     // sign it with the hot wallet should leave the signatures in place even if it can't find the
     // destinations for the inputs
@@ -4209,9 +4209,9 @@ fn sign_decommission_pool_request_cold_wallet(#[case] seed: Seed) {
         )
         .unwrap()
         .0;
-    assert!(partially_signed_transaction.is_fully_signed(&chain_config));
+    assert!(partially_signed_transaction.all_signatures_available());
 
-    let signed_tx = partially_signed_transaction.into_signed_tx(&chain_config).unwrap();
+    let signed_tx = partially_signed_transaction.into_signed_tx().unwrap();
 
     let _ = create_block(
         &chain_config,
@@ -4372,14 +4372,14 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
         .unwrap()
         .0;
     // the tx is not fully signed
-    assert!(!tx.is_fully_signed(&chain_config));
+    assert!(!tx.all_signatures_available());
 
     // sign the tx with cold wallet
     let signed_tx = cold_wallet
         .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, TransactionToSign::Partial(send_req))
         .unwrap()
         .0
-        .into_signed_tx(&chain_config)
+        .into_signed_tx()
         .unwrap();
 
     let (_, block2) = create_block(
@@ -4600,25 +4600,25 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
     .unwrap();
 
     // sign it with wallet1
-    let ptx = wallet1
+    let (ptx, _, statuses) = wallet1
         .sign_raw_transaction(
             DEFAULT_ACCOUNT_INDEX,
             TransactionToSign::Tx(spend_multisig_tx),
         )
-        .unwrap()
-        .0;
+        .unwrap();
 
     // check it is still not fully signed
-    assert!(!ptx.is_fully_signed(&chain_config));
+    assert!(ptx.all_signatures_available());
+    assert!(!statuses.iter().all(|s| *s == SignatureStatus::FullySigned));
 
     // try to sign it with wallet1 again
-    let ptx = wallet1
+    let (ptx, _, statuses) = wallet1
         .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, TransactionToSign::Partial(ptx))
-        .unwrap()
-        .0;
+        .unwrap();
 
     // check it is still not fully signed
-    assert!(!ptx.is_fully_signed(&chain_config));
+    assert!(ptx.all_signatures_available());
+    assert!(!statuses.iter().all(|s| *s == SignatureStatus::FullySigned));
 
     // try to sign it with wallet2 but wallet2 does not have the multisig added as standalone
     let ptx = wallet2
@@ -4630,11 +4630,11 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
     wallet2.add_standalone_multisig(DEFAULT_ACCOUNT_INDEX, challenge, None).unwrap();
 
     // now we can sign it
-    let ptx = wallet2
+    let (ptx, _, statuses) = wallet2
         .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, TransactionToSign::Partial(ptx))
-        .unwrap()
-        .0;
+        .unwrap();
 
     // now it is fully signed
-    assert!(ptx.is_fully_signed(&chain_config));
+    assert!(ptx.all_signatures_available());
+    assert!(statuses.iter().all(|s| *s == SignatureStatus::FullySigned));
 }

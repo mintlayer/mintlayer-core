@@ -19,6 +19,7 @@ use common::{
     address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
         classic_multisig::ClassicMultisigChallenge,
+        partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCTokenInfo, TokenId, TokenIssuance,
@@ -41,10 +42,7 @@ use logging::log;
 use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
 use wallet::{
-    account::{
-        currency_grouper::Currency, PartiallySignedTransaction, TransactionToSign,
-        UnconfirmedTokenInfo,
-    },
+    account::{currency_grouper::Currency, TransactionToSign, UnconfirmedTokenInfo},
     get_tx_output_destination,
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,

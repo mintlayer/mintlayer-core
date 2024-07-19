@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use partially_signed_transaction::PartiallySignedTransaction;
 use thiserror::Error;
 
 use serialization::{DirectDecode, DirectEncode};
@@ -33,6 +34,7 @@ pub use account_nonce::*;
 pub mod utxo_outpoint;
 pub use utxo_outpoint::*;
 
+pub mod partially_signed_transaction;
 pub mod signed_transaction;
 
 pub mod output;
@@ -100,6 +102,8 @@ impl Eq for WithId<Transaction> {}
 pub enum TransactionCreationError {
     #[error("The number of signatures does not match the number of inputs")]
     InvalidWitnessCount,
+    #[error("Failed to convert partially signed tx to signed")]
+    FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
 }
 
 impl Transaction {

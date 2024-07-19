@@ -20,8 +20,8 @@ use std::sync::Arc;
 use crate::account::transaction_list::TransactionList;
 use crate::account::TxInfo;
 use crate::account::{
-    currency_grouper::Currency, CurrentFeeRate, DelegationData, PartiallySignedTransaction,
-    PoolData, TransactionToSign, UnconfirmedTokenInfo, UtxoSelectorError,
+    currency_grouper::Currency, CurrentFeeRate, DelegationData, PoolData, TransactionToSign,
+    UnconfirmedTokenInfo, UtxoSelectorError,
 };
 use crate::key_chain::{
     make_account_path, make_path_to_vrf_key, KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE,
@@ -39,6 +39,7 @@ use common::address::pubkeyhash::PublicKeyHash;
 use common::address::{Address, AddressError, RpcAddress};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
+use common::chain::partially_signed_transaction::PartiallySignedTransaction;
 use common::chain::signature::inputsig::arbitrary_message::{
     ArbitraryMessageSignature, SignArbitraryMessageError,
 };
@@ -967,11 +968,34 @@ impl<B: storage::Backend> Wallet<B> {
             let ptx = request.into_partially_signed_tx()?;
 
             let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
-            let tx = signer
-                .sign_tx(ptx, account.key_chain())
-                .map(|(ptx, _, _)| ptx)?
-                .into_signed_tx(chain_config)
-                .map_err(error_mapper)?;
+            let ptx = signer.sign_tx(ptx, account.key_chain()).map(|(ptx, _, _)| ptx)?;
+
+            let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
+            let is_fully_signed = ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
+                |((i, destination), witness)| match (witness, destination) {
+                    (None | Some(_), None) | (None, Some(_)) => false,
+                    (Some(_), Some(destination)) => {
+                        tx_verifier::input_check::signature_only_check::verify_tx_signature(
+                            chain_config,
+                            destination,
+                            &ptx,
+                            &inputs_utxo_refs,
+                            i,
+                        )
+                        .is_ok()
+                    }
+                },
+            );
+
+            if !is_fully_signed {
+                return Err(error_mapper(WalletError::FailedToConvertPartiallySignedTx(
+                    ptx,
+                )));
+            }
+
+            let tx = ptx
+                .into_signed_tx()
+                .map_err(|e| error_mapper(WalletError::TransactionCreation(e)))?;
 
             check_transaction(chain_config, block_height.next_height(), &tx)?;
             Ok(tx)
@@ -1707,7 +1731,7 @@ impl<B: storage::Backend> Wallet<B> {
             let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
             let ptx = signer.sign_tx(ptx, account.key_chain()).map(|(ptx, _, _)| ptx)?;
 
-            if ptx.is_fully_signed(chain_config) {
+            if ptx.all_signatures_available() {
                 return Err(WalletError::FullySignedTransactionInDecommissionReq);
             }
             Ok(ptx)

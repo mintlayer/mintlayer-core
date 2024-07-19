@@ -18,6 +18,7 @@ use std::mem::take;
 
 use common::address::Address;
 use common::chain::output_value::OutputValue;
+use common::chain::partially_signed_transaction::PartiallySignedTransaction;
 use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{Metadata, TokenId, TokenIssuance};
@@ -30,7 +31,7 @@ use crypto::vrf::VRFPublicKey;
 use utils::ensure;
 
 use crate::account::currency_grouper::Currency;
-use crate::account::{PartiallySignedTransaction, PoolData};
+use crate::account::PoolData;
 use crate::{WalletError, WalletResult};
 
 /// The `SendRequest` struct provides the necessary information to the wallet
@@ -283,7 +284,9 @@ impl SendRequest {
         let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
         let destinations = self.destinations.into_iter().map(Some).collect();
 
-        PartiallySignedTransaction::new(tx, vec![None; num_inputs], self.utxos, destinations)
+        let ptx =
+            PartiallySignedTransaction::new(tx, vec![None; num_inputs], self.utxos, destinations)?;
+        Ok(ptx)
     }
 }
 

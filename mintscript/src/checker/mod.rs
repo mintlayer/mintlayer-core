@@ -24,6 +24,7 @@ use hashlock::{HashlockChecker, NoOpHashlockChecker, StandardHashlockChecker};
 pub use signature::{
     NoOpSignatureChecker, SignatureChecker, SignatureContext, StandardSignatureChecker,
 };
+use timelock::NoOpTimelockChecker;
 pub use timelock::{StandardTimelockChecker, TimelockChecker, TimelockContext, TimelockError};
 
 /// Script signature and timelock checker.
@@ -42,6 +43,10 @@ pub struct ScriptChecker<C, S, T, H> {
 pub type TimelockOnlyScriptChecker<C> =
     ScriptChecker<C, NoOpSignatureChecker, StandardTimelockChecker, NoOpHashlockChecker>;
 
+/// Script checker only verifying signtures.
+pub type SignatureOnlyScriptChecker<C> =
+    ScriptChecker<C, StandardSignatureChecker, NoOpTimelockChecker, NoOpHashlockChecker>;
+
 /// Full script checker with all checks active.
 pub type FullScriptChecker<C> =
     ScriptChecker<C, StandardSignatureChecker, StandardTimelockChecker, StandardHashlockChecker>;
@@ -53,6 +58,18 @@ impl<C> TimelockOnlyScriptChecker<C> {
             context,
             NoOpSignatureChecker,
             StandardTimelockChecker,
+            NoOpHashlockChecker,
+        )
+    }
+}
+
+impl<C> SignatureOnlyScriptChecker<C> {
+    /// Create a script checker that only checks signatures.
+    pub fn signature_only(context: C) -> Self {
+        Self::custom(
+            context,
+            StandardSignatureChecker,
+            NoOpTimelockChecker,
             NoOpHashlockChecker,
         )
     }

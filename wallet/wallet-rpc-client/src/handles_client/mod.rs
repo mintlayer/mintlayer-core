@@ -19,8 +19,9 @@ use chainstate::ChainInfo;
 use common::{
     address::{dehexify::dehexify_all_addresses, AddressError},
     chain::{
-        block::timestamp::BlockTimestamp, tokens::IsTokenUnfreezable, Block, GenBlock,
-        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
+        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -30,10 +31,7 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use rpc::types::RpcHexString;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded, json_encoded::JsonEncoded};
 use utils_networking::IpOrSocketAddress;
-use wallet::{
-    account::{PartiallySignedTransaction, TxInfo},
-    version::get_version,
-};
+use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
     types::{CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
@@ -49,7 +47,10 @@ use wallet_rpc_lib::{
     },
     RpcError, WalletRpc,
 };
-use wallet_types::{seed_phrase::StoreSeedPhrase, utxo_types::UtxoTypes, with_locked::WithLocked};
+use wallet_types::{
+    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, utxo_types::UtxoTypes,
+    with_locked::WithLocked,
+};
 
 use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, WalletInterface};
 
@@ -1190,11 +1191,11 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             .sign_raw_transaction(account_index, RpcHexString::from_str(&raw_tx)?, config)
             .await
             .map(|(ptx, prev_signatures, cur_signatures)| {
-                let tx = if ptx.is_fully_signed(self.wallet_rpc.chain_config()) {
-                    PartialOrSignedTx::Signed(
-                        ptx.into_signed_tx(self.wallet_rpc.chain_config())
-                            .expect("already checked"),
-                    )
+                let is_fully_signed = ptx.all_signatures_available()
+                    && cur_signatures.iter().all(|s| *s == SignatureStatus::FullySigned);
+
+                let tx = if is_fully_signed {
+                    PartialOrSignedTx::Signed(ptx.into_signed_tx().expect("already checked"))
                 } else {
                     PartialOrSignedTx::Partial(ptx)
                 };

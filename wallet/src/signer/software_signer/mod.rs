@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use common::chain::{
+    partially_signed_transaction::PartiallySignedTransaction,
     signature::{
         inputsig::{
             arbitrary_message::ArbitraryMessageSignature,
@@ -42,10 +43,7 @@ use serialization::Encode;
 use wallet_storage::WalletStorageReadUnlocked;
 use wallet_types::signature_status::SignatureStatus;
 
-use crate::{
-    account::PartiallySignedTransaction,
-    key_chain::{make_account_path, AccountKeyChains, FoundPubKey, MasterKeyChain},
-};
+use crate::key_chain::{make_account_path, AccountKeyChains, FoundPubKey, MasterKeyChain};
 
 use super::{Signer, SignerError, SignerResult};
 
@@ -247,13 +245,17 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
                     )),
                     InputWitness::Standard(sig) => match destination {
                         Some(destination) => {
-                            let sighash =
-                                signature_hash(sig.sighash_type(), ptx.tx(), &inputs_utxo_refs, i)?;
+                            let sig_verified =
+                                tx_verifier::input_check::signature_only_check::verify_tx_signature(
+                                    &self.chain_config,
+                                    destination,
+                                    &ptx,
+                                    &inputs_utxo_refs,
+                                    i,
+                                )
+                                .is_ok();
 
-                            if sig
-                                .verify_signature(&self.chain_config, destination, &sighash)
-                                .is_ok()
-                            {
+                            if sig_verified {
                                 Ok((
                                     Some(w.clone()),
                                     SignatureStatus::FullySigned,
@@ -304,7 +306,7 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
             .into_iter()
             .multiunzip();
 
-        Ok((ptx.new_witnesses(witnesses), prev_statuses, new_statuses))
+        Ok((ptx.with_witnesses(witnesses), prev_statuses, new_statuses))
     }
 
     fn sign_challenge(
