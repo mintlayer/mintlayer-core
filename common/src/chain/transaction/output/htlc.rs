@@ -16,6 +16,7 @@
 // TODO: consider removing this in the future when fixed-hash fixes this problem
 #![allow(clippy::non_canonical_clone_impl)]
 
+use crypto::hash::{self, hash};
 use randomness::Rng;
 use serialization::{Decode, Encode};
 
@@ -53,6 +54,12 @@ impl HtlcSecret {
 
     pub fn consume(self) -> [u8; 32] {
         self.secret
+    }
+
+    pub fn hash(&self) -> HtlcSecretHash {
+        HtlcSecretHash::from_slice(
+            hash::<hash::Ripemd160, _>(hash::<hash::Sha256, _>(&self.secret)).as_slice(),
+        )
     }
 }
 
