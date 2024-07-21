@@ -332,7 +332,7 @@ where
                 }) = hello_response
                 else {
                     if let Message::WillDisconnect(msg) = hello_response {
-                        log::warn!(
+                        log::info!(
                             "Peer {} is going to disconnect us with the reason: '{}'",
                             self.peer_id,
                             msg.reason

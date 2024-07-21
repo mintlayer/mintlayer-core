@@ -1570,7 +1570,7 @@ where
     }
 
     fn handle_will_disconnect_messgae(&mut self, peer_id: PeerId, msg: WillDisconnectMessage) {
-        log::warn!(
+        log::info!(
             "Peer {peer_id} is going to disconnect us with the reason: {}",
             msg.reason
         );
