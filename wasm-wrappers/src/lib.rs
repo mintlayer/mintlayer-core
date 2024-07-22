@@ -545,7 +545,7 @@ pub fn encode_stake_pool_data(
         vrf_public_key,
         decommission_key,
         PerThousand::new(margin_ratio_per_thousand)
-            .ok_or(Error::InvalidPerThousedns(margin_ratio_per_thousand))?,
+            .ok_or(Error::InvalidPerThousand(margin_ratio_per_thousand))?,
         cost_per_block,
     );
 

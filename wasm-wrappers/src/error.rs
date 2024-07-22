@@ -40,7 +40,7 @@ pub enum Error {
     #[error("Invalid time lock encoding")]
     InvalidTimeLock,
     #[error("Invalid per thousand {0} valid range is [0, 1000]")]
-    InvalidPerThousedns(u16),
+    InvalidPerThousand(u16),
     #[error("Invalid stake pool data encoding")]
     InvalidStakePoolData,
     #[error("Invalid Transaction output encoding")]

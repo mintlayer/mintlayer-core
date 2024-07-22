@@ -19,7 +19,8 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        timelock::OutputTimeLock, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -451,6 +452,18 @@ pub trait WalletInterface {
         &self,
         account_index: U31,
         data: String,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error>;
+
+    async fn create_htlc(
+        &self,
+        account_index: U31,
+        amount: DecimalAmount,
+        token_id: Option<String>,
+        secret_hash: String,
+        spend_address: String,
+        refund_address: String,
+        refund_timelock: OutputTimeLock,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
 

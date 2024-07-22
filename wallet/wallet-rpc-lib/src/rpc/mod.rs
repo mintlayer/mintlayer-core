@@ -47,11 +47,13 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
+        htlc::{HashedTimelockContract, HtlcSecretHash},
         output_value::OutputValue,
         partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
+        timelock::OutputTimeLock,
         tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenTotalSupply},
         Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
         Transaction, TxOutput, UtxoOutPoint,
@@ -1393,6 +1395,73 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .call(move |controller| {
                 let status = StakingStatus::new(controller.is_staking(account_index));
                 Ok::<_, ControllerError<_>>(status)
+            })
+            .await?
+    }
+
+    pub async fn create_htlc(
+        &self,
+        account_index: U31,
+        amount: RpcAmountIn,
+        token_id: Option<RpcAddress<TokenId>>,
+        secret_hash: RpcHexString,
+        spend_address: RpcAddress<Destination>,
+        refund_address: RpcAddress<Destination>,
+        refund_timelock: OutputTimeLock,
+        config: ControllerConfig,
+    ) -> WRpcResult<SignedTransaction, N> {
+        let secret_hash = HtlcSecretHash::decode_all(&mut secret_hash.as_bytes())
+            .map_err(|_| RpcError::InvalidHtlcSecretHash)?;
+
+        let spend_key = spend_address
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidAddress)?;
+
+        let refund_key = refund_address
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidAddress)?;
+
+        let htlc = HashedTimelockContract {
+            secret_hash,
+            spend_key,
+            refund_timelock,
+            refund_key,
+        };
+
+        let token_id = match token_id {
+            Some(id) => {
+                Some(id.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidTokenId)?)
+            }
+            None => None,
+        };
+        let coin_decimals = self.chain_config.coin_decimals();
+
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    let value = match token_id {
+                        Some(token_id) => {
+                            let token_info = controller.get_token_info(token_id).await?;
+                            let amount = amount
+                                .to_amount(token_info.token_number_of_decimals())
+                                .ok_or(RpcError::InvalidCoinAmount)?;
+                            OutputValue::TokenV1(token_id, amount)
+                        }
+                        None => {
+                            let amount = amount
+                                .to_amount(coin_decimals)
+                                .ok_or(RpcError::InvalidCoinAmount)?;
+                            OutputValue::Coin(amount)
+                        }
+                    };
+
+                    controller
+                        .synced_controller(account_index, config)
+                        .await?
+                        .create_htlc_tx(value, htlc)
+                        .await
+                        .map_err(RpcError::Controller)
+                })
             })
             .await?
     }

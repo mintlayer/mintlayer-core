@@ -20,7 +20,7 @@ use common::address::Address;
 use common::chain::output_value::OutputValue;
 use common::chain::partially_signed_transaction::PartiallySignedTransaction;
 use common::chain::stakelock::StakePoolData;
-use common::chain::timelock::OutputTimeLock::{self, ForBlockCount};
+use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{Metadata, TokenId, TokenIssuance};
 use common::chain::{
     ChainConfig, Destination, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,

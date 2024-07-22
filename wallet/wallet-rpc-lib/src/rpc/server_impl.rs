@@ -20,6 +20,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         partially_signed_transaction::PartiallySignedTransaction,
+        timelock::OutputTimeLock,
         tokens::{IsTokenUnfreezable, TokenId},
         Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
         TxOutput,
@@ -994,6 +995,38 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
 
         rpc::handle_result(
             self.deposit_data(account_arg.index::<N>()?, data.into_bytes(), config).await,
+        )
+    }
+
+    async fn create_htlc(
+        &self,
+        account_arg: AccountArg,
+        amount: RpcAmountIn,
+        token_id: Option<RpcAddress<TokenId>>,
+        secret_hash: RpcHexString,
+        spend_address: RpcAddress<Destination>,
+        refund_address: RpcAddress<Destination>,
+        refund_timelock: OutputTimeLock,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb(),
+            broadcast_to_mempool: true,
+        };
+
+        rpc::handle_result(
+            self.create_htlc(
+                account_arg.index::<N>()?,
+                amount,
+                token_id,
+                secret_hash,
+                spend_address,
+                refund_address,
+                refund_timelock,
+                config,
+            )
+            .await
+            .map(NewTransaction::new),
         )
     }
 

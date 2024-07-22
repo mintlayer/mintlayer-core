@@ -20,8 +20,8 @@ use common::{
     address::{dehexify::dehexify_all_addresses, AddressError},
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        timelock::OutputTimeLock, tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -1009,6 +1009,33 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         self.wallet_rpc
             .deposit_data(account_index, data, config)
             .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn create_htlc(
+        &self,
+        account_index: U31,
+        amount: DecimalAmount,
+        token_id: Option<String>,
+        secret_hash: String,
+        spend_address: String,
+        refund_address: String,
+        refund_timelock: OutputTimeLock,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        self.wallet_rpc
+            .create_htlc(
+                account_index,
+                amount.into(),
+                token_id.map(|id| id.into()),
+                RpcHexString::from_str(&secret_hash)?,
+                spend_address.into(),
+                refund_address.into(),
+                refund_timelock,
+                config,
+            )
+            .await
+            .map(NewTransaction::new)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 

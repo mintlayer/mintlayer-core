@@ -964,6 +964,7 @@ impl Account {
         self.select_inputs_for_send_request(
             request,
             SelectedInputs::Utxos(vec![]),
+            None,
             BTreeMap::new(),
             db_tx,
             median_time,

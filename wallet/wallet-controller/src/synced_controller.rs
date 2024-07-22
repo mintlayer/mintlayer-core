@@ -19,6 +19,7 @@ use common::{
     address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
         classic_multisig::ClassicMultisigChallenge,
+        htlc::HashedTimelockContract,
         output_value::OutputValue,
         partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
@@ -1006,6 +1007,28 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 current_fee_rate,
             )
             .map_err(ControllerError::WalletError)
+    }
+
+    pub async fn create_htlc_tx(
+        &mut self,
+        output_value: OutputValue,
+        htlc: HashedTimelockContract,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_htlc_tx(
+                    account_index,
+                    output_value,
+                    htlc,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
     }
 
     /// Checks if the wallet has stake pools and marks this account for staking.
