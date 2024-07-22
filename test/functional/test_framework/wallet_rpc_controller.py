@@ -212,6 +212,10 @@ class WalletRpcController:
         self.account = account_index
         return "Success"
 
+    async def add_standalone_multisig_address_get_result(self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = None) -> str:
+        result = self._write_command("standalone_add_multisig", [self.account, min_required_signatures, pub_keys, label, True])
+        return result['result']
+
     async def new_public_key(self, address: Optional[str] = None) -> bytes:
         if address is None:
             address = await self.new_address()
@@ -220,6 +224,9 @@ class WalletRpcController:
         # remove the pub key enum value, the first one byte
         pub_key_bytes = bytes.fromhex(public_key)[1:]
         return pub_key_bytes
+
+    async def reveal_public_key_as_address(self, address: str) -> str:
+        return self._write_command("address_reveal_public_key", [self.account, address])['result']['public_key_address']
 
     async def new_address(self) -> str:
         return self._write_command(f"address_new", [self.account])['result']['address']
@@ -239,7 +246,12 @@ class WalletRpcController:
         return "The transaction was submitted successfully"
 
     async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
-        return self._write_command("token_send", [self.account, token_id, address, {'decimal': amount}, {'in_top_x_mb': 5}])['result']
+        return self._write_command("token_send", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']
+
+    # This function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
+    async def send_tokens_to_address_or_fail(self, token_id: str, address: str, amount: Union[float, str]):
+        # send_tokens_to_address already fails on error.
+        await self.send_tokens_to_address(token_id, address, amount)
 
     async def issue_new_token(self,
                               token_ticker: str,
@@ -248,23 +260,45 @@ class WalletRpcController:
                               destination_address: str,
                               token_supply: str = 'unlimited',
                               is_freezable: str = 'freezable'):
-        output = self._write_command('token_issue_new', [
+        result = self._write_command('token_issue_new', [
             self.account,
-            token_ticker,
-            number_of_decimals,
-            metadata_uri,
             destination_address,
-            token_supply,
-            is_freezable,
+            {
+                'token_ticker': token_ticker,
+                'number_of_decimals': number_of_decimals,
+                'metadata_uri': metadata_uri,
+                'token_supply': {
+                    'type': token_supply.title()
+                },
+                'is_freezable': True if is_freezable == 'freezable' else False
+            },
             {'in_top_x_mb': 5}
-            ])['result']
-        return output
+        ])
+
+        if 'result' in result:
+            return result['result']['token_id'], None
+        else:
+            return None, result['error']
 
     async def mint_tokens(self, token_id: str, address: str, amount: int) -> str:
-        return self._write_command("token_mint", [self.account, token_id, address, {'decimal': amount}, {'in_top_x_mb': 5}])['result']
+        result = self._write_command("token_mint", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])
+
+        if 'result' in result:
+            # For consistency with wallet_cli_controller we return the same string that is produced by wallet cli.
+            # TODO: probably we should change the result of wallet_cli_controller's `mint_tokens` and update
+            # the existing tests instead.
+            return "The transaction was submitted successfully"
+        else:
+            return result['error']
 
     async def unmint_tokens(self, token_id: str, amount: int) -> str:
-        return self._write_command("token_mint", [self.account, token_id, {'decimal': amount}, {'in_top_x_mb': 5}])['result']
+        result = self._write_command("token_unmint", [self.account, token_id, {'decimal': str(amount)}, {'in_top_x_mb': 5}])
+
+        if 'result' in result:
+            # Same note/TODO as in mint_tokens.
+            return "The transaction was submitted successfully"
+        else:
+            return result['error']
 
     async def lock_token_supply(self, token_id: str) -> str:
         return self._write_command("token_lock_supply", [self.account, token_id, {'in_top_x_mb': 5}])['result']

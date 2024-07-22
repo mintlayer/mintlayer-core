@@ -147,6 +147,8 @@ BASE_SCRIPTS = [
     'wallet_get_address_usage.py',
     'wallet_tokens.py',
     'wallet_tokens_freeze.py',
+    'wallet_tokens_transfer_from_multisig_addr.py',
+    'wallet_tokens_transfer_from_multisig_addr_rpc.py',
     'wallet_tokens_change_authority.py',
     'wallet_tokens_change_supply.py',
     'wallet_nfts.py',

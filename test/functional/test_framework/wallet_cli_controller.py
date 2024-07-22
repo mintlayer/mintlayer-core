@@ -25,6 +25,8 @@ from tempfile import NamedTemporaryFile
 
 from typing import Optional, List, Tuple, Union
 
+from test_framework.util import assert_in
+
 TEN_MB = 10*2**20
 READ_TIMEOUT_SEC = 30
 DEFAULT_ACCOUNT_INDEX = 0
@@ -236,6 +238,11 @@ class WalletCliController:
         label_str = f'--label {label}' if label else ''
         return await self._write_command(f"standalone-add-multisig {min_required_signatures} {' '.join(pub_keys)} {label_str}\n")
 
+    async def add_standalone_multisig_address_get_result(self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = None) -> str:
+        output = await self.add_standalone_multisig_address(min_required_signatures, pub_keys, label)
+        assert_in("Success. The following new multisig address has been added to the account", output)
+        return output.splitlines()[1]
+
     async def select_account(self, account_index: int) -> str:
         return await self._write_command(f"account-select {account_index}\n")
 
@@ -253,9 +260,7 @@ class WalletCliController:
         pub_key_bytes = bytes.fromhex(public_key)[1:]
         return pub_key_bytes
 
-    async def reveal_public_key_as_address(self, address: Optional[str] = None) -> str:
-        if address is None:
-            address = await self.new_address()
+    async def reveal_public_key_as_address(self, address: str) -> str:
         return await self._write_command(f"address-reveal-public-key-as-address {address}\n")
 
     async def new_address(self) -> str:
@@ -308,6 +313,11 @@ class WalletCliController:
 
     async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
         return await self._write_command(f"token-send {token_id} {address} {amount}\n")
+
+    # This function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
+    async def send_tokens_to_address_or_fail(self, token_id: str, address: str, amount: Union[float, str]):
+        output = await self.send_tokens_to_address(token_id, address, amount)
+        assert_in("The transaction was submitted successfully", output)
 
     async def issue_new_token(self,
                               token_ticker: str,
