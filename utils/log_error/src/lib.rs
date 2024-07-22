@@ -151,10 +151,10 @@ pub fn log_error(args: TokenStream, item: TokenStream) -> TokenStream {
                 let result = (move || #block)();
 
                 if let Err(ref err) = result {
-                    utils::log_utils::log(
+                    utils::mintlayer_core_log_error_support::log(
                         err,
                         "log_error",
-                        logging::log::Level::#log_level_tok,
+                        utils::mintlayer_core_log_error_support::Level::#log_level_tok,
                         std::panic::Location::caller()
                     );
                 }
@@ -224,10 +224,10 @@ pub fn log_error(args: TokenStream, item: TokenStream) -> TokenStream {
                     )().await;
 
                     if let Err(ref err) = result {
-                        utils::log_utils::log(
+                        utils::mintlayer_core_log_error_support::log(
                             err,
                             "log_error",
-                            logging::log::Level::#log_level_tok,
+                            utils::mintlayer_core_log_error_support::Level::#log_level_tok,
                             caller_location
                         );
                     }

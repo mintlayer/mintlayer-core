@@ -48,3 +48,13 @@ mod concurrency_impl;
 pub use concurrency_impl::*;
 
 pub use log_error::log_error;
+
+// The internals of the `log_error` macro will refer to other parts of the repository as
+// `utils::mintlayer_core_log_error_support::...`. The purpose of this is allow external projects
+// to use `log_error` without polluting their namespaces with core-specific generic names.
+// Note: the external project will have to depend on the `fix_hidden_lifetime_bug` crate explicitly
+// anyway (re-exporting it here won't help).
+pub mod mintlayer_core_log_error_support {
+    pub use crate::log_utils::log;
+    pub use logging::log::Level;
+}
