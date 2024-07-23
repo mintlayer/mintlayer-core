@@ -55,6 +55,7 @@ use common::{
     address::AddressError,
     chain::{
         block::timestamp::BlockTimestamp,
+        htlc::HtlcSecret,
         partially_signed_transaction::PartiallySignedTransaction,
         signature::{inputsig::InputWitness, DestinationSigError, Transactable},
         tokens::{RPCTokenInfo, TokenId},
@@ -910,6 +911,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &self,
         inputs: Vec<UtxoOutPoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
         only_transaction: bool,
     ) -> Result<(TransactionToSign, Balances), ControllerError<T>> {
         let input_utxos = self.fetch_utxos(&inputs).await?;
@@ -939,7 +941,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 vec![None; num_inputs],
                 input_utxos.into_iter().map(Option::Some).collect(),
                 destinations.into_iter().map(Option::Some).collect(),
-                None,
+                htlc_secrets,
             )
             .map_err(WalletError::TransactionCreation)?;
 

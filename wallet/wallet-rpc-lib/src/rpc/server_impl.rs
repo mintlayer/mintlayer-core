@@ -1189,10 +1189,11 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         &self,
         inputs: Vec<RpcUtxoOutpoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<RpcHexString>>>,
         only_transaction: bool,
     ) -> rpc::RpcResult<ComposedTransaction> {
         rpc::handle_result(
-            self.compose_transaction(inputs, outputs, only_transaction)
+            self.compose_transaction(inputs, outputs, htlc_secrets, only_transaction)
                 .await
                 .map(|(tx, fees)| ComposedTransaction {
                     hex: tx.to_hex(),

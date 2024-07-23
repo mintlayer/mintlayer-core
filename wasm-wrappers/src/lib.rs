@@ -571,6 +571,11 @@ pub fn encode_output_create_stake_pool(
     Ok(output.encode())
 }
 
+//#[wasm_bindgen]
+pub fn encode_output_htlc() -> Result<Vec<u8>, Error> {
+    todo!("impl")
+}
+
 /// Returns the fee that needs to be paid by a transaction for issuing a new fungible token
 #[wasm_bindgen]
 pub fn fungible_token_issuance_fee(_current_block_height: u64, network: Network) -> Amount {

@@ -145,6 +145,9 @@ pub enum RpcError<N: NodeInterface> {
     #[error("No outputs specified")]
     NoOutputsSpecified,
 
+    #[error("Invalid HTLC secret")]
+    InvalidHtlcSecret,
+
     #[error("Invalid HTLC secret hash")]
     InvalidHtlcSecretHash,
 }

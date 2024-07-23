@@ -542,11 +542,15 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         &self,
         inputs: Vec<UtxoOutPoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<String>>>,
         only_transaction: bool,
     ) -> Result<ComposedTransaction, Self::Error> {
         let inputs = inputs.into_iter().map(Into::into).collect();
+        let htlc_secrets = htlc_secrets
+            .map(|s| s.into_iter().map(|s| s.map(|s| s.parse()).transpose()).collect())
+            .transpose()?;
         self.wallet_rpc
-            .compose_transaction(inputs, outputs, only_transaction)
+            .compose_transaction(inputs, outputs, htlc_secrets, only_transaction)
             .await
             .map(|(tx, fees)| ComposedTransaction {
                 hex: tx.to_hex(),

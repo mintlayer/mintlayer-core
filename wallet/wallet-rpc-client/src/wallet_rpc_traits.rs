@@ -235,6 +235,7 @@ pub trait WalletInterface {
         &self,
         inputs: Vec<UtxoOutPoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<String>>>,
         only_transaction: bool,
     ) -> Result<ComposedTransaction, Self::Error>;
 

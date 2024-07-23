@@ -963,7 +963,7 @@ where
                 let ComposedTransaction { hex, fees } = self
                     .non_empty_wallet()
                     .await?
-                    .compose_transaction(input_utxos, outputs, only_transaction)
+                    .compose_transaction(input_utxos, outputs, None, only_transaction)
                     .await?;
                 let mut output = format!("The hex encoded transaction is:\n{hex}\n");
 

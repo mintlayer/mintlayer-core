@@ -1208,12 +1208,22 @@ impl WalletInterface for ClientWalletRpc {
         &self,
         inputs: Vec<UtxoOutPoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<String>>>,
         only_transaction: bool,
     ) -> Result<ComposedTransaction, Self::Error> {
         let inputs = inputs.into_iter().map(Into::into).collect();
-        WalletRpcClient::compose_transaction(&self.http_client, inputs, outputs, only_transaction)
-            .await
-            .map_err(WalletRpcError::ResponseError)
+        let htlc_secrets = htlc_secrets
+            .map(|s| s.into_iter().map(|s| s.map(|s| s.parse()).transpose()).collect())
+            .transpose()?;
+        WalletRpcClient::compose_transaction(
+            &self.http_client,
+            inputs,
+            outputs,
+            htlc_secrets,
+            only_transaction,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn node_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {

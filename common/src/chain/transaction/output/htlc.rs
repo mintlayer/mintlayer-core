@@ -33,18 +33,20 @@ pub struct HashedTimelockContract {
     pub refund_key: Destination,
 }
 
-#[derive(Clone, Encode, Decode, PartialEq, Eq, Debug)]
+pub const HTLC_SECRET_SIZE: usize = 32;
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct HtlcSecret {
-    secret: [u8; 32],
+    secret: [u8; HTLC_SECRET_SIZE],
 }
 
 impl HtlcSecret {
-    pub fn new(secret: [u8; 32]) -> Self {
+    pub fn new(secret: [u8; HTLC_SECRET_SIZE]) -> Self {
         Self { secret }
     }
 
     pub fn new_from_rng(rng: &mut impl Rng) -> Self {
-        let secret: [u8; 32] = std::array::from_fn(|_| rng.gen::<u8>());
+        let secret: [u8; HTLC_SECRET_SIZE] = std::array::from_fn(|_| rng.gen::<u8>());
         Self { secret }
     }
 
@@ -52,7 +54,7 @@ impl HtlcSecret {
         &self.secret
     }
 
-    pub fn consume(self) -> [u8; 32] {
+    pub fn consume(self) -> [u8; HTLC_SECRET_SIZE] {
         self.secret
     }
 
@@ -61,6 +63,10 @@ impl HtlcSecret {
             hash::<hash::Ripemd160, _>(hash::<hash::Sha256, _>(&self.secret)).as_slice(),
         )
     }
+}
+
+impl rpc_description::HasValueHint for HtlcSecret {
+    const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::Array(&u8::HINT_SER);
 }
 
 fixed_hash::construct_fixed_hash! {
