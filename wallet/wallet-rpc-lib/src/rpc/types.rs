@@ -38,7 +38,7 @@ use rpc::description::HasValueHint;
 use wallet::account::PoolData;
 
 pub use chainstate::{
-    rpc::{RpcOutputValue, RpcSignedTransaction, RpcTxOutput, RpcUtxoOutpoint},
+    rpc::{RpcSignedTransaction, RpcTxOutput, RpcUtxoOutpoint},
     ChainInfo,
 };
 pub use common::{
@@ -128,6 +128,9 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error(transparent)]
     Address(#[from] AddressError),
+
+    #[error("Invalid HTLC secret")]
+    InvalidHtlcSecret,
 
     #[error("Invalid HTLC secret hash")]
     InvalidHtlcSecretHash,
