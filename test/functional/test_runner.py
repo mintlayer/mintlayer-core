@@ -486,7 +486,7 @@ class TestHandler:
             test = self.test_list.pop(0)
             portseed = len(self.test_list)
             portseed_arg = ["--portseed={}".format(portseed)]
-            randomseed_arg = [f"--randomseed={self.randomseed}"]
+            randomseed_arg = [] if any(f.startswith('--randomseed') for f in self.flags) else [f"--randomseed={self.randomseed}"]
             log_stdout = tempfile.SpooledTemporaryFile(max_size=2**16)
             log_stderr = tempfile.SpooledTemporaryFile(max_size=2**16)
             test_argv = test.split()

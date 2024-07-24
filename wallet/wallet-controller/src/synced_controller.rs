@@ -660,10 +660,15 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     ///
     /// The change will be sent to addresses specified in `change_addresses`.
     /// If there is no entry in `change_addresses` for a certain token, the change will be sent
-    /// to a first unused address in the wallet.
+    /// to the first unused address in the wallet.
     /// If there is no entry in `change_addresses` for coins, the destination for the change
     /// from the fee payment will be taken from one of the existing coin utxos.
-    // FIXME this discrepancy between tokens/coins fee handling is ugly;
+    // TODO: this discrepancy between tokens/coins fee handling is a bit ugly, it's better to unify it.
+    // Note: the reason for this specific fee change behavior is that this function is called from
+    // `make_tx_to_send_tokens_from_multisig_address`, which is supposed to be used in automated
+    // scenarios; issuing a new address for each call seems redundant in such a case.
+    // The token change being sent to first unused address doesn't have any particular reason;
+    // it's just how this function's callee behaves by default.
     pub async fn make_unsigned_tx_to_send_tokens_to_addresses(
         &mut self,
         inputs: Vec<(UtxoOutPoint, TxOutput)>,

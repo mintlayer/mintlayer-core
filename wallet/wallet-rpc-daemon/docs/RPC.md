@@ -241,6 +241,12 @@ Parameters:
 ```
 {
     "account": number,
+    "utxo_states": [ EITHER OF
+         1) "Confirmed"
+         2) "Conflicted"
+         3) "Inactive"
+         4) "Abandoned"
+         5) "InMempool", .. ],
     "with_locked": EITHER OF
          1) "Any"
          2) "Unlocked"
@@ -1123,7 +1129,7 @@ Parameters:
 Returns:
 ```
 {
-    "transaction_hex": string,
+    "transaction": hex string,
     "current_signatures": [ EITHER OF
          1) { "type": "NotSigned" }
          2) { "type": "InvalidSignature" }

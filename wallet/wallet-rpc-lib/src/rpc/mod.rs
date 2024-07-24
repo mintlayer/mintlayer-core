@@ -1172,8 +1172,6 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 })
             })
             .await?
-
-        // FIXME validate the produced transaction
     }
 
     pub async fn create_stake_pool(

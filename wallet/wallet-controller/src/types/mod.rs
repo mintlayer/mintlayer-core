@@ -136,19 +136,3 @@ impl rpc_description::HasValueHint for GenericTxOutput {
 impl rpc_description::HasValueHint for GenericTxTokenOutput {
     const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::GENERIC_OBJECT;
 }
-
-#[cfg(test)]
-mod tests {
-    use common::{address::pubkeyhash::PublicKeyHash, chain::Destination, primitives::DecimalAmount};
-
-    use super::GenericTxOutput;
-
-    // FIXME
-    #[test]
-    fn foooo() {
-        let hash: PublicKeyHash = [1; 20].into();
-        let xx = GenericTxOutput::Transfer(DecimalAmount::from_uint_decimal(12345, 2), Destination::PublicKeyHash(hash));
-
-        println!("xx = {}", serde_json::to_string(&xx).unwrap());
-    }
-}

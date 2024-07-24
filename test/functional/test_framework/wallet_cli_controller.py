@@ -22,10 +22,11 @@ import asyncio
 import re
 from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
-
 from typing import Optional, List, Tuple, Union
 
 from test_framework.util import assert_in
+from test_framework.wallet_controller_common import PartialSigInfo, TokenTxOutput
+
 
 TEN_MB = 10*2**20
 READ_TIMEOUT_SEC = 30
@@ -46,16 +47,6 @@ class TxOutput:
 
     def __str__(self):
         return f'transfer({self.address},{self.amount})'
-
-# FIXME move this elsewhere
-@dataclass
-class TokenTxOutput:
-    token_id: str
-    address: str
-    amount: str
-
-    def __str__(self):
-        return f'transfer({self.token_id},{self.address},{self.amount})'
 
 @dataclass
 class PoolData:
@@ -83,14 +74,6 @@ class CreatedBlockInfo:
 class AccountInfo:
     index: int
     name: Optional[str]
-
-# FIXME move this elsewhere
-@dataclass
-class PartialSigInfo:
-    input_index: int
-    num_signatures: int
-    required_signatures: int
-
 
 
 class WalletCliController:
@@ -278,7 +261,6 @@ class WalletCliController:
     async def new_public_key(self, address: Optional[str] = None) -> bytes:
         if address is None:
             address = await self.new_address()
-            self.log.info(f'address: {address}')
         public_key = await self._write_command(f"address-reveal-public-key-as-hex {address}\n")
 
         self.log.info(f'pub key output: {public_key}')
@@ -345,7 +327,6 @@ class WalletCliController:
         output = await self.send_tokens_to_address(token_id, address, amount)
         assert_in("The transaction was submitted successfully", output)
 
-    # This function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
     async def issue_new_token(self,
                               token_ticker: str,
                               number_of_decimals: int,
@@ -541,7 +522,6 @@ class WalletCliController:
         output = await self._write_command(
             f"token-make-tx-to-send-from-multisig-address {from_address} {outputs_str} {fee_change_addr_str}\n")
 
-        self.log.debug(f"make_tx_to_send_tokens_from_multisig_address's output: {output}")
         return output
 
     async def make_tx_to_send_tokens_from_multisig_address_expect_fully_signed(
@@ -552,7 +532,7 @@ class WalletCliController:
 
         lines = [s for s in output.splitlines() if s.strip()]
         return lines[1]
-    
+
     async def make_tx_to_send_tokens_from_multisig_address_expect_partially_signed(
             self, from_address: str, outputs: List[TokenTxOutput], fee_change_addr: Optional[str]):
 

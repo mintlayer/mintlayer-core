@@ -36,7 +36,6 @@ use crypto::{
     vrf::VRFPublicKey,
 };
 use rpc::description::HasValueHint;
-use serialization::hex::{HexDecode as _, HexEncode as _, HexError};
 use wallet::account::PoolData;
 
 pub use chainstate::{
@@ -499,7 +498,9 @@ impl From<&UtxoType> for RpcUtxoType {
     }
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(
+    Debug, Clone, Copy, serde::Serialize, serde::Deserialize, HasValueHint, enum_iterator::Sequence,
+)]
 pub enum RpcUtxoState {
     Confirmed,
     Conflicted,
@@ -696,41 +697,9 @@ pub struct MaybeSignedTransaction {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct SendTokensFromMultisigAddressResult {
-    transaction: HexEncoded<PartiallySignedTransaction>,
-    current_signatures: Vec<RpcSignatureStatus>,
-    fees: Balances,
-}
-
-impl SendTokensFromMultisigAddressResult {
-    // FIXME remove methods, make fields public?
-    pub fn from_tx_signatures_fees(
-        tx: PartiallySignedTransaction,
-        current_signatures: Vec<RpcSignatureStatus>,
-        fees: Balances,
-    ) -> Self {
-
-        Self {
-            transaction: HexEncoded::new(tx),
-            current_signatures,
-            fees,
-        }
-    }
-
-    pub fn transaction(&self) -> &PartiallySignedTransaction {
-        &self.transaction.as_ref()
-    }
-
-    pub fn current_signatures(&self) -> &[RpcSignatureStatus] {
-        &self.current_signatures
-    }
-
-    pub fn fees(&self) -> &Balances {
-        &self.fees
-    }
-
-    // pub fn decode_transaction(&self) -> Result<PartiallySignedTransaction, HexError> {
-    //     PartiallySignedTransaction::hex_decode_all(&self.transaction)
-    // }
+    pub transaction: HexEncoded<PartiallySignedTransaction>,
+    pub current_signatures: Vec<RpcSignatureStatus>,
+    pub fees: Balances,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]

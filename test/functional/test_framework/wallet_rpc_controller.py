@@ -29,7 +29,7 @@ from operator import itemgetter
 from typing import Optional, List, Tuple, Union
 
 from test_framework.util import assert_in, rpc_port
-from test_framework.wallet_cli_controller import TokenTxOutput, PartialSigInfo
+from test_framework.wallet_controller_common import PartialSigInfo, TokenTxOutput
 
 ONE_MB = 2**20
 READ_TIMEOUT_SEC = 30
@@ -214,10 +214,10 @@ class WalletRpcController:
         self.account = account_index
         return "Success"
 
-    # This function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
+    # Note: this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
     async def add_standalone_multisig_address_get_result(
             self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = None, no_rescan: Optional[bool] = None) -> str:
-    
+
         result = self._write_command("standalone_add_multisig", [self.account, min_required_signatures, pub_keys, label, no_rescan])
         return result['result']
 
@@ -258,7 +258,6 @@ class WalletRpcController:
         # send_tokens_to_address already fails on error.
         await self.send_tokens_to_address(token_id, address, amount)
 
-    # This function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
     async def issue_new_token(self,
                               token_ticker: str,
                               number_of_decimals: int,
@@ -350,9 +349,7 @@ class WalletRpcController:
         return "The transaction was submitted successfully"
 
     async def submit_transaction(self, transaction: str, do_not_store: bool = False) -> str:
-        result = self._write_command(f"node_submit_transaction", [transaction, do_not_store, {}])
-        self.log.info(f"result = {result}")
-        result['result']
+        self._write_command(f"node_submit_transaction", [transaction, do_not_store, {}])['result']
         return "The transaction was submitted successfully"
 
     async def list_pool_ids(self) -> List[PoolData]:
@@ -406,14 +403,11 @@ class WalletRpcController:
     async def get_balance(self, with_locked: str = 'unlocked', utxo_states: List[str] = ['confirmed']) -> str:
         with_locked = with_locked.capitalize()
         result = self._write_command("account_balance", [self.account, [state.title() for state in utxo_states], with_locked])
-
-        self.log.info(f"result = {result}")
-
         result = result['result']
 
         coins = result['coins']['decimal']
-
         tokens = {}
+
         if 'tokens' in result:
             for (hexified_token_id, balance) in result['tokens'].items():
                 token_id_as_addr = self.node.test_functions_dehexify_all_addresses(hexified_token_id)
@@ -485,13 +479,6 @@ class WalletRpcController:
             return result['error']['message']
 
     async def make_tx_to_send_tokens_from_multisig_address(self, from_address: str, outputs: List[TokenTxOutput], fee_change_addr: Optional[str]):
-        # fee_change_addr_str = f'--fee-change-address {fee_change_addr}' if fee_change_addr else ''
-        # outputs_str = f"{' '.join(map(str, outputs))}"
-        # output = await self._write_command(f"token-make-tx-to-send-from-multisig-address {address} {outputs_str} {fee_change_addr_str}\n")
-
-        # self.log.debug(f"make_tx_to_send_tokens_from_multisig_address's output: {output}")
-        # return output
-
         outputs = [
             {
                 "token_id": output.token_id,
@@ -505,36 +492,28 @@ class WalletRpcController:
             for output in outputs
         ]
 
-        self.log.info(f"!!!!!!!!!!!!! outputs = {outputs}")
-
         result = self._write_command(
             "make_tx_to_send_tokens_from_multisig_address",
             [self.account, from_address, fee_change_addr, outputs, {'in_top_x_mb': 5}])
-
-
-        self.log.info(f"!!!!!!!!!!!!! result = {result}")
 
         return result['result']
 
     async def make_tx_to_send_tokens_from_multisig_address_expect_fully_signed(
             self, from_address: str, outputs: List[TokenTxOutput], fee_change_addr: Optional[str]):
-        
+
         result = await self.make_tx_to_send_tokens_from_multisig_address(from_address, outputs, fee_change_addr)
-        
+
         for sig_status in result['current_signatures']:
             assert sig_status['type'] == 'FullySigned'
 
         tx_as_partially_signed = result['transaction']
-
         signed_tx = self.node.test_functions_partially_signed_tx_to_signed_tx(tx_as_partially_signed)
-
-        self.log.info(f"!!!!!!!!!!!!! signed_tx = {signed_tx}")
 
         return signed_tx
 
     async def make_tx_to_send_tokens_from_multisig_address_expect_partially_signed(
             self, from_address: str, outputs: List[TokenTxOutput], fee_change_addr: Optional[str]):
-        
+
         result = await self.make_tx_to_send_tokens_from_multisig_address(from_address, outputs, fee_change_addr)
 
         siginfo = sorted(result['current_signatures'],  key=itemgetter('type'))

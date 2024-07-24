@@ -67,24 +67,42 @@ lazy_static::lazy_static! {
     };
 }
 
-fn multisig_signature_size(info: &MultisigInfo) -> usize {
-    // FIXME need to cache this somehow to avoid allocations on every call.
-    let signatures = (0..info.min_required_signatures.get())
-        .map(|i| (i, BOGUS_KEY_PAIR_AND_SIGNATURE.2.clone()))
-        .collect::<BTreeMap<_, _>>();
-    let challenge = ClassicMultisigChallenge::new_unchecked(
-        info.min_required_signatures,
-        vec![BOGUS_KEY_PAIR_AND_SIGNATURE.1.clone(); info.total_keys.get()],
-    );
+mod multisig_signature_size_impl {
+    use std::sync::Mutex;
 
-    let raw_signature = AuthorizedClassicalMultisigSpend::new(signatures, challenge).encode();
+    use super::*;
 
-    let standard = StandardInputSignature::new(
-        SigHashType::try_from(SigHashType::ALL).expect("should not fail"),
-        raw_signature,
-    );
-    InputWitness::Standard(standard).encoded_size()
+    // Cache results of multisig_signature_size, because it's relatively expensive.
+    static CACHE: Mutex<BTreeMap<MultisigInfo, usize>> = Mutex::new(BTreeMap::new());
+
+    pub fn multisig_signature_size(info: MultisigInfo) -> usize {
+        use std::collections::btree_map::Entry;
+
+        match CACHE.lock().expect("poisoned mutex").entry(info) {
+            Entry::Vacant(entry) => {
+                let signatures = (0..info.min_required_signatures.get())
+                    .map(|i| (i, BOGUS_KEY_PAIR_AND_SIGNATURE.2.clone()))
+                    .collect::<BTreeMap<_, _>>();
+                let challenge = ClassicMultisigChallenge::new_unchecked(
+                    info.min_required_signatures,
+                    vec![BOGUS_KEY_PAIR_AND_SIGNATURE.1.clone(); info.total_keys.get()],
+                );
+
+                let raw_signature =
+                    AuthorizedClassicalMultisigSpend::new(signatures, challenge).encode();
+
+                let standard = StandardInputSignature::new(
+                    SigHashType::try_from(SigHashType::ALL).expect("should not fail"),
+                    raw_signature,
+                );
+                let size = InputWitness::Standard(standard).encoded_size();
+                *entry.insert(size)
+            }
+            Entry::Occupied(entry) => *entry.get(),
+        }
+    }
 }
+use multisig_signature_size_impl::multisig_signature_size;
 
 lazy_static::lazy_static! {
     static ref NO_SIGNATURE_SIZE: usize = {
@@ -119,6 +137,7 @@ lazy_static::lazy_static! {
     };
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct MultisigInfo {
     total_keys: NonZeroUsize,
     min_required_signatures: NonZeroU8,
@@ -164,7 +183,7 @@ pub fn input_signature_size_from_destination(
         )),
         Destination::ClassicMultisig(_) => dest_info_provider
             .and_then(|dest_info_provider| dest_info_provider.get_multisig_info(destination))
-            .map(|info| multisig_signature_size(&info))
+            .map(multisig_signature_size)
             .ok_or_else(|| SizeEstimationError::UnsupportedInputDestination(destination.clone())),
     }
 }

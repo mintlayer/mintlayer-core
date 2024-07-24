@@ -433,7 +433,6 @@ pub enum WalletCommand {
     #[clap(name = "token-make-tx-to-send-from-multisig-address")]
     MakeTxToSendTokensFromMultisigAddress {
         /// The source multisig address; the change will be sent to it as well.
-        // FIXME have an optional change_address for this as well.
         from_address: String,
 
         /// An optional address to which the change for the fee payment should be sent to.

@@ -971,13 +971,13 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
                 config,
             )
             .await
-            .map(|(tx, cur_signatures, fees)| {
-                SendTokensFromMultisigAddressResult::from_tx_signatures_fees(
-                    tx,
-                    cur_signatures.into_iter().map(Into::into).collect(),
+            .map(
+                |(tx, cur_signatures, fees)| SendTokensFromMultisigAddressResult {
+                    transaction: HexEncoded::new(tx),
+                    current_signatures: cur_signatures.into_iter().map(Into::into).collect(),
                     fees,
-                )
-            }),
+                },
+            ),
         )
     }
 

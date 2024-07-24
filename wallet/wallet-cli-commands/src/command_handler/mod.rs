@@ -1408,17 +1408,19 @@ where
                     )
                     .await?;
 
-                let tx = result.transaction();
+                let tx = result.transaction.as_ref();
 
                 let summary = tx.tx().text_summary(chain_config);
 
                 let is_fully_signed = tx.all_signatures_available()
-                    && result.current_signatures().iter().all(|s| *s == RpcSignatureStatus::FullySigned);
+                    && result
+                        .current_signatures
+                        .iter()
+                        .all(|s| *s == RpcSignatureStatus::FullySigned);
 
                 let mut output_str = if is_fully_signed {
-                    // Note: we can only get here if this wallet owns all keys of the multisig (or if it's a 1-of-1
-                    // multisig).
-                    // FIXME should the message contain something like "WARNING: this is not supposed to happen..."?
+                    // Note: we can only get here if this wallet owns all keys of the multisig (including the case when
+                    // it's a 1-of-1 multisig).
 
                     let signed_tx = tx.clone().into_signed_tx().expect("already checked");
                     let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
@@ -1430,7 +1432,7 @@ where
                     )
                 } else {
                     let current_sigs = result
-                        .current_signatures()
+                        .current_signatures
                         .iter()
                         .enumerate()
                         .map(format_signature_status)
@@ -1441,11 +1443,11 @@ where
                         The current signature states are:\n{current_sigs}.\n\
                         Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n\
                         {transaction}\n\n{summary}",
-                        transaction = HexEncoded::new(result.transaction())
+                        transaction = result.transaction
                     )
                 };
 
-                format_fees(&mut output_str, result.fees(), chain_config);
+                format_fees(&mut output_str, &result.fees, chain_config);
 
                 Ok(ConsoleCommand::Print(output_str))
             }

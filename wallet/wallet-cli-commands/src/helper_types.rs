@@ -16,16 +16,18 @@
 use std::{fmt::Display, str::FromStr};
 
 use clap::ValueEnum;
-use wallet_controller::types::{GenericTxOutput, GenericTxTokenOutput};
-use wallet_types::utxo_types::{UtxoState, UtxoType};
 
 use common::{
     address::Address,
     chain::{ChainConfig, OutPointSourceId, TxOutput, UtxoOutPoint},
     primitives::{DecimalAmount, Id, H256},
 };
+use wallet_controller::types::{GenericTxOutput, GenericTxTokenOutput};
 use wallet_rpc_lib::types::{NodeInterface, PoolInfo, TokenTotalSupply};
-use wallet_types::with_locked::WithLocked;
+use wallet_types::{
+    utxo_types::{UtxoState, UtxoType},
+    with_locked::WithLocked,
+};
 
 use crate::errors::WalletCliCommandError;
 
@@ -165,14 +167,14 @@ pub fn parse_utxo_outpoint<N: NodeInterface>(
     input: &str,
 ) -> Result<UtxoOutPoint, WalletCliCommandError<N>> {
     let (name, mut args) = parse_funclike_expr(input).ok_or(
-        WalletCliCommandError::<N>::InvalidInput("Invalid output format".into()),
+        WalletCliCommandError::<N>::InvalidInput("Invalid input format".into()),
     )?;
 
     let (h256_str, output_index_str) = match (args.next(), args.next(), args.next()) {
         (Some(h256_str), Some(output_index_str), None) => (h256_str, output_index_str),
         (_, _, _) => {
             return Err(WalletCliCommandError::<N>::InvalidInput(
-                "Invalid output format".into(),
+                "Invalid input format".into(),
             ));
         }
     };
@@ -202,33 +204,33 @@ pub fn parse_generic_output<N: NodeInterface>(
     chain_config: &ChainConfig,
 ) -> Result<GenericTxOutput, WalletCliCommandError<N>> {
     let (name, mut args) = parse_funclike_expr(input).ok_or(
-        WalletCliCommandError::<N>::InvalidInput("Invalid output format".into()),
+        WalletCliCommandError::<N>::InvalidInput("Invalid input format".into()),
     )?;
 
     let (dest_str, amount_str) = match (args.next(), args.next(), args.next()) {
         (Some(dest_str), Some(amount_str), None) => (dest_str, amount_str),
         (_, _, _) => {
             return Err(WalletCliCommandError::<N>::InvalidInput(
-                "Invalid output format".into(),
+                "Invalid input format".into(),
             ));
         }
     };
 
     let dest = Address::from_string(chain_config, dest_str)
         .map_err(|err| {
-            WalletCliCommandError::<N>::InvalidInput(format!("invalid address {dest_str} {err}"))
+            WalletCliCommandError::<N>::InvalidInput(format!("Invalid address {dest_str} {err}"))
         })?
         .into_object();
 
     let amount = DecimalAmount::from_str(amount_str).map_err(|err| {
-        WalletCliCommandError::<N>::InvalidInput(format!("invalid amount {amount_str} {err}"))
+        WalletCliCommandError::<N>::InvalidInput(format!("Invalid amount {amount_str} {err}"))
     })?;
 
     let output = match name {
         "transfer" => GenericTxOutput::Transfer(amount, dest),
         _ => {
             return Err(WalletCliCommandError::<N>::InvalidInput(
-                "Invalid output: unknown type".into(),
+                "Invalid input: unknown type".into(),
             ));
         }
     };
@@ -243,7 +245,7 @@ pub fn parse_generic_token_output<N: NodeInterface>(
     chain_config: &ChainConfig,
 ) -> Result<GenericTxTokenOutput, WalletCliCommandError<N>> {
     let (name, mut args) = parse_funclike_expr(input).ok_or(
-        WalletCliCommandError::<N>::InvalidInput("Invalid output format".into()),
+        WalletCliCommandError::<N>::InvalidInput("Invalid input format".into()),
     )?;
 
     let (token_id_str, dest_str, amount_str) =
@@ -253,7 +255,7 @@ pub fn parse_generic_token_output<N: NodeInterface>(
             }
             (_, _, _, _) => {
                 return Err(WalletCliCommandError::<N>::InvalidInput(
-                    "Invalid output format".into(),
+                    "Invalid input format".into(),
                 ));
             }
         };
@@ -261,19 +263,19 @@ pub fn parse_generic_token_output<N: NodeInterface>(
     let token_id = Address::from_string(chain_config, token_id_str)
         .map_err(|err| {
             WalletCliCommandError::<N>::InvalidInput(format!(
-                "invalid token id {token_id_str} {err}"
+                "Invalid token id {token_id_str} {err}"
             ))
         })?
         .into_object();
 
     let dest = Address::from_string(chain_config, dest_str)
         .map_err(|err| {
-            WalletCliCommandError::<N>::InvalidInput(format!("invalid address {dest_str} {err}"))
+            WalletCliCommandError::<N>::InvalidInput(format!("Invalid address {dest_str} {err}"))
         })?
         .into_object();
 
     let amount = DecimalAmount::from_str(amount_str).map_err(|err| {
-        WalletCliCommandError::<N>::InvalidInput(format!("invalid amount {amount_str} {err}"))
+        WalletCliCommandError::<N>::InvalidInput(format!("Invalid amount {amount_str} {err}"))
     })?;
 
     let output = match name {
@@ -284,15 +286,13 @@ pub fn parse_generic_token_output<N: NodeInterface>(
 
         _ => {
             return Err(WalletCliCommandError::<N>::InvalidInput(
-                "Invalid output: unknown type".into(),
+                "Invalid input: unknown type".into(),
             ));
         }
     };
 
     Ok(output)
 }
-
-// FIXME tests for parse_funclike_expr and calling funcs
 
 /// Parse simple strings of the form "foo(x,y,z)".
 fn parse_funclike_expr(input: &str) -> Option<(&str, impl Iterator<Item = &'_ str>)> {
@@ -380,51 +380,6 @@ fn parse_token_amount<N: NodeInterface>(
     Ok(amount.into())
 }
 
-#[cfg(test)]
-mod tests {
-    use node_comm::rpc_client::ColdWalletClient;
-    use rstest::rstest;
-    use test_utils::random::{make_seedable_rng, Seed};
-
-    use super::*;
-    use randomness::Rng;
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn test_parse_utxo_outpoint(#[case] seed: Seed) {
-        fn check(input: &str, is_tx: bool, idx: u32, hash: H256) {
-            let utxo_outpoint = parse_utxo_outpoint::<ColdWalletClient>(input).unwrap();
-
-            match utxo_outpoint.source_id() {
-                OutPointSourceId::Transaction(id) => {
-                    assert_eq!(id.to_hash(), hash);
-                    assert!(is_tx);
-                }
-                OutPointSourceId::BlockReward(id) => {
-                    assert_eq!(id.to_hash(), hash);
-                    assert!(!is_tx);
-                }
-            }
-
-            assert_eq!(utxo_outpoint.output_index(), idx);
-        }
-
-        let mut rng = make_seedable_rng(seed);
-
-        for _ in 0..10 {
-            let h256 = H256::random_using(&mut rng);
-            let idx = rng.gen::<u32>();
-            let (id, is_tx) = if rng.gen::<bool>() {
-                ("tx", true)
-            } else {
-                ("block", false)
-            };
-            check(&format!("{id}({h256:x},{idx})"), is_tx, idx, h256);
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CliIsFreezable {
     NotFreezable,
@@ -471,6 +426,220 @@ impl YesNo {
         match self {
             Self::Yes => true,
             Self::No => false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use common::{
+        address::pubkeyhash::PublicKeyHash,
+        chain::{self, Destination},
+    };
+    use node_comm::rpc_client::ColdWalletClient;
+    use randomness::Rng;
+    use test_utils::{
+        assert_matches,
+        random::{make_seedable_rng, Seed},
+    };
+
+    use super::*;
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_parse_funclike_expr(#[case] seed: Seed) {
+        use test_utils::random::{collect_string_with_random_spaces, gen_random_alnum_string};
+
+        let mut rng = make_seedable_rng(seed);
+
+        for _ in 0..10 {
+            let args_count = rng.gen_range(1..5);
+            let args = (0..args_count)
+                .map(|_| gen_random_alnum_string(&mut rng, 1, 5))
+                .collect::<Vec<_>>();
+            let name = gen_random_alnum_string(&mut rng, 1, 5);
+
+            let str_to_parse = collect_string_with_random_spaces(
+                &mut rng,
+                std::iter::once(name.as_str())
+                    .chain(std::iter::once("("))
+                    .chain(itertools::intersperse(args.iter().map(String::as_str), ","))
+                    .chain(std::iter::once(")")),
+                0,
+                3,
+            );
+
+            let (parsed_name, parsed_args) = parse_funclike_expr(&str_to_parse).unwrap();
+            let parsed_args = parsed_args.map(<str>::to_owned).collect::<Vec<_>>();
+            assert_eq!(parsed_name, name);
+            assert_eq!(parsed_args, args);
+
+            let str_without_opening_paren = str_to_parse.replace('(', "");
+            assert!(parse_funclike_expr(&str_without_opening_paren).is_none());
+            let str_without_closing_paren = str_to_parse.replace(')', "");
+            assert!(parse_funclike_expr(&str_without_closing_paren).is_none());
+            let str_without_paren = str_without_opening_paren.replace(')', "");
+            assert!(parse_funclike_expr(&str_without_paren).is_none());
+
+            let str_to_parse = collect_string_with_random_spaces(
+                &mut rng,
+                std::iter::once(name.as_str())
+                    .chain(std::iter::once("("))
+                    .chain(std::iter::once(")")),
+                0,
+                3,
+            );
+
+            let (parsed_name, parsed_args) = parse_funclike_expr(&str_to_parse).unwrap();
+            let parsed_args = parsed_args.map(<str>::to_owned).collect::<Vec<_>>();
+            assert_eq!(parsed_name, name);
+            assert_eq!(parsed_args, vec![""]);
+
+            let str_without_opening_paren = str_to_parse.replace('(', "");
+            assert!(parse_funclike_expr(&str_without_opening_paren).is_none());
+            let str_without_closing_paren = str_to_parse.replace(')', "");
+            assert!(parse_funclike_expr(&str_without_closing_paren).is_none());
+            let str_without_paren = str_without_opening_paren.replace(')', "");
+            assert!(parse_funclike_expr(&str_without_paren).is_none());
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_parse_utxo_outpoint(#[case] seed: Seed) {
+        fn check(input: &str, is_tx: bool, idx: u32, hash: H256) {
+            let utxo_outpoint = parse_utxo_outpoint::<ColdWalletClient>(input).unwrap();
+
+            match utxo_outpoint.source_id() {
+                OutPointSourceId::Transaction(id) => {
+                    assert_eq!(id.to_hash(), hash);
+                    assert!(is_tx);
+                }
+                OutPointSourceId::BlockReward(id) => {
+                    assert_eq!(id.to_hash(), hash);
+                    assert!(!is_tx);
+                }
+            }
+
+            assert_eq!(utxo_outpoint.output_index(), idx);
+        }
+
+        let mut rng = make_seedable_rng(seed);
+
+        for _ in 0..10 {
+            let h256 = H256::random_using(&mut rng);
+            let idx = rng.gen::<u32>();
+            let (id, is_tx) = if rng.gen::<bool>() {
+                ("tx", true)
+            } else {
+                ("block", false)
+            };
+            check(&format!("{id}({h256:x},{idx})"), is_tx, idx, h256);
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_parse_generic_output(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let chain_config = chain::config::create_unit_test_config();
+
+        let parse_assert_error = |str_to_parse: &str| {
+            let err = parse_generic_token_output::<ColdWalletClient>(str_to_parse, &chain_config)
+                .unwrap_err();
+            assert_matches!(
+                err,
+                WalletCliCommandError::<ColdWalletClient>::InvalidInput(_)
+            );
+        };
+
+        for _ in 0..10 {
+            let pkh = PublicKeyHash::random_using(&mut rng);
+            let addr = Address::new(&chain_config, Destination::PublicKeyHash(pkh)).unwrap();
+            let amount = DecimalAmount::from_uint_decimal(
+                rng.gen_range(0..=u128::MAX),
+                rng.gen_range(0..=u8::MAX),
+            );
+            let parsed_output = parse_generic_output::<ColdWalletClient>(
+                &format!("transfer({addr},{amount})"),
+                &chain_config,
+            )
+            .unwrap();
+
+            match parsed_output {
+                GenericTxOutput::Transfer(parsed_amount, parsed_dest) => {
+                    assert_eq!(parsed_amount.mantissa(), amount.mantissa());
+                    assert_eq!(parsed_amount.decimals(), amount.decimals());
+                    assert_eq!(parsed_dest, *addr.as_object());
+                }
+            }
+
+            parse_assert_error(&format!("foo({addr},{amount})"));
+            parse_assert_error(&format!("transfer(foo,{amount})"));
+            parse_assert_error(&format!("transfer({addr},foo)"));
+            parse_assert_error(&format!("transfer {addr},{amount})"));
+            parse_assert_error(&format!("transfer({addr},{amount}"));
+            parse_assert_error(&format!("transfer {addr},{amount}"));
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_parse_generic_token_output(#[case] seed: Seed) {
+        use common::chain::tokens::TokenId;
+
+        let mut rng = make_seedable_rng(seed);
+        let chain_config = chain::config::create_unit_test_config();
+
+        let parse_assert_error = |str_to_parse: &str| {
+            let err = parse_generic_token_output::<ColdWalletClient>(str_to_parse, &chain_config)
+                .unwrap_err();
+            assert_matches!(
+                err,
+                WalletCliCommandError::<ColdWalletClient>::InvalidInput(_)
+            );
+        };
+
+        for _ in 0..10 {
+            let token_id = TokenId::new(H256::random_using(&mut rng));
+            let token_id_as_addr = Address::new(&chain_config, token_id).unwrap();
+            let pkh = PublicKeyHash::random_using(&mut rng);
+            let addr = Address::new(&chain_config, Destination::PublicKeyHash(pkh)).unwrap();
+            let amount = DecimalAmount::from_uint_decimal(
+                rng.gen_range(0..=u128::MAX),
+                rng.gen_range(0..=u8::MAX),
+            );
+            let GenericTxTokenOutput {
+                token_id: parsed_token_id,
+                output: parsed_output,
+            } = parse_generic_token_output::<ColdWalletClient>(
+                &format!("transfer({token_id_as_addr},{addr},{amount})"),
+                &chain_config,
+            )
+            .unwrap();
+
+            assert_eq!(parsed_token_id, token_id);
+            match parsed_output {
+                GenericTxOutput::Transfer(parsed_amount, parsed_dest) => {
+                    assert_eq!(parsed_amount.mantissa(), amount.mantissa());
+                    assert_eq!(parsed_amount.decimals(), amount.decimals());
+                    assert_eq!(parsed_dest, *addr.as_object());
+                }
+            }
+
+            parse_assert_error(&format!("foo({token_id_as_addr},{addr},{amount})"));
+            parse_assert_error(&format!("transfer(foo,{addr},{amount})"));
+            parse_assert_error(&format!("transfer({token_id_as_addr},foo,{amount})"));
+            parse_assert_error(&format!("transfer({token_id_as_addr},{addr},foo)"));
+            parse_assert_error(&format!("transfer {token_id_as_addr},{addr},{amount})"));
+            parse_assert_error(&format!("transfer({token_id_as_addr},{addr},{amount}"));
+            parse_assert_error(&format!("transfer {token_id_as_addr},{addr},{amount}"));
         }
     }
 }
