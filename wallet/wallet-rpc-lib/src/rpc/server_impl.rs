@@ -397,12 +397,21 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
     async fn get_balance(
         &self,
         account_arg: AccountArg,
+        utxo_states: Vec<RpcUtxoState>,
         with_locked: Option<WithLocked>,
     ) -> rpc::RpcResult<Balances> {
+        let utxo_states = utxo_states
+            .iter()
+            .map(|rpc_state| {
+                let state: UtxoState = rpc_state.into();
+                state
+            })
+            .fold(UtxoStates::NONE, |states, state| states | state);
+
         rpc::handle_result(
             self.get_balance(
                 account_arg.index::<N>()?,
-                UtxoStates::ALL,
+                utxo_states,
                 with_locked.unwrap_or(WithLocked::Unlocked),
             )
             .await,

@@ -655,7 +655,7 @@ pub struct ComposedTransaction {
     pub fees: Balances,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize, HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RpcSignatureStatus {
     NotSigned,
@@ -696,28 +696,28 @@ pub struct MaybeSignedTransaction {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct SendTokensFromMultisigAddressResult {
-    transaction_hex: String,
+    transaction: HexEncoded<PartiallySignedTransaction>,
     current_signatures: Vec<RpcSignatureStatus>,
     fees: Balances,
 }
 
 impl SendTokensFromMultisigAddressResult {
+    // FIXME remove methods, make fields public?
     pub fn from_tx_signatures_fees(
         tx: PartiallySignedTransaction,
         current_signatures: Vec<RpcSignatureStatus>,
         fees: Balances,
     ) -> Self {
-        let transaction_hex = tx.hex_encode();
 
         Self {
-            transaction_hex,
+            transaction: HexEncoded::new(tx),
             current_signatures,
             fees,
         }
     }
 
-    pub fn transaction_hex(&self) -> &str {
-        &self.transaction_hex
+    pub fn transaction(&self) -> &PartiallySignedTransaction {
+        &self.transaction.as_ref()
     }
 
     pub fn current_signatures(&self) -> &[RpcSignatureStatus] {
@@ -728,9 +728,9 @@ impl SendTokensFromMultisigAddressResult {
         &self.fees
     }
 
-    pub fn decode_transaction(&self) -> Result<PartiallySignedTransaction, HexError> {
-        PartiallySignedTransaction::hex_decode_all(&self.transaction_hex)
-    }
+    // pub fn decode_transaction(&self) -> Result<PartiallySignedTransaction, HexError> {
+    //     PartiallySignedTransaction::hex_decode_all(&self.transaction)
+    // }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]

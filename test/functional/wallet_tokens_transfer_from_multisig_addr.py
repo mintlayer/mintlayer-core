@@ -16,21 +16,21 @@
 #  limitations under the License.
 """Test the MakeTxToSendTokensFromMultisigAddress command."""
 
-from test_framework.key import ECKey
+# from test_framework.key import ECKey
 from test_framework.mintlayer import (block_input_data_obj, make_tx, reward_input, ATOMS_PER_COIN)
-from test_framework.segwit_addr import (bech32_encode, convertbits, Encoding)
+# from test_framework.segwit_addr import (bech32_encode, convertbits, Encoding)
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import assert_in, assert_equal
-from test_framework.wallet_cli_controller import DEFAULT_ACCOUNT_INDEX, WalletCliController
+from test_framework.util import assert_in, assert_not_in, assert_equal
+from test_framework.wallet_cli_controller import (TokenTxOutput, WalletCliController, DEFAULT_ACCOUNT_INDEX)
 
 import asyncio
 import random
-import scalecodec
+# import scalecodec
 import string
 import sys
 
 
-destination_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('Destination')
+# destination_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('Destination')
 
 
 class WalletTokensTransferFromMultisigAddr(BitcoinTestFramework):
@@ -63,28 +63,33 @@ class WalletTokensTransferFromMultisigAddr(BitcoinTestFramework):
 
         return block_id
 
+    async def sync_wallet(self, wallet):
+        assert_in("Success", await wallet.sync())
+
     def run_test(self):
         if 'win32' in sys.platform:
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         asyncio.run(self.async_test())
 
-    async def setup_tokens(self, node, wallet):
-        self.log.info(f"3")
-
+    # Create 2 tokens and mint the specified amount of each.
+    # The resulting coin balance's integer part will also equal the specified amount.
+    async def setup_coins_and_tokens(self, node, wallet, amount):
         pub_key_bytes = await wallet.new_public_key()
 
         tip_id = node.chainstate_best_block_id()
         self.log.debug(f'Tip: {tip_id}')
 
+        # This function will spend 2x100 coins on issuing tokens and 2x50 on minting;
+        # also, a portion of a coin will be spent for the transaction fee.
         output = {
-            'Transfer': [ { 'Coin': 500 * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
+            'Transfer': [ { 'Coin': (amount + 301) * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}} } ],
         }
         encoded_tx, tx_id = make_tx([reward_input(tip_id)], [output], 0)
 
         node.mempool_submit_transaction(encoded_tx, {})
         assert node.mempool_contains_tx(tx_id)
 
-        block_id = self.generate_block() # Block 1
+        block_id = self.generate_block()
         assert not node.mempool_contains_tx(tx_id)
 
         # Sync the wallet
@@ -110,138 +115,176 @@ class WalletTokensTransferFromMultisigAddr(BitcoinTestFramework):
         self.generate_block()
 
         # Mint some foo.
-        mint_output = await wallet.mint_tokens(token_foo_id, address, 100000)
-        assert_in("The transaction was submitted successfully", mint_output)
-
+        await wallet.mint_tokens_or_fail(token_foo_id, address, amount)
         # Mint some bar.
-        mint_output = await wallet.mint_tokens(token_bar_id, address, 100000)
-        assert_in("The transaction was submitted successfully", mint_output)
+        await wallet.mint_tokens_or_fail(token_bar_id, address, amount)
 
         self.generate_block()
+        await self.sync_wallet(wallet)
 
         return (token_foo_id, token_bar_id)
 
-    def random_pub_key_as_address(self):
-        key = ECKey()
-        key.generate()
-        pub_key_bytes = key.get_pubkey().get_bytes()
-
-        encoded_dest = destination_obj.encode({
-            'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': pub_key_bytes}}}
-        })
-        # The returned encoded_dest is 'ScaleBytes', need to convert it to bytes,
-        encoded_dest = bytes.fromhex(encoded_dest.to_hex()[2:])
-
-        addr = bech32_encode(Encoding.BECH32M, 'rpmt', convertbits(encoded_dest, 8, 5))
-
-        return addr
-
-    async def setup_multisig_addresses(self, wallet, tokens_to_send):
+    async def setup_multisig_addresses(self, wallet, another_pub_key_as_addr, tokens_to_send, amount_to_send):
         addr = await wallet.new_address()
         pubkey_as_addr = await wallet.reveal_public_key_as_address(addr)
 
-        random_pubkey_as_addr = self.random_pub_key_as_address()
-
-        ms_addr_1_of_2 = await wallet.add_standalone_multisig_address_get_result(1, [pubkey_as_addr, random_pubkey_as_addr])
-        ms_addr_2_of_2 = await wallet.add_standalone_multisig_address_get_result(2, [pubkey_as_addr, random_pubkey_as_addr])
+        ms_addr_1_of_2 = await wallet.add_standalone_multisig_address_get_result(1, [pubkey_as_addr, another_pub_key_as_addr], None, True)
+        ms_addr_2_of_2 = await wallet.add_standalone_multisig_address_get_result(2, [pubkey_as_addr, another_pub_key_as_addr], None, True)
 
         for token in tokens_to_send:
-            await wallet.send_tokens_to_address_or_fail(token, ms_addr_1_of_2, 1000)
-            await wallet.send_tokens_to_address_or_fail(token, ms_addr_2_of_2, 1000)
+            await wallet.send_tokens_to_address_or_fail(token, ms_addr_1_of_2, amount_to_send)
+            await wallet.send_tokens_to_address_or_fail(token, ms_addr_2_of_2, amount_to_send)
+
+        self.generate_block()
+        await self.sync_wallet(wallet)
 
         return (ms_addr_1_of_2, ms_addr_2_of_2)
+
+    async def switch_to_wallet(self, wallet, wallet_name):
+        await wallet.close_wallet()
+        await wallet.open_wallet(wallet_name)
 
     async def async_test(self):
         node = self.nodes[0]
 
         async with self.wallet_controller(node, self.config, self.log) as wallet:
-            await wallet.create_wallet()
+            await wallet.create_wallet('cosigner_wallet')
+            cosigner_wallet_addr = await wallet.new_address()
+            cosigner_wallet_pub_key_as_addr = await wallet.reveal_public_key_as_address(cosigner_wallet_addr)
 
-            (token_foo_id, token_bar_id) = await self.setup_tokens(node, wallet)
+            await wallet.close_wallet()
+            await wallet.create_wallet('another_wallet')
 
-            (ms_addr_1_of_2, ms_addr_2_of_2) = await self.setup_multisig_addresses(wallet, [token_foo_id])
+            another_wallet_addr = await wallet.new_address()
 
+            await wallet.close_wallet()
+            await wallet.create_wallet('main_wallet')
 
-            # assert_in("Coins amount: 201", await wallet.get_balance())
+            (token_foo_id, token_bar_id) = await self.setup_coins_and_tokens(node, wallet, 10000)
+
+            async def assert_balances(coin, foo, bar):
+                await self.sync_wallet(wallet)
+                balances = await wallet.get_balance()
+                assert_in(f"Coins amount: {coin}", balances)
+
+                if foo:
+                    assert_in(f"Token: {token_foo_id} amount: {foo}", balances)
+                else:
+                    assert_not_in(token_foo_id, balances)
+                
+                if bar:
+                    assert_in(f"Token: {token_bar_id} amount: {bar}", balances)
+                else:
+                    assert_not_in(token_bar_id, balances)
+
+            await assert_balances(coin=10000, foo=10000, bar=10000)
+
+            (ms_addr_1_of_2_with_foo, ms_addr_2_of_2_with_foo) = await self.setup_multisig_addresses(
+                wallet, cosigner_wallet_pub_key_as_addr, [token_foo_id], 1000)
+
+            await assert_balances(coin=10000, foo=8000, bar=10000)
+
+            (ms_addr_1_of_2_with_foo_bar, ms_addr_2_of_2_with_foo_bar) = await self.setup_multisig_addresses(
+                wallet, cosigner_wallet_pub_key_as_addr, [token_foo_id, token_bar_id], 1000)
+
+            await assert_balances(coin=10000, foo=6000, bar=8000)
+
+            # Now start creating transactions to send tokens from the multisig address to another_wallet_addr,
+
+            dest_addr = another_wallet_addr
+
+            # Sanity check - another_wallet has zero balances.
+            await self.switch_to_wallet(wallet, 'another_wallet')
+            await assert_balances(coin=0, foo=0, bar=0)
+            await self.switch_to_wallet(wallet, 'main_wallet')
+
+            fully_signed_tx_with_foo = await wallet.make_tx_to_send_tokens_from_multisig_address_expect_fully_signed(
+                ms_addr_1_of_2_with_foo, [TokenTxOutput(token_foo_id, dest_addr, '100')], None)
+
+            assert_in("The transaction was submitted successfully", await wallet.submit_transaction(fully_signed_tx_with_foo))
+
+            self.generate_block()
+            # await self.sync_wallet(wallet)
+
+            await self.switch_to_wallet(wallet, 'another_wallet')
+            await assert_balances(coin=0, foo=100, bar=0)
+            await self.switch_to_wallet(wallet, 'main_wallet')
+
+            (partially_signed_tx_with_foo, siginfo) = await wallet.make_tx_to_send_tokens_from_multisig_address_expect_partially_signed(
+                ms_addr_2_of_2_with_foo, [TokenTxOutput(token_foo_id, dest_addr, '100')], None)
+            assert len(siginfo) == 1
+            assert {(s.num_signatures, s.required_signatures) for s in siginfo} == {(1, 2)}
+
+            await self.switch_to_wallet(wallet, 'cosigner_wallet')
+            fully_signed_tx_with_foo2 = await wallet.sign_raw_transaction_expect_fully_signed(partially_signed_tx_with_foo)
+            await self.switch_to_wallet(wallet, 'main_wallet')
+
+            assert_in("The transaction was submitted successfully", await wallet.submit_transaction(fully_signed_tx_with_foo2))
+
+            self.generate_block()
+            # await self.sync_wallet(wallet)
+
+            await self.switch_to_wallet(wallet, 'another_wallet')
+            await assert_balances(coin=0, foo=200, bar=0)
+            await self.switch_to_wallet(wallet, 'main_wallet')
+
+            fully_signed_tx_with_foo_bar = await wallet.make_tx_to_send_tokens_from_multisig_address_expect_fully_signed(
+                ms_addr_1_of_2_with_foo_bar, [TokenTxOutput(token_foo_id, dest_addr, '100'), TokenTxOutput(token_bar_id, dest_addr, '50')], None)
+
+            assert_in("The transaction was submitted successfully", await wallet.submit_transaction(fully_signed_tx_with_foo_bar))
+
+            self.generate_block()
+            # await self.sync_wallet(wallet)
+
+            await self.switch_to_wallet(wallet, 'another_wallet')
+            await assert_balances(coin=0, foo=300, bar=50)
+            await self.switch_to_wallet(wallet, 'main_wallet')
+
+            (partially_signed_tx_with_foo_bar, siginfo) = await wallet.make_tx_to_send_tokens_from_multisig_address_expect_partially_signed(
+                ms_addr_2_of_2_with_foo_bar, [TokenTxOutput(token_foo_id, dest_addr, '100'), TokenTxOutput(token_bar_id, dest_addr, '50')], None)
+            assert len(siginfo) == 2
+            assert {(s.num_signatures, s.required_signatures) for s in siginfo} == {(1, 2)}
+
+            await self.switch_to_wallet(wallet, 'cosigner_wallet')
+            fully_signed_tx_with_foo_bar2 = await wallet.sign_raw_transaction_expect_fully_signed(partially_signed_tx_with_foo_bar)
+            await self.switch_to_wallet(wallet, 'main_wallet')
+
+            assert_in("The transaction was submitted successfully", await wallet.submit_transaction(fully_signed_tx_with_foo_bar2))
+
+            self.generate_block()
+            # await self.sync_wallet(wallet)
+
+            await self.switch_to_wallet(wallet, 'another_wallet')
+            await assert_balances(coin=0, foo=400, bar=100)
+            await self.switch_to_wallet(wallet, 'main_wallet')
+
+            # The main wallet still the sama balances
+            await assert_balances(coin=10000, foo=6000, bar=8000)
+
+            # Now create one more tx, this time sending the fee change to dest_addr as well.
+            # Note that since all coins belong to a single utxo, this will move all coins to dest_addr.
+
+            (partially_signed_tx_with_foo_bar2, siginfo) = await wallet.make_tx_to_send_tokens_from_multisig_address_expect_partially_signed(
+                ms_addr_2_of_2_with_foo_bar, [TokenTxOutput(token_foo_id, dest_addr, '100'), TokenTxOutput(token_bar_id, dest_addr, '50')], dest_addr)
+            assert len(siginfo) == 2
+            assert {(s.num_signatures, s.required_signatures) for s in siginfo} == {(1, 2)}
+
+            await self.switch_to_wallet(wallet, 'cosigner_wallet')
+            fully_signed_tx_with_foo_bar3 = await wallet.sign_raw_transaction_expect_fully_signed(partially_signed_tx_with_foo_bar2)
+            await self.switch_to_wallet(wallet, 'main_wallet')
+
+            assert_in("The transaction was submitted successfully", await wallet.submit_transaction(fully_signed_tx_with_foo_bar3))
+
+            self.generate_block()
+            # await self.sync_wallet(wallet)
+
+            await assert_balances(coin=0, foo=6000, bar=8000)
+
+            await self.switch_to_wallet(wallet, 'another_wallet')
+            await assert_balances(coin=10000, foo=500, bar=150)
 
             assert(False)
 
-            # # invalid ticker
-            # # > max len
-            # invalid_ticker = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(13, 20)))
-            # token_id, err = await wallet.issue_new_token(invalid_ticker, 2, "http://uri", address)
-            # assert token_id is None
-            # assert err is not None
-            # assert_in("Invalid ticker length", err)
-            # # non alphanumeric
-            # invalid_ticker = "asd" + random.choice(r"#$%&'()*+,-./:;<=>?@[]^_`{|}~")
-            # token_id, err = await wallet.issue_new_token("asd#", 2, "http://uri", address)
-            # assert token_id is None
-            # assert err is not None
-            # assert_in("Invalid character in token ticker", err)
-
-            # # invalid url
-            # token_id, err = await wallet.issue_new_token("XXX", 2, "123 123", address)
-            # assert token_id is None
-            # assert err is not None
-            # assert_in("Incorrect metadata URI", err)
-
-            # # invalid num decimals
-            # token_id, err = await wallet.issue_new_token("XXX", 99, "http://uri", address)
-            # assert token_id is None
-            # assert err is not None
-            # assert_in("Too many decimals", err)
-
-            # # issue a valid token
-            # valid_ticker = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(random.randint(1, 5)))
-            # num_decimals = random.randint(1, 5)
-            # token_id, err = await wallet.issue_new_token(valid_ticker, num_decimals, "http://uri", address)
-            # assert token_id is not None
-            # assert err is None
-            # self.log.info(f"new token id: {token_id}")
-
-            # self.generate_block()
-            # assert_in("Success", await wallet.sync())
-            # assert_in("Coins amount: 100", await wallet.get_balance())
-
-            # amount_to_mint = random.randint(1, 10000)
-            # assert_in("The transaction was submitted successfully", await wallet.mint_tokens(token_id, address, amount_to_mint))
-
-            # self.generate_block()
-            # assert_in("Success", await wallet.sync())
-            # assert_in("Coins amount: 50", await wallet.get_balance())
-
-            # assert_in(f"{token_id} amount: {amount_to_mint}", await wallet.get_balance())
-
-            # ## create a new account and send some tokens to it
-            # await wallet.create_new_account()
-            # await wallet.select_account(1)
-            # address = await wallet.new_address()
-
-            # await wallet.select_account(DEFAULT_ACCOUNT_INDEX)
-            # amount_to_send = random.randint(0, amount_to_mint - 1)
-            # amount_to_send_decimals = random.randint(1, 10**num_decimals)
-            # amount_to_send_str = f"{amount_to_send}.{amount_to_send_decimals}".rstrip('0').rstrip('.')
-            # self.log.info(f"mint {amount_to_mint} sent {amount_to_send_str} diff {amount_to_mint - amount_to_send - amount_to_send_decimals / 10**num_decimals}")
-
-            # output = await wallet.send_tokens_to_address(token_id, address, amount_to_send_str)
-            # assert_in("The transaction was submitted successfully", output)
-
-            # self.generate_block()
-            # assert_in("Success", await wallet.sync())
-
-            # ## check the new balance
-            # token_balance = amount_to_mint - amount_to_send - 1
-            # token_balance_decimals = 10**len(str(amount_to_send_decimals)) - amount_to_send_decimals
-            # num_zeroes = len(str(amount_to_send_decimals)) - len(str(token_balance_decimals))
-            # token_balance_str = f"{token_balance}.{'0'*num_zeroes}{token_balance_decimals}".rstrip('0').rstrip('.')
-            # assert_in(f"{token_id} amount: {token_balance_str}", await wallet.get_balance())
-
-            # ## try to issue a new token, should fail with not enough coins
-            # token_id, err = await wallet.issue_new_token("XXX", 2, "http://uri", address)
-            # assert token_id is None
-            # assert err is not None
-            # assert_in("Not enough funds", err)
 
 if __name__ == '__main__':
     WalletTokensTransferFromMultisigAddr().main()

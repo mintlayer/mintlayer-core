@@ -329,6 +329,7 @@ trait WalletRpc {
     async fn get_balance(
         &self,
         account: AccountArg,
+        utxo_states: Vec<RpcUtxoState>,
         with_locked: Option<WithLocked>,
     ) -> rpc::RpcResult<Balances>;
 

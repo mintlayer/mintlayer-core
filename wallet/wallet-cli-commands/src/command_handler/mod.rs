@@ -1408,31 +1408,27 @@ where
                     )
                     .await?;
 
-                let tx = result.decode_transaction().expect("transaction to be encoded properly");
+                let tx = result.transaction();
 
                 let summary = tx.tx().text_summary(chain_config);
 
-                let mut output_str = if tx.all_signatures_available() {
+                let is_fully_signed = tx.all_signatures_available()
+                    && result.current_signatures().iter().all(|s| *s == RpcSignatureStatus::FullySigned);
+
+                let mut output_str = if is_fully_signed {
                     // Note: we can only get here if this wallet owns all keys of the multisig (or if it's a 1-of-1
                     // multisig).
                     // FIXME should the message contain something like "WARNING: this is not supposed to happen..."?
 
-                    let signed_tx = tx.into_signed_tx().expect("already checked");
+                    let signed_tx = tx.clone().into_signed_tx().expect("already checked");
                     let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
-
-                    // FIXME do we need to show a qr code here? Transactions of this kind may be rather big, so the qr code
-                    // will appear broken even on a large screen.
-                    let qr_code_string = qrcode_or_error_string(&result_hex.to_string());
 
                     format!(
                         "The transaction has been fully signed and is ready to be broadcast to network. \
                         You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
-                        Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n\
-                        Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}"
+                        Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n{summary}"
                     )
                 } else {
-                    let qr_code_string = qrcode_or_error_string(result.transaction_hex());
-
                     let current_sigs = result
                         .current_signatures()
                         .iter()
@@ -1442,10 +1438,10 @@ where
 
                     format!(
                         "Not all transaction inputs have been signed. This wallet does not have all the keys for that.\n\
-                        The current signature states are:\n{current_sigs}\n\
-                        Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n{transaction}\n\n\
-                        Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}",
-                        transaction = result.transaction_hex()
+                        The current signature states are:\n{current_sigs}.\n\
+                        Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n\
+                        {transaction}\n\n{summary}",
+                        transaction = HexEncoded::new(result.transaction())
                     )
                 };
 

@@ -25,6 +25,7 @@ use common::{
             EpochIndex,
         },
         output_value::OutputValue,
+        partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
         Destination, OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
@@ -121,6 +122,12 @@ trait RpcTestFunctionsRpc {
 
     #[method(name = "dehexify_all_addresses")]
     async fn dehexify_all_addresses(&self, input: String) -> rpc::RpcResult<String>;
+
+    #[method(name = "partially_signed_tx_to_signed_tx")]
+    async fn partially_signed_tx_to_signed_tx(
+        &self,
+        input: HexEncoded<PartiallySignedTransaction>,
+    ) -> rpc::RpcResult<Option<HexEncoded<SignedTransaction>>>;
 }
 
 #[async_trait::async_trait]
@@ -378,6 +385,13 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
             .expect("Subsystem call ok");
 
         Ok(output)
+    }
+
+    async fn partially_signed_tx_to_signed_tx(
+        &self,
+        tx: HexEncoded<PartiallySignedTransaction>,
+    ) -> rpc::RpcResult<Option<HexEncoded<SignedTransaction>>> {
+        Ok(tx.take().into_signed_tx().ok().map(HexEncoded::new))
     }
 }
 

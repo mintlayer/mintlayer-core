@@ -47,6 +47,16 @@ class TxOutput:
     def __str__(self):
         return f'transfer({self.address},{self.amount})'
 
+# FIXME move this elsewhere
+@dataclass
+class TokenTxOutput:
+    token_id: str
+    address: str
+    amount: str
+
+    def __str__(self):
+        return f'transfer({self.token_id},{self.address},{self.amount})'
+
 @dataclass
 class PoolData:
     pool_id: str
@@ -73,6 +83,15 @@ class CreatedBlockInfo:
 class AccountInfo:
     index: int
     name: Optional[str]
+
+# FIXME move this elsewhere
+@dataclass
+class PartialSigInfo:
+    input_index: int
+    num_signatures: int
+    required_signatures: int
+
+
 
 class WalletCliController:
 
@@ -234,12 +253,18 @@ class WalletCliController:
         label_str = f'--label {label}' if label else ''
         return await self._write_command(f"standalone-add-watch-only-address {address} {label_str}\n")
 
-    async def add_standalone_multisig_address(self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = None) -> str:
-        label_str = f'--label {label}' if label else ''
-        return await self._write_command(f"standalone-add-multisig {min_required_signatures} {' '.join(pub_keys)} {label_str}\n")
+    async def add_standalone_multisig_address(
+            self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = None, no_rescan: Optional[bool] = None) -> str:
 
-    async def add_standalone_multisig_address_get_result(self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = None) -> str:
-        output = await self.add_standalone_multisig_address(min_required_signatures, pub_keys, label)
+        label_str = f'--label {label}' if label else ''
+        no_rescan_str = f'--no-rescan {str(no_rescan).lower()}' if no_rescan else ''
+        return await self._write_command(f"standalone-add-multisig {min_required_signatures} {' '.join(pub_keys)} {label_str} {no_rescan_str}\n")
+
+    # Note: unlike add_standalone_multisig_address, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
+    async def add_standalone_multisig_address_get_result(
+            self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = None, no_rescan: Optional[bool] = None) -> str:
+
+        output = await self.add_standalone_multisig_address(min_required_signatures, pub_keys, label, no_rescan)
         assert_in("Success. The following new multisig address has been added to the account", output)
         return output.splitlines()[1]
 
@@ -253,6 +278,7 @@ class WalletCliController:
     async def new_public_key(self, address: Optional[str] = None) -> bytes:
         if address is None:
             address = await self.new_address()
+            self.log.info(f'address: {address}')
         public_key = await self._write_command(f"address-reveal-public-key-as-hex {address}\n")
 
         self.log.info(f'pub key output: {public_key}')
@@ -314,11 +340,12 @@ class WalletCliController:
     async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
         return await self._write_command(f"token-send {token_id} {address} {amount}\n")
 
-    # This function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
+    # Note: unlike send_tokens_to_address, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
     async def send_tokens_to_address_or_fail(self, token_id: str, address: str, amount: Union[float, str]):
         output = await self.send_tokens_to_address(token_id, address, amount)
         assert_in("The transaction was submitted successfully", output)
 
+    # This function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
     async def issue_new_token(self,
                               token_ticker: str,
                               number_of_decimals: int,
@@ -336,6 +363,11 @@ class WalletCliController:
 
     async def mint_tokens(self, token_id: str, address: str, amount: int) -> str:
         return await self._write_command(f"token-mint {token_id} {address} {amount}\n")
+
+    # Note: unlike mint_tokens, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
+    async def mint_tokens_or_fail(self, token_id: str, address: str, amount: int):
+        output = await self.mint_tokens(token_id, address, amount)
+        assert_in("The transaction was submitted successfully", output)
 
     async def unmint_tokens(self, token_id: str, amount: int) -> str:
         return await self._write_command(f"token-unmint {token_id} {amount}\n")
@@ -386,6 +418,13 @@ class WalletCliController:
 
     async def sign_raw_transaction(self, transaction: str) -> str:
         return await self._write_command(f"account-sign-raw-transaction {transaction}\n")
+
+    async def sign_raw_transaction_expect_fully_signed(self, transaction: str) -> str:
+        output = await self.sign_raw_transaction(transaction)
+        assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
+
+        lines = [s for s in output.splitlines() if s.strip()]
+        return lines[1]
 
     async def sign_challenge_plain(self, message: str, address: str) -> str:
         return await self._write_command(f'challenge-sign-plain "{message}" {address}\n')
@@ -493,3 +532,40 @@ class WalletCliController:
 
     async def abandon_transaction(self, tx_id: str) -> str:
         return await self._write_command(f"transaction-abandon {tx_id}\n")
+
+    async def make_tx_to_send_tokens_from_multisig_address(
+            self, from_address: str, outputs: List[TokenTxOutput], fee_change_addr: Optional[str]):
+
+        fee_change_addr_str = f'--fee-change-address {fee_change_addr}' if fee_change_addr else ''
+        outputs_str = f"{' '.join(map(str, outputs))}"
+        output = await self._write_command(
+            f"token-make-tx-to-send-from-multisig-address {from_address} {outputs_str} {fee_change_addr_str}\n")
+
+        self.log.debug(f"make_tx_to_send_tokens_from_multisig_address's output: {output}")
+        return output
+
+    async def make_tx_to_send_tokens_from_multisig_address_expect_fully_signed(
+            self, from_address: str, outputs: List[TokenTxOutput], fee_change_addr: Optional[str]):
+
+        output = await self.make_tx_to_send_tokens_from_multisig_address(from_address, outputs, fee_change_addr)
+        assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
+
+        lines = [s for s in output.splitlines() if s.strip()]
+        return lines[1]
+    
+    async def make_tx_to_send_tokens_from_multisig_address_expect_partially_signed(
+            self, from_address: str, outputs: List[TokenTxOutput], fee_change_addr: Optional[str]):
+
+        output = await self.make_tx_to_send_tokens_from_multisig_address(from_address, outputs, fee_change_addr)
+        assert_in("Not all transaction inputs have been signed", output)
+
+        lines = [s for s in output.splitlines() if s.strip()]
+        siginfo = lines[2]
+        tx = lines[4]
+
+        siginfo = [
+            PartialSigInfo(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            for m in re.finditer(r'(\d+):\s+PartialMultisig having (\d+) out of (\d+) required signatures', siginfo)
+        ]
+
+        return (tx, siginfo)

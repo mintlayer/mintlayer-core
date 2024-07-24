@@ -331,12 +331,17 @@ impl WalletInterface for ClientWalletRpc {
     async fn get_balance(
         &self,
         account_index: U31,
-        _utxo_states: Vec<UtxoState>,
+        utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
     ) -> Result<Balances, Self::Error> {
-        WalletRpcClient::get_balance(&self.http_client, account_index.into(), Some(with_locked))
-            .await
-            .map_err(WalletRpcError::ResponseError)
+        WalletRpcClient::get_balance(
+            &self.http_client,
+            account_index.into(),
+            utxo_states.iter().map(Into::into).collect(),
+            Some(with_locked),
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn get_multisig_utxos(

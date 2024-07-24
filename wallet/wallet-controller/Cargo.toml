@@ -35,6 +35,9 @@ thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 zeroize.workspace = true
 
+# FIXME remove
+serde_json.workspace = true
+
 [dev-dependencies]
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
 p2p-types = { path = "../../p2p/types" }
