@@ -21,6 +21,8 @@ use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
 use crate::{Account, SendRequest};
 use common::chain::config::create_regtest;
 use common::chain::output_value::OutputValue;
+use common::chain::signature::inputsig::arbitrary_message::produce_message_challenge;
+use common::chain::signature::verify_signature;
 use common::chain::timelock::OutputTimeLock;
 use common::chain::{GenBlock, TxInput};
 use common::primitives::amount::UnsignedIntType;
@@ -36,6 +38,46 @@ use wallet_types::KeyPurpose::{Change, ReceiveFunds};
 
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn sign_message(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let config = Arc::new(create_regtest());
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+
+    let master_key_chain = MasterKeyChain::new_from_mnemonic(
+        config.clone(),
+        &mut db_tx,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
+
+    let key_chain = master_key_chain
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX, LOOKAHEAD_SIZE)
+        .unwrap();
+    let mut account = Account::new(config.clone(), &mut db_tx, key_chain, None).unwrap();
+
+    let destination = account.get_new_address(&mut db_tx, ReceiveFunds).unwrap().1.into_object();
+    let mut signer = SoftwareSigner::new(config.clone(), DEFAULT_ACCOUNT_INDEX);
+    let message = vec![rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>()];
+    let res = signer
+        .sign_challenge(
+            message.clone(),
+            destination.clone(),
+            account.key_chain(),
+            &db_tx,
+        )
+        .unwrap();
+
+    let message_challenge = produce_message_challenge(&message);
+    res.verify_signature(&config, &destination, &message_challenge).unwrap();
+}
 
 #[rstest]
 #[trace]

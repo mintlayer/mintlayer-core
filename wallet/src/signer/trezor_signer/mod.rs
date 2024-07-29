@@ -28,31 +28,37 @@ use common::{
                 arbitrary_message::ArbitraryMessageSignature,
                 authorize_pubkey_spend::AuthorizedPublicKeySpend,
                 authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
-                standard_signature::StandardInputSignature, InputWitness,
+                classical_multisig::{
+                    authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
+                    multisig_partial_signature::{self, PartiallySignedMultisigChallenge},
+                },
+                standard_signature::StandardInputSignature,
+                InputWitness,
             },
             sighash::{sighashtype::SigHashType, signature_hash},
+            DestinationSigError,
         },
         timelock::OutputTimeLock,
         tokens::{NftIssuance, TokenIssuance, TokenTotalSupply},
         AccountCommand, AccountSpending, ChainConfig, Destination, OutPointSourceId,
         SignedTransactionIntent, Transaction, TxInput, TxOutput,
     },
-    primitives::Amount,
+    primitives::{Amount, H256},
 };
 use crypto::key::{
-    extended::{ExtendedPrivateKey, ExtendedPublicKey},
+    extended::ExtendedPublicKey,
     hdkd::{chain_code::ChainCode, derivable::Derivable, u31::U31},
     secp256k1::{extended_keys::Secp256k1ExtendedPublicKey, Secp256k1PublicKey},
-    PrivateKey, Signature,
+    Signature,
 };
 use itertools::Itertools;
-use randomness::make_true_rng;
 use serialization::Encode;
 use trezor_client::{
+    client::mintlayer::MintlayerSignature,
     find_devices,
     protos::{
-        MintlayerAccountCommandTxInput, MintlayerAccountTxInput, MintlayerBurnTxOutput,
-        MintlayerChangeTokenAuhtority, MintlayerCreateDelegationIdTxOutput,
+        MintlayerAccountCommandTxInput, MintlayerAccountTxInput, MintlayerAddressPath,
+        MintlayerBurnTxOutput, MintlayerChangeTokenAuhtority, MintlayerCreateDelegationIdTxOutput,
         MintlayerCreateStakePoolTxOutput, MintlayerDataDepositTxOutput,
         MintlayerDelegateStakingTxOutput, MintlayerFreezeToken,
         MintlayerIssueFungibleTokenTxOutput, MintlayerIssueNftTxOutput,
@@ -74,10 +80,7 @@ use wallet_storage::{
 use wallet_types::{signature_status::SignatureStatus, AccountId};
 
 use crate::{
-    key_chain::{
-        make_account_path, AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey,
-        MasterKeyChain,
-    },
+    key_chain::{make_account_path, AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey},
     Account, WalletResult,
 };
 
@@ -88,61 +91,29 @@ use super::{Signer, SignerError, SignerProvider, SignerResult};
 pub enum TrezorError {
     #[error("No connected Trezor device found")]
     NoDeviceFound,
+    #[error("Trezor device error: {0}")]
+    DeviceError(#[from] trezor_client::Error),
 }
 
 pub struct TrezorSigner {
     chain_config: Arc<ChainConfig>,
-    account_index: U31,
     client: Arc<Mutex<Trezor>>,
 }
 
 impl TrezorSigner {
-    pub fn new(
-        chain_config: Arc<ChainConfig>,
-        account_index: U31,
-        client: Arc<Mutex<Trezor>>,
-    ) -> Self {
+    pub fn new(chain_config: Arc<ChainConfig>, client: Arc<Mutex<Trezor>>) -> Self {
         Self {
             chain_config,
-            account_index,
             client,
-        }
-    }
-
-    fn derive_account_private_key(
-        &self,
-        db_tx: &impl WalletStorageReadUnlocked,
-    ) -> SignerResult<ExtendedPrivateKey> {
-        let account_path = make_account_path(&self.chain_config, self.account_index);
-
-        let root_key = MasterKeyChain::load_root_key(db_tx)?.derive_absolute_path(&account_path)?;
-        Ok(root_key)
-    }
-
-    fn get_private_key_for_destination(
-        &self,
-        destination: &Destination,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
-    ) -> SignerResult<Option<PrivateKey>> {
-        let xpriv = self.derive_account_private_key(db_tx)?;
-        match key_chain.find_public_key(destination) {
-            Some(FoundPubKey::Hierarchy(xpub)) => {
-                get_private_key(&xpriv, &xpub).map(|pk| Some(pk.private_key()))
-            }
-            Some(FoundPubKey::Standalone(acc_public_key)) => {
-                let standalone_pk = db_tx.get_account_standalone_private_key(&acc_public_key)?;
-                Ok(standalone_pk)
-            }
-            None => Ok(None),
         }
     }
 
     fn make_signature(
         &self,
-        signature: &Option<Vec<u8>>,
+        signature: &Vec<MintlayerSignature>,
         destination: &Destination,
         sighash_type: SigHashType,
+        sighash: H256,
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<(Option<InputWitness>, SignatureStatus)> {
         match destination {
@@ -151,19 +122,11 @@ impl TrezorSigner {
                 SignatureStatus::FullySigned,
             )),
             Destination::PublicKeyHash(_) => {
-                if let Some(signature) = signature {
-                    if signature.is_empty() {
-                        eprintln!("empty signature");
-                        return Ok((None, SignatureStatus::NotSigned));
-                    }
-
-                    eprintln!("some signature pkh");
+                if let Some(signature) = signature.first() {
                     let pk =
                         key_chain.find_public_key(destination).expect("found").into_public_key();
-                    eprintln!("pk {:?}", pk.encode());
-                    let mut signature = signature.clone();
+                    let mut signature = signature.signature.clone();
                     signature.insert(0, 0);
-                    eprintln!("sig len {}", signature.len());
                     let sig = Signature::from_data(signature)?;
                     let sig = AuthorizedPublicKeyHashSpend::new(pk, sig);
                     let sig = InputWitness::Standard(StandardInputSignature::new(
@@ -171,17 +134,14 @@ impl TrezorSigner {
                         sig.encode(),
                     ));
 
-                    eprintln!("sig ok");
                     Ok((Some(sig), SignatureStatus::FullySigned))
                 } else {
-                    eprintln!("empty signature");
                     Ok((None, SignatureStatus::NotSigned))
                 }
             }
             Destination::PublicKey(_) => {
-                if let Some(signature) = signature {
-                    eprintln!("some signature pk");
-                    let mut signature = signature.clone();
+                if let Some(signature) = signature.first() {
+                    let mut signature = signature.signature.clone();
                     signature.insert(0, 0);
                     let sig = Signature::from_data(signature)?;
                     let sig = AuthorizedPublicKeySpend::new(sig);
@@ -192,13 +152,53 @@ impl TrezorSigner {
 
                     Ok((Some(sig), SignatureStatus::FullySigned))
                 } else {
-                    eprintln!("empty signature");
                     Ok((None, SignatureStatus::NotSigned))
                 }
             }
             Destination::ClassicMultisig(_) => {
-                if let Some(_challenge) = key_chain.find_multisig_challenge(destination) {
-                    unimplemented!("add support for multisig in Trezor")
+                if let Some(challenge) = key_chain.find_multisig_challenge(destination) {
+                    let mut current_signatures =
+                        AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
+
+                    for sig in signature {
+                        if let Some(idx) = sig.multisig_idx {
+                            let mut signature = sig.signature.clone();
+                            signature.insert(0, 0);
+                            let sig = Signature::from_data(signature)?;
+                            current_signatures.add_signature(idx as u8, sig);
+                        }
+                    }
+
+                    let msg = sighash.encode();
+                    // Check the signatures status again after adding that last signature
+                    let verifier = PartiallySignedMultisigChallenge::from_partial(
+                        &self.chain_config,
+                        &msg,
+                        &current_signatures,
+                    )?;
+
+                    let status = match verifier.verify_signatures(&self.chain_config)? {
+                        multisig_partial_signature::SigsVerifyResult::CompleteAndValid => {
+                            SignatureStatus::FullySigned
+                        }
+                        multisig_partial_signature::SigsVerifyResult::Incomplete => {
+                            SignatureStatus::PartialMultisig {
+                                required_signatures: challenge.min_required_signatures(),
+                                num_signatures: current_signatures.signatures().len() as u8,
+                            }
+                        }
+                        multisig_partial_signature::SigsVerifyResult::Invalid => {
+                            unreachable!(
+                                "We checked the signatures then added a signature, so this should be unreachable"
+                            )
+                        }
+                    };
+
+                    let sig = InputWitness::Standard(StandardInputSignature::new(
+                        sighash_type,
+                        current_signatures.encode(),
+                    ));
+                    return Ok((Some(sig), status));
                 }
 
                 Ok((None, SignatureStatus::NotSigned))
@@ -229,17 +229,16 @@ impl Signer for TrezorSigner {
         Vec<SignatureStatus>,
         Vec<SignatureStatus>,
     )> {
-        let inputs = to_trezor_input_msgs(&ptx, key_chain, &self.chain_config);
+        let inputs = to_trezor_input_msgs(&ptx, key_chain, &self.chain_config)?;
         let outputs = self.to_trezor_output_msgs(&ptx);
         let utxos = to_trezor_utxo_msgs(&ptx, &self.chain_config);
 
         let new_signatures = self
             .client
             .lock()
-            .expect("")
+            .expect("poisoned lock")
             .mintlayer_sign_tx(inputs, outputs, utxos)
-            .expect("");
-        eprintln!("new signatures: {new_signatures:?}");
+            .map_err(TrezorError::DeviceError)?;
 
         let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
 
@@ -264,14 +263,77 @@ impl Signer for TrezorSigner {
                                 .verify_signature(&self.chain_config, destination, &sighash)
                                 .is_ok()
                             {
-                                eprintln!("valid signature {sighash:?}!!\n\n");
                                 Ok((
                                     Some(w.clone()),
                                     SignatureStatus::FullySigned,
                                     SignatureStatus::FullySigned,
                                 ))
                             } else if let Destination::ClassicMultisig(_) = destination {
-                                unimplemented!("add support for multisig to Trezor");
+                                let mut current_signatures = AuthorizedClassicalMultisigSpend::from_data(
+                                    sig.raw_signature(),
+                                )?;
+
+                                let previous_status = SignatureStatus::PartialMultisig {
+                                    required_signatures: current_signatures.challenge().min_required_signatures(),
+                                    num_signatures: current_signatures.signatures().len() as u8,
+                                };
+
+                                if let Some(signature) = new_signatures.get(i) {
+                                for sig in signature {
+                                    if let Some(idx) = sig.multisig_idx {
+                                        let mut signature = sig.signature.clone();
+                                        signature.insert(0, 0);
+                                        let sig = Signature::from_data(signature)?;
+                                        current_signatures.add_signature(idx as u8, sig);
+                                    }
+                                }
+
+                                let msg = sighash.encode();
+                                // Check the signatures status again after adding that last signature
+                                let verifier = PartiallySignedMultisigChallenge::from_partial(
+                                    &self.chain_config,
+                                    &msg,
+                                    &current_signatures,
+                                )?;
+
+                                let status = match verifier.verify_signatures(&self.chain_config)? {
+                                    multisig_partial_signature::SigsVerifyResult::CompleteAndValid => {
+                                        SignatureStatus::FullySigned
+                                    }
+                                    multisig_partial_signature::SigsVerifyResult::Incomplete => {
+                                        let challenge = current_signatures.challenge();
+                                        SignatureStatus::PartialMultisig {
+                                            required_signatures: challenge.min_required_signatures(),
+                                            num_signatures: current_signatures.signatures().len() as u8,
+                                        }
+                                    }
+                                    multisig_partial_signature::SigsVerifyResult::Invalid => {
+                                        unreachable!(
+                                            "We checked the signatures then added a signature, so this should be unreachable"
+                                        )
+                                    }
+                                };
+
+                                let sighash_type =
+                                    SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
+                                let sig = InputWitness::Standard(StandardInputSignature::new(
+                                    sighash_type,
+                                    current_signatures.encode(),
+                                ));
+                                return Ok((Some(sig),
+                                        previous_status,
+                                        status));
+                                }
+                                else {
+                                Ok((
+                                    None,
+                                    SignatureStatus::InvalidSignature,
+                                    SignatureStatus::NotSigned,
+                                ))
+
+                                }
+
+
                             } else {
                                 Ok((
                                     None,
@@ -291,13 +353,17 @@ impl Signer for TrezorSigner {
                     (Some(destination), Some(sig)) => {
                         let sighash_type =
                             SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
-                        eprintln!("making sig for {i}");
-                        let (sig, status) =
-                            self.make_signature(sig, destination, sighash_type, key_chain)?;
+                        let sighash = signature_hash(sighash_type, ptx.tx(), &inputs_utxo_refs, i)?;
+                        let (sig, status) = self.make_signature(
+                            sig,
+                            destination,
+                            sighash_type,
+                            sighash,
+                            key_chain,
+                        )?;
                         Ok((sig, SignatureStatus::NotSigned, status))
                     }
                     (Some(_) | None, None) | (None, Some(_)) => {
-                        eprintln!("no signature!");
                         Ok((None, SignatureStatus::NotSigned, SignatureStatus::NotSigned))
                     }
                 },
@@ -314,19 +380,61 @@ impl Signer for TrezorSigner {
         message: Vec<u8>,
         destination: Destination,
         key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        _db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<ArbitraryMessageSignature> {
-        let private_key = self
-            .get_private_key_for_destination(&destination, key_chain, db_tx)?
-            .ok_or(SignerError::DestinationNotFromThisWallet)?;
+        let data = match key_chain.find_public_key(&destination) {
+            Some(FoundPubKey::Hierarchy(xpub)) => {
+                let address_n = xpub
+                    .get_derivation_path()
+                    .as_slice()
+                    .iter()
+                    .map(|c| c.into_encoded_index())
+                    .collect();
 
-        let sig = ArbitraryMessageSignature::produce_uniparty_signature(
-            &private_key,
-            &destination,
-            &message,
-            make_true_rng(),
-        )?;
+                let addr = Address::new(&self.chain_config, destination.clone())
+                    .expect("addressable")
+                    .into_string();
 
+                let sig = self
+                    .client
+                    .lock()
+                    .expect("poisoned lock")
+                    .mintlayer_sign_message(address_n, addr, message)
+                    .map_err(TrezorError::DeviceError)?;
+                let mut signature = sig;
+                signature.insert(0, 0);
+                let signature = Signature::from_data(signature)?;
+
+                match &destination {
+                    Destination::PublicKey(_) => AuthorizedPublicKeySpend::new(signature).encode(),
+                    Destination::PublicKeyHash(_) => {
+                        AuthorizedPublicKeyHashSpend::new(xpub.into_public_key(), signature)
+                            .encode()
+                    }
+                    Destination::AnyoneCanSpend => {
+                        return Err(SignerError::SigningError(
+                            DestinationSigError::AttemptedToProduceSignatureForAnyoneCanSpend,
+                        ))
+                    }
+                    Destination::ClassicMultisig(_) => {
+                        return Err(SignerError::SigningError(
+                            DestinationSigError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
+                        ))
+                    }
+                    Destination::ScriptHash(_) => {
+                        return Err(SignerError::SigningError(
+                            DestinationSigError::Unsupported,
+                        ))
+                    }
+                }
+            }
+            Some(FoundPubKey::Standalone(_)) => {
+                unimplemented!("standalone keys with trezor")
+            }
+            None => return Err(SignerError::DestinationNotFromThisWallet),
+        };
+
+        let sig = ArbitraryMessageSignature::from_data(data);
         Ok(sig)
     }
 
@@ -363,174 +471,241 @@ fn to_trezor_input_msgs(
     ptx: &PartiallySignedTransaction,
     key_chain: &impl AccountKeyChains,
     chain_config: &ChainConfig,
-) -> Vec<MintlayerTxInput> {
-    let inputs = ptx
-        .tx()
+) -> SignerResult<Vec<MintlayerTxInput>> {
+    ptx.tx()
         .inputs()
         .iter()
         .zip(ptx.input_utxos())
         .zip(ptx.destinations())
         .map(|((inp, utxo), dest)| match (inp, utxo, dest) {
-            (TxInput::Utxo(outpoint), Some(utxo), Some(dest)) => {
-                let mut inp_req = MintlayerUtxoTxInput::new();
-                let id = match outpoint.source_id() {
-                    OutPointSourceId::Transaction(id) => {
-                        inp_req.set_type(MintlayerUtxoType::TRANSACTION);
-                        id.to_hash().0
-                    }
-                    OutPointSourceId::BlockReward(id) => {
-                        inp_req.set_type(MintlayerUtxoType::BLOCK);
-                        id.to_hash().0
-                    }
-                };
-                inp_req.set_prev_hash(id.to_vec());
-                inp_req.set_prev_index(outpoint.output_index());
-                match tx_output_value(utxo) {
-                    OutputValue::Coin(amount) => {
-                        let mut value = MintlayerOutputValue::new();
-                        value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-                        inp_req.value = Some(value).into();
-                    }
-                    OutputValue::TokenV1(token_id, amount) => {
-                        let mut value = MintlayerOutputValue::new();
-                        value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-                        value.set_token_id(token_id.to_hash().as_bytes().to_vec());
-                        inp_req.value = Some(value).into();
-                    }
-                    OutputValue::TokenV0(_) => {
-                        panic!("token v0 unsuported");
-                    }
-                }
-
-                inp_req.set_address(
-                    Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
-                );
-                match key_chain.find_public_key(dest) {
-                    Some(FoundPubKey::Hierarchy(xpub)) => {
-                        inp_req.address_n = xpub
-                            .get_derivation_path()
-                            .as_slice()
-                            .iter()
-                            .map(|c| c.into_encoded_index())
-                            .collect();
-                    }
-                    Some(FoundPubKey::Standalone(_)) => {
-                        unimplemented!("standalone keys with trezor")
-                    }
-                    None => {}
-                };
-
-                let mut inp = MintlayerTxInput::new();
-                inp.utxo = Some(inp_req).into();
-                inp
-            }
-            (TxInput::Account(outpoint), _, Some(dest)) => {
-                let mut inp_req = MintlayerAccountTxInput::new();
-                inp_req.set_address(
-                    Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
-                );
-                match key_chain.find_public_key(dest) {
-                    Some(FoundPubKey::Hierarchy(xpub)) => {
-                        inp_req.address_n = xpub
-                            .get_derivation_path()
-                            .as_slice()
-                            .iter()
-                            .map(|c| c.into_encoded_index())
-                            .collect();
-                    }
-                    Some(FoundPubKey::Standalone(_)) => {
-                        unimplemented!("standalone keys with trezor")
-                    }
-                    None => {}
-                };
-                inp_req.set_nonce(outpoint.nonce().value());
-                match outpoint.account() {
-                    AccountSpending::DelegationBalance(delegation_id, amount) => {
-                        inp_req.set_delegation_id(delegation_id.to_hash().as_bytes().to_vec());
-                        let mut value = MintlayerOutputValue::new();
-                        value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-                        inp_req.value = Some(value).into();
-                    }
-                }
-                let mut inp = MintlayerTxInput::new();
-                inp.account = Some(inp_req).into();
-                inp
-            }
-            (TxInput::AccountCommand(nonce, command), _, Some(dest)) => {
-                let mut inp_req = MintlayerAccountCommandTxInput::new();
-                inp_req.set_address(
-                    Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
-                );
-                match key_chain.find_public_key(dest) {
-                    Some(FoundPubKey::Hierarchy(xpub)) => {
-                        inp_req.address_n = xpub
-                            .get_derivation_path()
-                            .as_slice()
-                            .iter()
-                            .map(|c| c.into_encoded_index())
-                            .collect();
-                    }
-                    Some(FoundPubKey::Standalone(_)) => {
-                        unimplemented!("standalone keys with trezor")
-                    }
-                    None => {}
-                };
-                inp_req.set_nonce(nonce.value());
-                match command {
-                    AccountCommand::MintTokens(token_id, amount) => {
-                        let mut req = MintlayerMintTokens::new();
-                        req.set_token_id(token_id.to_hash().as_bytes().to_vec());
-                        req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-
-                        inp_req.mint = Some(req).into();
-                    }
-                    AccountCommand::UnmintTokens(token_id) => {
-                        let mut req = MintlayerUnmintTokens::new();
-                        req.set_token_id(token_id.to_hash().as_bytes().to_vec());
-
-                        inp_req.unmint = Some(req).into();
-                    }
-                    AccountCommand::FreezeToken(token_id, unfreezable) => {
-                        let mut req = MintlayerFreezeToken::new();
-                        req.set_token_id(token_id.to_hash().as_bytes().to_vec());
-                        req.set_is_token_unfreezabe(unfreezable.as_bool());
-
-                        inp_req.freeze_token = Some(req).into();
-                    }
-                    AccountCommand::UnfreezeToken(token_id) => {
-                        let mut req = MintlayerUnfreezeToken::new();
-                        req.set_token_id(token_id.to_hash().as_bytes().to_vec());
-
-                        inp_req.unfreeze_token = Some(req).into();
-                    }
-                    AccountCommand::LockTokenSupply(token_id) => {
-                        let mut req = MintlayerLockTokenSupply::new();
-                        req.set_token_id(token_id.to_hash().as_bytes().to_vec());
-
-                        inp_req.lock_token_supply = Some(req).into();
-                    }
-                    AccountCommand::ChangeTokenAuthority(token_id, dest) => {
-                        let mut req = MintlayerChangeTokenAuhtority::new();
-                        req.set_token_id(token_id.to_hash().as_bytes().to_vec());
-                        req.set_destination(
-                            Address::new(chain_config, dest.clone())
-                                .expect("addressable")
-                                .into_string(),
-                        );
-
-                        inp_req.change_token_authority = Some(req).into();
-                    }
-                }
-                let mut inp = MintlayerTxInput::new();
-                inp.account_command = Some(inp_req).into();
-                inp
-            }
-            (TxInput::Utxo(_) | TxInput::Account(_) | TxInput::AccountCommand(_, _), _, _) => {
-                unimplemented!("accounting not supported yet with trezor")
-            }
+            (TxInput::Utxo(outpoint), Some(utxo), Some(dest)) => Ok(to_trezor_utxo_input(
+                outpoint,
+                utxo,
+                chain_config,
+                dest,
+                key_chain,
+            )),
+            (TxInput::Account(outpoint), _, Some(dest)) => Ok(to_trezor_account_input(
+                chain_config,
+                dest,
+                key_chain,
+                outpoint,
+            )),
+            (TxInput::AccountCommand(nonce, command), _, Some(dest)) => Ok(
+                to_trezor_account_command_input(chain_config, dest, key_chain, nonce, command),
+            ),
+            (_, _, None) => Err(SignerError::MissingDestinationInTransaction),
+            (TxInput::Utxo(_), _, _) => Err(SignerError::MissingUtxo),
         })
-        .collect();
-    inputs
+        .collect()
+}
+
+fn to_trezor_account_command_input(
+    chain_config: &ChainConfig,
+    dest: &Destination,
+    key_chain: &impl AccountKeyChains,
+    nonce: &common::chain::AccountNonce,
+    command: &AccountCommand,
+) -> MintlayerTxInput {
+    let mut inp_req = MintlayerAccountCommandTxInput::new();
+    inp_req
+        .set_address(Address::new(chain_config, dest.clone()).expect("addressable").into_string());
+    match key_chain.find_public_key(dest) {
+        Some(FoundPubKey::Hierarchy(xpub)) => {
+            let address_n = xpub
+                .get_derivation_path()
+                .as_slice()
+                .iter()
+                .map(|c| c.into_encoded_index())
+                .collect();
+            inp_req.address_n = vec![MintlayerAddressPath {
+                address_n,
+                ..Default::default()
+            }];
+        }
+        Some(FoundPubKey::Standalone(_)) => {
+            unimplemented!("standalone keys with trezor")
+        }
+        None => {}
+    };
+    inp_req.set_nonce(nonce.value());
+    match command {
+        AccountCommand::MintTokens(token_id, amount) => {
+            let mut req = MintlayerMintTokens::new();
+            req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
+
+            inp_req.mint = Some(req).into();
+        }
+        AccountCommand::UnmintTokens(token_id) => {
+            let mut req = MintlayerUnmintTokens::new();
+            req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+
+            inp_req.unmint = Some(req).into();
+        }
+        AccountCommand::FreezeToken(token_id, unfreezable) => {
+            let mut req = MintlayerFreezeToken::new();
+            req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            req.set_is_token_unfreezabe(unfreezable.as_bool());
+
+            inp_req.freeze_token = Some(req).into();
+        }
+        AccountCommand::UnfreezeToken(token_id) => {
+            let mut req = MintlayerUnfreezeToken::new();
+            req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+
+            inp_req.unfreeze_token = Some(req).into();
+        }
+        AccountCommand::LockTokenSupply(token_id) => {
+            let mut req = MintlayerLockTokenSupply::new();
+            req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+
+            inp_req.lock_token_supply = Some(req).into();
+        }
+        AccountCommand::ChangeTokenAuthority(token_id, dest) => {
+            let mut req = MintlayerChangeTokenAuhtority::new();
+            req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            req.set_destination(
+                Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
+            );
+
+            inp_req.change_token_authority = Some(req).into();
+        }
+    }
+    let mut inp = MintlayerTxInput::new();
+    inp.account_command = Some(inp_req).into();
+    inp
+}
+
+fn to_trezor_account_input(
+    chain_config: &ChainConfig,
+    dest: &Destination,
+    key_chain: &impl AccountKeyChains,
+    outpoint: &common::chain::AccountOutPoint,
+) -> MintlayerTxInput {
+    let mut inp_req = MintlayerAccountTxInput::new();
+    inp_req
+        .set_address(Address::new(chain_config, dest.clone()).expect("addressable").into_string());
+    match key_chain.find_public_key(dest) {
+        Some(FoundPubKey::Hierarchy(xpub)) => {
+            let address_n = xpub
+                .get_derivation_path()
+                .as_slice()
+                .iter()
+                .map(|c| c.into_encoded_index())
+                .collect();
+            inp_req.address_n = vec![MintlayerAddressPath {
+                address_n,
+                ..Default::default()
+            }];
+        }
+        Some(FoundPubKey::Standalone(_)) => {
+            unimplemented!("standalone keys with trezor")
+        }
+        None => {}
+    };
+    inp_req.set_nonce(outpoint.nonce().value());
+    match outpoint.account() {
+        AccountSpending::DelegationBalance(delegation_id, amount) => {
+            inp_req.set_delegation_id(delegation_id.to_hash().as_bytes().to_vec());
+            let mut value = MintlayerOutputValue::new();
+            value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
+            inp_req.value = Some(value).into();
+        }
+    }
+    let mut inp = MintlayerTxInput::new();
+    inp.account = Some(inp_req).into();
+    inp
+}
+
+fn to_trezor_utxo_input(
+    outpoint: &common::chain::UtxoOutPoint,
+    utxo: &TxOutput,
+    chain_config: &ChainConfig,
+    dest: &Destination,
+    key_chain: &impl AccountKeyChains,
+) -> MintlayerTxInput {
+    let mut inp_req = MintlayerUtxoTxInput::new();
+    let id = match outpoint.source_id() {
+        OutPointSourceId::Transaction(id) => {
+            inp_req.set_type(MintlayerUtxoType::TRANSACTION);
+            id.to_hash().0
+        }
+        OutPointSourceId::BlockReward(id) => {
+            inp_req.set_type(MintlayerUtxoType::BLOCK);
+            id.to_hash().0
+        }
+    };
+    inp_req.set_prev_hash(id.to_vec());
+    inp_req.set_prev_index(outpoint.output_index());
+    match tx_output_value(utxo) {
+        OutputValue::Coin(amount) => {
+            let mut value = MintlayerOutputValue::new();
+            value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
+            inp_req.value = Some(value).into();
+        }
+        OutputValue::TokenV1(token_id, amount) => {
+            let mut value = MintlayerOutputValue::new();
+            value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
+            value.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            inp_req.value = Some(value).into();
+        }
+        OutputValue::TokenV0(_) => {
+            panic!("token v0 unsuported");
+        }
+    }
+
+    inp_req
+        .set_address(Address::new(chain_config, dest.clone()).expect("addressable").into_string());
+    match key_chain.find_public_key(dest) {
+        Some(FoundPubKey::Hierarchy(xpub)) => {
+            let address_n = xpub
+                .get_derivation_path()
+                .as_slice()
+                .iter()
+                .map(|c| c.into_encoded_index())
+                .collect();
+            inp_req.address_n = vec![MintlayerAddressPath {
+                address_n,
+                ..Default::default()
+            }];
+        }
+        Some(FoundPubKey::Standalone(_)) => {
+            unimplemented!("standalone keys with trezor")
+        }
+        None => {
+            if let Some(challenge) = key_chain.find_multisig_challenge(dest) {
+                inp_req.address_n = challenge
+                    .public_keys()
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, pk)| {
+                        match key_chain.find_public_key(&Destination::PublicKey(pk.clone())) {
+                            Some(FoundPubKey::Hierarchy(xpub)) => {
+                                let address_n = xpub
+                                    .get_derivation_path()
+                                    .as_slice()
+                                    .iter()
+                                    .map(|c| c.into_encoded_index())
+                                    .collect();
+                                Some(MintlayerAddressPath {
+                                    address_n,
+                                    multisig_idx: Some(idx as u32),
+                                    special_fields: Default::default(),
+                                })
+                            }
+                            Some(FoundPubKey::Standalone(_)) => unimplemented!("standalone keys"),
+                            None => None,
+                        }
+                    })
+                    .collect();
+            }
+        }
+    };
+
+    let mut inp = MintlayerTxInput::new();
+    inp.utxo = Some(inp_req).into();
+    inp
 }
 
 fn to_trezor_utxo_msgs(
@@ -578,20 +753,6 @@ fn set_value(value: &OutputValue, out_req: &mut MintlayerTransferTxOutput) {
             panic!("token v0 unsuported");
         }
     };
-}
-
-/// Get the private key that corresponds to the provided public key
-fn get_private_key(
-    parent_key: &ExtendedPrivateKey,
-    requested_key: &ExtendedPublicKey,
-) -> SignerResult<ExtendedPrivateKey> {
-    let derived_key =
-        parent_key.clone().derive_absolute_path(requested_key.get_derivation_path())?;
-    if &derived_key.to_public_key() == requested_key {
-        Ok(derived_key)
-    } else {
-        Err(SignerError::KeysNotInSameHierarchy)
-    }
 }
 
 fn to_trezor_output_msg(chain_config: &ChainConfig, out: &TxOutput) -> MintlayerTxOutput {
@@ -779,28 +940,17 @@ fn to_trezor_output_msg(chain_config: &ChainConfig, out: &TxOutput) -> Mintlayer
                     out_req.set_name(data.metadata.name.clone());
                     out_req.set_ticker(data.metadata.ticker().clone());
                     out_req.set_icon_uri(
-                        data.metadata
-                            .icon_uri()
-                            .as_ref()
-                            .as_ref()
-                            .map(|x| x.clone())
-                            .unwrap_or_default(),
+                        data.metadata.icon_uri().as_ref().clone().unwrap_or_default(),
                     );
                     out_req.set_media_uri(
-                        data.metadata
-                            .media_uri()
-                            .as_ref()
-                            .as_ref()
-                            .map(|x| x.clone())
-                            .unwrap_or_default(),
+                        data.metadata.media_uri().as_ref().clone().unwrap_or_default(),
                     );
                     out_req.set_media_hash(data.metadata.media_hash().clone());
                     out_req.set_additional_metadata_uri(
                         data.metadata
                             .additional_metadata_uri()
                             .as_ref()
-                            .as_ref()
-                            .map(|x| x.clone())
+                            .clone()
                             .unwrap_or_default(),
                     );
                     out_req.set_description(data.metadata.description.clone());
@@ -858,8 +1008,8 @@ impl SignerProvider for TrezorSignerProvider {
     type S = TrezorSigner;
     type K = AccountKeyChainImplHardware;
 
-    fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S {
-        TrezorSigner::new(chain_config, account_index, self.client.clone())
+    fn provide(&mut self, chain_config: Arc<ChainConfig>, _account_index: U31) -> Self::S {
+        TrezorSigner::new(chain_config, self.client.clone())
     }
 
     fn make_new_account(
@@ -869,24 +1019,16 @@ impl SignerProvider for TrezorSignerProvider {
         name: Option<String>,
         db_tx: &mut impl WalletStorageWriteUnlocked,
     ) -> WalletResult<Account<Self::K>> {
-        eprintln!(
-            "coin type in new acc trezor: {:?}",
-            chain_config.bip44_coin_type().get_index()
-        );
         let derivation_path = make_account_path(&chain_config, account_index);
         let account_path =
             derivation_path.as_slice().iter().map(|c| c.into_encoded_index()).collect();
 
-        eprintln!("account path {account_path:?}");
-
         let xpub = self
             .client
             .lock()
-            .expect("")
+            .expect("poisoned lock")
             .mintlayer_get_public_key(account_path)
-            .expect("")
-            .ok()
-            .expect("");
+            .map_err(|e| SignerError::TrezorError(TrezorError::DeviceError(e)))?;
 
         let chain_code = ChainCode::from(xpub.chain_code.0);
         let account_pubkey = Secp256k1ExtendedPublicKey::from_hardware_wallet(
