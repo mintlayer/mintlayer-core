@@ -18,7 +18,9 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
     parse::{Parse, ParseStream},
-    parse_quote, Error, ItemFn, LitStr, ReturnType, Token,
+    parse_quote,
+    punctuated::Punctuated,
+    Error, ItemFn, LitStr, ReturnType, Token,
 };
 
 /// A macro that logs errors returned by the function to which it is attached, mentioning
@@ -118,6 +120,37 @@ use syn::{
 ///        }
 ///    }
 ///    ```
+/// 3. For `async` functions, the implementation wraps the function body in an `async` block. This may also
+/// lead to compilation problems if lifetimes are involved. E.g. this code:
+///     ```ignore
+///     struct Test<'a>(&'a u32);
+///
+///     impl<'a> Test<'a> {
+///         #[log_error]
+///         async fn f(&mut self) -> Result<(), std::io::Error> {
+///             let val = self.0;
+///             Ok(())
+///         }
+///     }
+///     ```
+///     will fail to compile with the error "hidden type `{async block@...}` captures the lifetime `'a`".
+///
+///     The workaround is to use the `async_fn_captures_lifetimes` attribute of `log_error`:
+///     ```
+///     # use log_error::log_error;
+///     # struct Test<'a>(&'a u32);
+///     impl<'a> Test<'a> {
+///         #[log_error(async_fn_captures_lifetimes('a))]
+///         async fn f(&mut self) -> Result<(), std::io::Error> {
+///             let val = self.0;
+///             Ok(())
+///         }
+///     }
+///     ```
+///     If there are more than one lifetime, separate them with commas:
+///     ```ignore
+///     #[log_error(async_fn_captures_lifetimes('a, 'b))]
+///     ```
 #[proc_macro_attribute]
 pub fn log_error(args: TokenStream, item: TokenStream) -> TokenStream {
     let args = syn::parse_macro_input!(args as Args);
@@ -144,6 +177,15 @@ pub fn log_error(args: TokenStream, item: TokenStream) -> TokenStream {
     // See https://github.com/rust-lang/rfcs/blob/master/text/2091-inline-semantic.md#propagation-of-tracker
 
     let output = if sig.asyncness.is_none() {
+        if args.async_fn_captures_lifetimes.is_some() {
+            return syn::Error::new(
+                proc_macro2::Span::call_site(),
+                "The 'async_fn_captures_lifetimes' attribute only works for async functions",
+            )
+            .to_compile_error()
+            .into();
+        }
+
         quote! {
             #[track_caller]
             #(#attrs)*
@@ -162,6 +204,14 @@ pub fn log_error(args: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
     } else {
+        let captures_lifetimes = args
+            .async_fn_captures_lifetimes
+            .unwrap_or_default()
+            .0
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
+
         // "track_caller" won't work in an async function, it has to be re-written as non-async
         // one returning `impl Future`.
         let mut sig = sig;
@@ -204,11 +254,17 @@ pub fn log_error(args: TokenStream, item: TokenStream) -> TokenStream {
         // where async functions would fail to compile with the aforementioned "hidden type ...
         // captures lifetime" error. That issue has been fixed in 1.69, but non-async functions
         // that return `impl Future` still need this workaround as of Rust 1.76.
+        //
+        // Also note that we re-use `fix_hidden_lifetime_bug` machinery to handle the `async_fn_captures_lifetimes`
+        // attribute too.
         quote! {
             #[track_caller]
-            #[fix_hidden_lifetime_bug::fix_hidden_lifetime_bug]
+            #[utils::mintlayer_core_log_error_support::fix_hidden_lifetime_bug::fix_hidden_lifetime_bug(
+                // Note: this makes `fix_hidden_lifetime_bug` refer to itself via this name.
+                crate=utils::mintlayer_core_log_error_support::fix_hidden_lifetime_bug
+            )]
             #(#attrs)*
-            #vis #sig {
+            #vis #sig #( + utils::mintlayer_core_log_error_support::fix_hidden_lifetime_bug::Captures<#captures_lifetimes>)*  {
                 // For some weird reason, if `Location::caller` is called inside the async block,
                 // it will contain the location where the macro is called (probably, the location
                 // of the async block itself). So we have to call it outside the block before
@@ -250,6 +306,9 @@ enum Level {
     Warn,
 }
 
+#[derive(Default)]
+struct CapturesLifetimes(Punctuated<syn::Lifetime, Token![,]>);
+
 impl Parse for Level {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let _ = input.parse::<kw::level>()?;
@@ -270,9 +329,20 @@ impl Parse for Level {
     }
 }
 
+impl Parse for CapturesLifetimes {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let _ = input.parse::<kw::async_fn_captures_lifetimes>();
+        let content;
+        let _ = syn::parenthesized!(content in input);
+        let lifetimes = content.parse_terminated(syn::Lifetime::parse, Token![,])?;
+        Ok(Self(lifetimes))
+    }
+}
+
 #[derive(Default)]
 struct Args {
     level: Option<Level>,
+    async_fn_captures_lifetimes: Option<CapturesLifetimes>,
 }
 
 impl Parse for Args {
@@ -287,6 +357,13 @@ impl Parse for Args {
                     return Err(input.error("duplicate `level` argument"));
                 }
                 args.level = Some(input.parse()?);
+            } else if lookahead.peek(kw::async_fn_captures_lifetimes) {
+                if args.async_fn_captures_lifetimes.is_some() {
+                    return Err(input.error("duplicate `async_fn_captures_lifetimes` argument"));
+                }
+                args.async_fn_captures_lifetimes = Some(input.parse()?);
+            } else if lookahead.peek(Token![,]) {
+                let _ = input.parse::<Token![,]>()?;
             } else {
                 return Err(lookahead.error());
             }
@@ -298,4 +375,5 @@ impl Parse for Args {
 
 mod kw {
     syn::custom_keyword!(level);
+    syn::custom_keyword!(async_fn_captures_lifetimes);
 }

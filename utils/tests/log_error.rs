@@ -604,6 +604,38 @@ mod test_log_error_macro_async_funcs_helpers {
             Ok(())
         }
     }
+
+    // Note: for CapturesLifetime cases, `mut self` is important.
+    pub struct CapturesLifetime1<'a>(pub &'a str);
+
+    impl<'a> CapturesLifetime1<'a> {
+        #[log_error(async_fn_captures_lifetimes('a))]
+        pub async fn func(&mut self, fail: bool) -> Result<(), SeriousError> {
+            let _ = self.0.to_owned();
+
+            if fail {
+                Err(SeriousError)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    pub struct CapturesLifetime2<'a, 'b>(pub &'a str, pub &'b str);
+
+    impl<'a, 'b> CapturesLifetime2<'a, 'b> {
+        #[log_error(async_fn_captures_lifetimes('a, 'b))]
+        pub async fn func(&mut self, fail: bool) -> Result<(), SeriousError> {
+            let _ = self.0.to_owned();
+            let _ = self.1.to_owned();
+
+            if fail {
+                Err(SeriousError)
+            } else {
+                Ok(())
+            }
+        }
+    }
 }
 
 async fn test_log_error_macro_async_funcs(output: &LogOutput) {
@@ -764,6 +796,52 @@ async fn test_log_error_macro_async_funcs(output: &LogOutput) {
                 line!() - 7
             )],
             "test_log_error_macro_async_funcs/func_with_tracing_instrument_outer",
+        );
+    }
+
+    // CapturesLifetime1
+    {
+        let s = "foo".to_owned();
+        let mut test_struct = CapturesLifetime1(&s);
+        test_struct.func(false).await.unwrap();
+        assert_eq!(output.take(), "");
+    }
+    {
+        let s = "foo".to_owned();
+        let mut test_struct = CapturesLifetime1(&s);
+        test_struct.func(true).await.unwrap_err();
+        let output = output.take();
+        assert_lines_match(
+            &output,
+            &[format!(
+                r"ERROR log_error: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 6
+            )],
+            "test_log_error_macro_async_funcs/func",
+        );
+    }
+
+    // CapturesLifetime2
+    {
+        let s1 = "foo".to_owned();
+        let s2 = "bar".to_owned();
+        let mut test_struct = CapturesLifetime2(&s1, &s2);
+        test_struct.func(false).await.unwrap();
+        assert_eq!(output.take(), "");
+    }
+    {
+        let s1 = "foo".to_owned();
+        let s2 = "bar".to_owned();
+        let mut test_struct = CapturesLifetime2(&s1, &s2);
+        test_struct.func(true).await.unwrap_err();
+        let output = output.take();
+        assert_lines_match(
+            &output,
+            &[format!(
+                r"ERROR log_error: This is serious \(utils/tests/log_error.rs:{}:\d+\)",
+                line!() - 6
+            )],
+            "test_log_error_macro_async_funcs/func",
         );
     }
 }
