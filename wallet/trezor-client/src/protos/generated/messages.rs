@@ -522,8 +522,8 @@ pub enum MessageType {
     MessageType_MintlayerGetPublicKey = 1002,
     // @@protoc_insertion_point(enum_value:hw.trezor.messages.MessageType.MessageType_MintlayerPublicKey)
     MessageType_MintlayerPublicKey = 1003,
-    // @@protoc_insertion_point(enum_value:hw.trezor.messages.MessageType.MessageType_MintlayerVerifySig)
-    MessageType_MintlayerVerifySig = 1004,
+    // @@protoc_insertion_point(enum_value:hw.trezor.messages.MessageType.MessageType_MintlayerSignMessage)
+    MessageType_MintlayerSignMessage = 1004,
     // @@protoc_insertion_point(enum_value:hw.trezor.messages.MessageType.MessageType_MintlayerSignTx)
     MessageType_MintlayerSignTx = 1005,
     // @@protoc_insertion_point(enum_value:hw.trezor.messages.MessageType.MessageType_MintlayerTxRequest)
@@ -790,7 +790,7 @@ impl ::protobuf::Enum for MessageType {
             1001 => ::std::option::Option::Some(MessageType::MessageType_MintlayerAddress),
             1002 => ::std::option::Option::Some(MessageType::MessageType_MintlayerGetPublicKey),
             1003 => ::std::option::Option::Some(MessageType::MessageType_MintlayerPublicKey),
-            1004 => ::std::option::Option::Some(MessageType::MessageType_MintlayerVerifySig),
+            1004 => ::std::option::Option::Some(MessageType::MessageType_MintlayerSignMessage),
             1005 => ::std::option::Option::Some(MessageType::MessageType_MintlayerSignTx),
             1006 => ::std::option::Option::Some(MessageType::MessageType_MintlayerTxRequest),
             1007 => ::std::option::Option::Some(MessageType::MessageType_MintlayerTxAckUtxoInput),
@@ -1048,7 +1048,7 @@ impl ::protobuf::Enum for MessageType {
             "MessageType_MintlayerAddress" => ::std::option::Option::Some(MessageType::MessageType_MintlayerAddress),
             "MessageType_MintlayerGetPublicKey" => ::std::option::Option::Some(MessageType::MessageType_MintlayerGetPublicKey),
             "MessageType_MintlayerPublicKey" => ::std::option::Option::Some(MessageType::MessageType_MintlayerPublicKey),
-            "MessageType_MintlayerVerifySig" => ::std::option::Option::Some(MessageType::MessageType_MintlayerVerifySig),
+            "MessageType_MintlayerSignMessage" => ::std::option::Option::Some(MessageType::MessageType_MintlayerSignMessage),
             "MessageType_MintlayerSignTx" => ::std::option::Option::Some(MessageType::MessageType_MintlayerSignTx),
             "MessageType_MintlayerTxRequest" => ::std::option::Option::Some(MessageType::MessageType_MintlayerTxRequest),
             "MessageType_MintlayerTxAckUtxoInput" => ::std::option::Option::Some(MessageType::MessageType_MintlayerTxAckUtxoInput),
@@ -1305,7 +1305,7 @@ impl ::protobuf::Enum for MessageType {
         MessageType::MessageType_MintlayerAddress,
         MessageType::MessageType_MintlayerGetPublicKey,
         MessageType::MessageType_MintlayerPublicKey,
-        MessageType::MessageType_MintlayerVerifySig,
+        MessageType::MessageType_MintlayerSignMessage,
         MessageType::MessageType_MintlayerSignTx,
         MessageType::MessageType_MintlayerTxRequest,
         MessageType::MessageType_MintlayerTxAckUtxoInput,
@@ -1568,7 +1568,7 @@ impl ::protobuf::EnumFull for MessageType {
             MessageType::MessageType_MintlayerAddress => 244,
             MessageType::MessageType_MintlayerGetPublicKey => 245,
             MessageType::MessageType_MintlayerPublicKey => 246,
-            MessageType::MessageType_MintlayerVerifySig => 247,
+            MessageType::MessageType_MintlayerSignMessage => 247,
             MessageType::MessageType_MintlayerSignTx => 248,
             MessageType::MessageType_MintlayerTxRequest => 249,
             MessageType::MessageType_MintlayerTxAckUtxoInput => 250,
@@ -1622,7 +1622,7 @@ pub mod exts {
 
 static file_descriptor_proto_data: &'static [u8] = b"\
     \n\x0emessages.proto\x12\x12hw.trezor.messages\x1a\x20google/protobuf/de\
-    scriptor.proto*\xa3W\n\x0bMessageType\x12(\n\x16MessageType_Initialize\
+    scriptor.proto*\xa5W\n\x0bMessageType\x12(\n\x16MessageType_Initialize\
     \x10\0\x1a\x0c\x80\xa6\x1d\x01\xb0\xb5\x18\x01\x90\xb5\x18\x01\x12\x1e\n\
     \x10MessageType_Ping\x10\x01\x1a\x08\x80\xa6\x1d\x01\x90\xb5\x18\x01\x12\
     %\n\x13MessageType_Success\x10\x02\x1a\x0c\x80\xa6\x1d\x01\xa8\xb5\x18\
@@ -1901,11 +1901,11 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     ss\x10\xe8\x07\x1a\x04\x90\xb5\x18\x01\x12'\n\x1cMessageType_MintlayerAd\
     dress\x10\xe9\x07\x1a\x04\x98\xb5\x18\x01\x12,\n!MessageType_MintlayerGe\
     tPublicKey\x10\xea\x07\x1a\x04\x90\xb5\x18\x01\x12)\n\x1eMessageType_Min\
-    tlayerPublicKey\x10\xeb\x07\x1a\x04\x98\xb5\x18\x01\x12)\n\x1eMessageTyp\
-    e_MintlayerVerifySig\x10\xec\x07\x1a\x04\x90\xb5\x18\x01\x12&\n\x1bMessa\
-    geType_MintlayerSignTx\x10\xed\x07\x1a\x04\x90\xb5\x18\x01\x12)\n\x1eMes\
-    sageType_MintlayerTxRequest\x10\xee\x07\x1a\x04\x98\xb5\x18\x01\x12.\n#M\
-    essageType_MintlayerTxAckUtxoInput\x10\xef\x07\x1a\x04\x90\xb5\x18\x01\
+    tlayerPublicKey\x10\xeb\x07\x1a\x04\x98\xb5\x18\x01\x12+\n\x20MessageTyp\
+    e_MintlayerSignMessage\x10\xec\x07\x1a\x04\x90\xb5\x18\x01\x12&\n\x1bMes\
+    sageType_MintlayerSignTx\x10\xed\x07\x1a\x04\x90\xb5\x18\x01\x12)\n\x1eM\
+    essageType_MintlayerTxRequest\x10\xee\x07\x1a\x04\x98\xb5\x18\x01\x12.\n\
+    #MessageType_MintlayerTxAckUtxoInput\x10\xef\x07\x1a\x04\x90\xb5\x18\x01\
     \x12+\n\x20MessageType_MintlayerTxAckOutput\x10\xf0\x07\x1a\x04\x90\xb5\
     \x18\x01\x1a\x04\xc8\xf3\x18\x01\"\x04\x08Z\x10\\\"\x04\x08r\x10z\"\x06\
     \x08\xdb\x01\x10\xdb\x01\"\x06\x08\xe0\x01\x10\xe0\x01\"\x06\x08\xac\x02\

@@ -18,7 +18,10 @@ use std::sync::Arc;
 use common::chain::{
     partially_signed_transaction::PartiallySignedTransaction,
     signature::{
-        inputsig::arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
+        inputsig::{
+            arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
+            classical_multisig::multisig_partial_signature::PartiallySignedMultisigStructureError,
+        },
         DestinationSigError,
     },
     ChainConfig, Destination,
@@ -58,9 +61,15 @@ pub enum SignerError {
     #[error("{0}")]
     SignArbitraryMessageError(#[from] SignArbitraryMessageError),
     #[error("{0}")]
+    MultisigError(#[from] PartiallySignedMultisigStructureError),
+    #[error("{0}")]
     SerializationError(#[from] serialization::Error),
     #[error("Trezor error: {0}")]
     TrezorError(#[from] TrezorError),
+    #[error("Partially signed tx is missing input's destination")]
+    MissingDestinationInTransaction,
+    #[error("Partially signed tx is missing UTXO type input's UTXO")]
+    MissingUtxo,
 }
 
 type SignerResult<T> = Result<T, SignerError>;
