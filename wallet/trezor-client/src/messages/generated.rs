@@ -189,7 +189,7 @@ trezor_message_impl! {
     MintlayerAddress => MessageType_MintlayerAddress,
     MintlayerGetPublicKey => MessageType_MintlayerGetPublicKey,
     MintlayerPublicKey => MessageType_MintlayerPublicKey,
-    MintlayerVerifySig => MessageType_MintlayerVerifySig,
+    MintlayerSignMessage => MessageType_MintlayerSignMessage,
     MintlayerSignTx => MessageType_MintlayerSignTx,
     MintlayerTxRequest => MessageType_MintlayerTxRequest,
     MintlayerTxAckUtxoInput => MessageType_MintlayerTxAckUtxoInput,
