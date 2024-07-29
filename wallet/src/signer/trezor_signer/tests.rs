@@ -20,6 +20,7 @@ use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
 use crate::{Account, SendRequest};
 use common::chain::config::create_regtest;
 use common::chain::output_value::OutputValue;
+use common::chain::signature::inputsig::arbitrary_message::produce_message_challenge;
 use common::chain::signature::verify_signature;
 use common::chain::timelock::OutputTimeLock;
 use common::chain::tokens::TokenId;
@@ -27,7 +28,7 @@ use common::chain::{
     AccountNonce, AccountOutPoint, DelegationId, GenBlock, PoolId, Transaction, TxInput,
 };
 use common::primitives::{Amount, Id, H256};
-use crypto::key::KeyKind;
+use crypto::key::{KeyKind, PrivateKey};
 use randomness::{Rng, RngCore};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -39,6 +40,50 @@ use wallet_types::KeyPurpose::{Change, ReceiveFunds};
 
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn sign_message(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = Arc::new(create_regtest());
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+
+    let master_key_chain = MasterKeyChain::new_from_mnemonic(
+        chain_config.clone(),
+        &mut db_tx,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
+
+    let key_chain = master_key_chain
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX, LOOKAHEAD_SIZE)
+        .unwrap();
+    let mut account = Account::new(chain_config.clone(), &mut db_tx, key_chain, None).unwrap();
+
+    let destination = account.get_new_address(&mut db_tx, ReceiveFunds).unwrap().1.into_object();
+    let mut devices = find_devices(false);
+    assert!(!devices.is_empty());
+    let client = devices.pop().unwrap().connect().unwrap();
+
+    let mut signer = TrezorSigner::new(chain_config.clone(), Arc::new(Mutex::new(client)));
+    let message = vec![rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>()];
+    let res = signer
+        .sign_challenge(
+            message.clone(),
+            destination.clone(),
+            account.key_chain(),
+            &db_tx,
+        )
+        .unwrap();
+
+    let message_challenge = produce_message_challenge(&message);
+    res.verify_signature(&chain_config, &destination, &message_challenge).unwrap();
+}
 
 #[rstest]
 #[trace]
@@ -88,7 +133,6 @@ fn sign_transaction(#[case] seed: Seed) {
         .collect();
 
     let inputs: Vec<TxInput> = (0..utxos.len())
-        .into_iter()
         .map(|_| {
             let source_id = if rng.gen_bool(0.5) {
                 Id::<Transaction>::new(H256::random_using(&mut rng)).into()
@@ -103,13 +147,13 @@ fn sign_transaction(#[case] seed: Seed) {
         TxInput::Account(AccountOutPoint::new(
             AccountNonce::new(1),
             AccountSpending::DelegationBalance(
-                DelegationId::new(H256::random_using(&mut rng)).into(),
+                DelegationId::new(H256::random_using(&mut rng)),
                 Amount::from_atoms(rng.next_u32() as u128),
             ),
         )),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
-            AccountCommand::UnmintTokens(TokenId::new(H256::random_using(&mut rng)).into()),
+            AccountCommand::UnmintTokens(TokenId::new(H256::random_using(&mut rng))),
         ),
     ];
     let acc_dests: Vec<Destination> = acc_inputs
@@ -153,11 +197,11 @@ fn sign_transaction(#[case] seed: Seed) {
         ),
         TxOutput::CreateDelegationId(
             Destination::AnyoneCanSpend,
-            PoolId::new(H256::random_using(&mut rng)).into(),
+            PoolId::new(H256::random_using(&mut rng)),
         ),
         TxOutput::DelegateStaking(
             Amount::from_atoms(200),
-            DelegationId::new(H256::random_using(&mut rng)).into(),
+            DelegationId::new(H256::random_using(&mut rng)),
         ),
     ];
 
@@ -172,11 +216,7 @@ fn sign_transaction(#[case] seed: Seed) {
     assert!(!devices.is_empty());
     let client = devices.pop().unwrap().connect().unwrap();
 
-    let mut signer = TrezorSigner::new(
-        chain_config.clone(),
-        DEFAULT_ACCOUNT_INDEX,
-        Arc::new(Mutex::new(client)),
-    );
+    let mut signer = TrezorSigner::new(chain_config.clone(), Arc::new(Mutex::new(client)));
     let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).unwrap();
 
     eprintln!("num inputs in tx: {} {:?}", inputs.len(), ptx.witnesses());
@@ -200,8 +240,7 @@ fn sign_transaction(#[case] seed: Seed) {
         )
         .unwrap();
     }
-    for i in 0..acc_dests.len() {
-        let destination = &acc_dests[i];
+    for (i, destination) in acc_dests.iter().enumerate() {
         verify_signature(
             &chain_config,
             destination,
