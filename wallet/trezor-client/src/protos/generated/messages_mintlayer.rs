@@ -765,66 +765,66 @@ impl ::protobuf::reflect::ProtobufValue for MintlayerPublicKey {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
-// @@protoc_insertion_point(message:hw.trezor.messages.mintlayer.MintlayerVerifySig)
+// @@protoc_insertion_point(message:hw.trezor.messages.mintlayer.MintlayerSignMessage)
 #[derive(PartialEq,Clone,Default,Debug)]
-pub struct MintlayerVerifySig {
+pub struct MintlayerSignMessage {
     // message fields
-    // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerVerifySig.address_n)
+    // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerSignMessage.address_n)
     pub address_n: ::std::vec::Vec<u32>,
-    // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerVerifySig.signature)
-    pub signature: ::std::option::Option<::std::vec::Vec<u8>>,
-    // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerVerifySig.message)
+    // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerSignMessage.address)
+    pub address: ::std::option::Option<::std::string::String>,
+    // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerSignMessage.message)
     pub message: ::std::option::Option<::std::vec::Vec<u8>>,
     // special fields
-    // @@protoc_insertion_point(special_field:hw.trezor.messages.mintlayer.MintlayerVerifySig.special_fields)
+    // @@protoc_insertion_point(special_field:hw.trezor.messages.mintlayer.MintlayerSignMessage.special_fields)
     pub special_fields: ::protobuf::SpecialFields,
 }
 
-impl<'a> ::std::default::Default for &'a MintlayerVerifySig {
-    fn default() -> &'a MintlayerVerifySig {
-        <MintlayerVerifySig as ::protobuf::Message>::default_instance()
+impl<'a> ::std::default::Default for &'a MintlayerSignMessage {
+    fn default() -> &'a MintlayerSignMessage {
+        <MintlayerSignMessage as ::protobuf::Message>::default_instance()
     }
 }
 
-impl MintlayerVerifySig {
-    pub fn new() -> MintlayerVerifySig {
+impl MintlayerSignMessage {
+    pub fn new() -> MintlayerSignMessage {
         ::std::default::Default::default()
     }
 
-    // required bytes signature = 2;
+    // required string address = 2;
 
-    pub fn signature(&self) -> &[u8] {
-        match self.signature.as_ref() {
+    pub fn address(&self) -> &str {
+        match self.address.as_ref() {
             Some(v) => v,
-            None => &[],
+            None => "",
         }
     }
 
-    pub fn clear_signature(&mut self) {
-        self.signature = ::std::option::Option::None;
+    pub fn clear_address(&mut self) {
+        self.address = ::std::option::Option::None;
     }
 
-    pub fn has_signature(&self) -> bool {
-        self.signature.is_some()
+    pub fn has_address(&self) -> bool {
+        self.address.is_some()
     }
 
     // Param is passed by value, moved
-    pub fn set_signature(&mut self, v: ::std::vec::Vec<u8>) {
-        self.signature = ::std::option::Option::Some(v);
+    pub fn set_address(&mut self, v: ::std::string::String) {
+        self.address = ::std::option::Option::Some(v);
     }
 
     // Mutable pointer to the field.
     // If field is not initialized, it is initialized with default value first.
-    pub fn mut_signature(&mut self) -> &mut ::std::vec::Vec<u8> {
-        if self.signature.is_none() {
-            self.signature = ::std::option::Option::Some(::std::vec::Vec::new());
+    pub fn mut_address(&mut self) -> &mut ::std::string::String {
+        if self.address.is_none() {
+            self.address = ::std::option::Option::Some(::std::string::String::new());
         }
-        self.signature.as_mut().unwrap()
+        self.address.as_mut().unwrap()
     }
 
     // Take field
-    pub fn take_signature(&mut self) -> ::std::vec::Vec<u8> {
-        self.signature.take().unwrap_or_else(|| ::std::vec::Vec::new())
+    pub fn take_address(&mut self) -> ::std::string::String {
+        self.address.take().unwrap_or_else(|| ::std::string::String::new())
     }
 
     // required bytes message = 3;
@@ -868,32 +868,32 @@ impl MintlayerVerifySig {
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_vec_simpler_accessor::<_, _>(
             "address_n",
-            |m: &MintlayerVerifySig| { &m.address_n },
-            |m: &mut MintlayerVerifySig| { &mut m.address_n },
+            |m: &MintlayerSignMessage| { &m.address_n },
+            |m: &mut MintlayerSignMessage| { &mut m.address_n },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
-            "signature",
-            |m: &MintlayerVerifySig| { &m.signature },
-            |m: &mut MintlayerVerifySig| { &mut m.signature },
+            "address",
+            |m: &MintlayerSignMessage| { &m.address },
+            |m: &mut MintlayerSignMessage| { &mut m.address },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "message",
-            |m: &MintlayerVerifySig| { &m.message },
-            |m: &mut MintlayerVerifySig| { &mut m.message },
+            |m: &MintlayerSignMessage| { &m.message },
+            |m: &mut MintlayerSignMessage| { &mut m.message },
         ));
-        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<MintlayerVerifySig>(
-            "MintlayerVerifySig",
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<MintlayerSignMessage>(
+            "MintlayerSignMessage",
             fields,
             oneofs,
         )
     }
 }
 
-impl ::protobuf::Message for MintlayerVerifySig {
-    const NAME: &'static str = "MintlayerVerifySig";
+impl ::protobuf::Message for MintlayerSignMessage {
+    const NAME: &'static str = "MintlayerSignMessage";
 
     fn is_initialized(&self) -> bool {
-        if self.signature.is_none() {
+        if self.address.is_none() {
             return false;
         }
         if self.message.is_none() {
@@ -912,7 +912,7 @@ impl ::protobuf::Message for MintlayerVerifySig {
                     self.address_n.push(is.read_uint32()?);
                 },
                 18 => {
-                    self.signature = ::std::option::Option::Some(is.read_bytes()?);
+                    self.address = ::std::option::Option::Some(is.read_string()?);
                 },
                 26 => {
                     self.message = ::std::option::Option::Some(is.read_bytes()?);
@@ -932,8 +932,8 @@ impl ::protobuf::Message for MintlayerVerifySig {
         for value in &self.address_n {
             my_size += ::protobuf::rt::uint32_size(1, *value);
         };
-        if let Some(v) = self.signature.as_ref() {
-            my_size += ::protobuf::rt::bytes_size(2, &v);
+        if let Some(v) = self.address.as_ref() {
+            my_size += ::protobuf::rt::string_size(2, &v);
         }
         if let Some(v) = self.message.as_ref() {
             my_size += ::protobuf::rt::bytes_size(3, &v);
@@ -947,8 +947,8 @@ impl ::protobuf::Message for MintlayerVerifySig {
         for v in &self.address_n {
             os.write_uint32(1, *v)?;
         };
-        if let Some(v) = self.signature.as_ref() {
-            os.write_bytes(2, v)?;
+        if let Some(v) = self.address.as_ref() {
+            os.write_string(2, v)?;
         }
         if let Some(v) = self.message.as_ref() {
             os.write_bytes(3, v)?;
@@ -965,21 +965,21 @@ impl ::protobuf::Message for MintlayerVerifySig {
         &mut self.special_fields
     }
 
-    fn new() -> MintlayerVerifySig {
-        MintlayerVerifySig::new()
+    fn new() -> MintlayerSignMessage {
+        MintlayerSignMessage::new()
     }
 
     fn clear(&mut self) {
         self.address_n.clear();
-        self.signature = ::std::option::Option::None;
+        self.address = ::std::option::Option::None;
         self.message = ::std::option::Option::None;
         self.special_fields.clear();
     }
 
-    fn default_instance() -> &'static MintlayerVerifySig {
-        static instance: MintlayerVerifySig = MintlayerVerifySig {
+    fn default_instance() -> &'static MintlayerSignMessage {
+        static instance: MintlayerSignMessage = MintlayerSignMessage {
             address_n: ::std::vec::Vec::new(),
-            signature: ::std::option::Option::None,
+            address: ::std::option::Option::None,
             message: ::std::option::Option::None,
             special_fields: ::protobuf::SpecialFields::new(),
         };
@@ -987,20 +987,20 @@ impl ::protobuf::Message for MintlayerVerifySig {
     }
 }
 
-impl ::protobuf::MessageFull for MintlayerVerifySig {
+impl ::protobuf::MessageFull for MintlayerSignMessage {
     fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
         static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
-        descriptor.get(|| file_descriptor().message_by_package_relative_name("MintlayerVerifySig").unwrap()).clone()
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("MintlayerSignMessage").unwrap()).clone()
     }
 }
 
-impl ::std::fmt::Display for MintlayerVerifySig {
+impl ::std::fmt::Display for MintlayerSignMessage {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
         ::protobuf::text_format::fmt(self, f)
     }
 }
 
-impl ::protobuf::reflect::ProtobufValue for MintlayerVerifySig {
+impl ::protobuf::reflect::ProtobufValue for MintlayerSignMessage {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
@@ -1377,6 +1377,16 @@ impl ::protobuf::Message for MintlayerTxRequest {
     const NAME: &'static str = "MintlayerTxRequest";
 
     fn is_initialized(&self) -> bool {
+        for v in &self.details {
+            if !v.is_initialized() {
+                return false;
+            }
+        };
+        for v in &self.serialized {
+            if !v.is_initialized() {
+                return false;
+            }
+        };
         true
     }
 
@@ -1678,14 +1688,212 @@ pub mod mintlayer_tx_request {
         type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
     }
 
+    // @@protoc_insertion_point(message:hw.trezor.messages.mintlayer.MintlayerTxRequest.MintlayerSignature)
+    #[derive(PartialEq,Clone,Default,Debug)]
+    pub struct MintlayerSignature {
+        // message fields
+        // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerTxRequest.MintlayerSignature.signature)
+        pub signature: ::std::option::Option<::std::vec::Vec<u8>>,
+        // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerTxRequest.MintlayerSignature.multisig_idx)
+        pub multisig_idx: ::std::option::Option<u32>,
+        // special fields
+        // @@protoc_insertion_point(special_field:hw.trezor.messages.mintlayer.MintlayerTxRequest.MintlayerSignature.special_fields)
+        pub special_fields: ::protobuf::SpecialFields,
+    }
+
+    impl<'a> ::std::default::Default for &'a MintlayerSignature {
+        fn default() -> &'a MintlayerSignature {
+            <MintlayerSignature as ::protobuf::Message>::default_instance()
+        }
+    }
+
+    impl MintlayerSignature {
+        pub fn new() -> MintlayerSignature {
+            ::std::default::Default::default()
+        }
+
+        // required bytes signature = 1;
+
+        pub fn signature(&self) -> &[u8] {
+            match self.signature.as_ref() {
+                Some(v) => v,
+                None => &[],
+            }
+        }
+
+        pub fn clear_signature(&mut self) {
+            self.signature = ::std::option::Option::None;
+        }
+
+        pub fn has_signature(&self) -> bool {
+            self.signature.is_some()
+        }
+
+        // Param is passed by value, moved
+        pub fn set_signature(&mut self, v: ::std::vec::Vec<u8>) {
+            self.signature = ::std::option::Option::Some(v);
+        }
+
+        // Mutable pointer to the field.
+        // If field is not initialized, it is initialized with default value first.
+        pub fn mut_signature(&mut self) -> &mut ::std::vec::Vec<u8> {
+            if self.signature.is_none() {
+                self.signature = ::std::option::Option::Some(::std::vec::Vec::new());
+            }
+            self.signature.as_mut().unwrap()
+        }
+
+        // Take field
+        pub fn take_signature(&mut self) -> ::std::vec::Vec<u8> {
+            self.signature.take().unwrap_or_else(|| ::std::vec::Vec::new())
+        }
+
+        // optional uint32 multisig_idx = 2;
+
+        pub fn multisig_idx(&self) -> u32 {
+            self.multisig_idx.unwrap_or(0)
+        }
+
+        pub fn clear_multisig_idx(&mut self) {
+            self.multisig_idx = ::std::option::Option::None;
+        }
+
+        pub fn has_multisig_idx(&self) -> bool {
+            self.multisig_idx.is_some()
+        }
+
+        // Param is passed by value, moved
+        pub fn set_multisig_idx(&mut self, v: u32) {
+            self.multisig_idx = ::std::option::Option::Some(v);
+        }
+
+        pub(in super) fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+            let mut fields = ::std::vec::Vec::with_capacity(2);
+            let mut oneofs = ::std::vec::Vec::with_capacity(0);
+            fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+                "signature",
+                |m: &MintlayerSignature| { &m.signature },
+                |m: &mut MintlayerSignature| { &mut m.signature },
+            ));
+            fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+                "multisig_idx",
+                |m: &MintlayerSignature| { &m.multisig_idx },
+                |m: &mut MintlayerSignature| { &mut m.multisig_idx },
+            ));
+            ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<MintlayerSignature>(
+                "MintlayerTxRequest.MintlayerSignature",
+                fields,
+                oneofs,
+            )
+        }
+    }
+
+    impl ::protobuf::Message for MintlayerSignature {
+        const NAME: &'static str = "MintlayerSignature";
+
+        fn is_initialized(&self) -> bool {
+            if self.signature.is_none() {
+                return false;
+            }
+            true
+        }
+
+        fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+            while let Some(tag) = is.read_raw_tag_or_eof()? {
+                match tag {
+                    10 => {
+                        self.signature = ::std::option::Option::Some(is.read_bytes()?);
+                    },
+                    16 => {
+                        self.multisig_idx = ::std::option::Option::Some(is.read_uint32()?);
+                    },
+                    tag => {
+                        ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                    },
+                };
+            }
+            ::std::result::Result::Ok(())
+        }
+
+        // Compute sizes of nested messages
+        #[allow(unused_variables)]
+        fn compute_size(&self) -> u64 {
+            let mut my_size = 0;
+            if let Some(v) = self.signature.as_ref() {
+                my_size += ::protobuf::rt::bytes_size(1, &v);
+            }
+            if let Some(v) = self.multisig_idx {
+                my_size += ::protobuf::rt::uint32_size(2, v);
+            }
+            my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+            self.special_fields.cached_size().set(my_size as u32);
+            my_size
+        }
+
+        fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+            if let Some(v) = self.signature.as_ref() {
+                os.write_bytes(1, v)?;
+            }
+            if let Some(v) = self.multisig_idx {
+                os.write_uint32(2, v)?;
+            }
+            os.write_unknown_fields(self.special_fields.unknown_fields())?;
+            ::std::result::Result::Ok(())
+        }
+
+        fn special_fields(&self) -> &::protobuf::SpecialFields {
+            &self.special_fields
+        }
+
+        fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+            &mut self.special_fields
+        }
+
+        fn new() -> MintlayerSignature {
+            MintlayerSignature::new()
+        }
+
+        fn clear(&mut self) {
+            self.signature = ::std::option::Option::None;
+            self.multisig_idx = ::std::option::Option::None;
+            self.special_fields.clear();
+        }
+
+        fn default_instance() -> &'static MintlayerSignature {
+            static instance: MintlayerSignature = MintlayerSignature {
+                signature: ::std::option::Option::None,
+                multisig_idx: ::std::option::Option::None,
+                special_fields: ::protobuf::SpecialFields::new(),
+            };
+            &instance
+        }
+    }
+
+    impl ::protobuf::MessageFull for MintlayerSignature {
+        fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+            static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+            descriptor.get(|| super::file_descriptor().message_by_package_relative_name("MintlayerTxRequest.MintlayerSignature").unwrap()).clone()
+        }
+    }
+
+    impl ::std::fmt::Display for MintlayerSignature {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            ::protobuf::text_format::fmt(self, f)
+        }
+    }
+
+    impl ::protobuf::reflect::ProtobufValue for MintlayerSignature {
+        type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+    }
+
     // @@protoc_insertion_point(message:hw.trezor.messages.mintlayer.MintlayerTxRequest.MintlayerTxRequestSerializedType)
     #[derive(PartialEq,Clone,Default,Debug)]
     pub struct MintlayerTxRequestSerializedType {
         // message fields
         // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerTxRequest.MintlayerTxRequestSerializedType.signature_index)
         pub signature_index: ::std::option::Option<u32>,
-        // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerTxRequest.MintlayerTxRequestSerializedType.signature)
-        pub signature: ::std::option::Option<::std::vec::Vec<u8>>,
+        // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerTxRequest.MintlayerTxRequestSerializedType.signatures)
+        pub signatures: ::std::vec::Vec<MintlayerSignature>,
         // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerTxRequest.MintlayerTxRequestSerializedType.serialized_tx)
         pub serialized_tx: ::std::option::Option<::std::vec::Vec<u8>>,
         // special fields
@@ -1721,42 +1929,6 @@ pub mod mintlayer_tx_request {
         // Param is passed by value, moved
         pub fn set_signature_index(&mut self, v: u32) {
             self.signature_index = ::std::option::Option::Some(v);
-        }
-
-        // optional bytes signature = 2;
-
-        pub fn signature(&self) -> &[u8] {
-            match self.signature.as_ref() {
-                Some(v) => v,
-                None => &[],
-            }
-        }
-
-        pub fn clear_signature(&mut self) {
-            self.signature = ::std::option::Option::None;
-        }
-
-        pub fn has_signature(&self) -> bool {
-            self.signature.is_some()
-        }
-
-        // Param is passed by value, moved
-        pub fn set_signature(&mut self, v: ::std::vec::Vec<u8>) {
-            self.signature = ::std::option::Option::Some(v);
-        }
-
-        // Mutable pointer to the field.
-        // If field is not initialized, it is initialized with default value first.
-        pub fn mut_signature(&mut self) -> &mut ::std::vec::Vec<u8> {
-            if self.signature.is_none() {
-                self.signature = ::std::option::Option::Some(::std::vec::Vec::new());
-            }
-            self.signature.as_mut().unwrap()
-        }
-
-        // Take field
-        pub fn take_signature(&mut self) -> ::std::vec::Vec<u8> {
-            self.signature.take().unwrap_or_else(|| ::std::vec::Vec::new())
         }
 
         // optional bytes serialized_tx = 3;
@@ -1803,10 +1975,10 @@ pub mod mintlayer_tx_request {
                 |m: &MintlayerTxRequestSerializedType| { &m.signature_index },
                 |m: &mut MintlayerTxRequestSerializedType| { &mut m.signature_index },
             ));
-            fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
-                "signature",
-                |m: &MintlayerTxRequestSerializedType| { &m.signature },
-                |m: &mut MintlayerTxRequestSerializedType| { &mut m.signature },
+            fields.push(::protobuf::reflect::rt::v2::make_vec_simpler_accessor::<_, _>(
+                "signatures",
+                |m: &MintlayerTxRequestSerializedType| { &m.signatures },
+                |m: &mut MintlayerTxRequestSerializedType| { &mut m.signatures },
             ));
             fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
                 "serialized_tx",
@@ -1825,6 +1997,11 @@ pub mod mintlayer_tx_request {
         const NAME: &'static str = "MintlayerTxRequestSerializedType";
 
         fn is_initialized(&self) -> bool {
+            for v in &self.signatures {
+                if !v.is_initialized() {
+                    return false;
+                }
+            };
             true
         }
 
@@ -1835,7 +2012,7 @@ pub mod mintlayer_tx_request {
                         self.signature_index = ::std::option::Option::Some(is.read_uint32()?);
                     },
                     18 => {
-                        self.signature = ::std::option::Option::Some(is.read_bytes()?);
+                        self.signatures.push(is.read_message()?);
                     },
                     26 => {
                         self.serialized_tx = ::std::option::Option::Some(is.read_bytes()?);
@@ -1855,9 +2032,10 @@ pub mod mintlayer_tx_request {
             if let Some(v) = self.signature_index {
                 my_size += ::protobuf::rt::uint32_size(1, v);
             }
-            if let Some(v) = self.signature.as_ref() {
-                my_size += ::protobuf::rt::bytes_size(2, &v);
-            }
+            for value in &self.signatures {
+                let len = value.compute_size();
+                my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
+            };
             if let Some(v) = self.serialized_tx.as_ref() {
                 my_size += ::protobuf::rt::bytes_size(3, &v);
             }
@@ -1870,9 +2048,9 @@ pub mod mintlayer_tx_request {
             if let Some(v) = self.signature_index {
                 os.write_uint32(1, v)?;
             }
-            if let Some(v) = self.signature.as_ref() {
-                os.write_bytes(2, v)?;
-            }
+            for v in &self.signatures {
+                ::protobuf::rt::write_message_field_with_cached_size(2, v, os)?;
+            };
             if let Some(v) = self.serialized_tx.as_ref() {
                 os.write_bytes(3, v)?;
             }
@@ -1894,7 +2072,7 @@ pub mod mintlayer_tx_request {
 
         fn clear(&mut self) {
             self.signature_index = ::std::option::Option::None;
-            self.signature = ::std::option::Option::None;
+            self.signatures.clear();
             self.serialized_tx = ::std::option::Option::None;
             self.special_fields.clear();
         }
@@ -1902,7 +2080,7 @@ pub mod mintlayer_tx_request {
         fn default_instance() -> &'static MintlayerTxRequestSerializedType {
             static instance: MintlayerTxRequestSerializedType = MintlayerTxRequestSerializedType {
                 signature_index: ::std::option::Option::None,
-                signature: ::std::option::Option::None,
+                signatures: ::std::vec::Vec::new(),
                 serialized_tx: ::std::option::Option::None,
                 special_fields: ::protobuf::SpecialFields::new(),
             };
@@ -2176,12 +2354,174 @@ impl ::protobuf::reflect::ProtobufValue for MintlayerTxInput {
     type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
 }
 
+// @@protoc_insertion_point(message:hw.trezor.messages.mintlayer.MintlayerAddressPath)
+#[derive(PartialEq,Clone,Default,Debug)]
+pub struct MintlayerAddressPath {
+    // message fields
+    // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerAddressPath.address_n)
+    pub address_n: ::std::vec::Vec<u32>,
+    // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerAddressPath.multisig_idx)
+    pub multisig_idx: ::std::option::Option<u32>,
+    // special fields
+    // @@protoc_insertion_point(special_field:hw.trezor.messages.mintlayer.MintlayerAddressPath.special_fields)
+    pub special_fields: ::protobuf::SpecialFields,
+}
+
+impl<'a> ::std::default::Default for &'a MintlayerAddressPath {
+    fn default() -> &'a MintlayerAddressPath {
+        <MintlayerAddressPath as ::protobuf::Message>::default_instance()
+    }
+}
+
+impl MintlayerAddressPath {
+    pub fn new() -> MintlayerAddressPath {
+        ::std::default::Default::default()
+    }
+
+    // optional uint32 multisig_idx = 2;
+
+    pub fn multisig_idx(&self) -> u32 {
+        self.multisig_idx.unwrap_or(0)
+    }
+
+    pub fn clear_multisig_idx(&mut self) {
+        self.multisig_idx = ::std::option::Option::None;
+    }
+
+    pub fn has_multisig_idx(&self) -> bool {
+        self.multisig_idx.is_some()
+    }
+
+    // Param is passed by value, moved
+    pub fn set_multisig_idx(&mut self, v: u32) {
+        self.multisig_idx = ::std::option::Option::Some(v);
+    }
+
+    fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
+        let mut fields = ::std::vec::Vec::with_capacity(2);
+        let mut oneofs = ::std::vec::Vec::with_capacity(0);
+        fields.push(::protobuf::reflect::rt::v2::make_vec_simpler_accessor::<_, _>(
+            "address_n",
+            |m: &MintlayerAddressPath| { &m.address_n },
+            |m: &mut MintlayerAddressPath| { &mut m.address_n },
+        ));
+        fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
+            "multisig_idx",
+            |m: &MintlayerAddressPath| { &m.multisig_idx },
+            |m: &mut MintlayerAddressPath| { &mut m.multisig_idx },
+        ));
+        ::protobuf::reflect::GeneratedMessageDescriptorData::new_2::<MintlayerAddressPath>(
+            "MintlayerAddressPath",
+            fields,
+            oneofs,
+        )
+    }
+}
+
+impl ::protobuf::Message for MintlayerAddressPath {
+    const NAME: &'static str = "MintlayerAddressPath";
+
+    fn is_initialized(&self) -> bool {
+        true
+    }
+
+    fn merge_from(&mut self, is: &mut ::protobuf::CodedInputStream<'_>) -> ::protobuf::Result<()> {
+        while let Some(tag) = is.read_raw_tag_or_eof()? {
+            match tag {
+                10 => {
+                    is.read_repeated_packed_uint32_into(&mut self.address_n)?;
+                },
+                8 => {
+                    self.address_n.push(is.read_uint32()?);
+                },
+                16 => {
+                    self.multisig_idx = ::std::option::Option::Some(is.read_uint32()?);
+                },
+                tag => {
+                    ::protobuf::rt::read_unknown_or_skip_group(tag, is, self.special_fields.mut_unknown_fields())?;
+                },
+            };
+        }
+        ::std::result::Result::Ok(())
+    }
+
+    // Compute sizes of nested messages
+    #[allow(unused_variables)]
+    fn compute_size(&self) -> u64 {
+        let mut my_size = 0;
+        for value in &self.address_n {
+            my_size += ::protobuf::rt::uint32_size(1, *value);
+        };
+        if let Some(v) = self.multisig_idx {
+            my_size += ::protobuf::rt::uint32_size(2, v);
+        }
+        my_size += ::protobuf::rt::unknown_fields_size(self.special_fields.unknown_fields());
+        self.special_fields.cached_size().set(my_size as u32);
+        my_size
+    }
+
+    fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
+        for v in &self.address_n {
+            os.write_uint32(1, *v)?;
+        };
+        if let Some(v) = self.multisig_idx {
+            os.write_uint32(2, v)?;
+        }
+        os.write_unknown_fields(self.special_fields.unknown_fields())?;
+        ::std::result::Result::Ok(())
+    }
+
+    fn special_fields(&self) -> &::protobuf::SpecialFields {
+        &self.special_fields
+    }
+
+    fn mut_special_fields(&mut self) -> &mut ::protobuf::SpecialFields {
+        &mut self.special_fields
+    }
+
+    fn new() -> MintlayerAddressPath {
+        MintlayerAddressPath::new()
+    }
+
+    fn clear(&mut self) {
+        self.address_n.clear();
+        self.multisig_idx = ::std::option::Option::None;
+        self.special_fields.clear();
+    }
+
+    fn default_instance() -> &'static MintlayerAddressPath {
+        static instance: MintlayerAddressPath = MintlayerAddressPath {
+            address_n: ::std::vec::Vec::new(),
+            multisig_idx: ::std::option::Option::None,
+            special_fields: ::protobuf::SpecialFields::new(),
+        };
+        &instance
+    }
+}
+
+impl ::protobuf::MessageFull for MintlayerAddressPath {
+    fn descriptor() -> ::protobuf::reflect::MessageDescriptor {
+        static descriptor: ::protobuf::rt::Lazy<::protobuf::reflect::MessageDescriptor> = ::protobuf::rt::Lazy::new();
+        descriptor.get(|| file_descriptor().message_by_package_relative_name("MintlayerAddressPath").unwrap()).clone()
+    }
+}
+
+impl ::std::fmt::Display for MintlayerAddressPath {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        ::protobuf::text_format::fmt(self, f)
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for MintlayerAddressPath {
+    type RuntimeType = ::protobuf::reflect::rt::RuntimeTypeMessage<Self>;
+}
+
 // @@protoc_insertion_point(message:hw.trezor.messages.mintlayer.MintlayerUtxoTxInput)
 #[derive(PartialEq,Clone,Default,Debug)]
 pub struct MintlayerUtxoTxInput {
     // message fields
     // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerUtxoTxInput.address_n)
-    pub address_n: ::std::vec::Vec<u32>,
+    pub address_n: ::std::vec::Vec<MintlayerAddressPath>,
     // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerUtxoTxInput.address)
     pub address: ::std::option::Option<::std::string::String>,
     // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerUtxoTxInput.prev_hash)
@@ -2407,6 +2747,11 @@ impl ::protobuf::Message for MintlayerUtxoTxInput {
         if self.value.is_none() {
             return false;
         }
+        for v in &self.address_n {
+            if !v.is_initialized() {
+                return false;
+            }
+        };
         for v in &self.value {
             if !v.is_initialized() {
                 return false;
@@ -2419,10 +2764,7 @@ impl ::protobuf::Message for MintlayerUtxoTxInput {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
                 10 => {
-                    is.read_repeated_packed_uint32_into(&mut self.address_n)?;
-                },
-                8 => {
-                    self.address_n.push(is.read_uint32()?);
+                    self.address_n.push(is.read_message()?);
                 },
                 18 => {
                     self.address = ::std::option::Option::Some(is.read_string()?);
@@ -2455,7 +2797,8 @@ impl ::protobuf::Message for MintlayerUtxoTxInput {
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
         for value in &self.address_n {
-            my_size += ::protobuf::rt::uint32_size(1, *value);
+            let len = value.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         };
         if let Some(v) = self.address.as_ref() {
             my_size += ::protobuf::rt::string_size(2, &v);
@@ -2483,7 +2826,7 @@ impl ::protobuf::Message for MintlayerUtxoTxInput {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
         for v in &self.address_n {
-            os.write_uint32(1, *v)?;
+            ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
         };
         if let Some(v) = self.address.as_ref() {
             os.write_string(2, v)?;
@@ -2567,7 +2910,7 @@ impl ::protobuf::reflect::ProtobufValue for MintlayerUtxoTxInput {
 pub struct MintlayerAccountTxInput {
     // message fields
     // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerAccountTxInput.address_n)
-    pub address_n: ::std::vec::Vec<u32>,
+    pub address_n: ::std::vec::Vec<MintlayerAddressPath>,
     // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerAccountTxInput.address)
     pub address: ::std::option::Option<::std::string::String>,
     // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerAccountTxInput.sequence)
@@ -2761,6 +3104,11 @@ impl ::protobuf::Message for MintlayerAccountTxInput {
         if self.delegation_id.is_none() {
             return false;
         }
+        for v in &self.address_n {
+            if !v.is_initialized() {
+                return false;
+            }
+        };
         for v in &self.value {
             if !v.is_initialized() {
                 return false;
@@ -2773,10 +3121,7 @@ impl ::protobuf::Message for MintlayerAccountTxInput {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
                 10 => {
-                    is.read_repeated_packed_uint32_into(&mut self.address_n)?;
-                },
-                8 => {
-                    self.address_n.push(is.read_uint32()?);
+                    self.address_n.push(is.read_message()?);
                 },
                 18 => {
                     self.address = ::std::option::Option::Some(is.read_string()?);
@@ -2806,7 +3151,8 @@ impl ::protobuf::Message for MintlayerAccountTxInput {
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
         for value in &self.address_n {
-            my_size += ::protobuf::rt::uint32_size(1, *value);
+            let len = value.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         };
         if let Some(v) = self.address.as_ref() {
             my_size += ::protobuf::rt::string_size(2, &v);
@@ -2831,7 +3177,7 @@ impl ::protobuf::Message for MintlayerAccountTxInput {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
         for v in &self.address_n {
-            os.write_uint32(1, *v)?;
+            ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
         };
         if let Some(v) = self.address.as_ref() {
             os.write_string(2, v)?;
@@ -2910,7 +3256,7 @@ impl ::protobuf::reflect::ProtobufValue for MintlayerAccountTxInput {
 pub struct MintlayerAccountCommandTxInput {
     // message fields
     // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerAccountCommandTxInput.address_n)
-    pub address_n: ::std::vec::Vec<u32>,
+    pub address_n: ::std::vec::Vec<MintlayerAddressPath>,
     // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerAccountCommandTxInput.address)
     pub address: ::std::option::Option<::std::string::String>,
     // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerAccountCommandTxInput.sequence)
@@ -3090,6 +3436,11 @@ impl ::protobuf::Message for MintlayerAccountCommandTxInput {
         if self.nonce.is_none() {
             return false;
         }
+        for v in &self.address_n {
+            if !v.is_initialized() {
+                return false;
+            }
+        };
         for v in &self.mint {
             if !v.is_initialized() {
                 return false;
@@ -3127,10 +3478,7 @@ impl ::protobuf::Message for MintlayerAccountCommandTxInput {
         while let Some(tag) = is.read_raw_tag_or_eof()? {
             match tag {
                 10 => {
-                    is.read_repeated_packed_uint32_into(&mut self.address_n)?;
-                },
-                8 => {
-                    self.address_n.push(is.read_uint32()?);
+                    self.address_n.push(is.read_message()?);
                 },
                 18 => {
                     self.address = ::std::option::Option::Some(is.read_string()?);
@@ -3172,7 +3520,8 @@ impl ::protobuf::Message for MintlayerAccountCommandTxInput {
     fn compute_size(&self) -> u64 {
         let mut my_size = 0;
         for value in &self.address_n {
-            my_size += ::protobuf::rt::uint32_size(1, *value);
+            let len = value.compute_size();
+            my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
         };
         if let Some(v) = self.address.as_ref() {
             my_size += ::protobuf::rt::string_size(2, &v);
@@ -3214,7 +3563,7 @@ impl ::protobuf::Message for MintlayerAccountCommandTxInput {
 
     fn write_to_with_cached_sizes(&self, os: &mut ::protobuf::CodedOutputStream<'_>) -> ::protobuf::Result<()> {
         for v in &self.address_n {
-            os.write_uint32(1, *v)?;
+            ::protobuf::rt::write_message_field_with_cached_size(1, v, os)?;
         };
         if let Some(v) = self.address.as_ref() {
             os.write_string(2, v)?;
@@ -4993,8 +5342,6 @@ pub struct MintlayerTransferTxOutput {
     // message fields
     // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerTransferTxOutput.address)
     pub address: ::std::option::Option<::std::string::String>,
-    // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerTransferTxOutput.address_n)
-    pub address_n: ::std::vec::Vec<u32>,
     // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerTransferTxOutput.value)
     pub value: ::protobuf::MessageField<MintlayerOutputValue>,
     // special fields
@@ -5050,17 +5397,12 @@ impl MintlayerTransferTxOutput {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(3);
+        let mut fields = ::std::vec::Vec::with_capacity(2);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "address",
             |m: &MintlayerTransferTxOutput| { &m.address },
             |m: &mut MintlayerTransferTxOutput| { &mut m.address },
-        ));
-        fields.push(::protobuf::reflect::rt::v2::make_vec_simpler_accessor::<_, _>(
-            "address_n",
-            |m: &MintlayerTransferTxOutput| { &m.address_n },
-            |m: &mut MintlayerTransferTxOutput| { &mut m.address_n },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, MintlayerOutputValue>(
             "value",
@@ -5097,12 +5439,6 @@ impl ::protobuf::Message for MintlayerTransferTxOutput {
                     self.address = ::std::option::Option::Some(is.read_string()?);
                 },
                 18 => {
-                    is.read_repeated_packed_uint32_into(&mut self.address_n)?;
-                },
-                16 => {
-                    self.address_n.push(is.read_uint32()?);
-                },
-                26 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.value)?;
                 },
                 tag => {
@@ -5120,9 +5456,6 @@ impl ::protobuf::Message for MintlayerTransferTxOutput {
         if let Some(v) = self.address.as_ref() {
             my_size += ::protobuf::rt::string_size(1, &v);
         }
-        for value in &self.address_n {
-            my_size += ::protobuf::rt::uint32_size(2, *value);
-        };
         if let Some(v) = self.value.as_ref() {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
@@ -5136,11 +5469,8 @@ impl ::protobuf::Message for MintlayerTransferTxOutput {
         if let Some(v) = self.address.as_ref() {
             os.write_string(1, v)?;
         }
-        for v in &self.address_n {
-            os.write_uint32(2, *v)?;
-        };
         if let Some(v) = self.value.as_ref() {
-            ::protobuf::rt::write_message_field_with_cached_size(3, v, os)?;
+            ::protobuf::rt::write_message_field_with_cached_size(2, v, os)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -5160,7 +5490,6 @@ impl ::protobuf::Message for MintlayerTransferTxOutput {
 
     fn clear(&mut self) {
         self.address = ::std::option::Option::None;
-        self.address_n.clear();
         self.value.clear();
         self.special_fields.clear();
     }
@@ -5168,7 +5497,6 @@ impl ::protobuf::Message for MintlayerTransferTxOutput {
     fn default_instance() -> &'static MintlayerTransferTxOutput {
         static instance: MintlayerTransferTxOutput = MintlayerTransferTxOutput {
             address: ::std::option::Option::None,
-            address_n: ::std::vec::Vec::new(),
             value: ::protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
         };
@@ -5451,8 +5779,6 @@ pub struct MintlayerLockThenTransferTxOutput {
     // message fields
     // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerLockThenTransferTxOutput.address)
     pub address: ::std::option::Option<::std::string::String>,
-    // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerLockThenTransferTxOutput.address_n)
-    pub address_n: ::std::vec::Vec<u32>,
     // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerLockThenTransferTxOutput.value)
     pub value: ::protobuf::MessageField<MintlayerOutputValue>,
     // @@protoc_insertion_point(field:hw.trezor.messages.mintlayer.MintlayerLockThenTransferTxOutput.lock)
@@ -5510,17 +5836,12 @@ impl MintlayerLockThenTransferTxOutput {
     }
 
     fn generated_message_descriptor_data() -> ::protobuf::reflect::GeneratedMessageDescriptorData {
-        let mut fields = ::std::vec::Vec::with_capacity(4);
+        let mut fields = ::std::vec::Vec::with_capacity(3);
         let mut oneofs = ::std::vec::Vec::with_capacity(0);
         fields.push(::protobuf::reflect::rt::v2::make_option_accessor::<_, _>(
             "address",
             |m: &MintlayerLockThenTransferTxOutput| { &m.address },
             |m: &mut MintlayerLockThenTransferTxOutput| { &mut m.address },
-        ));
-        fields.push(::protobuf::reflect::rt::v2::make_vec_simpler_accessor::<_, _>(
-            "address_n",
-            |m: &MintlayerLockThenTransferTxOutput| { &m.address_n },
-            |m: &mut MintlayerLockThenTransferTxOutput| { &mut m.address_n },
         ));
         fields.push(::protobuf::reflect::rt::v2::make_message_field_accessor::<_, MintlayerOutputValue>(
             "value",
@@ -5570,15 +5891,9 @@ impl ::protobuf::Message for MintlayerLockThenTransferTxOutput {
                     self.address = ::std::option::Option::Some(is.read_string()?);
                 },
                 18 => {
-                    is.read_repeated_packed_uint32_into(&mut self.address_n)?;
-                },
-                16 => {
-                    self.address_n.push(is.read_uint32()?);
-                },
-                26 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.value)?;
                 },
-                34 => {
+                26 => {
                     ::protobuf::rt::read_singular_message_into_field(is, &mut self.lock)?;
                 },
                 tag => {
@@ -5596,9 +5911,6 @@ impl ::protobuf::Message for MintlayerLockThenTransferTxOutput {
         if let Some(v) = self.address.as_ref() {
             my_size += ::protobuf::rt::string_size(1, &v);
         }
-        for value in &self.address_n {
-            my_size += ::protobuf::rt::uint32_size(2, *value);
-        };
         if let Some(v) = self.value.as_ref() {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint64_size(len) + len;
@@ -5616,14 +5928,11 @@ impl ::protobuf::Message for MintlayerLockThenTransferTxOutput {
         if let Some(v) = self.address.as_ref() {
             os.write_string(1, v)?;
         }
-        for v in &self.address_n {
-            os.write_uint32(2, *v)?;
-        };
         if let Some(v) = self.value.as_ref() {
-            ::protobuf::rt::write_message_field_with_cached_size(3, v, os)?;
+            ::protobuf::rt::write_message_field_with_cached_size(2, v, os)?;
         }
         if let Some(v) = self.lock.as_ref() {
-            ::protobuf::rt::write_message_field_with_cached_size(4, v, os)?;
+            ::protobuf::rt::write_message_field_with_cached_size(3, v, os)?;
         }
         os.write_unknown_fields(self.special_fields.unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -5643,7 +5952,6 @@ impl ::protobuf::Message for MintlayerLockThenTransferTxOutput {
 
     fn clear(&mut self) {
         self.address = ::std::option::Option::None;
-        self.address_n.clear();
         self.value.clear();
         self.lock.clear();
         self.special_fields.clear();
@@ -5652,7 +5960,6 @@ impl ::protobuf::Message for MintlayerLockThenTransferTxOutput {
     fn default_instance() -> &'static MintlayerLockThenTransferTxOutput {
         static instance: MintlayerLockThenTransferTxOutput = MintlayerLockThenTransferTxOutput {
             address: ::std::option::Option::None,
-            address_n: ::std::vec::Vec::new(),
             value: ::protobuf::MessageField::none(),
             lock: ::protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
@@ -9579,14 +9886,14 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     etPublicKey\x12\x1b\n\taddress_n\x18\x01\x20\x03(\rR\x08addressN\x12!\n\
     \x0cshow_display\x18\x02\x20\x01(\x08R\x0bshowDisplay\"R\n\x12MintlayerP\
     ublicKey\x12\x1d\n\npublic_key\x18\x01\x20\x02(\x0cR\tpublicKey\x12\x1d\
-    \n\nchain_code\x18\x02\x20\x02(\x0cR\tchainCode\"i\n\x12MintlayerVerifyS\
-    ig\x12\x1b\n\taddress_n\x18\x01\x20\x03(\rR\x08addressN\x12\x1c\n\tsigna\
-    ture\x18\x02\x20\x02(\x0cR\tsignature\x12\x18\n\x07message\x18\x03\x20\
+    \n\nchain_code\x18\x02\x20\x02(\x0cR\tchainCode\"g\n\x14MintlayerSignMes\
+    sage\x12\x1b\n\taddress_n\x18\x01\x20\x03(\rR\x08addressN\x12\x18\n\x07a\
+    ddress\x18\x02\x20\x02(\tR\x07address\x12\x18\n\x07message\x18\x03\x20\
     \x02(\x0cR\x07message\"\xb6\x01\n\x0fMintlayerSignTx\x12#\n\routputs_cou\
     nt\x18\x01\x20\x02(\rR\x0coutputsCount\x12!\n\x0cinputs_count\x18\x02\
     \x20\x02(\rR\x0binputsCount\x12\x1b\n\x07version\x18\x03\x20\x01(\r:\x01\
     1R\x07version\x12\"\n\tserialize\x18\x04\x20\x01(\x08:\x04trueR\tseriali\
-    ze\x12\x1a\n\x08chunkify\x18\x05\x20\x01(\x08R\x08chunkify\"\x9a\x05\n\
+    ze\x12\x1a\n\x08chunkify\x18\x05\x20\x01(\x08R\x08chunkify\"\xb8\x06\n\
     \x12MintlayerTxRequest\x12h\n\x0crequest_type\x18\x01\x20\x01(\x0e2E.hw.\
     trezor.messages.mintlayer.MintlayerTxRequest.MintlayerRequestTypeR\x0bre\
     questType\x12h\n\x07details\x18\x02\x20\x01(\x0b2N.hw.trezor.messages.mi\
@@ -9595,38 +9902,45 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     layerTxRequest.MintlayerTxRequestSerializedTypeR\nserialized\x1a]\n\x1dM\
     intlayerTxRequestDetailsType\x12#\n\rrequest_index\x18\x01\x20\x01(\rR\
     \x0crequestIndex\x12\x17\n\x07tx_hash\x18\x02\x20\x01(\x0cR\x06txHash\
-    \x1a\x8e\x01\n\x20MintlayerTxRequestSerializedType\x12'\n\x0fsignature_i\
-    ndex\x18\x01\x20\x01(\rR\x0esignatureIndex\x12\x1c\n\tsignature\x18\x02\
-    \x20\x01(\x0cR\tsignature\x12#\n\rserialized_tx\x18\x03\x20\x01(\x0cR\
-    \x0cserializedTx\"M\n\x14MintlayerRequestType\x12\x0b\n\x07TXINPUT\x10\0\
-    \x12\x0c\n\x08TXOUTPUT\x10\x01\x12\n\n\x06TXMETA\x10\x02\x12\x0e\n\nTXFI\
-    NISHED\x10\x03\"\x92\x02\n\x10MintlayerTxInput\x12F\n\x04utxo\x18\x01\
-    \x20\x01(\x0b22.hw.trezor.messages.mintlayer.MintlayerUtxoTxInputR\x04ut\
-    xo\x12O\n\x07account\x18\x02\x20\x01(\x0b25.hw.trezor.messages.mintlayer\
-    .MintlayerAccountTxInputR\x07account\x12e\n\x0faccount_command\x18\x03\
-    \x20\x01(\x0b2<.hw.trezor.messages.mintlayer.MintlayerAccountCommandTxIn\
-    putR\x0eaccountCommand\"\xc0\x02\n\x14MintlayerUtxoTxInput\x12\x1b\n\tad\
-    dress_n\x18\x01\x20\x03(\rR\x08addressN\x12\x18\n\x07address\x18\x02\x20\
-    \x02(\tR\x07address\x12\x1b\n\tprev_hash\x18\x03\x20\x02(\x0cR\x08prevHa\
-    sh\x12\x1d\n\nprev_index\x18\x04\x20\x02(\rR\tprevIndex\x12C\n\x04type\
-    \x18\x05\x20\x02(\x0e2/.hw.trezor.messages.mintlayer.MintlayerUtxoTypeR\
-    \x04type\x12&\n\x08sequence\x18\x06\x20\x01(\r:\n4294967295R\x08sequence\
-    \x12H\n\x05value\x18\x07\x20\x02(\x0b22.hw.trezor.messages.mintlayer.Min\
-    tlayerOutputValueR\x05value\"\xfd\x01\n\x17MintlayerAccountTxInput\x12\
-    \x1b\n\taddress_n\x18\x01\x20\x03(\rR\x08addressN\x12\x18\n\x07address\
-    \x18\x02\x20\x02(\tR\x07address\x12&\n\x08sequence\x18\x03\x20\x01(\r:\n\
-    4294967295R\x08sequence\x12H\n\x05value\x18\x04\x20\x02(\x0b22.hw.trezor\
-    .messages.mintlayer.MintlayerOutputValueR\x05value\x12\x14\n\x05nonce\
-    \x18\x05\x20\x02(\x04R\x05nonce\x12#\n\rdelegation_id\x18\x06\x20\x02(\
-    \x0cR\x0cdelegationId\"\xb4\x05\n\x1eMintlayerAccountCommandTxInput\x12\
-    \x1b\n\taddress_n\x18\x01\x20\x03(\rR\x08addressN\x12\x18\n\x07address\
-    \x18\x02\x20\x02(\tR\x07address\x12&\n\x08sequence\x18\x03\x20\x01(\r:\n\
-    4294967295R\x08sequence\x12\x14\n\x05nonce\x18\x04\x20\x02(\x04R\x05nonc\
-    e\x12E\n\x04mint\x18\x05\x20\x01(\x0b21.hw.trezor.messages.mintlayer.Min\
-    tlayerMintTokensR\x04mint\x12K\n\x06unmint\x18\x06\x20\x01(\x0b23.hw.tre\
-    zor.messages.mintlayer.MintlayerUnmintTokensR\x06unmint\x12b\n\x11lock_t\
-    oken_supply\x18\x07\x20\x01(\x0b26.hw.trezor.messages.mintlayer.Mintlaye\
-    rLockTokenSupplyR\x0flockTokenSupply\x12U\n\x0cfreeze_token\x18\x08\x20\
+    \x1aU\n\x12MintlayerSignature\x12\x1c\n\tsignature\x18\x01\x20\x02(\x0cR\
+    \tsignature\x12!\n\x0cmultisig_idx\x18\x02\x20\x01(\rR\x0bmultisigIdx\
+    \x1a\xd5\x01\n\x20MintlayerTxRequestSerializedType\x12'\n\x0fsignature_i\
+    ndex\x18\x01\x20\x01(\rR\x0esignatureIndex\x12c\n\nsignatures\x18\x02\
+    \x20\x03(\x0b2C.hw.trezor.messages.mintlayer.MintlayerTxRequest.Mintlaye\
+    rSignatureR\nsignatures\x12#\n\rserialized_tx\x18\x03\x20\x01(\x0cR\x0cs\
+    erializedTx\"M\n\x14MintlayerRequestType\x12\x0b\n\x07TXINPUT\x10\0\x12\
+    \x0c\n\x08TXOUTPUT\x10\x01\x12\n\n\x06TXMETA\x10\x02\x12\x0e\n\nTXFINISH\
+    ED\x10\x03\"\x92\x02\n\x10MintlayerTxInput\x12F\n\x04utxo\x18\x01\x20\
+    \x01(\x0b22.hw.trezor.messages.mintlayer.MintlayerUtxoTxInputR\x04utxo\
+    \x12O\n\x07account\x18\x02\x20\x01(\x0b25.hw.trezor.messages.mintlayer.M\
+    intlayerAccountTxInputR\x07account\x12e\n\x0faccount_command\x18\x03\x20\
+    \x01(\x0b2<.hw.trezor.messages.mintlayer.MintlayerAccountCommandTxInputR\
+    \x0eaccountCommand\"V\n\x14MintlayerAddressPath\x12\x1b\n\taddress_n\x18\
+    \x01\x20\x03(\rR\x08addressN\x12!\n\x0cmultisig_idx\x18\x02\x20\x01(\rR\
+    \x0bmultisigIdx\"\xf4\x02\n\x14MintlayerUtxoTxInput\x12O\n\taddress_n\
+    \x18\x01\x20\x03(\x0b22.hw.trezor.messages.mintlayer.MintlayerAddressPat\
+    hR\x08addressN\x12\x18\n\x07address\x18\x02\x20\x02(\tR\x07address\x12\
+    \x1b\n\tprev_hash\x18\x03\x20\x02(\x0cR\x08prevHash\x12\x1d\n\nprev_inde\
+    x\x18\x04\x20\x02(\rR\tprevIndex\x12C\n\x04type\x18\x05\x20\x02(\x0e2/.h\
+    w.trezor.messages.mintlayer.MintlayerUtxoTypeR\x04type\x12&\n\x08sequenc\
+    e\x18\x06\x20\x01(\r:\n4294967295R\x08sequence\x12H\n\x05value\x18\x07\
+    \x20\x02(\x0b22.hw.trezor.messages.mintlayer.MintlayerOutputValueR\x05va\
+    lue\"\xb1\x02\n\x17MintlayerAccountTxInput\x12O\n\taddress_n\x18\x01\x20\
+    \x03(\x0b22.hw.trezor.messages.mintlayer.MintlayerAddressPathR\x08addres\
+    sN\x12\x18\n\x07address\x18\x02\x20\x02(\tR\x07address\x12&\n\x08sequenc\
+    e\x18\x03\x20\x01(\r:\n4294967295R\x08sequence\x12H\n\x05value\x18\x04\
+    \x20\x02(\x0b22.hw.trezor.messages.mintlayer.MintlayerOutputValueR\x05va\
+    lue\x12\x14\n\x05nonce\x18\x05\x20\x02(\x04R\x05nonce\x12#\n\rdelegation\
+    _id\x18\x06\x20\x02(\x0cR\x0cdelegationId\"\xe8\x05\n\x1eMintlayerAccoun\
+    tCommandTxInput\x12O\n\taddress_n\x18\x01\x20\x03(\x0b22.hw.trezor.messa\
+    ges.mintlayer.MintlayerAddressPathR\x08addressN\x12\x18\n\x07address\x18\
+    \x02\x20\x02(\tR\x07address\x12&\n\x08sequence\x18\x03\x20\x01(\r:\n4294\
+    967295R\x08sequence\x12\x14\n\x05nonce\x18\x04\x20\x02(\x04R\x05nonce\
+    \x12E\n\x04mint\x18\x05\x20\x01(\x0b21.hw.trezor.messages.mintlayer.Mint\
+    layerMintTokensR\x04mint\x12K\n\x06unmint\x18\x06\x20\x01(\x0b23.hw.trez\
+    or.messages.mintlayer.MintlayerUnmintTokensR\x06unmint\x12b\n\x11lock_to\
+    ken_supply\x18\x07\x20\x01(\x0b26.hw.trezor.messages.mintlayer.Mintlayer\
+    LockTokenSupplyR\x0flockTokenSupply\x12U\n\x0cfreeze_token\x18\x08\x20\
     \x01(\x0b22.hw.trezor.messages.mintlayer.MintlayerFreezeTokenR\x0bfreeze\
     Token\x12[\n\x0eunfreeze_token\x18\t\x20\x01(\x0b24.hw.trezor.messages.m\
     intlayer.MintlayerUnfreezeTokenR\runfreezeToken\x12q\n\x16change_token_a\
@@ -9661,73 +9975,71 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     \x12]\n\x0cdata_deposit\x18\n\x20\x01(\x0b2:.hw.trezor.messages.mintlaye\
     r.MintlayerDataDepositTxOutputR\x0bdataDeposit\"I\n\x14MintlayerOutputVa\
     lue\x12\x16\n\x06amount\x18\x01\x20\x02(\x0cR\x06amount\x12\x19\n\x08tok\
-    en_id\x18\x02\x20\x01(\x0cR\x07tokenId\"\x9c\x01\n\x19MintlayerTransferT\
-    xOutput\x12\x18\n\x07address\x18\x01\x20\x01(\tR\x07address\x12\x1b\n\ta\
-    ddress_n\x18\x02\x20\x03(\rR\x08addressN\x12H\n\x05value\x18\x03\x20\x02\
-    (\x0b22.hw.trezor.messages.mintlayer.MintlayerOutputValueR\x05value\"\
-    \xa4\x01\n\x17MintlayerOutputTimeLock\x12!\n\x0cuntil_height\x18\x01\x20\
-    \x01(\x04R\x0buntilHeight\x12\x1d\n\nuntil_time\x18\x02\x20\x01(\x04R\tu\
-    ntilTime\x12&\n\x0ffor_block_count\x18\x03\x20\x01(\x04R\rforBlockCount\
-    \x12\x1f\n\x0bfor_seconds\x18\x04\x20\x01(\x04R\nforSeconds\"\xef\x01\n!\
-    MintlayerLockThenTransferTxOutput\x12\x18\n\x07address\x18\x01\x20\x01(\
-    \tR\x07address\x12\x1b\n\taddress_n\x18\x02\x20\x03(\rR\x08addressN\x12H\
-    \n\x05value\x18\x03\x20\x02(\x0b22.hw.trezor.messages.mintlayer.Mintlaye\
-    rOutputValueR\x05value\x12I\n\x04lock\x18\x04\x20\x02(\x0b25.hw.trezor.m\
-    essages.mintlayer.MintlayerOutputTimeLockR\x04lock\"a\n\x15MintlayerBurn\
-    TxOutput\x12H\n\x05value\x18\x01\x20\x02(\x0b22.hw.trezor.messages.mintl\
-    ayer.MintlayerOutputValueR\x05value\"\x9d\x02\n\x20MintlayerCreateStakeP\
-    oolTxOutput\x12\x17\n\x07pool_id\x18\x01\x20\x02(\x0cR\x06poolId\x12\x16\
-    \n\x06pledge\x18\x02\x20\x02(\x0cR\x06pledge\x12\x16\n\x06staker\x18\x03\
-    \x20\x02(\tR\x06staker\x12$\n\x0evrf_public_key\x18\x04\x20\x02(\tR\x0cv\
-    rfPublicKey\x12)\n\x10decommission_key\x18\x05\x20\x02(\tR\x0fdecommissi\
-    onKey\x129\n\x19margin_ratio_per_thousand\x18\x06\x20\x02(\rR\x16marginR\
-    atioPerThousand\x12$\n\x0ecost_per_block\x18\x07\x20\x02(\x0cR\x0ccostPe\
-    rBlock\"c\n&MintlayerProduceBlockFromStakeTxOutput\x12\x20\n\x0bdestinat\
-    ion\x18\x01\x20\x02(\tR\x0bdestination\x12\x17\n\x07pool_id\x18\x02\x20\
-    \x02(\x0cR\x06poolId\"`\n#MintlayerCreateDelegationIdTxOutput\x12\x20\n\
-    \x0bdestination\x18\x01\x20\x02(\tR\x0bdestination\x12\x17\n\x07pool_id\
-    \x18\x02\x20\x02(\x0cR\x06poolId\"_\n\x20MintlayerDelegateStakingTxOutpu\
-    t\x12\x16\n\x06amount\x18\x01\x20\x02(\x0cR\x06amount\x12#\n\rdelegation\
-    _id\x18\x02\x20\x02(\x0cR\x0cdelegationId\"\x8f\x01\n\x19MintlayerTokenT\
-    otalSupply\x12O\n\x04type\x18\x01\x20\x02(\x0e2;.hw.trezor.messages.mint\
-    layer.MintlayerTokenTotalSupplyTypeR\x04type\x12!\n\x0cfixed_amount\x18\
-    \x02\x20\x01(\x0cR\x0bfixedAmount\"\xb6\x02\n#MintlayerIssueFungibleToke\
-    nTxOutput\x12!\n\x0ctoken_ticker\x18\x01\x20\x02(\x0cR\x0btokenTicker\
-    \x12,\n\x12number_of_decimals\x18\x02\x20\x02(\rR\x10numberOfDecimals\
-    \x12!\n\x0cmetadata_uri\x18\x03\x20\x02(\x0cR\x0bmetadataUri\x12Z\n\x0ct\
-    otal_supply\x18\x04\x20\x02(\x0b27.hw.trezor.messages.mintlayer.Mintlaye\
-    rTokenTotalSupplyR\x0btotalSupply\x12\x1c\n\tauthority\x18\x05\x20\x02(\
-    \tR\tauthority\x12!\n\x0cis_freezable\x18\x06\x20\x02(\x08R\x0bisFreezab\
-    le\"\xcf\x02\n\x19MintlayerIssueNftTxOutput\x12\x19\n\x08token_id\x18\
-    \x01\x20\x02(\x0cR\x07tokenId\x12\x20\n\x0bdestination\x18\x02\x20\x02(\
-    \tR\x0bdestination\x12\x18\n\x07creator\x18\x03\x20\x01(\tR\x07creator\
-    \x12\x12\n\x04name\x18\x04\x20\x02(\x0cR\x04name\x12\x20\n\x0bdescriptio\
-    n\x18\x05\x20\x02(\x0cR\x0bdescription\x12\x16\n\x06ticker\x18\x06\x20\
-    \x02(\x0cR\x06ticker\x12\x19\n\x08icon_uri\x18\x07\x20\x01(\x0cR\x07icon\
-    Uri\x126\n\x17additional_metadata_uri\x18\x08\x20\x01(\x0cR\x15additiona\
-    lMetadataUri\x12\x1b\n\tmedia_uri\x18\t\x20\x01(\x0cR\x08mediaUri\x12\
-    \x1d\n\nmedia_hash\x18\n\x20\x02(\x0cR\tmediaHash\"2\n\x1cMintlayerDataD\
-    epositTxOutput\x12\x12\n\x04data\x18\x01\x20\x02(\x0cR\x04data\"s\n\x0fM\
-    intlayerPrevTx\x12\x18\n\x07version\x18\x01\x20\x02(\rR\x07version\x12!\
-    \n\x0cinputs_count\x18\x06\x20\x02(\rR\x0binputsCount\x12#\n\routputs_co\
-    unt\x18\x07\x20\x02(\rR\x0coutputsCount\"b\n\x12MintlayerPrevInput\x12\
-    \x1b\n\tprev_hash\x18\x02\x20\x02(\x0cR\x08prevHash\x12\x1d\n\nprev_inde\
-    x\x18\x03\x20\x02(\rR\tprevIndexJ\x04\x08\x01\x10\x02J\x04\x08\x04\x10\
-    \x05J\x04\x08\x05\x10\x06\"g\n\x1bMintlayerPrevTransferOutput\x12H\n\x05\
-    value\x18\x01\x20\x02(\x0b22.hw.trezor.messages.mintlayer.MintlayerOutpu\
-    tValueR\x05value\"\xdf\x01\n\x17MintlayerTxAckUtxoInput\x12`\n\x02tx\x18\
-    \x01\x20\x02(\x0b2P.hw.trezor.messages.mintlayer.MintlayerTxAckUtxoInput\
-    .MintlayerTxAckInputWrapperR\x02tx\x1ab\n\x1aMintlayerTxAckInputWrapper\
-    \x12D\n\x05input\x18\x02\x20\x02(\x0b2..hw.trezor.messages.mintlayer.Min\
-    tlayerTxInputR\x05input\"\xde\x01\n\x14MintlayerTxAckOutput\x12^\n\x02tx\
-    \x18\x01\x20\x02(\x0b2N.hw.trezor.messages.mintlayer.MintlayerTxAckOutpu\
-    t.MintlayerTxAckOutputWrapperR\x02tx\x1af\n\x1bMintlayerTxAckOutputWrapp\
-    er\x12G\n\x06output\x18\x05\x20\x02(\x0b2/.hw.trezor.messages.mintlayer.\
-    MintlayerTxOutputR\x06output*/\n\x11MintlayerUtxoType\x12\x0f\n\x0bTRANS\
-    ACTION\x10\0\x12\t\n\x05BLOCK\x10\x01*G\n\x1dMintlayerTokenTotalSupplyTy\
-    pe\x12\t\n\x05FIXED\x10\0\x12\x0c\n\x08LOCKABLE\x10\x01\x12\r\n\tUNLIMIT\
-    ED\x10\x02B=\n#com.satoshilabs.trezor.lib.protobufB\x16TrezorMessageMint\
-    layer\
+    en_id\x18\x02\x20\x01(\x0cR\x07tokenId\"\x7f\n\x19MintlayerTransferTxOut\
+    put\x12\x18\n\x07address\x18\x01\x20\x01(\tR\x07address\x12H\n\x05value\
+    \x18\x02\x20\x02(\x0b22.hw.trezor.messages.mintlayer.MintlayerOutputValu\
+    eR\x05value\"\xa4\x01\n\x17MintlayerOutputTimeLock\x12!\n\x0cuntil_heigh\
+    t\x18\x01\x20\x01(\x04R\x0buntilHeight\x12\x1d\n\nuntil_time\x18\x02\x20\
+    \x01(\x04R\tuntilTime\x12&\n\x0ffor_block_count\x18\x03\x20\x01(\x04R\rf\
+    orBlockCount\x12\x1f\n\x0bfor_seconds\x18\x04\x20\x01(\x04R\nforSeconds\
+    \"\xd2\x01\n!MintlayerLockThenTransferTxOutput\x12\x18\n\x07address\x18\
+    \x01\x20\x01(\tR\x07address\x12H\n\x05value\x18\x02\x20\x02(\x0b22.hw.tr\
+    ezor.messages.mintlayer.MintlayerOutputValueR\x05value\x12I\n\x04lock\
+    \x18\x03\x20\x02(\x0b25.hw.trezor.messages.mintlayer.MintlayerOutputTime\
+    LockR\x04lock\"a\n\x15MintlayerBurnTxOutput\x12H\n\x05value\x18\x01\x20\
+    \x02(\x0b22.hw.trezor.messages.mintlayer.MintlayerOutputValueR\x05value\
+    \"\x9d\x02\n\x20MintlayerCreateStakePoolTxOutput\x12\x17\n\x07pool_id\
+    \x18\x01\x20\x02(\x0cR\x06poolId\x12\x16\n\x06pledge\x18\x02\x20\x02(\
+    \x0cR\x06pledge\x12\x16\n\x06staker\x18\x03\x20\x02(\tR\x06staker\x12$\n\
+    \x0evrf_public_key\x18\x04\x20\x02(\tR\x0cvrfPublicKey\x12)\n\x10decommi\
+    ssion_key\x18\x05\x20\x02(\tR\x0fdecommissionKey\x129\n\x19margin_ratio_\
+    per_thousand\x18\x06\x20\x02(\rR\x16marginRatioPerThousand\x12$\n\x0ecos\
+    t_per_block\x18\x07\x20\x02(\x0cR\x0ccostPerBlock\"c\n&MintlayerProduceB\
+    lockFromStakeTxOutput\x12\x20\n\x0bdestination\x18\x01\x20\x02(\tR\x0bde\
+    stination\x12\x17\n\x07pool_id\x18\x02\x20\x02(\x0cR\x06poolId\"`\n#Mint\
+    layerCreateDelegationIdTxOutput\x12\x20\n\x0bdestination\x18\x01\x20\x02\
+    (\tR\x0bdestination\x12\x17\n\x07pool_id\x18\x02\x20\x02(\x0cR\x06poolId\
+    \"_\n\x20MintlayerDelegateStakingTxOutput\x12\x16\n\x06amount\x18\x01\
+    \x20\x02(\x0cR\x06amount\x12#\n\rdelegation_id\x18\x02\x20\x02(\x0cR\x0c\
+    delegationId\"\x8f\x01\n\x19MintlayerTokenTotalSupply\x12O\n\x04type\x18\
+    \x01\x20\x02(\x0e2;.hw.trezor.messages.mintlayer.MintlayerTokenTotalSupp\
+    lyTypeR\x04type\x12!\n\x0cfixed_amount\x18\x02\x20\x01(\x0cR\x0bfixedAmo\
+    unt\"\xb6\x02\n#MintlayerIssueFungibleTokenTxOutput\x12!\n\x0ctoken_tick\
+    er\x18\x01\x20\x02(\x0cR\x0btokenTicker\x12,\n\x12number_of_decimals\x18\
+    \x02\x20\x02(\rR\x10numberOfDecimals\x12!\n\x0cmetadata_uri\x18\x03\x20\
+    \x02(\x0cR\x0bmetadataUri\x12Z\n\x0ctotal_supply\x18\x04\x20\x02(\x0b27.\
+    hw.trezor.messages.mintlayer.MintlayerTokenTotalSupplyR\x0btotalSupply\
+    \x12\x1c\n\tauthority\x18\x05\x20\x02(\tR\tauthority\x12!\n\x0cis_freeza\
+    ble\x18\x06\x20\x02(\x08R\x0bisFreezable\"\xcf\x02\n\x19MintlayerIssueNf\
+    tTxOutput\x12\x19\n\x08token_id\x18\x01\x20\x02(\x0cR\x07tokenId\x12\x20\
+    \n\x0bdestination\x18\x02\x20\x02(\tR\x0bdestination\x12\x18\n\x07creato\
+    r\x18\x03\x20\x01(\tR\x07creator\x12\x12\n\x04name\x18\x04\x20\x02(\x0cR\
+    \x04name\x12\x20\n\x0bdescription\x18\x05\x20\x02(\x0cR\x0bdescription\
+    \x12\x16\n\x06ticker\x18\x06\x20\x02(\x0cR\x06ticker\x12\x19\n\x08icon_u\
+    ri\x18\x07\x20\x01(\x0cR\x07iconUri\x126\n\x17additional_metadata_uri\
+    \x18\x08\x20\x01(\x0cR\x15additionalMetadataUri\x12\x1b\n\tmedia_uri\x18\
+    \t\x20\x01(\x0cR\x08mediaUri\x12\x1d\n\nmedia_hash\x18\n\x20\x02(\x0cR\t\
+    mediaHash\"2\n\x1cMintlayerDataDepositTxOutput\x12\x12\n\x04data\x18\x01\
+    \x20\x02(\x0cR\x04data\"s\n\x0fMintlayerPrevTx\x12\x18\n\x07version\x18\
+    \x01\x20\x02(\rR\x07version\x12!\n\x0cinputs_count\x18\x06\x20\x02(\rR\
+    \x0binputsCount\x12#\n\routputs_count\x18\x07\x20\x02(\rR\x0coutputsCoun\
+    t\"b\n\x12MintlayerPrevInput\x12\x1b\n\tprev_hash\x18\x02\x20\x02(\x0cR\
+    \x08prevHash\x12\x1d\n\nprev_index\x18\x03\x20\x02(\rR\tprevIndexJ\x04\
+    \x08\x01\x10\x02J\x04\x08\x04\x10\x05J\x04\x08\x05\x10\x06\"g\n\x1bMintl\
+    ayerPrevTransferOutput\x12H\n\x05value\x18\x01\x20\x02(\x0b22.hw.trezor.\
+    messages.mintlayer.MintlayerOutputValueR\x05value\"\xdf\x01\n\x17Mintlay\
+    erTxAckUtxoInput\x12`\n\x02tx\x18\x01\x20\x02(\x0b2P.hw.trezor.messages.\
+    mintlayer.MintlayerTxAckUtxoInput.MintlayerTxAckInputWrapperR\x02tx\x1ab\
+    \n\x1aMintlayerTxAckInputWrapper\x12D\n\x05input\x18\x02\x20\x02(\x0b2..\
+    hw.trezor.messages.mintlayer.MintlayerTxInputR\x05input\"\xde\x01\n\x14M\
+    intlayerTxAckOutput\x12^\n\x02tx\x18\x01\x20\x02(\x0b2N.hw.trezor.messag\
+    es.mintlayer.MintlayerTxAckOutput.MintlayerTxAckOutputWrapperR\x02tx\x1a\
+    f\n\x1bMintlayerTxAckOutputWrapper\x12G\n\x06output\x18\x05\x20\x02(\x0b\
+    2/.hw.trezor.messages.mintlayer.MintlayerTxOutputR\x06output*/\n\x11Mint\
+    layerUtxoType\x12\x0f\n\x0bTRANSACTION\x10\0\x12\t\n\x05BLOCK\x10\x01*G\
+    \n\x1dMintlayerTokenTotalSupplyType\x12\t\n\x05FIXED\x10\0\x12\x0c\n\x08\
+    LOCKABLE\x10\x01\x12\r\n\tUNLIMITED\x10\x02B=\n#com.satoshilabs.trezor.l\
+    ib.protobufB\x16TrezorMessageMintlayer\
 ";
 
 /// `FileDescriptorProto` object which was a source for this generated file
@@ -9745,15 +10057,16 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
     file_descriptor.get(|| {
         let generated_file_descriptor = generated_file_descriptor_lazy.get(|| {
             let mut deps = ::std::vec::Vec::with_capacity(0);
-            let mut messages = ::std::vec::Vec::with_capacity(40);
+            let mut messages = ::std::vec::Vec::with_capacity(42);
             messages.push(MintlayerGetAddress::generated_message_descriptor_data());
             messages.push(MintlayerAddress::generated_message_descriptor_data());
             messages.push(MintlayerGetPublicKey::generated_message_descriptor_data());
             messages.push(MintlayerPublicKey::generated_message_descriptor_data());
-            messages.push(MintlayerVerifySig::generated_message_descriptor_data());
+            messages.push(MintlayerSignMessage::generated_message_descriptor_data());
             messages.push(MintlayerSignTx::generated_message_descriptor_data());
             messages.push(MintlayerTxRequest::generated_message_descriptor_data());
             messages.push(MintlayerTxInput::generated_message_descriptor_data());
+            messages.push(MintlayerAddressPath::generated_message_descriptor_data());
             messages.push(MintlayerUtxoTxInput::generated_message_descriptor_data());
             messages.push(MintlayerAccountTxInput::generated_message_descriptor_data());
             messages.push(MintlayerAccountCommandTxInput::generated_message_descriptor_data());
@@ -9783,6 +10096,7 @@ pub fn file_descriptor() -> &'static ::protobuf::reflect::FileDescriptor {
             messages.push(MintlayerTxAckUtxoInput::generated_message_descriptor_data());
             messages.push(MintlayerTxAckOutput::generated_message_descriptor_data());
             messages.push(mintlayer_tx_request::MintlayerTxRequestDetailsType::generated_message_descriptor_data());
+            messages.push(mintlayer_tx_request::MintlayerSignature::generated_message_descriptor_data());
             messages.push(mintlayer_tx_request::MintlayerTxRequestSerializedType::generated_message_descriptor_data());
             messages.push(mintlayer_tx_ack_utxo_input::MintlayerTxAckInputWrapper::generated_message_descriptor_data());
             messages.push(mintlayer_tx_ack_output::MintlayerTxAckOutputWrapper::generated_message_descriptor_data());
