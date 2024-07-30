@@ -153,6 +153,25 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
                     menu_item("Exit", MenuMessage::Exit),
                 ]
             }
+            WalletMode::Trezor => {
+                vec![
+                    menu_item(
+                        "Create new Trezor wallet",
+                        MenuMessage::CreateNewWallet {
+                            wallet_type: WalletType::Trezor,
+                        },
+                    ),
+                    menu_item(
+                        "Open Trezor wallet",
+                        MenuMessage::OpenWallet {
+                            wallet_type: WalletType::Trezor,
+                        },
+                    ),
+                    // TODO: enable setting when needed
+                    // menu_item("Settings", MenuMessage::NoOp),
+                    menu_item("Exit", MenuMessage::Exit),
+                ]
+            }
         })
         .width(260),
     );
