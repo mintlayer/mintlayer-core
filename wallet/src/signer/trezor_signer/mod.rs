@@ -77,11 +77,13 @@ use utils::ensure;
 use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
-use wallet_types::{signature_status::SignatureStatus, AccountId};
+use wallet_types::{
+    account_info::DEFAULT_ACCOUNT_INDEX, signature_status::SignatureStatus, AccountId,
+};
 
 use crate::{
     key_chain::{make_account_path, AccountKeyChainImplHardware, AccountKeyChains, FoundPubKey},
-    Account, WalletResult,
+    Account, WalletError, WalletResult,
 };
 
 use super::{Signer, SignerError, SignerProvider, SignerResult};
@@ -993,15 +995,82 @@ impl std::fmt::Debug for TrezorSignerProvider {
 
 impl TrezorSignerProvider {
     pub fn new() -> Result<Self, TrezorError> {
-        let mut devices = find_devices(false);
-        ensure!(!devices.is_empty(), TrezorError::NoDeviceFound);
-
-        let client = devices.pop().unwrap().connect().unwrap();
+        let client = find_trezor_device()?;
 
         Ok(Self {
             client: Arc::new(Mutex::new(client)),
         })
     }
+
+    pub fn load_from_database(
+        chain_config: Arc<ChainConfig>,
+        db_tx: &impl WalletStorageReadLocked,
+    ) -> WalletResult<Self> {
+        let client = find_trezor_device().map_err(SignerError::TrezorError)?;
+
+        let provider = Self {
+            client: Arc::new(Mutex::new(client)),
+        };
+
+        check_public_keys(db_tx, &provider, chain_config)?;
+
+        Ok(provider)
+    }
+
+    fn fetch_extended_pub_key(
+        &self,
+        chain_config: &Arc<ChainConfig>,
+        account_index: U31,
+    ) -> Result<ExtendedPublicKey, WalletError> {
+        let derivation_path = make_account_path(chain_config, account_index);
+        let account_path =
+            derivation_path.as_slice().iter().map(|c| c.into_encoded_index()).collect();
+        let xpub = self
+            .client
+            .lock()
+            .expect("poisoned lock")
+            .mintlayer_get_public_key(account_path)
+            .map_err(|e| SignerError::TrezorError(TrezorError::DeviceError(e)))?;
+        let chain_code = ChainCode::from(xpub.chain_code.0);
+        let account_pubkey = Secp256k1ExtendedPublicKey::from_hardware_wallet(
+            derivation_path,
+            chain_code,
+            Secp256k1PublicKey::from_bytes(&xpub.public_key.serialize()).expect(""),
+        );
+        let account_pubkey = ExtendedPublicKey::from_hardware_public_key(account_pubkey);
+        Ok(account_pubkey)
+    }
+}
+
+/// Check that the public keys in the DB are the same as the ones with the connected hardware
+/// wallet
+fn check_public_keys(
+    db_tx: &impl WalletStorageReadLocked,
+    provider: &TrezorSignerProvider,
+    chain_config: Arc<ChainConfig>,
+) -> Result<(), WalletError> {
+    let first_acc = db_tx
+        .get_accounts_info()?
+        .iter()
+        .find_map(|(acc_id, info)| {
+            (info.account_index() == DEFAULT_ACCOUNT_INDEX).then_some(acc_id)
+        })
+        .cloned()
+        .ok_or(WalletError::WalletNotInitialized)?;
+    let expected_pk = provider.fetch_extended_pub_key(&chain_config, DEFAULT_ACCOUNT_INDEX)?;
+    let loaded_acc = provider.load_account_from_database(chain_config, db_tx, &first_acc)?;
+    ensure!(
+        loaded_acc.key_chain().account_public_key() == &expected_pk,
+        WalletError::HardwareWalletDifferentFile
+    );
+    Ok(())
+}
+
+fn find_trezor_device() -> Result<Trezor, TrezorError> {
+    let mut devices = find_devices(false);
+    let device = devices.pop().ok_or(TrezorError::NoDeviceFound)?;
+    let client = device.connect()?;
+    Ok(client)
 }
 
 impl SignerProvider for TrezorSignerProvider {
@@ -1019,24 +1088,7 @@ impl SignerProvider for TrezorSignerProvider {
         name: Option<String>,
         db_tx: &mut impl WalletStorageWriteUnlocked,
     ) -> WalletResult<Account<Self::K>> {
-        let derivation_path = make_account_path(&chain_config, account_index);
-        let account_path =
-            derivation_path.as_slice().iter().map(|c| c.into_encoded_index()).collect();
-
-        let xpub = self
-            .client
-            .lock()
-            .expect("poisoned lock")
-            .mintlayer_get_public_key(account_path)
-            .map_err(|e| SignerError::TrezorError(TrezorError::DeviceError(e)))?;
-
-        let chain_code = ChainCode::from(xpub.chain_code.0);
-        let account_pubkey = Secp256k1ExtendedPublicKey::from_hardware_wallet(
-            derivation_path,
-            chain_code,
-            Secp256k1PublicKey::from_bytes(&xpub.public_key.serialize()).expect(""),
-        );
-        let account_pubkey = ExtendedPublicKey::from_hardware_public_key(account_pubkey);
+        let account_pubkey = self.fetch_extended_pub_key(&chain_config, account_index)?;
 
         let lookahead_size = db_tx.get_lookahead_size()?;
 
