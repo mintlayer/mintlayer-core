@@ -22,7 +22,6 @@ use crate::{Account, SendRequest};
 use common::chain::config::create_regtest;
 use common::chain::output_value::OutputValue;
 use common::chain::signature::inputsig::arbitrary_message::produce_message_challenge;
-use common::chain::signature::verify_signature;
 use common::chain::timelock::OutputTimeLock;
 use common::chain::tokens::TokenId;
 use common::chain::{

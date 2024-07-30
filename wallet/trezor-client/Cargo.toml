@@ -14,7 +14,7 @@ authors = [
 ]
 license = "CC0-1.0"
 homepage = "https://github.com/trezor/trezor-firmware/tree/master/rust/trezor-client"
-repository = "https://github.com/trezor/trezor-firmware"
+# repository = "https://github.com/trezor/trezor-firmware"
 description = "Client library for interfacing with Trezor hardware wallet devices"
 keywords = ["ethereum", "bitcoin", "trezor", "wallet"]
 categories = ["api-bindings", "cryptography::cryptocurrencies"]
@@ -37,7 +37,7 @@ rust-version = "1.60"
 
 [dependencies]
 # important: keep in sync
-protobuf = "=3.3.0"
+protobuf = "=3.3"
 # protobuf-codegen = "=3.3.0"
 byteorder = "1.4"
 rusb = "0.9"
@@ -48,11 +48,11 @@ tracing = "0.1"
 
 # bitcoin
 bitcoin = { version = "0.31", optional = true }
-unicode-normalization = { version = "0.1.22", optional = true }
+unicode-normalization = { version = "0.1", optional = true }
 
 [dev-dependencies]
 tracing-subscriber = "0.3"
-serial_test = "2.0.0"
+serial_test = "2.0"
 
 [features]
 default = ["bitcoin", "ethereum", "solana", "mintlayer"]
