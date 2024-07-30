@@ -233,6 +233,10 @@ pub enum WalletError {
     StandaloneAddressNotFound(RpcAddress<Destination>),
     #[error("Signer error: {0}")]
     SignerError(#[from] SignerError),
+    #[error("Cannot change a Trezor wallet type")]
+    CannotChangeTrezorWalletType,
+    #[error("The file being loaded does not correspond to the connected hardware wallet")]
+    HardwareWalletDifferentFile,
 }
 
 /// Result type used for the wallet
@@ -603,8 +607,13 @@ where
             (WalletType::Hot, WalletType::Cold) => {
                 Self::migrate_hot_to_cold_wallet(db, chain_config, signer_provider)?
             }
+            (WalletType::Cold | WalletType::Hot, WalletType::Trezor)
+            | (WalletType::Trezor, WalletType::Hot | WalletType::Cold) => {
+                return Err(WalletError::CannotChangeTrezorWalletType)
+            }
             (WalletType::Cold, WalletType::Cold) => {}
             (WalletType::Hot, WalletType::Hot) => {}
+            (WalletType::Trezor, WalletType::Trezor) => {}
         }
         Ok(())
     }

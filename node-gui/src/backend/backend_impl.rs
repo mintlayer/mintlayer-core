@@ -41,10 +41,8 @@ use wallet_controller::{
     ControllerConfig, NodeInterface, UtxoState, WalletHandlesClient,
 };
 use wallet_rpc_client::handles_client::WalletRpcHandlesClient;
-use wallet_rpc_lib::{EventStream, WalletRpc, WalletService};
-use wallet_types::{
-    seed_phrase::StoreSeedPhrase, wallet_type::WalletType, with_locked::WithLocked,
-};
+use wallet_rpc_lib::{types::HardwareWalletType, EventStream, WalletRpc, WalletService};
+use wallet_types::{wallet_type::WalletType, with_locked::WithLocked};
 
 use crate::main_window::ImportOrCreate;
 
@@ -262,7 +260,7 @@ impl Backend {
     async fn add_create_wallet(
         &mut self,
         file_path: PathBuf,
-        mnemonic: wallet_controller::mnemonic::Mnemonic,
+        wallet_args: WalletTypeArgs,
         wallet_type: WalletType,
         import: ImportOrCreate,
     ) -> Result<WalletInfo, BackendError> {
@@ -284,7 +282,7 @@ impl Backend {
                     .create_wallet(
                         handles_client,
                         file_path.clone(),
-                        &mnemonic,
+                        wallet_args,
                         import,
                         wallet_events,
                     )
@@ -303,7 +301,35 @@ impl Backend {
                 let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
 
                 let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) = self
-                    .create_wallet(client, file_path.clone(), &mnemonic, import, wallet_events)
+                    .create_wallet(
+                        client,
+                        file_path.clone(),
+                        wallet_args,
+                        import,
+                        wallet_events,
+                    )
+                    .await?;
+
+                let wallet_data = WalletData {
+                    controller: GuiHotColdController::Cold(wallet_rpc, command_handler),
+                    accounts: accounts_data,
+                    best_block,
+                    updated: false,
+                };
+
+                (wallet_data, accounts_info, best_block)
+            }
+            (WalletType::Trezor, _) => {
+                let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
+
+                let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) = self
+                    .create_wallet(
+                        client,
+                        file_path.clone(),
+                        wallet_args,
+                        import,
+                        wallet_events,
+                    )
                     .await?;
 
                 let wallet_data = WalletData {
@@ -340,7 +366,7 @@ impl Backend {
         &mut self,
         handles_client: N,
         file_path: PathBuf,
-        mnemonic: &wallet::wallet::Mnemonic,
+        wallet_args: WalletTypeArgs,
         import: ImportOrCreate,
         wallet_events: GuiWalletEvents,
     ) -> Result<
@@ -369,14 +395,9 @@ impl Backend {
         let node_rpc = wallet_service.node_rpc().clone();
         let chain_config = wallet_service.chain_config().clone();
         let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc.clone(), chain_config.clone());
-        let args = WalletTypeArgs::Software {
-            mnemonic: Some(mnemonic.to_string()),
-            passphrase: None,
-            store_seed_phrase: StoreSeedPhrase::Store,
-        };
 
         wallet_rpc
-            .create_wallet(file_path, args, import.skip_syncing())
+            .create_wallet(file_path, wallet_args, import.skip_syncing())
             .await
             .map_err(|err| BackendError::WalletError(err.to_string()))?;
         tokio::spawn(forward_events(
@@ -453,7 +474,9 @@ impl Backend {
                         best_block,
                         accounts_info,
                         accounts_data,
-                    ) = self.open_wallet(handles_client, file_path.clone(), wallet_events).await?;
+                    ) = self
+                        .open_wallet(handles_client, file_path.clone(), wallet_events, None)
+                        .await?;
 
                     let wallet_data = WalletData {
                         controller: GuiHotColdController::Hot(wallet_rpc, command_handler),
@@ -474,7 +497,35 @@ impl Backend {
                         best_block,
                         accounts_info,
                         accounts_data,
-                    ) = self.open_wallet(client, file_path.clone(), wallet_events).await?;
+                    ) = self.open_wallet(client, file_path.clone(), wallet_events, None).await?;
+
+                    let wallet_data = WalletData {
+                        controller: GuiHotColdController::Cold(wallet_rpc, command_handler),
+                        accounts: accounts_data,
+                        best_block,
+                        updated: false,
+                    };
+
+                    (wallet_data, accounts_info, best_block, encryption_state)
+                }
+                (WalletType::Trezor, _) => {
+                    let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
+
+                    let (
+                        wallet_rpc,
+                        command_handler,
+                        encryption_state,
+                        best_block,
+                        accounts_info,
+                        accounts_data,
+                    ) = self
+                        .open_wallet(
+                            client,
+                            file_path.clone(),
+                            wallet_events,
+                            Some(HardwareWalletType::Trezor),
+                        )
+                        .await?;
 
                     let wallet_data = WalletData {
                         controller: GuiHotColdController::Cold(wallet_rpc, command_handler),
@@ -509,6 +560,7 @@ impl Backend {
         handles_client: N,
         file_path: PathBuf,
         wallet_events: GuiWalletEvents,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<
         (
             WalletRpc<N>,
@@ -537,7 +589,7 @@ impl Backend {
         let chain_config = wallet_service.chain_config().clone();
         let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc.clone(), chain_config.clone());
         wallet_rpc
-            .open_wallet(file_path, None, false)
+            .open_wallet(file_path, None, false, hardware_wallet)
             .await
             .map_err(|err| BackendError::WalletError(err.to_string()))?;
         tokio::spawn(forward_events(
@@ -966,13 +1018,13 @@ impl Backend {
                 Self::send_event(&self.event_tx, BackendEvent::OpenWallet(open_res));
             }
             BackendRequest::RecoverWallet {
-                mnemonic,
+                wallet_args,
                 file_path,
                 import,
                 wallet_type,
             } => {
                 let import_res =
-                    self.add_create_wallet(file_path, mnemonic, wallet_type, import).await;
+                    self.add_create_wallet(file_path, wallet_args, wallet_type, import).await;
                 Self::send_event(&self.event_tx, BackendEvent::ImportWallet(import_res));
             }
             BackendRequest::CloseWallet(wallet_id) => {

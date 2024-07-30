@@ -100,12 +100,14 @@ impl WalletInterface for ClientWalletRpc {
         path: PathBuf,
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<(), Self::Error> {
         ColdWalletRpcClient::open_wallet(
             &self.http_client,
             path.to_string_lossy().to_string(),
             password,
             force_migrate_wallet_type,
+            hardware_wallet,
         )
         .await
         .map_err(WalletRpcError::ResponseError)
