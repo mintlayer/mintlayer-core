@@ -117,6 +117,7 @@ pub fn view_left_panel(
 
     // `next_height` is used to prevent flickering when a new block is found
     let show_scan_progress = match wallet_info.wallet_type {
+        WalletType::Trezor => false,
         WalletType::Cold => false,
         WalletType::Hot => {
             wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height
@@ -175,7 +176,7 @@ pub fn view_left_panel(
         .spacing(10)
         .padding(10),
         match wallet_info.wallet_type {
-            WalletType::Cold => {
+            WalletType::Trezor | WalletType::Cold => {
                 column![
                     panel_button(
                         "Addresses",

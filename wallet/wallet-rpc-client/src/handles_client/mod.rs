@@ -170,6 +170,7 @@ where
         path: PathBuf,
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<(), Self::Error> {
         self.wallet_rpc
             .open_wallet(
@@ -177,6 +178,7 @@ where
                 password,
                 force_migrate_wallet_type.unwrap_or(false),
                 ScanBlockchain::ScanAndWait,
+                hardware_wallet,
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)

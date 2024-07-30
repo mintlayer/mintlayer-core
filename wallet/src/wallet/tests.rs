@@ -273,12 +273,7 @@ fn verify_wallet_balance<B, P>(
         |_| Ok(()),
         WalletType::Hot,
         false,
-        |db_tx| {
-            Ok(SoftwareSignerProvider::load_from_database(
-                chain_config.clone(),
-                db_tx,
-            )?)
-        },
+        |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
     .unwrap();
 
@@ -375,12 +370,7 @@ fn wallet_creation_in_memory() {
         |_| Ok(()),
         WalletType::Hot,
         false,
-        |db_tx| {
-            Ok(SoftwareSignerProvider::load_from_database(
-                chain_config2,
-                db_tx,
-            )?)
-        },
+        |db_tx| SoftwareSignerProvider::load_from_database(chain_config2, db_tx),
     ) {
         Ok(_) => panic!("Wallet loading should fail"),
         Err(err) => assert_eq!(err, WalletError::WalletNotInitialized),
@@ -398,12 +388,7 @@ fn wallet_creation_in_memory() {
         |_| Ok(()),
         WalletType::Hot,
         false,
-        |db_tx| {
-            Ok(SoftwareSignerProvider::load_from_database(
-                chain_config.clone(),
-                db_tx,
-            )?)
-        },
+        |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
     .unwrap();
 }
@@ -494,12 +479,7 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
         |_| Ok(()),
         WalletType::Hot,
         false,
-        |db_tx| {
-            Ok(SoftwareSignerProvider::load_from_database(
-                chain_config.clone(),
-                db_tx,
-            )?)
-        },
+        |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
     .unwrap();
 
@@ -978,12 +958,7 @@ fn test_wallet_accounts<B, P>(
         |_| Ok(()),
         WalletType::Hot,
         false,
-        |db_tx| {
-            Ok(SoftwareSignerProvider::load_from_database(
-                chain_config.clone(),
-                db_tx,
-            )?)
-        },
+        |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
     .unwrap();
     let accounts = wallet.account_indexes().cloned().collect::<Vec<_>>();

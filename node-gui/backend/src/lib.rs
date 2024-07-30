@@ -73,6 +73,7 @@ impl ImportOrCreate {
 pub enum WalletMode {
     Cold,
     Hot,
+    Trezor,
 }
 
 #[derive(Debug)]
@@ -196,7 +197,7 @@ pub async fn node_initialize(
             });
             (chain_config, chain_info)
         }
-        WalletMode::Cold => spawn_cold_backend(
+        WalletMode::Trezor | WalletMode::Cold => spawn_cold_backend(
             opts,
             event_tx,
             request_rx,

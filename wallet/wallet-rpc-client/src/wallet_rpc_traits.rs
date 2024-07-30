@@ -80,6 +80,7 @@ pub trait WalletInterface {
         path: PathBuf,
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<(), Self::Error>;
 
     async fn close_wallet(&self) -> Result<(), Self::Error>;

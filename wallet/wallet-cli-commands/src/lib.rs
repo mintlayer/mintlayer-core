@@ -78,6 +78,10 @@ pub enum WalletManagementCommand {
         /// Force change the wallet type from hot to cold or from cold to hot
         #[arg(long)]
         force_change_wallet_type: bool,
+
+        /// Open a wallet file related to a connected hardware wallet.
+        #[arg(long)]
+        hardware_wallet: Option<CLIHardwareWalletType>,
     },
 
     #[clap(name = "wallet-close")]

@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod confirm_broadcast;
+pub mod create_hw_wallet;
 pub mod esc_handler;
 pub mod new_wallet_account;
 pub mod opaque;

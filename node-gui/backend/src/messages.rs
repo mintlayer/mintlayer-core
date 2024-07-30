@@ -33,7 +33,7 @@ use p2p::P2pEvent;
 use serialization::hex_encoded::hex_encoded_serialization;
 use wallet::account::transaction_list::TransactionList;
 use wallet_cli_commands::ConsoleCommand;
-use wallet_controller::types::Balances;
+use wallet_controller::types::{Balances, WalletTypeArgs};
 use wallet_rpc_lib::types::PoolInfo;
 use wallet_types::wallet_type::WalletType;
 
@@ -205,7 +205,7 @@ pub enum BackendRequest {
     // This will remove the old file if it already exists.
     // The frontend should check if this is what the user really wants.
     RecoverWallet {
-        mnemonic: wallet_controller::mnemonic::Mnemonic,
+        wallet_args: WalletTypeArgs,
         file_path: PathBuf,
         import: ImportOrCreate,
         wallet_type: WalletType,

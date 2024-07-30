@@ -42,6 +42,8 @@ use node_gui_backend::{
 const COLD_WALLET_TOOLTIP_TEXT: &str =
     "Start the wallet in Cold mode without connecting to the network or any nodes. The Cold mode is made to run the wallet on an air-gapped machine without internet connection for storage of keys of high-value. For example, pool decommission keys.";
 const HOT_WALLET_TOOLTIP_TEXT: &str = "Start the wallet in Hot mode and connect to the network.";
+const TREZOR_WALLET_TOOLTIP_TEXT: &str =
+    "Start the wallet in Trezor mode and connect to a Trezor hardware wallet.";
 
 const MAIN_NETWORK_TOOLTIP: &str = "The 'Mainnet' is the main network that has coins with value.";
 const TEST_NETWORK_TOOLTIP: &str = "The 'Testnet' is the network with coins that have no value, but is used for testing various applications before deploying them on Mainnet.";
@@ -428,6 +430,17 @@ fn view(state: &GuiState) -> Element<Message> {
                     )
                     .gap(10)
                     .style(iced::widget::container::bordered_box),
+                ],
+                row![
+                    iced::widget::button(text("Trezor")).on_press(WalletMode::Trezor),
+                    tooltip(
+                        Text::new(iced_aw::Bootstrap::Question.to_string())
+                            .font(iced_aw::BOOTSTRAP_FONT),
+                        TREZOR_WALLET_TOOLTIP_TEXT,
+                        tooltip::Position::Bottom
+                    )
+                    .gap(10)
+                    .style(iced::theme::Container::Box)
                 ],
             ]
             .align_x(iced::Alignment::Center)

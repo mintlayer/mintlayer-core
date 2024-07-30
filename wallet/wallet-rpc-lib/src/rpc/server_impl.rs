@@ -138,6 +138,7 @@ where
         path: String,
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
+        open_as_hw_wallet: Option<HardwareWalletType>,
     ) -> rpc::RpcResult<()> {
         rpc::handle_result(
             self.open_wallet(
@@ -145,6 +146,7 @@ where
                 password,
                 force_migrate_wallet_type.unwrap_or(false),
                 ScanBlockchain::ScanNoWait,
+                open_as_hw_wallet,
             )
             .await,
         )
