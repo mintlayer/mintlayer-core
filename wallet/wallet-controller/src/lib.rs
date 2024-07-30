@@ -380,8 +380,9 @@ where
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         password: Option<String>,
-        wallet_type: WalletType,
+        current_wallet_type: WalletType,
         force_change_wallet_type: bool,
+        open_as_wallet_type: WalletType,
     ) -> Result<WalletType2<DefaultBackend>, ControllerError<T>> {
         utils::ensure!(
             file_path.as_ref().exists(),
@@ -394,23 +395,34 @@ where
         let db = wallet::wallet::open_or_create_wallet_file(&file_path)
             .map_err(ControllerError::WalletError)?;
 
-        let wallet = wallet::Wallet::load_wallet(
-            Arc::clone(&chain_config),
-            db,
-            password,
-            |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
-            wallet_type,
-            force_change_wallet_type,
-            |db_tx| {
-                Ok(SoftwareSignerProvider::load_from_database(
-                    chain_config.clone(),
-                    db_tx,
-                )?)
-            },
-        )
-        .map_err(ControllerError::WalletError)?;
-
-        Ok(WalletType2::Software(wallet))
+        match open_as_wallet_type {
+            WalletType::Cold | WalletType::Hot => {
+                let wallet = wallet::Wallet::load_wallet(
+                    Arc::clone(&chain_config),
+                    db,
+                    password,
+                    |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
+                    current_wallet_type,
+                    force_change_wallet_type,
+                    |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
+                )
+                .map_err(ControllerError::WalletError)?;
+                Ok(WalletType2::Software(wallet))
+            }
+            WalletType::Trezor => {
+                let wallet = wallet::Wallet::load_wallet(
+                    Arc::clone(&chain_config),
+                    db,
+                    password,
+                    |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
+                    current_wallet_type,
+                    force_change_wallet_type,
+                    |db_tx| TrezorSignerProvider::load_from_database(chain_config.clone(), db_tx),
+                )
+                .map_err(ControllerError::WalletError)?;
+                Ok(WalletType2::Trezor(wallet))
+            }
+        }
     }
 
     pub fn seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<T>> {
