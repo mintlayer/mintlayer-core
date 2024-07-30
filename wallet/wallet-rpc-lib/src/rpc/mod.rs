@@ -77,15 +77,15 @@ use wallet_controller::{
 };
 use wallet_types::{
     account_info::StandaloneAddressDetails, signature_status::SignatureStatus, wallet_tx::TxData,
-    with_locked::WithLocked,
+    wallet_type::WalletType, with_locked::WithLocked,
 };
 
 use crate::{WalletHandle, WalletRpcConfig};
 
 pub use self::types::RpcError;
 use self::types::{
-    AddressInfo, AddressWithUsageInfo, DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo,
-    NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
+    AddressInfo, AddressWithUsageInfo, DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo,
+    NewAccountInfo, NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
     RpcStandaloneAddress, RpcStandaloneAddressDetails, RpcStandaloneAddresses,
     RpcStandalonePrivateKeyAddress, RpcTokenId, RpcUtxoOutpoint, StakingStatus,
     StandaloneAddressWithDetails, VrfPublicKeyInfo,
@@ -144,13 +144,23 @@ where
         wallet_path: PathBuf,
         password: Option<String>,
         force_migrate_wallet_type: bool,
+        open_as_hw_wallet: Option<HardwareWalletType>,
     ) -> WRpcResult<(), N> {
+        let open_as_wallet_type =
+            open_as_hw_wallet.map_or(self.node.is_cold_wallet_node(), |hw| match hw {
+                HardwareWalletType::Trezor => WalletType::Trezor,
+            });
         Ok(self
             .wallet
             .manage_async(move |wallet_manager| {
                 Box::pin(async move {
                     wallet_manager
-                        .open_wallet(wallet_path, password, force_migrate_wallet_type)
+                        .open_wallet(
+                            wallet_path,
+                            password,
+                            force_migrate_wallet_type,
+                            open_as_wallet_type,
+                        )
                         .await
                 })
             })
