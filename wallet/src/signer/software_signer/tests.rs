@@ -181,7 +181,7 @@ fn sign_transaction(#[case] seed: Seed) {
     for i in 0..sig_tx.inputs().len() {
         let destination =
             crate::get_tx_output_destination(utxos_ref[i].unwrap(), &|_| None).unwrap();
-        common::chain::signature::verify_signature(
+        verify_signature(
             &config,
             &destination,
             &sig_tx,

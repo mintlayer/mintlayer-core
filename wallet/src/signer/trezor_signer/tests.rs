@@ -245,8 +245,9 @@ fn sign_transaction(#[case] seed: Seed) {
             &chain_config,
             destination,
             &sig_tx,
+            &sig_tx.signatures()[i],
             &utxos_ref,
-            i + inputs.len(),
+            i,
         )
         .unwrap();
     }
