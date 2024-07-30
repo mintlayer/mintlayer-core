@@ -115,9 +115,10 @@ trait ColdWalletRpc {
 
     /// Set the lookahead size for key generation.
     ///
-    /// Lookahead size (or called gap) is the number of addresses to generate and the blockchain for incoming transactions to them
-    /// after the last address that was seen to contain a transaction on the blockchain.
-    /// Do not attempt to reduce the size of this value unless you're sure there are no incoming transactions in these addresses.
+    /// The lookahead size, also known as the gap limit, determines the number of addresses
+    /// to generate and monitor on the blockchain for incoming transactions, following the last
+    /// known address with a transaction.
+    /// Only reduce this value if you are certain there are no incoming transactions on these addresses.
     #[method(name = "wallet_set_lookahead_size")]
     async fn set_lookahead_size(
         &self,
