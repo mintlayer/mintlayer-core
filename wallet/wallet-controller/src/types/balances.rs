@@ -15,17 +15,17 @@
 
 use std::collections::BTreeMap;
 
-use common::{chain::tokens::TokenId, primitives::amount::RpcAmountOut};
+use common::{address::RpcAddress, chain::tokens::TokenId, primitives::amount::RpcAmountOut};
 
 /// Balances of coins and tokens
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 pub struct Balances {
     coins: RpcAmountOut,
-    tokens: BTreeMap<TokenId, RpcAmountOut>,
+    tokens: BTreeMap<RpcAddress<TokenId>, RpcAmountOut>,
 }
 
 impl Balances {
-    pub fn new(coins: RpcAmountOut, tokens: BTreeMap<TokenId, RpcAmountOut>) -> Self {
+    pub fn new(coins: RpcAmountOut, tokens: BTreeMap<RpcAddress<TokenId>, RpcAmountOut>) -> Self {
         Self { coins, tokens }
     }
 
@@ -33,15 +33,13 @@ impl Balances {
         &self.coins
     }
 
-    pub fn tokens(&self) -> &BTreeMap<TokenId, RpcAmountOut> {
+    pub fn tokens(&self) -> &BTreeMap<RpcAddress<TokenId>, RpcAmountOut> {
         &self.tokens
     }
 
-    pub fn token(&self, token_id: &TokenId) -> &RpcAmountOut {
-        self.tokens.get(token_id).unwrap_or(&RpcAmountOut::ZERO)
-    }
-
-    pub fn into_coins_and_tokens(self) -> (RpcAmountOut, BTreeMap<TokenId, RpcAmountOut>) {
+    pub fn into_coins_and_tokens(
+        self,
+    ) -> (RpcAmountOut, BTreeMap<RpcAddress<TokenId>, RpcAmountOut>) {
         let Self { coins, tokens } = self;
         (coins, tokens)
     }

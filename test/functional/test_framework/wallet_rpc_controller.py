@@ -20,12 +20,11 @@ import os
 import asyncio
 import http.client
 import json
-import re
 from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 import base64
 
-from typing import Optional, List, Tuple, Union
+from typing import Optional, List, Union
 
 from test_framework.util import rpc_port
 
@@ -38,11 +37,21 @@ class UtxoOutpoint:
     id: str
     index: int
 
-    def __str__(self):
-        return f'tx({self.id},{self.index})'
+    def to_json(self):
+        return { "source_id": { "type": "Transaction", "content": { "tx_id": self.id } }, "index": self.index }
+
+@dataclass
+class TransferTxOutput:
+    atoms: int
+    pub_key_hex: str
+    token_id: Optional[str]
 
     def to_json(self):
-        return { "id": {"Transaction": self.id}, "index": self.index }
+        if self.token_id:
+            return {'Transfer': [ { 'TokenV1': [f"0x{self.token_id}", {"atoms": str(self.atoms)}] }, f"HexifiedDestination{{0x02{self.pub_key_hex}}}" ]}
+        else:
+            return {'Transfer': [ { 'Coin': {"atoms": str(self.atoms)} }, f"HexifiedDestination{{0x02{self.pub_key_hex}}}" ]}
+
 
 @dataclass
 class PoolData:
@@ -221,8 +230,21 @@ class WalletRpcController:
         pub_key_bytes = bytes.fromhex(public_key)[1:]
         return pub_key_bytes
 
+    async def reveal_public_key_as_address(self, address: Optional[str] = None) -> str:
+        if address is None:
+            address = await self.new_address()
+        return self._write_command("address_reveal_public_key", [self.account, address])['result']['public_key_address']
+
+    async def reveal_public_key_as_hex(self, address: Optional[str] = None) -> str:
+        if address is None:
+            address = await self.new_address()
+        return self._write_command("address_reveal_public_key", [self.account, address])['result']['public_key_hex']
+
     async def new_address(self) -> str:
         return self._write_command(f"address_new", [self.account])['result']['address']
+
+    async def add_standalone_multisig_address(self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = None) -> str:
+        return self._write_command("standalone_add_multisig", [self.account, min_required_signatures, pub_keys, label, None])['result']
 
     async def list_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
         outputs = self._write_command("account_utxos", [self.account, utxo_types, with_locked, ''.join(utxo_states)])['result']
@@ -239,32 +261,39 @@ class WalletRpcController:
         return "The transaction was submitted successfully"
 
     async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
-        return self._write_command("token_send", [self.account, token_id, address, {'decimal': amount}, {'in_top_x_mb': 5}])['result']
+        return self._write_command("token_send", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']
 
     async def issue_new_token(self,
                               token_ticker: str,
                               number_of_decimals: int,
                               metadata_uri: str,
                               destination_address: str,
-                              token_supply: str = 'unlimited',
-                              is_freezable: str = 'freezable'):
+                              token_supply: Optional[int] = None,
+                              is_freezable: bool = True):
+        if token_supply is None:
+            token_supply = { "type": "Lockable" }
+        else:
+            token_supply = { "type": "Fixed", "content": {'decimal': str(token_supply)} }
+
         output = self._write_command('token_issue_new', [
             self.account,
-            token_ticker,
-            number_of_decimals,
-            metadata_uri,
             destination_address,
-            token_supply,
-            is_freezable,
+            {
+                'token_ticker': token_ticker,
+                'number_of_decimals': number_of_decimals,
+                'metadata_uri': metadata_uri,
+                'token_supply': token_supply,
+                'is_freezable': is_freezable,
+            },
             {'in_top_x_mb': 5}
             ])['result']
         return output
 
     async def mint_tokens(self, token_id: str, address: str, amount: int) -> str:
-        return self._write_command("token_mint", [self.account, token_id, address, {'decimal': amount}, {'in_top_x_mb': 5}])['result']
+        return self._write_command("token_mint", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']
 
     async def unmint_tokens(self, token_id: str, amount: int) -> str:
-        return self._write_command("token_mint", [self.account, token_id, {'decimal': amount}, {'in_top_x_mb': 5}])['result']
+        return self._write_command("token_unmint", [self.account, token_id, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']
 
     async def lock_token_supply(self, token_id: str) -> str:
         return self._write_command("token_lock_supply", [self.account, token_id, {'in_top_x_mb': 5}])['result']
@@ -319,8 +348,7 @@ class WalletRpcController:
         return "The transaction was submitted successfully"
 
     async def submit_transaction(self, transaction: str, do_not_store: bool = False) -> str:
-        self._write_command(f"node_submit_transaction", [transaction, do_not_store, {}])['result']
-        return "The transaction was submitted successfully"
+        return self._write_command(f"node_submit_transaction", [transaction, do_not_store, {}])
 
     async def list_pool_ids(self) -> List[PoolData]:
         pools = self._write_command("staking_list_pools", [self.account])['result']
@@ -373,7 +401,7 @@ class WalletRpcController:
     async def get_balance(self, with_locked: str = 'unlocked', utxo_states: List[str] = ['confirmed']) -> str:
         with_locked = with_locked.capitalize()
         balances = self._write_command("account_balance", [self.account, with_locked])# {' '.join(utxo_states)})
-        return f"Coins amount: {balances['result']['coins']['decimal']}"
+        return balances['result']
 
     async def list_pending_transactions(self) -> List[str]:
         output = self._write_command("transaction_list_pending", [self.account])['result']
@@ -422,10 +450,32 @@ class WalletRpcController:
             return result['error']['message']
 
     async def create_from_cold_address(self, address: str, amount: int, selected_utxo: UtxoOutpoint, change_address: Optional[str] = None) -> str:
-        #utxo = { "type": "Transaction", "content": { "id": selected_utxo.id, "index": selected_utxo.index } }
         utxo = { "source_id": { "type": "Transaction", "content": { "tx_id": selected_utxo.id } }, "index": selected_utxo.index }
         result = self._write_command("transaction_create_from_cold_input", [self.account, address, {'decimal': str(amount)}, utxo, change_address, {'in_top_x_mb': 5}])
         if 'result' in result:
             return f"Send transaction created\n\n{result['result']['hex']}"
         else:
             return result['error']['message']
+
+    async def compose_transaction(self,
+                                  outputs: List[TransferTxOutput],
+                                  selected_utxos: List[UtxoOutpoint],
+                                  htlc_secrets: Optional[List[Optional[str]]] = None,
+                                  only_transaction: bool = False) -> str:
+        utxos = [utxo.to_json() for utxo in selected_utxos]
+        outputs = [output.to_json() for output in outputs]
+        print(outputs)
+        result = self._write_command('transaction_compose', [utxos, outputs, htlc_secrets, only_transaction])
+        return result
+
+    async def create_htlc(self,
+                         amount: int,
+                         token_id: Optional[str],
+                         secret_hash: str,
+                         spend_address: str,
+                         refund_address: str,
+                         refund_lock_for_blocks: int) -> str:
+        timelock = { "type": "ForBlockCount", "content": refund_lock_for_blocks }
+        object = [self.account, {'decimal': str(amount)}, token_id, secret_hash, spend_address, refund_address, timelock, {'in_top_x_mb': 5}]
+        result = self._write_command("create_htlc", object)
+        return result['result']['tx_id']

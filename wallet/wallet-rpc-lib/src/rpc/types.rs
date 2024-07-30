@@ -484,6 +484,7 @@ impl From<&UtxoType> for RpcUtxoType {
             UtxoType::IssueNft => RpcUtxoType::IssueNft,
             UtxoType::CreateStakePool => RpcUtxoType::CreateStakePool,
             UtxoType::ProduceBlockFromStake => RpcUtxoType::ProduceBlockFromStake,
+            UtxoType::Htlc => todo!(),
         }
     }
 }

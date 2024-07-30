@@ -17,7 +17,6 @@ mod interface;
 mod server_impl;
 pub mod types;
 
-use hex::FromHex;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
@@ -1360,14 +1359,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 s.into_iter()
                     .map(|s| {
                         s.map(|s| -> Result<HtlcSecret, RpcError<N>> {
-                            ensure!(
-                                s.as_ref().len() == (common::chain::htlc::HTLC_SECRET_SIZE * 2),
-                                RpcError::InvalidHtlcSecret
-                            );
-                            let decoded_vec = Vec::from_hex(s.as_bytes())
-                                .map_err(|_| RpcError::InvalidHtlcSecret)?;
                             Ok(HtlcSecret::new(
-                                decoded_vec.try_into().map_err(|_| RpcError::InvalidHtlcSecret)?,
+                                s.into_bytes()
+                                    .try_into()
+                                    .map_err(|_| RpcError::InvalidHtlcSecret)?,
                             ))
                         })
                         .transpose()
