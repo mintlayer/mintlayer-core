@@ -203,13 +203,20 @@ where
                 wallet_path,
                 encryption_password,
                 force_change_wallet_type,
+                hardware_wallet,
             } => {
+                let hardware_wallet = hardware_wallet.and_then(|t| match t {
+                    #[cfg(feature = "trezor")]
+                    CLIHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
+                    CLIHardwareWalletType::None => None,
+                });
                 self.wallet()
                     .await?
                     .open_wallet(
                         wallet_path,
                         encryption_password,
                         Some(force_change_wallet_type),
+                        hardware_wallet,
                     )
                     .await?;
                 self.wallet.update_wallet::<N>().await;

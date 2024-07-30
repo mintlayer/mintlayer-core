@@ -439,7 +439,7 @@ impl SoftwareSignerProvider {
     pub fn load_from_database(
         chain_config: Arc<ChainConfig>,
         db_tx: &impl WalletStorageReadLocked,
-    ) -> SignerResult<Self> {
+    ) -> WalletResult<Self> {
         let master_key_chain = MasterKeyChain::new_from_existing_database(chain_config, db_tx)?;
         Ok(Self { master_key_chain })
     }

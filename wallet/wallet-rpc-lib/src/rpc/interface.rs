@@ -84,6 +84,7 @@ trait ColdWalletRpc {
         path: String,
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> rpc::RpcResult<()>;
 
     /// Close the currently open wallet file

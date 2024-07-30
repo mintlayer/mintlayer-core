@@ -65,6 +65,7 @@ impl ImportOrCreate {
 pub enum WalletMode {
     Cold,
     Hot,
+    Trezor,
 }
 
 #[derive(Debug)]
@@ -182,7 +183,7 @@ pub async fn node_initialize(
             });
             (chain_config, chain_info)
         }
-        WalletMode::Cold => {
+        WalletMode::Trezor | WalletMode::Cold => {
             let chain_config = Arc::new(match network {
                 InitNetwork::Mainnet => common::chain::config::create_mainnet(),
                 InitNetwork::Testnet => common::chain::config::create_testnet(),

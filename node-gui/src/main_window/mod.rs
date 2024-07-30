@@ -32,12 +32,14 @@ use node_gui_backend::{
 use p2p::{net::types::services::Services, types::peer_id::PeerId, P2pEvent};
 use rfd::AsyncFileDialog;
 use wallet_cli_commands::ConsoleCommand;
-use wallet_types::wallet_type::WalletType;
+use wallet_controller::types::WalletTypeArgs;
+use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType};
 
 use crate::{
     main_window::{main_menu::MenuMessage, main_widget::MainWidgetMessage},
     widgets::{
         confirm_broadcast::new_confirm_broadcast,
+        create_hw_wallet::hw_wallet_create_dialog,
         new_wallet_account::new_wallet_account,
         popup_dialog::{popup_dialog, Popup},
         wallet_mnemonic::wallet_mnemonic_dialog,
@@ -146,6 +148,12 @@ pub struct MainWindow {
 }
 
 #[derive(Debug, Clone)]
+pub enum WalletArgs {
+    Trezor,
+    Software { mnemonic: String },
+}
+
+#[derive(Debug, Clone)]
 pub enum MainWindowMessage {
     MenuMessage(main_menu::MenuMessage),
     MainWidgetMessage(main_widget::MainWidgetMessage),
@@ -158,12 +166,12 @@ pub enum MainWindowMessage {
     OpenWalletFileCanceled,
 
     ImportWalletMnemonic {
-        mnemonic: String,
+        args: WalletArgs,
         import: ImportOrCreate,
         wallet_type: WalletType,
     },
     ImportWalletFileSelected {
-        mnemonic: wallet_controller::mnemonic::Mnemonic,
+        wallet_args: WalletTypeArgs,
         file_path: PathBuf,
         import: ImportOrCreate,
         wallet_type: WalletType,
@@ -643,48 +651,58 @@ impl MainWindow {
             }
 
             MainWindowMessage::ImportWalletMnemonic {
-                mnemonic,
+                args,
                 import,
                 wallet_type,
             } => {
-                let mnemonic_res =
-                    wallet_controller::mnemonic::parse_mnemonic(self.language, &mnemonic);
-                match mnemonic_res {
-                    Ok(mnemonic) => {
-                        self.file_dialog_active = true;
-                        Command::perform(
-                            async move {
-                                let file_opt = AsyncFileDialog::new().save_file().await;
-                                if let Some(file) = file_opt {
-                                    log::info!("Save wallet file: {file:?}");
-                                    MainWindowMessage::ImportWalletFileSelected {
-                                        mnemonic,
-                                        file_path: file.path().to_owned(),
-                                        import,
-                                        wallet_type,
-                                    }
-                                } else {
-                                    MainWindowMessage::ImportWalletFileCanceled
-                                }
+                let wallet_args = match args {
+                    WalletArgs::Software { mnemonic } => {
+                        let mnemonic_res =
+                            wallet_controller::mnemonic::parse_mnemonic(self.language, &mnemonic);
+                        match mnemonic_res {
+                            Ok(mnemonic) => WalletTypeArgs::Software {
+                                mnemonic: Some(mnemonic.to_string()),
+                                passphrase: None,
+                                store_seed_phrase: StoreSeedPhrase::Store,
                             },
-                            identity,
-                        )
+                            Err(err) => {
+                                self.show_error(err.to_string());
+                                return Command::none();
+                            }
+                        }
                     }
-                    Err(err) => {
-                        self.show_error(err.to_string());
-                        Command::none()
-                    }
-                }
+                    WalletArgs::Trezor => WalletTypeArgs::Trezor,
+                };
+
+                self.file_dialog_active = true;
+                Command::perform(
+                    async move {
+                        let file_opt = AsyncFileDialog::new().save_file().await;
+                        if let Some(file) = file_opt {
+                            log::info!("Save wallet file: {file:?}");
+                            MainWindowMessage::ImportWalletFileSelected {
+                                wallet_args,
+                                file_path: file.path().to_owned(),
+                                import,
+                                wallet_type,
+                            }
+                        } else {
+                            MainWindowMessage::ImportWalletFileCanceled
+                        }
+                    },
+                    identity,
+                )
             }
             MainWindowMessage::ImportWalletFileSelected {
-                mnemonic,
+                wallet_args,
                 file_path,
                 import,
                 wallet_type,
             } => {
                 self.file_dialog_active = false;
+
                 backend_sender.send(BackendRequest::RecoverWallet {
-                    mnemonic,
+                    wallet_args,
                     file_path,
                     import,
                     wallet_type,
@@ -767,16 +785,27 @@ impl MainWindow {
                     wallet_type,
                 } => {
                     let wallet_type = *wallet_type;
-                    wallet_mnemonic_dialog(
-                        Some(generated_mnemonic.clone()),
-                        Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
-                            mnemonic,
-                            import: ImportOrCreate::Create,
-                            wallet_type,
-                        }),
-                        Box::new(|| MainWindowMessage::CloseDialog),
-                    )
-                    .into()
+                    match wallet_type {
+                        WalletType::Hot | WalletType::Cold => wallet_mnemonic_dialog(
+                            Some(generated_mnemonic.clone()),
+                            Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
+                                args: WalletArgs::Software { mnemonic },
+                                import: ImportOrCreate::Create,
+                                wallet_type,
+                            }),
+                            Box::new(|| MainWindowMessage::CloseDialog),
+                        )
+                        .into(),
+                        WalletType::Trezor => hw_wallet_create_dialog(
+                            Box::new(move || MainWindowMessage::ImportWalletMnemonic {
+                                args: WalletArgs::Trezor,
+                                import: ImportOrCreate::Create,
+                                wallet_type,
+                            }),
+                            Box::new(|| MainWindowMessage::CloseDialog),
+                        )
+                        .into(),
+                    }
                 }
 
                 ActiveDialog::WalletRecover { wallet_type } => {
@@ -784,7 +813,7 @@ impl MainWindow {
                     wallet_mnemonic_dialog(
                         None,
                         Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
-                            mnemonic,
+                            args: WalletArgs::Software { mnemonic },
                             import: ImportOrCreate::Import,
                             wallet_type,
                         }),
