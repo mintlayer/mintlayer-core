@@ -654,9 +654,10 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
-    /// Lock a given number of coins or tokens in a Hashed Timelock Contract.
-    #[method(name = "create_htlc")]
-    async fn create_htlc(
+    /// Creates a transaction that lock a given number of coins or tokens in a Hashed Timelock Contract.
+    /// Created transaction is not broadcasted by this function.
+    #[method(name = "create_htlc_transaction")]
+    async fn create_htlc_transaction(
         &self,
         account: AccountArg,
         amount: RpcAmountIn,
@@ -666,7 +667,7 @@ trait WalletRpc {
         refund_address: RpcAddress<Destination>,
         refund_timelock: OutputTimeLock,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<HexEncoded<SignedTransaction>>;
 
     /// Node version
     #[method(name = "node_version")]

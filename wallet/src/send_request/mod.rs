@@ -318,7 +318,7 @@ where
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_)
         | TxOutput::AnyoneCanTake(_) => None,
-        TxOutput::Htlc(_, _) => None, // TODO(HTLC)
+        TxOutput::Htlc(_, htlc) => Some(htlc.spend_key.clone()),
     }
 }
 

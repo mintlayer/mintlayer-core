@@ -4639,3 +4639,106 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
     assert!(ptx.all_signatures_available());
     assert!(statuses.iter().all(|s| *s == SignatureStatus::FullySigned));
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_htlc(#[case] seed: Seed) {
+    use common::chain::htlc::HtlcSecret;
+
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_regtest());
+
+    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
+
+    let coin_balance = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let _ = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
+
+    let coin_balance = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance, block1_amount);
+
+    let (_, address1) = wallet1.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pub_key1 = wallet1.find_public_key(DEFAULT_ACCOUNT_INDEX, address1.into_object()).unwrap();
+
+    let (_, address2) = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pub_key2 = wallet2.find_public_key(DEFAULT_ACCOUNT_INDEX, address2.into_object()).unwrap();
+
+    let min_required_signatures = 2;
+    let challenge = ClassicMultisigChallenge::new(
+        &chain_config,
+        NonZeroU8::new(min_required_signatures).unwrap(),
+        vec![pub_key1, pub_key2],
+    )
+    .unwrap();
+    let multisig_hash = wallet1
+        .add_standalone_multisig(DEFAULT_ACCOUNT_INDEX, challenge.clone(), None)
+        .unwrap();
+    wallet2
+        .add_standalone_multisig(DEFAULT_ACCOUNT_INDEX, challenge.clone(), None)
+        .unwrap();
+
+    let secret = HtlcSecret::new_from_rng(&mut rng);
+    let spend_key = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let htlc = HashedTimelockContract {
+        secret_hash: secret.hash(),
+        spend_key: spend_key.into_object(),
+        refund_timelock: OutputTimeLock::ForBlockCount(1),
+        refund_key: Destination::ClassicMultisig(multisig_hash),
+    };
+    let output_value = OutputValue::Coin(coin_balance);
+
+    let create_htlc_tx = wallet1
+        .create_htlc_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            output_value.clone(),
+            htlc.clone(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+    let (_, block2) = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![create_htlc_tx],
+        Amount::ZERO,
+        1,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block2]);
+
+    // Htlc is not accounted in balance
+    assert_eq!(get_coin_balance(&wallet1), Amount::ZERO);
+    assert_eq!(get_coin_balance(&wallet2), Amount::ZERO);
+
+    // Htlc is available as utxo to spend
+    let wallet1_utxos = wallet1
+        .get_utxos(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Htlc.into(),
+            UtxoState::Confirmed.into(),
+            WithLocked::Any,
+        )
+        .unwrap();
+    assert!(wallet1_utxos.is_empty());
+    let mut wallet2_utxos = wallet2
+        .get_utxos(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Htlc.into(),
+            UtxoState::Confirmed.into(),
+            WithLocked::Any,
+        )
+        .unwrap();
+    assert_eq!(wallet2_utxos.len(), 1);
+    let (_, output, _) = wallet2_utxos.pop().unwrap();
+    match output {
+        TxOutput::Htlc(actual_output_value, actual_htlc) => {
+            assert_eq!(actual_output_value, output_value);
+            assert_eq!(htlc, *actual_htlc);
+        }
+        _ => panic!("wrong TxOutput type"),
+    };
+}

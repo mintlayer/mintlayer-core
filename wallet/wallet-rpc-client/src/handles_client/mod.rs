@@ -1016,7 +1016,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
-    async fn create_htlc(
+    async fn create_htlc_transaction(
         &self,
         account_index: U31,
         amount: DecimalAmount,
@@ -1026,9 +1026,9 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         refund_address: String,
         refund_timelock: OutputTimeLock,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<HexEncoded<SignedTransaction>, Self::Error> {
         self.wallet_rpc
-            .create_htlc(
+            .create_htlc_transaction(
                 account_index,
                 amount.into(),
                 token_id.map(|id| id.into()),
@@ -1039,7 +1039,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
                 config,
             )
             .await
-            .map(NewTransaction::new)
+            .map(HexEncoded::new)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 

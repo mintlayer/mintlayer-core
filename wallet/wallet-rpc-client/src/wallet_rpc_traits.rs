@@ -456,7 +456,7 @@ pub trait WalletInterface {
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
 
-    async fn create_htlc(
+    async fn create_htlc_transaction(
         &self,
         account_index: U31,
         amount: DecimalAmount,
@@ -466,7 +466,7 @@ pub trait WalletInterface {
         refund_address: String,
         refund_timelock: OutputTimeLock,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<HexEncoded<SignedTransaction>, Self::Error>;
 
     async fn node_version(&self) -> Result<NodeVersion, Self::Error>;
 

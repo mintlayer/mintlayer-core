@@ -998,7 +998,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         )
     }
 
-    async fn create_htlc(
+    async fn create_htlc_transaction(
         &self,
         account_arg: AccountArg,
         amount: RpcAmountIn,
@@ -1008,14 +1008,14 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         refund_address: RpcAddress<Destination>,
         refund_timelock: OutputTimeLock,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<HexEncoded<SignedTransaction>> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
 
         rpc::handle_result(
-            self.create_htlc(
+            self.create_htlc_transaction(
                 account_arg.index::<N>()?,
                 amount,
                 token_id,
@@ -1026,7 +1026,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
                 config,
             )
             .await
-            .map(NewTransaction::new),
+            .map(HexEncoded::new),
         )
     }
 

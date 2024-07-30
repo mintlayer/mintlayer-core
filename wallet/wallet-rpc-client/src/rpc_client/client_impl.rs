@@ -892,7 +892,7 @@ impl WalletInterface for ClientWalletRpc {
         .map_err(WalletRpcError::ResponseError)
     }
 
-    async fn create_htlc(
+    async fn create_htlc_transaction(
         &self,
         account_index: U31,
         amount: DecimalAmount,
@@ -902,9 +902,9 @@ impl WalletInterface for ClientWalletRpc {
         refund_address: String,
         refund_timelock: OutputTimeLock,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error> {
+    ) -> Result<HexEncoded<SignedTransaction>, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
-        WalletRpcClient::create_htlc(
+        WalletRpcClient::create_htlc_transaction(
             &self.http_client,
             account_index.into(),
             amount.into(),

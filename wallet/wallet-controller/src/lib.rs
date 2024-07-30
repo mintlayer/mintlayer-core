@@ -52,7 +52,7 @@ use sync::InSync;
 use synced_controller::SyncedController;
 
 use common::{
-    address::AddressError,
+    address::{AddressError, RpcAddress},
     chain::{
         block::timestamp::BlockTimestamp,
         htlc::HtlcSecret,
@@ -957,7 +957,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         outputs: &[TxOutput],
     ) -> Result<Balances, ControllerError<T>> {
         let mut inputs = self.group_inputs(inputs)?;
-        let outputs = self.group_outpus(outputs)?;
+        let outputs = self.group_outputs(outputs)?;
 
         let mut fees = BTreeMap::new();
 
@@ -977,7 +977,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         into_balances(&self.rpc_client, &self.chain_config, fees).await
     }
 
-    fn group_outpus(
+    fn group_outputs(
         &self,
         outputs: &[TxOutput],
     ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
@@ -1154,6 +1154,7 @@ pub async fn into_balances<T: NodeInterface>(
             fetch_token_info(rpc_client, token_id).await.map(|info| {
                 let decimals = info.token_number_of_decimals();
                 let amount = RpcAmountOut::from_amount_no_padding(amount, decimals);
+                let token_id = RpcAddress::new(chain_config, token_id).expect("addressable");
                 (token_id, amount)
             })
         })

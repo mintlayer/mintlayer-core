@@ -1014,21 +1014,17 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         output_value: OutputValue,
         htlc: HashedTimelockContract,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        self.create_and_send_tx(
-            move |current_fee_rate: FeeRate,
-                  consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
-                  account_index: U31| {
-                wallet.create_htlc_tx(
-                    account_index,
-                    output_value,
-                    htlc,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
-            },
-        )
-        .await
+        let (current_fee_rate, consolidate_fee_rate) =
+            self.get_current_and_consolidation_fee_rate().await?;
+
+        let result = self.wallet.create_htlc_tx(
+            self.account_index,
+            output_value,
+            htlc,
+            current_fee_rate,
+            consolidate_fee_rate,
+        )?;
+        Ok(result)
     }
 
     /// Checks if the wallet has stake pools and marks this account for staking.

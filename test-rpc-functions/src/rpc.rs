@@ -15,6 +15,9 @@
 
 //! Block production subsystem RPC handler
 
+use std::str::FromStr;
+
+use chainstate::rpc::RpcUtxoOutpoint;
 use chainstate_types::vrf_tools::{construct_transcript, verify_vrf_and_get_vrf_output};
 use common::{
     address::{dehexify, Address},
@@ -26,14 +29,21 @@ use common::{
         },
         output_value::OutputValue,
         partially_signed_transaction::PartiallySignedTransaction,
-        signature::inputsig::InputWitness,
+        signature::inputsig::{
+            authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
+            InputWitness,
+        },
         stakelock::StakePoolData,
+        tokens::TokenId,
         Destination, OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable, H256},
 };
 use crypto::key::Signature;
-use serialization::{hex::HexDecode, hex::HexEncode, hex_encoded::HexEncoded};
+use serialization::{
+    hex::{HexDecode, HexEncode},
+    hex_encoded::HexEncoded,
+};
 
 use crate::{RpcTestFunctionsError, RpcTestFunctionsHandle};
 
@@ -128,6 +138,16 @@ trait RpcTestFunctionsRpc {
         &self,
         input: HexEncoded<PartiallySignedTransaction>,
     ) -> rpc::RpcResult<Option<HexEncoded<SignedTransaction>>>;
+
+    #[method(name = "reveal_token_id")]
+    async fn reveal_token_id(&self, token_id: String) -> rpc::RpcResult<HexEncoded<TokenId>>;
+
+    #[method(name = "extract_htlc_secret")]
+    async fn extract_htlc_secret(
+        &self,
+        signed_tx_hex: String,
+        htlc_outpoint: RpcUtxoOutpoint,
+    ) -> rpc::RpcResult<Option<String>>;
 }
 
 #[async_trait::async_trait]
@@ -392,6 +412,55 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         tx: HexEncoded<PartiallySignedTransaction>,
     ) -> rpc::RpcResult<Option<HexEncoded<SignedTransaction>>> {
         Ok(tx.take().into_signed_tx().ok().map(HexEncoded::new))
+    }
+
+    async fn reveal_token_id(&self, token_id: String) -> rpc::RpcResult<HexEncoded<TokenId>> {
+        let result = self
+            .call(move |this| {
+                this.get_chain_config().map(|chain| {
+                    Address::<TokenId>::from_string(&chain, &token_id).map(|a| a.into_object())
+                })
+            })
+            .await
+            .expect("Subsystem call ok")
+            .expect("chain config is present")
+            .map(HexEncoded::new);
+
+        rpc::handle_result(result)
+    }
+
+    async fn extract_htlc_secret(
+        &self,
+        signed_tx_hex: String,
+        htlc_outpoint: RpcUtxoOutpoint,
+    ) -> rpc::RpcResult<Option<String>> {
+        let tx = HexEncoded::<SignedTransaction>::from_str(&signed_tx_hex).expect("ok").take();
+
+        let htlc_outpoint = htlc_outpoint.into_outpoint();
+        let htlc_position = tx.transaction().inputs().iter().position(|input| match input {
+            TxInput::Utxo(outpoint) => *outpoint == htlc_outpoint,
+            TxInput::Account(_) | TxInput::AccountCommand(_, _) => false,
+        });
+
+        match htlc_position {
+            Some(i) => match tx.signatures().get(i).unwrap() {
+                InputWitness::NoSignature(_) => Ok(None),
+                InputWitness::Standard(sig) => {
+                    let htlc_spend_result =
+                        AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())
+                            .map_err(RpcTestFunctionsError::from);
+                    let htlc_spend: AuthorizedHashedTimelockContractSpend =
+                        rpc::handle_result(htlc_spend_result)?;
+                    match htlc_spend {
+                        AuthorizedHashedTimelockContractSpend::Secret(secret, _) => {
+                            Ok(Some(secret.hex_encode()))
+                        }
+                        AuthorizedHashedTimelockContractSpend::Multisig(_) => Ok(None),
+                    }
+                }
+            },
+            None => Ok(None),
+        }
     }
 }
 
