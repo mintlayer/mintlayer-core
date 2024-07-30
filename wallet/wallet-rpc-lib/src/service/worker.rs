@@ -23,6 +23,7 @@ use logging::log;
 use utils_networking::broadcaster::Broadcaster;
 use wallet_controller::types::{CreatedWallet, WalletTypeArgs};
 use wallet_controller::{ControllerError, NodeInterface};
+use wallet_types::wallet_type::WalletType;
 
 use crate::types::RpcError;
 
@@ -151,6 +152,7 @@ where
         wallet_path: PathBuf,
         password: Option<String>,
         force_migrate_wallet_type: bool,
+        open_as_wallet_type: WalletType,
     ) -> Result<(), ControllerError<N>> {
         utils::ensure!(
             self.controller.is_none(),
@@ -163,6 +165,7 @@ where
             password,
             self.node_rpc.is_cold_wallet_node(),
             force_migrate_wallet_type,
+            open_as_wallet_type,
         )?;
 
         let controller = WalletController::new(

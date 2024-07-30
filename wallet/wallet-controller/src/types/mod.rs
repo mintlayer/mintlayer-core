@@ -46,6 +46,7 @@ pub enum CreatedWallet {
     NewlyGeneratedMnemonic(Mnemonic, Option<String>),
 }
 
+#[derive(Debug, Clone)]
 pub enum WalletTypeArgs {
     Software {
         mnemonic: Option<String>,

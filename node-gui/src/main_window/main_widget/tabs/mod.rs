@@ -117,6 +117,11 @@ impl TabsWidget {
                 self.cold_wallet_tab.tab_label(),
                 self.cold_wallet_tab.view(node_state),
             ),
+            WalletMode::Trezor => tabs.push(
+                TabIndex::Summary as usize,
+                self.cold_wallet_tab.tab_label(),
+                self.cold_wallet_tab.view(node_state),
+            ),
         };
         // TODO: enable settings tab when needed
         //.push(
