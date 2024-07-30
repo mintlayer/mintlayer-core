@@ -64,7 +64,7 @@ use wallet_types::{
 
 use crate::{
     into_balances,
-    types::{Balances, GenericTxOutput},
+    types::{Balances, GenericCurrencyTransfer},
     ControllerConfig, ControllerError,
 };
 
@@ -672,7 +672,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     pub async fn make_unsigned_tx_to_send_tokens_to_addresses(
         &mut self,
         inputs: Vec<(UtxoOutPoint, TxOutput)>,
-        outputs: BTreeMap<TokenId, Vec<GenericTxOutput>>,
+        outputs: BTreeMap<TokenId, Vec<GenericCurrencyTransfer>>,
         change_addresses: BTreeMap<Currency, Address<Destination>>,
     ) -> Result<(PartiallySignedTransaction, Balances), ControllerError<T>> {
         ensure!(
@@ -700,10 +700,10 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 }
 
                 itertools::process_results(
-                    outputs_vec.into_iter().map(|output| output.into_token_output(&token_info)),
+                    outputs_vec.into_iter().map(|output| output.into_token_tx_output(&token_info)),
                     |iter| result.extend(iter),
                 )
-                .map_err(ControllerError::InvalidGenericTxOutput)?;
+                .map_err(ControllerError::InvalidTxOutput)?;
             }
 
             result

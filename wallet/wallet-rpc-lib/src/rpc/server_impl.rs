@@ -32,7 +32,7 @@ use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, GenericTxTokenOutput, SeedWithPassPhrase, WalletInfo},
+    types::{BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
 };
 use wallet_types::{
@@ -955,7 +955,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         account_arg: AccountArg,
         from_address: RpcAddress<Destination>,
         fee_change_address: Option<RpcAddress<Destination>>,
-        outputs: Vec<GenericTxTokenOutput>,
+        outputs: Vec<GenericTokenTransfer>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<SendTokensFromMultisigAddressResult> {
         let config = ControllerConfig {

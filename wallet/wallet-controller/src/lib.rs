@@ -43,8 +43,8 @@ use std::{
     time::Duration,
 };
 use types::{
-    Balances, GenericTxOutputError, InspectTransaction, SeedWithPassPhrase, SignatureStats,
-    TransactionToInspect, ValidatedSignatures, WalletInfo,
+    Balances, GenericCurrencyTransferToTxOutputConversionError, InspectTransaction,
+    SeedWithPassPhrase, SignatureStats, TransactionToInspect, ValidatedSignatures, WalletInfo,
 };
 
 use read::ReadOnlyController;
@@ -136,8 +136,8 @@ pub enum ControllerError<T: NodeInterface> {
     ExpectingNonEmptyOutputs,
     #[error("No coin UTXOs to pay fee from")]
     NoCoinUtxosToPayFeeFrom,
-    #[error("Invalid tx output: {0:?}")]
-    InvalidGenericTxOutput(GenericTxOutputError),
+    #[error("Invalid tx output: {0}")]
+    InvalidTxOutput(GenericCurrencyTransferToTxOutputConversionError),
     #[error("The specified token {0} is not a fungible token")]
     NotFungibleToken(TokenId),
 }

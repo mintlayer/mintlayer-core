@@ -16,7 +16,7 @@
 use crypto::key::hdkd::u31::U31;
 use node_comm::node_traits::NodeInterface;
 use utils::qrcode::QrCodeError;
-use wallet_controller::types::GenericTxOutputError;
+use wallet_controller::types::GenericCurrencyTransferToTxOutputConversionError;
 use wallet_rpc_client::{handles_client::WalletRpcHandlesClientError, rpc_client::WalletRpcError};
 use wallet_rpc_lib::RpcError;
 
@@ -49,5 +49,5 @@ pub enum WalletCliCommandError<N: NodeInterface> {
     #[error("The wallet has been closed between commands")]
     ExistingWalletWasClosed,
     #[error("Invalid tx output: {0}")]
-    InvalidGenericTxOutput(GenericTxOutputError),
+    InvalidTxOutput(GenericCurrencyTransferToTxOutputConversionError),
 }

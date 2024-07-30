@@ -49,90 +49,96 @@ pub struct WalletInfo {
 ///
 /// For now it only has the `Transfer` variant, but more can be added when needed.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum GenericTxOutput {
-    Transfer(DecimalAmount, Destination),
+pub struct GenericCurrencyTransfer {
+    pub amount: DecimalAmount,
+    pub destination: Destination,
 }
 
-impl GenericTxOutput {
-    pub fn into_coin_output(
+impl GenericCurrencyTransfer {
+    pub fn into_coin_tx_output(
         self,
         chain_config: &ChainConfig,
-    ) -> Result<TxOutput, GenericTxOutputError> {
-        self.into_tx_output(|amount| {
-            let decimals = chain_config.coin_decimals();
-            Ok(OutputValue::Coin(amount.to_amount(decimals).ok_or(
-                GenericTxOutputError::AmountNotConvertible(amount, decimals),
-            )?))
-        })
+    ) -> Result<TxOutput, GenericCurrencyTransferToTxOutputConversionError> {
+        let decimals = chain_config.coin_decimals();
+        let output_val = OutputValue::Coin(self.amount.to_amount(decimals).ok_or(
+            GenericCurrencyTransferToTxOutputConversionError::AmountNotConvertible(
+                self.amount,
+                decimals,
+            ),
+        )?);
+
+        Ok(TxOutput::Transfer(output_val, self.destination))
     }
 
-    pub fn into_token_output(
+    pub fn into_token_tx_output(
         self,
         token_info: &RPCTokenInfo,
-    ) -> Result<TxOutput, GenericTxOutputError> {
-        self.into_tx_output(|amount| {
-            let decimals = token_info.token_number_of_decimals();
-            Ok(OutputValue::TokenV1(
-                token_info.token_id(),
-                amount
-                    .to_amount(decimals)
-                    .ok_or(GenericTxOutputError::AmountNotConvertible(amount, decimals))?,
-            ))
-        })
-    }
+    ) -> Result<TxOutput, GenericCurrencyTransferToTxOutputConversionError> {
+        let decimals = token_info.token_number_of_decimals();
+        let output_val = OutputValue::TokenV1(
+            token_info.token_id(),
+            self.amount.to_amount(decimals).ok_or(
+                GenericCurrencyTransferToTxOutputConversionError::AmountNotConvertible(
+                    self.amount,
+                    decimals,
+                ),
+            )?,
+        );
 
-    fn into_tx_output(
-        self,
-        value_maker: impl Fn(DecimalAmount) -> Result<OutputValue, GenericTxOutputError>,
-    ) -> Result<TxOutput, GenericTxOutputError> {
-        match self {
-            GenericTxOutput::Transfer(amount, dest) => {
-                let output_val = value_maker(amount)?;
-                Ok(TxOutput::Transfer(output_val, dest))
-            }
-        }
+        Ok(TxOutput::Transfer(output_val, self.destination))
     }
 }
 
-/// GenericTxOutput intended to send a specific token.
+/// A struct that represents sending a specific token.
 ///
-/// The difference from TxOutput is that it only contains DecimalAmount and not Amount
+/// The difference from TxOutput::Transfer is that it only contains DecimalAmount and not Amount
 /// (to calculate the latter you need to know the number of decimals for the token).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct GenericTxTokenOutput {
+pub struct GenericTokenTransfer {
     pub token_id: TokenId,
-    pub output: GenericTxOutput,
+    pub amount: DecimalAmount,
+    pub destination: Destination,
 }
 
-impl GenericTxTokenOutput {
+impl GenericTokenTransfer {
+    pub fn into_currency_transfer(self) -> (TokenId, GenericCurrencyTransfer) {
+        (
+            self.token_id,
+            GenericCurrencyTransfer {
+                amount: self.amount,
+                destination: self.destination,
+            },
+        )
+    }
+
     pub fn into_tx_output(
         self,
         token_info: &RPCTokenInfo,
-    ) -> Result<TxOutput, GenericTxOutputError> {
+    ) -> Result<TxOutput, GenericCurrencyTransferToTxOutputConversionError> {
         ensure!(
             self.token_id == token_info.token_id(),
-            GenericTxOutputError::UnexpectedTokenId {
+            GenericCurrencyTransferToTxOutputConversionError::UnexpectedTokenId {
                 expected: self.token_id,
                 actual: token_info.token_id(),
             }
         );
 
-        self.output.into_token_output(token_info)
+        self.into_currency_transfer().1.into_token_tx_output(token_info)
     }
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum GenericTxOutputError {
+pub enum GenericCurrencyTransferToTxOutputConversionError {
     #[error("Decimal amount {0} can't be converted to Amount with {1} decimals")]
     AmountNotConvertible(DecimalAmount, u8),
     #[error("Unexpected token id {actual} (expecting {expected})")]
     UnexpectedTokenId { expected: TokenId, actual: TokenId },
 }
 
-impl rpc_description::HasValueHint for GenericTxOutput {
+impl rpc_description::HasValueHint for GenericCurrencyTransfer {
     const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::GENERIC_OBJECT;
 }
 
-impl rpc_description::HasValueHint for GenericTxTokenOutput {
+impl rpc_description::HasValueHint for GenericTokenTransfer {
     const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::GENERIC_OBJECT;
 }

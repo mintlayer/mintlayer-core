@@ -33,7 +33,7 @@ use serialization::{hex::HexEncode, hex_encoded::HexEncoded, json_encoded::JsonE
 use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
-    types::{CreatedBlockInfo, GenericTxTokenOutput, SeedWithPassPhrase, WalletInfo},
+    types::{CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
@@ -976,7 +976,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         account_index: U31,
         from_address: String,
         fee_change_address: Option<String>,
-        outputs: Vec<GenericTxTokenOutput>,
+        outputs: Vec<GenericTokenTransfer>,
         config: ControllerConfig,
     ) -> Result<SendTokensFromMultisigAddressResult, Self::Error> {
         self.wallet_rpc

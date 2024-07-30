@@ -34,7 +34,7 @@ use serialization::DecodeAll;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::TxInfo;
 use wallet_controller::{
-    types::{Balances, CreatedBlockInfo, GenericTxTokenOutput, SeedWithPassPhrase, WalletInfo},
+    types::{Balances, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
@@ -857,7 +857,7 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         from_address: String,
         fee_change_address: Option<String>,
-        outputs: Vec<GenericTxTokenOutput>,
+        outputs: Vec<GenericTokenTransfer>,
         config: ControllerConfig,
     ) -> Result<SendTokensFromMultisigAddressResult, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);

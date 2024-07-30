@@ -482,12 +482,8 @@ class WalletRpcController:
         outputs = [
             {
                 "token_id": output.token_id,
-                "output": {
-                    "Transfer": [
-                        output.amount,
-                        f"HexifiedDestination{{0x{self.node.test_functions_address_to_destination(output.address)}}}"
-                    ]
-                }
+                "amount": output.amount,
+                "destination": f"HexifiedDestination{{0x{self.node.test_functions_address_to_destination(output.address)}}}"
             }
             for output in outputs
         ]

@@ -34,7 +34,7 @@ use node_comm::node_traits::NodeInterface;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::{QrCode, QrCodeError};
 use wallet::version::get_version;
-use wallet_controller::types::GenericTxTokenOutput;
+use wallet_controller::types::GenericTokenTransfer;
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     Balances, ComposedTransaction, ControllerConfig, MnemonicInfo, NewTransaction, NftMetadata,
@@ -43,7 +43,7 @@ use wallet_rpc_lib::types::{
 };
 
 use crate::{
-    errors::WalletCliCommandError, helper_types::parse_generic_token_output,
+    errors::WalletCliCommandError, helper_types::parse_generic_token_transfer,
     ManageableWalletCommand, WalletManagementCommand,
 };
 
@@ -1392,9 +1392,9 @@ where
                 fee_change_address,
                 outputs,
             } => {
-                let outputs: Vec<GenericTxTokenOutput> = outputs
+                let outputs: Vec<GenericTokenTransfer> = outputs
                     .into_iter()
-                    .map(|input| parse_generic_token_output(&input, chain_config))
+                    .map(|input| parse_generic_token_transfer(&input, chain_config))
                     .collect::<Result<Vec<_>, WalletCliCommandError<N>>>()?;
 
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;

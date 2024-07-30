@@ -22,7 +22,7 @@ use common::{
     chain::{ChainConfig, OutPointSourceId, TxOutput, UtxoOutPoint},
     primitives::{DecimalAmount, Id, H256},
 };
-use wallet_controller::types::{GenericTxOutput, GenericTxTokenOutput};
+use wallet_controller::types::{GenericCurrencyTransfer, GenericTokenTransfer};
 use wallet_rpc_lib::types::{NodeInterface, PoolInfo, TokenTotalSupply};
 use wallet_types::{
     utxo_types::{UtxoState, UtxoType},
@@ -196,13 +196,13 @@ pub fn parse_utxo_outpoint<N: NodeInterface>(
     Ok(UtxoOutPoint::new(source_id, output_index))
 }
 
-/// Parses a string into `GenericTxOutput`.
+/// Parses a string into `GenericCurrencyTransfer`.
 /// The string format is expected to be `transfer(address,amount)`
 /// e.g `transfer(tmt1qy7y8ra99sgmt97lu2kn249yds23pnp7xsv62p77,10.1)`.
-pub fn parse_generic_output<N: NodeInterface>(
+pub fn parse_generic_currency_transfer<N: NodeInterface>(
     input: &str,
     chain_config: &ChainConfig,
-) -> Result<GenericTxOutput, WalletCliCommandError<N>> {
+) -> Result<GenericCurrencyTransfer, WalletCliCommandError<N>> {
     let (name, mut args) = parse_funclike_expr(input).ok_or(
         WalletCliCommandError::<N>::InvalidInput("Invalid input format".into()),
     )?;
@@ -216,7 +216,7 @@ pub fn parse_generic_output<N: NodeInterface>(
         }
     };
 
-    let dest = Address::from_string(chain_config, dest_str)
+    let destination = Address::from_string(chain_config, dest_str)
         .map_err(|err| {
             WalletCliCommandError::<N>::InvalidInput(format!("Invalid address {dest_str} {err}"))
         })?
@@ -227,7 +227,10 @@ pub fn parse_generic_output<N: NodeInterface>(
     })?;
 
     let output = match name {
-        "transfer" => GenericTxOutput::Transfer(amount, dest),
+        "transfer" => GenericCurrencyTransfer {
+            amount,
+            destination,
+        },
         _ => {
             return Err(WalletCliCommandError::<N>::InvalidInput(
                 "Invalid input: unknown type".into(),
@@ -238,12 +241,12 @@ pub fn parse_generic_output<N: NodeInterface>(
     Ok(output)
 }
 
-/// Parses a string into `GenericTxTokenOutput`.
+/// Parses a string into `GenericTokenTransfer`.
 /// The string format is expected to be `transfer(token_id,address,amount)`
-pub fn parse_generic_token_output<N: NodeInterface>(
+pub fn parse_generic_token_transfer<N: NodeInterface>(
     input: &str,
     chain_config: &ChainConfig,
-) -> Result<GenericTxTokenOutput, WalletCliCommandError<N>> {
+) -> Result<GenericTokenTransfer, WalletCliCommandError<N>> {
     let (name, mut args) = parse_funclike_expr(input).ok_or(
         WalletCliCommandError::<N>::InvalidInput("Invalid input format".into()),
     )?;
@@ -268,7 +271,7 @@ pub fn parse_generic_token_output<N: NodeInterface>(
         })?
         .into_object();
 
-    let dest = Address::from_string(chain_config, dest_str)
+    let destination = Address::from_string(chain_config, dest_str)
         .map_err(|err| {
             WalletCliCommandError::<N>::InvalidInput(format!("Invalid address {dest_str} {err}"))
         })?
@@ -279,9 +282,10 @@ pub fn parse_generic_token_output<N: NodeInterface>(
     })?;
 
     let output = match name {
-        "transfer" => GenericTxTokenOutput {
+        "transfer" => GenericTokenTransfer {
             token_id,
-            output: GenericTxOutput::Transfer(amount, dest),
+            amount,
+            destination,
         },
 
         _ => {
@@ -336,9 +340,9 @@ pub fn parse_coin_output<N: NodeInterface>(
     input: &str,
     chain_config: &ChainConfig,
 ) -> Result<TxOutput, WalletCliCommandError<N>> {
-    parse_generic_output(input, chain_config)?
-        .into_coin_output(chain_config)
-        .map_err(WalletCliCommandError::<N>::InvalidGenericTxOutput)
+    parse_generic_currency_transfer(input, chain_config)?
+        .into_coin_tx_output(chain_config)
+        .map_err(WalletCliCommandError::<N>::InvalidTxOutput)
 }
 
 /// Try to parse a total token supply from a string
@@ -550,7 +554,7 @@ mod tests {
         let chain_config = chain::config::create_unit_test_config();
 
         let parse_assert_error = |str_to_parse: &str| {
-            let err = parse_generic_token_output::<ColdWalletClient>(str_to_parse, &chain_config)
+            let err = parse_generic_token_transfer::<ColdWalletClient>(str_to_parse, &chain_config)
                 .unwrap_err();
             assert_matches!(
                 err,
@@ -565,19 +569,18 @@ mod tests {
                 rng.gen_range(0..=u128::MAX),
                 rng.gen_range(0..=u8::MAX),
             );
-            let parsed_output = parse_generic_output::<ColdWalletClient>(
+            let GenericCurrencyTransfer {
+                amount: parsed_amount,
+                destination: parsed_dest,
+            } = parse_generic_currency_transfer::<ColdWalletClient>(
                 &format!("transfer({addr},{amount})"),
                 &chain_config,
             )
             .unwrap();
 
-            match parsed_output {
-                GenericTxOutput::Transfer(parsed_amount, parsed_dest) => {
-                    assert_eq!(parsed_amount.mantissa(), amount.mantissa());
-                    assert_eq!(parsed_amount.decimals(), amount.decimals());
-                    assert_eq!(parsed_dest, *addr.as_object());
-                }
-            }
+            assert_eq!(parsed_amount.mantissa(), amount.mantissa());
+            assert_eq!(parsed_amount.decimals(), amount.decimals());
+            assert_eq!(parsed_dest, *addr.as_object());
 
             parse_assert_error(&format!("foo({addr},{amount})"));
             parse_assert_error(&format!("transfer(foo,{amount})"));
@@ -598,7 +601,7 @@ mod tests {
         let chain_config = chain::config::create_unit_test_config();
 
         let parse_assert_error = |str_to_parse: &str| {
-            let err = parse_generic_token_output::<ColdWalletClient>(str_to_parse, &chain_config)
+            let err = parse_generic_token_transfer::<ColdWalletClient>(str_to_parse, &chain_config)
                 .unwrap_err();
             assert_matches!(
                 err,
@@ -615,23 +618,21 @@ mod tests {
                 rng.gen_range(0..=u128::MAX),
                 rng.gen_range(0..=u8::MAX),
             );
-            let GenericTxTokenOutput {
+            let GenericTokenTransfer {
                 token_id: parsed_token_id,
-                output: parsed_output,
-            } = parse_generic_token_output::<ColdWalletClient>(
+                amount: parsed_amount,
+                destination: parsed_dest,
+            } = parse_generic_token_transfer::<ColdWalletClient>(
                 &format!("transfer({token_id_as_addr},{addr},{amount})"),
                 &chain_config,
             )
             .unwrap();
 
             assert_eq!(parsed_token_id, token_id);
-            match parsed_output {
-                GenericTxOutput::Transfer(parsed_amount, parsed_dest) => {
-                    assert_eq!(parsed_amount.mantissa(), amount.mantissa());
-                    assert_eq!(parsed_amount.decimals(), amount.decimals());
-                    assert_eq!(parsed_dest, *addr.as_object());
-                }
-            }
+
+            assert_eq!(parsed_amount.mantissa(), amount.mantissa());
+            assert_eq!(parsed_amount.decimals(), amount.decimals());
+            assert_eq!(parsed_dest, *addr.as_object());
 
             parse_assert_error(&format!("foo({token_id_as_addr},{addr},{amount})"));
             parse_assert_error(&format!("transfer(foo,{addr},{amount})"));

@@ -67,7 +67,7 @@ pub use interface::{
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{
-        Balances, BlockInfo, CreatedBlockInfo, GenericTxTokenOutput, InspectTransaction,
+        Balances, BlockInfo, CreatedBlockInfo, GenericTokenTransfer, InspectTransaction,
         SeedWithPassPhrase, TransactionToInspect, WalletInfo,
     },
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoState, UtxoStates,
@@ -1061,7 +1061,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         account_index: U31,
         from_rpc_address: RpcAddress<Destination>,
         fee_change_rpc_address: Option<RpcAddress<Destination>>,
-        outputs: Vec<GenericTxTokenOutput>,
+        outputs: Vec<GenericTokenTransfer>,
         config: ControllerConfig,
     ) -> WRpcResult<(PartiallySignedTransaction, Vec<SignatureStatus>, Balances), N> {
         let from_address = from_rpc_address
@@ -1080,7 +1080,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             let mut result = BTreeMap::<_, Vec<_>>::new();
 
             for output in outputs {
-                result.entry(output.token_id).or_default().push(output.output);
+                let (token_id, currency_transfer) = output.into_currency_transfer();
+                result.entry(token_id).or_default().push(currency_transfer);
             }
 
             result

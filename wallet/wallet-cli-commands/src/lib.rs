@@ -431,6 +431,7 @@ pub enum WalletCommand {
     /// The optional `fee_change_address` specifies the destination for the change for the fee payment;
     /// If it's unset, the destination will be taken from one of existing single-sig utxos.
     #[clap(name = "token-make-tx-to-send-from-multisig-address")]
+    #[clap(hide = true)]
     MakeTxToSendTokensFromMultisigAddress {
         /// The source multisig address; the change will be sent to it as well.
         from_address: String,

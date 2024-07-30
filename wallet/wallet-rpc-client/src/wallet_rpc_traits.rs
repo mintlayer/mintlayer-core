@@ -29,7 +29,7 @@ use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::TxInfo;
 use wallet_controller::{
-    types::{CreatedBlockInfo, GenericTxTokenOutput, SeedWithPassPhrase, WalletInfo},
+    types::{CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::types::{
@@ -443,7 +443,7 @@ pub trait WalletInterface {
         account_index: U31,
         from_address: String,
         fee_change_address: Option<String>,
-        outputs: Vec<GenericTxTokenOutput>,
+        outputs: Vec<GenericTokenTransfer>,
         config: ControllerConfig,
     ) -> Result<SendTokensFromMultisigAddressResult, Self::Error>;
 

@@ -29,7 +29,7 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use rpc::types::RpcHexString;
 use wallet::account::TxInfo;
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, GenericTxTokenOutput, SeedWithPassPhrase, WalletInfo},
+    types::{BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer,
 };
 use wallet_types::with_locked::WithLocked;
@@ -640,7 +640,7 @@ trait WalletRpc {
         account_arg: AccountArg,
         from_address: RpcAddress<Destination>,
         fee_change_address: Option<RpcAddress<Destination>>,
-        outputs: Vec<GenericTxTokenOutput>,
+        outputs: Vec<GenericTokenTransfer>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<SendTokensFromMultisigAddressResult>;
 
