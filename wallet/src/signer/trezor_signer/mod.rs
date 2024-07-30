@@ -444,6 +444,7 @@ impl Signer for TrezorSigner {
 fn tx_output_value(out: &TxOutput) -> OutputValue {
     match out {
         TxOutput::Transfer(value, _)
+        | TxOutput::Htlc(value, _)
         | TxOutput::LockThenTransfer(value, _, _)
         | TxOutput::Burn(value) => value.clone(),
         TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
@@ -454,6 +455,7 @@ fn tx_output_value(out: &TxOutput) -> OutputValue {
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::IssueFungibleToken(_)
+        | TxOutput::AnyoneCanTake(_)
         | TxOutput::DataDeposit(_) => OutputValue::Coin(Amount::ZERO),
     }
 }
@@ -561,6 +563,9 @@ fn to_trezor_account_command_input(
             );
 
             inp_req.change_token_authority = Some(req).into();
+        }
+        AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
+            unimplemented!("order commands")
         }
     }
     let mut inp = MintlayerTxInput::new();
@@ -968,6 +973,8 @@ fn to_trezor_output_msg(chain_config: &ChainConfig, out: &TxOutput) -> Mintlayer
             out.data_deposit = Some(out_req).into();
             out
         }
+        TxOutput::Htlc(_, _) => unimplemented!("HTLC"),
+        TxOutput::AnyoneCanTake(_) => unimplemented!("AnyoneCanTake"),
     }
 }
 
