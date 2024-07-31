@@ -65,6 +65,7 @@ impl ImportOrCreate {
 pub enum WalletMode {
     Cold,
     Hot,
+    #[cfg(feature = "trezor")]
     Trezor,
 }
 
@@ -183,35 +184,23 @@ pub async fn node_initialize(
             });
             (chain_config, chain_info)
         }
-        WalletMode::Trezor | WalletMode::Cold => {
-            let chain_config = Arc::new(match network {
-                InitNetwork::Mainnet => common::chain::config::create_mainnet(),
-                InitNetwork::Testnet => common::chain::config::create_testnet(),
-            });
-            let chain_info = ChainInfo {
-                best_block_id: chain_config.genesis_block_id(),
-                best_block_height: BlockHeight::zero(),
-                median_time: chain_config.genesis_block().timestamp(),
-                best_block_timestamp: chain_config.genesis_block().timestamp(),
-                is_initial_block_download: false,
-            };
-
-            let manager_join_handle = tokio::spawn(async move {});
-
-            let backend = backend_impl::Backend::new_cold(
-                chain_config.clone(),
-                event_tx,
-                low_priority_event_tx,
-                wallet_updated_tx,
-                manager_join_handle,
-            );
-
-            tokio::spawn(async move {
-                backend_impl::run_cold(backend, request_rx, wallet_updated_rx).await;
-            });
-
-            (chain_config, chain_info)
-        }
+        #[cfg(feature = "trezor")]
+        WalletMode::Trezor => spawn_cold_backend(
+            network,
+            event_tx,
+            request_rx,
+            low_priority_event_tx,
+            wallet_updated_tx,
+            wallet_updated_rx,
+        ),
+        WalletMode::Cold => spawn_cold_backend(
+            network,
+            event_tx,
+            request_rx,
+            low_priority_event_tx,
+            wallet_updated_tx,
+            wallet_updated_rx,
+        ),
     };
 
     let initialized_node = InitializedNode {
@@ -227,4 +216,41 @@ pub async fn node_initialize(
     };
 
     Ok(backend_controls)
+}
+
+fn spawn_cold_backend(
+    network: InitNetwork,
+    event_tx: UnboundedSender<BackendEvent>,
+    request_rx: UnboundedReceiver<BackendRequest>,
+    low_priority_event_tx: UnboundedSender<BackendEvent>,
+    wallet_updated_tx: UnboundedSender<messages::WalletId>,
+    wallet_updated_rx: UnboundedReceiver<messages::WalletId>,
+) -> (Arc<ChainConfig>, ChainInfo) {
+    let chain_config = Arc::new(match network {
+        InitNetwork::Mainnet => common::chain::config::create_mainnet(),
+        InitNetwork::Testnet => common::chain::config::create_testnet(),
+    });
+    let chain_info = ChainInfo {
+        best_block_id: chain_config.genesis_block_id(),
+        best_block_height: BlockHeight::zero(),
+        median_time: chain_config.genesis_block().timestamp(),
+        best_block_timestamp: chain_config.genesis_block().timestamp(),
+        is_initial_block_download: false,
+    };
+
+    let manager_join_handle = tokio::spawn(async move {});
+
+    let backend = backend_impl::Backend::new_cold(
+        chain_config.clone(),
+        event_tx,
+        low_priority_event_tx,
+        wallet_updated_tx,
+        manager_join_handle,
+    );
+
+    tokio::spawn(async move {
+        backend_impl::run_cold(backend, request_rx, wallet_updated_rx).await;
+    });
+
+    (chain_config, chain_info)
 }

@@ -37,6 +37,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 const COLD_WALLET_TOOLTIP_TEXT: &str =
     "Start the wallet in Cold mode without connecting to the network or any nodes. The Cold mode is made to run the wallet on an air-gapped machine without internet connection for storage of keys of high-value. For example, pool decommission keys.";
 const HOT_WALLET_TOOLTIP_TEXT: &str = "Start the wallet in Hot mode and connect to the network.";
+#[cfg(feature = "trezor")]
 const TREZOR_WALLET_TOOLTIP_TEXT: &str =
     "Start the wallet in Trezor mode and connect to a Trezor hardware wallet.";
 
@@ -350,7 +351,13 @@ impl Application for MintlayerNodeGUI {
                         .gap(10)
                         .style(iced::theme::Container::Box)
                     ],
-                    row![
+                ]
+                .align_items(iced::Alignment::Center)
+                .spacing(5);
+
+                #[cfg(feature = "trezor")]
+                let error_box = {
+                    let trezor_row = row![
                         iced::widget::button(text("Trezor")).on_press(WalletMode::Trezor),
                         tooltip(
                             Text::new(iced_aw::Bootstrap::Question.to_string())
@@ -360,10 +367,9 @@ impl Application for MintlayerNodeGUI {
                         )
                         .gap(10)
                         .style(iced::theme::Container::Box)
-                    ],
-                ]
-                .align_items(iced::Alignment::Center)
-                .spacing(5);
+                    ];
+                    error_box.push(trezor_row)
+                };
 
                 let res: Element<WalletMode> = container(error_box)
                     .width(Length::Fill)

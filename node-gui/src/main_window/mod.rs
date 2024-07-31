@@ -35,11 +35,12 @@ use wallet_cli_commands::ConsoleCommand;
 use wallet_controller::types::WalletTypeArgs;
 use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType};
 
+#[cfg(feature = "trezor")]
+use crate::widgets::create_hw_wallet::hw_wallet_create_dialog;
 use crate::{
     main_window::{main_menu::MenuMessage, main_widget::MainWidgetMessage},
     widgets::{
         confirm_broadcast::new_confirm_broadcast,
-        create_hw_wallet::hw_wallet_create_dialog,
         new_wallet_account::new_wallet_account,
         popup_dialog::{popup_dialog, Popup},
         wallet_mnemonic::wallet_mnemonic_dialog,
@@ -149,8 +150,11 @@ pub struct MainWindow {
 
 #[derive(Debug, Clone)]
 pub enum WalletArgs {
+    Software {
+        mnemonic: String,
+    },
+    #[cfg(feature = "trezor")]
     Trezor,
-    Software { mnemonic: String },
 }
 
 #[derive(Debug, Clone)]
@@ -671,6 +675,7 @@ impl MainWindow {
                             }
                         }
                     }
+                    #[cfg(feature = "trezor")]
                     WalletArgs::Trezor => WalletTypeArgs::Trezor,
                 };
 
@@ -796,6 +801,7 @@ impl MainWindow {
                             Box::new(|| MainWindowMessage::CloseDialog),
                         )
                         .into(),
+                        #[cfg(feature = "trezor")]
                         WalletType::Trezor => hw_wallet_create_dialog(
                             Box::new(move || MainWindowMessage::ImportWalletMnemonic {
                                 args: WalletArgs::Trezor,
