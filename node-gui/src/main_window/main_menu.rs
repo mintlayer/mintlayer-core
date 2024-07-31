@@ -153,6 +153,7 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
                     menu_item("Exit", MenuMessage::Exit),
                 ]
             }
+            #[cfg(feature = "trezor")]
             WalletMode::Trezor => {
                 vec![
                     menu_item(

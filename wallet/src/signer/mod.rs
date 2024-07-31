@@ -37,11 +37,12 @@ use crate::{
     Account, WalletResult,
 };
 
-use self::trezor_signer::TrezorError;
-
 pub mod software_signer;
 #[cfg(feature = "trezor")]
 pub mod trezor_signer;
+
+#[cfg(feature = "trezor")]
+use self::trezor_signer::TrezorError;
 
 /// Signer errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -66,6 +67,7 @@ pub enum SignerError {
     MultisigError(#[from] PartiallySignedMultisigStructureError),
     #[error("{0}")]
     SerializationError(#[from] serialization::Error),
+    #[cfg(feature = "trezor")]
     #[error("Trezor error: {0}")]
     TrezorError(#[from] TrezorError),
     #[error("Partially signed tx is missing input's destination")]

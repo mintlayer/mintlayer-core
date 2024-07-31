@@ -59,6 +59,4 @@ wallet-test-node = { path = "../wallet-test-node" }
 rstest.workspace = true
 
 [features]
-trezor = []
-
-default = ["trezor"]
+trezor = ["wallet-types/trezor", "wallet-rpc-lib/trezor"]
