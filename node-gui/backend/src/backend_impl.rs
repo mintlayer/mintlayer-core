@@ -319,6 +319,7 @@ impl Backend {
 
                 (wallet_data, accounts_info, best_block)
             }
+            #[cfg(feature = "trezor")]
             (WalletType::Trezor, _) => {
                 let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
 
@@ -508,6 +509,7 @@ impl Backend {
 
                     (wallet_data, accounts_info, best_block, encryption_state)
                 }
+                #[cfg(feature = "trezor")]
                 (WalletType::Trezor, _) => {
                     let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
 
