@@ -39,3 +39,6 @@ rfd = { workspace = true, features = ["xdg-portal", "tokio"] }
 thiserror.workspace = true
 tokio.workspace = true
 variant_count.workspace = true
+
+[features]
+trezor = ["wallet-controller/trezor", "wallet-types/trezor", "wallet-rpc-lib/trezor"]

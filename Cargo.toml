@@ -291,5 +291,3 @@ lto = "off"
 
 [features]
 trezor = []
-
-default = ["trezor"]

@@ -43,6 +43,4 @@ rstest.workspace = true
 tempfile.workspace = true
 
 [features]
-trezor = ["trezor-client"]
-
-default = ["trezor"]
+trezor = ["dep:trezor-client", "wallet-types/trezor"]

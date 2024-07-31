@@ -28,3 +28,6 @@ zeroize.workspace = true
 test-utils = { path = "../../test-utils" }
 
 rstest.workspace = true
+
+[features]
+trezor = []

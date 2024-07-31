@@ -77,8 +77,11 @@ use wallet_controller::{
 };
 use wallet_types::{
     account_info::StandaloneAddressDetails, signature_status::SignatureStatus, wallet_tx::TxData,
-    wallet_type::WalletType, with_locked::WithLocked,
+    with_locked::WithLocked,
 };
+
+#[cfg(feature = "trezor")]
+use wallet_types::wallet_type::WalletType;
 
 use crate::{WalletHandle, WalletRpcConfig};
 
@@ -148,6 +151,7 @@ where
     ) -> WRpcResult<(), N> {
         let open_as_wallet_type =
             open_as_hw_wallet.map_or(self.node.is_cold_wallet_node(), |hw| match hw {
+                #[cfg(feature = "trezor")]
                 HardwareWalletType::Trezor => WalletType::Trezor,
             });
         Ok(self

@@ -1109,5 +1109,6 @@ impl SignerProvider for TrezorSignerProvider {
     }
 }
 
+#[cfg(feature = "trezor-emulator")]
 #[cfg(test)]
 mod tests;
