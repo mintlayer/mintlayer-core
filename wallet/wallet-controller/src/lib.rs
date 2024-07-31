@@ -102,8 +102,7 @@ pub use wallet_types::{
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
 use wallet_types::{
-    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, wallet_type::WalletType,
-    with_locked::WithLocked, Currency,
+    signature_status::SignatureStatus, wallet_type::WalletType, with_locked::WithLocked, Currency,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -409,6 +408,7 @@ where
                 .map_err(ControllerError::WalletError)?;
                 Ok(WalletType2::Software(wallet))
             }
+            #[cfg(feature = "trezor")]
             WalletType::Trezor => {
                 let wallet = wallet::Wallet::load_wallet(
                     Arc::clone(&chain_config),

@@ -73,6 +73,7 @@ impl ImportOrCreate {
 pub enum WalletMode {
     Cold,
     Hot,
+    #[cfg(feature = "trezor")]
     Trezor,
 }
 
@@ -197,7 +198,16 @@ pub async fn node_initialize(
             });
             (chain_config, chain_info)
         }
-        WalletMode::Trezor | WalletMode::Cold => spawn_cold_backend(
+        #[cfg(feature = "trezor")]
+        WalletMode::Trezor => spawn_cold_backend(
+            opts,
+            event_tx,
+            request_rx,
+            low_priority_event_tx,
+            wallet_updated_tx,
+            wallet_updated_rx,
+        )?,
+        WalletMode::Cold => spawn_cold_backend(
             opts,
             event_tx,
             request_rx,

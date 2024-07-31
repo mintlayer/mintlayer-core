@@ -178,6 +178,7 @@ impl WalletTab {
         let selected_panel = match wallet_type {
             WalletType::Hot => SelectedPanel::Transactions,
             WalletType::Cold => SelectedPanel::Addresses,
+            #[cfg(feature = "trezor")]
             WalletType::Trezor => SelectedPanel::Addresses,
         };
 
@@ -483,6 +484,7 @@ impl Tab for WalletTab {
 
         let still_syncing = match wallet_info.wallet_type {
             WalletType::Cold => false,
+            #[cfg(feature = "trezor")]
             WalletType::Trezor => false,
             WalletType::Hot => {
                 wallet_info.best_block.1.next_height() < node_state.chain_info.best_block_height

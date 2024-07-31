@@ -134,6 +134,7 @@ pub fn unique(debug: bool) -> Result<Trezor> {
     }
 }
 
+#[cfg(feature = "trezor-emulator")]
 #[cfg(test)]
 mod tests {
     use serial_test::serial;

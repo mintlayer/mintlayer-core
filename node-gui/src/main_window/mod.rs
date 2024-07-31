@@ -38,6 +38,8 @@ use wallet_cli_commands::ConsoleCommand;
 use wallet_controller::types::WalletTypeArgs;
 use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType};
 
+#[cfg(feature = "trezor")]
+use crate::widgets::create_hw_wallet::hw_wallet_create_dialog;
 use crate::{
     main_window::{main_menu::MenuMessage, main_widget::MainWidgetMessage},
     widgets::{
@@ -154,8 +156,11 @@ pub struct MainWindow {
 
 #[derive(Debug, Clone)]
 pub enum WalletArgs {
+    Software {
+        mnemonic: String,
+    },
+    #[cfg(feature = "trezor")]
     Trezor,
-    Software { mnemonic: String },
 }
 
 #[derive(Debug, Clone)]
@@ -689,6 +694,7 @@ impl MainWindow {
                             }
                         }
                     }
+                    #[cfg(feature = "trezor")]
                     WalletArgs::Trezor => WalletTypeArgs::Trezor,
                 };
 
@@ -829,17 +835,29 @@ impl MainWindow {
                     }
                     ActiveDialog::WalletRecover { wallet_type } => {
                         let wallet_type = *wallet_type;
-                        wallet_mnemonic_dialog(
-                            None,
-                            Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
-                                args: WalletArgs::Software { mnemonic },
-                                import: ImportOrCreate::Import,
-                                wallet_type,
-                            }),
-                            Box::new(|| MainWindowMessage::CloseDialog),
-                            Box::new(MainWindowMessage::CopyToClipboard),
-                        )
-                        .into()
+                        match wallet_type {
+                            WalletType::Hot | WalletType::Cold => wallet_mnemonic_dialog(
+                                None,
+                                Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
+                                    args: WalletArgs::Software { mnemonic },
+                                    import: ImportOrCreate::Import,
+                                    wallet_type,
+                                }),
+                                Box::new(|| MainWindowMessage::CloseDialog),
+                                Box::new(MainWindowMessage::CopyToClipboard),
+                            )
+                            .into(),
+                            #[cfg(feature = "trezor")]
+                            WalletType::Trezor => hw_wallet_create_dialog(
+                                Box::new(move || MainWindowMessage::ImportWalletMnemonic {
+                                    args: WalletArgs::Trezor,
+                                    import: ImportOrCreate::Create,
+                                    wallet_type,
+                                }),
+                                Box::new(|| MainWindowMessage::CloseDialog),
+                            )
+                            .into(),
+                        }
                     }
 
                     ActiveDialog::WalletSetPassword { wallet_id } => {

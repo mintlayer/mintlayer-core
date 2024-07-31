@@ -88,6 +88,9 @@ use crate::{
     WalletHandle, WalletRpcConfig,
 };
 
+#[cfg(feature = "trezor")]
+use wallet_types::wallet_type::WalletType;
+
 pub use self::types::RpcError;
 use self::types::{
     AddressInfo, AddressWithUsageInfo, DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo,
@@ -155,6 +158,7 @@ where
     ) -> WRpcResult<(), N> {
         let open_as_wallet_type =
             open_as_hw_wallet.map_or(self.node.is_cold_wallet_node(), |hw| match hw {
+                #[cfg(feature = "trezor")]
                 HardwareWalletType::Trezor => WalletType::Trezor,
             });
         Ok(self
