@@ -51,6 +51,4 @@ wallet-types = { path = "../types" }
 rstest.workspace = true
 
 [features]
-trezor = []
-
-default = ["trezor"]
+trezor = ["wallet-types/trezor"]

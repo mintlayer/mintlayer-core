@@ -273,5 +273,3 @@ opt-level = 2
 
 [features]
 trezor = []
-
-default = ["trezor"]
