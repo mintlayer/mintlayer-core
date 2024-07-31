@@ -624,12 +624,14 @@ where
             (WalletType::Hot, WalletType::Cold) => {
                 Self::migrate_hot_to_cold_wallet(db, chain_config, signer_provider)?
             }
+            #[cfg(feature = "trezor")]
             (WalletType::Cold | WalletType::Hot, WalletType::Trezor)
             | (WalletType::Trezor, WalletType::Hot | WalletType::Cold) => {
                 return Err(WalletError::CannotChangeTrezorWalletType)
             }
             (WalletType::Cold, WalletType::Cold) => {}
             (WalletType::Hot, WalletType::Hot) => {}
+            #[cfg(feature = "trezor")]
             (WalletType::Trezor, WalletType::Trezor) => {}
         }
         Ok(())
