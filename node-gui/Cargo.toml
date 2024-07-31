@@ -42,3 +42,6 @@ variant_count.workspace = true
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
+
+[features]
+trezor = ["wallet-controller/trezor", "wallet-types/trezor", "wallet-rpc-lib/trezor"]

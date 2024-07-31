@@ -408,6 +408,7 @@ where
                 .map_err(ControllerError::WalletError)?;
                 Ok(WalletType2::Software(wallet))
             }
+            #[cfg(feature = "trezor")]
             WalletType::Trezor => {
                 let wallet = wallet::Wallet::load_wallet(
                     Arc::clone(&chain_config),
