@@ -22,6 +22,7 @@ pub enum WalletType {
     Cold,
     #[codec(index = 1)]
     Hot,
+    #[cfg(feature = "trezor")]
     #[codec(index = 2)]
     Trezor,
 }
@@ -31,6 +32,7 @@ impl Display for WalletType {
         match self {
             Self::Hot => write!(f, "Hot"),
             Self::Cold => write!(f, "Cold"),
+            #[cfg(feature = "trezor")]
             Self::Trezor => write!(f, "Trezor"),
         }
     }

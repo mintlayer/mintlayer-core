@@ -45,6 +45,4 @@ anyhow.workspace = true
 rstest.workspace = true
 
 [features]
-trezor = []
-
-default = ["trezor"]
+trezor = ["wallet-types/trezor"]
