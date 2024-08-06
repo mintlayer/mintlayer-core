@@ -15,6 +15,7 @@
 
 //! Common code for wallet UI applications
 
+mod helpers;
 pub mod mnemonic;
 pub mod read;
 mod sync;
@@ -28,11 +29,8 @@ use blockprod::BlockProductionError;
 use chainstate::tx_verifier::{
     self, error::ScriptError, input_check::signature_only_check::SignatureOnlyVerifiable,
 };
-use futures::{
-    never::Never,
-    stream::{FuturesOrdered, FuturesUnordered},
-    TryStreamExt,
-};
+use futures::{never::Never, stream::FuturesOrdered, TryStreamExt};
+use helpers::{fetch_token_info, fetch_utxo, fetch_utxo_exra_info, into_balances};
 use node_comm::rpc_client::ColdWalletClient;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -54,18 +52,17 @@ use sync::InSync;
 use synced_controller::SyncedController;
 
 use common::{
-    address::{AddressError, RpcAddress},
+    address::AddressError,
     chain::{
         block::timestamp::BlockTimestamp,
         htlc::HtlcSecret,
-        partially_signed_transaction::PartiallySignedTransaction,
+        partially_signed_transaction::{PartiallySignedTransaction, UtxoAdditionalInfo},
         signature::{inputsig::InputWitness, DestinationSigError, Transactable},
         tokens::{RPCTokenInfo, TokenId},
         Block, ChainConfig, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
-        amount::RpcAmountOut,
         time::{get_time, Time},
         Amount, BlockHeight, Id, Idable,
     },
@@ -982,9 +979,11 @@ where
         &self,
         ptx: PartiallySignedTransaction,
     ) -> Result<InspectTransaction, ControllerError<T>> {
-        let input_utxos: Vec<_> = ptx.input_utxos().iter().flatten().cloned().collect();
+        let input_utxos: Vec<_> =
+            ptx.input_utxos().iter().flatten().map(|(utxo, _)| utxo).cloned().collect();
         let fees = self.get_fees(&input_utxos, ptx.tx().outputs()).await?;
-        let inputs_utxos_refs: Vec<_> = ptx.input_utxos().iter().map(|out| out.as_ref()).collect();
+        let inputs_utxos_refs: Vec<_> =
+            ptx.input_utxos().iter().map(|out| out.as_ref().map(|(utxo, _)| utxo)).collect();
         let signature_statuses: Vec<_> = ptx
             .witnesses()
             .iter()
@@ -1121,6 +1120,7 @@ where
                 .collect::<Result<Vec<_>, WalletError>>()
                 .map_err(ControllerError::WalletError)?;
 
+            let input_utxos = self.fetch_utxos_extra_info(input_utxos).await?;
             let tx = PartiallySignedTransaction::new(
                 tx,
                 vec![None; num_inputs],
@@ -1201,29 +1201,24 @@ where
         &self,
         inputs: &[UtxoOutPoint],
     ) -> Result<Vec<TxOutput>, ControllerError<T>> {
-        let tasks: FuturesOrdered<_> = inputs.iter().map(|input| self.fetch_utxo(input)).collect();
+        let tasks: FuturesOrdered<_> = inputs
+            .iter()
+            .map(|input| fetch_utxo(&self.rpc_client, input, &self.wallet))
+            .collect();
         let input_utxos: Vec<TxOutput> = tasks.try_collect().await?;
         Ok(input_utxos)
     }
 
-    async fn fetch_utxo(&self, input: &UtxoOutPoint) -> Result<TxOutput, ControllerError<T>> {
-        // search locally for the unspent utxo
-        if let Some(out) = match &self.wallet {
-            WalletType2::Software(w) => w.find_unspent_utxo_with_destination(input),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.find_unspent_utxo_with_destination(input),
-        } {
-            return Ok(out.0);
-        }
-
-        // check the chainstate
-        self.rpc_client
-            .get_utxo(input.clone())
-            .await
-            .map_err(ControllerError::NodeCallError)?
-            .ok_or(ControllerError::WalletError(WalletError::CannotFindUtxo(
-                input.clone(),
-            )))
+    async fn fetch_utxos_extra_info(
+        &self,
+        inputs: Vec<TxOutput>,
+    ) -> Result<Vec<(TxOutput, UtxoAdditionalInfo)>, ControllerError<T>> {
+        let tasks: FuturesOrdered<_> = inputs
+            .into_iter()
+            .map(|input| fetch_utxo_exra_info(&self.rpc_client, input))
+            .collect();
+        let input_utxos: Vec<(TxOutput, UtxoAdditionalInfo)> = tasks.try_collect().await?;
+        Ok(input_utxos)
     }
 
     async fn fetch_opt_utxo(
@@ -1231,7 +1226,7 @@ where
         input: &TxInput,
     ) -> Result<Option<TxOutput>, ControllerError<T>> {
         match input {
-            TxInput::Utxo(utxo) => self.fetch_utxo(utxo).await.map(Some),
+            TxInput::Utxo(utxo) => fetch_utxo(&self.rpc_client, utxo, &self.wallet).await.map(Some),
             TxInput::Account(_) => Ok(None),
             TxInput::AccountCommand(_, _) => Ok(None),
         }
@@ -1313,45 +1308,4 @@ where
                 .expect("Sleep intervals cannot be this large");
         }
     }
-}
-
-pub async fn fetch_token_info<T: NodeInterface>(
-    rpc_client: &T,
-    token_id: TokenId,
-) -> Result<RPCTokenInfo, ControllerError<T>> {
-    rpc_client
-        .get_token_info(token_id)
-        .await
-        .map_err(ControllerError::NodeCallError)?
-        .ok_or(ControllerError::WalletError(WalletError::UnknownTokenId(
-            token_id,
-        )))
-}
-
-pub async fn into_balances<T: NodeInterface>(
-    rpc_client: &T,
-    chain_config: &ChainConfig,
-    mut balances: BTreeMap<Currency, Amount>,
-) -> Result<Balances, ControllerError<T>> {
-    let coins = balances.remove(&Currency::Coin).unwrap_or(Amount::ZERO);
-    let coins = RpcAmountOut::from_amount_no_padding(coins, chain_config.coin_decimals());
-
-    let tasks: FuturesUnordered<_> = balances
-        .into_iter()
-        .map(|(currency, amount)| async move {
-            let token_id = match currency {
-                Currency::Coin => panic!("Removed just above"),
-                Currency::Token(token_id) => token_id,
-            };
-
-            fetch_token_info(rpc_client, token_id).await.map(|info| {
-                let decimals = info.token_number_of_decimals();
-                let amount = RpcAmountOut::from_amount_no_padding(amount, decimals);
-                let token_id = RpcAddress::new(chain_config, token_id).expect("addressable");
-                (token_id, amount)
-            })
-        })
-        .collect();
-
-    Ok(Balances::new(coins, tasks.try_collect().await?))
 }

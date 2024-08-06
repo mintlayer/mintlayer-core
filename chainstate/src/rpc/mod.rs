@@ -24,7 +24,7 @@ use std::{
     sync::Arc,
 };
 
-use self::types::{block::RpcBlock, event::RpcEvent};
+use self::types::{block::RpcBlock, event::RpcEvent, output::RpcPoolData};
 use crate::{Block, BlockSource, ChainInfo, GenBlock};
 use chainstate_types::BlockIndex;
 use common::{
@@ -143,6 +143,12 @@ trait ChainstateRpc {
     /// Returns `None` (null) if the pool is not found.
     #[method(name = "staker_balance")]
     async fn staker_balance(&self, pool_address: String) -> RpcResult<Option<Amount>>;
+
+    /// Returns the pool data of the pool associated with the given pool address.
+    ///
+    /// Returns `None` (null) if the pool is not found.
+    #[method(name = "pool_data")]
+    async fn pool_data(&self, pool_address: String) -> RpcResult<Option<RpcPoolData>>;
 
     /// Given a pool defined by a pool address, and a delegation address,
     /// returns the amount of coins owned by that delegation in that pool.
@@ -330,6 +336,26 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                         .and_then(|pool_id| dynamize_err(this.get_stake_pool_data(pool_id)))
                         .and_then(|pool_data| {
                             dynamize_err(pool_data.map(|d| d.staker_balance()).transpose())
+                        });
+
+                result
+            })
+            .await,
+        )
+    }
+
+    async fn pool_data(&self, pool_address: String) -> RpcResult<Option<RpcPoolData>> {
+        rpc::handle_result(
+            self.call(move |this| {
+                let chain_config = this.get_chain_config();
+                let result: Result<Option<RpcPoolData>, _> =
+                    dynamize_err(Address::<PoolId>::from_string(chain_config, pool_address))
+                        .map(|address| address.into_object())
+                        .and_then(|pool_id| dynamize_err(this.get_stake_pool_data(pool_id)))
+                        .and_then(|pool_data| {
+                            dynamize_err(
+                                pool_data.map(|d| RpcPoolData::new(chain_config, &d)).transpose(),
+                            )
                         });
 
                 result
