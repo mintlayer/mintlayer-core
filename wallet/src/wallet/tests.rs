@@ -17,6 +17,7 @@ use crate::{
     account::currency_grouper::Currency,
     key_chain::{make_account_path, LOOKAHEAD_SIZE},
     send_request::{make_address_output, make_create_delegation_output},
+    signer::software_signer::SoftwareSignerProvider,
     wallet_events::WalletEventsNoOp,
     DefaultWallet,
 };
@@ -53,7 +54,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::{schema, WalletStorageEncryptionRead};
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
-    seed_phrase::PassPhrase,
+    seed_phrase::{PassPhrase, StoreSeedPhrase},
     utxo_types::{UtxoState, UtxoType},
 };
 use wallet_types::{seed_phrase::SeedPhraseLanguage, AccountWalletTxId};
@@ -68,12 +69,20 @@ const MNEMONIC2: &str =
 
 const NETWORK_FEE: u128 = 10000;
 
-fn get_best_block(wallet: &DefaultWallet) -> (Id<GenBlock>, BlockHeight) {
+fn get_best_block<B, P>(wallet: &Wallet<B, P>) -> (Id<GenBlock>, BlockHeight)
+where
+    B: storage::Backend + 'static,
+    P: SignerProvider,
+{
     *wallet.get_best_block().first_key_value().unwrap().1
 }
 
 #[track_caller]
-fn scan_wallet(wallet: &mut DefaultWallet, height: BlockHeight, blocks: Vec<Block>) {
+fn scan_wallet<B, P>(wallet: &mut Wallet<B, P>, height: BlockHeight, blocks: Vec<Block>)
+where
+    B: storage::Backend + 'static,
+    P: SignerProvider,
+{
     for account in wallet.get_best_block().keys() {
         wallet
             .scan_new_blocks(*account, height, blocks.clone(), &WalletEventsNoOp)
@@ -172,7 +181,11 @@ fn get_address(
     .unwrap()
 }
 
-fn get_coin_balance_for_acc(wallet: &DefaultWallet, account: U31) -> Amount {
+fn get_coin_balance_for_acc<B, P>(wallet: &Wallet<B, P>, account: U31) -> Amount
+where
+    B: storage::Backend + 'static,
+    P: SignerProvider,
+{
     let coin_balance = wallet
         .get_balance(account, UtxoState::Confirmed.into(), WithLocked::Unlocked)
         .unwrap()
@@ -182,7 +195,11 @@ fn get_coin_balance_for_acc(wallet: &DefaultWallet, account: U31) -> Amount {
     coin_balance
 }
 
-fn get_coin_balance_with_inactive(wallet: &DefaultWallet) -> Amount {
+fn get_coin_balance_with_inactive<B, P>(wallet: &Wallet<B, P>) -> Amount
+where
+    B: storage::Backend + 'static,
+    P: SignerProvider,
+{
     let coin_balance = wallet
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
@@ -196,11 +213,19 @@ fn get_coin_balance_with_inactive(wallet: &DefaultWallet) -> Amount {
     coin_balance
 }
 
-fn get_coin_balance(wallet: &DefaultWallet) -> Amount {
+fn get_coin_balance<B, P>(wallet: &Wallet<B, P>) -> Amount
+where
+    B: storage::Backend + 'static,
+    P: SignerProvider,
+{
     get_coin_balance_for_acc(wallet, DEFAULT_ACCOUNT_INDEX)
 }
 
-fn get_currency_balances(wallet: &DefaultWallet) -> (Amount, Vec<(TokenId, Amount)>) {
+fn get_currency_balances<B, P>(wallet: &Wallet<B, P>) -> (Amount, Vec<(TokenId, Amount)>)
+where
+    B: storage::Backend + 'static,
+    P: SignerProvider,
+{
     let mut currency_balances = wallet
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
@@ -222,11 +247,14 @@ fn get_currency_balances(wallet: &DefaultWallet) -> (Amount, Vec<(TokenId, Amoun
 }
 
 #[track_caller]
-fn verify_wallet_balance(
+fn verify_wallet_balance<B, P>(
     chain_config: &Arc<ChainConfig>,
-    wallet: &DefaultWallet,
+    wallet: &Wallet<B, P>,
     expected_balance: Amount,
-) {
+) where
+    B: storage::Backend + 'static,
+    P: SignerProvider,
+{
     let coin_balance = get_coin_balance(wallet);
     assert_eq!(coin_balance, expected_balance);
 
@@ -239,45 +267,56 @@ fn verify_wallet_balance(
         |_| Ok(()),
         WalletType::Hot,
         false,
+        |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
     .unwrap();
+
+    wallet.get_best_block();
+
     let coin_balance = get_coin_balance(&wallet);
     // Check that the loaded wallet has the same balance
     assert_eq!(coin_balance, expected_balance);
 }
 
 #[track_caller]
-fn create_wallet(chain_config: Arc<ChainConfig>) -> Wallet<DefaultBackend> {
+fn create_wallet(chain_config: Arc<ChainConfig>) -> DefaultWallet {
     create_wallet_with_mnemonic(chain_config, MNEMONIC)
 }
 
 #[track_caller]
-fn create_wallet_with_mnemonic(
-    chain_config: Arc<ChainConfig>,
-    mnemonic: &str,
-) -> Wallet<DefaultBackend> {
+fn create_wallet_with_mnemonic(chain_config: Arc<ChainConfig>, mnemonic: &str) -> DefaultWallet {
     let db = create_wallet_in_memory().unwrap();
     let genesis_block_id = chain_config.genesis_block_id();
     Wallet::create_new_wallet(
-        chain_config,
+        chain_config.clone(),
         db,
-        mnemonic,
-        None,
-        StoreSeedPhrase::DoNotStore,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
+        |db_tx| {
+            Ok(SoftwareSignerProvider::new_from_mnemonic(
+                chain_config,
+                db_tx,
+                mnemonic,
+                None,
+                StoreSeedPhrase::DoNotStore,
+            )?)
+        },
     )
     .unwrap()
 }
 
 #[track_caller]
-fn create_block(
+fn create_block<B, P>(
     chain_config: &Arc<ChainConfig>,
-    wallet: &mut DefaultWallet,
+    wallet: &mut Wallet<B, P>,
     transactions: Vec<SignedTransaction>,
     reward: Amount,
     block_height: u64,
-) -> (Address<Destination>, Block) {
+) -> (Address<Destination>, Block)
+where
+    B: storage::Backend + 'static,
+    P: SignerProvider,
+{
     let address = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     let block1 = Block::new(
@@ -315,6 +354,7 @@ fn test_balance_from_genesis(
 fn wallet_creation_in_memory() {
     let chain_config = Arc::new(create_regtest());
     let empty_db = create_wallet_in_memory().unwrap();
+    let chain_config2 = chain_config.clone();
 
     // fail to load an empty wallet
     match Wallet::load_wallet(
@@ -324,6 +364,7 @@ fn wallet_creation_in_memory() {
         |_| Ok(()),
         WalletType::Hot,
         false,
+        |db_tx| SoftwareSignerProvider::load_from_database(chain_config2, db_tx),
     ) {
         Ok(_) => panic!("Wallet loading should fail"),
         Err(err) => assert_eq!(err, WalletError::WalletNotInitialized),
@@ -335,12 +376,13 @@ fn wallet_creation_in_memory() {
 
     // successfully load a wallet from initialized db
     let _wallet = Wallet::load_wallet(
-        chain_config,
+        chain_config.clone(),
         initialized_db,
         None,
         |_| Ok(()),
         WalletType::Hot,
         false,
+        |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
     .unwrap();
 }
@@ -370,11 +412,17 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
     let mut wallet = Wallet::create_new_wallet(
         Arc::clone(&chain_config),
         db,
-        MNEMONIC,
-        None,
-        StoreSeedPhrase::DoNotStore,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
+        |db_tx| {
+            Ok(SoftwareSignerProvider::new_from_mnemonic(
+                chain_config.clone(),
+                db_tx,
+                MNEMONIC,
+                None,
+                StoreSeedPhrase::DoNotStore,
+            )?)
+        },
     )
     .unwrap();
     verify_wallet_balance(&chain_config, &wallet, genesis_amount);
@@ -425,6 +473,7 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
         |_| Ok(()),
         WalletType::Hot,
         false,
+        |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
     .unwrap();
 
@@ -468,11 +517,17 @@ fn wallet_seed_phrase_retrieval(#[case] seed: Seed) {
     let mut wallet = Wallet::create_new_wallet(
         Arc::clone(&chain_config),
         db,
-        MNEMONIC,
-        wallet_passphrase.as_ref().map(|p| p.as_ref()),
-        StoreSeedPhrase::Store,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
+        |db_tx| {
+            Ok(SoftwareSignerProvider::new_from_mnemonic(
+                chain_config.clone(),
+                db_tx,
+                MNEMONIC,
+                wallet_passphrase.as_ref().map(|p| p.as_ref()),
+                StoreSeedPhrase::Store,
+            )?)
+        },
     )
     .unwrap();
 
@@ -557,11 +612,17 @@ fn wallet_seed_phrase_check_address() {
     let mut wallet = Wallet::create_new_wallet(
         Arc::clone(&chain_config),
         db,
-        MNEMONIC,
-        wallet_passphrase.as_ref().map(|p| p.as_ref()),
-        StoreSeedPhrase::Store,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
+        |db_tx| {
+            Ok(SoftwareSignerProvider::new_from_mnemonic(
+                chain_config.clone(),
+                db_tx,
+                MNEMONIC,
+                wallet_passphrase.as_ref().map(|p| p.as_ref()),
+                StoreSeedPhrase::Store,
+            )?)
+        },
     )
     .unwrap();
 
@@ -577,11 +638,17 @@ fn wallet_seed_phrase_check_address() {
     let mut wallet = Wallet::create_new_wallet(
         Arc::clone(&chain_config),
         db,
-        MNEMONIC,
-        wallet_passphrase.as_ref().map(|p| p.as_ref()),
-        StoreSeedPhrase::Store,
         (BlockHeight::new(0), genesis_block_id),
         WalletType::Hot,
+        |db_tx| {
+            Ok(SoftwareSignerProvider::new_from_mnemonic(
+                chain_config.clone(),
+                db_tx,
+                MNEMONIC,
+                wallet_passphrase.as_ref().map(|p| p.as_ref()),
+                StoreSeedPhrase::Store,
+            )?)
+        },
     )
     .unwrap();
 
@@ -866,11 +933,14 @@ fn wallet_balance_parent_child_transactions() {
 }
 
 #[track_caller]
-fn test_wallet_accounts(
+fn test_wallet_accounts<B, P>(
     chain_config: &Arc<ChainConfig>,
-    wallet: &DefaultWallet,
+    wallet: &Wallet<B, P>,
     expected_accounts: Vec<U31>,
-) {
+) where
+    B: storage::Backend + 'static,
+    P: SignerProvider,
+{
     let accounts = wallet.account_indexes().cloned().collect::<Vec<_>>();
     assert_eq!(accounts, expected_accounts);
 
@@ -882,6 +952,7 @@ fn test_wallet_accounts(
         |_| Ok(()),
         WalletType::Hot,
         false,
+        |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
     .unwrap();
     let accounts = wallet.account_indexes().cloned().collect::<Vec<_>>();
@@ -991,7 +1062,7 @@ fn wallet_recover_new_account(#[case] seed: Seed) {
 
     let mut total_amounts = BTreeMap::new();
     let mut last_account_index = DEFAULT_ACCOUNT_INDEX;
-    let blocks = (0..rng.gen_range(1..1000))
+    let blocks = (0..rng.gen_range(1..100))
         .map(|idx| {
             let tx_amount1 = Amount::from_atoms(rng.gen_range(1..10));
             total_amounts

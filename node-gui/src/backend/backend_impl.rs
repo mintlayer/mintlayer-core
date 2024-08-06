@@ -36,14 +36,13 @@ use wallet_cli_commands::{
     WalletCommand,
 };
 use wallet_controller::{
-    make_cold_wallet_rpc_client, types::Balances, ControllerConfig, NodeInterface, UtxoState,
-    WalletHandlesClient,
+    make_cold_wallet_rpc_client,
+    types::{Balances, WalletTypeArgs},
+    ControllerConfig, NodeInterface, UtxoState, WalletHandlesClient,
 };
 use wallet_rpc_client::handles_client::WalletRpcHandlesClient;
-use wallet_rpc_lib::{EventStream, WalletRpc, WalletService};
-use wallet_types::{
-    seed_phrase::StoreSeedPhrase, wallet_type::WalletType, with_locked::WithLocked,
-};
+use wallet_rpc_lib::{types::HardwareWalletType, EventStream, WalletRpc, WalletService};
+use wallet_types::{wallet_type::WalletType, with_locked::WithLocked};
 
 use crate::main_window::ImportOrCreate;
 
@@ -205,10 +204,13 @@ impl Backend {
         }
     }
 
-    async fn get_account_info<T: NodeInterface + Clone + Send + Sync + Debug + 'static>(
+    async fn get_account_info<T>(
         controller: &WalletRpc<T>,
         account_index: U31,
-    ) -> Result<(AccountId, AccountInfo), BackendError> {
+    ) -> Result<(AccountId, AccountInfo), BackendError>
+    where
+        T: NodeInterface + Clone + Send + Sync + Debug + 'static,
+    {
         let name = controller
             .wallet_info()
             .await
@@ -258,7 +260,7 @@ impl Backend {
     async fn add_create_wallet(
         &mut self,
         file_path: PathBuf,
-        mnemonic: wallet_controller::mnemonic::Mnemonic,
+        wallet_args: WalletTypeArgs,
         wallet_type: WalletType,
         import: ImportOrCreate,
     ) -> Result<WalletInfo, BackendError> {
@@ -280,7 +282,7 @@ impl Backend {
                     .create_wallet(
                         handles_client,
                         file_path.clone(),
-                        &mnemonic,
+                        wallet_args,
                         import,
                         wallet_events,
                     )
@@ -299,7 +301,36 @@ impl Backend {
                 let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
 
                 let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) = self
-                    .create_wallet(client, file_path.clone(), &mnemonic, import, wallet_events)
+                    .create_wallet(
+                        client,
+                        file_path.clone(),
+                        wallet_args,
+                        import,
+                        wallet_events,
+                    )
+                    .await?;
+
+                let wallet_data = WalletData {
+                    controller: GuiHotColdController::Cold(wallet_rpc, command_handler),
+                    accounts: accounts_data,
+                    best_block,
+                    updated: false,
+                };
+
+                (wallet_data, accounts_info, best_block)
+            }
+            #[cfg(feature = "trezor")]
+            (WalletType::Trezor, _) => {
+                let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
+
+                let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) = self
+                    .create_wallet(
+                        client,
+                        file_path.clone(),
+                        wallet_args,
+                        import,
+                        wallet_events,
+                    )
                     .await?;
 
                 let wallet_data = WalletData {
@@ -332,11 +363,11 @@ impl Backend {
         Ok(wallet_info)
     }
 
-    async fn create_wallet<N: NodeInterface + Clone + Debug + Send + Sync + 'static>(
+    async fn create_wallet<N>(
         &mut self,
         handles_client: N,
         file_path: PathBuf,
-        mnemonic: &wallet::wallet::Mnemonic,
+        wallet_args: WalletTypeArgs,
         import: ImportOrCreate,
         wallet_events: GuiWalletEvents,
     ) -> Result<
@@ -348,7 +379,10 @@ impl Backend {
             BTreeMap<AccountId, AccountData>,
         ),
         BackendError,
-    > {
+    >
+    where
+        N: NodeInterface + Clone + Debug + Send + Sync + 'static,
+    {
         let wallet_service = WalletService::start(
             self.chain_config.clone(),
             None,
@@ -362,14 +396,9 @@ impl Backend {
         let node_rpc = wallet_service.node_rpc().clone();
         let chain_config = wallet_service.chain_config().clone();
         let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc.clone(), chain_config.clone());
+
         wallet_rpc
-            .create_wallet(
-                file_path,
-                StoreSeedPhrase::Store,
-                Some(mnemonic.to_string()),
-                None,
-                import.skip_syncing(),
-            )
+            .create_wallet(file_path, wallet_args, import.skip_syncing())
             .await
             .map_err(|err| BackendError::WalletError(err.to_string()))?;
         tokio::spawn(forward_events(
@@ -446,7 +475,9 @@ impl Backend {
                         best_block,
                         accounts_info,
                         accounts_data,
-                    ) = self.open_wallet(handles_client, file_path.clone(), wallet_events).await?;
+                    ) = self
+                        .open_wallet(handles_client, file_path.clone(), wallet_events, None)
+                        .await?;
 
                     let wallet_data = WalletData {
                         controller: GuiHotColdController::Hot(wallet_rpc, command_handler),
@@ -467,7 +498,36 @@ impl Backend {
                         best_block,
                         accounts_info,
                         accounts_data,
-                    ) = self.open_wallet(client, file_path.clone(), wallet_events).await?;
+                    ) = self.open_wallet(client, file_path.clone(), wallet_events, None).await?;
+
+                    let wallet_data = WalletData {
+                        controller: GuiHotColdController::Cold(wallet_rpc, command_handler),
+                        accounts: accounts_data,
+                        best_block,
+                        updated: false,
+                    };
+
+                    (wallet_data, accounts_info, best_block, encryption_state)
+                }
+                #[cfg(feature = "trezor")]
+                (WalletType::Trezor, _) => {
+                    let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
+
+                    let (
+                        wallet_rpc,
+                        command_handler,
+                        encryption_state,
+                        best_block,
+                        accounts_info,
+                        accounts_data,
+                    ) = self
+                        .open_wallet(
+                            client,
+                            file_path.clone(),
+                            wallet_events,
+                            Some(HardwareWalletType::Trezor),
+                        )
+                        .await?;
 
                     let wallet_data = WalletData {
                         controller: GuiHotColdController::Cold(wallet_rpc, command_handler),
@@ -497,11 +557,12 @@ impl Backend {
         Ok(wallet_info)
     }
 
-    async fn open_wallet<N: NodeInterface + Clone + Debug + Send + Sync + 'static>(
+    async fn open_wallet<N>(
         &mut self,
         handles_client: N,
         file_path: PathBuf,
         wallet_events: GuiWalletEvents,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<
         (
             WalletRpc<N>,
@@ -512,7 +573,10 @@ impl Backend {
             BTreeMap<AccountId, AccountData>,
         ),
         BackendError,
-    > {
+    >
+    where
+        N: NodeInterface + Clone + Debug + Send + Sync + 'static,
+    {
         let wallet_service = WalletService::start(
             self.chain_config.clone(),
             None,
@@ -527,7 +591,7 @@ impl Backend {
         let chain_config = wallet_service.chain_config().clone();
         let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc.clone(), chain_config.clone());
         wallet_rpc
-            .open_wallet(file_path, None, false)
+            .open_wallet(file_path, None, false, hardware_wallet)
             .await
             .map_err(|err| BackendError::WalletError(err.to_string()))?;
         tokio::spawn(forward_events(
@@ -956,13 +1020,13 @@ impl Backend {
                 Self::send_event(&self.event_tx, BackendEvent::OpenWallet(open_res));
             }
             BackendRequest::RecoverWallet {
-                mnemonic,
+                wallet_args,
                 file_path,
                 import,
                 wallet_type,
             } => {
                 let import_res =
-                    self.add_create_wallet(file_path, mnemonic, wallet_type, import).await;
+                    self.add_create_wallet(file_path, wallet_args, wallet_type, import).await;
                 Self::send_event(&self.event_tx, BackendEvent::ImportWallet(import_res));
             }
             BackendRequest::CloseWallet(wallet_id) => {
@@ -1250,10 +1314,13 @@ impl Backend {
     }
 }
 
-async fn get_account_balance<N: NodeInterface + Clone + Send + Sync + 'static>(
+async fn get_account_balance<N>(
     controller: &WalletRpc<N>,
     account_index: U31,
-) -> Result<Balances, BackendError> {
+) -> Result<Balances, BackendError>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static,
+{
     controller
         .get_balance(
             account_index,
@@ -1264,11 +1331,14 @@ async fn get_account_balance<N: NodeInterface + Clone + Send + Sync + 'static>(
         .map_err(|e| BackendError::WalletError(e.to_string()))
 }
 
-async fn encrypt_action<T: NodeInterface + Clone + Send + Sync + 'static>(
+async fn encrypt_action<T>(
     action: EncryptionAction,
     controller: &mut WalletRpc<T>,
     wallet_id: WalletId,
-) -> Result<(WalletId, EncryptionState), BackendError> {
+) -> Result<(WalletId, EncryptionState), BackendError>
+where
+    T: NodeInterface + Clone + Send + Sync + 'static,
+{
     match action {
         EncryptionAction::SetPassword(password) => controller
             .encrypt_private_keys(password)
@@ -1297,7 +1367,7 @@ async fn select_acc_and_execute_cmd<N>(
     chain_config: &ChainConfig,
 ) -> Result<ConsoleCommand, BackendError>
 where
-    N: NodeInterface + Clone + Send + Sync + Debug + 'static,
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
 {
     c.handle_manageable_wallet_command(
         chain_config,

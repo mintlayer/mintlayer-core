@@ -63,23 +63,26 @@ pub use interface::{
 pub use rpc::{rpc_creds::RpcCreds, Rpc};
 use wallet_controller::{
     types::{
-        Balances, BlockInfo, CreatedBlockInfo, InspectTransaction, SeedWithPassPhrase,
-        TransactionToInspect, WalletInfo,
+        Balances, BlockInfo, CreatedBlockInfo, CreatedWallet, InspectTransaction,
+        SeedWithPassPhrase, TransactionToInspect, WalletInfo, WalletTypeArgs,
     },
     ConnectedPeer, ControllerConfig, ControllerError, NodeInterface, UtxoStates, UtxoTypes,
     DEFAULT_ACCOUNT_INDEX,
 };
 use wallet_types::{
-    account_info::StandaloneAddressDetails, seed_phrase::StoreSeedPhrase,
-    signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked,
+    account_info::StandaloneAddressDetails, signature_status::SignatureStatus, wallet_tx::TxData,
+    with_locked::WithLocked,
 };
 
-use crate::{service::CreatedWallet, WalletHandle, WalletRpcConfig};
+#[cfg(feature = "trezor")]
+use wallet_types::wallet_type::WalletType;
+
+use crate::{WalletHandle, WalletRpcConfig};
 
 pub use self::types::RpcError;
 use self::types::{
-    AddressInfo, AddressWithUsageInfo, DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo,
-    NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
+    AddressInfo, AddressWithUsageInfo, DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo,
+    NewAccountInfo, NewTransaction, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
     RpcStandaloneAddress, RpcStandaloneAddressDetails, RpcStandaloneAddresses,
     RpcStandalonePrivateKeyAddress, RpcTokenId, RpcUtxoOutpoint, StakingStatus,
     StandaloneAddressWithDetails, VrfPublicKeyInfo,
@@ -94,7 +97,10 @@ pub struct WalletRpc<N: Clone> {
 
 type WRpcResult<T, N> = Result<T, RpcError<N>>;
 
-impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
+impl<N> WalletRpc<N>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static,
+{
     pub fn new(wallet: WalletHandle<N>, node: N, chain_config: Arc<ChainConfig>) -> Self {
         Self {
             wallet,
@@ -118,18 +124,14 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     pub async fn create_wallet(
         &self,
         path: PathBuf,
-        store_seed_phrase: StoreSeedPhrase,
-        mnemonic: Option<String>,
-        passphrase: Option<String>,
+        args: WalletTypeArgs,
         skip_syncing: bool,
     ) -> WRpcResult<CreatedWallet, N> {
         self.wallet
             .manage_async(move |wallet_manager| {
-                Box::pin(async move {
-                    wallet_manager
-                        .create_wallet(path, store_seed_phrase, mnemonic, passphrase, skip_syncing)
-                        .await
-                })
+                Box::pin(
+                    async move { wallet_manager.create_wallet(path, args, skip_syncing).await },
+                )
             })
             .await?
     }
@@ -139,13 +141,24 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         wallet_path: PathBuf,
         password: Option<String>,
         force_migrate_wallet_type: bool,
+        open_as_hw_wallet: Option<HardwareWalletType>,
     ) -> WRpcResult<(), N> {
+        let open_as_wallet_type =
+            open_as_hw_wallet.map_or(self.node.is_cold_wallet_node(), |hw| match hw {
+                #[cfg(feature = "trezor")]
+                HardwareWalletType::Trezor => WalletType::Trezor,
+            });
         Ok(self
             .wallet
             .manage_async(move |wallet_manager| {
                 Box::pin(async move {
                     wallet_manager
-                        .open_wallet(wallet_path, password, force_migrate_wallet_type)
+                        .open_wallet(
+                            wallet_path,
+                            password,
+                            force_migrate_wallet_type,
+                            open_as_wallet_type,
+                        )
                         .await
                 })
             })
@@ -1790,13 +1803,16 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     }
 }
 
-pub async fn start<N: NodeInterface + Clone + Send + Sync + Debug + 'static>(
+pub async fn start<N>(
     wallet_handle: WalletHandle<N>,
     node_rpc: N,
     config: WalletRpcConfig,
     chain_config: Arc<ChainConfig>,
     cold_wallet: bool,
-) -> anyhow::Result<rpc::Rpc> {
+) -> anyhow::Result<rpc::Rpc>
+where
+    N: NodeInterface + Clone + Send + Sync + 'static + Debug,
+{
     let WalletRpcConfig {
         bind_addr,
         auth_credentials,

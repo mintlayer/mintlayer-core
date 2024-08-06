@@ -287,3 +287,6 @@ opt-level = 2
 [profile.dist]
 inherits = "release"
 lto = "off"
+
+[features]
+trezor = []

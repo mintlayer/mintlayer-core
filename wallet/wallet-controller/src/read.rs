@@ -35,7 +35,6 @@ use wallet::{
         TxInfo,
     },
     wallet::WalletPoolsFilter,
-    DefaultWallet,
 };
 use wallet_types::{
     account_info::StandaloneAddresses,
@@ -47,11 +46,11 @@ use wallet_types::{
 
 use crate::{
     types::{AccountStandaloneKeyDetails, Balances, CreatedBlockInfo},
-    ControllerError,
+    ControllerError, WalletType2,
 };
 
-pub struct ReadOnlyController<'a, T> {
-    wallet: &'a DefaultWallet,
+pub struct ReadOnlyController<'a, T, B: storage::Backend + 'static> {
+    wallet: &'a WalletType2<B>,
     rpc_client: T,
     chain_config: &'a ChainConfig,
     account_index: U31,
@@ -60,9 +59,13 @@ pub struct ReadOnlyController<'a, T> {
 /// A Map between the derived child number and the Address with whether it is marked as used or not
 type MapAddressWithUsage<T> = BTreeMap<ChildNumber, (Address<T>, bool)>;
 
-impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
+impl<'a, T, B> ReadOnlyController<'a, T, B>
+where
+    T: NodeInterface,
+    B: storage::Backend + 'static,
+{
     pub fn new(
-        wallet: &'a DefaultWallet,
+        wallet: &'a WalletType2<B>,
         rpc_client: T,
         chain_config: &'a ChainConfig,
         account_index: U31,
@@ -84,9 +87,12 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         utxo_states: UtxoStates,
         with_locked: WithLocked,
     ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
-        self.wallet
-            .get_balance(self.account_index, utxo_states, with_locked)
-            .map_err(ControllerError::WalletError)
+        match &self.wallet {
+            WalletType2::Software(w) => w.get_balance(self.account_index, utxo_states, with_locked),
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(w) => w.get_balance(self.account_index, utxo_states, with_locked),
+        }
+        .map_err(ControllerError::WalletError)
     }
 
     pub async fn get_decimal_balance(
@@ -104,12 +110,17 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         utxo_states: UtxoStates,
         with_locked: WithLocked,
     ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ControllerError<T>> {
-        self.wallet
-            .get_multisig_utxos(self.account_index, utxo_types, utxo_states, with_locked)
-            .map(|utxos| {
-                utxos.into_iter().map(|(outpoint, output, _)| (outpoint, output)).collect()
-            })
-            .map_err(ControllerError::WalletError)
+        match &self.wallet {
+            WalletType2::Software(w) => {
+                w.get_multisig_utxos(self.account_index, utxo_types, utxo_states, with_locked)
+            }
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(w) => {
+                w.get_multisig_utxos(self.account_index, utxo_types, utxo_states, with_locked)
+            }
+        }
+        .map(|utxos| utxos.into_iter().map(|(outpoint, output, _)| (outpoint, output)).collect())
+        .map_err(ControllerError::WalletError)
     }
 
     pub fn get_utxos(
@@ -118,18 +129,26 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         utxo_states: UtxoStates,
         with_locked: WithLocked,
     ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ControllerError<T>> {
-        self.wallet
-            .get_utxos(self.account_index, utxo_types, utxo_states, with_locked)
-            .map(|utxos| {
-                utxos.into_iter().map(|(outpoint, output, _)| (outpoint, output)).collect()
-            })
-            .map_err(ControllerError::WalletError)
+        match &self.wallet {
+            WalletType2::Software(w) => {
+                w.get_utxos(self.account_index, utxo_types, utxo_states, with_locked)
+            }
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(w) => {
+                w.get_utxos(self.account_index, utxo_types, utxo_states, with_locked)
+            }
+        }
+        .map(|utxos| utxos.into_iter().map(|(outpoint, output, _)| (outpoint, output)).collect())
+        .map_err(ControllerError::WalletError)
     }
 
     pub fn pending_transactions(&self) -> Result<Vec<WithId<&'a Transaction>>, ControllerError<T>> {
-        self.wallet
-            .pending_transactions(self.account_index)
-            .map_err(ControllerError::WalletError)
+        match &self.wallet {
+            WalletType2::Software(w) => w.pending_transactions(self.account_index),
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(w) => w.pending_transactions(self.account_index),
+        }
+        .map_err(ControllerError::WalletError)
     }
 
     pub fn mainchain_transactions(
@@ -137,9 +156,16 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         destination: Option<Destination>,
         limit: usize,
     ) -> Result<Vec<TxInfo>, ControllerError<T>> {
-        self.wallet
-            .mainchain_transactions(self.account_index, destination, limit)
-            .map_err(ControllerError::WalletError)
+        match &self.wallet {
+            WalletType2::Software(w) => {
+                w.mainchain_transactions(self.account_index, destination, limit)
+            }
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(w) => {
+                w.mainchain_transactions(self.account_index, destination, limit)
+            }
+        }
+        .map_err(ControllerError::WalletError)
     }
 
     pub fn get_transaction_list(
@@ -147,46 +173,68 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         skip: usize,
         count: usize,
     ) -> Result<TransactionList, ControllerError<T>> {
-        self.wallet
-            .get_transaction_list(self.account_index, skip, count)
-            .map_err(ControllerError::WalletError)
+        match &self.wallet {
+            WalletType2::Software(w) => w.get_transaction_list(self.account_index, skip, count),
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(w) => w.get_transaction_list(self.account_index, skip, count),
+        }
+        .map_err(ControllerError::WalletError)
     }
 
     pub fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
     ) -> Result<&TxData, ControllerError<T>> {
-        self.wallet
-            .get_transaction(self.account_index, transaction_id)
-            .map_err(ControllerError::WalletError)
+        match &self.wallet {
+            WalletType2::Software(w) => w.get_transaction(self.account_index, transaction_id),
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(w) => w.get_transaction(self.account_index, transaction_id),
+        }
+        .map_err(ControllerError::WalletError)
     }
 
     pub fn get_all_issued_addresses(
         &self,
     ) -> Result<BTreeMap<ChildNumber, Address<Destination>>, ControllerError<T>> {
-        self.wallet
-            .get_all_issued_addresses(self.account_index)
-            .map_err(ControllerError::WalletError)
+        match &self.wallet {
+            WalletType2::Software(w) => w.get_all_issued_addresses(self.account_index),
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(w) => w.get_all_issued_addresses(self.account_index),
+        }
+        .map_err(ControllerError::WalletError)
     }
 
     pub fn get_all_issued_vrf_public_keys(
         &self,
     ) -> Result<MapAddressWithUsage<VRFPublicKey>, ControllerError<T>> {
-        self.wallet
-            .get_all_issued_vrf_public_keys(self.account_index)
-            .map_err(ControllerError::WalletError)
+        match &self.wallet {
+            WalletType2::Software(w) => w.get_all_issued_vrf_public_keys(self.account_index),
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(_) => {
+                return Err(ControllerError::UnsupportedHardwareWalletOperation)
+            }
+        }
+        .map_err(ControllerError::WalletError)
     }
 
     pub fn get_legacy_vrf_public_key(&self) -> Result<Address<VRFPublicKey>, ControllerError<T>> {
-        self.wallet
-            .get_legacy_vrf_public_key(self.account_index)
-            .map_err(ControllerError::WalletError)
+        match &self.wallet {
+            WalletType2::Software(w) => w.get_legacy_vrf_public_key(self.account_index),
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(_) => {
+                return Err(ControllerError::UnsupportedHardwareWalletOperation)
+            }
+        }
+        .map_err(ControllerError::WalletError)
     }
 
     pub fn get_addresses_usage(&self) -> Result<&'a KeychainUsageState, ControllerError<T>> {
-        self.wallet
-            .get_addresses_usage(self.account_index)
-            .map_err(ControllerError::WalletError)
+        match &self.wallet {
+            WalletType2::Software(w) => w.get_addresses_usage(self.account_index),
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(w) => w.get_addresses_usage(self.account_index),
+        }
+        .map_err(ControllerError::WalletError)
     }
 
     /// Get all addresses with usage information
@@ -211,9 +259,12 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
 
     /// Get all standalone addresses with their labels
     pub fn get_standalone_addresses(&self) -> Result<StandaloneAddresses, ControllerError<T>> {
-        self.wallet
-            .get_all_standalone_addresses(self.account_index)
-            .map_err(ControllerError::WalletError)
+        match &self.wallet {
+            WalletType2::Software(w) => w.get_all_standalone_addresses(self.account_index),
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(w) => w.get_all_standalone_addresses(self.account_index),
+        }
+        .map_err(ControllerError::WalletError)
     }
 
     /// Get all standalone addresses with their labels and balances
@@ -221,10 +272,16 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         &self,
         address: Destination,
     ) -> Result<AccountStandaloneKeyDetails, ControllerError<T>> {
-        let (address, balances, details) = self
-            .wallet
-            .get_all_standalone_address_details(self.account_index, address)
-            .map_err(ControllerError::WalletError)?;
+        let (address, balances, details) = match &self.wallet {
+            WalletType2::Software(w) => {
+                w.get_all_standalone_address_details(self.account_index, address)
+            }
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(w) => {
+                w.get_all_standalone_address_details(self.account_index, address)
+            }
+        }
+        .map_err(ControllerError::WalletError)?;
 
         let balances = super::into_balances(&self.rpc_client, self.chain_config, balances).await?;
 
@@ -264,10 +321,12 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
         &self,
         filter: WalletPoolsFilter,
     ) -> Result<Vec<(PoolId, PoolData, Amount, Amount)>, ControllerError<T>> {
-        let pools = self
-            .wallet
-            .get_pool_ids(self.account_index, filter)
-            .map_err(ControllerError::WalletError)?;
+        let pools = match &self.wallet {
+            WalletType2::Software(w) => w.get_pool_ids(self.account_index, filter),
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(w) => w.get_pool_ids(self.account_index, filter),
+        }
+        .map_err(ControllerError::WalletError)?;
 
         let tasks: FuturesUnordered<_> = pools
             .into_iter()
@@ -312,47 +371,70 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     pub async fn get_delegations(
         &self,
     ) -> Result<Vec<(DelegationId, PoolId, Amount)>, ControllerError<T>> {
-        let delegations = self
-            .wallet
-            .get_delegations(self.account_index)
-            .map_err(ControllerError::WalletError)?;
-
-        let tasks: FuturesUnordered<_> = delegations
-            .into_iter()
-            .map(|(delegation_id, delegation_data)| {
-                self.get_delegation_share(delegation_data, *delegation_id).map(|res| {
-                    res.map(|opt| {
-                        opt.map(|(delegation_id, amount)| {
-                            (delegation_id, delegation_data.pool_id, amount)
+        let delegations = match &self.wallet {
+            WalletType2::Software(w) => {
+                let delegations =
+                    w.get_delegations(self.account_index).map_err(ControllerError::WalletError)?;
+                let tasks: FuturesUnordered<_> = delegations
+                    .into_iter()
+                    .map(|(delegation_id, delegation_data)| {
+                        self.get_delegation_share(delegation_data, *delegation_id).map(|res| {
+                            res.map(|opt| {
+                                opt.map(|(delegation_id, amount)| {
+                                    (delegation_id, delegation_data.pool_id, amount)
+                                })
+                            })
                         })
                     })
-                })
-            })
-            .collect();
+                    .collect();
 
-        let delegations = tasks.try_collect::<Vec<_>>().await?.into_iter().flatten().collect();
+                tasks.try_collect::<Vec<_>>().await?.into_iter().flatten().collect()
+            }
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(w) => {
+                let delegations =
+                    w.get_delegations(self.account_index).map_err(ControllerError::WalletError)?;
+                let tasks: FuturesUnordered<_> = delegations
+                    .into_iter()
+                    .map(|(delegation_id, delegation_data)| {
+                        self.get_delegation_share(delegation_data, *delegation_id).map(|res| {
+                            res.map(|opt| {
+                                opt.map(|(delegation_id, amount)| {
+                                    (delegation_id, delegation_data.pool_id, amount)
+                                })
+                            })
+                        })
+                    })
+                    .collect();
+
+                tasks.try_collect::<Vec<_>>().await?.into_iter().flatten().collect()
+            }
+        };
+
         Ok(delegations)
     }
 
     pub fn get_created_blocks(&self) -> Result<Vec<CreatedBlockInfo>, ControllerError<T>> {
-        self.wallet
-            .get_created_blocks(self.account_index)
-            .map_err(ControllerError::WalletError)
-            .map(|blocks| {
-                blocks
-                    .into_iter()
-                    .map(|(height, id, pool_id)| {
-                        let pool_id =
-                            Address::new(self.chain_config, pool_id).expect("addressable");
+        match &self.wallet {
+            WalletType2::Software(w) => w.get_created_blocks(self.account_index),
+            #[cfg(feature = "trezor")]
+            WalletType2::Trezor(w) => w.get_created_blocks(self.account_index),
+        }
+        .map_err(ControllerError::WalletError)
+        .map(|blocks| {
+            blocks
+                .into_iter()
+                .map(|(height, id, pool_id)| {
+                    let pool_id = Address::new(self.chain_config, pool_id).expect("addressable");
 
-                        CreatedBlockInfo {
-                            height,
-                            id,
-                            pool_id: pool_id.to_string(),
-                        }
-                    })
-                    .collect()
-            })
+                    CreatedBlockInfo {
+                        height,
+                        id,
+                        pool_id: pool_id.to_string(),
+                    }
+                })
+                .collect()
+        })
     }
 
     async fn get_delegation_share(
