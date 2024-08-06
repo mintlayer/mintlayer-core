@@ -17,16 +17,27 @@ use super::{
     signature::{inputsig::InputWitness, Signable, Transactable},
     Destination, Transaction, TxOutput,
 };
-use crate::chain::{SignedTransaction, TransactionCreationError, TxInput};
+use crate::{
+    chain::{SignedTransaction, TransactionCreationError, TxInput},
+    primitives::Amount,
+};
 use serialization::{Decode, Encode};
 use utils::ensure;
+
+/// Additional info for UTXOs
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+pub enum UtxoAdditionalInfo {
+    TokenInfo { num_decimals: u8, ticker: Vec<u8> },
+    PoolInfo { staker_balance: Amount },
+    NoAdditionalInfo,
+}
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct PartiallySignedTransaction {
     tx: Transaction,
     witnesses: Vec<Option<InputWitness>>,
 
-    input_utxos: Vec<Option<TxOutput>>,
+    input_utxos: Vec<Option<(TxOutput, UtxoAdditionalInfo)>>,
     destinations: Vec<Option<Destination>>,
 }
 
@@ -34,7 +45,7 @@ impl PartiallySignedTransaction {
     pub fn new(
         tx: Transaction,
         witnesses: Vec<Option<InputWitness>>,
-        input_utxos: Vec<Option<TxOutput>>,
+        input_utxos: Vec<Option<(TxOutput, UtxoAdditionalInfo)>>,
         destinations: Vec<Option<Destination>>,
     ) -> Result<Self, TransactionCreationError> {
         ensure!(
@@ -73,7 +84,7 @@ impl PartiallySignedTransaction {
         self.tx
     }
 
-    pub fn input_utxos(&self) -> &[Option<TxOutput>] {
+    pub fn input_utxos(&self) -> &[Option<(TxOutput, UtxoAdditionalInfo)>] {
         self.input_utxos.as_ref()
     }
 
