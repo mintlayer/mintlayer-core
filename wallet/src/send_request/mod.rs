@@ -185,8 +185,10 @@ impl SendRequest {
         }
     }
 
-    pub fn add_fee(&mut self, currency: Currency, fee: Amount) {
-        self.fees.insert(currency, fee);
+    pub fn add_fee(&mut self, currency: Currency, fee: Amount) -> WalletResult<()> {
+        let prev_fee = self.fees.entry(currency).or_insert(Amount::ZERO);
+        *prev_fee = (*prev_fee + fee).ok_or(WalletError::FeeAmountOverflow)?;
+        Ok(())
     }
 
     pub fn from_transaction<'a, PoolDataGetter>(

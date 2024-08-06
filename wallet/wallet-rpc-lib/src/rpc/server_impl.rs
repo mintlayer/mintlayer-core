@@ -32,7 +32,7 @@ use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
-    types::{BlockInfo, CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
+    types::{BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
 };
 use wallet_types::{
@@ -47,8 +47,9 @@ use crate::{
         MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
         NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
         RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
-        RpcUtxoType, StakePoolBalance, StakingStatus, StandaloneAddressWithDetails, TokenMetadata,
-        TransactionOptions, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
+        RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+        StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
+        UtxoInfo, VrfPublicKeyInfo,
     },
     RpcError,
 };
@@ -396,12 +397,21 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
     async fn get_balance(
         &self,
         account_arg: AccountArg,
+        utxo_states: Vec<RpcUtxoState>,
         with_locked: Option<WithLocked>,
     ) -> rpc::RpcResult<Balances> {
+        let utxo_states = utxo_states
+            .iter()
+            .map(|rpc_state| {
+                let state: UtxoState = rpc_state.into();
+                state
+            })
+            .fold(UtxoStates::NONE, |states, state| states | state);
+
         rpc::handle_result(
             self.get_balance(
                 account_arg.index::<N>()?,
-                UtxoStates::ALL,
+                utxo_states,
                 with_locked.unwrap_or(WithLocked::Unlocked),
             )
             .await,
@@ -937,6 +947,37 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         rpc::handle_result(
             self.send_tokens(account_arg.index::<N>()?, token_id, address, amount, config)
                 .await,
+        )
+    }
+
+    async fn make_tx_to_send_tokens_from_multisig_address(
+        &self,
+        account_arg: AccountArg,
+        from_address: RpcAddress<Destination>,
+        fee_change_address: Option<RpcAddress<Destination>>,
+        outputs: Vec<GenericTokenTransfer>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<SendTokensFromMultisigAddressResult> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb(),
+            broadcast_to_mempool: true,
+        };
+        rpc::handle_result(
+            self.make_tx_to_send_tokens_from_multisig_address(
+                account_arg.index::<N>()?,
+                from_address,
+                fee_change_address,
+                outputs,
+                config,
+            )
+            .await
+            .map(
+                |(tx, cur_signatures, fees)| SendTokensFromMultisigAddressResult {
+                    transaction: HexEncoded::new(tx),
+                    current_signatures: cur_signatures.into_iter().map(Into::into).collect(),
+                    fees,
+                },
+            ),
         )
     }
 

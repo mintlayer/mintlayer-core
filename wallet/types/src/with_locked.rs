@@ -16,7 +16,7 @@
 use rpc_description::HasValueHint;
 
 /// Enum used to specify whether to include locked balance/utxos for wallet commands
-#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub enum WithLocked {
     Any,
     Unlocked,

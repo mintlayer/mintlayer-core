@@ -18,11 +18,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::account::transaction_list::TransactionList;
-use crate::account::TxInfo;
 use crate::account::{
     currency_grouper::Currency, CurrentFeeRate, DelegationData, PoolData, TransactionToSign,
     UnconfirmedTokenInfo, UtxoSelectorError,
 };
+use crate::account::{CoinSelectionAlgo, TxInfo};
 use crate::key_chain::{
     make_account_path, make_path_to_vrf_key, KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE,
     VRF_INDEX,
@@ -130,6 +130,8 @@ pub enum WalletError {
     SizeEstimationError(#[from] SizeEstimationError),
     #[error("Output amounts overflow")]
     OutputAmountOverflow,
+    #[error("Fee amounts overflow")]
+    FeeAmountOverflow,
     #[error("Delegation with id: {0} with duplicate AccountNonce: {1}")]
     InconsistentDelegationDuplicateNonce(DelegationId, AccountNonce),
     #[error("Inconsistent produce block from stake for pool id: {0}, missing CreateStakePool")]
@@ -1318,6 +1320,8 @@ impl<B: storage::Backend> Wallet<B> {
     /// * `account_index: U31` - The index of the account from which funds will be sent.
     /// * `outputs: impl IntoIterator<Item = TxOutput>` - An iterator over `TxOutput` items representing the addresses and amounts to which funds will be sent.
     /// * `inputs`: SelectedInputs - if not empty will try to select inputs from those instead of the available ones
+    /// * `selection_algo`: Option<CoinSelectionAlgo> - coin selection algorithm to use on the effective set of inputs;
+    /// the default value depends on whether the provided `inputs` are empty.
     /// * `change_addresses`: if present will use those change_addresses instead of generating new ones
     /// * `current_fee_rate: FeeRate` - The current fee rate based on the mempool to be used for the transaction.
     /// * `consolidate_fee_rate: FeeRate` - The fee rate in case of a consolidation event, if the
@@ -1354,11 +1358,13 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_unsigned_transaction_to_addresses(
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
         inputs: SelectedInputs,
+        selection_algo: Option<CoinSelectionAlgo>,
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
@@ -1370,6 +1376,7 @@ impl<B: storage::Backend> Wallet<B> {
                 db_tx,
                 request,
                 inputs,
+                selection_algo,
                 change_addresses,
                 latest_median_time,
                 CurrentFeeRate {

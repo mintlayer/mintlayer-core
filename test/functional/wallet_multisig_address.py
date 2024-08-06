@@ -123,7 +123,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
             num_wallets = random.randint(2, 32)
             min_required_signatures = random.randint(1, num_wallets)
 
-            pub_key = await wallet.reveal_public_key_as_address()
+            pub_key = await wallet.reveal_public_key_as_address(await wallet.new_address())
             public_keys = [pub_key]
 
             # empty public keys for multisig
@@ -145,7 +145,7 @@ class WalletSubmitTransaction(BitcoinTestFramework):
                 await wallet.close_wallet()
                 await wallet.create_wallet(f'wallet{i}')
                 assert_in("Success", await wallet.sync())
-                pub_key = await wallet.reveal_public_key_as_address()
+                pub_key = await wallet.reveal_public_key_as_address(await wallet.new_address())
                 public_keys.append(pub_key)
 
 

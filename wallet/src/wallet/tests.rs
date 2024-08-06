@@ -4357,6 +4357,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
                 UtxoOutPoint::new(OutPointSourceId::BlockReward(block1.get_id().into()), 0),
                 reward_output,
             )]),
+            None,
             [(Currency::Coin, cold_wallet_address.clone())].into(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),

@@ -241,6 +241,12 @@ Parameters:
 ```
 {
     "account": number,
+    "utxo_states": [ EITHER OF
+         1) "Confirmed"
+         2) "Conflicted"
+         3) "Inactive"
+         4) "Abandoned"
+         5) "InMempool", .. ],
     "with_locked": EITHER OF
          1) "Any"
          2) "Unlocked"
@@ -1093,6 +1099,60 @@ Parameters:
 Returns:
 ```
 { "tx_id": hex string }
+```
+
+### Method `make_tx_to_send_tokens_from_multisig_address`
+
+Create a transaction for sending tokens from a multisig address to other addresses, returning the change to
+the original multisig address.
+
+The utxos to pay fees from will be selected automatically; these will be normal, single-sig utxos.
+The `fee_change_address` parameter specifies the destination for the change for the fee payment;
+If it's `None`, the destination will be taken from one of existing single-sig utxos.
+
+
+Parameters:
+```
+{
+    "account_arg": number,
+    "from_address": bech32 string,
+    "fee_change_address": EITHER OF
+         1) bech32 string
+         2) null,
+    "outputs": [ object, .. ],
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
+}
+```
+
+Returns:
+```
+{
+    "transaction": hex string,
+    "current_signatures": [ EITHER OF
+         1) { "type": "NotSigned" }
+         2) { "type": "InvalidSignature" }
+         3) { "type": "UnknownSignature" }
+         4) { "type": "FullySigned" }
+         5) {
+                "type": "PartialMultisig",
+                "content": {
+                    "required_signatures": number,
+                    "num_signatures": number,
+                },
+            }, .. ],
+    "fees": {
+        "coins": {
+            "atoms": number string,
+            "decimal": decimal string,
+        },
+        "tokens": { hex string: {
+            "atoms": number string,
+            "decimal": decimal string,
+        }, .. },
+    },
+}
 ```
 
 ### Method `address_deposit_data`

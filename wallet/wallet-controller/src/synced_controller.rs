@@ -19,11 +19,12 @@ use common::{
     address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
         classic_multisig::ClassicMultisigChallenge,
+        output_value::OutputValue,
         partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{
-            IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCTokenInfo, TokenId, TokenIssuance,
-            TokenIssuanceV1, TokenTotalSupply,
+            IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, RPCTokenInfo,
+            TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
         ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
@@ -41,8 +42,11 @@ use futures::{stream::FuturesUnordered, TryStreamExt};
 use logging::log;
 use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
+use utils::ensure;
 use wallet::{
-    account::{currency_grouper::Currency, TransactionToSign, UnconfirmedTokenInfo},
+    account::{
+        currency_grouper::Currency, CoinSelectionAlgo, TransactionToSign, UnconfirmedTokenInfo,
+    },
     get_tx_output_destination,
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
@@ -58,7 +62,11 @@ use wallet_types::{
     with_locked::WithLocked,
 };
 
-use crate::{into_balances, types::Balances, ControllerConfig, ControllerError};
+use crate::{
+    into_balances,
+    types::{Balances, GenericCurrencyTransfer},
+    ControllerConfig, ControllerError,
+};
 
 pub struct SyncedController<'a, T, W> {
     wallet: &'a mut DefaultWallet,
@@ -118,22 +126,32 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         &self,
         input_utxos: &[UtxoOutPoint],
     ) -> Result<(), ControllerError<T>> {
-        let utxos = self
+        let token_ids = self
             .wallet
             .find_used_tokens(self.account_index, input_utxos)
             .map_err(ControllerError::WalletError)?;
 
-        for token_info in self.fetch_token_infos(utxos).await? {
+        for token_info in self.fetch_token_infos(token_ids).await? {
             match token_info {
-                RPCTokenInfo::FungibleToken(token_info) => self
-                    .wallet
-                    .get_token_unconfirmed_info(self.account_index, &token_info)
-                    .map_err(ControllerError::WalletError)?
-                    .check_can_be_used()
-                    .map_err(ControllerError::WalletError)?,
+                RPCTokenInfo::FungibleToken(token_info) => {
+                    self.check_fungible_token_is_usable(&token_info)?
+                }
                 RPCTokenInfo::NonFungibleToken(_) => {}
             }
         }
+        Ok(())
+    }
+
+    pub fn check_fungible_token_is_usable(
+        &self,
+        token_info: &RPCFungibleTokenInfo,
+    ) -> Result<(), ControllerError<T>> {
+        self.wallet
+            .get_token_unconfirmed_info(self.account_index, token_info)
+            .map_err(ControllerError::WalletError)?
+            .check_can_be_used()
+            .map_err(ControllerError::WalletError)?;
+
         Ok(())
     }
 
@@ -619,6 +637,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 self.account_index,
                 [output],
                 selected_inputs,
+                None,
                 [(Currency::Coin, change_address)].into(),
                 current_fee_rate,
                 consolidate_fee_rate,
@@ -628,6 +647,154 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
 
         Ok((req, fees))
+    }
+
+    /// Create an unsigned transaction for transfer of tokens to the specified destinations.
+    ///
+    /// The inputs for the transfer are randomly selected from the provided `inputs` until
+    /// target amounts are satisfied.
+    ///
+    /// The function will automatically select coin utxos to pay fees from (note that `inputs`
+    /// is not supposed to contain coin utxos; if it does, there is no guarantee that exactly
+    /// those utxos will be selected to pay the fee).
+    ///
+    /// The change will be sent to addresses specified in `change_addresses`.
+    /// If there is no entry in `change_addresses` for a certain token, the change will be sent
+    /// to the first unused address in the wallet.
+    /// If there is no entry in `change_addresses` for coins, the destination for the change
+    /// from the fee payment will be taken from one of the existing coin utxos.
+    // TODO: this discrepancy between tokens/coins fee handling is a bit ugly, it's better to unify it.
+    // Note: the reason for this specific fee change behavior is that this function is called from
+    // `make_tx_to_send_tokens_from_multisig_address`, which is supposed to be used in automated
+    // scenarios; issuing a new address for each call seems redundant in such a case.
+    // The token change being sent to first unused address doesn't have any particular reason;
+    // it's just how this function's callee behaves by default.
+    pub async fn make_unsigned_tx_to_send_tokens_to_addresses(
+        &mut self,
+        inputs: Vec<(UtxoOutPoint, TxOutput)>,
+        outputs: BTreeMap<TokenId, Vec<GenericCurrencyTransfer>>,
+        change_addresses: BTreeMap<Currency, Address<Destination>>,
+    ) -> Result<(PartiallySignedTransaction, Balances), ControllerError<T>> {
+        ensure!(
+            !inputs.is_empty(),
+            ControllerError::<T>::ExpectingNonEmptyInputs
+        );
+        ensure!(
+            !outputs.is_empty(),
+            ControllerError::<T>::ExpectingNonEmptyOutputs
+        );
+
+        let outputs = {
+            let mut result = Vec::new();
+
+            for (token_id, outputs_vec) in outputs {
+                let token_info = self.get_token_info(token_id).await?;
+
+                match &token_info {
+                    RPCTokenInfo::FungibleToken(token_info) => {
+                        self.check_fungible_token_is_usable(token_info)?
+                    }
+                    RPCTokenInfo::NonFungibleToken(_) => {
+                        return Err(ControllerError::<T>::NotFungibleToken(token_id));
+                    }
+                }
+
+                itertools::process_results(
+                    outputs_vec.into_iter().map(|output| output.into_token_tx_output(&token_info)),
+                    |iter| result.extend(iter),
+                )
+                .map_err(ControllerError::InvalidTxOutput)?;
+            }
+
+            result
+        };
+
+        let (inputs, change_addresses) = {
+            let mut inputs = inputs;
+            let mut change_addresses = change_addresses;
+
+            let all_utxos = self
+                .wallet
+                .get_utxos(
+                    self.account_index,
+                    UtxoType::Transfer | UtxoType::LockThenTransfer,
+                    UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+                    WithLocked::Unlocked,
+                )
+                .map_err(ControllerError::WalletError)?;
+
+            let all_coin_utxos = all_utxos
+                .into_iter()
+                .filter_map(|(o, txo, _)| {
+                    let (val, dest) = match &txo {
+                        TxOutput::Transfer(val, dest)
+                        | TxOutput::LockThenTransfer(val, dest, _) => (val, dest),
+                        TxOutput::CreateDelegationId(_, _)
+                        | TxOutput::IssueNft(_, _, _)
+                        | TxOutput::ProduceBlockFromStake(_, _)
+                        | TxOutput::CreateStakePool(_, _)
+                        | TxOutput::Htlc(_, _)
+                        | TxOutput::Burn(_)
+                        | TxOutput::IssueFungibleToken(_)
+                        | TxOutput::DelegateStaking(_, _)
+                        | TxOutput::DataDeposit(_)
+                        | TxOutput::AnyoneCanTake(_) => return None,
+                    };
+
+                    match val {
+                        OutputValue::Coin(_) => {
+                            let o = o.clone();
+                            let dest = dest.clone();
+                            Some((o, txo, dest))
+                        }
+                        OutputValue::TokenV0(_) | OutputValue::TokenV1(_, _) => None,
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            match change_addresses.entry(Currency::Coin) {
+                std::collections::btree_map::Entry::Vacant(e) => {
+                    let coin_change_address = Address::new(
+                        self.chain_config,
+                        all_coin_utxos
+                            .first()
+                            .ok_or(ControllerError::<T>::NoCoinUtxosToPayFeeFrom)?
+                            .2
+                            .clone(),
+                    )
+                    .expect("addressable");
+
+                    e.insert(coin_change_address);
+                }
+                std::collections::btree_map::Entry::Occupied(_) => {}
+            }
+
+            inputs.extend(all_coin_utxos.into_iter().map(|(o, txo, _)| (o, txo)));
+
+            (inputs, change_addresses)
+        };
+
+        let selected_inputs = SelectedInputs::Inputs(inputs);
+
+        let (current_fee_rate, consolidate_fee_rate) =
+            self.get_current_and_consolidation_fee_rate().await?;
+
+        let (tx, fees) = self
+            .wallet
+            .create_unsigned_transaction_to_addresses(
+                self.account_index,
+                outputs,
+                selected_inputs,
+                Some(CoinSelectionAlgo::Randomize),
+                change_addresses,
+                current_fee_rate,
+                consolidate_fee_rate,
+            )
+            .map_err(ControllerError::WalletError)?;
+
+        let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
+
+        Ok((tx, fees))
     }
 
     /// Create a transaction that creates a new delegation for the specified pool with the

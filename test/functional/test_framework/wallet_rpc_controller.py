@@ -24,10 +24,12 @@ import re
 from dataclasses import dataclass
 from tempfile import NamedTemporaryFile
 import base64
+from operator import itemgetter
 
 from typing import Optional, List, Tuple, Union
 
-from test_framework.util import rpc_port
+from test_framework.util import assert_in, rpc_port
+from test_framework.wallet_controller_common import PartialSigInfo, TokenTxOutput
 
 ONE_MB = 2**20
 READ_TIMEOUT_SEC = 30
@@ -167,10 +169,10 @@ class WalletRpcController:
         encoded_payload = json.dumps(payload).encode('utf-8')
         self.http_client.request("POST", '', body=encoded_payload, headers=self.headers())
         response = self.http_client.getresponse()
-        self.log.info(f"method, {method}")
-        self.log.info(f'response, {response} status: {response.status}')
+        self.log.debug(f"method, {method}")
+        self.log.debug(f'response, {response} status: {response.status}')
         body = response.read().decode('utf-8')
-        self.log.info(f'body, {body}')
+        self.log.debug(f'body, {body}')
         self.wallet_commands_file.write(response.read())
         return json.loads(body)
 
@@ -212,6 +214,13 @@ class WalletRpcController:
         self.account = account_index
         return "Success"
 
+    # Note: this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
+    async def add_standalone_multisig_address_get_result(
+            self, min_required_signatures: int, pub_keys: List[str], label: Optional[str] = None, no_rescan: Optional[bool] = None) -> str:
+
+        result = self._write_command("standalone_add_multisig", [self.account, min_required_signatures, pub_keys, label, no_rescan])
+        return result['result']
+
     async def new_public_key(self, address: Optional[str] = None) -> bytes:
         if address is None:
             address = await self.new_address()
@@ -220,6 +229,9 @@ class WalletRpcController:
         # remove the pub key enum value, the first one byte
         pub_key_bytes = bytes.fromhex(public_key)[1:]
         return pub_key_bytes
+
+    async def reveal_public_key_as_address(self, address: str) -> str:
+        return self._write_command("address_reveal_public_key", [self.account, address])['result']['public_key_address']
 
     async def new_address(self) -> str:
         return self._write_command(f"address_new", [self.account])['result']['address']
@@ -239,7 +251,12 @@ class WalletRpcController:
         return "The transaction was submitted successfully"
 
     async def send_tokens_to_address(self, token_id: str, address: str, amount: Union[float, str]):
-        return self._write_command("token_send", [self.account, token_id, address, {'decimal': amount}, {'in_top_x_mb': 5}])['result']
+        return self._write_command("token_send", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']
+
+    # Note: unlike send_tokens_to_address, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
+    async def send_tokens_to_address_or_fail(self, token_id: str, address: str, amount: Union[float, str]):
+        # send_tokens_to_address already fails on error.
+        await self.send_tokens_to_address(token_id, address, amount)
 
     async def issue_new_token(self,
                               token_ticker: str,
@@ -248,23 +265,36 @@ class WalletRpcController:
                               destination_address: str,
                               token_supply: str = 'unlimited',
                               is_freezable: str = 'freezable'):
-        output = self._write_command('token_issue_new', [
+        result = self._write_command('token_issue_new', [
             self.account,
-            token_ticker,
-            number_of_decimals,
-            metadata_uri,
             destination_address,
-            token_supply,
-            is_freezable,
+            {
+                'token_ticker': token_ticker,
+                'number_of_decimals': number_of_decimals,
+                'metadata_uri': metadata_uri,
+                'token_supply': {
+                    'type': token_supply.title()
+                },
+                'is_freezable': True if is_freezable == 'freezable' else False
+            },
             {'in_top_x_mb': 5}
-            ])['result']
-        return output
+        ])
+
+        if 'result' in result:
+            return result['result']['token_id'], None
+        else:
+            return None, result['error']
 
     async def mint_tokens(self, token_id: str, address: str, amount: int) -> str:
-        return self._write_command("token_mint", [self.account, token_id, address, {'decimal': amount}, {'in_top_x_mb': 5}])['result']
+        return self._write_command("token_mint", [self.account, token_id, address, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']
+
+    # Note: unlike mint_tokens, this function behaves identically both for wallet_cli_controller and wallet_rpc_controller.
+    async def mint_tokens_or_fail(self, token_id: str, address: str, amount: int):
+        # self.mint_tokens already fails on error
+        await self.mint_tokens(token_id, address, amount)
 
     async def unmint_tokens(self, token_id: str, amount: int) -> str:
-        return self._write_command("token_mint", [self.account, token_id, {'decimal': amount}, {'in_top_x_mb': 5}])['result']
+        return self._write_command("token_unmint", [self.account, token_id, {'decimal': str(amount)}, {'in_top_x_mb': 5}])['result']
 
     async def lock_token_supply(self, token_id: str) -> str:
         return self._write_command("token_lock_supply", [self.account, token_id, {'in_top_x_mb': 5}])['result']
@@ -372,8 +402,19 @@ class WalletRpcController:
 
     async def get_balance(self, with_locked: str = 'unlocked', utxo_states: List[str] = ['confirmed']) -> str:
         with_locked = with_locked.capitalize()
-        balances = self._write_command("account_balance", [self.account, with_locked])# {' '.join(utxo_states)})
-        return f"Coins amount: {balances['result']['coins']['decimal']}"
+        result = self._write_command("account_balance", [self.account, [state.title() for state in utxo_states], with_locked])
+        result = result['result']
+
+        coins = result['coins']['decimal']
+        tokens = {}
+
+        if 'tokens' in result:
+            for (hexified_token_id, balance) in result['tokens'].items():
+                token_id_as_addr = self.node.test_functions_dehexify_all_addresses(hexified_token_id)
+                tokens[token_id_as_addr] = balance['decimal']
+
+        # Mimic the output of wallet_cli_controller's 'get_balance'
+        return "\n".join([f"Coins amount: {coins}"] + [f"Token: {token} amount: {amount}" for token, amount in tokens.items()])
 
     async def list_pending_transactions(self) -> List[str]:
         output = self._write_command("transaction_list_pending", [self.account])['result']
@@ -392,6 +433,13 @@ class WalletRpcController:
                              Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n{result['result']['hex']}"
         else:
             return result['error']['message']
+
+    async def sign_raw_transaction_expect_fully_signed(self, transaction: str) -> str:
+        output = await self.sign_raw_transaction(transaction)
+        assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
+
+        lines = [s for s in output.splitlines() if s.strip()]
+        return lines[1]
 
     async def sign_challenge_plain(self, message: str, address: str) -> str:
         result = self._write_command('challenge_sign_plain', [self.account, message, address])
@@ -429,3 +477,47 @@ class WalletRpcController:
             return f"Send transaction created\n\n{result['result']['hex']}"
         else:
             return result['error']['message']
+
+    async def make_tx_to_send_tokens_from_multisig_address(self, from_address: str, outputs: List[TokenTxOutput], fee_change_addr: Optional[str]):
+        outputs = [
+            {
+                "token_id": output.token_id,
+                "amount": output.amount,
+                "destination": f"HexifiedDestination{{0x{self.node.test_functions_address_to_destination(output.address)}}}"
+            }
+            for output in outputs
+        ]
+
+        result = self._write_command(
+            "make_tx_to_send_tokens_from_multisig_address",
+            [self.account, from_address, fee_change_addr, outputs, {'in_top_x_mb': 5}])
+
+        return result['result']
+
+    async def make_tx_to_send_tokens_from_multisig_address_expect_fully_signed(
+            self, from_address: str, outputs: List[TokenTxOutput], fee_change_addr: Optional[str]):
+
+        result = await self.make_tx_to_send_tokens_from_multisig_address(from_address, outputs, fee_change_addr)
+
+        for sig_status in result['current_signatures']:
+            assert sig_status['type'] == 'FullySigned'
+
+        tx_as_partially_signed = result['transaction']
+        signed_tx = self.node.test_functions_partially_signed_tx_to_signed_tx(tx_as_partially_signed)
+
+        return signed_tx
+
+    async def make_tx_to_send_tokens_from_multisig_address_expect_partially_signed(
+            self, from_address: str, outputs: List[TokenTxOutput], fee_change_addr: Optional[str]):
+
+        result = await self.make_tx_to_send_tokens_from_multisig_address(from_address, outputs, fee_change_addr)
+
+        siginfo = sorted(result['current_signatures'],  key=itemgetter('type'))
+
+        siginfo_to_return = []
+        for (idx, status) in enumerate(siginfo):
+            if status['type'] == 'PartialMultisig':
+                content = status['content']
+                siginfo_to_return.append(PartialSigInfo(idx, content['num_signatures'], content['required_signatures']))
+
+        return (result['transaction'], siginfo_to_return)

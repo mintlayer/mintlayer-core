@@ -147,6 +147,8 @@ BASE_SCRIPTS = [
     'wallet_get_address_usage.py',
     'wallet_tokens.py',
     'wallet_tokens_freeze.py',
+    'wallet_tokens_transfer_from_multisig_addr.py',
+    'wallet_tokens_transfer_from_multisig_addr_rpc.py',
     'wallet_tokens_change_authority.py',
     'wallet_tokens_change_supply.py',
     'wallet_nfts.py',
@@ -484,7 +486,7 @@ class TestHandler:
             test = self.test_list.pop(0)
             portseed = len(self.test_list)
             portseed_arg = ["--portseed={}".format(portseed)]
-            randomseed_arg = [f"--randomseed={self.randomseed}"]
+            randomseed_arg = [] if any(f.startswith('--randomseed') for f in self.flags) else [f"--randomseed={self.randomseed}"]
             log_stdout = tempfile.SpooledTemporaryFile(max_size=2**16)
             log_stderr = tempfile.SpooledTemporaryFile(max_size=2**16)
             test_argv = test.split()

@@ -18,4 +18,5 @@ utils = { path = "../utils" }
 hex.workspace = true
 itertools.workspace = true
 rand_chacha.workspace = true
+regex.workspace = true
 rstest.workspace = true

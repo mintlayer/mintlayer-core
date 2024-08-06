@@ -22,6 +22,7 @@ serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
 wallet = { path = ".." }
+wallet-controller = { path = "../wallet-controller" }
 wallet-storage = { path = "../storage" }
 wallet-types = { path = "../types" }
 wallet-rpc-lib = { path = "../wallet-rpc-lib" }

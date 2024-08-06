@@ -28,6 +28,7 @@ p2p-types = { path = "../../p2p/types" }
 anyhow.workspace = true
 async-trait.workspace = true
 clap.workspace = true
+enum-iterator.workspace = true
 futures.workspace = true
 jsonrpsee.workspace = true
 serde.workspace = true

@@ -169,7 +169,7 @@ fn output_spendable_value(output: &TxOutput) -> Result<(Currency, Amount), UtxoS
     Ok(value)
 }
 
-pub fn group_utxos_for_input<T, Grouped: Clone>(
+pub fn group_utxos_for_input<T: std::fmt::Debug, Grouped: Clone>(
     outputs: impl Iterator<Item = T>,
     get_tx_output: impl Fn(&T) -> &TxOutput,
     mut combiner: impl FnMut(&mut Grouped, &T, Amount) -> WalletResult<()>,

@@ -232,3 +232,17 @@ Returns:
 string
 ```
 
+### Method `test_functions_partially_signed_tx_to_signed_tx`
+
+Parameters:
+```
+{ "input": hex string }
+```
+
+Returns:
+```
+EITHER OF
+     1) hex string
+     2) null
+```
+

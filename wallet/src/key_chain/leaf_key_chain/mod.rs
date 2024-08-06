@@ -306,7 +306,7 @@ impl LeafKeySoftChain {
             .derive_child(ChildNumber::from_normal(key_index))?)
     }
 
-    /// Derives and adds a key to his key chain. This does not affect the last used and issued state
+    /// Derives and adds a key to this key chain. This does not affect the last used and issued state
     fn derive_and_add_key(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -338,7 +338,7 @@ impl LeafKeySoftChain {
         db_tx.set_public_key(&account_path_id, &derived_key)?;
         db_tx.set_address(&account_path_id, &address)?;
 
-        // Add key and address the maps
+        // Add key and address to the maps
         self.derived_public_keys
             .insert(ChildNumber::from_normal(key_index), derived_key.clone());
         self.addresses.insert(ChildNumber::from_normal(key_index), address);

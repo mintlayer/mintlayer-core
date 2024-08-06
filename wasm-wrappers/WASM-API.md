@@ -192,6 +192,7 @@ Given the inputs, along each input's destination that can spend that input
 for Account inputs that spend from a delegation it is the owning address of that delegation,
 and in the case of AccountCommand inputs which change a token it is the token's authority destination)
 and the outputs, estimate the transaction size.
+ScriptHash and ClassicMultisig destinations are not supported.
 
 ### Function: `encode_transaction`
 
