@@ -1331,72 +1331,42 @@ impl<K: AccountKeyChains> Account<K> {
         self.output_cache.pool_data(pool_id).is_ok()
     }
 
-    pub fn tx_to_partially_signed_tx(
+    pub fn find_account_destination(
         &self,
-        tx: Transaction,
-        median_time: BlockTimestamp,
-    ) -> WalletResult<PartiallySignedTransaction> {
-        let current_block_info = BlockInfo {
-            height: self.account_info.best_block_height(),
-            timestamp: median_time,
-        };
+        acc_outpoint: &AccountOutPoint,
+    ) -> WalletResult<Destination> {
+        match acc_outpoint.account() {
+            AccountSpending::DelegationBalance(delegation_id, _) => self
+                .output_cache
+                .delegation_data(delegation_id)
+                .map(|data| data.destination.clone())
+                .ok_or(WalletError::DelegationNotFound(*delegation_id)),
+        }
+    }
 
-        let (input_utxos, destinations) = tx
-            .inputs()
-            .iter()
-            .map(|tx_inp| match tx_inp {
-                TxInput::Utxo(outpoint) => {
-                    // find utxo from cache
-                    self.find_unspent_utxo_with_destination(outpoint, current_block_info)
-                        .map(|(out, dest)| (Some(out), Some(dest)))
-                }
-                TxInput::Account(acc_outpoint) => {
-                    // find delegation destination
-                    match acc_outpoint.account() {
-                        AccountSpending::DelegationBalance(delegation_id, _) => self
-                            .output_cache
-                            .delegation_data(delegation_id)
-                            .map(|data| (None, Some(data.destination.clone())))
-                            .ok_or(WalletError::DelegationNotFound(*delegation_id)),
-                    }
-                }
-                TxInput::AccountCommand(_, cmd) => {
-                    match cmd {
-                        // find authority of the token
-                        AccountCommand::MintTokens(token_id, _)
-                        | AccountCommand::UnmintTokens(token_id)
-                        | AccountCommand::LockTokenSupply(token_id)
-                        | AccountCommand::ChangeTokenAuthority(token_id, _)
-                        | AccountCommand::ChangeTokenMetadataUri(token_id, _)
-                        | AccountCommand::FreezeToken(token_id, _)
-                        | AccountCommand::UnfreezeToken(token_id) => self
-                            .output_cache
-                            .token_data(token_id)
-                            .map(|data| (None, Some(data.authority.clone())))
-                            .ok_or(WalletError::UnknownTokenId(*token_id)),
-                        // find authority of the order
-                        AccountCommand::ConcludeOrder(order_id) => self
-                            .output_cache
-                            .order_data(order_id)
-                            .map(|data| (None, Some(data.conclude_key.clone())))
-                            .ok_or(WalletError::UnknownOrderId(*order_id)),
-                        AccountCommand::FillOrder(_, _, dest) => Ok((None, Some(dest.clone()))),
-                    }
-                }
-            })
-            .collect::<WalletResult<Vec<_>>>()?
-            .into_iter()
-            .unzip();
-
-        let num_inputs = tx.inputs().len();
-        let ptx = PartiallySignedTransaction::new(
-            tx,
-            vec![None; num_inputs],
-            input_utxos,
-            destinations,
-            None,
-        )?;
-        Ok(ptx)
+    pub fn find_account_command_destination(
+        &self,
+        cmd: &AccountCommand,
+    ) -> WalletResult<Destination> {
+        match cmd {
+            AccountCommand::MintTokens(token_id, _)
+            | AccountCommand::UnmintTokens(token_id)
+            | AccountCommand::LockTokenSupply(token_id)
+            | AccountCommand::ChangeTokenAuthority(token_id, _)
+            | AccountCommand::ChangeTokenMetadataUri(token_id, _)
+            | AccountCommand::FreezeToken(token_id, _)
+            | AccountCommand::UnfreezeToken(token_id) => self
+                .output_cache
+                .token_data(token_id)
+                .map(|data| data.authority.clone())
+                .ok_or(WalletError::UnknownTokenId(*token_id)),
+            AccountCommand::ConcludeOrder(order_id) => self
+                .output_cache
+                .order_data(order_id)
+                .map(|data| data.conclude_key.clone())
+                .ok_or(WalletError::UnknownOrderId(*order_id)),
+            AccountCommand::FillOrder(_, _, dest) => Ok(dest.clone()),
+        }
     }
 
     pub fn find_unspent_utxo_with_destination(

@@ -18,7 +18,7 @@ use std::mem::take;
 
 use common::address::Address;
 use common::chain::output_value::OutputValue;
-use common::chain::partially_signed_transaction::PartiallySignedTransaction;
+use common::chain::partially_signed_transaction::{PartiallySignedTransaction, UtxoAdditionalInfo};
 use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{Metadata, TokenId, TokenIssuance};
@@ -302,14 +302,14 @@ impl SendRequest {
         let num_inputs = self.inputs.len();
         let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
         let destinations = self.destinations.into_iter().map(Some).collect();
+        let utxos = self
+            .utxos
+            .into_iter()
+            .map(|utxo| utxo.map(|utxo| (utxo, UtxoAdditionalInfo::NoAdditionalInfo)))
+            .collect();
 
-        let ptx = PartiallySignedTransaction::new(
-            tx,
-            vec![None; num_inputs],
-            self.utxos,
-            destinations,
-            None,
-        )?;
+        let ptx =
+            PartiallySignedTransaction::new(tx, vec![None; num_inputs], utxos, destinations, None)?;
         Ok(ptx)
     }
 }

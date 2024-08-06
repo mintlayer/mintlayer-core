@@ -17,11 +17,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::account::transaction_list::TransactionList;
-use crate::account::{CoinSelectionAlgo, TxInfo};
 use crate::account::{
-    CurrentFeeRate, DelegationData, PoolData, TransactionToSign, UnconfirmedTokenInfo,
-    UtxoSelectorError,
+    transaction_list::TransactionList, CoinSelectionAlgo, CurrentFeeRate, DelegationData, PoolData,
+    TxInfo, UnconfirmedTokenInfo, UtxoSelectorError,
 };
 use crate::key_chain::{
     make_account_path, make_path_to_vrf_key, AccountKeyChainImplSoftware, KeyChainError,
@@ -49,9 +47,10 @@ use common::chain::tokens::{
     make_token_id, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
 use common::chain::{
-    make_order_id, AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId,
-    OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction, SignedTransactionIntent,
-    Transaction, TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
+    make_order_id, AccountCommand, AccountNonce, AccountOutPoint, Block, ChainConfig, DelegationId,
+    Destination, GenBlock, OrderId, OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction,
+    SignedTransactionIntent, Transaction, TransactionCreationError, TxInput, TxOutput,
+    UtxoOutPoint,
 };
 use common::primitives::id::{hash_encoded, WithId};
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -1051,7 +1050,7 @@ where
                 let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
 
                 let inputs_utxo_refs: Vec<_> =
-                    ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
+                    ptx.input_utxos().iter().map(|u| u.as_ref().map(|(x, _)| x)).collect();
                 let is_fully_signed =
                     ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
                         |((i, destination), witness)| match (witness, destination) {
@@ -1167,6 +1166,18 @@ where
             .map(|(outpoint, (txo, token_id))| (outpoint, txo.clone(), token_id))
             .collect();
         Ok(utxos)
+    }
+
+    pub fn find_account_destination(&self, acc_outpoint: &AccountOutPoint) -> Option<Destination> {
+        self.accounts
+            .values()
+            .find_map(|acc| acc.find_account_destination(acc_outpoint).ok())
+    }
+
+    pub fn find_account_command_destination(&self, cmd: &AccountCommand) -> Option<Destination> {
+        self.accounts
+            .values()
+            .find_map(|acc| acc.find_account_command_destination(cmd).ok())
     }
 
     pub fn find_unspent_utxo_with_destination(
@@ -1991,22 +2002,15 @@ where
     pub fn sign_raw_transaction(
         &mut self,
         account_index: U31,
-        tx: TransactionToSign,
+        ptx: PartiallySignedTransaction,
     ) -> WalletResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
         Vec<SignatureStatus>,
     )> {
-        let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked(
             account_index,
             |account, db_tx, chain_config, signer_provider| {
-                let ptx = match tx {
-                    TransactionToSign::Partial(ptx) => ptx,
-                    TransactionToSign::Tx(tx) => {
-                        account.tx_to_partially_signed_tx(tx, latest_median_time)?
-                    }
-                };
                 let mut signer =
                     signer_provider.provide(Arc::new(chain_config.clone()), account_index);
 
