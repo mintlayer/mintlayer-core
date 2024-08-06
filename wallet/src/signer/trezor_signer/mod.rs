@@ -58,9 +58,9 @@ use trezor_client::{
     find_devices,
     protos::{
         MintlayerAccountCommandTxInput, MintlayerAccountTxInput, MintlayerAddressPath,
-        MintlayerBurnTxOutput, MintlayerChangeTokenAuhtority, MintlayerCreateDelegationIdTxOutput,
-        MintlayerCreateStakePoolTxOutput, MintlayerDataDepositTxOutput,
-        MintlayerDelegateStakingTxOutput, MintlayerFreezeToken,
+        MintlayerBurnTxOutput, MintlayerChangeTokenAuhtority, MintlayerChangeTokenMediaUri,
+        MintlayerCreateDelegationIdTxOutput, MintlayerCreateStakePoolTxOutput,
+        MintlayerDataDepositTxOutput, MintlayerDelegateStakingTxOutput, MintlayerFreezeToken,
         MintlayerIssueFungibleTokenTxOutput, MintlayerIssueNftTxOutput,
         MintlayerLockThenTransferTxOutput, MintlayerLockTokenSupply, MintlayerMintTokens,
         MintlayerOutputValue, MintlayerProduceBlockFromStakeTxOutput, MintlayerTokenTotalSupply,
@@ -242,7 +242,8 @@ impl Signer for TrezorSigner {
             .mintlayer_sign_tx(inputs, outputs, utxos)
             .map_err(TrezorError::DeviceError)?;
 
-        let inputs_utxo_refs: Vec<_> = ptx.input_utxos().iter().map(|u| u.as_ref()).collect();
+        let inputs_utxo_refs: Vec<_> =
+            ptx.input_utxos().iter().map(|u| u.as_ref().map(|(x, _)| x)).collect();
 
         let (witnesses, prev_statuses, new_statuses) = ptx
             .witnesses()
@@ -484,7 +485,7 @@ fn to_trezor_input_msgs(
         .map(|((inp, utxo), dest)| match (inp, utxo, dest) {
             (TxInput::Utxo(outpoint), Some(utxo), Some(dest)) => Ok(to_trezor_utxo_input(
                 outpoint,
-                utxo,
+                &utxo.0,
                 chain_config,
                 dest,
                 key_chain,
@@ -574,6 +575,13 @@ fn to_trezor_account_command_input(
             );
 
             inp_req.change_token_authority = Some(req).into();
+        }
+        AccountCommand::ChangeTokenMetadataUri(token_id, uri) => {
+            let mut req = MintlayerChangeTokenMediaUri::new();
+            req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            req.set_media_uri(uri.clone());
+
+            inp_req.change_token_metadata_uri = Some(req).into();
         }
         AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
             unimplemented!("order commands")
@@ -729,7 +737,7 @@ fn to_trezor_utxo_msgs(
                         OutPointSourceId::Transaction(id) => id.to_hash().0,
                         OutPointSourceId::BlockReward(id) => id.to_hash().0,
                     };
-                    let out = to_trezor_output_msg(chain_config, utxo);
+                    let out = to_trezor_output_msg(chain_config, &utxo.0);
                     map.entry(id).or_default().insert(outpoint.output_index(), out);
                 }
                 (TxInput::Utxo(_), None) => unimplemented!("missing utxo"),

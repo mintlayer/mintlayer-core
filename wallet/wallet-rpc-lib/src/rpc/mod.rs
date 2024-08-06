@@ -841,6 +841,7 @@ where
                         .synced_controller(account_index, config)
                         .await?
                         .sign_raw_transaction(tx_to_sign)
+                        .await
                         .map_err(RpcError::Controller)
                 })
             })
@@ -1228,6 +1229,7 @@ where
 
                     let (tx, _, cur_signatures) = synced_controller
                         .sign_raw_transaction(TransactionToSign::Partial(tx))
+                        .await
                         .map_err(RpcError::Controller)?;
 
                     Ok::<_, RpcError<N>>((tx, cur_signatures, fees))
