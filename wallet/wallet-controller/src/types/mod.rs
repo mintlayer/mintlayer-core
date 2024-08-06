@@ -45,9 +45,7 @@ pub struct WalletInfo {
     pub account_names: Vec<Option<String>>,
 }
 
-/// Similar to TxOutput but without specifying the concrete currency.
-///
-/// For now it only has the `Transfer` variant, but more can be added when needed.
+// A struct that represents sending a particular amount of unspecified currency.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GenericCurrencyTransfer {
     pub amount: DecimalAmount,

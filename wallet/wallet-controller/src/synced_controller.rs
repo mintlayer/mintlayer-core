@@ -779,7 +779,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
-        let (req, fees) = self
+        let (tx, fees) = self
             .wallet
             .create_unsigned_transaction_to_addresses(
                 self.account_index,
@@ -794,7 +794,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
 
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
 
-        Ok((req, fees))
+        Ok((tx, fees))
     }
 
     /// Create a transaction that creates a new delegation for the specified pool with the
