@@ -113,7 +113,7 @@ pub fn make_seedable_rng(seed: Seed) -> impl Rng + CryptoRng {
 
 // This is similar to SliceRandom::shuffle, but it makes sure that the resulting order
 // will be different from the original one.
-pub fn shuffle_until_different<T>(slice: &mut [T], rng: &mut impl Rng) {
+pub fn shuffle_until_different<T>(slice: &mut [T], rng: &mut (impl Rng + ?Sized)) {
     const MAX_ATTEMPTS: usize = 1000;
 
     for _ in 0..MAX_ATTEMPTS {
@@ -135,7 +135,7 @@ pub fn shuffle_until_different<T>(slice: &mut [T], rng: &mut impl Rng) {
     panic!("Can't shuffle the slice");
 }
 
-pub fn flip_random_bit(data: &mut [u8], rng: &mut impl Rng) {
+pub fn flip_random_bit(data: &mut [u8], rng: &mut (impl Rng + ?Sized)) {
     assert!(!data.is_empty());
 
     let byte_idx = rng.gen_range(0..data.len());
@@ -146,13 +146,13 @@ pub fn flip_random_bit(data: &mut [u8], rng: &mut impl Rng) {
     *byte = (*byte & !bit_mask) | (!*byte & bit_mask);
 }
 
-pub fn with_random_bit_flipped(data: &[u8], rng: &mut impl Rng) -> Vec<u8> {
+pub fn with_random_bit_flipped(data: &[u8], rng: &mut (impl Rng + ?Sized)) -> Vec<u8> {
     let mut data = data.to_vec();
     flip_random_bit(&mut data, rng);
     data
 }
 
-pub fn gen_random_bytes(rng: &mut impl Rng, min_len: usize, max_len: usize) -> Vec<u8> {
+pub fn gen_random_bytes(rng: &mut (impl Rng + ?Sized), min_len: usize, max_len: usize) -> Vec<u8> {
     let data_length = rng.gen_range(min_len..=max_len);
     let mut bytes = vec![0; data_length];
     rng.fill_bytes(&mut bytes);
@@ -160,7 +160,11 @@ pub fn gen_random_bytes(rng: &mut impl Rng, min_len: usize, max_len: usize) -> V
 }
 
 /// Generate a string of random alphanumeric characters (arbitrary unicode, not just ascii).
-pub fn gen_random_alnum_string(rng: &mut impl Rng, min_len: usize, max_len: usize) -> String {
+pub fn gen_random_alnum_string(
+    rng: &mut (impl Rng + ?Sized),
+    min_len: usize,
+    max_len: usize,
+) -> String {
     let len = rng.gen_range(min_len..=max_len);
 
     rng.sample_iter::<char, _>(randomness::distributions::Standard)
@@ -171,7 +175,7 @@ pub fn gen_random_alnum_string(rng: &mut impl Rng, min_len: usize, max_len: usiz
 
 /// Generate a random amount of ascii and non-ascii whitespace characters.
 pub fn gen_random_spaces(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + ?Sized),
     min_count: usize,
     max_count: usize,
 ) -> impl Iterator<Item = char> {
@@ -190,7 +194,7 @@ pub fn gen_random_spaces(
 /// Collect the strings from the passed iterator into a single string, surrounding them with
 /// random amount of spaces.
 pub fn collect_string_with_random_spaces<'a>(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + ?Sized),
     strings: impl IntoIterator<Item = &'a str>,
     min_spaces_count: usize,
     max_spaces_count: usize,
