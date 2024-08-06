@@ -31,6 +31,7 @@ use p2p::{
     interface::types::ConnectedPeer,
     types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId},
 };
+use pos_accounting::PoolData;
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
@@ -115,6 +116,10 @@ impl NodeInterface for ColdWalletClient {
     }
 
     async fn get_staker_balance(&self, _pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn get_pool_data(&self, _pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 

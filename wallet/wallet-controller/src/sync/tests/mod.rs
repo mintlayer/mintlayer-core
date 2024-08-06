@@ -40,6 +40,7 @@ use node_comm::{
     rpc_client::NodeRpcError,
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
+use pos_accounting::PoolData;
 use randomness::{seq::IteratorRandom, CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -272,6 +273,10 @@ impl NodeInterface for MockNode {
     }
 
     async fn get_staker_balance(&self, _pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        unreachable!()
+    }
+
+    async fn get_pool_data(&self, _pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
         unreachable!()
     }
 
