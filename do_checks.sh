@@ -28,6 +28,7 @@ cargo clippy --all-features --workspace --all-targets -- \
 cargo clippy --all-features --workspace --lib --bins --examples -- \
     -A clippy::all \
     -D clippy::float_arithmetic \
+    -D clippy::unwrap_used \
     -D clippy::dbg_macro \
     -D clippy::items_after_statements \
     -D clippy::fallible_impl_from \
