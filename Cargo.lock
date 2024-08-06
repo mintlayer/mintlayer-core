@@ -4528,6 +4528,7 @@ dependencies = [
  "mempool",
  "node-lib",
  "p2p",
+ "pos-accounting",
  "rpc",
  "serde_json",
  "serialization",
@@ -8117,8 +8118,7 @@ dependencies = [
 
 [[package]]
 name = "trezor-client"
-version = "0.1.3"
-source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?branch=feature/mintlayer#aaf3552da31a9446e868c4fafb9ee740afac0c48"
+version = "0.1.4"
 dependencies = [
  "bitcoin",
  "byteorder",
@@ -8727,6 +8727,7 @@ dependencies = [
  "mempool-types",
  "node-comm",
  "p2p-types",
+ "pos-accounting",
  "randomness",
  "rpc-description",
  "rstest",

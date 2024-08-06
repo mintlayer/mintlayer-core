@@ -36,6 +36,7 @@ use p2p::{
     types::{bannable_address::BannableAddress, peer_id::PeerId, socket_address::SocketAddress},
     P2pHandle,
 };
+use pos_accounting::PoolData;
 use serialization::hex::HexError;
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
@@ -193,6 +194,11 @@ impl NodeInterface for WalletHandlesClient {
                     chainstate::PropertyQueryError::StakerBalanceOverflow(pool_id),
                 )
             })?;
+        Ok(result)
+    }
+
+    async fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
+        let result = self.chainstate.call(move |this| this.get_stake_pool_data(pool_id)).await??;
         Ok(result)
     }
 
