@@ -612,9 +612,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "CREATE TABLE ml.fungible_token (
                     token_id bytea NOT NULL,
                     block_height bigint NOT NULL,
+                    ticker bytea NOT NULL,
                     issuance bytea NOT NULL,
                     PRIMARY KEY (token_id, block_height)
                 );",
+        )
+        .await?;
+
+        // index when searching for token tickers
+        self.just_execute(
+            "CREATE INDEX fungible_token_ticker_index ON ml.fungible_token USING HASH (ticker);",
         )
         .await?;
 
@@ -622,9 +629,16 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             "CREATE TABLE ml.nft_issuance (
                     nft_id bytea NOT NULL,
                     block_height bigint NOT NULL,
+                    ticker bytea NOT NULL,
                     issuance bytea NOT NULL,
                     PRIMARY KEY (nft_id)
                 );",
+        )
+        .await?;
+
+        // index when searching for token tickers
+        self.just_execute(
+            "CREATE INDEX nft_token_ticker_index ON ml.nft_issuance USING HASH (ticker);",
         )
         .await?;
 
@@ -1736,10 +1750,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         self.tx
             .execute(
-                "INSERT INTO ml.fungible_token (token_id, block_height, issuance) VALUES ($1, $2, $3)
+                "INSERT INTO ml.fungible_token (token_id, block_height, issuance, ticker) VALUES ($1, $2, $3, $4)
                     ON CONFLICT (token_id, block_height) DO UPDATE
-                    SET issuance = $3;",
-                &[&token_id.encode(), &height, &issuance.encode()],
+                    SET issuance = $3, ticker = $4;",
+                &[&token_id.encode(), &height, &issuance.encode(), &issuance.token_ticker],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -1820,6 +1834,51 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                        ELSE 0 END);
             "#,
                 &[&offset, &len],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            .into_iter()
+            .map(|row| -> Result<TokenId, ApiServerStorageError> {
+                let token_id: Vec<u8> = row.get(0);
+                let token_id = TokenId::decode_all(&mut token_id.as_slice())
+                    .map_err(|_| ApiServerStorageError::AddressableError)?;
+                Ok(token_id)
+            })
+            .collect()
+    }
+
+    pub async fn get_token_ids_by_ticker(
+        &self,
+        len: u32,
+        offset: u32,
+        ticker: &[u8],
+    ) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        let len = len as i64;
+        let offset = offset as i64;
+        self.tx
+            .query(
+                r#"
+                WITH count_tokens AS (
+                    SELECT count(token_id) FROM ml.fungible_token WHERE ticker = $3
+                )
+                (SELECT token_id
+                 FROM ml.fungible_token
+                 WHERE ticker = $3
+                 ORDER BY token_id
+                 OFFSET $1
+                 LIMIT $2)
+                UNION ALL
+                (SELECT nft_id
+                 FROM ml.nft_issuance
+                 WHERE ticker = $3
+                 ORDER BY nft_id
+                 OFFSET GREATEST($1 - (SELECT * FROM count_tokens), 0)
+                 LIMIT CASE
+                       WHEN ($1 - (SELECT * FROM count_tokens) >= -$2)
+                           THEN ($2 + $1 - (SELECT * FROM count_tokens))
+                       ELSE 0 END);
+            "#,
+                &[&offset, &len, &ticker],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
@@ -1985,10 +2044,14 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     ) -> Result<(), ApiServerStorageError> {
         let height = Self::block_height_to_postgres_friendly(block_height);
 
+        let ticker = match &issuance {
+            NftIssuance::V0(data) => data.metadata.ticker(),
+        };
+
         self.tx
             .execute(
-                "INSERT INTO ml.nft_issuance (nft_id, block_height, issuance) VALUES ($1, $2, $3);",
-                &[&token_id.encode(), &height, &issuance.encode()],
+                "INSERT INTO ml.nft_issuance (nft_id, block_height, issuance, ticker) VALUES ($1, $2, $3, $4);",
+                &[&token_id.encode(), &height, &issuance.encode(), ticker],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
