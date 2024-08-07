@@ -58,7 +58,11 @@ use wallet_types::{
     with_locked::WithLocked,
 };
 
-use crate::{into_balances, types::Balances, ControllerConfig, ControllerError, WalletType2};
+use crate::{
+    helpers::{fetch_token_info, fetch_utxo, into_balances, tx_to_partially_signed_tx},
+    types::Balances,
+    ControllerConfig, ControllerError, WalletType2,
+};
 
 pub struct SyncedController<'a, T, W, B: storage::Backend + 'static> {
     wallet: &'a mut WalletType2<B>,
@@ -96,25 +100,14 @@ where
         }
     }
 
-    pub async fn get_token_info(
-        &self,
-        token_id: TokenId,
-    ) -> Result<RPCTokenInfo, ControllerError<T>> {
-        self.rpc_client
-            .get_token_info(token_id)
-            .await
-            .map_err(ControllerError::NodeCallError)?
-            .ok_or(ControllerError::WalletError(WalletError::UnknownTokenId(
-                token_id,
-            )))
-    }
-
     async fn fetch_token_infos(
         &self,
         tokens: BTreeSet<TokenId>,
     ) -> Result<Vec<RPCTokenInfo>, ControllerError<T>> {
-        let tasks: FuturesUnordered<_> =
-            tokens.into_iter().map(|token_id| self.get_token_info(token_id)).collect();
+        let tasks: FuturesUnordered<_> = tokens
+            .into_iter()
+            .map(|token_id| fetch_token_info(&self.rpc_client, token_id))
+            .collect();
         tasks.try_collect().await
     }
 
@@ -158,7 +151,7 @@ where
         let mut result = vec![];
         for utxo in input_utxos {
             if let Some(token_id) = utxo.2 {
-                let token_info = self.get_token_info(token_id).await?;
+                let token_info = fetch_token_info(&self.rpc_client, token_id).await?;
 
                 let ok_to_use = match token_info {
                     RPCTokenInfo::FungibleToken(token_info) => match &self.wallet {
@@ -788,7 +781,7 @@ where
     ) -> Result<(PartiallySignedTransaction, Balances), ControllerError<T>> {
         let output = make_address_output(address, amount);
 
-        let utxo_output = self.fetch_utxo(&selected_utxo).await?;
+        let utxo_output = fetch_utxo(&self.rpc_client, &selected_utxo, self.wallet).await?;
         let change_address = if let Some(change_address) = change_address {
             change_address
         } else {
@@ -1141,7 +1134,7 @@ where
 
     /// Tries to sign any unsigned inputs of a raw or partially signed transaction with the private
     /// keys in this wallet.
-    pub fn sign_raw_transaction(
+    pub async fn sign_raw_transaction(
         &mut self,
         tx: TransactionToSign,
     ) -> Result<
@@ -1152,10 +1145,17 @@ where
         ),
         ControllerError<T>,
     > {
+        let ptx = match tx {
+            TransactionToSign::Partial(ptx) => ptx,
+            TransactionToSign::Tx(tx) => {
+                tx_to_partially_signed_tx(&self.rpc_client, self.wallet, tx).await?
+            }
+        };
+
         match &mut self.wallet {
-            WalletType2::Software(w) => w.sign_raw_transaction(self.account_index, tx),
+            WalletType2::Software(w) => w.sign_raw_transaction(self.account_index, ptx),
             #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.sign_raw_transaction(self.account_index, tx),
+            WalletType2::Trezor(w) => w.sign_raw_transaction(self.account_index, ptx),
         }
         .map_err(ControllerError::WalletError)
     }
@@ -1325,17 +1325,5 @@ where
 
         let tx_id = self.broadcast_to_mempool_if_needed(tx).await?;
         Ok((tx_id, id))
-    }
-
-    async fn fetch_utxo(&self, input: &UtxoOutPoint) -> Result<TxOutput, ControllerError<T>> {
-        let utxo = self
-            .rpc_client
-            .get_utxo(input.clone())
-            .await
-            .map_err(ControllerError::NodeCallError)?;
-
-        utxo.ok_or(ControllerError::WalletError(WalletError::CannotFindUtxo(
-            input.clone(),
-        )))
     }
 }
