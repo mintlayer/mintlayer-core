@@ -347,6 +347,41 @@ EITHER OF
      2) null
 ```
 
+### Method `chainstate_pool_data`
+
+Returns the pool data of the pool associated with the given pool address.
+
+Returns `None` (null) if the pool is not found.
+
+
+Parameters:
+```
+{ "pool_address": string }
+```
+
+Returns:
+```
+EITHER OF
+     1) {
+            "pledge": {
+                "atoms": number string,
+                "decimal": decimal string,
+            },
+            "rewards": {
+                "atoms": number string,
+                "decimal": decimal string,
+            },
+            "vrf_public_key": bech32 string,
+            "decommission_key": bech32 string,
+            "margin_ratio_per_thousand": string,
+            "cost_per_block": {
+                "atoms": number string,
+                "decimal": decimal string,
+            },
+        }
+     2) null
+```
+
 ### Method `chainstate_delegation_share`
 
 Given a pool defined by a pool address, and a delegation address,
