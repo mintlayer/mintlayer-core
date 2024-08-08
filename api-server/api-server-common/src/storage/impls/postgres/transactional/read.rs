@@ -333,6 +333,18 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
         Ok(res)
     }
 
+    async fn get_token_ids_by_ticker(
+        &self,
+        len: u32,
+        offset: u32,
+        ticker: &[u8],
+    ) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_token_ids_by_ticker(len, offset, ticker).await?;
+
+        Ok(res)
+    }
+
     async fn get_statistic(
         &self,
         statistic: CoinOrTokenStatistic,

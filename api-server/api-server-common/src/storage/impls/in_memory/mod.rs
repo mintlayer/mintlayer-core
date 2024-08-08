@@ -552,6 +552,30 @@ impl ApiServerInMemoryStorage {
             .collect())
     }
 
+    fn get_token_ids_by_ticker(
+        &self,
+        len: u32,
+        offset: u32,
+        ticker: &[u8],
+    ) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        Ok(self
+            .fungible_token_issuances
+            .iter()
+            .filter_map(|(key, value)| {
+                (value.values().last().expect("not empty").token_ticker == ticker).then_some(key)
+            })
+            .chain(self.nft_token_issuances.iter().filter_map(|(key, value)| {
+                let value_ticker = match &value.values().last().expect("not empty") {
+                    NftIssuance::V0(data) => data.metadata.ticker(),
+                };
+                (value_ticker == ticker).then_some(key)
+            }))
+            .skip(offset as usize)
+            .take(len as usize)
+            .copied()
+            .collect())
+    }
+
     fn get_statistic(
         &self,
         statistic: CoinOrTokenStatistic,
