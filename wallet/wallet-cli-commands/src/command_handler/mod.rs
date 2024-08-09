@@ -478,8 +478,6 @@ where
                     .expect("Writing to a memory buffer should not fail");
 
                 for (token_id, amount) in tokens {
-                    let token_id = Address::new(chain_config, token_id)
-                        .expect("Encoding token id should never fail");
                     let amount = amount.decimal();
                     writeln!(&mut output, "Token: {token_id} amount: {amount}")
                         .expect("Writing to a memory buffer should not fail");
@@ -959,11 +957,11 @@ where
                 let ComposedTransaction { hex, fees } = self
                     .non_empty_wallet()
                     .await?
-                    .compose_transaction(input_utxos, outputs, only_transaction)
+                    .compose_transaction(input_utxos, outputs, None, only_transaction)
                     .await?;
                 let mut output = format!("The hex encoded transaction is:\n{hex}\n");
 
-                format_fees(&mut output, fees, chain_config);
+                format_fees(&mut output, fees);
 
                 Ok(ConsoleCommand::Print(output))
             }
@@ -1135,8 +1133,6 @@ where
                 let mut output = format!("Coins amount: {coins}\n");
 
                 for (token_id, amount) in tokens {
-                    let token_id = Address::new(chain_config, token_id)
-                        .expect("Encoding token id should never fail");
                     let amount = amount.decimal();
                     writeln!(&mut output, "Token: {token_id} amount: {amount}")
                         .expect("Writing to a memory buffer should not fail");
@@ -1306,7 +1302,7 @@ where
                     Pass the following string into the cold wallet with private key to sign:\n\n{hex}\n\n\
                     Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}\n"
                 );
-                format_fees(&mut output_str, fees, chain_config);
+                format_fees(&mut output_str, fees);
 
                 Ok(ConsoleCommand::Print(output_str))
             }
@@ -1361,7 +1357,7 @@ where
                 }
 
                 if let Some(fees) = fees {
-                    format_fees(&mut output_str, fees, chain_config);
+                    format_fees(&mut output_str, fees);
                 } else {
                     writeln!(output_str, "Could not calculate fees")
                         .expect("Writing to a memory buffer should not fail");
@@ -1667,7 +1663,7 @@ fn format_signature_status((idx, status): (usize, &RpcSignatureStatus)) -> Strin
     format!("Signature for input {idx}: {status}")
 }
 
-fn format_fees(output: &mut String, fees: Balances, chain_config: &ChainConfig) {
+fn format_fees(output: &mut String, fees: Balances) {
     let (coins, tokens) = fees.into_coins_and_tokens();
     let coins = coins.decimal();
     writeln!(
@@ -1677,8 +1673,6 @@ fn format_fees(output: &mut String, fees: Balances, chain_config: &ChainConfig) 
     .expect("Writing to a memory buffer should not fail");
 
     for (token_id, amount) in tokens {
-        let token_id =
-            Address::new(chain_config, token_id).expect("Encoding token id should never fail");
         let amount = amount.decimal();
         writeln!(output, "Token: {token_id} amount: {amount}")
             .expect("Writing to a memory buffer should not fail");

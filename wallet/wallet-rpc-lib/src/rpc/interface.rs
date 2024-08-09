@@ -18,7 +18,7 @@ use std::{collections::BTreeMap, num::NonZeroUsize};
 use common::{
     address::RpcAddress,
     chain::{
-        block::timestamp::BlockTimestamp, tokens::TokenId,
+        block::timestamp::BlockTimestamp, timelock::OutputTimeLock, tokens::TokenId,
         transaction::partially_signed_transaction::PartiallySignedTransaction, Block, DelegationId,
         Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
     },
@@ -635,6 +635,20 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
+    /// Lock a given number of coins or tokens in a Hashed Timelock Contract.
+    #[method(name = "create_htlc")]
+    async fn create_htlc(
+        &self,
+        account: AccountArg,
+        amount: RpcAmountIn,
+        token_id: Option<RpcAddress<TokenId>>,
+        secret_hash: RpcHexString,
+        spend_address: RpcAddress<Destination>,
+        refund_address: RpcAddress<Destination>,
+        refund_timelock: OutputTimeLock,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction>;
+
     /// Node version
     #[method(name = "node_version")]
     async fn node_version(&self) -> rpc::RpcResult<NodeVersion>;
@@ -765,6 +779,7 @@ trait WalletRpc {
         &self,
         inputs: Vec<RpcUtxoOutpoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<RpcHexString>>>,
         only_transaction: bool,
     ) -> rpc::RpcResult<ComposedTransaction>;
 

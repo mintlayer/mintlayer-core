@@ -128,6 +128,12 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error(transparent)]
     Address(#[from] AddressError),
+
+    #[error("Invalid HTLC secret")]
+    InvalidHtlcSecret,
+
+    #[error("Invalid HTLC secret hash")]
+    InvalidHtlcSecretHash,
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
@@ -478,6 +484,7 @@ impl From<&UtxoType> for RpcUtxoType {
             UtxoType::IssueNft => RpcUtxoType::IssueNft,
             UtxoType::CreateStakePool => RpcUtxoType::CreateStakePool,
             UtxoType::ProduceBlockFromStake => RpcUtxoType::ProduceBlockFromStake,
+            UtxoType::Htlc => todo!(),
         }
     }
 }

@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::mem::take;
 
 use common::address::Address;
+use common::chain::htlc::HtlcSecret;
 use common::chain::output_value::OutputValue;
 use common::chain::partially_signed_transaction::PartiallySignedTransaction;
 use common::chain::stakelock::StakePoolData;
@@ -45,6 +46,8 @@ pub struct SendRequest {
 
     /// destination for each input
     destinations: Vec<Destination>,
+
+    htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
 
     inputs: Vec<TxInput>,
 
@@ -179,6 +182,7 @@ impl SendRequest {
             flags: 0,
             utxos: Vec::new(),
             destinations: Vec::new(),
+            htlc_secrets: None,
             inputs: Vec::new(),
             outputs: Vec::new(),
             fees: BTreeMap::new(),
@@ -210,6 +214,7 @@ impl SendRequest {
             flags: transaction.flags(),
             utxos: utxos.into_iter().map(Some).collect(),
             destinations,
+            htlc_secrets: None,
             inputs: transaction.inputs().to_vec(),
             outputs: transaction.outputs().to_vec(),
             fees: BTreeMap::new(),
@@ -271,6 +276,14 @@ impl SendRequest {
         self
     }
 
+    pub fn with_htlc_secrets(
+        mut self,
+        secrets: impl IntoIterator<Item = Option<HtlcSecret>>,
+    ) -> Self {
+        self.htlc_secrets.get_or_insert(Vec::new()).extend(secrets);
+        self
+    }
+
     pub fn get_outputs_mut(&mut self) -> &mut Vec<TxOutput> {
         &mut self.outputs
     }
@@ -284,12 +297,18 @@ impl SendRequest {
         let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
         let destinations = self.destinations.into_iter().map(Some).collect();
 
-        let ptx =
-            PartiallySignedTransaction::new(tx, vec![None; num_inputs], self.utxos, destinations)?;
+        let ptx = PartiallySignedTransaction::new(
+            tx,
+            vec![None; num_inputs],
+            self.utxos,
+            destinations,
+            self.htlc_secrets,
+        )?;
         Ok(ptx)
     }
 }
 
+// FIXME: this is not gonna work for htlc
 pub fn get_tx_output_destination<'a, PoolDataGetter>(
     txo: &TxOutput,
     pool_data_getter: &PoolDataGetter,
@@ -311,7 +330,7 @@ where
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_)
         | TxOutput::AnyoneCanTake(_) => None,
-        TxOutput::Htlc(_, _) => None, // TODO(HTLC)
+        TxOutput::Htlc(_, htlc) => Some(htlc.spend_key.clone()),
     }
 }
 

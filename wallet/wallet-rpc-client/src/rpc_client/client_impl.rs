@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, future::pending, num::NonZeroUsize, path::PathBuf};
+use std::{collections::BTreeMap, future::pending, num::NonZeroUsize, path::PathBuf, str::FromStr};
 
 use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, WalletInterface};
 
@@ -23,12 +23,14 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        timelock::OutputTimeLock, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
 use crypto::key::{hdkd::u31::U31, PrivateKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
+use rpc::types::RpcHexString;
 use serialization::hex_encoded::HexEncoded;
 use serialization::DecodeAll;
 use utils_networking::IpOrSocketAddress;
@@ -864,6 +866,33 @@ impl WalletInterface for ClientWalletRpc {
         .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn create_htlc(
+        &self,
+        account_index: U31,
+        amount: DecimalAmount,
+        token_id: Option<String>,
+        secret_hash: String,
+        spend_address: String,
+        refund_address: String,
+        refund_timelock: OutputTimeLock,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        let options = TransactionOptions::from_controller_config(&config);
+        WalletRpcClient::create_htlc(
+            &self.http_client,
+            account_index.into(),
+            amount.into(),
+            token_id.map(|id| id.into()),
+            RpcHexString::from_str(&secret_hash)?,
+            spend_address.into(),
+            refund_address.into(),
+            refund_timelock,
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error> {
         WalletRpcClient::node_version(&self.http_client)
             .await
@@ -1153,12 +1182,22 @@ impl WalletInterface for ClientWalletRpc {
         &self,
         inputs: Vec<UtxoOutPoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<String>>>,
         only_transaction: bool,
     ) -> Result<ComposedTransaction, Self::Error> {
         let inputs = inputs.into_iter().map(Into::into).collect();
-        WalletRpcClient::compose_transaction(&self.http_client, inputs, outputs, only_transaction)
-            .await
-            .map_err(WalletRpcError::ResponseError)
+        let htlc_secrets = htlc_secrets
+            .map(|s| s.into_iter().map(|s| s.map(|s| s.parse()).transpose()).collect())
+            .transpose()?;
+        WalletRpcClient::compose_transaction(
+            &self.http_client,
+            inputs,
+            outputs,
+            htlc_secrets,
+            only_transaction,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn node_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {

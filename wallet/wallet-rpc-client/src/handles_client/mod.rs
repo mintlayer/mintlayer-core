@@ -20,8 +20,8 @@ use common::{
     address::{dehexify::dehexify_all_addresses, AddressError},
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        timelock::OutputTimeLock, tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -542,11 +542,15 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         &self,
         inputs: Vec<UtxoOutPoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<String>>>,
         only_transaction: bool,
     ) -> Result<ComposedTransaction, Self::Error> {
         let inputs = inputs.into_iter().map(Into::into).collect();
+        let htlc_secrets = htlc_secrets
+            .map(|s| s.into_iter().map(|s| s.map(|s| s.parse()).transpose()).collect())
+            .transpose()?;
         self.wallet_rpc
-            .compose_transaction(inputs, outputs, only_transaction)
+            .compose_transaction(inputs, outputs, htlc_secrets, only_transaction)
             .await
             .map(|(tx, fees)| ComposedTransaction {
                 hex: tx.to_hex(),
@@ -982,6 +986,33 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         self.wallet_rpc
             .deposit_data(account_index, data, config)
             .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn create_htlc(
+        &self,
+        account_index: U31,
+        amount: DecimalAmount,
+        token_id: Option<String>,
+        secret_hash: String,
+        spend_address: String,
+        refund_address: String,
+        refund_timelock: OutputTimeLock,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        self.wallet_rpc
+            .create_htlc(
+                account_index,
+                amount.into(),
+                token_id.map(|id| id.into()),
+                RpcHexString::from_str(&secret_hash)?,
+                spend_address.into(),
+                refund_address.into(),
+                refund_timelock,
+                config,
+            )
+            .await
+            .map(NewTransaction::new)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 

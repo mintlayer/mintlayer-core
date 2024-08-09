@@ -20,6 +20,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         partially_signed_transaction::PartiallySignedTransaction,
+        timelock::OutputTimeLock,
         tokens::{IsTokenUnfreezable, TokenId},
         Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
         TxOutput,
@@ -956,6 +957,38 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         )
     }
 
+    async fn create_htlc(
+        &self,
+        account_arg: AccountArg,
+        amount: RpcAmountIn,
+        token_id: Option<RpcAddress<TokenId>>,
+        secret_hash: RpcHexString,
+        spend_address: RpcAddress<Destination>,
+        refund_address: RpcAddress<Destination>,
+        refund_timelock: OutputTimeLock,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb(),
+            broadcast_to_mempool: true,
+        };
+
+        rpc::handle_result(
+            self.create_htlc(
+                account_arg.index::<N>()?,
+                amount,
+                token_id,
+                secret_hash,
+                spend_address,
+                refund_address,
+                refund_timelock,
+                config,
+            )
+            .await
+            .map(NewTransaction::new),
+        )
+    }
+
     async fn stake_pool_balance(
         &self,
         pool_id: RpcAddress<PoolId>,
@@ -1115,10 +1148,11 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         &self,
         inputs: Vec<RpcUtxoOutpoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<RpcHexString>>>,
         only_transaction: bool,
     ) -> rpc::RpcResult<ComposedTransaction> {
         rpc::handle_result(
-            self.compose_transaction(inputs, outputs, only_transaction)
+            self.compose_transaction(inputs, outputs, htlc_secrets, only_transaction)
                 .await
                 .map(|(tx, fees)| ComposedTransaction {
                     hex: tx.to_hex(),

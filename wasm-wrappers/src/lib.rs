@@ -545,7 +545,7 @@ pub fn encode_stake_pool_data(
         vrf_public_key,
         decommission_key,
         PerThousand::new(margin_ratio_per_thousand)
-            .ok_or(Error::InvalidPerThousedns(margin_ratio_per_thousand))?,
+            .ok_or(Error::InvalidPerThousand(margin_ratio_per_thousand))?,
         cost_per_block,
     );
 
@@ -569,6 +569,16 @@ pub fn encode_output_create_stake_pool(
 
     let output = TxOutput::CreateStakePool(pool_id, Box::new(pool_data));
     Ok(output.encode())
+}
+
+//#[wasm_bindgen]
+pub fn encode_output_htlc() -> Result<Vec<u8>, Error> {
+    todo!("impl")
+}
+
+//#[wasm_bindgen]
+pub fn extract_htlc_secret() -> Result<Vec<u8>, Error> {
+    todo!("impl")
 }
 
 /// Returns the fee that needs to be paid by a transaction for issuing a new fungible token

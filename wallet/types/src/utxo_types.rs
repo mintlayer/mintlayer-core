@@ -29,6 +29,7 @@ pub enum UtxoType {
     CreateStakePool = 1 << 2,
     ProduceBlockFromStake = 1 << 4,
     IssueNft = 1 << 7,
+    Htlc = 1 << 8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,7 +55,7 @@ pub fn get_utxo_type(output: &TxOutput) -> Option<UtxoType> {
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::DataDeposit(_)
         | TxOutput::AnyoneCanTake(_) => None,
-        TxOutput::Htlc(_, _) => None, // TODO(HTLC)
+        TxOutput::Htlc(_, _) => Some(UtxoType::Htlc),
     }
 }
 pub fn get_utxo_state(output: &TxState) -> UtxoState {
