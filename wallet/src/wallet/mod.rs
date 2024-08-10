@@ -172,13 +172,13 @@ pub enum WalletError {
     AddressError(#[from] AddressError),
     #[error("Unknown pool id {0}")]
     UnknownPoolId(PoolId),
-    #[error("Cannot find UTXO")]
+    #[error("Cannot find UTXO {0:?}")]
     CannotFindUtxo(UtxoOutPoint),
-    #[error("Selected UTXO is already consumed")]
+    #[error("Selected UTXO is already consumed  {0:?}")]
     ConsumedUtxo(UtxoOutPoint),
-    #[error("Selected UTXO is still locked")]
+    #[error("Selected UTXO is still locked  {0:?}")]
     LockedUtxo(UtxoOutPoint),
-    #[error("Selected UTXO is a token v0 and cannot be used")]
+    #[error("Selected UTXO is a token v0 and cannot be used  {0:?}")]
     TokenV0Utxo(UtxoOutPoint),
     #[error("Cannot change a Locked Token supply")]
     CannotChangeLockedTokenSupply,

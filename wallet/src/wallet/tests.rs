@@ -4643,7 +4643,7 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_htlc(#[case] seed: Seed) {
+fn create_htlc_and_spend(#[case] seed: Seed) {
     use common::chain::htlc::HtlcSecret;
 
     let mut rng = make_seedable_rng(seed);
@@ -4741,4 +4741,168 @@ fn create_htlc(#[case] seed: Seed) {
         }
         _ => panic!("wrong TxOutput type"),
     };
+
+    // FIXME: spend with a secret
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_htlc_and_refund(#[case] seed: Seed) {
+    use common::chain::htlc::HtlcSecret;
+
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_regtest());
+
+    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
+
+    let coin_balance = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let _ = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
+
+    let coin_balance = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance, block1_amount);
+    assert_eq!(get_coin_balance(&wallet2), Amount::ZERO);
+
+    let (_, address1) = wallet1.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pub_key1 = wallet1
+        .find_public_key(DEFAULT_ACCOUNT_INDEX, address1.clone().into_object())
+        .unwrap();
+
+    let (_, address2) = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pub_key2 = wallet2.find_public_key(DEFAULT_ACCOUNT_INDEX, address2.into_object()).unwrap();
+
+    let min_required_signatures = 2;
+    let challenge = ClassicMultisigChallenge::new(
+        &chain_config,
+        NonZeroU8::new(min_required_signatures).unwrap(),
+        vec![pub_key1, pub_key2],
+    )
+    .unwrap();
+    let multisig_hash = wallet1
+        .add_standalone_multisig(DEFAULT_ACCOUNT_INDEX, challenge.clone(), None)
+        .unwrap();
+    wallet2
+        .add_standalone_multisig(DEFAULT_ACCOUNT_INDEX, challenge.clone(), None)
+        .unwrap();
+
+    let secret = HtlcSecret::new_from_rng(&mut rng);
+    let spend_key = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let refund_key = Destination::ClassicMultisig(multisig_hash);
+    let htlc = HashedTimelockContract {
+        secret_hash: secret.hash(),
+        spend_key: spend_key.into_object(),
+        refund_timelock: OutputTimeLock::ForBlockCount(1),
+        refund_key: refund_key.clone(),
+    };
+    let output_value = OutputValue::Coin(coin_balance);
+
+    let create_htlc_tx = wallet1
+        .create_htlc_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            output_value.clone(),
+            htlc.clone(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+    let create_htlc_tx_id = create_htlc_tx.transaction().get_id();
+
+    let refund_tx = Transaction::new(
+        0,
+        vec![TxInput::from_utxo(create_htlc_tx_id.into(), 0)],
+        vec![TxOutput::Transfer(output_value, address1.into_object())],
+    )
+    .unwrap();
+    let refund_utxos = vec![create_htlc_tx.transaction().outputs().get(0).cloned()];
+    let refund_ptx = PartiallySignedTransaction::new(
+        refund_tx,
+        vec![None],
+        refund_utxos,
+        vec![Some(refund_key)],
+        None,
+    )
+    .unwrap();
+
+    let (_, block2) = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![create_htlc_tx],
+        Amount::ZERO,
+        1,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block2]);
+
+    // Htlc is not accounted in balance
+    assert_eq!(get_coin_balance(&wallet1), Amount::ZERO);
+    assert_eq!(get_coin_balance(&wallet2), Amount::ZERO);
+
+    let wallet1_multisig_utxos = wallet1
+        .get_multisig_utxos(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoTypes::ALL,
+            UtxoStates::ALL,
+            WithLocked::Any,
+        )
+        .unwrap();
+    assert_eq!(wallet1_multisig_utxos.len(), 1);
+    let wallet2_multisig_utxos = wallet2
+        .get_multisig_utxos(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoTypes::ALL,
+            UtxoStates::ALL,
+            WithLocked::Any,
+        )
+        .unwrap();
+    assert_eq!(wallet2_multisig_utxos.len(), 1);
+
+    let (refund_ptx, prev_statuses, new_statuses) = wallet2
+        .sign_raw_transaction(
+            DEFAULT_ACCOUNT_INDEX,
+            TransactionToSign::Partial(refund_ptx),
+        )
+        .unwrap();
+
+    assert_eq!(vec![SignatureStatus::NotSigned], prev_statuses);
+    assert_eq!(
+        vec![SignatureStatus::PartialMultisig {
+            required_signatures: 2,
+            num_signatures: 1
+        }],
+        new_statuses
+    );
+
+    let (refund_ptx, prev_statuses, new_statuses) = wallet1
+        .sign_raw_transaction(
+            DEFAULT_ACCOUNT_INDEX,
+            TransactionToSign::Partial(refund_ptx),
+        )
+        .unwrap();
+    assert_eq!(
+        vec![SignatureStatus::PartialMultisig {
+            required_signatures: 2,
+            num_signatures: 1
+        }],
+        prev_statuses
+    );
+    assert_eq!(vec![SignatureStatus::FullySigned], new_statuses);
+
+    let refund_tx = refund_ptx.into_signed_tx().unwrap();
+
+    let (_, block3) = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![refund_tx],
+        Amount::ZERO,
+        2,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block3]);
+
+    // Refund can be seen in the wallet balance
+    assert_eq!(get_coin_balance(&wallet1), coin_balance);
+    assert_eq!(get_coin_balance(&wallet2), Amount::ZERO);
 }

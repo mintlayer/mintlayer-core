@@ -14,32 +14,31 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-"""Wallet htlc spend with a secret test
+"""Wallet htlc refund test
 
 * Create 2 wallets for Alice and Bob
 * Alice mints some tokens and creates an output that locks that tokens in htlc
 * Bob creates an output that locks coins in htlc
-* Check that Alice cannot spend her htlc output even with the secret
-* Check that Bob cannot spend Alice's htlc without the secret
-* Check that Alice can spend Bob's htlc output only by revealing the secret
-* Check that Bob can extract secret from Alice's tx and use it to spend Alice's htlc output
+*
 * Check resulting balances
 """
 
+from scalecodec.base import ScaleBytes
 from test_framework.script import hash160
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.mintlayer import (make_tx, reward_input, ATOMS_PER_COIN)
+from test_framework.mintlayer import (hash_object, hex_to_dec_array, make_tx, make_tx_dict, reward_input, ATOMS_PER_COIN, tx_input)
 from test_framework.util import assert_in, assert_equal
-from test_framework.mintlayer import  block_input_data_obj, outpoint_obj
+from test_framework.mintlayer import  block_input_data_obj, signed_tx_obj, base_tx_obj
 from test_framework.wallet_rpc_controller import TransferTxOutput, UtxoOutpoint, WalletRpcController
 
 import asyncio
 import sys
+import scalecodec
 import random
 
 ATOMS_PER_TOKEN = 100
 
-class WalletHtlcSpend(BitcoinTestFramework):
+class WalletHtlcRefund(BitcoinTestFramework):
 
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -91,7 +90,6 @@ class WalletHtlcSpend(BitcoinTestFramework):
             alice_address = await wallet.new_address()
             alice_pub_key = await wallet.reveal_public_key_as_address(alice_address)
             alice_pub_key_bytes = await wallet.new_public_key(alice_address)
-            alice_pub_key_hex = await wallet.reveal_public_key_as_hex(alice_address)
             assert_equal(len(alice_pub_key_bytes), 33)
 
             await wallet.close_wallet()
@@ -100,7 +98,6 @@ class WalletHtlcSpend(BitcoinTestFramework):
             bob_address = await wallet.new_address()
             bob_pub_key = await wallet.reveal_public_key_as_address(bob_address)
             bob_pub_key_bytes = await wallet.new_public_key(bob_address)
-            bob_pub_key_hex = await wallet.reveal_public_key_as_hex(bob_address)
             assert_equal(len(bob_pub_key_bytes), 33)
 
             await self.switch_to_wallet(wallet, 'alice_wallet')
@@ -139,6 +136,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             token_id = issue_result['token_id']
             assert token_id is not None
             self.log.info(f"new token id: {token_id}")
+            token_id_hex = node.test_functions_reveal_token_id(token_id)
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
@@ -159,134 +157,170 @@ class WalletHtlcSpend(BitcoinTestFramework):
             ########################################################################################
             # Setup Alice's htlc
             alice_secret = bytes([random.randint(0, 255) for _ in range(32)])
-            alice_secret_hex = alice_secret.hex()
             alice_secret_hash = hash160(alice_secret).hex()
 
-            alice_amount_to_swap = amount_to_mint
             refund_address = await wallet.add_standalone_multisig_address(2, [alice_pub_key, bob_pub_key], None)
-            alice_htlc_tx = await wallet.create_htlc_transaction(alice_amount_to_swap, token_id, alice_secret_hash, bob_address, refund_address, 2)
-            output = await wallet.submit_transaction(alice_htlc_tx)
-            alice_htlc_tx_id = output['result']['tx_id']
-            self.generate_block()
-            assert_in("Success", await wallet.sync())
 
+            alice_amount_to_swap = amount_to_mint
+            alice_htlc_tx = await wallet.create_htlc_transaction(alice_amount_to_swap, token_id, alice_secret_hash, bob_address, refund_address, 6)
+            alice_signed_tx_obj = signed_tx_obj.decode(ScaleBytes("0x" + alice_htlc_tx))
+            alice_htlc_outputs = alice_signed_tx_obj['transaction']['outputs']
+            alice_htlc_change_dest = alice_htlc_outputs[1]['Transfer'][1]
+            alice_htlc_tx_id = hash_object(base_tx_obj, alice_signed_tx_obj['transaction'])
+
+            refund_dest = node.test_functions_address_to_destination(refund_address)
+            refund_dest_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('Destination', ScaleBytes("0x"+refund_dest))
+            refund_dest_obj = refund_dest_obj.decode()
+
+            # Create Alice's refund transaction
+            token_id_hex = node.test_functions_reveal_token_id(token_id)
+            output = {
+                    'Transfer': [ { 'TokenV1': [hex_to_dec_array(token_id_hex), alice_amount_to_swap * ATOMS_PER_TOKEN] },
+                                  { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': alice_pub_key_bytes}}} } ],
+            }
+            tx = make_tx_dict([tx_input(alice_htlc_tx_id, 0), tx_input(alice_htlc_tx_id, 1)], [output])
+            alice_refund_ptx = {
+                'tx': tx['transaction'],
+                'witnesses': [None, None],
+                'input_utxos': alice_htlc_outputs,
+                'destinations': [refund_dest_obj, alice_htlc_change_dest],
+                'htlc_secrets': [None, None]
+            }
+            alice_refund_tx_hex = scalecodec.base.RuntimeConfiguration().create_scale_object('PartiallySignedTransaction').encode(alice_refund_ptx).to_hex()[2:]
+
+            ########################################################################################
             # Setup Bob's htlc
             await self.switch_to_wallet(wallet, 'bob_wallet')
             assert_in("Success", await wallet.sync())
 
+            await wallet.add_standalone_multisig_address(2, [alice_pub_key, bob_pub_key], None)
+
             bob_amount_to_swap = 150
-            bob_htlc_tx = await wallet.create_htlc_transaction(bob_amount_to_swap, None, alice_secret_hash, alice_address, refund_address, 2)
+            bob_htlc_tx = await wallet.create_htlc_transaction(bob_amount_to_swap, None, alice_secret_hash, alice_address, refund_address, 6)
+            bob_signed_tx_obj = signed_tx_obj.decode(ScaleBytes("0x" + bob_htlc_tx))
+            bob_htlc_outputs = bob_signed_tx_obj['transaction']['outputs']
+            bob_htlc_change_dest = bob_htlc_outputs[1]['Transfer'][1]
+            bob_htlc_tx_id = hash_object(base_tx_obj, bob_signed_tx_obj['transaction'])
+
+            # Create Bob's refund transaction
+            output = {
+                    'Transfer': [ { 'Coin': bob_amount_to_swap * ATOMS_PER_COIN }, { 'PublicKey': {'key': {'Secp256k1Schnorr' : {'pubkey_data': bob_pub_key_bytes}}} } ],
+            }
+            tx = make_tx_dict([tx_input(bob_htlc_tx_id, 0), tx_input(bob_htlc_tx_id, 1)], [output])
+            bob_refund_ptx = {
+                'tx': tx['transaction'],
+                'witnesses': [None, None],
+                'input_utxos': bob_htlc_outputs,
+                'destinations': [refund_dest_obj, bob_htlc_change_dest],
+                'htlc_secrets': [None, None]
+            }
+            bob_refund_tx_hex = scalecodec.base.RuntimeConfiguration().create_scale_object('PartiallySignedTransaction').encode(bob_refund_ptx).to_hex()[2:]
+
+            ########################################################################################
+            # Bob signs Alice's refund
+            output = await wallet.sign_raw_transaction(alice_refund_tx_hex)
+            assert_in("Not all transaction inputs have been signed", output)
+            alice_refund_ptx = output.split('\n')[2]
+
+            # Alice's htlc tx can now be broadcasted
+            output = await wallet.submit_transaction(alice_htlc_tx)
+            assert_in("tx_id", output['result'])
+
+            # Alice signs Bob's refund
+            await self.switch_to_wallet(wallet, 'alice_wallet')
+            assert_in("Success", await wallet.sync())
+            output = await wallet.sign_raw_transaction(bob_refund_tx_hex)
+            assert_in("Not all transaction inputs have been signed", output)
+            bob_refund_ptx = output.split('\n')[2]
+
+            # Bob's htlc tx can now be broadcasted
             output = await wallet.submit_transaction(bob_htlc_tx)
-            bob_htlc_tx_id = output['result']['tx_id']
+            assert_in("tx_id", output['result'])
+
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
+            # Check Alice's balance
+            balance = await wallet.get_balance()
+            assert_in("0", balance['coins']['decimal'])
+            assert_equal({}, balance['tokens'])
+
+            # Check Bob's balance now
+            await self.switch_to_wallet(wallet, 'bob_wallet')
+            assert_in("Success", await wallet.sync())
+            balance = await wallet.get_balance()
+            assert_in("0", balance['coins']['decimal'])
+            assert_equal({}, balance['tokens'])
+
             ########################################################################################
-            # Try spending
+            # Alice signs the refund
             await self.switch_to_wallet(wallet, 'alice_wallet')
             assert_in("Success", await wallet.sync())
+            output = await wallet.sign_raw_transaction(alice_refund_ptx)
+            assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
 
-            random_secret = bytes([random.randint(0, 255) for _ in range(32)])
-            random_secret_hex = random_secret.hex()
+            # But Alice's refund cannot be spent yet due to the timelock
+            alice_refund_tx = output.split('\n')[2]
+            output = await wallet.submit_transaction(alice_refund_tx)
+            # spending height is 9 and not 5 as expected because of mempool's FUTURE_TIMELOCK_TOLERANCE_BLOCKS
+            assert_in("Spending at height 9, locked until height 10", output['error']['message'])
 
             balance = await wallet.get_balance()
             assert_in("0", balance['coins']['decimal'])
             assert_equal({}, balance['tokens'])
 
-            # Alice can't spend Alice's htlc without a secret
-            token_id_hex = node.test_functions_reveal_token_id(token_id)
-            tx_output = TransferTxOutput(alice_amount_to_swap * ATOMS_PER_TOKEN, alice_pub_key_hex, token_id_hex)
-            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(alice_htlc_tx_id, 0)], None)
-            output = await wallet.sign_raw_transaction(result['result']['hex'])
-            assert_in("Not all transaction inputs have been signed", output)
-
-            # Alice can't spend Alice's htlc with incorrect secret
-            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(alice_htlc_tx_id, 0)], [random_secret_hex])
-            output = await wallet.sign_raw_transaction(result['result']['hex'])
-            assert_in("Not all transaction inputs have been signed", output)
-
-            # Alice can't spend Alice's htlc with correct secret
-            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(alice_htlc_tx_id, 0)], [alice_secret_hex])
-            output = await wallet.sign_raw_transaction(result['result']['hex'])
-            assert_in("Not all transaction inputs have been signed", output)
-
-            ########################################################################################
+            # Bob signs and spends the refund
             await self.switch_to_wallet(wallet, 'bob_wallet')
             assert_in("Success", await wallet.sync())
+            output = await wallet.sign_raw_transaction(bob_refund_ptx)
+            assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
+            bob_refund_tx = output.split('\n')[2]
+
+            # But Bob's refund cannot be spent yet due to the timelock
+            output = await wallet.submit_transaction(bob_refund_tx)
+            # spending height is 9 and not 5 as expected because of mempool's FUTURE_TIMELOCK_TOLERANCE_BLOCKS
+            assert_in("Spending at height 9, locked until height 10", output['error']['message'])
 
             balance = await wallet.get_balance()
             assert_in("0", balance['coins']['decimal'])
             assert_equal({}, balance['tokens'])
 
-            # Bob can't spend it without secret
-            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(alice_htlc_tx_id, 0)], None)
-            output = await wallet.sign_raw_transaction(result['result']['hex'])
-            assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
-            signed_tx = output.split('\n')[2]
-            output = await wallet.submit_transaction(signed_tx)
-            assert_in("Signature decoding failed", output['error']['message'])
-            # Bob can't spend it with incorrect secret
-            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(alice_htlc_tx_id, 0)], [random_secret_hex])
-            output = await wallet.sign_raw_transaction(result['result']['hex'])
-            assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
-            signed_tx = output.split('\n')[2]
-            output = await wallet.submit_transaction(signed_tx)
-            assert_in("Preimage doesn't match the hash", output['error']['message'])
-
             ########################################################################################
-            await self.switch_to_wallet(wallet, 'alice_wallet')
-            assert_in("Success", await wallet.sync())
-
-            #Alice can't spend Bob's htlc without a secret
-            tx_output = TransferTxOutput(bob_amount_to_swap * ATOMS_PER_COIN, alice_pub_key_hex, None)
-            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(bob_htlc_tx_id, 0)], None)
-            output = await wallet.sign_raw_transaction(result['result']['hex'])
-            assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
-            signed_tx = output.split('\n')[2]
-            output = await wallet.submit_transaction(signed_tx)
-            assert_in("Signature decoding failed", output['error']['message'])
-            # Alice can't spend it with incorrect secret
-            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(bob_htlc_tx_id, 0)], [random_secret_hex])
-            output = await wallet.sign_raw_transaction(result['result']['hex'])
-            assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
-            signed_tx = output.split('\n')[2]
-            output = await wallet.submit_transaction(signed_tx)
-            assert_in("Preimage doesn't match the hash", output['error']['message'])
-            # Alice can only spend Bob's htlc by revealing a proper secret
-            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(bob_htlc_tx_id, 0), UtxoOutpoint(alice_htlc_tx_id, 1)], [alice_secret_hex, None])
-            output = await wallet.sign_raw_transaction(result['result']['hex'])
-            assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
-            signed_tx = output.split('\n')[2]
-            result_secret = node.test_functions_extract_htlc_secret(signed_tx, UtxoOutpoint(bob_htlc_tx_id, 0).to_json())
-            assert_equal(result_secret, alice_secret_hex)
-            output = await wallet.submit_transaction(signed_tx)
-            assert_in("tx_id", output['result'])
+            # Generate a block so that txs can get into mempool
             self.generate_block()
             assert_in("Success", await wallet.sync())
+            output = await wallet.submit_transaction(alice_refund_tx)
+            tx_id = output['result']['tx_id']
+            assert node.mempool_contains_tx(tx_id)
+            output = await wallet.submit_transaction(bob_refund_tx)
+            tx_id = output['result']['tx_id']
+            assert node.mempool_contains_tx(tx_id)
 
+            # tx won't get into blockchain because of timelock
+            self.generate_block()
+            assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in("150", balance['coins']['decimal'])
+            assert_in("0", balance['coins']['decimal'])
             assert_equal({}, balance['tokens'])
 
-            ########################################################################################
-            await self.switch_to_wallet(wallet, 'bob_wallet')
-            assert_in("Success", await wallet.sync())
-
-            # Now Bob can spend Alice's htlc with extracted secret
-            tx_output = TransferTxOutput(alice_amount_to_swap * ATOMS_PER_TOKEN, bob_pub_key_hex, token_id_hex)
-            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(alice_htlc_tx_id, 0), UtxoOutpoint(bob_htlc_tx_id, 1)], [alice_secret_hex, None])
-            output = await wallet.sign_raw_transaction(result['result']['hex'])
-            assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
-            signed_tx = output.split('\n')[2]
-            output = await wallet.submit_transaction(signed_tx)
-            assert_in("tx_id", output['result'])
             self.generate_block()
-            assert_in("Success", await wallet.sync())
+            self.generate_block()
+            self.generate_block()
+            self.generate_block()
 
+            # now check that fund got back to original owners
+            await self.switch_to_wallet(wallet, 'alice_wallet')
+            assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
             assert_in("0", balance['coins']['decimal'])
             assert_in(str(alice_amount_to_swap), balance['tokens'][token_id]['decimal'])
 
+            await self.switch_to_wallet(wallet, 'bob_wallet')
+            assert_in("Success", await wallet.sync())
+            balance = await wallet.get_balance()
+            assert_in("150", balance['coins']['decimal'])
+            assert_equal({}, balance['tokens'])
+
 
 if __name__ == '__main__':
-    WalletHtlcSpend().main()
+    WalletHtlcRefund().main()

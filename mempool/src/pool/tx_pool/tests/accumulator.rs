@@ -13,7 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::timelock::OutputTimeLock;
+use common::{
+    address::pubkeyhash::PublicKeyHash,
+    chain::{
+        classic_multisig::ClassicMultisigChallenge,
+        htlc::{HashedTimelockContract, HtlcSecret},
+        signature::{
+            inputsig::{
+                classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
+                htlc::produce_classical_multisig_signature_for_htlc_input,
+            },
+            sighash::{sighashtype::SigHashType, signature_hash},
+        },
+        timelock::OutputTimeLock,
+    },
+};
+use crypto::key::{KeyKind, PrivateKey};
 use serialization::Compact;
 
 use super::*;
@@ -354,6 +369,207 @@ async fn timelocked(#[case] seed: Seed, #[case] timelock: OutputTimeLock, #[case
     assert_eq!(res, Ok(TxStatus::InMempool));
 
     let tx1 = make_tx(&mut rng, &[(tx0_id.into(), 0)], &[800_000_000]);
+    let tx1_id = tx1.transaction().get_id();
+
+    let res = mempool.add_transaction_test(tx1.clone());
+    assert_eq!(
+        res.is_ok(),
+        in_mempool_at0,
+        "Unexpected mempool acceptance {res:?}"
+    );
+
+    let accumulator = Box::new(DefaultTxAccumulator::new(
+        1_000_000,
+        genesis_id.into(),
+        block1_time,
+    ));
+    let accumulator = mempool
+        .collect_txs(accumulator, vec![], PackingStrategy::FillSpaceFromMempool)
+        .unwrap();
+    let accumulated_ids: BTreeSet<_> = accumulator
+        .unwrap()
+        .transactions()
+        .iter()
+        .map(|tx| tx.transaction().get_id())
+        .collect();
+
+    assert!(accumulated_ids.contains(&tx0_id));
+    assert_eq!(accumulated_ids.contains(&tx1_id), in_accumulator_at0);
+
+    // Submit a block with the transaction that defines the time-locked output
+    let block1 = make_test_block(vec![tx0], genesis_id, block1_time);
+    let block1_id = block1.get_id();
+    chainstate
+        .call_mut(move |c| c.process_block(block1, BlockSource::Local))
+        .await
+        .unwrap()
+        .expect("block1");
+    mempool.on_new_tip(block1_id, BlockHeight::new(1)).unwrap();
+
+    let in_mempool = if !in_mempool_at0 {
+        mempool.add_transaction_test(tx1.clone()).is_ok()
+    } else {
+        mempool.contains_transaction(&tx1_id)
+    };
+
+    assert_eq!(in_mempool, in_mempool_at1);
+
+    // Check if the transaction spending time locked output is in the accumulator now
+    let accumulator = Box::new(DefaultTxAccumulator::new(
+        1_000_000,
+        block1_id.into(),
+        block2_time,
+    ));
+    let accumulator = mempool
+        .collect_txs(accumulator, vec![], PackingStrategy::FillSpaceFromMempool)
+        .unwrap()
+        .unwrap();
+    let has_tx1 = accumulator.transactions().iter().any(|tx| tx.transaction().get_id() == tx1_id);
+
+    assert_eq!(has_tx1, in_accumulator_at1);
+    assert!(accumulator.transactions().len() <= 1);
+}
+
+#[rstest]
+#[trace]
+#[case::until_blk1(Seed::from_entropy(), OutputTimeLock::UntilHeight(1.into()), 0b1111)]
+#[trace]
+#[case::until_blk2(Seed::from_entropy(), OutputTimeLock::UntilHeight(2.into()), 0b1011)]
+#[trace]
+#[case::until_blk4(Seed::from_entropy(), OutputTimeLock::UntilHeight(4.into()), 0b1010)]
+#[trace]
+#[case::until_blk20(Seed::from_entropy(), OutputTimeLock::UntilHeight(20.into()), 0b0000)]
+#[trace]
+#[case::for_1blk(Seed::from_entropy(), OutputTimeLock::ForBlockCount(1), 0b0011)]
+#[trace]
+#[case::for_2blk(Seed::from_entropy(), OutputTimeLock::ForBlockCount(2), 0b0010)]
+#[trace]
+#[case::for_20blk(Seed::from_entropy(), OutputTimeLock::ForBlockCount(20), 0b0000)]
+#[trace]
+#[case::until_5s(Seed::from_entropy(), timelock_secs_after_genesis(5), 0b1111)]
+#[trace]
+#[case::until_10s(Seed::from_entropy(), timelock_secs_after_genesis(10), 0b1111)]
+#[trace]
+#[case::until_11s(Seed::from_entropy(), timelock_secs_after_genesis(11), 0b1011)]
+#[trace]
+#[case::until_30s(Seed::from_entropy(), timelock_secs_after_genesis(30), 0b1011)]
+#[trace]
+#[case::until_31s(Seed::from_entropy(), timelock_secs_after_genesis(31), 0b1010)]
+#[trace]
+#[case::until_500s(Seed::from_entropy(), timelock_secs_after_genesis(500), 0b0000)]
+#[trace]
+#[case::for_1s(Seed::from_entropy(), OutputTimeLock::ForSeconds(1), 0b0011)]
+#[trace]
+#[case::for_10s(Seed::from_entropy(), OutputTimeLock::ForSeconds(10), 0b0011)]
+#[trace]
+#[case::for_20s(Seed::from_entropy(), OutputTimeLock::ForSeconds(20), 0b0011)]
+#[trace]
+#[case::for_21s(Seed::from_entropy(), OutputTimeLock::ForSeconds(21), 0b0010)]
+#[trace]
+#[case::for_500s(Seed::from_entropy(), OutputTimeLock::ForSeconds(500), 0b0000)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn timelocked_htlc_refund(
+    #[case] seed: Seed,
+    #[case] timelock: OutputTimeLock,
+    #[case] expected: u32,
+) {
+    // Unpack expected results:
+    let in_mempool_at0 = (expected & 0b1000) != 0;
+    let in_accumulator_at0 = (expected & 0b0100) != 0;
+    let in_mempool_at1 = (expected & 0b0010) != 0;
+    let in_accumulator_at1 = (expected & 0b0001) != 0;
+
+    let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
+    let chain_config = tf.chain_config().shallow_clone();
+    let genesis_id = tf.genesis().get_id();
+
+    let genesis_time = tf.genesis().timestamp();
+    let block1_time = genesis_time.add_int_seconds(10).unwrap();
+    let block2_time = genesis_time.add_int_seconds(30).unwrap();
+
+    // Setup tx with htlc
+    let (alice_sk, alice_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let (bob_sk, bob_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let secret = HtlcSecret::new_from_rng(&mut rng);
+    let refund_challenge = ClassicMultisigChallenge::new(
+        &chain_config,
+        ::utils::const_nz_u8!(2),
+        vec![alice_pk.clone(), bob_pk.clone()],
+    )
+    .unwrap();
+    let destination_multisig: PublicKeyHash = (&refund_challenge).into();
+
+    let htlc = HashedTimelockContract {
+        secret_hash: secret.hash(),
+        spend_key: Destination::PublicKeyHash((&bob_pk).into()),
+        refund_timelock: timelock,
+        refund_key: Destination::ClassicMultisig(destination_multisig),
+    };
+
+    let tx0 = {
+        TransactionBuilder::new()
+            .add_input(
+                TxInput::from_utxo(genesis_id.into(), 0),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::Htlc(
+                OutputValue::Coin(Amount::from_atoms(900_000_000)),
+                Box::new(htlc),
+            ))
+            .build()
+    };
+    let tx0_id = tx0.transaction().get_id();
+
+    let mut mempool = setup_with_chainstate(tf.chainstate());
+    mempool.clock = mocked_time_getter_seconds(Arc::new(block1_time.as_int_seconds().into()));
+    let chainstate = mempool.chainstate_handle().shallow_clone();
+
+    let res = mempool.add_transaction_test(tx0.clone());
+    assert_eq!(res, Ok(TxStatus::InMempool));
+
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_utxo(tx0_id.into(), 0),
+            InputWitness::NoSignature(None),
+        )
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(100)),
+            Destination::AnyoneCanSpend,
+        ))
+        .build()
+        .take_transaction();
+
+    let authorization = {
+        let mut authorization = AuthorizedClassicalMultisigSpend::new_empty(refund_challenge);
+
+        let sighash = signature_hash(
+            SigHashType::try_from(SigHashType::ALL).unwrap(),
+            &tx,
+            &[Some(&tx0.transaction().outputs()[0])],
+            0,
+        )
+        .unwrap();
+        let sighash = sighash.encode();
+
+        let signature = alice_sk.sign_message(&sighash, &mut rng).unwrap();
+        authorization.add_signature(0, signature);
+        let signature = bob_sk.sign_message(&sighash, &mut rng).unwrap();
+        authorization.add_signature(1, signature);
+
+        authorization
+    };
+
+    let input_sign = produce_classical_multisig_signature_for_htlc_input(
+        &chain_config,
+        &authorization,
+        SigHashType::try_from(SigHashType::ALL).unwrap(),
+        &tx,
+        &[Some(&tx0.transaction().outputs()[0])],
+        0,
+    )
+    .unwrap();
+    let tx1 = SignedTransaction::new(tx, vec![InputWitness::Standard(input_sign)]).unwrap();
     let tx1_id = tx1.transaction().get_id();
 
     let res = mempool.add_transaction_test(tx1.clone());

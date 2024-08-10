@@ -97,7 +97,7 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
         tx: &Transaction,
         destination: &Destination,
         input_index: usize,
-        input_utxos: &[Option<&TxOutput>],
+        inputs_utxo_refs: &[Option<&TxOutput>],
         key_chain: &impl AccountKeyChains,
         htlc_secret: &Option<HtlcSecret>,
     ) -> SignerResult<(Option<InputWitness>, SignatureStatus)> {
@@ -118,7 +118,7 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
                                 sighash_type,
                                 destination.clone(),
                                 tx,
-                                input_utxos,
+                                inputs_utxo_refs,
                                 input_index,
                                 htlc_secret.clone(),
                                 make_true_rng(),
@@ -130,7 +130,7 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
                                 sighash_type,
                                 destination.clone(),
                                 tx,
-                                input_utxos,
+                                inputs_utxo_refs,
                                 input_index,
                                 make_true_rng(),
                             )
@@ -154,18 +154,14 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
                     let (sig, _, status) = self.sign_multisig_input(
                         tx,
                         input_index,
-                        input_utxos,
+                        inputs_utxo_refs,
                         current_signatures,
                         key_chain,
                     )?;
 
-                    let sighash_type =
-                        SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
-                    let sig = InputWitness::Standard(StandardInputSignature::new(
-                        sighash_type,
-                        sig.encode(),
-                    ));
-                    return Ok((Some(sig), status));
+                    let signature = encode_multisig_spend(&sig, inputs_utxo_refs[input_index])?;
+
+                    return Ok((Some(InputWitness::Standard(signature)), status));
                 }
 
                 Ok((None, SignatureStatus::NotSigned))

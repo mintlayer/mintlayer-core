@@ -28,7 +28,8 @@ def init_mintlayer_types():
                 "type": "enum",
                 "type_mapping": [
                     ["Coin", "Amount"],
-                    # TODO tokens
+                    ["TokenV0", ""], # deprecated
+                    ["TokenV1", "(TokenId, Amount)"],
                 ]
             },
 
@@ -76,7 +77,21 @@ def init_mintlayer_types():
                     ["ProduceBlockFromStake", "(Destination, PoolId)"],
                     ["CreateDelegationId", "(Destination, PoolId)"],
                     ["DelegateStaking", "(Amount, DelegationId)"],
+                    ["IssueFungibleToken", ""], # TODO
+                    ["IssueNft", ""], # TODO
+                    ["DataDeposit", "Vec<u8>"],
+                    ["Htlc", "(OutputValue, HashedTimelockContract)"],
                 ]
+            },
+
+            "HashedTimelockContract": {
+                "type": "struct",
+                "type_mapping": [
+                    ["secret_hash", "[u8; 20]"],
+                    ["spend_key", "Destination"],
+                    ["refund_timelock", "OutputTimeLock"],
+                    ["refund_key", "Destination"],
+                ],
             },
 
             "OutputTimeLock": {
@@ -91,6 +106,7 @@ def init_mintlayer_types():
 
             "PoolId": "H256",
             "DelegationId": "H256",
+            "TokenId": "H256",
 
             "StakePoolData": {
                 "type": "struct",
@@ -195,6 +211,17 @@ def init_mintlayer_types():
                 "type_mapping": [
                     ["transaction", "TransactionV1"],
                     ["signatures", "Vec<InputWitness>"],
+                ]
+            },
+
+            "PartiallySignedTransaction": {
+                "type": "struct",
+                "type_mapping": [
+                    ["tx", "TransactionV1"],
+                    ["witnesses", "Vec<Option<InputWitness>>"],
+                    ["input_utxos", "Vec<Option<TxOutput>>"],
+                    ["destinations", "Vec<Option<Destination>>"],
+                    ["htlc_secrets", "Vec<Option<[u8; 32]>>"],
                 ]
             },
 

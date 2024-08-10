@@ -36,11 +36,11 @@ DEFAULT_ACCOUNT_INDEX = 0
 
 @dataclass
 class UtxoOutpoint:
-    id: str
+    tx_id: str
     index: int
 
     def to_json(self):
-        return { "source_id": { "type": "Transaction", "content": { "tx_id": self.id } }, "index": self.index }
+        return { "source_id": { "type": "Transaction", "content": { "tx_id": self.tx_id } }, "index": self.index }
 
 @dataclass
 class TransferTxOutput:
@@ -257,7 +257,7 @@ class WalletRpcController:
 
     async def list_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
         outputs = self._write_command("account_utxos", [self.account, utxo_types, with_locked, ''.join(utxo_states)])['result']
-        return [UtxoOutpoint(id=match['id'].strip(), index=int(match['index'].strip())) for match in outputs]
+        return [UtxoOutpoint(tx_id=match["outpoint"]["source_id"]["content"]['tx_id'], index=int(match["outpoint"]['index'])) for match in outputs]
 
     async def get_transaction(self, tx_id: str) -> str:
         return self._write_command("transaction_get", [self.account, tx_id])['result']
@@ -419,7 +419,7 @@ class WalletRpcController:
             return "Not staking"
 
     async def get_addresses_usage(self) -> str:
-        return self._write_command("address_show")['result']
+        return self._write_command("address_show", [self.account])['result']
 
     async def get_balance(self, with_locked: str = 'unlocked', utxo_states: List[str] = ['confirmed']) -> str:
         with_locked = with_locked.capitalize()
@@ -491,7 +491,7 @@ class WalletRpcController:
             return result['error']['message']
 
     async def create_from_cold_address(self, address: str, amount: int, selected_utxo: UtxoOutpoint, change_address: Optional[str] = None) -> str:
-        utxo = { "source_id": { "type": "Transaction", "content": { "tx_id": selected_utxo.id } }, "index": selected_utxo.index }
+        utxo = { "source_id": { "type": "Transaction", "content": { "tx_id": selected_utxo.tx_id } }, "index": selected_utxo.index }
         result = self._write_command("transaction_create_from_cold_input", [self.account, address, {'decimal': str(amount)}, utxo, change_address, {'in_top_x_mb': 5}])
         if 'result' in result:
             return f"Send transaction created\n\n{result['result']['hex']}"

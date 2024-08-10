@@ -234,7 +234,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> ColdWalletRpcServ
                     let is_complete = tx.all_signatures_available()
                         && cur_signatures.iter().all(|s| *s == SignatureStatus::FullySigned);
                     let hex = if is_complete {
-                        let tx = tx.into_signed_tx().expect("already checked");
+                        let tx = tx.into_signed_tx().expect("already checked3");
                         tx.hex_encode()
                     } else {
                         tx.hex_encode()
@@ -401,13 +401,11 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         utxo_states: Vec<RpcUtxoState>,
         with_locked: Option<WithLocked>,
     ) -> rpc::RpcResult<Balances> {
-        let utxo_states = utxo_states
-            .iter()
-            .map(|rpc_state| {
-                let state: UtxoState = rpc_state.into();
-                state
-            })
-            .fold(UtxoStates::NONE, |states, state| states | state);
+        let utxo_states = if utxo_states.is_empty() {
+            UtxoStates::ALL
+        } else {
+            utxo_states.iter().map(UtxoState::from).fold(UtxoStates::NONE, |x, y| x | y)
+        };
 
         rpc::handle_result(
             self.get_balance(

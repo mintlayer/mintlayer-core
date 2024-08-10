@@ -1253,7 +1253,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
                     && cur_signatures.iter().all(|s| *s == SignatureStatus::FullySigned);
 
                 let tx = if is_fully_signed {
-                    PartialOrSignedTx::Signed(ptx.into_signed_tx().expect("already checked"))
+                    PartialOrSignedTx::Signed(ptx.into_signed_tx().expect("already checked2"))
                 } else {
                     PartialOrSignedTx::Partial(ptx)
                 };

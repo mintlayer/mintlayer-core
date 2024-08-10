@@ -478,6 +478,7 @@ pub enum RpcUtxoType {
     IssueNft,
     CreateStakePool,
     ProduceBlockFromStake,
+    Htlc,
 }
 
 impl From<&RpcUtxoType> for UtxoType {
@@ -488,6 +489,7 @@ impl From<&RpcUtxoType> for UtxoType {
             RpcUtxoType::IssueNft => UtxoType::IssueNft,
             RpcUtxoType::CreateStakePool => UtxoType::CreateStakePool,
             RpcUtxoType::ProduceBlockFromStake => UtxoType::ProduceBlockFromStake,
+            RpcUtxoType::Htlc => UtxoType::Htlc,
         }
     }
 }
@@ -500,7 +502,7 @@ impl From<&UtxoType> for RpcUtxoType {
             UtxoType::IssueNft => RpcUtxoType::IssueNft,
             UtxoType::CreateStakePool => RpcUtxoType::CreateStakePool,
             UtxoType::ProduceBlockFromStake => RpcUtxoType::ProduceBlockFromStake,
-            UtxoType::Htlc => todo!(),
+            UtxoType::Htlc => RpcUtxoType::Htlc,
         }
     }
 }
