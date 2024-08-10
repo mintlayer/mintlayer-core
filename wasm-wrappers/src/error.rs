@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::TransactionCreationError;
 use wasm_bindgen::JsValue;
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -53,6 +54,12 @@ pub enum Error {
     InvalidTransaction,
     #[error("The number of signatures does not match the number of inputs")]
     InvalidWitnessCount,
+    #[error("Invalid htlc secret encoding")]
+    InvalidHtlcSecret,
+    #[error("Invalid multisig challenge encoding")]
+    InvalidMultisigChallenge,
+    #[error("Multisig required signatures cannot be zero")]
+    ZeroMultisigRequiredSigs,
     #[error("Final supply calculation error")]
     FinalSupplyError,
     #[error("Calculating effective balance failed: {0}")]
@@ -61,6 +68,8 @@ pub enum Error {
     FixedTotalSupply,
     #[error("Invalid token parameters: {0}")]
     TokenIssuanceError(#[from] tx_verifier::error::TokenIssuanceError),
+    #[error("Transaction creation error: {0}")]
+    TransactionCreationError(#[from] TransactionCreationError),
 }
 
 // This is required to make an error readable in JavaScript
