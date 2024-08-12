@@ -126,6 +126,8 @@ where
             }
         };
 
+        //FIXME
+        let scan_blockchain = args.user_supplied_menmonic();
         rpc::handle_result(
             self.create_wallet(path.into(), args, ScanBlockchain::ScanAndWait)
                 .await
