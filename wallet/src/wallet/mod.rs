@@ -78,7 +78,7 @@ use wallet_types::seed_phrase::SerializableSeedPhrase;
 use wallet_types::signature_status::SignatureStatus;
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::{TxData, TxState};
-use wallet_types::wallet_type::WalletType;
+use wallet_types::wallet_type::{WalletControllerMode, WalletType};
 use wallet_types::with_locked::WithLocked;
 use wallet_types::{AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState};
 
@@ -98,7 +98,7 @@ pub enum WalletError {
     #[error("Wallet is not initialized")]
     WalletNotInitialized,
     #[error("A {0} wallet is trying to open a {1} wallet file")]
-    DifferentWalletType(WalletType, WalletType),
+    DifferentWalletType(WalletControllerMode, WalletType),
     #[error("The wallet belongs to a different chain than the one specified")]
     DifferentChainType,
     #[error("Unsupported wallet version: {0}, max supported version of this software is {CURRENT_WALLET_VERSION}")]
@@ -476,7 +476,7 @@ where
     fn migration_v7(
         db: &Store<B>,
         chain_config: Arc<ChainConfig>,
-        wallet_type: WalletType,
+        controller_mode: WalletControllerMode,
     ) -> WalletResult<()> {
         let mut db_tx = db.transaction_rw(None)?;
         let accs = db_tx.get_accounts_info()?;
@@ -485,11 +485,11 @@ where
             accs.values().all(|acc| acc.best_block_id() == chain_config.genesis_block_id());
 
         ensure!(
-            wallet_type == WalletType::Hot || cold_wallet,
-            WalletError::DifferentWalletType(wallet_type, WalletType::Hot)
+            controller_mode == WalletControllerMode::Hot || cold_wallet,
+            WalletError::DifferentWalletType(controller_mode, WalletType::Hot)
         );
 
-        db_tx.set_wallet_type(wallet_type)?;
+        db_tx.set_wallet_type(controller_mode.into())?;
 
         db_tx.set_storage_version(WALLET_VERSION_V7)?;
         db_tx.commit()?;
@@ -509,7 +509,7 @@ where
         db: &Store<B>,
         chain_config: Arc<ChainConfig>,
         pre_migration: F,
-        wallet_type: WalletType,
+        controller_mode: WalletControllerMode,
         signer_provider: F2,
     ) -> WalletResult<P> {
         let version = db.transaction_ro()?.get_storage_version()?;
@@ -546,7 +546,7 @@ where
                 }
                 WALLET_VERSION_V6 => {
                     pre_migration(WALLET_VERSION_V6)?;
-                    Self::migration_v7(db, chain_config.clone(), wallet_type)?;
+                    Self::migration_v7(db, chain_config.clone(), controller_mode)?;
                 }
                 CURRENT_WALLET_VERSION => return Ok(signer_provider),
                 unsupported_version => {
@@ -559,7 +559,7 @@ where
     fn validate_chain_info(
         chain_config: &ChainConfig,
         db_tx: &impl WalletStorageReadLocked,
-        wallet_type: WalletType,
+        controller_mode: WalletControllerMode,
     ) -> WalletResult<()> {
         let chain_info = db_tx.get_chain_info()?;
         ensure!(
@@ -569,8 +569,8 @@ where
 
         let this_wallet_type = db_tx.get_wallet_type()?;
         ensure!(
-            this_wallet_type == wallet_type,
-            WalletError::DifferentWalletType(wallet_type, this_wallet_type)
+            this_wallet_type.is_compatible(controller_mode),
+            WalletError::DifferentWalletType(controller_mode, this_wallet_type)
         );
 
         Ok(())
@@ -729,7 +729,7 @@ where
         mut db: Store<B>,
         password: Option<String>,
         pre_migration: F,
-        wallet_type: WalletType,
+        controller_mode: WalletControllerMode,
         force_change_wallet_type: bool,
         signer_provider: F2,
     ) -> WalletResult<Self> {
@@ -740,12 +740,12 @@ where
             &db,
             chain_config.clone(),
             pre_migration,
-            wallet_type,
+            controller_mode,
             signer_provider,
         )?;
         if force_change_wallet_type {
             Self::force_migrate_wallet_type(
-                wallet_type,
+                controller_mode.into(),
                 &db,
                 chain_config.clone(),
                 &signer_provider,
@@ -756,7 +756,7 @@ where
         // Some unit tests expect that loading the wallet does not change the DB.
         let db_tx = db.transaction_ro()?;
 
-        Self::validate_chain_info(chain_config.as_ref(), &db_tx, wallet_type)?;
+        Self::validate_chain_info(chain_config.as_ref(), &db_tx, controller_mode)?;
 
         let accounts_info = db_tx.get_accounts_info()?;
 

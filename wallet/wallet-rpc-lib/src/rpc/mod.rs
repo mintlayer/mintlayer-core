@@ -132,12 +132,13 @@ where
         path: PathBuf,
         args: WalletTypeArgs,
         skip_syncing: bool,
+        scan_blockchain: bool,
     ) -> WRpcResult<CreatedWallet, N> {
         self.wallet
             .manage_async(move |wallet_manager| {
-                Box::pin(
-                    async move { wallet_manager.create_wallet(path, args, skip_syncing).await },
-                )
+                Box::pin(async move {
+                    wallet_manager.create_wallet(path, args, skip_syncing, scan_blockchain).await
+                })
             })
             .await?
     }
@@ -150,7 +151,7 @@ where
         open_as_hw_wallet: Option<HardwareWalletType>,
     ) -> WRpcResult<(), N> {
         let open_as_wallet_type =
-            open_as_hw_wallet.map_or(self.node.is_cold_wallet_node(), |hw| match hw {
+            open_as_hw_wallet.map_or(self.node.is_cold_wallet_node().into(), |hw| match hw {
                 #[cfg(feature = "trezor")]
                 HardwareWalletType::Trezor => WalletType::Trezor,
             });

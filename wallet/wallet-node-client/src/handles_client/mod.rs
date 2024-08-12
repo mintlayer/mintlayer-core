@@ -37,7 +37,7 @@ use p2p::{
 };
 use serialization::hex::HexError;
 use utils_networking::IpOrSocketAddress;
-use wallet_types::wallet_type::WalletType;
+use wallet_types::wallet_type::WalletControllerMode;
 
 use crate::node_traits::NodeInterface;
 
@@ -102,8 +102,8 @@ impl WalletHandlesClient {
 impl NodeInterface for WalletHandlesClient {
     type Error = WalletHandlesClientError;
 
-    fn is_cold_wallet_node(&self) -> WalletType {
-        WalletType::Hot
+    fn is_cold_wallet_node(&self) -> WalletControllerMode {
+        WalletControllerMode::Hot
     }
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {

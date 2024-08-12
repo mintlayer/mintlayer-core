@@ -46,7 +46,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use tokio::sync::mpsc;
 use utils_networking::IpOrSocketAddress;
 use wallet::wallet_events::WalletEventsNoOp;
-use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, wallet_type::WalletType};
+use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, wallet_type::WalletControllerMode};
 
 use super::*;
 
@@ -202,8 +202,8 @@ impl MockNode {
 impl NodeInterface for MockNode {
     type Error = NodeRpcError;
 
-    fn is_cold_wallet_node(&self) -> WalletType {
-        WalletType::Hot
+    fn is_cold_wallet_node(&self) -> WalletControllerMode {
+        WalletControllerMode::Hot
     }
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
