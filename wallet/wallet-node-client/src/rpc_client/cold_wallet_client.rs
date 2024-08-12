@@ -32,7 +32,7 @@ use p2p::{
     types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId},
 };
 use utils_networking::IpOrSocketAddress;
-use wallet_types::wallet_type::WalletType;
+use wallet_types::wallet_type::WalletControllerMode;
 
 use crate::node_traits::NodeInterface;
 
@@ -48,8 +48,8 @@ pub enum ColdWalletRpcError {
 impl NodeInterface for ColdWalletClient {
     type Error = ColdWalletRpcError;
 
-    fn is_cold_wallet_node(&self) -> WalletType {
-        WalletType::Cold
+    fn is_cold_wallet_node(&self) -> WalletControllerMode {
+        WalletControllerMode::Cold
     }
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {

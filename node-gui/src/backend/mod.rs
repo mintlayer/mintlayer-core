@@ -153,15 +153,6 @@ pub async fn node_initialize(
             });
             (chain_config, chain_info)
         }
-        #[cfg(feature = "trezor")]
-        WalletMode::Trezor => spawn_cold_backend(
-            network,
-            event_tx,
-            request_rx,
-            low_priority_event_tx,
-            wallet_updated_tx,
-            wallet_updated_rx,
-        ),
         WalletMode::Cold => spawn_cold_backend(
             network,
             event_tx,

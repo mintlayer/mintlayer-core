@@ -102,7 +102,9 @@ pub use wallet_types::{
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
 use wallet_types::{
-    signature_status::SignatureStatus, wallet_type::WalletType, with_locked::WithLocked,
+    signature_status::SignatureStatus,
+    wallet_type::{WalletControllerMode, WalletType},
+    with_locked::WithLocked,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -379,7 +381,7 @@ where
         chain_config: Arc<ChainConfig>,
         file_path: impl AsRef<Path>,
         password: Option<String>,
-        current_wallet_type: WalletType,
+        current_controller_mode: WalletControllerMode,
         force_change_wallet_type: bool,
         open_as_wallet_type: WalletType,
     ) -> Result<WalletType2<DefaultBackend>, ControllerError<T>> {
@@ -401,7 +403,7 @@ where
                     db,
                     password,
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
-                    current_wallet_type,
+                    current_controller_mode,
                     force_change_wallet_type,
                     |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
                 )
@@ -415,7 +417,7 @@ where
                     db,
                     password,
                     |version| Self::make_backup_wallet_file(file_path.as_ref(), version),
-                    current_wallet_type,
+                    current_controller_mode,
                     force_change_wallet_type,
                     |db_tx| TrezorSignerProvider::load_from_database(chain_config.clone(), db_tx),
                 )

@@ -124,8 +124,9 @@ where
             }
         };
 
+        let scan_blockchain = args.user_supplied_menmonic();
         rpc::handle_result(
-            self.create_wallet(path.into(), args, false)
+            self.create_wallet(path.into(), args, false, scan_blockchain)
                 .await
                 .map(Into::<CreatedWallet>::into),
         )

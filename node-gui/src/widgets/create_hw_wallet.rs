@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::main_window::ImportOrCreate;
 use iced::{
     alignment::Horizontal,
-    widget::{self, container, Button, Component, Text},
+    widget::{self, container, text, Button, Component, Text},
     Element, Length, Theme,
 };
 use iced_aw::Card;
@@ -23,16 +24,24 @@ use iced_aw::Card;
 pub struct CreateHwWalletDialog<Message> {
     on_import: Box<dyn Fn() -> Message>,
     on_close: Box<dyn Fn() -> Message>,
+    mode: ImportOrCreate,
 }
 
 pub fn hw_wallet_create_dialog<Message>(
     on_import: Box<dyn Fn() -> Message>,
     on_close: Box<dyn Fn() -> Message>,
+    mode: ImportOrCreate,
 ) -> CreateHwWalletDialog<Message> {
     CreateHwWalletDialog {
         on_import,
         on_close,
+        mode,
     }
+}
+
+#[derive(Default)]
+pub struct ImportState {
+    importing: bool,
 }
 
 #[derive(Clone)]
@@ -42,26 +51,39 @@ pub enum ImportEvent {
 }
 
 impl<Message> Component<Message, Theme, iced::Renderer> for CreateHwWalletDialog<Message> {
-    type State = ();
+    type State = ImportState;
     type Event = ImportEvent;
 
-    fn update(&mut self, _state: &mut Self::State, event: Self::Event) -> Option<Message> {
+    fn update(&mut self, state: &mut Self::State, event: Self::Event) -> Option<Message> {
         match event {
-            ImportEvent::Ok => Some((self.on_import)()),
+            ImportEvent::Ok => {
+                state.importing = true;
+                Some((self.on_import)())
+            }
             ImportEvent::Cancel => Some((self.on_close)()),
         }
     }
 
-    fn view(&self, _state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
+    fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
         let button = Button::new(Text::new("Select file").horizontal_alignment(Horizontal::Center))
             .width(100.0)
             .on_press(ImportEvent::Ok);
 
-        Card::new(
-            Text::new("Create new Wallet"),
-            Text::new("Create a new Trezor wallet using the connected Trezor device"),
-        )
-        .foot(container(button).width(Length::Fill).center_x())
+        let card = match self.mode {
+            ImportOrCreate::Create => Card::new(
+                Text::new("Create new Wallet"),
+                Text::new("Create a new Trezor wallet using the connected Trezor device"),
+            ),
+            ImportOrCreate::Import => Card::new(
+                Text::new("Recover new Wallet"),
+                Text::new("Recover a new wallet using the connected Trezor device"),
+            ),
+        };
+        if state.importing {
+            card.foot(container(text("Loading...")).width(Length::Fill).center_x())
+        } else {
+            card.foot(container(button).width(Length::Fill).center_x())
+        }
         .max_width(600.0)
         .on_close(ImportEvent::Cancel)
         .into()

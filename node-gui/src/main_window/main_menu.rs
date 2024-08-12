@@ -108,7 +108,7 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
         labeled_button("File", MenuMessage::NoOp),
         Menu::new(match wallet_mode {
             WalletMode::Hot => {
-                vec![
+                let menu = vec![
                     menu_item(
                         "Create new Hot wallet",
                         MenuMessage::CreateNewWallet {
@@ -130,7 +130,41 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
                     // TODO: enable setting when needed
                     // menu_item("Settings", MenuMessage::NoOp),
                     menu_item("Exit", MenuMessage::Exit),
-                ]
+                ];
+                #[cfg(feature = "trezor")]
+                {
+                    let mut menu = menu;
+                    menu.insert(
+                        1,
+                        menu_item(
+                            "Create new Trezor wallet",
+                            MenuMessage::CreateNewWallet {
+                                wallet_type: WalletType::Trezor,
+                            },
+                        ),
+                    );
+                    menu.insert(
+                        3,
+                        menu_item(
+                            "Recover from Trezor wallet",
+                            MenuMessage::RecoverWallet {
+                                wallet_type: WalletType::Trezor,
+                            },
+                        ),
+                    );
+                    menu.insert(
+                        5,
+                        menu_item(
+                            "Open Trezor wallet",
+                            MenuMessage::OpenWallet {
+                                wallet_type: WalletType::Trezor,
+                            },
+                        ),
+                    );
+                    menu
+                }
+                #[cfg(not(feature = "trezor"))]
+                menu
             }
             WalletMode::Cold => {
                 vec![
@@ -150,26 +184,6 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
                         "Open Cold wallet",
                         MenuMessage::OpenWallet {
                             wallet_type: WalletType::Cold,
-                        },
-                    ),
-                    // TODO: enable setting when needed
-                    // menu_item("Settings", MenuMessage::NoOp),
-                    menu_item("Exit", MenuMessage::Exit),
-                ]
-            }
-            #[cfg(feature = "trezor")]
-            WalletMode::Trezor => {
-                vec![
-                    menu_item(
-                        "Create new Trezor wallet",
-                        MenuMessage::CreateNewWallet {
-                            wallet_type: WalletType::Trezor,
-                        },
-                    ),
-                    menu_item(
-                        "Open Trezor wallet",
-                        MenuMessage::OpenWallet {
-                            wallet_type: WalletType::Trezor,
                         },
                     ),
                     // TODO: enable setting when needed
