@@ -39,7 +39,10 @@ pub use transaction::{
     InspectTransaction, SignatureStats, TransactionToInspect, ValidatedSignatures,
 };
 use utils::ensure;
-use wallet_types::seed_phrase::StoreSeedPhrase;
+use wallet_types::{
+    seed_phrase::StoreSeedPhrase,
+    wallet_type::{WalletControllerMode, WalletType},
+};
 
 use crate::mnemonic;
 
@@ -162,6 +165,17 @@ pub enum WalletTypeArgs {
 }
 
 impl WalletTypeArgs {
+    pub fn wallet_type(&self, controller_mode: WalletControllerMode) -> WalletType {
+        match self {
+            Self::Software {
+                mnemonic: _,
+                passphrase: _,
+                store_seed_phrase: _,
+            } => controller_mode.into(),
+            #[cfg(feature = "trezor")]
+            Self::Trezor => WalletType::Trezor,
+        }
+    }
     pub fn user_supplied_menmonic(&self) -> bool {
         match self {
             Self::Software {
@@ -170,7 +184,7 @@ impl WalletTypeArgs {
                 store_seed_phrase: _,
             } => mnemonic.is_some(),
             #[cfg(feature = "trezor")]
-            Self::Trezor => false,
+            Self::Trezor => true,
         }
     }
 

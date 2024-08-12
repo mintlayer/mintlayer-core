@@ -809,6 +809,7 @@ impl MainWindow {
                                 wallet_type,
                             }),
                             Box::new(|| MainWindowMessage::CloseDialog),
+                            ImportOrCreate::Create,
                         )
                         .into(),
                     }
@@ -816,16 +817,30 @@ impl MainWindow {
 
                 ActiveDialog::WalletRecover { wallet_type } => {
                     let wallet_type = *wallet_type;
-                    wallet_mnemonic_dialog(
-                        None,
-                        Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
-                            args: WalletArgs::Software { mnemonic },
-                            import: ImportOrCreate::Import,
-                            wallet_type,
-                        }),
-                        Box::new(|| MainWindowMessage::CloseDialog),
-                    )
-                    .into()
+                    // FIXME
+                    match wallet_type {
+                        WalletType::Hot | WalletType::Cold => wallet_mnemonic_dialog(
+                            None,
+                            Box::new(move |mnemonic| MainWindowMessage::ImportWalletMnemonic {
+                                args: WalletArgs::Software { mnemonic },
+                                import: ImportOrCreate::Import,
+                                wallet_type,
+                            }),
+                            Box::new(|| MainWindowMessage::CloseDialog),
+                        )
+                        .into(),
+                        #[cfg(feature = "trezor")]
+                        WalletType::Trezor => hw_wallet_create_dialog(
+                            Box::new(move || MainWindowMessage::ImportWalletMnemonic {
+                                args: WalletArgs::Trezor,
+                                import: ImportOrCreate::Import,
+                                wallet_type,
+                            }),
+                            Box::new(|| MainWindowMessage::CloseDialog),
+                            ImportOrCreate::Import,
+                        )
+                        .into(),
+                    }
                 }
 
                 ActiveDialog::WalletSetPassword { wallet_id } => {

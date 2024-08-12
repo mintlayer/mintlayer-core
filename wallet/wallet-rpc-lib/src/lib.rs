@@ -102,7 +102,9 @@ where
     let wallet_service = WalletService::start(
         wallet_config.chain_config,
         // TODO add support for trezor wallet
-        wallet_config.wallet_file.map(|file| (file, node_rpc.is_cold_wallet_node())),
+        wallet_config
+            .wallet_file
+            .map(|file| (file, node_rpc.is_cold_wallet_node().into())),
         wallet_config.force_change_wallet_type,
         wallet_config.start_staking_for_account,
         node_rpc,
