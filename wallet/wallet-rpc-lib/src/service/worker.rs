@@ -185,42 +185,53 @@ where
         wallet_path: PathBuf,
         args: WalletTypeArgs,
         skip_syncing: bool,
+        scan_blockchain: bool,
     ) -> Result<CreatedWallet, RpcError<N>> {
         utils::ensure!(
             self.controller.is_none(),
             ControllerError::WalletFileAlreadyOpen
         );
-        let newly_generated_mnemonic = !args.user_supplied_menmonic();
+        // let newly_generated_mnemonic = !args.user_supplied_menmonic();
+        let wallet_type = args.wallet_type(self.node_rpc.is_cold_wallet_node());
         let (computed_args, wallet_created) =
             args.parse_mnemonic().map_err(RpcError::InvalidMnemonic)?;
 
-        let wallet = if newly_generated_mnemonic || skip_syncing {
+        let wallet = if scan_blockchain {
+            WalletController::recover_wallet(
+                self.chain_config.clone(),
+                wallet_path,
+                computed_args,
+                wallet_type,
+            )
+        } else {
             let info = self.node_rpc.chainstate_info().await.map_err(RpcError::RpcError)?;
             WalletController::create_wallet(
                 self.chain_config.clone(),
                 wallet_path,
                 computed_args,
                 (info.best_block_height, info.best_block_id),
-                self.node_rpc.is_cold_wallet_node(),
-            )
-        } else {
-            WalletController::recover_wallet(
-                self.chain_config.clone(),
-                wallet_path,
-                computed_args,
-                self.node_rpc.is_cold_wallet_node(),
+                wallet_type,
             )
         }
         .map_err(RpcError::Controller)?;
 
-        let controller = WalletController::new(
-            self.chain_config.clone(),
-            self.node_rpc.clone(),
-            wallet,
-            self.wallet_events.clone(),
-        )
-        .await
-        .map_err(RpcError::Controller)?;
+        let controller = if skip_syncing {
+            WalletController::new_unsynced(
+                self.chain_config.clone(),
+                self.node_rpc.clone(),
+                wallet,
+                self.wallet_events.clone(),
+            )
+        } else {
+            WalletController::new(
+                self.chain_config.clone(),
+                self.node_rpc.clone(),
+                wallet,
+                self.wallet_events.clone(),
+            )
+            .await
+            .map_err(RpcError::Controller)?
+        };
 
         self.controller.replace(controller);
 
