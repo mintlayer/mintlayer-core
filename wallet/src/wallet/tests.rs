@@ -271,7 +271,7 @@ fn verify_wallet_balance<B, P>(
         db_copy,
         None,
         |_| Ok(()),
-        WalletType::Hot,
+        WalletControllerMode::Hot,
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
@@ -368,7 +368,7 @@ fn wallet_creation_in_memory() {
         empty_db,
         None,
         |_| Ok(()),
-        WalletType::Hot,
+        WalletControllerMode::Hot,
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config2, db_tx),
     ) {
@@ -386,7 +386,7 @@ fn wallet_creation_in_memory() {
         initialized_db,
         None,
         |_| Ok(()),
-        WalletType::Hot,
+        WalletControllerMode::Hot,
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
@@ -477,7 +477,7 @@ fn wallet_migration_to_v2(#[case] seed: Seed) {
         new_db,
         password,
         |_| Ok(()),
-        WalletType::Hot,
+        WalletControllerMode::Hot,
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )
@@ -956,7 +956,7 @@ fn test_wallet_accounts<B, P>(
         db_copy,
         None,
         |_| Ok(()),
-        WalletType::Hot,
+        WalletControllerMode::Hot,
         false,
         |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
     )

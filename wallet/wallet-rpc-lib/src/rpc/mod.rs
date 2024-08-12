@@ -157,7 +157,7 @@ where
         open_as_hw_wallet: Option<HardwareWalletType>,
     ) -> WRpcResult<(), N> {
         let open_as_wallet_type =
-            open_as_hw_wallet.map_or(self.node.is_cold_wallet_node(), |hw| match hw {
+            open_as_hw_wallet.map_or(self.node.is_cold_wallet_node().into(), |hw| match hw {
                 #[cfg(feature = "trezor")]
                 HardwareWalletType::Trezor => WalletType::Trezor,
             });

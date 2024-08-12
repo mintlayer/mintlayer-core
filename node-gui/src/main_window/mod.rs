@@ -883,6 +883,7 @@ impl MainWindow {
                                 password,
                             }),
                             Box::new(|| MainWindowMessage::CloseDialog),
+                            ImportOrCreate::Create,
                         )
                         .into()
                     }
@@ -922,7 +923,6 @@ impl MainWindow {
         let popup: Option<Element<MainWindowMessage>> =
             match (self.file_dialog_active, self.popups.last()) {
                 (true, _) => Some(bordered_text_on_normal_bg("File dialog...")),
-
                 (_, Some(popup)) => {
                     Some(popup_dialog(popup.clone(), MainWindowMessage::ClosePopup).into())
                 }
