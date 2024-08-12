@@ -379,12 +379,12 @@ impl Signer for TrezorSigner {
 
     fn sign_challenge(
         &mut self,
-        message: Vec<u8>,
-        destination: Destination,
+        message: &[u8],
+        destination: &Destination,
         key_chain: &impl AccountKeyChains,
         _db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<ArbitraryMessageSignature> {
-        let data = match key_chain.find_public_key(&destination) {
+        let data = match key_chain.find_public_key(destination) {
             Some(FoundPubKey::Hierarchy(xpub)) => {
                 let address_n = xpub
                     .get_derivation_path()
@@ -401,7 +401,7 @@ impl Signer for TrezorSigner {
                     .client
                     .lock()
                     .expect("poisoned lock")
-                    .mintlayer_sign_message(address_n, addr, message)
+                    .mintlayer_sign_message(address_n, addr, message.to_vec())
                     .map_err(TrezorError::DeviceError)?;
                 let mut signature = sig;
                 signature.insert(0, 0);
@@ -442,11 +442,11 @@ impl Signer for TrezorSigner {
 
     fn sign_transaction_intent(
         &mut self,
-        transaction: &Transaction,
-        input_destinations: &[Destination],
-        intent: &str,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        _transaction: &Transaction,
+        _input_destinations: &[Destination],
+        _intent: &str,
+        _key_chain: &impl AccountKeyChains,
+        _db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<SignedTransactionIntent> {
         unimplemented!("FIXME")
     }
@@ -466,7 +466,7 @@ fn tx_output_value(out: &TxOutput) -> OutputValue {
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::IssueFungibleToken(_)
-        | TxOutput::AnyoneCanTake(_)
+        | TxOutput::CreateOrder(_)
         | TxOutput::DataDeposit(_) => OutputValue::Coin(Amount::ZERO),
     }
 }
@@ -578,6 +578,7 @@ fn to_trezor_account_command_input(
         AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
             unimplemented!("order commands")
         }
+        AccountCommand::ChangeTokenMetadataUri(_, _) => unimplemented!("FIXME"),
     }
     let mut inp = MintlayerTxInput::new();
     inp.account_command = Some(inp_req).into();
@@ -985,7 +986,7 @@ fn to_trezor_output_msg(chain_config: &ChainConfig, out: &TxOutput) -> Mintlayer
             out
         }
         TxOutput::Htlc(_, _) => unimplemented!("HTLC"),
-        TxOutput::AnyoneCanTake(_) => unimplemented!("AnyoneCanTake"),
+        TxOutput::CreateOrder(_) => unimplemented!("CreateOrder"),
     }
 }
 

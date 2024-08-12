@@ -31,13 +31,13 @@ use mempool::{tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, F
 use p2p::types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 use utils_networking::IpOrSocketAddress;
-use wallet_types::wallet_type::WalletType;
+use wallet_types::wallet_type::WalletControllerMode;
 
 #[async_trait::async_trait]
 pub trait NodeInterface {
     type Error: std::error::Error + Send + Sync + 'static;
 
-    fn is_cold_wallet_node(&self) -> WalletType;
+    fn is_cold_wallet_node(&self) -> WalletControllerMode;
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error>;
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error>;

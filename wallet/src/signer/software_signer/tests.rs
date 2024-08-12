@@ -66,12 +66,7 @@ fn sign_message(#[case] seed: Seed) {
     let mut signer = SoftwareSigner::new(config.clone(), DEFAULT_ACCOUNT_INDEX);
     let message = vec![rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>()];
     let res = signer
-        .sign_challenge(
-            message.clone(),
-            destination.clone(),
-            account.key_chain(),
-            &db_tx,
-        )
+        .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
         .unwrap();
 
     let message_challenge = produce_message_challenge(&message);

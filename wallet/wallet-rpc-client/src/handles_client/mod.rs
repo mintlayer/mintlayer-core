@@ -158,8 +158,9 @@ where
             }
         };
 
+        let scan_blockchain = args.user_supplied_menmonic();
         self.wallet_rpc
-            .create_wallet(path, args, false)
+            .create_wallet(path, args, false, scan_blockchain)
             .await
             .map(Into::into)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
