@@ -832,7 +832,6 @@ impl MainWindow {
 
                 ActiveDialog::WalletRecover { wallet_type } => {
                     let wallet_type = *wallet_type;
-                    // FIXME
                     match wallet_type {
                         WalletType::Hot | WalletType::Cold => wallet_mnemonic_dialog(
                             None,
