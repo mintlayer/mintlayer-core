@@ -202,6 +202,62 @@ where
                 })
             }
 
+            WalletManagementCommand::RecoverWallet {
+                wallet_path,
+                mnemonic,
+                whether_to_store_seed_phrase,
+                passphrase,
+                hardware_wallet,
+            } => {
+                let hardware_wallet = hardware_wallet.and_then(|t| match t {
+                    #[cfg(feature = "trezor")]
+                    CLIHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
+                    CLIHardwareWalletType::None => None,
+                });
+
+                let newly_generated_mnemonic = self
+                    .wallet()
+                    .await?
+                    .recover_wallet(
+                        wallet_path,
+                        whether_to_store_seed_phrase.to_bool(),
+                        mnemonic,
+                        passphrase,
+                        hardware_wallet,
+                    )
+                    .await?;
+
+                self.wallet.update_wallet::<N>().await;
+
+                let msg = match newly_generated_mnemonic.mnemonic {
+                    MnemonicInfo::NewlyGenerated {
+                        mnemonic,
+                        passphrase,
+                    } => {
+                        let passphrase = if let Some(passphrase) = passphrase {
+                            format!("passphrase: {passphrase}\n")
+                        } else {
+                            String::new()
+                        };
+                        format!(
+                            "New wallet created successfully\nYour mnemonic: {}\n{passphrase}\
+                        Please write it somewhere safe to be able to restore your wallet. \
+                        It's recommended that you attempt to recover the wallet now as practice\
+                        to check that you arrive at the same addresses, \
+                        to ensure that you have done everything correctly.
+                        ",
+                            mnemonic
+                        )
+                    }
+                    MnemonicInfo::UserProvided => "New wallet created successfully".to_owned(),
+                };
+
+                Ok(ConsoleCommand::SetStatus {
+                    status: self.repl_status().await?,
+                    print_message: msg,
+                })
+            }
+
             WalletManagementCommand::OpenWallet {
                 wallet_path,
                 encryption_password,

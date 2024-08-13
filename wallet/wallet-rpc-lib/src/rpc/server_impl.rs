@@ -30,7 +30,6 @@ use common::{
 use crypto::{key::PrivateKey, vrf::VRFPublicKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
-#[cfg(feature = "trezor")]
 use utils::ensure;
 use utils_networking::IpOrSocketAddress;
 use wallet::{account::TxInfo, version::get_version};
@@ -126,8 +125,52 @@ where
             }
         };
 
-        //FIXME
-        let scan_blockchain = args.user_supplied_menmonic();
+        rpc::handle_result(
+            self.create_wallet(path.into(), args, ScanBlockchain::SkipScanning)
+                .await
+                .map(Into::<CreatedWallet>::into),
+        )
+    }
+
+    async fn recover_wallet(
+        &self,
+        path: String,
+        store_seed_phrase: bool,
+        mnemonic: Option<String>,
+        passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
+    ) -> rpc::RpcResult<CreatedWallet> {
+        let store_seed_phrase = if store_seed_phrase {
+            StoreSeedPhrase::Store
+        } else {
+            StoreSeedPhrase::DoNotStore
+        };
+
+        let args = match hardware_wallet {
+            None => {
+                ensure!(mnemonic.is_some(), RpcError::<N>::EmptyMnemonic);
+                WalletTypeArgs::Software {
+                    mnemonic,
+                    passphrase,
+                    store_seed_phrase,
+                }
+            }
+            #[cfg(feature = "trezor")]
+            Some(HardwareWalletType::Trezor) => {
+                ensure!(
+                    mnemonic.is_none()
+                        && passphrase.is_none()
+                        && store_seed_phrase == StoreSeedPhrase::DoNotStore,
+                    RpcError::<N>::HardwareWalletWithMnemonic
+                );
+                WalletTypeArgs::Trezor
+            }
+            #[cfg(not(feature = "trezor"))]
+            Some(_) => {
+                return Err(RpcError::<N>::InvalidHardwareWallet)?;
+            }
+        };
+
         rpc::handle_result(
             self.create_wallet(path.into(), args, ScanBlockchain::ScanAndWait)
                 .await
