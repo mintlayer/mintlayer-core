@@ -156,7 +156,51 @@ where
             }
         };
 
-        let scan_blockchain = args.user_supplied_menmonic();
+        let scan_blockchain = false;
+        self.wallet_rpc
+            .create_wallet(path, args, false, scan_blockchain)
+            .await
+            .map(Into::into)
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn recover_wallet(
+        &self,
+        path: PathBuf,
+        store_seed_phrase: bool,
+        mnemonic: Option<String>,
+        passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
+    ) -> Result<CreatedWallet, Self::Error> {
+        let store_seed_phrase = if store_seed_phrase {
+            StoreSeedPhrase::Store
+        } else {
+            StoreSeedPhrase::DoNotStore
+        };
+
+        let args = match hardware_wallet {
+            None => WalletTypeArgs::Software {
+                mnemonic,
+                passphrase,
+                store_seed_phrase,
+            },
+            #[cfg(feature = "trezor")]
+            Some(HardwareWalletType::Trezor) => {
+                ensure!(
+                    mnemonic.is_none()
+                        && passphrase.is_none()
+                        && store_seed_phrase == StoreSeedPhrase::DoNotStore,
+                    RpcError::HardwareWalletWithMnemonic
+                );
+                WalletTypeArgs::Trezor
+            }
+            #[cfg(not(feature = "trezor"))]
+            Some(_) => {
+                return Err(RpcError::<N>::InvalidHardwareWallet)?;
+            }
+        };
+
+        let scan_blockchain = true;
         self.wallet_rpc
             .create_wallet(path, args, false, scan_blockchain)
             .await

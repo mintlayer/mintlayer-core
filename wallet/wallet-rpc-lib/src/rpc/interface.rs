@@ -62,9 +62,20 @@ trait ColdWalletRpc {
     #[method(name = "version")]
     async fn version(&self) -> rpc::RpcResult<String>;
 
-    /// Create new wallet
+    /// Create a new wallet, this will skip scanning the blockchain
     #[method(name = "wallet_create")]
     async fn create_wallet(
+        &self,
+        path: String,
+        store_seed_phrase: bool,
+        mnemonic: Option<String>,
+        passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
+    ) -> rpc::RpcResult<CreatedWallet>;
+
+    /// Recover new wallet, this will rescan the blockchain upon creation
+    #[method(name = "wallet_recover")]
+    async fn recover_wallet(
         &self,
         path: String,
         store_seed_phrase: bool,
