@@ -198,7 +198,7 @@ impl CliTestFramework {
             .unwrap()
             .to_owned();
         let cmd = format!(
-            "wallet-create \"{}\" store-seed-phrase \"{}\"",
+            "wallet-recover \"{}\" store-seed-phrase \"{}\"",
             file_name, MNEMONIC
         );
         assert_eq!(self.exec(&cmd), "New wallet created successfully");

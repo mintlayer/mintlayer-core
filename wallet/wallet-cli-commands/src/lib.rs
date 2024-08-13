@@ -69,6 +69,31 @@ pub enum WalletManagementCommand {
         hardware_wallet: Option<CLIHardwareWalletType>,
     },
 
+    #[clap(name = "wallet-recover")]
+    RecoverWallet {
+        /// File path of the wallet file
+        wallet_path: PathBuf,
+
+        /// If 'store-seed-phrase', the seed-phrase will be stored in the wallet file.
+        /// If 'do-not-store-seed-phrase', the seed-phrase will only be printed on the screen.
+        /// Not storing the seed-phrase can be seen as a security measure
+        /// to ensure sufficient secrecy in case that seed-phrase is reused
+        /// elsewhere if this wallet is compromised.
+        whether_to_store_seed_phrase: CliStoreSeedPhrase,
+
+        /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
+        mnemonic: Option<String>,
+
+        /// Passphrase along the mnemonic
+        #[arg(long = "passphrase")]
+        passphrase: Option<String>,
+
+        /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
+        /// the software wallet
+        #[arg(long, conflicts_with_all(["mnemonic", "passphrase"]))]
+        hardware_wallet: Option<CLIHardwareWalletType>,
+    },
+
     #[clap(name = "wallet-open")]
     OpenWallet {
         /// File path of the wallet file
