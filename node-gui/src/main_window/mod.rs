@@ -870,7 +870,6 @@ impl MainWindow {
                                 password,
                             }),
                             Box::new(|| MainWindowMessage::CloseDialog),
-                            ImportOrCreate::Create,
                         )
                         .into()
                     }

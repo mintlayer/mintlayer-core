@@ -99,6 +99,26 @@ impl WalletInterface for ClientWalletRpc {
         .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn recover_wallet(
+        &self,
+        path: PathBuf,
+        store_seed_phrase: bool,
+        mnemonic: Option<String>,
+        passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
+    ) -> Result<CreatedWallet, Self::Error> {
+        ColdWalletRpcClient::recover_wallet(
+            &self.http_client,
+            path.to_string_lossy().to_string(),
+            store_seed_phrase,
+            mnemonic,
+            passphrase,
+            hardware_wallet,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn open_wallet(
         &self,
         path: PathBuf,
