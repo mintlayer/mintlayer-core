@@ -996,6 +996,7 @@ fn wallet_accounts_creation() {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         )
         .unwrap();
 
@@ -1155,6 +1156,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         ),
         Err(WalletError::DatabaseError(
             wallet_storage::Error::WalletLocked
@@ -1172,6 +1174,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
+                &BTreeMap::new(),
             )
             .unwrap();
     } else {
@@ -1201,6 +1204,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
+                &BTreeMap::new(),
             )
             .unwrap();
     }
@@ -1228,6 +1232,7 @@ fn wallet_get_transaction(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         )
         .unwrap();
 
@@ -1287,6 +1292,7 @@ fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         )
         .unwrap();
 
@@ -1309,6 +1315,7 @@ fn wallet_list_mainchain_transactions(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         )
         .unwrap();
     let spend_from_tx_id = tx.transaction().get_id();
@@ -1363,6 +1370,7 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
                 BTreeMap::new(),
                 very_big_feerate,
                 very_big_feerate,
+                &BTreeMap::new(),
             )
             .unwrap_err();
 
@@ -1390,6 +1398,7 @@ fn wallet_transaction_with_fees(#[case] seed: Seed) {
             BTreeMap::new(),
             feerate,
             feerate,
+            &BTreeMap::new(),
         )
         .unwrap();
 
@@ -1476,6 +1485,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
+                &BTreeMap::new(),
             )
             .unwrap_err();
         assert_eq!(err, WalletError::CannotFindUtxo(missing_utxo.clone()));
@@ -1502,6 +1512,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         )
         .unwrap();
 
@@ -1539,6 +1550,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
+                &BTreeMap::new(),
             )
             .unwrap_err();
 
@@ -1769,6 +1781,7 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         )
         .unwrap();
 
@@ -1903,6 +1916,7 @@ fn create_spend_from_delegations(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         )
         .unwrap();
 
@@ -2090,10 +2104,12 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let amount_fraction = (block1_amount.into_atoms() - NETWORK_FEE) / 10;
     let mut token_amount_to_issue = Amount::from_atoms(rng.gen_range(1..amount_fraction));
 
+    let mut number_of_decimals = rng.gen_range(1..18);
+    let token_ticker = "XXXX".as_bytes().to_vec();
     let (issued_token_id, token_issuance_transaction) = if issue_fungible_token {
         let token_issuance = TokenIssuanceV1 {
-            token_ticker: "XXXX".as_bytes().to_vec(),
-            number_of_decimals: rng.gen_range(1..18),
+            token_ticker: token_ticker.clone(),
+            number_of_decimals,
             metadata_uri: "http://uri".as_bytes().to_vec(),
             total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
             authority: address2.as_object().clone(),
@@ -2130,7 +2146,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             .unwrap();
 
         let unconfirmed_token_info =
-            wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+            wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info).unwrap();
         let mint_transaction = wallet
             .mint_tokens(
                 DEFAULT_ACCOUNT_INDEX,
@@ -2147,6 +2163,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             vec![token_issuance_transaction, mint_transaction],
         )
     } else {
+        number_of_decimals = 0;
         token_amount_to_issue = Amount::from_atoms(1);
         let (issued_token_id, token_issuance_transaction) = wallet
             .issue_new_nft(
@@ -2156,7 +2173,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                     creator: None,
                     name: "Name".as_bytes().to_vec(),
                     description: "SomeNFT".as_bytes().to_vec(),
-                    ticker: "XXXX".as_bytes().to_vec(),
+                    ticker: token_ticker.clone(),
                     icon_uri: DataOrNoVec::from(None),
                     additional_metadata_uri: DataOrNoVec::from(None),
                     media_uri: DataOrNoVec::from(None),
@@ -2201,6 +2218,13 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         Destination::PublicKeyHash(some_other_address),
     );
 
+    let additional_info = BTreeMap::from_iter([(
+        PoolOrTokenId::TokenId(*token_id),
+        UtxoAdditionalInfo::TokenInfo {
+            num_decimals: number_of_decimals,
+            ticker: token_ticker.clone(),
+        },
+    )]);
     let transfer_tokens_transaction = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
@@ -2209,6 +2233,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &additional_info,
         )
         .unwrap();
     wallet
@@ -2262,6 +2287,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &additional_info,
         )
         .err()
         .unwrap();
@@ -2306,13 +2332,15 @@ fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
     assert_eq!(coin_balance, block1_amount);
 
     let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let token_ticker = "XXXX".as_bytes().to_vec();
+    let number_of_decimals = rng.gen_range(1..18);
     let result = wallet.create_transaction_to_addresses(
         DEFAULT_ACCOUNT_INDEX,
         [TxOutput::Transfer(
             OutputValue::TokenV0(Box::new(TokenData::TokenIssuance(Box::new(
                 TokenIssuanceV0 {
-                    token_ticker: "XXXX".as_bytes().to_vec(),
-                    number_of_decimals: rng.gen_range(1..18),
+                    token_ticker,
+                    number_of_decimals,
                     metadata_uri: "http://uri".as_bytes().to_vec(),
                     amount_to_issue: Amount::from_atoms(rng.gen_range(1..10000)),
                 },
@@ -2323,6 +2351,7 @@ fn check_tokens_v0_are_ignored(#[case] seed: Seed) {
         BTreeMap::new(),
         FeeRate::from_amount_per_kb(Amount::ZERO),
         FeeRate::from_amount_per_kb(Amount::ZERO),
+        &BTreeMap::new(),
     );
 
     matches!(
@@ -2402,8 +2431,9 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         token_issuance.authority,
     );
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     let amount_to_mint = Amount::from_atoms(rng.gen_range(1..=fixed_max_amount.into_atoms()));
     let mint_tx = wallet
@@ -2419,8 +2449,9 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 
     let _ = create_block(&chain_config, &mut wallet, vec![mint_tx], block2_amount, 2);
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     let freeze_tx = wallet
         .freeze_token(
@@ -2434,8 +2465,9 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 
     wallet.add_unconfirmed_tx(freeze_tx.clone(), &WalletEventsNoOp).unwrap();
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     assert_eq!(
         unconfirmed_token_info.check_can_freeze().unwrap_err(),
@@ -2461,8 +2493,9 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 
     wallet.add_unconfirmed_tx(unfreeze_tx.clone(), &WalletEventsNoOp).unwrap();
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     unconfirmed_token_info.check_can_freeze().unwrap();
     assert_eq!(
@@ -2480,8 +2513,9 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         .abandon_transaction(DEFAULT_ACCOUNT_INDEX, freeze_tx.transaction().get_id())
         .unwrap();
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     unconfirmed_token_info.check_can_freeze().unwrap();
     assert_eq!(
@@ -2502,8 +2536,9 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         3,
     );
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     assert_eq!(
         unconfirmed_token_info.get_next_nonce().unwrap(),
@@ -2534,6 +2569,13 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         Destination::PublicKeyHash(some_other_address),
     );
 
+    let additional_info = BTreeMap::from_iter([(
+        PoolOrTokenId::TokenId(issued_token_id),
+        UtxoAdditionalInfo::TokenInfo {
+            num_decimals: unconfirmed_token_info.num_decimals(),
+            ticker: unconfirmed_token_info.token_ticker().to_vec(),
+        },
+    )]);
     let transfer_tokens_transaction = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
@@ -2542,6 +2584,7 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &additional_info,
         )
         .unwrap();
 
@@ -2550,8 +2593,9 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
         .unwrap();
     wallet.add_unconfirmed_tx(freeze_tx.clone(), &WalletEventsNoOp).unwrap();
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     assert_eq!(
         unconfirmed_token_info.check_can_freeze().unwrap_err(),
@@ -2685,8 +2729,9 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
         token_issuance.authority,
     );
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     assert_eq!(
         unconfirmed_token_info.authority().unwrap(),
@@ -2717,8 +2762,9 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
 
     wallet.add_unconfirmed_tx(mint_transaction.clone(), &WalletEventsNoOp).unwrap();
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     // Try to mint more then the fixed maximum
     let leftover = (fixed_max_amount - token_amount_to_mint).unwrap();
@@ -2763,8 +2809,9 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
             )
             .unwrap();
 
-        let unconfirmed_token_info =
-            wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+        let unconfirmed_token_info = wallet
+            .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+            .unwrap();
 
         assert_eq!(
             unconfirmed_token_info.get_next_nonce().unwrap(),
@@ -2786,8 +2833,9 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
     );
     token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     assert_eq!(
         unconfirmed_token_info.get_next_nonce().unwrap(),
@@ -2830,8 +2878,9 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
     wallet
         .add_unconfirmed_tx(unmint_transaction.clone(), &WalletEventsNoOp)
         .unwrap();
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     let _ = create_block(
         &chain_config,
@@ -2842,8 +2891,9 @@ fn change_token_supply_fixed(#[case] seed: Seed) {
     );
     token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     assert_eq!(
         unconfirmed_token_info.get_next_nonce().unwrap(),
@@ -2933,8 +2983,9 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         token_issuance.authority,
     );
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     assert_eq!(
         unconfirmed_token_info.authority().unwrap(),
@@ -2964,8 +3015,9 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
         .unwrap();
 
     wallet.add_unconfirmed_tx(mint_transaction.clone(), &WalletEventsNoOp).unwrap();
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     let _ = create_block(
         &chain_config,
@@ -2976,8 +3028,9 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
     );
     token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     assert_eq!(
         unconfirmed_token_info.get_next_nonce().unwrap(),
@@ -3019,8 +3072,9 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
     wallet
         .add_unconfirmed_tx(unmint_transaction.clone(), &WalletEventsNoOp)
         .unwrap();
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     let _ = create_block(
         &chain_config,
@@ -3031,8 +3085,9 @@ fn change_token_supply_unlimited(#[case] seed: Seed) {
     );
     token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     assert_eq!(
         unconfirmed_token_info.get_next_nonce().unwrap(),
@@ -3122,8 +3177,9 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         token_issuance.authority,
     );
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     assert_eq!(
         unconfirmed_token_info.authority().unwrap(),
@@ -3152,8 +3208,9 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
         )
         .unwrap();
     wallet.add_unconfirmed_tx(mint_transaction.clone(), &WalletEventsNoOp).unwrap();
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     let _ = create_block(
         &chain_config,
@@ -3164,8 +3221,9 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     );
     token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     assert_eq!(
         unconfirmed_token_info.get_next_nonce().unwrap(),
@@ -3208,8 +3266,9 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     wallet
         .add_unconfirmed_tx(unmint_transaction.clone(), &WalletEventsNoOp)
         .unwrap();
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     let _ = create_block(
         &chain_config,
@@ -3220,8 +3279,9 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     );
     token_info.circulating_supply = unconfirmed_token_info.current_supply().unwrap();
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     assert_eq!(
         unconfirmed_token_info.get_next_nonce().unwrap(),
@@ -3252,8 +3312,9 @@ fn change_and_lock_token_supply_lockable(#[case] seed: Seed) {
     );
     token_info.is_locked = true;
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     assert_eq!(
         unconfirmed_token_info.get_next_nonce().unwrap(),
@@ -3371,6 +3432,7 @@ fn lock_then_transfer(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         )
         .unwrap();
     wallet
@@ -3492,6 +3554,7 @@ fn wallet_multiple_transactions_in_single_block(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
+                &BTreeMap::new(),
             )
             .unwrap();
         wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
@@ -3583,6 +3646,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
+                &BTreeMap::new(),
             )
             .unwrap();
 
@@ -3618,6 +3682,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         )
         .unwrap();
     wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
@@ -3657,6 +3722,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         )
         .unwrap_err();
     assert_eq!(
@@ -3683,6 +3749,7 @@ fn wallet_scan_multiple_transactions_from_mempool(#[case] seed: Seed) {
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         )
         .unwrap();
     wallet.add_unconfirmed_tx(transaction.clone(), &WalletEventsNoOp).unwrap();
@@ -3767,6 +3834,7 @@ fn wallet_abandone_transactions(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
+                &BTreeMap::new(),
             )
             .unwrap();
         wallet
@@ -4534,6 +4602,7 @@ fn test_not_exhaustion_of_keys(#[case] seed: Seed) {
                 [].into(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
+                &BTreeMap::new(),
             )
             .unwrap();
     }

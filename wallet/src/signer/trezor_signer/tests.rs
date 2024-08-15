@@ -210,7 +210,7 @@ fn sign_transaction(#[case] seed: Seed) {
         .unwrap()
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
-    let ptx = req.into_partially_signed_tx().unwrap();
+    let ptx = req.into_partially_signed_tx(&BTreeMap::default()).unwrap();
 
     let mut devices = find_devices(false);
     assert!(!devices.is_empty());
