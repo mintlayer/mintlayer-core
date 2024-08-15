@@ -25,9 +25,9 @@ use common::{
         output_value::OutputValue,
         stakelock::StakePoolData,
         tokens::{
-            is_token_or_nft_issuance, make_token_id, IsTokenFreezable, IsTokenUnfreezable,
-            RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCTokenTotalSupply, TokenId, TokenIssuance,
-            TokenTotalSupply,
+            get_token_id_for_tx_output, make_token_id, IsTokenFreezable, IsTokenUnfreezable,
+            RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply,
+            TokenId, TokenIssuance, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
         OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -265,36 +265,58 @@ pub struct FungibleTokenInfo {
     authority: Destination,
 }
 
+/// Token info from the Node + any unconfirmed Txs from this wallet
 pub enum UnconfirmedTokenInfo {
-    OwnFungibleToken(TokenId, FungibleTokenInfo),
-    FungibleToken(TokenId, TokenFreezableState),
-    NonFungibleToken(TokenId),
+    /// Token info owned by this wallet
+    OwnFungibleToken(TokenId, FungibleTokenInfo, RPCFungibleTokenInfo),
+    /// Token info not owned by this wallet
+    FungibleToken(TokenId, TokenFreezableState, RPCFungibleTokenInfo),
+    /// NFT info
+    NonFungibleToken(TokenId, Box<RPCNonFungibleTokenInfo>),
 }
 
 impl UnconfirmedTokenInfo {
-    pub fn token_id(&self) -> &TokenId {
+    pub fn token_id(&self) -> TokenId {
         match self {
-            Self::OwnFungibleToken(token_id, _)
-            | Self::FungibleToken(token_id, _)
-            | Self::NonFungibleToken(token_id) => token_id,
+            Self::OwnFungibleToken(token_id, _, _)
+            | Self::FungibleToken(token_id, _, _)
+            | Self::NonFungibleToken(token_id, _) => *token_id,
+        }
+    }
+
+    pub fn num_decimals(&self) -> u8 {
+        match self {
+            Self::OwnFungibleToken(_, _, info) | Self::FungibleToken(_, _, info) => {
+                info.number_of_decimals
+            }
+            Self::NonFungibleToken(_, _) => 0,
+        }
+    }
+
+    pub fn token_ticker(&self) -> &[u8] {
+        match self {
+            Self::OwnFungibleToken(_, _, info) | Self::FungibleToken(_, _, info) => {
+                info.token_ticker.as_bytes()
+            }
+            Self::NonFungibleToken(_, info) => info.metadata.ticker.as_bytes(),
         }
     }
 
     pub fn check_can_be_used(&self) -> WalletResult<()> {
         match self {
-            Self::OwnFungibleToken(_, state) => state.frozen.check_can_be_used(),
-            Self::FungibleToken(_, state) => state.check_can_be_used(),
-            Self::NonFungibleToken(_) => Ok(()),
+            Self::OwnFungibleToken(_, state, _) => state.frozen.check_can_be_used(),
+            Self::FungibleToken(_, state, _) => state.check_can_be_used(),
+            Self::NonFungibleToken(_, _) => Ok(()),
         }
     }
 
     pub fn check_can_freeze(&self) -> WalletResult<()> {
         match self {
-            Self::OwnFungibleToken(_, state) => state.frozen.check_can_freeze(),
-            Self::FungibleToken(token_id, _) => {
+            Self::OwnFungibleToken(_, state, _) => state.frozen.check_can_freeze(),
+            Self::FungibleToken(token_id, _, _) => {
                 Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
-            Self::NonFungibleToken(token_id) => {
+            Self::NonFungibleToken(token_id, _) => {
                 Err(WalletError::CannotChangeNonFungibleToken(*token_id))
             }
         }
@@ -302,11 +324,11 @@ impl UnconfirmedTokenInfo {
 
     pub fn check_can_unfreeze(&self) -> WalletResult<()> {
         match self {
-            Self::OwnFungibleToken(_, state) => state.frozen.check_can_unfreeze(),
-            Self::FungibleToken(token_id, _) => {
+            Self::OwnFungibleToken(_, state, _) => state.frozen.check_can_unfreeze(),
+            Self::FungibleToken(token_id, _, _) => {
                 Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
-            Self::NonFungibleToken(token_id) => {
+            Self::NonFungibleToken(token_id, _) => {
                 Err(WalletError::CannotChangeNonFungibleToken(*token_id))
             }
         }
@@ -314,14 +336,14 @@ impl UnconfirmedTokenInfo {
 
     pub fn get_next_nonce(&self) -> WalletResult<AccountNonce> {
         match self {
-            Self::OwnFungibleToken(token_id, state) => state
+            Self::OwnFungibleToken(token_id, state, _) => state
                 .last_nonce
                 .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
                 .ok_or(WalletError::TokenIssuanceNonceOverflow(*token_id)),
-            Self::FungibleToken(token_id, _) => {
+            Self::FungibleToken(token_id, _, _) => {
                 Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
-            Self::NonFungibleToken(token_id) => {
+            Self::NonFungibleToken(token_id, _) => {
                 Err(WalletError::CannotChangeNonFungibleToken(*token_id))
             }
         }
@@ -329,11 +351,11 @@ impl UnconfirmedTokenInfo {
 
     pub fn authority(&self) -> WalletResult<&Destination> {
         match self {
-            Self::OwnFungibleToken(_, state) => Ok(&state.authority),
-            Self::FungibleToken(token_id, _) => {
+            Self::OwnFungibleToken(_, state, _) => Ok(&state.authority),
+            Self::FungibleToken(token_id, _, _) => {
                 Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
-            Self::NonFungibleToken(token_id) => {
+            Self::NonFungibleToken(token_id, _) => {
                 Err(WalletError::CannotChangeNonFungibleToken(*token_id))
             }
         }
@@ -341,11 +363,11 @@ impl UnconfirmedTokenInfo {
 
     pub fn check_can_mint(&self, amount: Amount) -> WalletResult<()> {
         match self {
-            Self::OwnFungibleToken(_, state) => state.total_supply.check_can_mint(amount),
-            Self::FungibleToken(token_id, _) => {
+            Self::OwnFungibleToken(_, state, _) => state.total_supply.check_can_mint(amount),
+            Self::FungibleToken(token_id, _, _) => {
                 Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
-            Self::NonFungibleToken(token_id) => {
+            Self::NonFungibleToken(token_id, _) => {
                 Err(WalletError::CannotChangeNonFungibleToken(*token_id))
             }
         }
@@ -353,11 +375,11 @@ impl UnconfirmedTokenInfo {
 
     pub fn check_can_unmint(&self, amount: Amount) -> WalletResult<()> {
         match self {
-            Self::OwnFungibleToken(_, state) => state.total_supply.check_can_unmint(amount),
-            Self::FungibleToken(token_id, _) => {
+            Self::OwnFungibleToken(_, state, _) => state.total_supply.check_can_unmint(amount),
+            Self::FungibleToken(token_id, _, _) => {
                 Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
-            Self::NonFungibleToken(token_id) => {
+            Self::NonFungibleToken(token_id, _) => {
                 Err(WalletError::CannotChangeNonFungibleToken(*token_id))
             }
         }
@@ -365,11 +387,11 @@ impl UnconfirmedTokenInfo {
 
     pub fn check_can_lock(&self) -> WalletResult<()> {
         match self {
-            Self::OwnFungibleToken(_, state) => state.total_supply.check_can_lock(),
-            Self::FungibleToken(token_id, _) => {
+            Self::OwnFungibleToken(_, state, _) => state.total_supply.check_can_lock(),
+            Self::FungibleToken(token_id, _, _) => {
                 Err(WalletError::CannotChangeNotOwnedToken(*token_id))
             }
-            Self::NonFungibleToken(token_id) => {
+            Self::NonFungibleToken(token_id, _) => {
                 Err(WalletError::CannotChangeNonFungibleToken(*token_id))
             }
         }
@@ -378,9 +400,9 @@ impl UnconfirmedTokenInfo {
     #[cfg(test)]
     pub fn current_supply(&self) -> Option<Amount> {
         match self {
-            Self::OwnFungibleToken(_, state) => Some(state.total_supply.current_supply()),
-            Self::FungibleToken(_, _) => None,
-            Self::NonFungibleToken(_) => None,
+            Self::OwnFungibleToken(_, state, _) => Some(state.total_supply.current_supply()),
+            Self::FungibleToken(_, _, _) => None,
+            Self::NonFungibleToken(_, _) => None,
         }
     }
 }
@@ -596,7 +618,7 @@ impl OutputCache {
 
     pub fn get_token_unconfirmed_info<F: Fn(&Destination) -> bool>(
         &self,
-        token_info: &RPCFungibleTokenInfo,
+        token_info: RPCFungibleTokenInfo,
         is_mine: F,
     ) -> WalletResult<UnconfirmedTokenInfo> {
         let token_data = match self.token_issuance.get(&token_info.token_id) {
@@ -605,6 +627,7 @@ impl OutputCache {
                     return Ok(UnconfirmedTokenInfo::FungibleToken(
                         token_info.token_id,
                         token_info.frozen.into(),
+                        token_info,
                     ));
                 }
                 token_data
@@ -614,6 +637,7 @@ impl OutputCache {
                 return Ok(UnconfirmedTokenInfo::FungibleToken(
                     token_info.token_id,
                     token_info.frozen.into(),
+                    token_info,
                 ));
             }
         };
@@ -646,6 +670,7 @@ impl OutputCache {
                 total_supply,
                 authority: token_data.authority.clone(),
             },
+            token_info,
         ))
     }
 
@@ -1112,9 +1137,9 @@ impl OutputCache {
         );
 
         let token_id = match tx {
-            WalletTx::Tx(tx_data) => is_token_or_nft_issuance(output)
-                .then_some(make_token_id(tx_data.get_transaction().inputs()))
-                .flatten(),
+            WalletTx::Tx(tx_data) => {
+                get_token_id_for_tx_output(output, tx_data.get_transaction().inputs())
+            }
             WalletTx::Block(_) => None,
         };
 
@@ -1182,9 +1207,10 @@ impl OutputCache {
                     })
                     .map(move |(output, outpoint)| {
                         let token_id = match tx {
-                            WalletTx::Tx(tx_data) => is_token_or_nft_issuance(output)
-                                .then_some(make_token_id(tx_data.get_transaction().inputs()))
-                                .flatten(),
+                            WalletTx::Tx(tx_data) => get_token_id_for_tx_output(
+                                output,
+                                tx_data.get_transaction().inputs(),
+                            ),
                             WalletTx::Block(_) => None,
                         };
                         (outpoint, (output, token_id))

@@ -87,3 +87,23 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
         TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => true,
     }
 }
+
+pub fn get_token_id_for_tx_output(output: &TxOutput, inputs: &[TxInput]) -> Option<TokenId> {
+    match output {
+        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
+            match v {
+                OutputValue::Coin(_) | OutputValue::TokenV0(_) => None,
+                OutputValue::TokenV1(token_id, _) => Some(*token_id),
+            }
+        }
+        TxOutput::CreateStakePool(_, _)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::DataDeposit(_)
+        | TxOutput::Htlc(_, _)
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::AnyoneCanTake(_) => None,
+        TxOutput::IssueNft(_, _, _) => make_token_id(inputs),
+    }
+}

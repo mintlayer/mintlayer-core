@@ -21,7 +21,7 @@ use common::{
         classic_multisig::ClassicMultisigChallenge,
         htlc::HashedTimelockContract,
         output_value::OutputValue,
-        partially_signed_transaction::PartiallySignedTransaction,
+        partially_signed_transaction::{PartiallySignedTransaction, UtxoAdditionalInfo},
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, RPCTokenInfo,
@@ -51,7 +51,7 @@ use wallet::{
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
-        make_data_deposit_output, SelectedInputs, StakePoolDataArguments,
+        make_data_deposit_output, PoolOrTokenId, SelectedInputs, StakePoolDataArguments,
     },
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
@@ -131,7 +131,7 @@ where
         for token_info in self.fetch_token_infos(token_ids).await? {
             match token_info {
                 RPCTokenInfo::FungibleToken(token_info) => {
-                    self.check_fungible_token_is_usable(&token_info)?
+                    self.check_fungible_token_is_usable(token_info)?
                 }
                 RPCTokenInfo::NonFungibleToken(_) => {}
             }
@@ -141,7 +141,7 @@ where
 
     pub fn check_fungible_token_is_usable(
         &self,
-        token_info: &RPCFungibleTokenInfo,
+        token_info: RPCFungibleTokenInfo,
     ) -> Result<(), ControllerError<T>> {
         match &self.wallet {
             WalletType2::Software(w) => {
@@ -161,20 +161,27 @@ where
     async fn filter_out_utxos_with_frozen_tokens(
         &self,
         input_utxos: Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>,
-    ) -> Result<Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>, ControllerError<T>> {
+    ) -> Result<
+        (
+            Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>,
+            BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+        ),
+        ControllerError<T>,
+    > {
         let mut result = vec![];
+        let mut additional_utxo_infos = BTreeMap::new();
         for utxo in input_utxos {
             if let Some(token_id) = utxo.2 {
                 let token_info = fetch_token_info(&self.rpc_client, token_id).await?;
 
-                let ok_to_use = match token_info {
+                let ok_to_use = match &token_info {
                     RPCTokenInfo::FungibleToken(token_info) => match &self.wallet {
                         WalletType2::Software(w) => {
-                            w.get_token_unconfirmed_info(self.account_index, &token_info)
+                            w.get_token_unconfirmed_info(self.account_index, token_info.clone())
                         }
                         #[cfg(feature = "trezor")]
                         WalletType2::Trezor(w) => {
-                            w.get_token_unconfirmed_info(self.account_index, &token_info)
+                            w.get_token_unconfirmed_info(self.account_index, token_info.clone())
                         }
                     }
                     .map_err(ControllerError::WalletError)?
@@ -184,12 +191,20 @@ where
                 };
                 if ok_to_use {
                     result.push(utxo);
+                    additional_utxo_infos.insert(
+                        PoolOrTokenId::TokenId(token_info.token_id()),
+                        UtxoAdditionalInfo::TokenInfo {
+                            num_decimals: token_info.token_number_of_decimals(),
+                            ticker: token_info.token_ticker(),
+                        },
+                    );
                 }
             } else {
                 result.push(utxo);
             }
         }
-        Ok(result)
+
+        Ok((result, additional_utxo_infos))
     }
 
     pub fn abandon_transaction(
@@ -392,7 +407,7 @@ where
         address: Address<Destination>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut WalletType2<B>,
@@ -428,7 +443,7 @@ where
         amount: Amount,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut WalletType2<B>,
@@ -462,7 +477,7 @@ where
         token_info: RPCTokenInfo,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut WalletType2<B>,
@@ -497,7 +512,7 @@ where
         is_token_unfreezable: IsTokenUnfreezable,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut WalletType2<B>,
@@ -531,7 +546,7 @@ where
         token_info: RPCTokenInfo,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut WalletType2<B>,
@@ -565,7 +580,7 @@ where
         address: Address<Destination>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut WalletType2<B>,
@@ -613,6 +628,7 @@ where
                         BTreeMap::new(),
                         current_fee_rate,
                         consolidate_fee_rate,
+                        &BTreeMap::new(),
                     ),
                     #[cfg(feature = "trezor")]
                     WalletType2::Trezor(w) => w.create_transaction_to_addresses(
@@ -622,6 +638,7 @@ where
                         BTreeMap::new(),
                         current_fee_rate,
                         consolidate_fee_rate,
+                        &BTreeMap::new(),
                     ),
                 }
             },
@@ -655,6 +672,7 @@ where
                         BTreeMap::new(),
                         current_fee_rate,
                         consolidate_fee_rate,
+                        &BTreeMap::new(),
                     ),
                     #[cfg(feature = "trezor")]
                     WalletType2::Trezor(w) => w.create_transaction_to_addresses(
@@ -664,6 +682,7 @@ where
                         BTreeMap::new(),
                         current_fee_rate,
                         consolidate_fee_rate,
+                        &BTreeMap::new(),
                     ),
                 }
             },
@@ -695,9 +714,10 @@ where
         }
         .map_err(ControllerError::WalletError)?;
 
-        let filtered_inputs = self
-            .filter_out_utxos_with_frozen_tokens(selected_utxos)
-            .await?
+        let (inputs, additional_utxo_infos) =
+            self.filter_out_utxos_with_frozen_tokens(selected_utxos).await?;
+
+        let filtered_inputs = inputs
             .into_iter()
             .filter(|(_, output, _)| {
                 get_tx_output_destination(output, &|_| None, HtlcSpendingCondition::Skip)
@@ -716,6 +736,7 @@ where
                         destination_address,
                         filtered_inputs,
                         current_fee_rate,
+                        &additional_utxo_infos,
                     ),
                     #[cfg(feature = "trezor")]
                     WalletType2::Trezor(w) => w.create_sweep_transaction(
@@ -723,6 +744,7 @@ where
                         destination_address,
                         filtered_inputs,
                         current_fee_rate,
+                        &additional_utxo_infos,
                     ),
                 }
             },
@@ -885,7 +907,7 @@ where
 
                 match &token_info {
                     RPCTokenInfo::FungibleToken(token_info) => {
-                        self.check_fungible_token_is_usable(token_info)?
+                        self.check_fungible_token_is_usable(token_info.clone())?
                     }
                     RPCTokenInfo::NonFungibleToken(_) => {
                         return Err(ControllerError::<T>::NotFungibleToken(token_id));
@@ -1062,6 +1084,7 @@ where
                         BTreeMap::new(),
                         current_fee_rate,
                         consolidate_fee_rate,
+                        &BTreeMap::new(),
                     ),
                     #[cfg(feature = "trezor")]
                     WalletType2::Trezor(w) => w.create_transaction_to_addresses(
@@ -1071,6 +1094,7 @@ where
                         BTreeMap::new(),
                         current_fee_rate,
                         consolidate_fee_rate,
+                        &BTreeMap::new(),
                     ),
                 }
             },
@@ -1142,13 +1166,20 @@ where
     ) -> Result<SignedTransaction, ControllerError<T>> {
         let output = make_address_output_token(address, amount, token_info.token_id());
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut WalletType2<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
+                let additional_info = BTreeMap::from_iter([(
+                    PoolOrTokenId::TokenId(token_info.token_id()),
+                    UtxoAdditionalInfo::TokenInfo {
+                        num_decimals: token_info.num_decimals(),
+                        ticker: token_info.token_ticker().to_vec(),
+                    },
+                )]);
                 match wallet {
                     WalletType2::Software(w) => w.create_transaction_to_addresses(
                         account_index,
@@ -1157,6 +1188,7 @@ where
                         BTreeMap::new(),
                         current_fee_rate,
                         consolidate_fee_rate,
+                        &additional_info,
                     ),
                     #[cfg(feature = "trezor")]
                     WalletType2::Trezor(w) => w.create_transaction_to_addresses(
@@ -1166,6 +1198,7 @@ where
                         BTreeMap::new(),
                         current_fee_rate,
                         consolidate_fee_rate,
+                        &additional_info,
                     ),
                 }
             },
@@ -1478,7 +1511,7 @@ where
         ) -> WalletResult<SignedTransaction>,
     >(
         &mut self,
-        token_info: &RPCTokenInfo,
+        token_info: RPCTokenInfo,
         tx_maker: F,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         // make sure we can use the token before create an tx using it
@@ -1494,7 +1527,7 @@ where
             }
             .map_err(ControllerError::WalletError)?,
             RPCTokenInfo::NonFungibleToken(info) => {
-                UnconfirmedTokenInfo::NonFungibleToken(info.token_id)
+                UnconfirmedTokenInfo::NonFungibleToken(info.token_id, info)
             }
         };
 
