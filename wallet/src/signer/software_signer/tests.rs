@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::ops::{Add, Div, Mul, Sub};
 
 use super::*;
@@ -162,7 +163,7 @@ fn sign_transaction(#[case] seed: Seed) {
     let tx = Transaction::new(0, inputs, outputs).unwrap();
 
     let req = SendRequest::from_transaction(tx, utxos.clone(), &|_| None).unwrap();
-    let ptx = req.into_partially_signed_tx().unwrap();
+    let ptx = req.into_partially_signed_tx(&BTreeMap::default()).unwrap();
 
     let mut signer = SoftwareSigner::new(config.clone(), DEFAULT_ACCOUNT_INDEX);
     let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).unwrap();
