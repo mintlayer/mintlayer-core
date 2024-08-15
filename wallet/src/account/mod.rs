@@ -649,7 +649,7 @@ impl<K: AccountKeyChains> Account<K> {
         )?;
 
         let fees = request.get_fees();
-        let ptx = request.into_partially_signed_tx()?;
+        let ptx = request.into_partially_signed_tx(&BTreeMap::new())?;
 
         Ok((ptx, fees))
     }
@@ -893,7 +893,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn get_token_unconfirmed_info(
         &self,
-        token_info: &RPCFungibleTokenInfo,
+        token_info: RPCFungibleTokenInfo,
     ) -> WalletResult<UnconfirmedTokenInfo> {
         self.output_cache
             .get_token_unconfirmed_info(token_info, |destination: &Destination| {
@@ -1129,7 +1129,7 @@ impl<K: AccountKeyChains> Account<K> {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SendRequest> {
-        let token_id = *token_info.token_id();
+        let token_id = token_info.token_id();
         let outputs = make_mint_token_outputs(token_id, amount, address);
 
         token_info.check_can_mint(amount)?;
@@ -1156,7 +1156,7 @@ impl<K: AccountKeyChains> Account<K> {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SendRequest> {
-        let token_id = *token_info.token_id();
+        let token_id = token_info.token_id();
         let outputs = make_unmint_token_outputs(token_id, amount);
 
         token_info.check_can_unmint(amount)?;
@@ -1182,7 +1182,7 @@ impl<K: AccountKeyChains> Account<K> {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SendRequest> {
-        let token_id = *token_info.token_id();
+        let token_id = token_info.token_id();
         token_info.check_can_lock()?;
 
         let nonce = token_info.get_next_nonce()?;
@@ -1212,7 +1212,7 @@ impl<K: AccountKeyChains> Account<K> {
         let nonce = token_info.get_next_nonce()?;
         let tx_input = TxInput::AccountCommand(
             nonce,
-            AccountCommand::FreezeToken(*token_info.token_id(), is_token_unfreezable),
+            AccountCommand::FreezeToken(token_info.token_id(), is_token_unfreezable),
         );
         let authority = token_info.authority()?.clone();
 
@@ -1237,7 +1237,7 @@ impl<K: AccountKeyChains> Account<K> {
 
         let nonce = token_info.get_next_nonce()?;
         let tx_input =
-            TxInput::AccountCommand(nonce, AccountCommand::UnfreezeToken(*token_info.token_id()));
+            TxInput::AccountCommand(nonce, AccountCommand::UnfreezeToken(token_info.token_id()));
         let authority = token_info.authority()?.clone();
 
         self.change_token_supply_transaction(
@@ -1263,7 +1263,7 @@ impl<K: AccountKeyChains> Account<K> {
         let nonce = token_info.get_next_nonce()?;
         let tx_input = TxInput::AccountCommand(
             nonce,
-            AccountCommand::ChangeTokenAuthority(*token_info.token_id(), new_authority),
+            AccountCommand::ChangeTokenAuthority(token_info.token_id(), new_authority),
         );
         let authority = token_info.authority()?.clone();
 

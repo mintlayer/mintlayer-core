@@ -98,7 +98,7 @@ impl RpcPoolData {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 pub struct RpcStakePoolData {
     pledge: RpcAmountOut,
     staker: RpcAddress<Destination>,
