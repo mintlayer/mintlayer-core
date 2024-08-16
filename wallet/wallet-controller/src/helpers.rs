@@ -21,7 +21,9 @@ use common::{
     address::RpcAddress,
     chain::{
         output_value::OutputValue,
-        partially_signed_transaction::{PartiallySignedTransaction, UtxoAdditionalInfo},
+        partially_signed_transaction::{
+            PartiallySignedTransaction, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
+        },
         tokens::{RPCTokenInfo, TokenId},
         ChainConfig, Destination, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
@@ -103,10 +105,9 @@ pub async fn fetch_utxo_with_destination<T: NodeInterface, B: storage::Backend>(
     let pool_id = pool_id_from_txo(&utxo);
     let dest = if let Some(pool_id) = pool_id {
         rpc_client
-            .get_pool_data(pool_id)
+            .get_pool_decommission_destination(pool_id)
             .await
             .map_err(ControllerError::NodeCallError)?
-            .map(|data| data.decommission_destination().clone())
     } else {
         // FIXME
         get_tx_output_destination(&utxo, &|_| None, HtlcSpendingCondition::Skip)
@@ -139,7 +140,7 @@ fn pool_id_from_txo(utxo: &TxOutput) -> Option<PoolId> {
 pub async fn fetch_utxo_exra_info<T>(
     rpc_client: &T,
     utxo: TxOutput,
-) -> Result<(TxOutput, UtxoAdditionalInfo), ControllerError<T>>
+) -> Result<UtxoWithAdditionalInfo, ControllerError<T>>
 where
     T: NodeInterface,
 {
@@ -148,31 +149,33 @@ where
         | TxOutput::Transfer(value, _)
         | TxOutput::LockThenTransfer(value, _, _)
         | TxOutput::Htlc(value, _) => match value {
-            OutputValue::Coin(_) | OutputValue::TokenV0(_) => {
-                Ok((utxo, UtxoAdditionalInfo::NoAdditionalInfo))
-            }
+            OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(UtxoWithAdditionalInfo::new(
+                utxo,
+                UtxoAdditionalInfo::NoAdditionalInfo,
+            )),
             OutputValue::TokenV1(token_id, _) => {
                 let info = fetch_token_info(rpc_client, *token_id).await?;
-                Ok((
+                Ok(UtxoWithAdditionalInfo::new(
                     utxo,
                     UtxoAdditionalInfo::TokenInfo {
                         num_decimals: info.token_number_of_decimals(),
-                        ticker: info.token_ticker(),
+                        ticker: info.token_ticker().to_vec(),
                     },
                 ))
             }
         },
         TxOutput::AnyoneCanTake(order) => match order.ask() {
-            OutputValue::Coin(_) | OutputValue::TokenV0(_) => {
-                Ok((utxo, UtxoAdditionalInfo::NoAdditionalInfo))
-            }
+            OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(UtxoWithAdditionalInfo::new(
+                utxo,
+                UtxoAdditionalInfo::NoAdditionalInfo,
+            )),
             OutputValue::TokenV1(token_id, _) => {
                 let info = fetch_token_info(rpc_client, *token_id).await?;
-                Ok((
+                Ok(UtxoWithAdditionalInfo::new(
                     utxo,
                     UtxoAdditionalInfo::TokenInfo {
                         num_decimals: info.token_number_of_decimals(),
-                        ticker: info.token_ticker(),
+                        ticker: info.token_ticker().to_vec(),
                     },
                 ))
             }
@@ -183,14 +186,20 @@ where
                 .await
                 .map_err(ControllerError::NodeCallError)?
                 .ok_or(WalletError::UnknownPoolId(*pool_id))?;
-            Ok((utxo, UtxoAdditionalInfo::PoolInfo { staker_balance }))
+            Ok(UtxoWithAdditionalInfo::new(
+                utxo,
+                UtxoAdditionalInfo::PoolInfo { staker_balance },
+            ))
         }
         TxOutput::IssueNft(_, _, _)
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::CreateStakePool(_, _)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DataDeposit(_) => Ok((utxo, UtxoAdditionalInfo::NoAdditionalInfo)),
+        | TxOutput::DataDeposit(_) => Ok(UtxoWithAdditionalInfo::new(
+            utxo,
+            UtxoAdditionalInfo::NoAdditionalInfo,
+        )),
     }
 }
 
@@ -250,7 +259,7 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
     wallet: &WalletType2<B>,
     tx_inp: &TxInput,
-) -> Result<(Option<(TxOutput, UtxoAdditionalInfo)>, Option<Destination>), ControllerError<T>> {
+) -> Result<(Option<UtxoWithAdditionalInfo>, Option<Destination>), ControllerError<T>> {
     Ok(match tx_inp {
         TxInput::Utxo(outpoint) => {
             let (utxo, dest) = fetch_utxo_with_destination(rpc_client, outpoint, wallet).await?;

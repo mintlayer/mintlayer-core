@@ -35,7 +35,7 @@ use common::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
         config::{create_mainnet, create_regtest, Builder, ChainType},
         output_value::OutputValue,
-        partially_signed_transaction::UtxoAdditionalInfo,
+        partially_signed_transaction::{UtxoAdditionalInfo, UtxoWithAdditionalInfo},
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
         tokens::{RPCIsTokenFrozen, TokenData, TokenIssuanceV0, TokenIssuanceV1},
@@ -4208,7 +4208,10 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     let ptx = PartiallySignedTransaction::new(
         tx,
         vec![None; inps],
-        vec![Some((utxo, UtxoAdditionalInfo::NoAdditionalInfo))],
+        vec![Some(UtxoWithAdditionalInfo::new(
+            utxo,
+            UtxoAdditionalInfo::NoAdditionalInfo,
+        ))],
         vec![Some(addr.into_object())],
         None,
     )
@@ -4738,7 +4741,7 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
     let spend_multisig_tx = PartiallySignedTransaction::new(
         spend_multisig_tx,
         vec![None; 1],
-        vec![Some((
+        vec![Some(UtxoWithAdditionalInfo::new(
             tx.outputs()[0].clone(),
             UtxoAdditionalInfo::NoAdditionalInfo,
         ))],
@@ -4893,7 +4896,7 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
         .outputs()
         .first()
         .cloned()
-        .map(|out| (out, UtxoAdditionalInfo::NoAdditionalInfo))];
+        .map(|out| UtxoWithAdditionalInfo::new(out, UtxoAdditionalInfo::NoAdditionalInfo))];
     let spend_ptx = PartiallySignedTransaction::new(
         spend_tx,
         vec![None],
@@ -4995,7 +4998,7 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
         .outputs()
         .first()
         .cloned()
-        .map(|out| (out, UtxoAdditionalInfo::NoAdditionalInfo))];
+        .map(|out| UtxoWithAdditionalInfo::new(out, UtxoAdditionalInfo::NoAdditionalInfo))];
     let refund_ptx = PartiallySignedTransaction::new(
         refund_tx,
         vec![None],

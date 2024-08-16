@@ -1036,7 +1036,7 @@ where
                 let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
 
                 let inputs_utxo_refs: Vec<_> =
-                    ptx.input_utxos().iter().map(|u| u.as_ref().map(|(x, _)| x)).collect();
+                    ptx.input_utxos().iter().map(|u| u.as_ref().map(|x| &x.utxo)).collect();
                 let is_fully_signed =
                     ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
                         |((i, destination), witness)| match (witness, destination) {

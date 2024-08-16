@@ -56,7 +56,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         htlc::HtlcSecret,
-        partially_signed_transaction::{PartiallySignedTransaction, UtxoAdditionalInfo},
+        partially_signed_transaction::{PartiallySignedTransaction, UtxoWithAdditionalInfo},
         signature::{inputsig::InputWitness, DestinationSigError, Transactable},
         tokens::{RPCTokenInfo, TokenId},
         Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxInput,
@@ -965,10 +965,13 @@ where
         ptx: PartiallySignedTransaction,
     ) -> Result<InspectTransaction, ControllerError<T>> {
         let input_utxos: Vec<_> =
-            ptx.input_utxos().iter().flatten().map(|(utxo, _)| utxo).cloned().collect();
+            ptx.input_utxos().iter().flatten().map(|utxo| &utxo.utxo).cloned().collect();
         let fees = self.get_fees(&input_utxos, ptx.tx().outputs()).await?;
-        let inputs_utxos_refs: Vec<_> =
-            ptx.input_utxos().iter().map(|out| out.as_ref().map(|(utxo, _)| utxo)).collect();
+        let inputs_utxos_refs: Vec<_> = ptx
+            .input_utxos()
+            .iter()
+            .map(|out| out.as_ref().map(|utxo| &utxo.utxo))
+            .collect();
         let signature_statuses: Vec<_> = ptx
             .witnesses()
             .iter()
@@ -1197,12 +1200,12 @@ where
     async fn fetch_utxos_extra_info(
         &self,
         inputs: Vec<TxOutput>,
-    ) -> Result<Vec<(TxOutput, UtxoAdditionalInfo)>, ControllerError<T>> {
+    ) -> Result<Vec<UtxoWithAdditionalInfo>, ControllerError<T>> {
         let tasks: FuturesOrdered<_> = inputs
             .into_iter()
             .map(|input| fetch_utxo_exra_info(&self.rpc_client, input))
             .collect();
-        let input_utxos: Vec<(TxOutput, UtxoAdditionalInfo)> = tasks.try_collect().await?;
+        let input_utxos: Vec<UtxoWithAdditionalInfo> = tasks.try_collect().await?;
         Ok(input_utxos)
     }
 
