@@ -1054,7 +1054,7 @@ where
                 let ptx = signer.sign_tx(ptx, account.key_chain(), db_tx).map(|(ptx, _, _)| ptx)?;
 
                 let inputs_utxo_refs: Vec<_> =
-                    ptx.input_utxos().iter().map(|u| u.as_ref().map(|(x, _)| x)).collect();
+                    ptx.input_utxos().iter().map(|u| u.as_ref().map(|x| &x.utxo)).collect();
                 let is_fully_signed =
                     ptx.destinations().iter().enumerate().zip(ptx.witnesses()).all(
                         |((i, destination), witness)| match (witness, destination) {
@@ -2026,19 +2026,24 @@ where
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<(OrderId, SignedTransaction)> {
         let latest_median_time = self.latest_median_time;
-        let tx = self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
-            account.create_order_tx(
-                db_tx,
-                ask_value,
-                give_value,
-                conclude_key,
-                latest_median_time,
-                CurrentFeeRate {
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                },
-            )
-        })?;
+        let tx = self.for_account_rw_unlocked_and_check_tx(
+            account_index,
+            //FIXME
+            &BTreeMap::new(),
+            |account, db_tx| {
+                account.create_order_tx(
+                    db_tx,
+                    ask_value,
+                    give_value,
+                    conclude_key,
+                    latest_median_time,
+                    CurrentFeeRate {
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    },
+                )
+            },
+        )?;
         let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.transaction().inputs())?;
         let order_id = make_order_id(input0_outpoint);
         Ok((order_id, tx))
@@ -2054,19 +2059,23 @@ where
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
-            account.create_conclude_order_tx(
-                db_tx,
-                order_id,
-                order_info,
-                output_address,
-                latest_median_time,
-                CurrentFeeRate {
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                },
-            )
-        })
+        self.for_account_rw_unlocked_and_check_tx(
+            account_index,
+            &BTreeMap::new(),
+            |account, db_tx| {
+                account.create_conclude_order_tx(
+                    db_tx,
+                    order_id,
+                    order_info,
+                    output_address,
+                    latest_median_time,
+                    CurrentFeeRate {
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    },
+                )
+            },
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2081,20 +2090,24 @@ where
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
-            account.create_fill_order_tx(
-                db_tx,
-                order_id,
-                order_info,
-                fill_amount_in_ask_currency,
-                output_address,
-                latest_median_time,
-                CurrentFeeRate {
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                },
-            )
-        })
+        self.for_account_rw_unlocked_and_check_tx(
+            account_index,
+            &BTreeMap::new(),
+            |account, db_tx| {
+                account.create_fill_order_tx(
+                    db_tx,
+                    order_id,
+                    order_info,
+                    fill_amount_in_ask_currency,
+                    output_address,
+                    latest_median_time,
+                    CurrentFeeRate {
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    },
+                )
+            },
+        )
     }
 
     pub fn sign_raw_transaction(

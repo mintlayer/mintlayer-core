@@ -19,8 +19,8 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
 };
@@ -30,7 +30,6 @@ use crypto::ephemeral_e2e::EndToEndPublicKey;
 use mempool::{tx_accumulator::PackingStrategy, tx_options::TxOptionsOverrides, FeeRate};
 use p2p::types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
-use pos_accounting::PoolData;
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
@@ -66,7 +65,10 @@ pub trait NodeInterface {
     ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error>;
     async fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error>;
     async fn get_staker_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error>;
-    async fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error>;
+    async fn get_pool_decommission_destination(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<Destination>, Self::Error>;
     async fn get_delegation_share(
         &self,
         pool_id: PoolId,
