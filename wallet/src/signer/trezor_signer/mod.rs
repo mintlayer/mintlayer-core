@@ -243,7 +243,7 @@ impl Signer for TrezorSigner {
             .map_err(TrezorError::DeviceError)?;
 
         let inputs_utxo_refs: Vec<_> =
-            ptx.input_utxos().iter().map(|u| u.as_ref().map(|(x, _)| x)).collect();
+            ptx.input_utxos().iter().map(|u| u.as_ref().map(|x| &x.utxo)).collect();
 
         let (witnesses, prev_statuses, new_statuses) = ptx
             .witnesses()
@@ -474,7 +474,7 @@ fn to_trezor_input_msgs(
         .map(|((inp, utxo), dest)| match (inp, utxo, dest) {
             (TxInput::Utxo(outpoint), Some(utxo), Some(dest)) => Ok(to_trezor_utxo_input(
                 outpoint,
-                &utxo.0,
+                &utxo.utxo,
                 chain_config,
                 dest,
                 key_chain,
@@ -718,7 +718,7 @@ fn to_trezor_utxo_msgs(
                         OutPointSourceId::Transaction(id) => id.to_hash().0,
                         OutPointSourceId::BlockReward(id) => id.to_hash().0,
                     };
-                    let out = to_trezor_output_msg(chain_config, &utxo.0);
+                    let out = to_trezor_output_msg(chain_config, &utxo.utxo);
                     map.entry(id).or_default().insert(outpoint.output_index(), out);
                 }
                 (TxInput::Utxo(_), None) => unimplemented!("missing utxo"),

@@ -25,7 +25,7 @@ use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        DelegationId, PoolId, SignedTransaction, Transaction,
+        DelegationId, Destination, PoolId, SignedTransaction, Transaction,
     },
     primitives::{time::Time, Amount},
 };
@@ -40,7 +40,6 @@ use node_comm::{
     rpc_client::NodeRpcError,
 };
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
-use pos_accounting::PoolData;
 use randomness::{seq::IteratorRandom, CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -276,7 +275,10 @@ impl NodeInterface for MockNode {
         unreachable!()
     }
 
-    async fn get_pool_data(&self, _pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
+    async fn get_pool_decommission_destination(
+        &self,
+        _pool_id: PoolId,
+    ) -> Result<Option<Destination>, Self::Error> {
         unreachable!()
     }
 

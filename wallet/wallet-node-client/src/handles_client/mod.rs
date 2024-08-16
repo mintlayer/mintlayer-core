@@ -20,7 +20,7 @@ use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
+        Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
 };
@@ -35,7 +35,6 @@ use p2p::{
     types::{bannable_address::BannableAddress, peer_id::PeerId, socket_address::SocketAddress},
     P2pHandle,
 };
-use pos_accounting::PoolData;
 use serialization::hex::HexError;
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
@@ -196,8 +195,15 @@ impl NodeInterface for WalletHandlesClient {
         Ok(result)
     }
 
-    async fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
-        let result = self.chainstate.call(move |this| this.get_stake_pool_data(pool_id)).await??;
+    async fn get_pool_decommission_destination(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<Destination>, Self::Error> {
+        let result = self
+            .chainstate
+            .call(move |this| this.get_stake_pool_data(pool_id))
+            .await??
+            .map(|data| data.decommission_destination().clone());
         Ok(result)
     }
 

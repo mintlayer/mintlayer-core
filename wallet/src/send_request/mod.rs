@@ -18,7 +18,9 @@ use std::mem::take;
 
 use common::address::Address;
 use common::chain::output_value::OutputValue;
-use common::chain::partially_signed_transaction::{PartiallySignedTransaction, UtxoAdditionalInfo};
+use common::chain::partially_signed_transaction::{
+    PartiallySignedTransaction, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
+};
 use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{Metadata, NftIssuance, TokenId, TokenIssuance};
@@ -332,7 +334,7 @@ impl SendRequest {
                             UtxoAdditionalInfo::NoAdditionalInfo
                         }
                     };
-                    Ok((utxo, additional_info))
+                    Ok(UtxoWithAdditionalInfo::new(utxo, additional_info))
                 })
                 .transpose()
             })
