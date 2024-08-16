@@ -34,11 +34,26 @@ pub enum UtxoAdditionalInfo {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+pub struct UtxoWithAdditionalInfo {
+    pub utxo: TxOutput,
+    pub additional_info: UtxoAdditionalInfo,
+}
+
+impl UtxoWithAdditionalInfo {
+    pub fn new(utxo: TxOutput, additional_info: UtxoAdditionalInfo) -> Self {
+        Self {
+            utxo,
+            additional_info,
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct PartiallySignedTransaction {
     tx: Transaction,
     witnesses: Vec<Option<InputWitness>>,
 
-    input_utxos: Vec<Option<(TxOutput, UtxoAdditionalInfo)>>,
+    input_utxos: Vec<Option<UtxoWithAdditionalInfo>>,
     destinations: Vec<Option<Destination>>,
 
     htlc_secrets: Vec<Option<HtlcSecret>>,
@@ -48,7 +63,7 @@ impl PartiallySignedTransaction {
     pub fn new(
         tx: Transaction,
         witnesses: Vec<Option<InputWitness>>,
-        input_utxos: Vec<Option<(TxOutput, UtxoAdditionalInfo)>>,
+        input_utxos: Vec<Option<UtxoWithAdditionalInfo>>,
         destinations: Vec<Option<Destination>>,
         htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
     ) -> Result<Self, TransactionCreationError> {
@@ -104,7 +119,7 @@ impl PartiallySignedTransaction {
         self.tx
     }
 
-    pub fn input_utxos(&self) -> &[Option<(TxOutput, UtxoAdditionalInfo)>] {
+    pub fn input_utxos(&self) -> &[Option<UtxoWithAdditionalInfo>] {
         self.input_utxos.as_ref()
     }
 

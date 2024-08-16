@@ -23,7 +23,6 @@ use common::{
     primitives::amount::{RpcAmountIn, RpcAmountOut},
 };
 use crypto::vrf::VRFPublicKey;
-use pos_accounting::PoolData;
 use rpc::types::RpcHexString;
 
 use super::token::{RpcNftIssuance, RpcTokenIssuance};
@@ -63,36 +62,6 @@ impl RpcOutputValueOut {
                 id: RpcAddress::new(chain_config, token_id)?,
                 amount: RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
             },
-        };
-        Ok(result)
-    }
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
-pub struct RpcPoolData {
-    pub pledge: RpcAmountOut,
-    pub rewards: RpcAmountOut,
-    pub vrf_public_key: RpcAddress<VRFPublicKey>,
-    pub decommission_key: RpcAddress<Destination>,
-    pub margin_ratio_per_thousand: String,
-    pub cost_per_block: RpcAmountOut,
-}
-
-impl RpcPoolData {
-    pub fn new(chain_config: &ChainConfig, data: &PoolData) -> Result<Self, AddressError> {
-        let result = Self {
-            pledge: RpcAmountOut::from_amount(data.pledge_amount(), chain_config.coin_decimals()),
-            rewards: RpcAmountOut::from_amount(data.staker_rewards(), chain_config.coin_decimals()),
-            vrf_public_key: RpcAddress::new(chain_config, data.vrf_public_key().clone())?,
-            decommission_key: RpcAddress::new(
-                chain_config,
-                data.decommission_destination().clone(),
-            )?,
-            margin_ratio_per_thousand: data.margin_ratio_per_thousand().to_percentage_str(),
-            cost_per_block: RpcAmountOut::from_amount(
-                data.cost_per_block(),
-                chain_config.coin_decimals(),
-            ),
         };
         Ok(result)
     }
