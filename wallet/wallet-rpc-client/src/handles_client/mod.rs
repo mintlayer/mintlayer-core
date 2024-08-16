@@ -20,8 +20,8 @@ use common::{
     address::{dehexify::dehexify_all_addresses, AddressError},
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        timelock::OutputTimeLock, tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -40,9 +40,10 @@ use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcInspectTransaction,
-        RpcStandaloneAddresses, RpcTokenId, SendTokensFromMultisigAddressResult, StakePoolBalance,
-        StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
+        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
+        RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
+        SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+        StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
         VrfPublicKeyInfo,
     },
     RpcError, WalletRpc,
@@ -1021,10 +1022,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         account_index: U31,
         amount: DecimalAmount,
         token_id: Option<String>,
-        secret_hash: String,
-        spend_address: String,
-        refund_address: String,
-        refund_timelock: OutputTimeLock,
+        htlc: RpcHashedTimelockContract,
         config: ControllerConfig,
     ) -> Result<HexEncoded<SignedTransaction>, Self::Error> {
         self.wallet_rpc
@@ -1032,10 +1030,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
                 account_index,
                 amount.into(),
                 token_id.map(|id| id.into()),
-                RpcHexString::from_str(&secret_hash)?,
-                spend_address.into(),
-                refund_address.into(),
-                refund_timelock,
+                htlc,
                 config,
             )
             .await

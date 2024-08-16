@@ -605,6 +605,7 @@ class WalletRpcController:
                          refund_address: str,
                          refund_lock_for_blocks: int) -> str:
         timelock = { "type": "ForBlockCount", "content": refund_lock_for_blocks }
-        object = [self.account, {'decimal': str(amount)}, token_id, secret_hash, spend_address, refund_address, timelock, {'in_top_x_mb': 5}]
+        htlc = { "secret_hash": secret_hash, "spend_address": spend_address, "refund_address": refund_address, "refund_timelock": timelock }
+        object = [self.account, {'decimal': str(amount)}, token_id, htlc, {'in_top_x_mb': 5}]
         result = self._write_command("create_htlc_transaction", object)
         return result['result']

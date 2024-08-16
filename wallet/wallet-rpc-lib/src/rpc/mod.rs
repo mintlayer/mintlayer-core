@@ -32,6 +32,7 @@ use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
+use types::RpcHashedTimelockContract;
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
@@ -53,7 +54,6 @@ use common::{
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
-        timelock::OutputTimeLock,
         tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenTotalSupply},
         Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
         Transaction, TxOutput, UtxoOutPoint,
@@ -1404,27 +1404,26 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         account_index: U31,
         amount: RpcAmountIn,
         token_id: Option<RpcAddress<TokenId>>,
-        secret_hash: RpcHexString,
-        spend_address: RpcAddress<Destination>,
-        refund_address: RpcAddress<Destination>,
-        refund_timelock: OutputTimeLock,
+        htlc: RpcHashedTimelockContract,
         config: ControllerConfig,
     ) -> WRpcResult<SignedTransaction, N> {
-        let secret_hash = HtlcSecretHash::decode_all(&mut secret_hash.as_bytes())
+        let secret_hash = HtlcSecretHash::decode_all(&mut htlc.secret_hash.as_bytes())
             .map_err(|_| RpcError::InvalidHtlcSecretHash)?;
 
-        let spend_key = spend_address
+        let spend_key = htlc
+            .spend_address
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidAddress)?;
 
-        let refund_key = refund_address
+        let refund_key = htlc
+            .refund_address
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidAddress)?;
 
         let htlc = HashedTimelockContract {
             secret_hash,
             spend_key,
-            refund_timelock,
+            refund_timelock: htlc.refund_timelock,
             refund_key,
         };
 

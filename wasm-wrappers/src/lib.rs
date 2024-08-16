@@ -759,7 +759,8 @@ pub fn encode_output_htlc(
     };
     let refund_timelock = OutputTimeLock::decode_all(&mut &refund_timelock[..])
         .map_err(|_| Error::InvalidTimeLock)?;
-    let secret_hash = serde_json::from_str::<HtlcSecretHash>(secret_hash).unwrap();
+    let secret_hash = serde_json::from_str::<HtlcSecretHash>(secret_hash)
+        .map_err(|_| Error::InvalidHtlcSecret)?;
 
     let spend_key = parse_addressable::<Destination>(&chain_config, spend_address)?;
     let refund_key = parse_addressable::<Destination>(&chain_config, refund_address)?;
@@ -801,7 +802,7 @@ pub fn extract_htlc_secret(
     });
 
     match htlc_position {
-        Some(i) => match tx.signatures().get(i).unwrap() {
+        Some(i) => match tx.signatures().get(i).ok_or(Error::InvalidWitnessCount)? {
             InputWitness::NoSignature(_) => Err(Error::InvalidWitness),
             InputWitness::Standard(sig) => {
                 let htlc_spend =
@@ -1085,9 +1086,10 @@ pub fn encode_witness_htlc_multisig(
             .map_err(|_| Error::InvalidMultisigChallenge)?;
         let mut authorization = AuthorizedClassicalMultisigSpend::new_empty(challenge);
 
-        let sighash = signature_hash(sighashtype, &tx, &utxos, input_num as usize).unwrap();
+        let sighash = signature_hash(sighashtype, &tx, &utxos, input_num as usize)
+            .map_err(|_| Error::InvalidSignatureEncoding)?;
         let sighash = sighash.encode();
-        let signature = private_key.sign_message(&sighash, &mut rng).unwrap();
+        let signature = private_key.sign_message(&sighash, &mut rng)?;
         authorization.add_signature(0, signature);
 
         authorization

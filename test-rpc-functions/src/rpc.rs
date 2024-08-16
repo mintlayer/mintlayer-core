@@ -443,7 +443,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         });
 
         match htlc_position {
-            Some(i) => match tx.signatures().get(i).unwrap() {
+            Some(i) => match tx.signatures().get(i).expect("ok") {
                 InputWitness::NoSignature(_) => Ok(None),
                 InputWitness::Standard(sig) => {
                     let htlc_spend_result =

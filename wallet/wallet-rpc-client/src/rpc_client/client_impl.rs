@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, future::pending, num::NonZeroUsize, path::PathBuf, str::FromStr};
+use std::{collections::BTreeMap, future::pending, num::NonZeroUsize, path::PathBuf};
 
 use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, WalletInterface};
 
@@ -23,14 +23,12 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        timelock::OutputTimeLock, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
 use crypto::key::{hdkd::u31::U31, PrivateKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
-use rpc::types::RpcHexString;
 use serialization::hex_encoded::HexEncoded;
 use serialization::DecodeAll;
 use utils_networking::IpOrSocketAddress;
@@ -43,10 +41,11 @@ use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcInspectTransaction,
-        RpcStandaloneAddresses, RpcTokenId, SendTokensFromMultisigAddressResult, StakePoolBalance,
-        StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TransactionOptions,
-        TxOptionsOverrides, VrfPublicKeyInfo,
+        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
+        RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
+        SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+        StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
+        VrfPublicKeyInfo,
     },
     ColdWalletRpcClient, WalletRpcClient,
 };
@@ -897,10 +896,7 @@ impl WalletInterface for ClientWalletRpc {
         account_index: U31,
         amount: DecimalAmount,
         token_id: Option<String>,
-        secret_hash: String,
-        spend_address: String,
-        refund_address: String,
-        refund_timelock: OutputTimeLock,
+        htlc: RpcHashedTimelockContract,
         config: ControllerConfig,
     ) -> Result<HexEncoded<SignedTransaction>, Self::Error> {
         let options = TransactionOptions::from_controller_config(&config);
@@ -909,10 +905,7 @@ impl WalletInterface for ClientWalletRpc {
             account_index.into(),
             amount.into(),
             token_id.map(|id| id.into()),
-            RpcHexString::from_str(&secret_hash)?,
-            spend_address.into(),
-            refund_address.into(),
-            refund_timelock,
+            htlc,
             options,
         )
         .await

@@ -324,7 +324,7 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
                             i,
                             &inputs_utxo_refs,
                             key_chain,
-                            &htlc_secret,
+                            htlc_secret,
                         )?;
                         Ok((sig, SignatureStatus::NotSigned, status))
                     }

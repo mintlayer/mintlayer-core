@@ -4818,7 +4818,7 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
         vec![TxOutput::Transfer(output_value, address1.into_object())],
     )
     .unwrap();
-    let refund_utxos = vec![create_htlc_tx.transaction().outputs().get(0).cloned()];
+    let refund_utxos = vec![create_htlc_tx.transaction().outputs().first().cloned()];
     let refund_ptx = PartiallySignedTransaction::new(
         refund_tx,
         vec![None],

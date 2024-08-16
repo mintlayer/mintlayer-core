@@ -20,7 +20,6 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         partially_signed_transaction::PartiallySignedTransaction,
-        timelock::OutputTimeLock,
         tokens::{IsTokenUnfreezable, TokenId},
         Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
         TxOutput,
@@ -54,6 +53,8 @@ use crate::{
     },
     RpcError,
 };
+
+use super::types::RpcHashedTimelockContract;
 
 #[async_trait::async_trait]
 impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletEventsRpcServer
@@ -1001,10 +1002,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         account_arg: AccountArg,
         amount: RpcAmountIn,
         token_id: Option<RpcAddress<TokenId>>,
-        secret_hash: RpcHexString,
-        spend_address: RpcAddress<Destination>,
-        refund_address: RpcAddress<Destination>,
-        refund_timelock: OutputTimeLock,
+        htlc: RpcHashedTimelockContract,
         options: TransactionOptions,
     ) -> rpc::RpcResult<HexEncoded<SignedTransaction>> {
         let config = ControllerConfig {
@@ -1013,18 +1011,9 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         };
 
         rpc::handle_result(
-            self.create_htlc_transaction(
-                account_arg.index::<N>()?,
-                amount,
-                token_id,
-                secret_hash,
-                spend_address,
-                refund_address,
-                refund_timelock,
-                config,
-            )
-            .await
-            .map(HexEncoded::new),
+            self.create_htlc_transaction(account_arg.index::<N>()?, amount, token_id, htlc, config)
+                .await
+                .map(HexEncoded::new),
         )
     }
 

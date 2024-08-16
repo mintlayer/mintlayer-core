@@ -19,8 +19,7 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        timelock::OutputTimeLock, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -36,10 +35,10 @@ use wallet_controller::{
 use wallet_rpc_lib::types::{
     AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
     DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcInspectTransaction, RpcSignatureStatus,
-    RpcStandaloneAddresses, RpcTokenId, SendTokensFromMultisigAddressResult, StakePoolBalance,
-    StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides,
-    VrfPublicKeyInfo,
+    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
+    RpcInspectTransaction, RpcSignatureStatus, RpcStandaloneAddresses, RpcTokenId,
+    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 use wallet_types::with_locked::WithLocked;
 
@@ -461,10 +460,7 @@ pub trait WalletInterface {
         account_index: U31,
         amount: DecimalAmount,
         token_id: Option<String>,
-        secret_hash: String,
-        spend_address: String,
-        refund_address: String,
-        refund_timelock: OutputTimeLock,
+        htlc: RpcHashedTimelockContract,
         config: ControllerConfig,
     ) -> Result<HexEncoded<SignedTransaction>, Self::Error>;
 

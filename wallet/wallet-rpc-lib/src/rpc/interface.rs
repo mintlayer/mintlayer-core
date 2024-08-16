@@ -18,7 +18,7 @@ use std::{collections::BTreeMap, num::NonZeroUsize};
 use common::{
     address::RpcAddress,
     chain::{
-        block::timestamp::BlockTimestamp, timelock::OutputTimeLock, tokens::TokenId,
+        block::timestamp::BlockTimestamp, tokens::TokenId,
         transaction::partially_signed_transaction::PartiallySignedTransaction, Block, DelegationId,
         Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
     },
@@ -38,9 +38,9 @@ use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
     CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
     MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcInspectTransaction,
-    RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
-    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
+    RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
+    RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
     VrfPublicKeyInfo,
 };
@@ -662,10 +662,7 @@ trait WalletRpc {
         account: AccountArg,
         amount: RpcAmountIn,
         token_id: Option<RpcAddress<TokenId>>,
-        secret_hash: RpcHexString,
-        spend_address: RpcAddress<Destination>,
-        refund_address: RpcAddress<Destination>,
-        refund_timelock: OutputTimeLock,
+        htlc: RpcHashedTimelockContract,
         options: TransactionOptions,
     ) -> rpc::RpcResult<HexEncoded<SignedTransaction>>;
 
