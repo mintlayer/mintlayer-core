@@ -347,9 +347,9 @@ EITHER OF
      2) null
 ```
 
-### Method `chainstate_pool_data`
+### Method `chainstate_pool_decommission_destination`
 
-Returns the pool data of the pool associated with the given pool address.
+Returns the pool's decommission destination associated with the given pool address.
 
 Returns `None` (null) if the pool is not found.
 
@@ -362,23 +362,7 @@ Parameters:
 Returns:
 ```
 EITHER OF
-     1) {
-            "pledge": {
-                "atoms": number string,
-                "decimal": decimal string,
-            },
-            "rewards": {
-                "atoms": number string,
-                "decimal": decimal string,
-            },
-            "vrf_public_key": bech32 string,
-            "decommission_key": bech32 string,
-            "margin_ratio_per_thousand": string,
-            "cost_per_block": {
-                "atoms": number string,
-                "decimal": decimal string,
-            },
-        }
+     1) bech32 string
      2) null
 ```
 
