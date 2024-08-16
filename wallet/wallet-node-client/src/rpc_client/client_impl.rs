@@ -21,10 +21,10 @@ use common::{
     address::Address,
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
-    primitives::{per_thousand::PerThousand, time::Time, Amount, BlockHeight, Id},
+    primitives::{time::Time, Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
 use crypto::ephemeral_e2e::EndToEndPublicKey;
@@ -36,7 +36,6 @@ use p2p::{
     rpc::P2pRpcClient,
     types::{bannable_address::BannableAddress, peer_id::PeerId, socket_address::SocketAddress},
 };
-use pos_accounting::PoolData;
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
@@ -142,22 +141,17 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
 
-    async fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
+    async fn get_pool_decommission_destination(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<Destination>, Self::Error> {
         let pool_address = Address::new(&self.chain_config, pool_id)?;
-        ChainstateRpcClient::pool_data(&self.http_client, pool_address.into_string())
-            .await
-            .map_err(NodeRpcError::ResponseError)?
-            .map(|d| {
-                Ok(PoolData::new(
-                    d.decommission_key.decode_object(&self.chain_config)?,
-                    d.pledge.amount(),
-                    d.rewards.amount(),
-                    d.vrf_public_key.decode_object(&self.chain_config)?,
-                    PerThousand::from_decimal_str(&d.margin_ratio_per_thousand)?,
-                    d.cost_per_block.amount(),
-                ))
-            })
-            .transpose()
+        ChainstateRpcClient::pool_decommission_destination(
+            &self.http_client,
+            pool_address.into_string(),
+        )
+        .await
+        .map_err(NodeRpcError::ResponseError)
     }
 
     async fn get_delegation_share(

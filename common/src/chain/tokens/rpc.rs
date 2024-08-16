@@ -52,10 +52,10 @@ impl RPCTokenInfo {
         }
     }
 
-    pub fn token_ticker(&self) -> Vec<u8> {
+    pub fn token_ticker(&self) -> &[u8] {
         match self {
-            Self::FungibleToken(info) => info.token_ticker.clone().into_bytes(),
-            Self::NonFungibleToken(info) => info.metadata.ticker.clone().into_bytes(),
+            Self::FungibleToken(info) => info.token_ticker.as_bytes(),
+            Self::NonFungibleToken(info) => info.metadata.ticker.as_bytes(),
         }
     }
 }
