@@ -20,8 +20,8 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
-        Transaction,
+        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        SignedTransaction, Transaction,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
 };
@@ -32,7 +32,6 @@ use p2p::{
     interface::types::ConnectedPeer,
     types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId},
 };
-use pos_accounting::PoolData;
 use utils_networking::IpOrSocketAddress;
 use wallet_types::wallet_type::WalletControllerMode;
 
@@ -120,7 +119,10 @@ impl NodeInterface for ColdWalletClient {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
-    async fn get_pool_data(&self, _pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
+    async fn get_pool_decommission_destination(
+        &self,
+        _pool_id: PoolId,
+    ) -> Result<Option<Destination>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
