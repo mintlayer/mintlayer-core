@@ -34,7 +34,7 @@ use common::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
         config::{create_mainnet, create_regtest, create_unit_test_config, Builder, ChainType},
         output_value::{OutputValue, RpcOutputValue},
-        partially_signed_transaction::UtxoAdditionalInfo,
+        partially_signed_transaction::{UtxoAdditionalInfo, UtxoWithAdditionalInfo},
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
         tokens::{RPCIsTokenFrozen, TokenData, TokenIssuanceV0, TokenIssuanceV1},
@@ -4355,7 +4355,10 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     let ptx = PartiallySignedTransaction::new(
         tx,
         vec![None; inps],
-        vec![Some((utxo, UtxoAdditionalInfo::NoAdditionalInfo))],
+        vec![Some(UtxoWithAdditionalInfo::new(
+            utxo,
+            UtxoAdditionalInfo::NoAdditionalInfo,
+        ))],
         vec![Some(addr.into_object())],
         None,
     )
@@ -4885,7 +4888,7 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
     let spend_multisig_tx = PartiallySignedTransaction::new(
         spend_multisig_tx,
         vec![None; 1],
-        vec![Some((
+        vec![Some(UtxoWithAdditionalInfo::new(
             tx.outputs()[0].clone(),
             UtxoAdditionalInfo::NoAdditionalInfo,
         ))],
@@ -5040,7 +5043,7 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
         .outputs()
         .first()
         .cloned()
-        .map(|out| (out, UtxoAdditionalInfo::NoAdditionalInfo))];
+        .map(|out| UtxoWithAdditionalInfo::new(out, UtxoAdditionalInfo::NoAdditionalInfo))];
     let spend_ptx = PartiallySignedTransaction::new(
         spend_tx,
         vec![None],
@@ -5142,7 +5145,7 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
         .outputs()
         .first()
         .cloned()
-        .map(|out| (out, UtxoAdditionalInfo::NoAdditionalInfo))];
+        .map(|out| UtxoWithAdditionalInfo::new(out, UtxoAdditionalInfo::NoAdditionalInfo))];
     let refund_ptx = PartiallySignedTransaction::new(
         refund_tx,
         vec![None],
@@ -5282,8 +5285,9 @@ fn create_order(#[case] seed: Seed) {
         token_issuance.authority,
     );
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     let token_amount_to_mint = Amount::from_atoms(rng.gen_range(2..100));
     let mint_transaction = wallet
@@ -5399,8 +5403,9 @@ fn create_order_and_conclude(#[case] seed: Seed) {
         token_issuance.authority,
     );
 
-    let unconfirmed_token_info =
-        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     let token_amount_to_mint = Amount::from_atoms(rng.gen_range(2..100));
     let mint_transaction = wallet
@@ -5560,8 +5565,9 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         token_issuance.authority,
     );
 
-    let unconfirmed_token_info =
-        wallet1.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet1
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     let token_amount_to_mint = Amount::from_atoms(100);
     let mint_transaction = wallet1
@@ -5864,8 +5870,9 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         token_issuance.authority,
     );
 
-    let unconfirmed_token_info =
-        wallet1.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+    let unconfirmed_token_info = wallet1
+        .get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, token_info.clone())
+        .unwrap();
 
     let token_amount_to_mint = Amount::from_atoms(100);
     let mint_transaction = wallet1

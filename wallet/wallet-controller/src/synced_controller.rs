@@ -194,7 +194,7 @@ where
                         PoolOrTokenId::TokenId(token_info.token_id()),
                         UtxoAdditionalInfo::TokenInfo {
                             num_decimals: token_info.token_number_of_decimals(),
-                            ticker: token_info.token_ticker(),
+                            ticker: token_info.token_ticker().to_vec(),
                         },
                     );
                 }
