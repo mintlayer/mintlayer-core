@@ -4666,7 +4666,9 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
     let pub_key1 = wallet1.find_public_key(DEFAULT_ACCOUNT_INDEX, address1.into_object()).unwrap();
 
     let (_, address2) = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
-    let pub_key2 = wallet2.find_public_key(DEFAULT_ACCOUNT_INDEX, address2.into_object()).unwrap();
+    let pub_key2 = wallet2
+        .find_public_key(DEFAULT_ACCOUNT_INDEX, address2.clone().into_object())
+        .unwrap();
 
     let min_required_signatures = 2;
     let challenge = ClassicMultisigChallenge::new(
@@ -4686,7 +4688,7 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
     let spend_key = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
     let htlc = HashedTimelockContract {
         secret_hash: secret.hash(),
-        spend_key: spend_key.into_object(),
+        spend_key: spend_key.clone().into_object(),
         refund_timelock: OutputTimeLock::ForBlockCount(1),
         refund_key: Destination::ClassicMultisig(multisig_hash),
     };
@@ -4701,10 +4703,11 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
+    let create_htlc_tx_id = create_htlc_tx.transaction().get_id();
     let (_, block2) = create_block(
         &chain_config,
         &mut wallet1,
-        vec![create_htlc_tx],
+        vec![create_htlc_tx.clone()],
         Amount::ZERO,
         1,
     );
@@ -4742,7 +4745,36 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
         _ => panic!("wrong TxOutput type"),
     };
 
-    // FIXME: spend with a secret
+    // spend with a secret
+    let spend_tx = Transaction::new(
+        0,
+        vec![TxInput::from_utxo(create_htlc_tx_id.into(), 0)],
+        vec![TxOutput::Transfer(output_value, address2.into_object())],
+    )
+    .unwrap();
+    let spend_utxos = vec![create_htlc_tx.transaction().outputs().first().cloned()];
+    let spend_ptx = PartiallySignedTransaction::new(
+        spend_tx,
+        vec![None],
+        spend_utxos,
+        vec![Some(spend_key.into_object())],
+        Some(vec![Some(secret)]),
+    )
+    .unwrap();
+
+    let (spend_ptx, _, new_statuses) = wallet2
+        .sign_raw_transaction(DEFAULT_ACCOUNT_INDEX, TransactionToSign::Partial(spend_ptx))
+        .unwrap();
+    assert_eq!(vec![SignatureStatus::FullySigned], new_statuses);
+
+    let spend_tx = spend_ptx.into_signed_tx().unwrap();
+
+    let (_, block2) = create_block(&chain_config, &mut wallet2, vec![spend_tx], Amount::ZERO, 1);
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block2]);
+
+    // Htlc is not accounted in balance
+    assert_eq!(get_coin_balance(&wallet1), Amount::ZERO);
+    assert_eq!(get_coin_balance(&wallet2), coin_balance);
 }
 
 #[rstest]

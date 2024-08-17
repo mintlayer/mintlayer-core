@@ -27,9 +27,9 @@ from scalecodec.base import ScaleBytes
 from test_framework.script import hash160
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (hash_object, hex_to_dec_array, make_tx, make_tx_dict, reward_input, ATOMS_PER_COIN, tx_input)
-from test_framework.util import assert_in, assert_equal
+from test_framework.util import assert_in, assert_equal, assert_not_in
 from test_framework.mintlayer import  block_input_data_obj, signed_tx_obj, base_tx_obj
-from test_framework.wallet_rpc_controller import TransferTxOutput, UtxoOutpoint, WalletRpcController
+from test_framework.wallet_rpc_controller import WalletRpcController
 
 import asyncio
 import sys
@@ -128,12 +128,11 @@ class WalletHtlcRefund(BitcoinTestFramework):
             assert_equal(await wallet.get_best_block(), block_id)
 
             balance = await wallet.get_balance()
-            assert_in("151", balance['coins']['decimal'])
-            assert_equal({}, balance['tokens'])
+            assert_in(f"Coins amount: 151", balance)
+            assert_not_in("Tokens", balance)
 
             # issue a valid token
-            issue_result = (await wallet.issue_new_token("XXXX", 2, "http://uri", alice_address))
-            token_id = issue_result['token_id']
+            token_id, _ = (await wallet.issue_new_token("XXXX", 2, "http://uri", alice_address))
             assert token_id is not None
             self.log.info(f"new token id: {token_id}")
             token_id_hex = node.test_functions_reveal_token_id(token_id)
@@ -141,8 +140,8 @@ class WalletHtlcRefund(BitcoinTestFramework):
             self.generate_block()
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in("50.", balance['coins']['decimal'])
-            assert_equal({}, balance['tokens'])
+            assert_in(f"Coins amount: 50", balance)
+            assert_not_in("Tokens", balance)
 
             amount_to_mint = random.randint(1, 10000)
             mint_result = await wallet.mint_tokens(token_id, alice_address, amount_to_mint)
@@ -151,8 +150,9 @@ class WalletHtlcRefund(BitcoinTestFramework):
             self.generate_block()
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in("0.", balance['coins']['decimal'])
-            assert_in(str(amount_to_mint), balance['tokens'][token_id]['decimal'])
+            print(balance)
+            assert_in(f"Coins amount: 0", balance)
+            assert_in(f"Token: {token_id} amount: {amount_to_mint}", balance)
 
             ########################################################################################
             # Setup Alice's htlc
@@ -224,7 +224,7 @@ class WalletHtlcRefund(BitcoinTestFramework):
 
             # Alice's htlc tx can now be broadcasted
             output = await wallet.submit_transaction(alice_htlc_tx)
-            assert_in("tx_id", output['result'])
+            assert_in("The transaction was submitted successfully", output)
 
             # Alice signs Bob's refund
             await self.switch_to_wallet(wallet, 'alice_wallet')
@@ -235,22 +235,22 @@ class WalletHtlcRefund(BitcoinTestFramework):
 
             # Bob's htlc tx can now be broadcasted
             output = await wallet.submit_transaction(bob_htlc_tx)
-            assert_in("tx_id", output['result'])
+            assert_in("The transaction was submitted successfully", output)
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
             # Check Alice's balance
             balance = await wallet.get_balance()
-            assert_in("0", balance['coins']['decimal'])
-            assert_equal({}, balance['tokens'])
+            assert_in(f"Coins amount: 0", balance)
+            assert_not_in("Tokens", balance)
 
             # Check Bob's balance now
             await self.switch_to_wallet(wallet, 'bob_wallet')
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in("0", balance['coins']['decimal'])
-            assert_equal({}, balance['tokens'])
+            assert_in(f"Coins amount: 0", balance)
+            assert_not_in("Tokens", balance)
 
             ########################################################################################
             # Alice signs the refund
@@ -263,11 +263,11 @@ class WalletHtlcRefund(BitcoinTestFramework):
             alice_refund_tx = output.split('\n')[2]
             output = await wallet.submit_transaction(alice_refund_tx)
             # spending height is 9 and not 5 as expected because of mempool's FUTURE_TIMELOCK_TOLERANCE_BLOCKS
-            assert_in("Spending at height 9, locked until height 10", output['error']['message'])
+            assert_in("Spending at height 9, locked until height 10", output)
 
             balance = await wallet.get_balance()
-            assert_in("0", balance['coins']['decimal'])
-            assert_equal({}, balance['tokens'])
+            assert_in(f"Coins amount: 0", balance)
+            assert_not_in("Tokens", balance)
 
             # Bob signs and spends the refund
             await self.switch_to_wallet(wallet, 'bob_wallet')
@@ -279,29 +279,29 @@ class WalletHtlcRefund(BitcoinTestFramework):
             # But Bob's refund cannot be spent yet due to the timelock
             output = await wallet.submit_transaction(bob_refund_tx)
             # spending height is 9 and not 5 as expected because of mempool's FUTURE_TIMELOCK_TOLERANCE_BLOCKS
-            assert_in("Spending at height 9, locked until height 10", output['error']['message'])
+            assert_in("Spending at height 9, locked until height 10", output)
 
             balance = await wallet.get_balance()
-            assert_in("0", balance['coins']['decimal'])
-            assert_equal({}, balance['tokens'])
+            assert_in(f"Coins amount: 0", balance)
+            assert_not_in("Tokens", balance)
 
             ########################################################################################
             # Generate a block so that txs can get into mempool
             self.generate_block()
             assert_in("Success", await wallet.sync())
             output = await wallet.submit_transaction(alice_refund_tx)
-            tx_id = output['result']['tx_id']
+            tx_id = output.split('\n')[2]
             assert node.mempool_contains_tx(tx_id)
             output = await wallet.submit_transaction(bob_refund_tx)
-            tx_id = output['result']['tx_id']
+            tx_id = output.split('\n')[2]
             assert node.mempool_contains_tx(tx_id)
 
             # tx won't get into blockchain because of timelock
             self.generate_block()
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in("0", balance['coins']['decimal'])
-            assert_equal({}, balance['tokens'])
+            assert_in(f"Coins amount: 0", balance)
+            assert_not_in("Tokens", balance)
 
             self.generate_block()
             self.generate_block()
@@ -312,14 +312,14 @@ class WalletHtlcRefund(BitcoinTestFramework):
             await self.switch_to_wallet(wallet, 'alice_wallet')
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in("0", balance['coins']['decimal'])
-            assert_in(str(alice_amount_to_swap), balance['tokens'][token_id]['decimal'])
+            assert_in(f"Coins amount: 0", balance)
+            assert_in(f"Token: {token_id} amount: {alice_amount_to_swap}", balance)
 
             await self.switch_to_wallet(wallet, 'bob_wallet')
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in("150", balance['coins']['decimal'])
-            assert_equal({}, balance['tokens'])
+            assert_in(f"Coins amount: 150", balance)
+            assert_not_in("Tokens", balance)
 
 
 if __name__ == '__main__':

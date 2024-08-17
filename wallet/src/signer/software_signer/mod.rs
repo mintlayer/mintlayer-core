@@ -279,7 +279,6 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
                                     SignatureStatus::FullySigned,
                                     SignatureStatus::FullySigned,
                                 ))
-                                // FIXME: who provide destination???
                             } else if let Destination::ClassicMultisig(_) = destination {
                                 let sig_components =
                                     decode_multisig_spend(sig, inputs_utxo_refs[i])?;

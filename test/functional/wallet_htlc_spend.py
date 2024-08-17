@@ -29,8 +29,8 @@
 from test_framework.script import hash160
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.mintlayer import (make_tx, reward_input, ATOMS_PER_COIN)
-from test_framework.util import assert_in, assert_equal
-from test_framework.mintlayer import  block_input_data_obj, outpoint_obj
+from test_framework.util import assert_in, assert_equal, assert_not_in
+from test_framework.mintlayer import  block_input_data_obj
 from test_framework.wallet_rpc_controller import TransferTxOutput, UtxoOutpoint, WalletRpcController
 
 import asyncio
@@ -131,20 +131,19 @@ class WalletHtlcSpend(BitcoinTestFramework):
             assert_equal(await wallet.get_best_block(), block_id)
 
             balance = await wallet.get_balance()
-            assert_in("151", balance['coins']['decimal'])
-            assert_equal({}, balance['tokens'])
+            assert_in(f"Coins amount: 151", balance)
+            assert_not_in("Tokens", balance)
 
             # issue a valid token
-            issue_result = (await wallet.issue_new_token("XXXX", 2, "http://uri", alice_address))
-            token_id = issue_result['token_id']
+            token_id, _ = (await wallet.issue_new_token("XXXX", 2, "http://uri", alice_address))
             assert token_id is not None
             self.log.info(f"new token id: {token_id}")
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in("50.", balance['coins']['decimal'])
-            assert_equal({}, balance['tokens'])
+            assert_in(f"Coins amount: 50", balance)
+            assert_not_in("Tokens", balance)
 
             amount_to_mint = random.randint(1, 10000)
             mint_result = await wallet.mint_tokens(token_id, alice_address, amount_to_mint)
@@ -153,8 +152,8 @@ class WalletHtlcSpend(BitcoinTestFramework):
             self.generate_block()
             assert_in("Success", await wallet.sync())
             balance = await wallet.get_balance()
-            assert_in("0.", balance['coins']['decimal'])
-            assert_in(str(amount_to_mint), balance['tokens'][token_id]['decimal'])
+            assert_in(f"Coins amount: 0", balance)
+            assert_in(f"Token: {token_id} amount: {amount_to_mint}", balance)
 
             ########################################################################################
             # Setup Alice's htlc
@@ -166,7 +165,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             refund_address = await wallet.add_standalone_multisig_address(2, [alice_pub_key, bob_pub_key], None)
             alice_htlc_tx = await wallet.create_htlc_transaction(alice_amount_to_swap, token_id, alice_secret_hash, bob_address, refund_address, 2)
             output = await wallet.submit_transaction(alice_htlc_tx)
-            alice_htlc_tx_id = output['result']['tx_id']
+            alice_htlc_tx_id = output.split('\n')[2]
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
@@ -177,7 +176,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             bob_amount_to_swap = 150
             bob_htlc_tx = await wallet.create_htlc_transaction(bob_amount_to_swap, None, alice_secret_hash, alice_address, refund_address, 2)
             output = await wallet.submit_transaction(bob_htlc_tx)
-            bob_htlc_tx_id = output['result']['tx_id']
+            bob_htlc_tx_id = output.split('\n')[2]
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
@@ -190,8 +189,8 @@ class WalletHtlcSpend(BitcoinTestFramework):
             random_secret_hex = random_secret.hex()
 
             balance = await wallet.get_balance()
-            assert_in("0", balance['coins']['decimal'])
-            assert_equal({}, balance['tokens'])
+            assert_in(f"Coins amount: 0", balance)
+            assert_not_in("Tokens", balance)
 
             # Alice can't spend Alice's htlc without a secret
             token_id_hex = node.test_functions_reveal_token_id(token_id)
@@ -215,8 +214,8 @@ class WalletHtlcSpend(BitcoinTestFramework):
             assert_in("Success", await wallet.sync())
 
             balance = await wallet.get_balance()
-            assert_in("0", balance['coins']['decimal'])
-            assert_equal({}, balance['tokens'])
+            assert_in(f"Coins amount: 0", balance)
+            assert_not_in("Tokens", balance)
 
             # Bob can't spend it without secret
             result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(alice_htlc_tx_id, 0)], None)
@@ -224,14 +223,14 @@ class WalletHtlcSpend(BitcoinTestFramework):
             assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
             signed_tx = output.split('\n')[2]
             output = await wallet.submit_transaction(signed_tx)
-            assert_in("Signature decoding failed", output['error']['message'])
+            assert_in("Signature decoding failed", output)
             # Bob can't spend it with incorrect secret
             result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(alice_htlc_tx_id, 0)], [random_secret_hex])
             output = await wallet.sign_raw_transaction(result['result']['hex'])
             assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
             signed_tx = output.split('\n')[2]
             output = await wallet.submit_transaction(signed_tx)
-            assert_in("Preimage doesn't match the hash", output['error']['message'])
+            assert_in("Preimage doesn't match the hash", output)
 
             ########################################################################################
             await self.switch_to_wallet(wallet, 'alice_wallet')
@@ -244,14 +243,14 @@ class WalletHtlcSpend(BitcoinTestFramework):
             assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
             signed_tx = output.split('\n')[2]
             output = await wallet.submit_transaction(signed_tx)
-            assert_in("Signature decoding failed", output['error']['message'])
+            assert_in("Signature decoding failed", output)
             # Alice can't spend it with incorrect secret
             result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(bob_htlc_tx_id, 0)], [random_secret_hex])
             output = await wallet.sign_raw_transaction(result['result']['hex'])
             assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
             signed_tx = output.split('\n')[2]
             output = await wallet.submit_transaction(signed_tx)
-            assert_in("Preimage doesn't match the hash", output['error']['message'])
+            assert_in("Preimage doesn't match the hash", output)
             # Alice can only spend Bob's htlc by revealing a proper secret
             result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(bob_htlc_tx_id, 0), UtxoOutpoint(alice_htlc_tx_id, 1)], [alice_secret_hex, None])
             output = await wallet.sign_raw_transaction(result['result']['hex'])
@@ -260,13 +259,13 @@ class WalletHtlcSpend(BitcoinTestFramework):
             result_secret = node.test_functions_extract_htlc_secret(signed_tx, UtxoOutpoint(bob_htlc_tx_id, 0).to_json())
             assert_equal(result_secret, alice_secret_hex)
             output = await wallet.submit_transaction(signed_tx)
-            assert_in("tx_id", output['result'])
+            assert_in("The transaction was submitted successfully", output)
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
             balance = await wallet.get_balance()
-            assert_in("150", balance['coins']['decimal'])
-            assert_equal({}, balance['tokens'])
+            assert_in(f"Coins amount: 150", balance)
+            assert_not_in("Tokens", balance)
 
             ########################################################################################
             await self.switch_to_wallet(wallet, 'bob_wallet')
@@ -279,13 +278,13 @@ class WalletHtlcSpend(BitcoinTestFramework):
             assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
             signed_tx = output.split('\n')[2]
             output = await wallet.submit_transaction(signed_tx)
-            assert_in("tx_id", output['result'])
+            assert_in("The transaction was submitted successfully", output)
             self.generate_block()
             assert_in("Success", await wallet.sync())
 
             balance = await wallet.get_balance()
-            assert_in("0", balance['coins']['decimal'])
-            assert_in(str(alice_amount_to_swap), balance['tokens'][token_id]['decimal'])
+            assert_in(f"Coins amount: 0", balance)
+            assert_in(f"Token: {token_id} amount: {alice_amount_to_swap}", balance)
 
 
 if __name__ == '__main__':

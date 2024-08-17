@@ -25,20 +25,12 @@ from tempfile import NamedTemporaryFile
 from typing import Optional, List, Tuple, Union
 
 from test_framework.util import assert_in
-from test_framework.wallet_controller_common import PartialSigInfo, TokenTxOutput
+from test_framework.wallet_controller_common import PartialSigInfo, TokenTxOutput, UtxoOutpoint
 
 
 TEN_MB = 10*2**20
 READ_TIMEOUT_SEC = 30
 DEFAULT_ACCOUNT_INDEX = 0
-
-@dataclass
-class UtxoOutpoint:
-    id: str
-    index: int
-
-    def __str__(self):
-        return f'tx({self.id},{self.index})'
 
 @dataclass
 class TxOutput:

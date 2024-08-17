@@ -17,6 +17,16 @@
 
 from dataclasses import dataclass
 
+@dataclass
+class UtxoOutpoint:
+    id: str
+    index: int
+
+    def __str__(self):
+        return f'tx({self.id},{self.index})'
+
+    def to_json(self):
+        return { "source_id": { "type": "Transaction", "content": { "tx_id": self.id } }, "index": self.index }
 
 @dataclass
 class TokenTxOutput:
