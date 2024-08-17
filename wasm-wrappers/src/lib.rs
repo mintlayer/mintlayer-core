@@ -775,8 +775,8 @@ pub fn encode_output_htlc(
     Ok(output.encode())
 }
 
-/// Given a transaction and input outpoint that spends an htlc utxo, extract a secret that is
-/// encoded inside the corresponding signature
+/// Given a signed transaction and input outpoint that spends an htlc utxo, extract a secret that is
+/// encoded in the corresponding input signature
 #[wasm_bindgen]
 pub fn extract_htlc_secret(
     signed_tx_bytes: &[u8],
@@ -965,7 +965,8 @@ pub fn encode_witness(
     Ok(witness.encode())
 }
 
-// FIXME: doc
+/// Given a private key, inputs and an input number to sign, and the destination that owns that output (through the utxo),
+/// and a network type (mainnet, testnet, etc), and an htlc secret this function returns a witness to be used in a signed transaction, as bytes.
 #[allow(clippy::too_many_arguments)]
 #[wasm_bindgen]
 pub fn encode_witness_htlc_secret(
@@ -1014,7 +1015,8 @@ pub fn encode_witness_htlc_secret(
     Ok(witness.encode())
 }
 
-// FIXME: doc
+/// Given an arbitrary number of public keys as bytes, number of minimum required signatures, and a network type, this function returns
+/// the multisig challenge, as bytes.
 #[wasm_bindgen]
 pub fn encode_multisig_challenge(
     mut public_keys_bytes: &[u8],
@@ -1039,7 +1041,10 @@ pub fn encode_multisig_challenge(
     Ok(challenge.encode())
 }
 
-// FIXME: doc
+/// Given a private key, inputs and an input number to sign, and multisig challenge,
+/// and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
+///
+/// `input_witness` parameter can be either empty or a result of previous calls to this function. If empty `multisig_challenge` parameter is required.
 #[allow(clippy::too_many_arguments)]
 #[wasm_bindgen]
 pub fn encode_witness_htlc_multisig(

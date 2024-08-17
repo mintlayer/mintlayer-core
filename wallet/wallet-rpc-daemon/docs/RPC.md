@@ -212,7 +212,8 @@ Parameters:
          2) "LockThenTransfer"
          3) "IssueNft"
          4) "CreateStakePool"
-         5) "ProduceBlockFromStake", .. ],
+         5) "ProduceBlockFromStake"
+         6) "Htlc", .. ],
     "utxo_states": [ EITHER OF
          1) "Confirmed"
          2) "Conflicted"
@@ -262,7 +263,7 @@ Returns:
         "atoms": number string,
         "decimal": decimal string,
     },
-    "tokens": { hex string: {
+    "tokens": { bech32 string: {
         "atoms": number string,
         "decimal": decimal string,
     }, .. },
@@ -439,7 +440,7 @@ Returns:
             "atoms": number string,
             "decimal": decimal string,
         },
-        "tokens": { hex string: {
+        "tokens": { bech32 string: {
             "atoms": number string,
             "decimal": decimal string,
         }, .. },
@@ -467,7 +468,7 @@ Returns:
                     "atoms": number string,
                     "decimal": decimal string,
                 },
-                "tokens": { hex string: {
+                "tokens": { bech32 string: {
                     "atoms": number string,
                     "decimal": decimal string,
                 }, .. },
@@ -1147,7 +1148,7 @@ Returns:
             "atoms": number string,
             "decimal": decimal string,
         },
-        "tokens": { hex string: {
+        "tokens": { bech32 string: {
             "atoms": number string,
             "decimal": decimal string,
         }, .. },
@@ -1175,6 +1176,55 @@ Parameters:
 Returns:
 ```
 { "tx_id": hex string }
+```
+
+### Method `create_htlc_transaction`
+
+Creates a transaction that lock a given number of coins or tokens in a Hashed Timelock Contract.
+Created transaction is not broadcasted by this function.
+
+
+Parameters:
+```
+{
+    "account": number,
+    "amount": EITHER OF
+         1) { "atoms": number string }
+         2) { "decimal": decimal string },
+    "token_id": EITHER OF
+         1) bech32 string
+         2) null,
+    "htlc": {
+        "secret_hash": hex string,
+        "spend_address": bech32 string,
+        "refund_address": bech32 string,
+        "refund_timelock": EITHER OF
+             1) {
+                    "type": "UntilHeight",
+                    "content": number,
+                }
+             2) {
+                    "type": "UntilTime",
+                    "content": { "timestamp": number },
+                }
+             3) {
+                    "type": "ForBlockCount",
+                    "content": number,
+                }
+             4) {
+                    "type": "ForSeconds",
+                    "content": number,
+                },
+    },
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
+}
+```
+
+Returns:
+```
+hex string
 ```
 
 ### Method `node_version`
@@ -1600,6 +1650,11 @@ Parameters:
         "index": number,
     }, .. ],
     "outputs": [ object, .. ],
+    "htlc_secrets": EITHER OF
+         1) [ EITHER OF
+                 1) hex string
+                 2) null, .. ]
+         2) null,
     "only_transaction": bool,
 }
 ```
@@ -1613,7 +1668,7 @@ Returns:
             "atoms": number string,
             "decimal": decimal string,
         },
-        "tokens": { hex string: {
+        "tokens": { bech32 string: {
             "atoms": number string,
             "decimal": decimal string,
         }, .. },
@@ -2120,7 +2175,7 @@ Returns:
             "atoms": number string,
             "decimal": decimal string,
         },
-        "tokens": { hex string: {
+        "tokens": { bech32 string: {
             "atoms": number string,
             "decimal": decimal string,
         }, .. },

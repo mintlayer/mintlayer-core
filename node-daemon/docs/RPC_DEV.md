@@ -246,3 +246,43 @@ EITHER OF
      2) null
 ```
 
+### Method `test_functions_reveal_token_id`
+
+Parameters:
+```
+{ "token_id": string }
+```
+
+Returns:
+```
+hex string
+```
+
+### Method `test_functions_extract_htlc_secret`
+
+Parameters:
+```
+{
+    "signed_tx_hex": string,
+    "htlc_outpoint": {
+        "source_id": EITHER OF
+             1) {
+                    "type": "Transaction",
+                    "content": { "tx_id": hex string },
+                }
+             2) {
+                    "type": "BlockReward",
+                    "content": { "block_id": hex string },
+                },
+        "index": number,
+    },
+}
+```
+
+Returns:
+```
+EITHER OF
+     1) string
+     2) null
+```
+
