@@ -24,7 +24,6 @@ bip39 = { workspace = true, default-features = false, features = ["std", "zeroiz
 getrandom = { version = "0.2", features = ["js"] }
 wasm-bindgen = "0.2"
 thiserror.workspace = true
-serde_json.workspace = true
 
 [dev-dependencies]
 hex.workspace = true

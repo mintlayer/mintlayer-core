@@ -27,15 +27,15 @@ use common::{
         signature::{
             inputsig::{
                 authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
-                classical_multisig::authorize_classical_multisig::AuthorizedClassicalMultisigSpend,
-                htlc::{
-                    produce_classical_multisig_signature_for_htlc_input,
-                    produce_uniparty_signature_for_htlc_input,
+                classical_multisig::authorize_classical_multisig::{
+                    sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
                 },
+                htlc::produce_uniparty_signature_for_htlc_input,
                 standard_signature::StandardInputSignature,
                 InputWitness,
             },
             sighash::{sighashtype::SigHashType, signature_hash},
+            DestinationSigError,
         },
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -759,8 +759,8 @@ pub fn encode_output_htlc(
     };
     let refund_timelock = OutputTimeLock::decode_all(&mut &refund_timelock[..])
         .map_err(|_| Error::InvalidTimeLock)?;
-    let secret_hash = serde_json::from_str::<HtlcSecretHash>(secret_hash)
-        .map_err(|_| Error::InvalidHtlcSecret)?;
+    let secret_hash =
+        HtlcSecretHash::from_str(secret_hash).map_err(|_| Error::InvalidHtlcSecretHash)?;
 
     let spend_key = parse_addressable::<Destination>(&chain_config, spend_address)?;
     let refund_key = parse_addressable::<Destination>(&chain_config, refund_address)?;
@@ -1044,12 +1044,14 @@ pub fn encode_multisig_challenge(
 /// Given a private key, inputs and an input number to sign, and multisig challenge,
 /// and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
 ///
-/// `input_witness` parameter can be either empty or a result of previous calls to this function. If empty `multisig_challenge` parameter is required.
+/// `key_index` parameter is an index of a public key in the challenge, against which is the signature produces from private key is to be verified.
+/// `input_witness` parameter can be either empty or a result of previous calls to this function.
 #[allow(clippy::too_many_arguments)]
 #[wasm_bindgen]
 pub fn encode_witness_htlc_multisig(
     sighashtype: SignatureHashType,
     private_key_bytes: &[u8],
+    key_index: u8,
     mut input_witness: &[u8],
     mut multisig_challenge: &[u8],
     transaction_bytes: &[u8],
@@ -1073,8 +1075,12 @@ pub fn encode_witness_htlc_multisig(
 
     let utxos = input_utxos.iter().map(Option::as_ref).collect::<Vec<_>>();
     let sighashtype = sighashtype.into();
+    let sighash = signature_hash(sighashtype, &tx, &utxos, input_num as usize)
+        .map_err(|_| Error::InvalidSignatureEncoding)?;
 
     let mut rng = randomness::make_true_rng();
+    let challenge = ClassicMultisigChallenge::decode_all(&mut multisig_challenge)
+        .map_err(|_| Error::InvalidMultisigChallenge)?;
     let authorization = if !input_witness.is_empty() {
         let input_witness =
             InputWitness::decode_all(&mut input_witness).map_err(|_| Error::InvalidWitness)?;
@@ -1082,34 +1088,40 @@ pub fn encode_witness_htlc_multisig(
         match input_witness {
             InputWitness::NoSignature(_) => return Err(Error::InvalidWitness),
             InputWitness::Standard(sig) => {
-                AuthorizedClassicalMultisigSpend::from_data(sig.raw_signature())
-                    .map_err(|_| Error::InvalidWitness)?
+                let htlc_spend =
+                    AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())?;
+                match htlc_spend {
+                    AuthorizedHashedTimelockContractSpend::Secret(_, _) => {
+                        return Err(Error::ProduceSignatureError(
+                            DestinationSigError::InvalidSignatureEncoding,
+                        ));
+                    }
+                    AuthorizedHashedTimelockContractSpend::Multisig(raw_signature) => {
+                        AuthorizedClassicalMultisigSpend::from_data(&raw_signature)
+                            .map_err(|_| Error::InvalidWitness)?
+                    }
+                }
             }
         }
     } else {
-        let challenge = ClassicMultisigChallenge::decode_all(&mut multisig_challenge)
-            .map_err(|_| Error::InvalidMultisigChallenge)?;
-        let mut authorization = AuthorizedClassicalMultisigSpend::new_empty(challenge);
-
-        let sighash = signature_hash(sighashtype, &tx, &utxos, input_num as usize)
-            .map_err(|_| Error::InvalidSignatureEncoding)?;
-        let sighash = sighash.encode();
-        let signature = private_key.sign_message(&sighash, &mut rng)?;
-        authorization.add_signature(0, signature);
-
-        authorization
+        AuthorizedClassicalMultisigSpend::new_empty(challenge.clone())
     };
 
-    let witness = produce_classical_multisig_signature_for_htlc_input(
+    let authorization = sign_classical_multisig_spending(
         &chain_config,
-        &authorization,
-        sighashtype,
-        &tx,
-        &utxos,
-        input_num as usize,
+        key_index,
+        &private_key,
+        &challenge,
+        &sighash,
+        authorization,
+        &mut rng,
     )
-    .map(InputWitness::Standard)
-    .map_err(|_| Error::InvalidWitness)?;
+    .map_err(DestinationSigError::ClassicalMultisigSigningFailed)?
+    .take();
+
+    let raw_signature =
+        AuthorizedHashedTimelockContractSpend::Multisig(authorization.encode()).encode();
+    let witness = InputWitness::Standard(StandardInputSignature::new(sighashtype, raw_signature));
 
     Ok(witness.encode())
 }

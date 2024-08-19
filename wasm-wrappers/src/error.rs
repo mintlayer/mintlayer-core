@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::TransactionCreationError;
+use common::chain::{signature::DestinationSigError, TransactionCreationError};
 use wasm_bindgen::JsValue;
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -56,6 +56,8 @@ pub enum Error {
     InvalidWitnessCount,
     #[error("Invalid htlc secret encoding")]
     InvalidHtlcSecret,
+    #[error("Invalid htlc secret hash encoding")]
+    InvalidHtlcSecretHash,
     #[error("Invalid multisig challenge encoding")]
     InvalidMultisigChallenge,
     #[error("Multisig required signatures cannot be zero")]
@@ -70,6 +72,8 @@ pub enum Error {
     TokenIssuanceError(#[from] tx_verifier::error::TokenIssuanceError),
     #[error("Transaction creation error: {0}")]
     TransactionCreationError(#[from] TransactionCreationError),
+    #[error("Transaction creation error: {0}")]
+    ProduceSignatureError(#[from] DestinationSigError),
 }
 
 // This is required to make an error readable in JavaScript

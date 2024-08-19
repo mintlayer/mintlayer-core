@@ -8880,7 +8880,6 @@ dependencies = [
  "hex",
  "randomness",
  "rstest",
- "serde_json",
  "serialization",
  "test-utils",
  "thiserror",

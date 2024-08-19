@@ -103,6 +103,7 @@ impl<'de> serde::Deserialize<'de> for HtlcSecretHash {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
+    use std::str::FromStr;
     use test_utils::random::Seed;
 
     use super::HtlcSecretHash;
@@ -121,24 +122,24 @@ mod tests {
     }
 
     #[rstest]
-    #[case("\"0000000000000000000000000000000000000000\"", [0;20])]
-    #[case("\"0000000000000000000000000000000000000001\"", [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1])]
-    #[case("\"ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd\"", [0xac,0x7b,0x96,0x0a,0x8d,0x03,0x70,0x5d,0x1a,0xce,0x08,0xb1,0xa1,0x9d,0xa3,0xfd,0xcc,0x99,0xdd,0xbd])]
-    #[case("\"e4732fe6f1ed1cddc2ed4b328fff5224276e3f6f\"", [0xe4,0x73,0x2f,0xe6,0xf1,0xed,0x1c,0xdd,0xc2,0xed,0x4b,0x32,0x8f,0xff,0x52,0x24,0x27,0x6e,0x3f,0x6f])]
-    #[case("\"0103b9683e51e5aba83b8a34c9b98ce67d66136c\"", [0x01,0x03,0xb9,0x68,0x3e,0x51,0xe5,0xab,0xa8,0x3b,0x8a,0x34,0xc9,0xb9,0x8c,0xe6,0x7d,0x66,0x13,0x6c])]
+    #[case("0000000000000000000000000000000000000000", [0;20])]
+    #[case("0000000000000000000000000000000000000001", [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1])]
+    #[case("ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd", [0xac,0x7b,0x96,0x0a,0x8d,0x03,0x70,0x5d,0x1a,0xce,0x08,0xb1,0xa1,0x9d,0xa3,0xfd,0xcc,0x99,0xdd,0xbd])]
+    #[case("e4732fe6f1ed1cddc2ed4b328fff5224276e3f6f", [0xe4,0x73,0x2f,0xe6,0xf1,0xed,0x1c,0xdd,0xc2,0xed,0x4b,0x32,0x8f,0xff,0x52,0x24,0x27,0x6e,0x3f,0x6f])]
+    #[case("0103b9683e51e5aba83b8a34c9b98ce67d66136c", [0x01,0x03,0xb9,0x68,0x3e,0x51,0xe5,0xab,0xa8,0x3b,0x8a,0x34,0xc9,0xb9,0x8c,0xe6,0x7d,0x66,0x13,0x6c])]
     fn deserialize_valid(#[case] str: String, #[case] expected: [u8; 20]) {
-        let result = serde_json::from_str::<HtlcSecretHash>(&str).unwrap();
+        let result = HtlcSecretHash::from_str(&str).unwrap();
         assert_eq!(result, HtlcSecretHash::from_slice(&expected));
     }
 
     #[rstest]
     #[case(
-        "\"00000000000000000000000000000000000000000000000000000000000000\"",
+        "00000000000000000000000000000000000000000000000000000000000000",
         "Invalid input length"
     )]
-    #[case("\"000000000000000000000000000000000invalid\"", "Invalid character")]
-    fn deserialize_invalid(#[case] s: String, #[case] expected_msg: String) {
-        let err = serde_json::from_str::<HtlcSecretHash>(&s).unwrap_err();
+    #[case("000000000000000000000000000000000invalid", "Invalid character")]
+    fn deserialize_invalid(#[case] str: String, #[case] expected_msg: String) {
+        let err = HtlcSecretHash::from_str(&str).unwrap_err();
         assert!(err.to_string().contains(&expected_msg));
     }
 }

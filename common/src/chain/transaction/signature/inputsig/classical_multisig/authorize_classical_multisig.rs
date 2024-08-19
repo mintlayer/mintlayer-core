@@ -152,7 +152,7 @@ pub fn verify_classical_multisig_spending(
 pub enum ClassicalMultisigSigningError {
     #[error("Attempted to sign a classical multisig with invalid challenge")]
     AttemptedToSignClassicalMultisigWithInvalidChallenge(ClassicMultisigChallengeError),
-    #[error("Attempted to add a classical multisig with an index that already exists")]
+    #[error("Attempted to add a classical multisig with an index that already exists {0}")]
     ClassicalMultisigIndexAlreadyExists(u8),
     #[error("Attempted to sign a classical multisig that is already complete")]
     AttemptedToSignAlreadyCompleteClassicalMultisig,

@@ -233,7 +233,8 @@ the multisig challenge, as bytes.
 Given a private key, inputs and an input number to sign, and multisig challenge,
 and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
 
-`input_witness` parameter can be either empty or a result of previous calls to this function. If empty `multisig_challenge` parameter is required.
+`key_index` parameter is an index of a public key in the challenge, against which is the signature produces from private key is to be verified.
+`input_witness` parameter can be either empty or a result of previous calls to this function.
 
 ### Function: `encode_signed_transaction`
 
