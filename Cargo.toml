@@ -124,7 +124,7 @@ utxo = { path = "utxo" }
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.80"
 version = "0.5.1"
 license = "MIT"
 
