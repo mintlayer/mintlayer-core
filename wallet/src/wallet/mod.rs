@@ -1809,18 +1809,29 @@ where
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
-            account.change_token_metadata_uri(
-                db_tx,
-                token_info,
-                metadata_uri,
-                latest_median_time,
-                CurrentFeeRate {
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                },
-            )
-        })
+        let additional_utxo_infos = BTreeMap::from_iter([(
+            PoolOrTokenId::TokenId(token_info.token_id()),
+            UtxoAdditionalInfo::TokenInfo {
+                num_decimals: token_info.num_decimals(),
+                ticker: token_info.token_ticker().to_vec(),
+            },
+        )]);
+        self.for_account_rw_unlocked_and_check_tx(
+            account_index,
+            &additional_utxo_infos,
+            |account, db_tx| {
+                account.change_token_metadata_uri(
+                    db_tx,
+                    token_info,
+                    metadata_uri,
+                    latest_median_time,
+                    CurrentFeeRate {
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    },
+                )
+            },
+        )
     }
 
     pub fn find_used_tokens(

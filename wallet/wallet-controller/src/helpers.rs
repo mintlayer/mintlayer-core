@@ -137,7 +137,7 @@ fn pool_id_from_txo(utxo: &TxOutput) -> Option<PoolId> {
     }
 }
 
-pub async fn fetch_utxo_exra_info<T>(
+pub async fn fetch_utxo_extra_info<T>(
     rpc_client: &T,
     utxo: TxOutput,
 ) -> Result<UtxoWithAdditionalInfo, ControllerError<T>>
@@ -244,12 +244,25 @@ pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
     let (input_utxos, destinations) = tasks.try_collect::<Vec<_>>().await?.into_iter().unzip();
     let num_inputs = tx.inputs().len();
 
+    let tasks: FuturesOrdered<_> = tx
+        .outputs()
+        .iter()
+        .map(|out| fetch_utxo_extra_info(rpc_client, out.clone()))
+        .collect();
+    let output_additional_infos = tasks
+        .try_collect::<Vec<_>>()
+        .await?
+        .into_iter()
+        .map(|x| x.additional_info)
+        .collect();
+
     let ptx = PartiallySignedTransaction::new(
         tx,
         vec![None; num_inputs],
         input_utxos,
         destinations,
         None,
+        output_additional_infos,
     )
     .map_err(WalletError::TransactionCreation)?;
     Ok(ptx)
@@ -263,7 +276,7 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
     Ok(match tx_inp {
         TxInput::Utxo(outpoint) => {
             let (utxo, dest) = fetch_utxo_with_destination(rpc_client, outpoint, wallet).await?;
-            let utxo_with_extra_info = fetch_utxo_exra_info(rpc_client, utxo).await?;
+            let utxo_with_extra_info = fetch_utxo_extra_info(rpc_client, utxo).await?;
             (Some(utxo_with_extra_info), Some(dest))
         }
         TxInput::Account(acc_outpoint) => {
