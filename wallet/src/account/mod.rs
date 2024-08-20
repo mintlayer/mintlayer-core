@@ -22,7 +22,6 @@ use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::htlc::HashedTimelockContract;
-use common::chain::partially_signed_transaction::PartiallySignedTransaction;
 use common::chain::{AccountCommand, AccountOutPoint, AccountSpending};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
@@ -38,6 +37,7 @@ use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
 use wallet_types::account_id::AccountPrefixedId;
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
+use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
 use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};

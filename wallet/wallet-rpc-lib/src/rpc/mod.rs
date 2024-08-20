@@ -50,7 +50,6 @@ use common::{
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         output_value::OutputValue,
-        partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
@@ -76,8 +75,9 @@ use wallet_controller::{
     UtxoType, UtxoTypes, DEFAULT_ACCOUNT_INDEX,
 };
 use wallet_types::{
-    account_info::StandaloneAddressDetails, signature_status::SignatureStatus, wallet_tx::TxData,
-    with_locked::WithLocked,
+    account_info::StandaloneAddressDetails,
+    partially_signed_transaction::PartiallySignedTransaction, signature_status::SignatureStatus,
+    wallet_tx::TxData, with_locked::WithLocked,
 };
 
 #[cfg(feature = "trezor")]

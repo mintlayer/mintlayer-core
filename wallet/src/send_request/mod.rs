@@ -18,9 +18,6 @@ use std::mem::take;
 
 use common::address::Address;
 use common::chain::output_value::OutputValue;
-use common::chain::partially_signed_transaction::{
-    PartiallySignedTransaction, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
-};
 use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock::ForBlockCount;
 use common::chain::tokens::{Metadata, NftIssuance, TokenId, TokenIssuance};
@@ -31,6 +28,9 @@ use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight};
 use crypto::vrf::VRFPublicKey;
 use utils::ensure;
+use wallet_types::partially_signed_transaction::{
+    PartiallySignedTransaction, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
+};
 
 use crate::account::currency_grouper::Currency;
 use crate::account::PoolData;
