@@ -72,6 +72,10 @@ pub enum SignerError {
     MissingDestinationInTransaction,
     #[error("Partially signed tx is missing UTXO type input's UTXO")]
     MissingUtxo,
+    #[error("Partially signed tx is missing extra info for UTXO")]
+    MissingUtxoExtraInfo,
+    #[error("Tokens V0 are not supported")]
+    UnsupportedTokensV0,
 }
 
 type SignerResult<T> = Result<T, SignerError>;

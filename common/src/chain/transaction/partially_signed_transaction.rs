@@ -57,6 +57,7 @@ pub struct PartiallySignedTransaction {
     destinations: Vec<Option<Destination>>,
 
     htlc_secrets: Vec<Option<HtlcSecret>>,
+    output_additional_infos: Vec<UtxoAdditionalInfo>,
 }
 
 impl PartiallySignedTransaction {
@@ -66,6 +67,7 @@ impl PartiallySignedTransaction {
         input_utxos: Vec<Option<UtxoWithAdditionalInfo>>,
         destinations: Vec<Option<Destination>>,
         htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
+        output_additional_infos: Vec<UtxoAdditionalInfo>,
     ) -> Result<Self, TransactionCreationError> {
         ensure!(
             tx.inputs().len() == witnesses.len(),
@@ -88,12 +90,18 @@ impl PartiallySignedTransaction {
             TransactionCreationError::InvalidHtlcSecretsCount
         );
 
+        ensure!(
+            tx.outputs().len() == output_additional_infos.len(),
+            TransactionCreationError::InvalidOutputAdditionalInfoCount
+        );
+
         Ok(Self {
             tx,
             witnesses,
             input_utxos,
             destinations,
             htlc_secrets,
+            output_additional_infos,
         })
     }
 
@@ -128,6 +136,10 @@ impl PartiallySignedTransaction {
 
     pub fn count_inputs(&self) -> usize {
         self.tx.inputs().len()
+    }
+
+    pub fn output_additional_infos(&self) -> &[UtxoAdditionalInfo] {
+        &self.output_additional_infos
     }
 
     pub fn all_signatures_available(&self) -> bool {
