@@ -20,7 +20,6 @@ use common::{
     address::dehexify::dehexify_all_addresses,
     chain::{
         block::timestamp::BlockTimestamp,
-        partially_signed_transaction::PartiallySignedTransaction,
         tokens::{IsTokenUnfreezable, TokenId},
         Block, DelegationId, Destination, GenBlock, OrderId, PoolId, SignedTransaction,
         SignedTransactionIntent, Transaction, TxOutput,
@@ -41,7 +40,8 @@ use wallet_controller::{
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
 };
 use wallet_types::{
-    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, with_locked::WithLocked,
+    partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
+    signature_status::SignatureStatus, with_locked::WithLocked,
 };
 
 use crate::{

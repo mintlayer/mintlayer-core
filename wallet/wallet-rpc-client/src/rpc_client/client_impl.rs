@@ -53,7 +53,9 @@ use wallet_rpc_lib::{
     },
     ColdWalletRpcClient, WalletRpcClient,
 };
-use wallet_types::with_locked::WithLocked;
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, with_locked::WithLocked,
+};
 
 #[async_trait::async_trait]
 impl WalletInterface for ClientWalletRpc {

@@ -21,7 +21,6 @@ use common::{
         classic_multisig::ClassicMultisigChallenge,
         htlc::HashedTimelockContract,
         output_value::OutputValue,
-        partially_signed_transaction::{PartiallySignedTransaction, UtxoAdditionalInfo},
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, RPCTokenInfo,
@@ -56,6 +55,7 @@ use wallet::{
     WalletError, WalletResult,
 };
 use wallet_types::{
+    partially_signed_transaction::{PartiallySignedTransaction, UtxoAdditionalInfo},
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
     with_locked::WithLocked,

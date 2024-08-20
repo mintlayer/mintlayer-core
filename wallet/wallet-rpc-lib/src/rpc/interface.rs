@@ -34,7 +34,9 @@ use wallet_controller::{
     types::{BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer,
 };
-use wallet_types::with_locked::WithLocked;
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, with_locked::WithLocked,
+};
 
 use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
