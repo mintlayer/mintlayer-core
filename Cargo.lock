@@ -4543,7 +4543,6 @@ dependencies = [
  "mempool",
  "node-lib",
  "p2p",
- "pos-accounting",
  "rpc",
  "serde_json",
  "serialization",
@@ -7637,6 +7636,7 @@ dependencies = [
  "subsystem",
  "thiserror",
  "tokio",
+ "wallet-types",
 ]
 
 [[package]]
@@ -8927,6 +8927,7 @@ dependencies = [
  "storage",
  "test-utils",
  "thiserror",
+ "tx-verifier",
  "utils",
  "zeroize",
 ]

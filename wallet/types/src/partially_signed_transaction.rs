@@ -13,17 +13,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{
-    htlc::HtlcSecret,
-    signature::{inputsig::InputWitness, Signable, Transactable},
-    Destination, Transaction, TxOutput,
-};
-use crate::{
-    chain::{SignedTransaction, TransactionCreationError, TxInput},
+use common::{
+    chain::{
+        htlc::HtlcSecret,
+        signature::{inputsig::InputWitness, Signable, Transactable},
+        Destination, SignedTransaction, Transaction, TransactionCreationError, TxInput, TxOutput,
+    },
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
+use thiserror::Error;
+use tx_verifier::input_check::signature_only_check::SignatureOnlyVerifiable;
 use utils::ensure;
+
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum PartiallySignedTransactionCreationError {
+    #[error("Failed to convert partially signed tx to signed")]
+    FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
+    #[error("The number of output additional infos does not match the number of outputs")]
+    InvalidOutputAdditionalInfoCount,
+    #[error("Failed to create transaction: {0}")]
+    TxCreationError(#[from] TransactionCreationError),
+    #[error("The number of input utxos does not match the number of inputs")]
+    InvalidInputUtxosCount,
+    #[error("The number of destinations does not match the number of inputs")]
+    InvalidDestinationsCount,
+    #[error("The number of htlc secrets does not match the number of inputs")]
+    InvalidHtlcSecretsCount,
+}
 
 /// Additional info for UTXOs
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
@@ -68,7 +85,7 @@ impl PartiallySignedTransaction {
         destinations: Vec<Option<Destination>>,
         htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
         output_additional_infos: Vec<UtxoAdditionalInfo>,
-    ) -> Result<Self, TransactionCreationError> {
+    ) -> Result<Self, PartiallySignedTransactionCreationError> {
         let htlc_secrets = htlc_secrets.unwrap_or_else(|| vec![None; tx.inputs().len()]);
 
         let this = Self {
@@ -85,7 +102,7 @@ impl PartiallySignedTransaction {
         Ok(this)
     }
 
-    pub fn ensure_consistency(&self) -> Result<(), TransactionCreationError> {
+    pub fn ensure_consistency(&self) -> Result<(), PartiallySignedTransactionCreationError> {
         ensure!(
             self.tx.inputs().len() == self.witnesses.len(),
             TransactionCreationError::InvalidWitnessCount
@@ -93,22 +110,22 @@ impl PartiallySignedTransaction {
 
         ensure!(
             self.tx.inputs().len() == self.input_utxos.len(),
-            TransactionCreationError::InvalidInputUtxosCount,
+            PartiallySignedTransactionCreationError::InvalidInputUtxosCount,
         );
 
         ensure!(
             self.tx.inputs().len() == self.destinations.len(),
-            TransactionCreationError::InvalidDestinationsCount
+            PartiallySignedTransactionCreationError::InvalidDestinationsCount
         );
 
         ensure!(
             self.tx.inputs().len() == self.htlc_secrets.len(),
-            TransactionCreationError::InvalidHtlcSecretsCount
+            PartiallySignedTransactionCreationError::InvalidHtlcSecretsCount
         );
 
         ensure!(
             self.tx.outputs().len() == self.output_additional_infos.len(),
-            TransactionCreationError::InvalidOutputAdditionalInfoCount
+            PartiallySignedTransactionCreationError::InvalidOutputAdditionalInfoCount
         );
 
         Ok(())
@@ -165,14 +182,14 @@ impl PartiallySignedTransaction {
             })
     }
 
-    pub fn into_signed_tx(self) -> Result<SignedTransaction, TransactionCreationError> {
+    pub fn into_signed_tx(
+        self,
+    ) -> Result<SignedTransaction, PartiallySignedTransactionCreationError> {
         if self.all_signatures_available() {
             let witnesses = self.witnesses.into_iter().map(|w| w.expect("cannot fail")).collect();
             Ok(SignedTransaction::new(self.tx, witnesses)?)
         } else {
-            Err(TransactionCreationError::FailedToConvertPartiallySignedTx(
-                self,
-            ))
+            Err(PartiallySignedTransactionCreationError::FailedToConvertPartiallySignedTx(self))
         }
     }
 }
@@ -200,3 +217,5 @@ impl Transactable for PartiallySignedTransaction {
         self.witnesses.clone()
     }
 }
+
+impl SignatureOnlyVerifiable for PartiallySignedTransaction {}

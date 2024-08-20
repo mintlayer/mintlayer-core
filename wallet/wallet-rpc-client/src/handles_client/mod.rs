@@ -53,8 +53,8 @@ use wallet_rpc_lib::{
     RpcError, WalletRpc,
 };
 use wallet_types::{
-    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, utxo_types::UtxoTypes,
-    with_locked::WithLocked,
+    partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
+    signature_status::SignatureStatus, utxo_types::UtxoTypes, with_locked::WithLocked,
 };
 
 use crate::wallet_rpc_traits::{
