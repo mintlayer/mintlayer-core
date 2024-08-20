@@ -301,56 +301,73 @@ impl SendRequest {
         additional_info: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> WalletResult<PartiallySignedTransaction> {
         let num_inputs = self.inputs.len();
-        let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
         let destinations = self.destinations.into_iter().map(Some).collect();
         let utxos = self
             .utxos
             .into_iter()
             .map(|utxo| {
                 utxo.map(|utxo| {
-                    let additional_info = match &utxo {
-                        TxOutput::Burn(value)
-                        | TxOutput::Htlc(value, _)
-                        | TxOutput::Transfer(value, _)
-                        | TxOutput::LockThenTransfer(value, _, _) => {
-                            find_additional_info(value, additional_info)?
-                        }
-                        TxOutput::AnyoneCanTake(data) => {
-                            find_additional_info(data.as_ref().ask(), additional_info)?
-                        }
-                        TxOutput::IssueNft(_, data, _) => UtxoAdditionalInfo::TokenInfo {
-                            num_decimals: 0,
-                            ticker: match data.as_ref() {
-                                NftIssuance::V0(data) => data.metadata.ticker().clone(),
-                            },
-                        },
-                        TxOutput::CreateStakePool(_, data) => UtxoAdditionalInfo::PoolInfo {
-                            staker_balance: data.pledge(),
-                        },
-                        TxOutput::ProduceBlockFromStake(_, pool_id) => additional_info
-                            .get(&PoolOrTokenId::PoolId(*pool_id))
-                            .ok_or(WalletError::MissingPoolAdditionalData(*pool_id))?
-                            .clone(),
-                        TxOutput::DataDeposit(_)
-                        | TxOutput::IssueFungibleToken(_)
-                        | TxOutput::DelegateStaking(_, _)
-                        | TxOutput::CreateDelegationId(_, _) => {
-                            UtxoAdditionalInfo::NoAdditionalInfo
-                        }
-                    };
+                    let additional_info = find_additional_info(&utxo, additional_info)?;
                     Ok(UtxoWithAdditionalInfo::new(utxo, additional_info))
                 })
                 .transpose()
             })
             .collect::<WalletResult<Vec<_>>>()?;
+        let output_additional_infos = self
+            .outputs
+            .iter()
+            .map(|utxo| find_additional_info(utxo, additional_info))
+            .collect::<WalletResult<Vec<_>>>()?;
+        let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
 
-        let ptx =
-            PartiallySignedTransaction::new(tx, vec![None; num_inputs], utxos, destinations, None)?;
+        let ptx = PartiallySignedTransaction::new(
+            tx,
+            vec![None; num_inputs],
+            utxos,
+            destinations,
+            None,
+            output_additional_infos,
+        )?;
         Ok(ptx)
     }
 }
 
 fn find_additional_info(
+    utxo: &TxOutput,
+    additional_info: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+) -> Result<UtxoAdditionalInfo, WalletError> {
+    let additional_info = match utxo {
+        TxOutput::Burn(value)
+        | TxOutput::Htlc(value, _)
+        | TxOutput::Transfer(value, _)
+        | TxOutput::LockThenTransfer(value, _, _) => {
+            find_additional_info_output_value(value, additional_info)?
+        }
+        TxOutput::AnyoneCanTake(data) => {
+            find_additional_info_output_value(data.as_ref().ask(), additional_info)?
+        }
+        TxOutput::IssueNft(_, data, _) => UtxoAdditionalInfo::TokenInfo {
+            num_decimals: 0,
+            ticker: match data.as_ref() {
+                NftIssuance::V0(data) => data.metadata.ticker().clone(),
+            },
+        },
+        TxOutput::CreateStakePool(_, data) => UtxoAdditionalInfo::PoolInfo {
+            staker_balance: data.pledge(),
+        },
+        TxOutput::ProduceBlockFromStake(_, pool_id) => additional_info
+            .get(&PoolOrTokenId::PoolId(*pool_id))
+            .ok_or(WalletError::MissingPoolAdditionalData(*pool_id))?
+            .clone(),
+        TxOutput::DataDeposit(_)
+        | TxOutput::IssueFungibleToken(_)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::CreateDelegationId(_, _) => UtxoAdditionalInfo::NoAdditionalInfo,
+    };
+    Ok(additional_info)
+}
+
+fn find_additional_info_output_value(
     value: &OutputValue,
     additional_info: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
 ) -> WalletResult<UtxoAdditionalInfo> {

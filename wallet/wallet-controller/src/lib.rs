@@ -30,7 +30,7 @@ use chainstate::tx_verifier::{
     self, error::ScriptError, input_check::signature_only_check::SignatureOnlyVerifiable,
 };
 use futures::{never::Never, stream::FuturesOrdered, TryStreamExt};
-use helpers::{fetch_token_info, fetch_utxo, fetch_utxo_exra_info, into_balances};
+use helpers::{fetch_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances};
 use node_comm::rpc_client::ColdWalletClient;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -1124,12 +1124,19 @@ where
                 .map_err(ControllerError::WalletError)?;
 
             let input_utxos = self.fetch_utxos_extra_info(input_utxos).await?;
+            let output_additional_infos = self
+                .fetch_utxos_extra_info(tx.outputs().to_vec())
+                .await?
+                .into_iter()
+                .map(|x| x.additional_info)
+                .collect();
             let tx = PartiallySignedTransaction::new(
                 tx,
                 vec![None; num_inputs],
                 input_utxos.into_iter().map(Option::Some).collect(),
                 destinations.into_iter().map(Option::Some).collect(),
                 htlc_secrets,
+                output_additional_infos,
             )
             .map_err(WalletError::TransactionCreation)?;
 
@@ -1218,7 +1225,7 @@ where
     ) -> Result<Vec<UtxoWithAdditionalInfo>, ControllerError<T>> {
         let tasks: FuturesOrdered<_> = inputs
             .into_iter()
-            .map(|input| fetch_utxo_exra_info(&self.rpc_client, input))
+            .map(|input| fetch_utxo_extra_info(&self.rpc_client, input))
             .collect();
         let input_utxos: Vec<UtxoWithAdditionalInfo> = tasks.try_collect().await?;
         Ok(input_utxos)
