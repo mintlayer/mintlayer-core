@@ -52,7 +52,6 @@ use common::{
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         output_value::{OutputValue, RpcOutputValue},
-        partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
@@ -78,15 +77,13 @@ use wallet_controller::{
     UtxoType, UtxoTypes, DEFAULT_ACCOUNT_INDEX,
 };
 use wallet_types::{
-    account_info::StandaloneAddressDetails, scan_blockchain::ScanBlockchain,
+    account_info::StandaloneAddressDetails,
+    partially_signed_transaction::PartiallySignedTransaction, scan_blockchain::ScanBlockchain,
     seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, wallet_tx::TxData,
     with_locked::WithLocked, Currency,
 };
 
-use crate::{
-    service::{CreatedWallet, WalletController},
-    WalletHandle, WalletRpcConfig,
-};
+use crate::{service::WalletController, WalletHandle, WalletRpcConfig};
 
 #[cfg(feature = "trezor")]
 use wallet_types::wallet_type::WalletType;

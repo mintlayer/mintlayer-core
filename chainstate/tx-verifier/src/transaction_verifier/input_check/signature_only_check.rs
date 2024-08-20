@@ -16,7 +16,6 @@
 use std::convert::Infallible;
 
 use common::chain::{
-    partially_signed_transaction::PartiallySignedTransaction,
     signature::{inputsig::InputWitness, DestinationSigError, Transactable},
     tokens::TokenId,
     ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, TxInput, TxOutput,
@@ -102,7 +101,6 @@ impl<T: Transactable> InputInfoProvider for InputVerifyContextSignature<'_, T> {
 // Prevent BlockRewardTransactable from being used here
 pub trait SignatureOnlyVerifiable {}
 impl SignatureOnlyVerifiable for SignedTransaction {}
-impl SignatureOnlyVerifiable for PartiallySignedTransaction {}
 
 pub fn verify_tx_signature<T: Transactable + SignatureOnlyVerifiable>(
     chain_config: &ChainConfig,

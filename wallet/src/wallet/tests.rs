@@ -28,7 +28,6 @@ use common::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
         config::{create_mainnet, create_regtest, create_unit_test_config, Builder, ChainType},
         output_value::{OutputValue, RpcOutputValue},
-        partially_signed_transaction::{UtxoAdditionalInfo, UtxoWithAdditionalInfo},
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -52,6 +51,10 @@ use test_utils::{
 use wallet_storage::{schema, WalletStorageEncryptionRead};
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
+    partially_signed_transaction::{
+        PartiallySignedTransaction, PartiallySignedTransactionCreationError, UtxoAdditionalInfo,
+        UtxoWithAdditionalInfo,
+    },
     seed_phrase::{PassPhrase, StoreSeedPhrase},
     utxo_types::{UtxoState, UtxoType},
     AccountWalletTxId, Currency,
@@ -4564,7 +4567,7 @@ fn decommission_pool_request_wrong_account(#[case] seed: Seed) {
     assert!(!decommission_partial_tx.all_signatures_available());
     matches!(
         decommission_partial_tx.into_signed_tx().unwrap_err(),
-        TransactionCreationError::FailedToConvertPartiallySignedTx(_)
+        PartiallySignedTransactionCreationError::FailedToConvertPartiallySignedTx(_)
     );
 }
 

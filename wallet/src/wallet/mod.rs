@@ -39,7 +39,6 @@ use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::htlc::HashedTimelockContract;
 use common::chain::output_value::OutputValue;
-use common::chain::partially_signed_transaction::{PartiallySignedTransaction, UtxoAdditionalInfo};
 use common::chain::signature::inputsig::arbitrary_message::{
     ArbitraryMessageSignature, SignArbitraryMessageError,
 };
@@ -75,6 +74,9 @@ use wallet_storage::{
 };
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::chain_info::ChainInfo;
+use wallet_types::partially_signed_transaction::{
+    PartiallySignedTransaction, PartiallySignedTransactionCreationError, UtxoAdditionalInfo,
+};
 use wallet_types::seed_phrase::SerializableSeedPhrase;
 use wallet_types::signature_status::SignatureStatus;
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
@@ -158,6 +160,8 @@ pub enum WalletError {
     UnknownOrderId(OrderId),
     #[error("Transaction creation error: {0}")]
     TransactionCreation(#[from] TransactionCreationError),
+    #[error("Transaction creation error: {0}")]
+    PartiallySignedTransactionCreation(#[from] PartiallySignedTransactionCreationError),
     #[error("Transaction signing error: {0}")]
     TransactionSig(#[from] DestinationSigError),
     #[error("Delegation not found with id {0}")]
@@ -1080,9 +1084,9 @@ where
                     )));
                 }
 
-                let tx = ptx
-                    .into_signed_tx()
-                    .map_err(|e| error_mapper(WalletError::TransactionCreation(e)))?;
+                let tx = ptx.into_signed_tx().map_err(|e| {
+                    error_mapper(WalletError::PartiallySignedTransactionCreation(e))
+                })?;
 
                 check_transaction(chain_config, block_height.next_height(), &tx)?;
                 Ok((tx, additional_data))

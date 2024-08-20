@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use common::chain::{
     htlc::HtlcSecret,
-    partially_signed_transaction::PartiallySignedTransaction,
     signature::{
         inputsig::{
             arbitrary_message::ArbitraryMessageSignature,
@@ -48,7 +47,10 @@ use wallet_storage::{
     StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
     WalletStorageWriteUnlocked,
 };
-use wallet_types::{seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, AccountId};
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
+    signature_status::SignatureStatus, AccountId,
+};
 
 use crate::{
     key_chain::{

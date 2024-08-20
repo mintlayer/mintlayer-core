@@ -41,7 +41,9 @@ use wallet_rpc_lib::types::{
     RpcTokenId, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
 };
-use wallet_types::with_locked::WithLocked;
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, with_locked::WithLocked,
+};
 
 pub enum PartialOrSignedTx {
     Partial(PartiallySignedTransaction),
