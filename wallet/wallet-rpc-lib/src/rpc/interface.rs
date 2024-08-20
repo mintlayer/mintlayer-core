@@ -19,9 +19,8 @@ use chainstate::rpc::RpcOutputValueIn;
 use common::{
     address::RpcAddress,
     chain::{
-        block::timestamp::BlockTimestamp, tokens::TokenId,
-        transaction::partially_signed_transaction::PartiallySignedTransaction, Block, DelegationId,
-        Destination, GenBlock, OrderId, PoolId, SignedTransaction, Transaction, TxOutput,
+        block::timestamp::BlockTimestamp, tokens::TokenId, Block, DelegationId, Destination,
+        GenBlock, OrderId, PoolId, SignedTransaction, Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -33,7 +32,9 @@ use wallet_controller::{
     types::{BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer,
 };
-use wallet_types::with_locked::WithLocked;
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, with_locked::WithLocked,
+};
 
 use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
