@@ -4352,6 +4352,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     // remove the signatures and try to sign it again
     let tx = stake_pool_transaction.transaction().clone();
     let inps = tx.inputs().len();
+    let outs = tx.outputs().len();
     let ptx = PartiallySignedTransaction::new(
         tx,
         vec![None; inps],
@@ -4361,6 +4362,7 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
         ))],
         vec![Some(addr.into_object())],
         None,
+        vec![UtxoAdditionalInfo::NoAdditionalInfo; outs],
     )
     .unwrap();
     let stake_pool_transaction = wallet
@@ -4885,6 +4887,7 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
         )],
     )
     .unwrap();
+    let outs = tx.outputs().len();
     let spend_multisig_tx = PartiallySignedTransaction::new(
         spend_multisig_tx,
         vec![None; 1],
@@ -4894,6 +4897,7 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
         ))],
         vec![Some(multisig_address.as_object().clone())],
         None,
+        vec![UtxoAdditionalInfo::NoAdditionalInfo; outs],
     )
     .unwrap();
 
@@ -5044,12 +5048,14 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
         .first()
         .cloned()
         .map(|out| UtxoWithAdditionalInfo::new(out, UtxoAdditionalInfo::NoAdditionalInfo))];
+    let outs = create_htlc_tx.outputs().len();
     let spend_ptx = PartiallySignedTransaction::new(
         spend_tx,
         vec![None],
         spend_utxos,
         vec![Some(spend_key.into_object())],
         Some(vec![Some(secret)]),
+        vec![UtxoAdditionalInfo::NoAdditionalInfo; outs],
     )
     .unwrap();
 
@@ -5146,12 +5152,14 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
         .first()
         .cloned()
         .map(|out| UtxoWithAdditionalInfo::new(out, UtxoAdditionalInfo::NoAdditionalInfo))];
+    let outs = create_htlc_tx.outputs().len();
     let refund_ptx = PartiallySignedTransaction::new(
         refund_tx,
         vec![None],
         refund_utxos,
         vec![Some(refund_key)],
         None,
+        vec![UtxoAdditionalInfo::NoAdditionalInfo; outs],
     )
     .unwrap();
 

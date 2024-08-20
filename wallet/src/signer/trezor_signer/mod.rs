@@ -22,7 +22,9 @@ use common::{
     address::Address,
     chain::{
         output_value::OutputValue,
-        partially_signed_transaction::PartiallySignedTransaction,
+        partially_signed_transaction::{
+            PartiallySignedTransaction, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
+        },
         signature::{
             inputsig::{
                 arbitrary_message::ArbitraryMessageSignature,
@@ -63,9 +65,9 @@ use trezor_client::{
         MintlayerDataDepositTxOutput, MintlayerDelegateStakingTxOutput, MintlayerFreezeToken,
         MintlayerIssueFungibleTokenTxOutput, MintlayerIssueNftTxOutput,
         MintlayerLockThenTransferTxOutput, MintlayerLockTokenSupply, MintlayerMintTokens,
-        MintlayerOutputValue, MintlayerProduceBlockFromStakeTxOutput, MintlayerTokenTotalSupply,
-        MintlayerTokenTotalSupplyType, MintlayerTxInput, MintlayerTxOutput, MintlayerUnfreezeToken,
-        MintlayerUnmintTokens, MintlayerUtxoType,
+        MintlayerOutputValue, MintlayerProduceBlockFromStakeTxOutput, MintlayerTokenOutputValue,
+        MintlayerTokenTotalSupply, MintlayerTokenTotalSupplyType, MintlayerTxInput,
+        MintlayerTxOutput, MintlayerUnfreezeToken, MintlayerUnmintTokens, MintlayerUtxoType,
     },
 };
 #[allow(clippy::all)]
@@ -209,12 +211,18 @@ impl TrezorSigner {
         }
     }
 
-    fn to_trezor_output_msgs(&self, ptx: &PartiallySignedTransaction) -> Vec<MintlayerTxOutput> {
+    fn to_trezor_output_msgs(
+        &self,
+        ptx: &PartiallySignedTransaction,
+    ) -> SignerResult<Vec<MintlayerTxOutput>> {
         let outputs = ptx
             .tx()
             .outputs()
             .iter()
-            .map(|out| to_trezor_output_msg(&self.chain_config, out))
+            .zip(ptx.output_additional_infos())
+            .map(|(out, additional_info)| {
+                to_trezor_output_msg(&self.chain_config, out, additional_info)
+            })
             .collect();
         outputs
     }
@@ -232,8 +240,8 @@ impl Signer for TrezorSigner {
         Vec<SignatureStatus>,
     )> {
         let inputs = to_trezor_input_msgs(&ptx, key_chain, &self.chain_config)?;
-        let outputs = self.to_trezor_output_msgs(&ptx);
-        let utxos = to_trezor_utxo_msgs(&ptx, &self.chain_config);
+        let outputs = self.to_trezor_output_msgs(&ptx)?;
+        let utxos = to_trezor_utxo_msgs(&ptx, &self.chain_config)?;
 
         let new_signatures = self
             .client
@@ -463,8 +471,8 @@ fn tx_output_value(out: &TxOutput) -> OutputValue {
         TxOutput::IssueNft(token_id, _, _) => {
             OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
         }
-        TxOutput::CreateStakePool(_, _)
-        | TxOutput::CreateDelegationId(_, _)
+        TxOutput::CreateStakePool(_, data) => OutputValue::Coin(data.pledge()),
+        TxOutput::CreateDelegationId(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::CreateOrder(_)
@@ -483,13 +491,9 @@ fn to_trezor_input_msgs(
         .zip(ptx.input_utxos())
         .zip(ptx.destinations())
         .map(|((inp, utxo), dest)| match (inp, utxo, dest) {
-            (TxInput::Utxo(outpoint), Some(utxo), Some(dest)) => Ok(to_trezor_utxo_input(
-                outpoint,
-                &utxo.utxo,
-                chain_config,
-                dest,
-                key_chain,
-            )),
+            (TxInput::Utxo(outpoint), Some(utxo), Some(dest)) => {
+                to_trezor_utxo_input(outpoint, utxo, chain_config, dest, key_chain)
+            }
             (TxInput::Account(outpoint), _, Some(dest)) => Ok(to_trezor_account_input(
                 chain_config,
                 dest,
@@ -636,11 +640,11 @@ fn to_trezor_account_input(
 
 fn to_trezor_utxo_input(
     outpoint: &common::chain::UtxoOutPoint,
-    utxo: &TxOutput,
+    utxo: &UtxoWithAdditionalInfo,
     chain_config: &ChainConfig,
     dest: &Destination,
     key_chain: &impl AccountKeyChains,
-) -> MintlayerTxInput {
+) -> SignerResult<MintlayerTxInput> {
     let mut inp_req = MintlayerUtxoTxInput::new();
     let id = match outpoint.source_id() {
         OutPointSourceId::Transaction(id) => {
@@ -654,22 +658,13 @@ fn to_trezor_utxo_input(
     };
     inp_req.set_prev_hash(id.to_vec());
     inp_req.set_prev_index(outpoint.output_index());
-    match tx_output_value(utxo) {
-        OutputValue::Coin(amount) => {
-            let mut value = MintlayerOutputValue::new();
-            value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-            inp_req.value = Some(value).into();
-        }
-        OutputValue::TokenV1(token_id, amount) => {
-            let mut value = MintlayerOutputValue::new();
-            value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-            value.set_token_id(token_id.to_hash().as_bytes().to_vec());
-            inp_req.value = Some(value).into();
-        }
-        OutputValue::TokenV0(_) => {
-            panic!("token v0 unsuported");
-        }
-    }
+
+    let output_value = tx_output_value(&utxo.utxo);
+    inp_req.value = Some(to_trezor_output_value(
+        &output_value,
+        &utxo.additional_info,
+    )?)
+    .into();
 
     inp_req
         .set_address(Address::new(chain_config, dest.clone()).expect("addressable").into_string());
@@ -721,61 +716,80 @@ fn to_trezor_utxo_input(
 
     let mut inp = MintlayerTxInput::new();
     inp.utxo = Some(inp_req).into();
-    inp
+    Ok(inp)
+}
+
+fn to_trezor_output_value(
+    output_value: &OutputValue,
+    additional_info: &UtxoAdditionalInfo,
+) -> SignerResult<MintlayerOutputValue> {
+    let value = match output_value {
+        OutputValue::Coin(amount) => {
+            let mut value = MintlayerOutputValue::new();
+            value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
+            value
+        }
+        OutputValue::TokenV1(token_id, amount) => {
+            let mut value = MintlayerOutputValue::new();
+            value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
+            let mut token_value = MintlayerTokenOutputValue::new();
+            token_value.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            match additional_info {
+                UtxoAdditionalInfo::TokenInfo {
+                    num_decimals,
+                    ticker,
+                } => {
+                    token_value.set_number_of_decimals(*num_decimals as u32);
+                    token_value.set_token_ticker(ticker.clone());
+                }
+                UtxoAdditionalInfo::PoolInfo { staker_balance: _ }
+                | UtxoAdditionalInfo::NoAdditionalInfo => {
+                    return Err(SignerError::MissingUtxoExtraInfo)
+                }
+            }
+            value.token = Some(token_value).into();
+            value
+        }
+        OutputValue::TokenV0(_) => return Err(SignerError::UnsupportedTokensV0),
+    };
+    Ok(value)
 }
 
 fn to_trezor_utxo_msgs(
     ptx: &PartiallySignedTransaction,
     chain_config: &ChainConfig,
-) -> BTreeMap<[u8; 32], BTreeMap<u32, MintlayerTxOutput>> {
-    let utxos = ptx.input_utxos().iter().zip(ptx.tx().inputs()).fold(
-        BTreeMap::new(),
-        |mut map: BTreeMap<[u8; 32], BTreeMap<u32, _>>, (utxo, inp)| {
-            match (inp, utxo) {
-                (TxInput::Utxo(outpoint), Some(utxo)) => {
-                    let id = match outpoint.source_id() {
-                        OutPointSourceId::Transaction(id) => id.to_hash().0,
-                        OutPointSourceId::BlockReward(id) => id.to_hash().0,
-                    };
-                    let out = to_trezor_output_msg(chain_config, &utxo.utxo);
-                    map.entry(id).or_default().insert(outpoint.output_index(), out);
-                }
-                (TxInput::Utxo(_), None) => unimplemented!("missing utxo"),
-                (TxInput::Account(_) | TxInput::AccountCommand(_, _), Some(_)) => {
-                    panic!("can't have accounts as UTXOs")
-                }
-                (TxInput::Account(_) | TxInput::AccountCommand(_, _), _) => {}
+) -> SignerResult<BTreeMap<[u8; 32], BTreeMap<u32, MintlayerTxOutput>>> {
+    let mut utxos: BTreeMap<[u8; 32], BTreeMap<u32, MintlayerTxOutput>> = BTreeMap::new();
+    for (utxo, inp) in ptx.input_utxos().iter().zip(ptx.tx().inputs()) {
+        match (inp, utxo) {
+            (TxInput::Utxo(outpoint), Some(utxo)) => {
+                let id = match outpoint.source_id() {
+                    OutPointSourceId::Transaction(id) => id.to_hash().0,
+                    OutPointSourceId::BlockReward(id) => id.to_hash().0,
+                };
+                let out = to_trezor_output_msg(chain_config, &utxo.utxo, &utxo.additional_info)?;
+                utxos.entry(id).or_default().insert(outpoint.output_index(), out);
             }
-            map
-        },
-    );
-    utxos
+            (TxInput::Utxo(_), None) => unimplemented!("missing utxo"),
+            (TxInput::Account(_) | TxInput::AccountCommand(_, _), Some(_)) => {
+                panic!("can't have accounts as UTXOs")
+            }
+            (TxInput::Account(_) | TxInput::AccountCommand(_, _), _) => {}
+        }
+    }
+
+    Ok(utxos)
 }
 
-fn set_value(value: &OutputValue, out_req: &mut MintlayerTransferTxOutput) {
-    match value {
-        OutputValue::Coin(amount) => {
-            let mut value = MintlayerOutputValue::new();
-            value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-            out_req.value = Some(value).into();
-        }
-        OutputValue::TokenV1(token_id, amount) => {
-            let mut value = MintlayerOutputValue::new();
-            value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-            value.set_token_id(token_id.to_hash().as_bytes().to_vec());
-            out_req.value = Some(value).into();
-        }
-        OutputValue::TokenV0(_) => {
-            panic!("token v0 unsuported");
-        }
-    };
-}
-
-fn to_trezor_output_msg(chain_config: &ChainConfig, out: &TxOutput) -> MintlayerTxOutput {
-    match out {
+fn to_trezor_output_msg(
+    chain_config: &ChainConfig,
+    out: &TxOutput,
+    additional_info: &UtxoAdditionalInfo,
+) -> SignerResult<MintlayerTxOutput> {
+    let res = match out {
         TxOutput::Transfer(value, dest) => {
             let mut out_req = MintlayerTransferTxOutput::new();
-            set_value(value, &mut out_req);
+            out_req.value = Some(to_trezor_output_value(value, additional_info)?).into();
             out_req.set_address(
                 Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
             );
@@ -786,22 +800,11 @@ fn to_trezor_output_msg(chain_config: &ChainConfig, out: &TxOutput) -> Mintlayer
         }
         TxOutput::LockThenTransfer(value, dest, lock) => {
             let mut out_req = MintlayerLockThenTransferTxOutput::new();
-            match value {
-                OutputValue::Coin(amount) => {
-                    let mut value = MintlayerOutputValue::new();
-                    value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-                    out_req.value = Some(value).into();
-                }
-                OutputValue::TokenV1(token_id, amount) => {
-                    let mut value = MintlayerOutputValue::new();
-                    value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-                    value.set_token_id(token_id.to_hash().as_bytes().to_vec());
-                    out_req.value = Some(value).into();
-                }
-                OutputValue::TokenV0(_) => {
-                    panic!("token v0 unsuported");
-                }
-            };
+            out_req.value = Some(to_trezor_output_value(
+                value,
+                &UtxoAdditionalInfo::NoAdditionalInfo,
+            )?)
+            .into();
             out_req.set_address(
                 Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
             );
@@ -829,22 +832,11 @@ fn to_trezor_output_msg(chain_config: &ChainConfig, out: &TxOutput) -> Mintlayer
         }
         TxOutput::Burn(value) => {
             let mut out_req = MintlayerBurnTxOutput::new();
-            match value {
-                OutputValue::Coin(amount) => {
-                    let mut value = MintlayerOutputValue::new();
-                    value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-                    out_req.value = Some(value).into();
-                }
-                OutputValue::TokenV1(token_id, amount) => {
-                    let mut value = MintlayerOutputValue::new();
-                    value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-                    value.set_token_id(token_id.to_hash().as_bytes().to_vec());
-                    out_req.value = Some(value).into();
-                }
-                OutputValue::TokenV0(_) => {
-                    panic!("token v0 unsuported");
-                }
-            };
+            out_req.value = Some(to_trezor_output_value(
+                value,
+                &UtxoAdditionalInfo::NoAdditionalInfo,
+            )?)
+            .into();
 
             let mut out = MintlayerTxOutput::new();
             out.burn = Some(out_req).into();
@@ -995,7 +987,8 @@ fn to_trezor_output_msg(chain_config: &ChainConfig, out: &TxOutput) -> Mintlayer
         }
         TxOutput::Htlc(_, _) => unimplemented!("HTLC"),
         TxOutput::CreateOrder(_) => unimplemented!("CreateOrder"),
-    }
+    };
+    Ok(res)
 }
 
 #[derive(Clone)]
