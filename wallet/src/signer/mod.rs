@@ -16,7 +16,6 @@
 use std::sync::Arc;
 
 use common::chain::{
-    partially_signed_transaction::PartiallySignedTransaction,
     signature::{
         inputsig::{
             arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
@@ -30,7 +29,10 @@ use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
 use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
-use wallet_types::{signature_status::SignatureStatus, AccountId};
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, signature_status::SignatureStatus,
+    AccountId,
+};
 
 use crate::{
     key_chain::{AccountKeyChains, KeyChainError},
