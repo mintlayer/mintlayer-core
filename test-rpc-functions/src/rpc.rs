@@ -28,7 +28,6 @@ use common::{
             EpochIndex,
         },
         output_value::OutputValue,
-        partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::{
             authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
             InputWitness,
@@ -44,6 +43,7 @@ use serialization::{
     hex::{HexDecode, HexEncode},
     hex_encoded::HexEncoded,
 };
+use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
 
 use crate::{RpcTestFunctionsError, RpcTestFunctionsHandle};
 

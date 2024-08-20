@@ -21,9 +21,6 @@ use common::{
     address::RpcAddress,
     chain::{
         output_value::OutputValue,
-        partially_signed_transaction::{
-            PartiallySignedTransaction, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
-        },
         tokens::{RPCTokenInfo, TokenId},
         ChainConfig, Destination, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
@@ -38,6 +35,9 @@ use wallet::{
     account::currency_grouper::Currency,
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     WalletError,
+};
+use wallet_types::partially_signed_transaction::{
+    PartiallySignedTransaction, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
 };
 
 use crate::{types::Balances, ControllerError, WalletType2};
@@ -264,7 +264,7 @@ pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
         None,
         output_additional_infos,
     )
-    .map_err(WalletError::TransactionCreation)?;
+    .map_err(WalletError::PartiallySignedTransactionCreation)?;
     Ok(ptx)
 }
 

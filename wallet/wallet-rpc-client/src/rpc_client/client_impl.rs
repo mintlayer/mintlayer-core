@@ -22,8 +22,8 @@ use super::{ClientWalletRpc, WalletRpcError};
 use chainstate::ChainInfo;
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, Block, GenBlock, SignedTransaction, Transaction,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -49,7 +49,9 @@ use wallet_rpc_lib::{
     },
     ColdWalletRpcClient, WalletRpcClient,
 };
-use wallet_types::with_locked::WithLocked;
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, with_locked::WithLocked,
+};
 
 #[async_trait::async_trait]
 impl WalletInterface for ClientWalletRpc {

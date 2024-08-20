@@ -22,9 +22,6 @@ use common::{
     address::Address,
     chain::{
         output_value::OutputValue,
-        partially_signed_transaction::{
-            PartiallySignedTransaction, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
-        },
         signature::{
             inputsig::{
                 arbitrary_message::ArbitraryMessageSignature,
@@ -80,7 +77,12 @@ use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
-    account_info::DEFAULT_ACCOUNT_INDEX, signature_status::SignatureStatus, AccountId,
+    account_info::DEFAULT_ACCOUNT_INDEX,
+    partially_signed_transaction::{
+        PartiallySignedTransaction, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
+    },
+    signature_status::SignatureStatus,
+    AccountId,
 };
 
 use crate::{

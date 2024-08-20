@@ -19,9 +19,8 @@ use chainstate::ChainInfo;
 use common::{
     address::{dehexify::dehexify_all_addresses, AddressError},
     chain::{
-        block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        block::timestamp::BlockTimestamp, tokens::IsTokenUnfreezable, Block, GenBlock,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -53,8 +52,8 @@ use wallet_rpc_lib::{
     RpcError, WalletRpc,
 };
 use wallet_types::{
-    seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, utxo_types::UtxoTypes,
-    with_locked::WithLocked,
+    partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
+    signature_status::SignatureStatus, utxo_types::UtxoTypes, with_locked::WithLocked,
 };
 
 use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, WalletInterface};

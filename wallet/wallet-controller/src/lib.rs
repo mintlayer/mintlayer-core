@@ -56,7 +56,6 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         htlc::HtlcSecret,
-        partially_signed_transaction::{PartiallySignedTransaction, UtxoWithAdditionalInfo},
         signature::{inputsig::InputWitness, DestinationSigError, Transactable},
         tokens::{RPCTokenInfo, TokenId},
         Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxInput,
@@ -99,6 +98,7 @@ pub use wallet_types::{
     utxo_types::{UtxoState, UtxoStates, UtxoType, UtxoTypes},
 };
 use wallet_types::{
+    partially_signed_transaction::{PartiallySignedTransaction, UtxoWithAdditionalInfo},
     signature_status::SignatureStatus,
     wallet_type::{WalletControllerMode, WalletType},
     with_locked::WithLocked,
@@ -1123,7 +1123,7 @@ where
                 htlc_secrets,
                 output_additional_infos,
             )
-            .map_err(WalletError::TransactionCreation)?;
+            .map_err(WalletError::PartiallySignedTransactionCreation)?;
 
             TransactionToSign::Partial(tx)
         };

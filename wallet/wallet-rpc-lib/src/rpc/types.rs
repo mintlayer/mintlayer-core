@@ -20,7 +20,6 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallengeError,
-        partially_signed_transaction::PartiallySignedTransaction,
         signature::DestinationSigError,
         timelock::OutputTimeLock,
         tokens::{self, IsTokenFreezable, Metadata, TokenCreator, TokenId},
@@ -56,7 +55,9 @@ pub use wallet_controller::types::{
 };
 pub use wallet_controller::{ControllerConfig, NodeInterface};
 use wallet_controller::{UtxoState, UtxoType};
-use wallet_types::signature_status::SignatureStatus;
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, signature_status::SignatureStatus,
+};
 
 use crate::service::SubmitError;
 
