@@ -20,9 +20,8 @@ use std::{fmt::Write, str::FromStr};
 use common::{
     address::Address,
     chain::{
-        config::checkpoints_data::print_block_heights_ids_as_checkpoints_data,
-        partially_signed_transaction::PartiallySignedTransaction, ChainConfig, Destination,
-        SignedTransaction, TxOutput, UtxoOutPoint,
+        config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, ChainConfig,
+        Destination, SignedTransaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Idable as _, H256},
     text_summary::TextSummary,
@@ -44,6 +43,7 @@ use wallet_rpc_lib::types::{
 
 #[cfg(feature = "trezor")]
 use wallet_rpc_lib::types::HardwareWalletType;
+use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
 
 use crate::{
     errors::WalletCliCommandError, helper_types::parse_generic_token_transfer,
