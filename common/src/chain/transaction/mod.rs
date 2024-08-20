@@ -110,6 +110,8 @@ pub enum TransactionCreationError {
     InvalidHtlcSecretsCount,
     #[error("Failed to convert partially signed tx to signed")]
     FailedToConvertPartiallySignedTx(PartiallySignedTransaction),
+    #[error("The number of output additional infos does not match the number of outputs")]
+    InvalidOutputAdditionalInfoCount,
 }
 
 impl Transaction {
