@@ -723,7 +723,7 @@ fn to_trezor_utxo_input(
 
 fn to_trezor_output_value(
     output_value: &OutputValue,
-    additional_info: &UtxoAdditionalInfo,
+    additional_info: &Option<UtxoAdditionalInfo>,
 ) -> SignerResult<MintlayerOutputValue> {
     let value = match output_value {
         OutputValue::Coin(amount) => {
@@ -737,15 +737,14 @@ fn to_trezor_output_value(
             let mut token_value = MintlayerTokenOutputValue::new();
             token_value.set_token_id(token_id.to_hash().as_bytes().to_vec());
             match additional_info {
-                UtxoAdditionalInfo::TokenInfo {
+                Some(UtxoAdditionalInfo::TokenInfo {
                     num_decimals,
                     ticker,
-                } => {
+                }) => {
                     token_value.set_number_of_decimals(*num_decimals as u32);
                     token_value.set_token_ticker(ticker.clone());
                 }
-                UtxoAdditionalInfo::PoolInfo { staker_balance: _ }
-                | UtxoAdditionalInfo::NoAdditionalInfo => {
+                Some(UtxoAdditionalInfo::PoolInfo { staker_balance: _ }) | None => {
                     return Err(SignerError::MissingUtxoExtraInfo)
                 }
             }
@@ -786,7 +785,7 @@ fn to_trezor_utxo_msgs(
 fn to_trezor_output_msg(
     chain_config: &ChainConfig,
     out: &TxOutput,
-    additional_info: &UtxoAdditionalInfo,
+    additional_info: &Option<UtxoAdditionalInfo>,
 ) -> SignerResult<MintlayerTxOutput> {
     let res = match out {
         TxOutput::Transfer(value, dest) => {
@@ -802,11 +801,7 @@ fn to_trezor_output_msg(
         }
         TxOutput::LockThenTransfer(value, dest, lock) => {
             let mut out_req = MintlayerLockThenTransferTxOutput::new();
-            out_req.value = Some(to_trezor_output_value(
-                value,
-                &UtxoAdditionalInfo::NoAdditionalInfo,
-            )?)
-            .into();
+            out_req.value = Some(to_trezor_output_value(value, additional_info)?).into();
             out_req.set_address(
                 Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
             );
@@ -834,11 +829,7 @@ fn to_trezor_output_msg(
         }
         TxOutput::Burn(value) => {
             let mut out_req = MintlayerBurnTxOutput::new();
-            out_req.value = Some(to_trezor_output_value(
-                value,
-                &UtxoAdditionalInfo::NoAdditionalInfo,
-            )?)
-            .into();
+            out_req.value = Some(to_trezor_output_value(value, additional_info)?).into();
 
             let mut out = MintlayerTxOutput::new();
             out.burn = Some(out_req).into();
