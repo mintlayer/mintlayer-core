@@ -4359,13 +4359,10 @@ fn sign_decommission_pool_request_between_accounts(#[case] seed: Seed) {
     let ptx = PartiallySignedTransaction::new(
         tx,
         vec![None; inps],
-        vec![Some(UtxoWithAdditionalInfo::new(
-            utxo,
-            UtxoAdditionalInfo::NoAdditionalInfo,
-        ))],
+        vec![Some(UtxoWithAdditionalInfo::new(utxo, None))],
         vec![Some(addr.into_object())],
         None,
-        vec![UtxoAdditionalInfo::NoAdditionalInfo; outs],
+        vec![None; outs],
     )
     .unwrap();
     let stake_pool_transaction = wallet
@@ -4894,13 +4891,10 @@ fn test_add_standalone_multisig(#[case] seed: Seed) {
     let spend_multisig_tx = PartiallySignedTransaction::new(
         spend_multisig_tx,
         vec![None; 1],
-        vec![Some(UtxoWithAdditionalInfo::new(
-            tx.outputs()[0].clone(),
-            UtxoAdditionalInfo::NoAdditionalInfo,
-        ))],
+        vec![Some(UtxoWithAdditionalInfo::new(tx.outputs()[0].clone(), None))],
         vec![Some(multisig_address.as_object().clone())],
         None,
-        vec![UtxoAdditionalInfo::NoAdditionalInfo; outs],
+        vec![None; outs],
     )
     .unwrap();
 
@@ -5050,7 +5044,7 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
         .outputs()
         .first()
         .cloned()
-        .map(|out| UtxoWithAdditionalInfo::new(out, UtxoAdditionalInfo::NoAdditionalInfo))];
+        .map(|out| UtxoWithAdditionalInfo::new(out, None))];
     let outs = create_htlc_tx.outputs().len();
     let spend_ptx = PartiallySignedTransaction::new(
         spend_tx,
@@ -5058,7 +5052,7 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
         spend_utxos,
         vec![Some(spend_key.into_object())],
         Some(vec![Some(secret)]),
-        vec![UtxoAdditionalInfo::NoAdditionalInfo; outs],
+        vec![None; outs],
     )
     .unwrap();
 
@@ -5154,7 +5148,7 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
         .outputs()
         .first()
         .cloned()
-        .map(|out| UtxoWithAdditionalInfo::new(out, UtxoAdditionalInfo::NoAdditionalInfo))];
+        .map(|out| UtxoWithAdditionalInfo::new(out, None))];
     let outs = create_htlc_tx.outputs().len();
     let refund_ptx = PartiallySignedTransaction::new(
         refund_tx,
@@ -5162,7 +5156,7 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
         refund_utxos,
         vec![Some(refund_key)],
         None,
-        vec![UtxoAdditionalInfo::NoAdditionalInfo; outs],
+        vec![None; outs],
     )
     .unwrap();
 
