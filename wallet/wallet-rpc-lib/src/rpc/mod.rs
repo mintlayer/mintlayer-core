@@ -1427,12 +1427,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             refund_key,
         };
 
-        let token_id = match token_id {
-            Some(id) => {
-                Some(id.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidTokenId)?)
-            }
-            None => None,
-        };
+        let token_id = token_id
+            .map(|id| id.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidTokenId))
+            .transpose()?;
         let coin_decimals = self.chain_config.coin_decimals();
 
         self.wallet
@@ -1476,8 +1473,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         let inputs = inputs.into_iter().map(|o| o.into_outpoint()).collect();
 
         let htlc_secrets = htlc_secrets
-            .map(|s| {
-                s.into_iter()
+            .map(|htlc_secrets| {
+                htlc_secrets
+                    .into_iter()
                     .map(|s| {
                         s.map(|s| -> Result<HtlcSecret, RpcError<N>> {
                             Ok(HtlcSecret::new(

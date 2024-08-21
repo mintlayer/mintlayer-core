@@ -58,6 +58,8 @@ pub enum Error {
     InvalidHtlcSecret,
     #[error("Invalid htlc secret hash encoding")]
     InvalidHtlcSecretHash,
+    #[error("No input outpoint found in transaction")]
+    NoInputOutpointFound,
     #[error("Invalid multisig challenge encoding")]
     InvalidMultisigChallenge,
     #[error("Multisig required signatures cannot be zero")]
@@ -72,7 +74,7 @@ pub enum Error {
     TokenIssuanceError(#[from] tx_verifier::error::TokenIssuanceError),
     #[error("Transaction creation error: {0}")]
     TransactionCreationError(#[from] TransactionCreationError),
-    #[error("Transaction creation error: {0}")]
+    #[error("Produce signature error: {0}")]
     ProduceSignatureError(#[from] DestinationSigError),
 }
 

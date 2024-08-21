@@ -235,7 +235,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> ColdWalletRpcServ
                     let is_complete = tx.all_signatures_available()
                         && cur_signatures.iter().all(|s| *s == SignatureStatus::FullySigned);
                     let hex = if is_complete {
-                        let tx = tx.into_signed_tx().expect("already checked3");
+                        let tx = tx.into_signed_tx().expect("already checked");
                         tx.hex_encode()
                     } else {
                         tx.hex_encode()
@@ -402,11 +402,9 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         utxo_states: Vec<RpcUtxoState>,
         with_locked: Option<WithLocked>,
     ) -> rpc::RpcResult<Balances> {
-        let utxo_states = if utxo_states.is_empty() {
-            UtxoStates::ALL
-        } else {
-            utxo_states.iter().map(UtxoState::from).fold(UtxoStates::NONE, |x, y| x | y)
-        };
+        let utxo_states = (&utxo_states.iter().map(UtxoState::from).collect::<Vec<_>>())
+            .try_into()
+            .unwrap_or(UtxoStates::ALL);
 
         rpc::handle_result(
             self.get_balance(
@@ -425,17 +423,13 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         utxo_states: Vec<RpcUtxoState>,
         with_locked: Option<WithLocked>,
     ) -> rpc::RpcResult<Vec<JsonValue>> {
-        let utxo_types = if utxo_types.is_empty() {
-            UtxoTypes::ALL
-        } else {
-            utxo_types.iter().map(UtxoType::from).fold(UtxoTypes::NONE, |x, y| x | y)
-        };
+        let utxo_types = (&utxo_types.iter().map(UtxoType::from).collect::<Vec<_>>())
+            .try_into()
+            .unwrap_or(UtxoTypes::ALL);
 
-        let utxo_states = if utxo_states.is_empty() {
-            UtxoState::Confirmed.into()
-        } else {
-            utxo_states.iter().map(UtxoState::from).fold(UtxoStates::NONE, |x, y| x | y)
-        };
+        let utxo_states = (&utxo_states.iter().map(UtxoState::from).collect::<Vec<_>>())
+            .try_into()
+            .unwrap_or(UtxoState::Confirmed.into());
 
         let utxos = self
             .get_multisig_utxos(

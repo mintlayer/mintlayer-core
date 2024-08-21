@@ -267,7 +267,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_>
                     TxOutput::ProduceBlockFromStake(d, _) => {
                         // Spending an output of a block creation output is only allowed to
                         // create another block, given that this is a block reward.
-                        Ok(to_signature_witness_script(ctx, &d))
+                        Ok(to_signature_witness_script(ctx, d))
                     }
                     TxOutput::CreateStakePool(_, pool_data) => {
                         // Spending an output of a pool creation output is only allowed when

@@ -796,27 +796,26 @@ pub fn extract_htlc_secret(
             .map_err(|_| Error::InvalidTransaction)?
     };
 
-    let htlc_position = tx.transaction().inputs().iter().position(|input| match input {
-        TxInput::Utxo(outpoint) => *outpoint == htlc_utxo_outpoint,
-        TxInput::Account(_) | TxInput::AccountCommand(_, _) => false,
-    });
+    let htlc_position = tx
+        .transaction()
+        .inputs()
+        .iter()
+        .position(|input| match input {
+            TxInput::Utxo(outpoint) => *outpoint == htlc_utxo_outpoint,
+            TxInput::Account(_) | TxInput::AccountCommand(_, _) => false,
+        })
+        .ok_or(Error::NoInputOutpointFound)?;
 
-    match htlc_position {
-        Some(i) => match tx.signatures().get(i).ok_or(Error::InvalidWitnessCount)? {
-            InputWitness::NoSignature(_) => Err(Error::InvalidWitness),
-            InputWitness::Standard(sig) => {
-                let htlc_spend =
-                    AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())
-                        .map_err(|_| Error::InvalidWitness)?;
-                match htlc_spend {
-                    AuthorizedHashedTimelockContractSpend::Secret(secret, _) => Ok(secret.encode()),
-                    AuthorizedHashedTimelockContractSpend::Multisig(_) => {
-                        Err(Error::InvalidWitness)
-                    }
-                }
+    match tx.signatures().get(htlc_position).ok_or(Error::InvalidWitnessCount)? {
+        InputWitness::NoSignature(_) => Err(Error::InvalidWitness),
+        InputWitness::Standard(sig) => {
+            let htlc_spend = AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())
+                .map_err(|_| Error::InvalidWitness)?;
+            match htlc_spend {
+                AuthorizedHashedTimelockContractSpend::Secret(secret, _) => Ok(secret.encode()),
+                AuthorizedHashedTimelockContractSpend::Multisig(_) => Err(Error::InvalidWitness),
             }
-        },
-        None => Err(Error::InvalidWitnessCount),
+        }
     }
 }
 
