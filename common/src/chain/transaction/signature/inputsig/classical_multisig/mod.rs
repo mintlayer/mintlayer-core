@@ -14,4 +14,5 @@
 // limitations under the License.
 
 pub mod authorize_classical_multisig;
+pub mod encode_decode_multisig_spend;
 pub mod multisig_partial_signature;

@@ -21,10 +21,12 @@ use common::chain::{
     signature::{
         inputsig::{
             arbitrary_message::ArbitraryMessageSignature,
-            authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
-            classical_multisig::authorize_classical_multisig::{
-                sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
-                ClassicalMultisigCompletionStatus,
+            classical_multisig::{
+                authorize_classical_multisig::{
+                    sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
+                    ClassicalMultisigCompletionStatus,
+                },
+                encode_decode_multisig_spend::{decode_multisig_spend, encode_multisig_spend},
             },
             htlc::produce_uniparty_signature_for_htlc_input,
             standard_signature::StandardInputSignature,
@@ -159,7 +161,7 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
                         key_chain,
                     )?;
 
-                    let signature = encode_multisig_spend(&sig, inputs_utxo_refs[input_index])?;
+                    let signature = encode_multisig_spend(&sig, inputs_utxo_refs[input_index]);
 
                     return Ok((Some(InputWitness::Standard(signature)), status));
                 }
@@ -281,7 +283,8 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
                                 ))
                             } else if let Destination::ClassicMultisig(_) = destination {
                                 let sig_components =
-                                    decode_multisig_spend(sig, inputs_utxo_refs[i])?;
+                                    decode_multisig_spend(sig, inputs_utxo_refs[i])
+                                        .map_err(SignerError::SigningError)?;
 
                                 let (sig_component, previous_status, final_status) = self
                                     .sign_multisig_input(
@@ -293,7 +296,7 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
                                     )?;
 
                                 let signature =
-                                    encode_multisig_spend(&sig_component, inputs_utxo_refs[i])?;
+                                    encode_multisig_spend(&sig_component, inputs_utxo_refs[i]);
 
                                 Ok((
                                     Some(InputWitness::Standard(signature)),
@@ -370,70 +373,6 @@ fn get_private_key(
     } else {
         Err(SignerError::KeysNotInSameHierarchy)
     }
-}
-
-fn is_htlc_output(output: &TxOutput) -> bool {
-    match output {
-        TxOutput::Transfer(_, _)
-        | TxOutput::LockThenTransfer(_, _, _)
-        | TxOutput::Burn(_)
-        | TxOutput::CreateStakePool(_, _)
-        | TxOutput::ProduceBlockFromStake(_, _)
-        | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _)
-        | TxOutput::IssueFungibleToken(_)
-        | TxOutput::IssueNft(_, _, _)
-        | TxOutput::DataDeposit(_)
-        | TxOutput::AnyoneCanTake(_) => false,
-        TxOutput::Htlc(_, _) => true,
-    }
-}
-
-fn decode_multisig_spend(
-    sig: &StandardInputSignature,
-    utxo: Option<&TxOutput>,
-) -> SignerResult<AuthorizedClassicalMultisigSpend> {
-    let sig_component = match utxo {
-        Some(utxo) => {
-            if is_htlc_output(utxo) {
-                let htlc_spend =
-                    AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())?;
-                match htlc_spend {
-                    AuthorizedHashedTimelockContractSpend::Secret(_, _) => {
-                        return Err(SignerError::SigningError(
-                            DestinationSigError::IncompleteClassicalMultisigAuthorization,
-                        ));
-                    }
-                    AuthorizedHashedTimelockContractSpend::Multisig(raw_signature) => {
-                        AuthorizedClassicalMultisigSpend::from_data(&raw_signature)?
-                    }
-                }
-            } else {
-                AuthorizedClassicalMultisigSpend::from_data(sig.raw_signature())?
-            }
-        }
-        None => AuthorizedClassicalMultisigSpend::from_data(sig.raw_signature())?,
-    };
-    Ok(sig_component)
-}
-
-fn encode_multisig_spend(
-    sig_component: &AuthorizedClassicalMultisigSpend,
-    utxo: Option<&TxOutput>,
-) -> SignerResult<StandardInputSignature> {
-    let raw_signature = match utxo {
-        Some(utxo) => {
-            if is_htlc_output(utxo) {
-                AuthorizedHashedTimelockContractSpend::Multisig(sig_component.encode()).encode()
-            } else {
-                sig_component.encode()
-            }
-        }
-        None => sig_component.encode(),
-    };
-
-    let sighash_type = SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
-    Ok(StandardInputSignature::new(sighash_type, raw_signature))
 }
 
 #[cfg(test)]
