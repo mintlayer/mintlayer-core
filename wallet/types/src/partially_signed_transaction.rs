@@ -47,17 +47,16 @@ pub enum PartiallySignedTransactionCreationError {
 pub enum UtxoAdditionalInfo {
     TokenInfo { num_decimals: u8, ticker: Vec<u8> },
     PoolInfo { staker_balance: Amount },
-    NoAdditionalInfo,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct UtxoWithAdditionalInfo {
     pub utxo: TxOutput,
-    pub additional_info: UtxoAdditionalInfo,
+    pub additional_info: Option<UtxoAdditionalInfo>,
 }
 
 impl UtxoWithAdditionalInfo {
-    pub fn new(utxo: TxOutput, additional_info: UtxoAdditionalInfo) -> Self {
+    pub fn new(utxo: TxOutput, additional_info: Option<UtxoAdditionalInfo>) -> Self {
         Self {
             utxo,
             additional_info,
@@ -74,7 +73,7 @@ pub struct PartiallySignedTransaction {
     destinations: Vec<Option<Destination>>,
 
     htlc_secrets: Vec<Option<HtlcSecret>>,
-    output_additional_infos: Vec<UtxoAdditionalInfo>,
+    output_additional_infos: Vec<Option<UtxoAdditionalInfo>>,
 }
 
 impl PartiallySignedTransaction {
@@ -84,7 +83,7 @@ impl PartiallySignedTransaction {
         input_utxos: Vec<Option<UtxoWithAdditionalInfo>>,
         destinations: Vec<Option<Destination>>,
         htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
-        output_additional_infos: Vec<UtxoAdditionalInfo>,
+        output_additional_infos: Vec<Option<UtxoAdditionalInfo>>,
     ) -> Result<Self, PartiallySignedTransactionCreationError> {
         ensure!(
             tx.inputs().len() == witnesses.len(),
@@ -169,7 +168,7 @@ impl PartiallySignedTransaction {
         self.tx.inputs().len()
     }
 
-    pub fn output_additional_infos(&self) -> &[UtxoAdditionalInfo] {
+    pub fn output_additional_infos(&self) -> &[Option<UtxoAdditionalInfo>] {
         &self.output_additional_infos
     }
 

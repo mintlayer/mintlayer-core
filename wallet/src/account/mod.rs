@@ -84,7 +84,7 @@ use wallet_types::{
 
 use self::currency_grouper::Currency;
 pub use self::output_cache::{
-    DelegationData, FungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
+    DelegationData, OwnFungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
 };
 use self::output_cache::{OutputCache, TokenIssuanceData};
 use self::transaction_list::{get_transaction_list, TransactionList};
