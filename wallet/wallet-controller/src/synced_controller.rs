@@ -1659,7 +1659,7 @@ where
             }
             .map_err(ControllerError::WalletError)?,
             RPCTokenInfo::NonFungibleToken(info) => {
-                UnconfirmedTokenInfo::NonFungibleToken(info.token_id, info)
+                UnconfirmedTokenInfo::NonFungibleToken(info.token_id, info.as_ref().into())
             }
         };
 

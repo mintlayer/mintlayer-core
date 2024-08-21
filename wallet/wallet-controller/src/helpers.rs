@@ -149,34 +149,32 @@ where
         | TxOutput::Transfer(value, _)
         | TxOutput::LockThenTransfer(value, _, _)
         | TxOutput::Htlc(value, _) => match value {
-            OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(UtxoWithAdditionalInfo::new(
-                utxo,
-                UtxoAdditionalInfo::NoAdditionalInfo,
-            )),
+            OutputValue::Coin(_) | OutputValue::TokenV0(_) => {
+                Ok(UtxoWithAdditionalInfo::new(utxo, None))
+            }
             OutputValue::TokenV1(token_id, _) => {
                 let info = fetch_token_info(rpc_client, *token_id).await?;
                 Ok(UtxoWithAdditionalInfo::new(
                     utxo,
-                    UtxoAdditionalInfo::TokenInfo {
+                    Some(UtxoAdditionalInfo::TokenInfo {
                         num_decimals: info.token_number_of_decimals(),
                         ticker: info.token_ticker().to_vec(),
-                    },
+                    }),
                 ))
             }
         },
         TxOutput::AnyoneCanTake(order) => match order.ask() {
-            OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(UtxoWithAdditionalInfo::new(
-                utxo,
-                UtxoAdditionalInfo::NoAdditionalInfo,
-            )),
+            OutputValue::Coin(_) | OutputValue::TokenV0(_) => {
+                Ok(UtxoWithAdditionalInfo::new(utxo, None))
+            }
             OutputValue::TokenV1(token_id, _) => {
                 let info = fetch_token_info(rpc_client, *token_id).await?;
                 Ok(UtxoWithAdditionalInfo::new(
                     utxo,
-                    UtxoAdditionalInfo::TokenInfo {
+                    Some(UtxoAdditionalInfo::TokenInfo {
                         num_decimals: info.token_number_of_decimals(),
                         ticker: info.token_ticker().to_vec(),
-                    },
+                    }),
                 ))
             }
         },
@@ -188,7 +186,7 @@ where
                 .ok_or(WalletError::UnknownPoolId(*pool_id))?;
             Ok(UtxoWithAdditionalInfo::new(
                 utxo,
-                UtxoAdditionalInfo::PoolInfo { staker_balance },
+                Some(UtxoAdditionalInfo::PoolInfo { staker_balance }),
             ))
         }
         TxOutput::IssueNft(_, _, _)
@@ -196,10 +194,7 @@ where
         | TxOutput::CreateStakePool(_, _)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DataDeposit(_) => Ok(UtxoWithAdditionalInfo::new(
-            utxo,
-            UtxoAdditionalInfo::NoAdditionalInfo,
-        )),
+        | TxOutput::DataDeposit(_) => Ok(UtxoWithAdditionalInfo::new(utxo, None)),
     }
 }
 

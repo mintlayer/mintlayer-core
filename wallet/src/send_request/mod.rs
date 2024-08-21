@@ -345,7 +345,7 @@ impl SendRequest {
 fn find_additional_info(
     utxo: &TxOutput,
     additional_info: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
-) -> Result<UtxoAdditionalInfo, WalletError> {
+) -> Result<Option<UtxoAdditionalInfo>, WalletError> {
     let additional_info = match utxo {
         TxOutput::Burn(value)
         | TxOutput::Htlc(value, _)
@@ -356,23 +356,24 @@ fn find_additional_info(
         TxOutput::AnyoneCanTake(data) => {
             find_additional_info_output_value(data.as_ref().ask(), additional_info)?
         }
-        TxOutput::IssueNft(_, data, _) => UtxoAdditionalInfo::TokenInfo {
+        TxOutput::IssueNft(_, data, _) => Some(UtxoAdditionalInfo::TokenInfo {
             num_decimals: 0,
             ticker: match data.as_ref() {
                 NftIssuance::V0(data) => data.metadata.ticker().clone(),
             },
-        },
-        TxOutput::CreateStakePool(_, data) => UtxoAdditionalInfo::PoolInfo {
+        }),
+        TxOutput::CreateStakePool(_, data) => Some(UtxoAdditionalInfo::PoolInfo {
             staker_balance: data.pledge(),
-        },
+        }),
         TxOutput::ProduceBlockFromStake(_, pool_id) => additional_info
             .get(&PoolOrTokenId::PoolId(*pool_id))
-            .ok_or(WalletError::MissingPoolAdditionalData(*pool_id))?
-            .clone(),
+            .ok_or(WalletError::MissingPoolAdditionalData(*pool_id))
+            .map(Some)?
+            .cloned(),
         TxOutput::DataDeposit(_)
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::DelegateStaking(_, _)
-        | TxOutput::CreateDelegationId(_, _) => UtxoAdditionalInfo::NoAdditionalInfo,
+        | TxOutput::CreateDelegationId(_, _) => None,
     };
     Ok(additional_info)
 }
@@ -380,13 +381,14 @@ fn find_additional_info(
 fn find_additional_info_output_value(
     value: &OutputValue,
     additional_info: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
-) -> WalletResult<UtxoAdditionalInfo> {
+) -> WalletResult<Option<UtxoAdditionalInfo>> {
     match value {
-        OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(UtxoAdditionalInfo::NoAdditionalInfo),
+        OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(None),
         OutputValue::TokenV1(token_id, _) => additional_info
             .get(&PoolOrTokenId::TokenId(*token_id))
             .ok_or(WalletError::MissingTokenAdditionalData(*token_id))
-            .cloned(),
+            .cloned()
+            .map(Some),
     }
 }
 
