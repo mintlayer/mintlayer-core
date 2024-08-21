@@ -20,7 +20,7 @@ use common::chain::{
             authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
             standard_signature::StandardInputSignature, InputWitness,
         },
-        DestinationSigError,
+        DestinationSigError, EvaluatedInputWitness,
     },
     tokens::TokenId,
     AccountCommand, AccountOutPoint, AccountSpending, DelegationId, Destination, OrderId, PoolId,
@@ -130,30 +130,28 @@ pub trait TranslateInput<C> {
 
 impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
     fn translate_input(ctx: &C) -> Result<WitnessScript, TranslationError> {
-        let checksig =
-            |dest: &Destination| WitnessScript::signature(dest.clone(), ctx.witness().clone());
-
         match ctx.input_info() {
             InputInfo::Utxo {
                 outpoint: _,
                 utxo,
                 utxo_source: _,
             } => match utxo {
-                TxOutput::Transfer(_val, dest) => Ok(checksig(dest)),
+                TxOutput::Transfer(_val, dest) => Ok(to_signature_witness_script(ctx, dest)),
                 TxOutput::LockThenTransfer(_val, dest, timelock) => {
                     Ok(WitnessScript::satisfied_conjunction([
                         WitnessScript::timelock(*timelock),
-                        checksig(dest),
+                        to_signature_witness_script(ctx, dest),
                     ]))
                 }
-                TxOutput::CreateStakePool(_pool_id, pool_data) => {
-                    Ok(checksig(pool_data.decommission_key()))
-                }
+                TxOutput::CreateStakePool(_pool_id, pool_data) => Ok(to_signature_witness_script(
+                    ctx,
+                    pool_data.decommission_key(),
+                )),
                 TxOutput::ProduceBlockFromStake(_, pool_id) => {
                     let dest = ctx
                         .get_pool_decommission_destination(pool_id)?
                         .ok_or(TranslationError::PoolNotFound(*pool_id))?;
-                    Ok(checksig(&dest))
+                    Ok(to_signature_witness_script(ctx, &dest))
                 }
                 TxOutput::Htlc(_, htlc) => {
                     let script = match ctx.witness() {
@@ -177,10 +175,12 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                                     ),
                                     WitnessScript::signature(
                                         htlc.spend_key.clone(),
-                                        InputWitness::Standard(StandardInputSignature::new(
-                                            sig.sighash_type(),
-                                            raw_signature,
-                                        )),
+                                        EvaluatedInputWitness::Standard(
+                                            StandardInputSignature::new(
+                                                sig.sighash_type(),
+                                                raw_signature,
+                                            ),
+                                        ),
                                     ),
                                 ]),
                                 AuthorizedHashedTimelockContractSpend::Multisig(raw_signature) => {
@@ -188,10 +188,12 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                                         WitnessScript::timelock(htlc.refund_timelock),
                                         WitnessScript::signature(
                                             htlc.refund_key.clone(),
-                                            InputWitness::Standard(StandardInputSignature::new(
-                                                sig.sighash_type(),
-                                                raw_signature,
-                                            )),
+                                            EvaluatedInputWitness::Standard(
+                                                StandardInputSignature::new(
+                                                    sig.sighash_type(),
+                                                    raw_signature,
+                                                ),
+                                            ),
                                         ),
                                     ])
                                 }
@@ -200,7 +202,9 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                     };
                     Ok(script)
                 }
-                TxOutput::IssueNft(_id, _issuance, dest) => Ok(checksig(dest)),
+                TxOutput::IssueNft(_id, _issuance, dest) => {
+                    Ok(to_signature_witness_script(ctx, dest))
+                }
                 TxOutput::DelegateStaking(_amount, _deleg_id) => Err(TranslationError::Unspendable),
                 TxOutput::CreateDelegationId(_dest, _pool_id) => Err(TranslationError::Unspendable),
                 TxOutput::IssueFungibleToken(_issuance) => Err(TranslationError::Unspendable),
@@ -213,7 +217,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                     let dest = ctx
                         .get_delegation_spend_destination(delegation_id)?
                         .ok_or(TranslationError::DelegationNotFound(*delegation_id))?;
-                    Ok(checksig(&dest))
+                    Ok(to_signature_witness_script(ctx, &dest))
                 }
             },
             InputInfo::AccountCommand { command } => match command {
@@ -226,13 +230,13 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                     let dest = ctx
                         .get_tokens_authority(token_id)?
                         .ok_or(TranslationError::TokenNotFound(*token_id))?;
-                    Ok(checksig(&dest))
+                    Ok(to_signature_witness_script(ctx, &dest))
                 }
                 AccountCommand::ConcludeOrder(order_id) => {
                     let dest = ctx
                         .get_orders_conclude_destination(order_id)?
                         .ok_or(TranslationError::OrderNotFound(*order_id))?;
-                    Ok(checksig(&dest))
+                    Ok(to_signature_witness_script(ctx, &dest))
                 }
                 AccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
             },
@@ -242,8 +246,6 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
 
 impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_> {
     fn translate_input(ctx: &C) -> Result<WitnessScript, TranslationError> {
-        let checksig =
-            |dest: &Destination| WitnessScript::signature(dest.clone(), ctx.witness().clone());
         match ctx.input_info() {
             InputInfo::Utxo {
                 outpoint: _,
@@ -265,14 +267,14 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_>
                     TxOutput::ProduceBlockFromStake(d, _) => {
                         // Spending an output of a block creation output is only allowed to
                         // create another block, given that this is a block reward.
-                        Ok(checksig(d))
+                        Ok(to_signature_witness_script(ctx, &d))
                     }
                     TxOutput::CreateStakePool(_, pool_data) => {
                         // Spending an output of a pool creation output is only allowed when
                         // creating a block (given it's in a block reward; otherwise it should
                         // be a transaction for decommissioning the pool), hence the staker key
                         // is checked.
-                        Ok(checksig(pool_data.staker()))
+                        Ok(to_signature_witness_script(ctx, pool_data.staker()))
                     }
                 }
             }
@@ -346,9 +348,6 @@ pub struct SignatureOnlyTx;
 
 impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
     fn translate_input(ctx: &C) -> Result<WitnessScript, TranslationError> {
-        let checksig =
-            |dest: &Destination| WitnessScript::signature(dest.clone(), ctx.witness().clone());
-
         match ctx.input_info() {
             InputInfo::Utxo {
                 outpoint: _,
@@ -356,16 +355,17 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                 utxo_source: _,
             } => match utxo {
                 TxOutput::Transfer(_val, dest) | TxOutput::LockThenTransfer(_val, dest, _) => {
-                    Ok(checksig(dest))
+                    Ok(to_signature_witness_script(ctx, dest))
                 }
-                TxOutput::CreateStakePool(_pool_id, pool_data) => {
-                    Ok(checksig(pool_data.decommission_key()))
-                }
+                TxOutput::CreateStakePool(_pool_id, pool_data) => Ok(to_signature_witness_script(
+                    ctx,
+                    pool_data.decommission_key(),
+                )),
                 TxOutput::ProduceBlockFromStake(_dest, pool_id) => {
                     let dest = ctx
                         .get_pool_decommission_destination(pool_id)?
                         .ok_or(TranslationError::PoolNotFound(*pool_id))?;
-                    Ok(checksig(&dest))
+                    Ok(to_signature_witness_script(ctx, &dest))
                 }
                 TxOutput::Htlc(_, htlc) => {
                     let script = match ctx.witness() {
@@ -382,19 +382,23 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                                 AuthorizedHashedTimelockContractSpend::Secret(_, raw_signature) => {
                                     WitnessScript::signature(
                                         htlc.spend_key.clone(),
-                                        InputWitness::Standard(StandardInputSignature::new(
-                                            sig.sighash_type(),
-                                            raw_signature,
-                                        )),
+                                        EvaluatedInputWitness::Standard(
+                                            StandardInputSignature::new(
+                                                sig.sighash_type(),
+                                                raw_signature,
+                                            ),
+                                        ),
                                     )
                                 }
                                 AuthorizedHashedTimelockContractSpend::Multisig(raw_signature) => {
                                     WitnessScript::signature(
                                         htlc.refund_key.clone(),
-                                        InputWitness::Standard(StandardInputSignature::new(
-                                            sig.sighash_type(),
-                                            raw_signature,
-                                        )),
+                                        EvaluatedInputWitness::Standard(
+                                            StandardInputSignature::new(
+                                                sig.sighash_type(),
+                                                raw_signature,
+                                            ),
+                                        ),
                                     )
                                 }
                             }
@@ -402,7 +406,9 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                     };
                     Ok(script)
                 }
-                TxOutput::IssueNft(_id, _issuance, dest) => Ok(checksig(dest)),
+                TxOutput::IssueNft(_id, _issuance, dest) => {
+                    Ok(to_signature_witness_script(ctx, dest))
+                }
                 TxOutput::DelegateStaking(_amount, _deleg_id) => Err(TranslationError::Unspendable),
                 TxOutput::CreateDelegationId(_dest, _pool_id) => Err(TranslationError::Unspendable),
                 TxOutput::IssueFungibleToken(_issuance) => Err(TranslationError::Unspendable),
@@ -415,7 +421,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                     let dest = ctx
                         .get_delegation_spend_destination(delegation_id)?
                         .ok_or(TranslationError::DelegationNotFound(*delegation_id))?;
-                    Ok(checksig(&dest))
+                    Ok(to_signature_witness_script(ctx, &dest))
                 }
             },
             InputInfo::AccountCommand { command } => match command {
@@ -428,13 +434,13 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                     let dest = ctx
                         .get_tokens_authority(token_id)?
                         .ok_or(TranslationError::TokenNotFound(*token_id))?;
-                    Ok(checksig(&dest))
+                    Ok(to_signature_witness_script(ctx, &dest))
                 }
                 AccountCommand::ConcludeOrder(order_id) => {
                     let dest = ctx
                         .get_orders_conclude_destination(order_id)?
                         .ok_or(TranslationError::OrderNotFound(*order_id))?;
-                    Ok(checksig(&dest))
+                    Ok(to_signature_witness_script(ctx, &dest))
                 }
                 AccountCommand::FillOrder(_, _, _) => Ok(WitnessScript::TRUE),
             },
@@ -451,4 +457,15 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyReward {
         // because staking/decommissioning destinations are not the same.
         unimplemented!()
     }
+}
+
+fn to_signature_witness_script(
+    ctx: &impl SignatureInfoProvider,
+    dest: &Destination,
+) -> WitnessScript {
+    let eval_witness = match ctx.witness().clone() {
+        InputWitness::NoSignature(d) => EvaluatedInputWitness::NoSignature(d),
+        InputWitness::Standard(s) => EvaluatedInputWitness::Standard(s),
+    };
+    WitnessScript::signature(dest.clone(), eval_witness)
 }

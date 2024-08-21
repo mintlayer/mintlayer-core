@@ -44,7 +44,6 @@ use crypto::key::{
 };
 use itertools::Itertools;
 use randomness::make_true_rng;
-use serialization::Encode;
 use wallet_storage::WalletStorageReadUnlocked;
 use wallet_types::signature_status::SignatureStatus;
 

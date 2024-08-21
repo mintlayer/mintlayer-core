@@ -24,10 +24,7 @@ use crate::{
     chain::{
         config::create_mainnet,
         output_value::OutputValue,
-        signature::{
-            inputsig::standard_signature::StandardInputSignature, verify_signature,
-            DestinationSigError,
-        },
+        signature::{inputsig::standard_signature::StandardInputSignature, DestinationSigError},
         signed_transaction::SignedTransaction,
         ChainConfig, Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
     },

@@ -72,6 +72,8 @@ fn make_dummy_tx(
 #[trace]
 #[case(Seed::from_entropy())]
 fn check_sig(#[case] seed: Seed) {
+    use common::chain::signature::EvaluatedInputWitness;
+
     let mut rng = make_seedable_rng(seed);
     let n_inputs = rng.gen_range(1..5);
 
@@ -84,7 +86,11 @@ fn check_sig(#[case] seed: Seed) {
     let (utxos, transaction) = make_dummy_tx(&mut rng, &privkeys);
     let sig0 = &transaction.signatures()[0];
 
-    let script = WitnessScript::signature(Destination::PublicKey(pubkey0.clone()), sig0.clone());
+    let eval_witness = match sig0.clone() {
+        InputWitness::NoSignature(d) => EvaluatedInputWitness::NoSignature(d),
+        InputWitness::Standard(s) => EvaluatedInputWitness::Standard(s),
+    };
+    let script = WitnessScript::signature(Destination::PublicKey(pubkey0.clone()), eval_witness);
 
     // Test a successful check
     let mut checker = MockContext::new(0, &transaction, &utxos).into_checker();

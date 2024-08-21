@@ -27,7 +27,7 @@ use crate::{
                 check_insert_input, check_insert_output, check_mutate_input, check_mutate_output,
                 sign_mutate_then_verify,
             },
-            verify_signature, DestinationSigError,
+            DestinationSigError,
         },
         signed_transaction::SignedTransaction,
         tokens::TokenId,

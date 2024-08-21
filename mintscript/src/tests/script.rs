@@ -15,6 +15,8 @@
 
 use std::ops::RangeInclusive;
 
+use common::chain::signature::EvaluatedInputWitness;
+
 use super::*;
 
 #[rstest::rstest]
@@ -127,7 +129,7 @@ fn visit_order(#[case] script: WS) {
         fn visit_signature(
             &mut self,
             _destination: &Destination,
-            _signature: &InputWitness,
+            _signature: &EvaluatedInputWitness,
         ) -> Result<(), Self::SignatureError> {
             unreachable!("Not used in this test")
         }

@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::chain::{
-    signature::{inputsig::InputWitness, DestinationSigError, Transactable},
+    signature::{DestinationSigError, EvaluatedInputWitness, Transactable},
     ChainConfig, Destination, TxOutput,
 };
 
@@ -26,7 +26,7 @@ pub trait SignatureChecker<C> {
         &mut self,
         ctx: &mut C,
         destination: &Destination,
-        signature: &InputWitness,
+        witness: &EvaluatedInputWitness,
     ) -> Result<(), Self::Error>;
 }
 
@@ -40,7 +40,7 @@ impl<C> SignatureChecker<C> for NoOpSignatureChecker {
         &mut self,
         _ctx: &mut C,
         _dest: &Destination,
-        _sig: &InputWitness,
+        _witness: &EvaluatedInputWitness,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -72,7 +72,7 @@ impl<C: SignatureContext> SignatureChecker<C> for StandardSignatureChecker {
         &mut self,
         ctx: &mut C,
         destination: &Destination,
-        signature: &InputWitness,
+        witness: &EvaluatedInputWitness,
     ) -> Result<(), Self::Error> {
         let tx = ctx.transaction();
         let input_num = ctx.input_num();
@@ -82,7 +82,7 @@ impl<C: SignatureContext> SignatureChecker<C> for StandardSignatureChecker {
             chain_config,
             destination,
             tx,
-            signature,
+            witness,
             ctx.input_utxos(),
             input_num,
         )

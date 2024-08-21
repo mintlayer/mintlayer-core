@@ -22,11 +22,12 @@ use script::Script;
 use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        self,
         output_value::OutputValue,
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::sighashtype::SigHashType,
-            DestinationSigError,
+            DestinationSigError, EvaluatedInputWitness, Signable,
         },
         signed_transaction::SignedTransaction,
         AccountNonce, AccountSpending, ChainConfig, DelegationId, Destination, Transaction,
@@ -215,7 +216,7 @@ pub fn verify_signed_tx(
     destination: &Destination,
 ) -> Result<(), DestinationSigError> {
     for i in 0..tx.inputs().len() {
-        crate::chain::signature::verify_signature(
+        verify_signature(
             chain_config,
             destination,
             tx,
@@ -254,4 +255,26 @@ pub fn destinations(
         Destination::ScriptHash(Id::<Script>::from(H256::random_using(rng))),
     ]
     .into_iter()
+}
+
+pub fn verify_signature<T: Signable>(
+    chain_config: &ChainConfig,
+    outpoint_destination: &Destination,
+    tx: &T,
+    input_witness: &InputWitness,
+    inputs_utxos: &[Option<&TxOutput>],
+    input_num: usize,
+) -> Result<(), DestinationSigError> {
+    let eval_witness = match input_witness.clone() {
+        InputWitness::NoSignature(d) => EvaluatedInputWitness::NoSignature(d),
+        InputWitness::Standard(s) => EvaluatedInputWitness::Standard(s),
+    };
+    chain::signature::verify_signature(
+        chain_config,
+        outpoint_destination,
+        tx,
+        &eval_witness,
+        inputs_utxos,
+        input_num,
+    )
 }

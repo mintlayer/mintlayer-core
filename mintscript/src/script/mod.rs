@@ -16,7 +16,7 @@
 mod display;
 mod verify;
 
-use common::chain::{signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination};
+use common::chain::{signature::EvaluatedInputWitness, timelock::OutputTimeLock, Destination};
 use utils::ensure;
 
 pub use verify::{ScriptError, ScriptErrorOf, ScriptResult, ScriptVisitor};
@@ -135,7 +135,7 @@ pub enum HashChallenge {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum WitnessScript {
     Threshold(Threshold),
-    Signature(Destination, InputWitness),
+    Signature(Destination, EvaluatedInputWitness),
     Timelock(OutputTimeLock),
     HashLock {
         hash_challenge: HashChallenge,
@@ -148,7 +148,7 @@ impl WitnessScript {
     pub const TRUE: Self = Threshold::TRUE.into_script();
 
     /// Construct a public key / signature lock
-    pub const fn signature(dest: Destination, sig: InputWitness) -> Self {
+    pub const fn signature(dest: Destination, sig: EvaluatedInputWitness) -> Self {
         Self::Signature(dest, sig)
     }
 

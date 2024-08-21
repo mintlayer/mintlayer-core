@@ -15,7 +15,7 @@
 
 //! Script verification / evaluation
 
-use common::chain::{signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination};
+use common::chain::{signature::EvaluatedInputWitness, timelock::OutputTimeLock, Destination};
 
 use super::{HashChallenge, WitnessScript};
 
@@ -39,7 +39,7 @@ pub trait ScriptVisitor {
     fn visit_signature(
         &mut self,
         destination: &Destination,
-        signature: &InputWitness,
+        witness: &EvaluatedInputWitness,
     ) -> Result<(), Self::SignatureError>;
 
     /// Check timelock

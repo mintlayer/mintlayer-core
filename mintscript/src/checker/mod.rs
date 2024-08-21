@@ -17,7 +17,7 @@ mod hashlock;
 mod signature;
 mod timelock;
 
-use common::chain::{signature::inputsig::InputWitness, timelock::OutputTimeLock, Destination};
+use common::chain::{signature::EvaluatedInputWitness, timelock::OutputTimeLock, Destination};
 
 pub use hashlock::HashlockError;
 use hashlock::{HashlockChecker, NoOpHashlockChecker, StandardHashlockChecker};
@@ -130,10 +130,9 @@ where
     fn visit_signature(
         &mut self,
         destination: &Destination,
-        signature: &InputWitness,
+        witness: &EvaluatedInputWitness,
     ) -> Result<(), Self::SignatureError> {
-        self.signature_checker
-            .check_signature(&mut self.context, destination, signature)
+        self.signature_checker.check_signature(&mut self.context, destination, witness)
     }
 
     fn visit_timelock(&mut self, timelock: &OutputTimeLock) -> Result<(), Self::TimelockError> {
