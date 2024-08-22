@@ -83,7 +83,7 @@ use wallet::{
         currency_grouper::{self, Currency},
         TransactionToSign,
     },
-    get_tx_output_destination,
+    destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
     DefaultWallet, WalletError, WalletResult,
@@ -776,9 +776,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .iter()
             .map(|txo| {
                 txo.map(|txo| {
-                    get_tx_output_destination(txo, &|_| None).ok_or_else(|| {
-                        WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
-                    })
+                    get_tx_output_destination(txo, &|_| None, HtlcSpendingCondition::Undefined)
+                        .ok_or_else(|| {
+                            WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
+                        })
                 })
                 .transpose()
             })
@@ -928,8 +929,16 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         } else {
             let destinations = input_utxos
                 .iter()
-                .map(|txo| {
-                    get_tx_output_destination(txo, &|_| None).ok_or_else(|| {
+                .enumerate()
+                .map(|(i, txo)| {
+                    let htlc_spending =
+                        htlc_secrets.as_ref().map_or(HtlcSpendingCondition::Undefined, |secrets| {
+                            secrets.get(i).map_or(HtlcSpendingCondition::WithMultisig, |_| {
+                                HtlcSpendingCondition::WithSecret
+                            })
+                        });
+
+                    get_tx_output_destination(txo, &|_| None, htlc_spending).ok_or_else(|| {
                         WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
                     })
                 })

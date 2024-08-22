@@ -32,6 +32,7 @@ use utils::ensure;
 
 use crate::account::currency_grouper::Currency;
 use crate::account::PoolData;
+use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
 use crate::{WalletError, WalletResult};
 
 /// The `SendRequest` struct provides the necessary information to the wallet
@@ -202,9 +203,10 @@ impl SendRequest {
         let destinations = utxos
             .iter()
             .map(|utxo| {
-                get_tx_output_destination(utxo, &pool_data_getter).ok_or_else(|| {
-                    WalletError::UnsupportedTransactionOutput(Box::new(utxo.clone()))
-                })
+                get_tx_output_destination(utxo, &pool_data_getter, HtlcSpendingCondition::Undefined)
+                    .ok_or_else(|| {
+                        WalletError::UnsupportedTransactionOutput(Box::new(utxo.clone()))
+                    })
             })
             .collect::<WalletResult<Vec<_>>>()?;
 
@@ -258,9 +260,12 @@ impl SendRequest {
         for (outpoint, txo) in utxos {
             self.inputs.push(outpoint);
             self.destinations.push(
-                get_tx_output_destination(&txo, &pool_data_getter).ok_or_else(|| {
-                    WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
-                })?,
+                get_tx_output_destination(
+                    &txo,
+                    &pool_data_getter,
+                    HtlcSpendingCondition::Undefined,
+                )
+                .ok_or_else(|| WalletError::UnsupportedTransactionOutput(Box::new(txo.clone())))?,
             );
             self.utxos.push(Some(txo));
         }
@@ -294,31 +299,6 @@ impl SendRequest {
             None,
         )?;
         Ok(ptx)
-    }
-}
-
-pub fn get_tx_output_destination<'a, PoolDataGetter>(
-    txo: &TxOutput,
-    pool_data_getter: &PoolDataGetter,
-) -> Option<Destination>
-where
-    PoolDataGetter: Fn(&PoolId) -> Option<&'a PoolData>,
-{
-    match txo {
-        TxOutput::Transfer(_, d)
-        | TxOutput::LockThenTransfer(_, d, _)
-        | TxOutput::CreateDelegationId(d, _)
-        | TxOutput::IssueNft(_, _, d) => Some(d.clone()),
-        TxOutput::ProduceBlockFromStake(_, pool_id) => {
-            pool_data_getter(pool_id).map(|pool_data| pool_data.decommission_key.clone())
-        }
-        TxOutput::CreateStakePool(_, data) => Some(data.decommission_key().clone()),
-        TxOutput::IssueFungibleToken(_)
-        | TxOutput::Burn(_)
-        | TxOutput::DelegateStaking(_, _)
-        | TxOutput::DataDeposit(_)
-        | TxOutput::AnyoneCanTake(_) => None,
-        TxOutput::Htlc(_, htlc) => Some(htlc.spend_key.clone()),
     }
 }
 

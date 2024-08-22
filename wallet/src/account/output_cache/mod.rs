@@ -47,7 +47,7 @@ use wallet_types::{
     AccountWalletTxId, BlockInfo, WalletTx,
 };
 
-use crate::{get_tx_output_destination, WalletError, WalletResult};
+use crate::{destination_getters::get_all_tx_output_destinations, WalletError, WalletResult};
 
 pub type UtxoWithTxOutput<'a> = (UtxoOutPoint, (&'a TxOutput, Option<TokenId>));
 
@@ -1249,8 +1249,10 @@ impl OutputCache {
                 .txs
                 .get(&utxo.source_id())
                 .and_then(|tx| tx.outputs().get(utxo.output_index() as usize))
-                .and_then(|txo| get_tx_output_destination(txo, &|pool_id| self.pools.get(pool_id)))
-                .map_or(false, |output_dest| &output_dest == dest),
+                .and_then(|txo| {
+                    get_all_tx_output_destinations(txo, &|pool_id| self.pools.get(pool_id))
+                })
+                .map_or(false, |output_dest| output_dest.contains(dest)),
             TxInput::Account(_) | TxInput::AccountCommand(_, _) => false,
         })
     }
@@ -1258,8 +1260,8 @@ impl OutputCache {
     /// Returns true if the destination is found in the transaction's outputs
     fn destination_in_tx_outputs(&self, tx: &WithId<&Transaction>, dest: &Destination) -> bool {
         tx.outputs().iter().any(|txo| {
-            get_tx_output_destination(txo, &|pool_id| self.pools.get(pool_id))
-                .map_or(false, |output_dest| &output_dest == dest)
+            get_all_tx_output_destinations(txo, &|pool_id| self.pools.get(pool_id))
+                .map_or(false, |output_dest| output_dest.contains(dest))
         })
     }
 

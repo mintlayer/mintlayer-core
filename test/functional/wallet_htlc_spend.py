@@ -195,7 +195,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             # Alice can't spend Alice's htlc without a secret
             token_id_hex = node.test_functions_reveal_token_id(token_id)
             tx_output = TransferTxOutput(alice_amount_to_swap * ATOMS_PER_TOKEN, alice_pub_key_hex, token_id_hex)
-            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(alice_htlc_tx_id, 0)], None)
+            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(alice_htlc_tx_id, 0)], [None])
             output = await wallet.sign_raw_transaction(result['result']['hex'])
             assert_in("Not all transaction inputs have been signed", output)
 
@@ -218,7 +218,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
             assert_not_in("Tokens", balance)
 
             # Bob can't spend it without secret
-            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(alice_htlc_tx_id, 0)], None)
+            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(alice_htlc_tx_id, 0)], [None])
             output = await wallet.sign_raw_transaction(result['result']['hex'])
             assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
             signed_tx = output.split('\n')[2]
@@ -238,7 +238,7 @@ class WalletHtlcSpend(BitcoinTestFramework):
 
             #Alice can't spend Bob's htlc without a secret
             tx_output = TransferTxOutput(bob_amount_to_swap * ATOMS_PER_COIN, alice_pub_key_hex, None)
-            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(bob_htlc_tx_id, 0)], None)
+            result = await wallet.compose_transaction([tx_output], [UtxoOutpoint(bob_htlc_tx_id, 0)], [None])
             output = await wallet.sign_raw_transaction(result['result']['hex'])
             assert_in("The transaction has been fully signed and is ready to be broadcast to network", output)
             signed_tx = output.split('\n')[2]

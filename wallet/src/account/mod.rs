@@ -41,6 +41,7 @@ use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
+use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
 use crate::key_chain::{AccountKeyChainImpl, KeyChainError};
 use crate::send_request::{
     make_address_output, make_address_output_from_delegation, make_address_output_token,
@@ -49,7 +50,7 @@ use crate::send_request::{
 };
 use crate::wallet::WalletPoolsFilter;
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
-use crate::{get_tx_output_destination, SendRequest, WalletError, WalletResult};
+use crate::{SendRequest, WalletError, WalletResult};
 use common::address::{Address, RpcAddress};
 use common::chain::output_value::OutputValue;
 use common::chain::tokens::{
@@ -1325,8 +1326,12 @@ impl Account {
 
         Ok((
             txo.clone(),
-            get_tx_output_destination(txo, &|pool_id| self.output_cache.pool_data(*pool_id).ok())
-                .ok_or(WalletError::InputCannotBeSpent(txo.clone()))?,
+            get_tx_output_destination(
+                txo,
+                &|pool_id| self.output_cache.pool_data(*pool_id).ok(),
+                HtlcSpendingCondition::Undefined,
+            )
+            .ok_or(WalletError::InputCannotBeSpent(txo.clone()))?,
         ))
     }
 

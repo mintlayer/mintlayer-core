@@ -4772,7 +4772,7 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
     let (_, block2) = create_block(&chain_config, &mut wallet2, vec![spend_tx], Amount::ZERO, 1);
     scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block2]);
 
-    // Htlc is not accounted in balance
+    // Coins from htlc successfully transferred
     assert_eq!(get_coin_balance(&wallet1), Amount::ZERO);
     assert_eq!(get_coin_balance(&wallet2), coin_balance);
 }
