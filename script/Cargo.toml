@@ -13,15 +13,18 @@ utils = { path = '../utils' }
 
 parity-scale-codec.workspace = true
 thiserror.workspace = true
+hex.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 logging = { path = '../logging' }
 
 flate2.workspace = true
-hex.workspace = true
 hex-literal.workspace = true
 proptest.workspace = true
+serde_json.workspace = true
 
 [features]
 default = ['testcontext']
+serde = []
 testcontext = []

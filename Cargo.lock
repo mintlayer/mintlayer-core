@@ -6459,6 +6459,8 @@ dependencies = [
  "logging",
  "parity-scale-codec",
  "proptest",
+ "serde",
+ "serde_json",
  "serialization",
  "thiserror",
  "typename",

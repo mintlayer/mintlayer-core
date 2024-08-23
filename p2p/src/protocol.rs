@@ -93,11 +93,11 @@ make_config_setting!(MaxAddrListResponseAddressCount, usize, 1000);
 ///
 /// Note that there are basically two kinds of values here:
 /// 1) The "hard" limits, which are essential parts of the protocol. Modifying such a value
-/// even slightly will break the protocol. E.g. sending a `msg_header_count_limit` number of
-/// headers signifies that the node may have more headers; modifying this limit even by 1 may
-/// cause the peers not to understand each other properly anymore.
+///    even slightly will break the protocol. E.g. sending a `msg_header_count_limit` number of
+///    headers signifies that the node may have more headers; modifying this limit even by 1 may
+///    cause the peers not to understand each other properly anymore.
 /// 2) "Soft" limits, which are intended to control weird behavior. Most peers operate under these
-/// limits anyway, so changing them slightly should not lead to protocol incompatibility.
+///    limits anyway, so changing them slightly should not lead to protocol incompatibility.
 #[derive(Debug, Default)]
 pub struct ProtocolConfig {
     // "Hard" limits:

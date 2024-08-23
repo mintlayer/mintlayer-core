@@ -22,12 +22,6 @@
 
 #![allow(non_camel_case_types)]
 
-#[cfg(feature = "serde")]
-use serde;
-
-#[cfg(feature = "serde")]
-use prelude::*;
-
 use core::{convert::From, fmt};
 
 // Note: I am deliberately not implementing PartialOrd or Ord on the
