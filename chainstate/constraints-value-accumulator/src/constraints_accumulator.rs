@@ -404,7 +404,7 @@ impl ConstrainedValueAccumulator {
                 TxOutput::DataDeposit(_) => insert_or_increase(
                     &mut accumulator.unconstrained_value,
                     CoinOrTokenId::Coin,
-                    chain_config.data_deposit_fee(),
+                    chain_config.data_deposit_fee(block_height),
                 )?,
                 TxOutput::IssueFungibleToken(_) => insert_or_increase(
                     &mut accumulator.unconstrained_value,

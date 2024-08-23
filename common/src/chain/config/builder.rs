@@ -50,8 +50,12 @@ const TESTNET_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78440);
 // The fork, at which we upgrade chainstate to distribute reward to staker proportionally to their balance
 // and change various tokens fees
 const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(138244);
+// The fork, at which txs with htlc outputs become valid, data deposit fee and max future block time offset changed
+// FIXME: set height
+const TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
+// The fork, at which order outputs become valid
+const TESTNET_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
 // The fork, at which txs with htlc and orders outputs become valid
-const TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
 const MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
 
 impl ChainType {
@@ -229,7 +233,17 @@ impl ChainType {
                         ),
                     ),
                     (
-                        TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT,
+                        TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            HtlcActivated::Yes,
+                            OrdersActivated::No,
+                        ),
+                    ),
+                    (
+                        TESTNET_ORDERS_FORK_HEIGHT,
                         ChainstateUpgrade::new(
                             TokenIssuanceVersion::V1,
                             RewardDistributionVersion::V1,
@@ -297,7 +311,6 @@ pub struct Builder {
     genesis_block: GenesisBlockInit,
     emission_schedule: EmissionScheduleInit,
     data_deposit_max_size: usize,
-    data_deposit_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_name_len: usize,
@@ -345,7 +358,6 @@ impl Builder {
             consensus_upgrades,
             chainstate_upgrades: chain_type.default_chainstate_upgrades(),
             data_deposit_max_size: super::DATA_DEPOSIT_MAX_SIZE,
-            data_deposit_fee: super::DATA_DEPOSIT_FEE,
             token_max_uri_len: super::TOKEN_MAX_URI_LEN,
             token_max_dec_count: super::TOKEN_MAX_DEC_COUNT,
             token_max_name_len: super::TOKEN_MAX_NAME_LEN,
@@ -398,7 +410,6 @@ impl Builder {
             consensus_upgrades,
             chainstate_upgrades,
             data_deposit_max_size,
-            data_deposit_fee,
             token_max_uri_len,
             token_max_dec_count,
             token_max_name_len,
@@ -491,7 +502,6 @@ impl Builder {
             consensus_upgrades,
             chainstate_upgrades,
             data_deposit_max_size,
-            data_deposit_fee,
             token_max_uri_len,
             token_max_dec_count,
             empty_consensus_reward_maturity_block_count,
@@ -631,8 +641,9 @@ mod tests {
         {
             let config = Builder::new(ChainType::Testnet).build();
 
-            let before_the_fork =
-                BlockHeight::new(rng.gen_range(0..TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT.into_int()));
+            let before_the_fork = BlockHeight::new(
+                rng.gen_range(0..TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT.into_int()),
+            );
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1,
                 config.max_future_block_time_offset(before_the_fork)
@@ -640,11 +651,11 @@ mod tests {
 
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,
-                config.max_future_block_time_offset(TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT)
+                config.max_future_block_time_offset(TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT)
             );
 
             let after_the_fork = BlockHeight::new(
-                rng.gen_range(TESTNET_HTLC_AND_ORDERS_FORK_HEIGHT.into_int()..u64::MAX),
+                rng.gen_range(TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT.into_int()..u64::MAX),
             );
             assert_eq!(
                 DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2,

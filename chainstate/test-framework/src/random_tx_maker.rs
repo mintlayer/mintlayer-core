@@ -1009,7 +1009,8 @@ impl<'a> RandomTxMaker<'a> {
                 }
             } else if switch == 6 {
                 // data deposit
-                let min_tx_fee = self.chainstate.get_chain_config().data_deposit_fee();
+                let min_tx_fee =
+                    self.chainstate.get_chain_config().data_deposit_fee(BlockHeight::zero());
                 if amount_to_spend >= min_tx_fee {
                     let change = (amount_to_spend - min_tx_fee).unwrap();
 

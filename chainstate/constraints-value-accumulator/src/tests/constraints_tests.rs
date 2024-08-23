@@ -1178,7 +1178,7 @@ fn calculate_data_deposit_fee(#[case] seed: Seed) {
         .consensus_upgrades(NetUpgrades::regtest_with_pos())
         .build();
     let block_height = BlockHeight::new(1);
-    let data_deposit_fee = chain_config.data_deposit_fee();
+    let data_deposit_fee = chain_config.data_deposit_fee(block_height);
 
     let pos_store = InMemoryPoSAccounting::new();
     let pos_db = PoSAccountingDB::new(&pos_store);

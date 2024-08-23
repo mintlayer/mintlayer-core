@@ -423,7 +423,7 @@ async fn simulation(
                         burn_value(&mut statistics, value);
                     }
                     TxOutput::DataDeposit(_) => {
-                        let data_deposit_fee = chain_config.data_deposit_fee();
+                        let data_deposit_fee = chain_config.data_deposit_fee(BlockHeight::zero());
                         burn_coins(&mut statistics, data_deposit_fee);
                     }
                     TxOutput::DelegateStaking(to_stake, _) => {

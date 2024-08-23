@@ -107,7 +107,9 @@ pub fn group_outputs_with_issuance_fee<T, Grouped: Clone>(
             TxOutput::IssueNft(_, _, _) => {
                 OutputValue::Coin(chain_config.nft_issuance_fee(block_height))
             }
-            TxOutput::DataDeposit(_) => OutputValue::Coin(chain_config.data_deposit_fee()),
+            TxOutput::DataDeposit(_) => {
+                OutputValue::Coin(chain_config.data_deposit_fee(block_height))
+            }
             TxOutput::CreateDelegationId(_, _) => continue,
             TxOutput::ProduceBlockFromStake(_, _) => {
                 return Err(WalletError::UnsupportedTransactionOutput(Box::new(

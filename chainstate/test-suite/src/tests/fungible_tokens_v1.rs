@@ -3897,7 +3897,8 @@ fn token_issue_mint_and_data_deposit_not_enough_fee(#[case] seed: Seed) {
         let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
         let token_supply_change_fee =
             tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
-        let data_deposit_fee = tf.chainstate.get_chain_config().data_deposit_fee();
+        let data_deposit_fee =
+            tf.chainstate.get_chain_config().data_deposit_fee(BlockHeight::zero());
 
         let (token_id, _, utxo_with_change) = issue_token_from_genesis(
             &mut rng,

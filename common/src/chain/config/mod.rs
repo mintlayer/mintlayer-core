@@ -283,7 +283,6 @@ pub struct ChainConfig {
     sealed_epoch_distance_from_tip: usize,
     initial_randomness: H256,
     data_deposit_max_size: usize,
-    data_deposit_fee: Amount,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_name_len: usize,
@@ -575,8 +574,12 @@ impl ChainConfig {
     }
 
     /// The fee for depositing data
-    pub fn data_deposit_fee(&self) -> Amount {
-        self.data_deposit_fee
+    pub fn data_deposit_fee(&self, height: BlockHeight) -> Amount {
+        // Change of the fee has nothing to do with htlc, they just come in the same upgrade height
+        match self.chainstate_upgrades.version_at_height(height).1.htlc_activated() {
+            HtlcActivated::No => DATA_DEPOSIT_FEE_V0,
+            HtlcActivated::Yes => DATA_DEPOSIT_FEE_V1,
+        }
     }
 
     /// The fee for issuing a fungible token
@@ -734,7 +737,8 @@ const TOKEN_CHANGE_AUTHORITY_FEE_V0: Amount = CoinUnit::from_coins(100).to_amoun
 const TOKEN_CHANGE_AUTHORITY_FEE_V1: Amount = CoinUnit::from_coins(20).to_amount_atoms();
 
 const DATA_DEPOSIT_MAX_SIZE: usize = 128;
-const DATA_DEPOSIT_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const DATA_DEPOSIT_FEE_V0: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const DATA_DEPOSIT_FEE_V1: Amount = CoinUnit::from_coins(50).to_amount_atoms(); // FIXME: set value
 
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
 const TOKEN_MAX_TICKER_LEN: usize = 12;
