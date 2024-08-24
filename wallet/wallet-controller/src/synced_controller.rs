@@ -47,8 +47,9 @@ use wallet::{
     account::{CoinSelectionAlgo, TransactionToSign, UnconfirmedTokenInfo},
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     send_request::{
-        make_address_output, make_address_output_token, make_create_delegation_output,
-        make_data_deposit_output, PoolOrTokenId, SelectedInputs, StakePoolCreationArguments,
+        get_referenced_token_ids, make_address_output, make_address_output_token,
+        make_create_delegation_output, make_data_deposit_output, PoolOrTokenId, SelectedInputs,
+        StakePoolCreationArguments,
     },
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
@@ -159,10 +160,10 @@ where
     /// Filter out utxos that contain tokens that are frozen and can't be used
     async fn filter_out_utxos_with_frozen_tokens(
         &self,
-        input_utxos: Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>,
+        input_utxos: Vec<(UtxoOutPoint, TxOutput)>,
     ) -> Result<
         (
-            Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>,
+            Vec<(UtxoOutPoint, TxOutput)>,
             BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
         ),
         ControllerError<T>,
@@ -170,36 +171,48 @@ where
         let mut result = vec![];
         let mut additional_utxo_infos = BTreeMap::new();
         for utxo in input_utxos {
-            if let Some(token_id) = utxo.2 {
-                let token_info = fetch_token_info(&self.rpc_client, token_id).await?;
+            let token_ids = get_referenced_token_ids(&utxo.1);
+            if token_ids.is_empty() {
+                result.push(utxo);
+            } else {
+                let token_infos = self.fetch_token_infos(token_ids).await?;
+                let ok_to_use = token_infos.iter().try_fold(
+                    true,
+                    |all_ok, token_info| -> Result<bool, ControllerError<T>> {
+                        let all_ok = all_ok
+                            && match &token_info {
+                                RPCTokenInfo::FungibleToken(token_info) => match &self.wallet {
+                                    WalletType2::Software(w) => w.get_token_unconfirmed_info(
+                                        self.account_index,
+                                        token_info.clone(),
+                                    ),
+                                    #[cfg(feature = "trezor")]
+                                    WalletType2::Trezor(w) => w.get_token_unconfirmed_info(
+                                        self.account_index,
+                                        token_info.clone(),
+                                    ),
+                                }
+                                .map_err(ControllerError::WalletError)?
+                                .check_can_be_used()
+                                .is_ok(),
+                                RPCTokenInfo::NonFungibleToken(_) => true,
+                            };
+                        Ok(all_ok)
+                    },
+                )?;
 
-                let ok_to_use = match &token_info {
-                    RPCTokenInfo::FungibleToken(token_info) => match &self.wallet {
-                        WalletType2::Software(w) => {
-                            w.get_token_unconfirmed_info(self.account_index, token_info.clone())
-                        }
-                        #[cfg(feature = "trezor")]
-                        WalletType2::Trezor(w) => {
-                            w.get_token_unconfirmed_info(self.account_index, token_info.clone())
-                        }
-                    }
-                    .map_err(ControllerError::WalletError)?
-                    .check_can_be_used()
-                    .is_ok(),
-                    RPCTokenInfo::NonFungibleToken(_) => true,
-                };
                 if ok_to_use {
                     result.push(utxo);
-                    additional_utxo_infos.insert(
-                        PoolOrTokenId::TokenId(token_info.token_id()),
-                        UtxoAdditionalInfo::TokenInfo {
-                            num_decimals: token_info.token_number_of_decimals(),
-                            ticker: token_info.token_ticker().to_vec(),
-                        },
-                    );
+                    for token_info in token_infos {
+                        additional_utxo_infos.insert(
+                            PoolOrTokenId::TokenId(token_info.token_id()),
+                            UtxoAdditionalInfo::TokenInfo {
+                                num_decimals: token_info.token_number_of_decimals(),
+                                ticker: token_info.token_ticker().to_vec(),
+                            },
+                        );
+                    }
                 }
-            } else {
-                result.push(utxo);
             }
         }
 
@@ -742,7 +755,7 @@ where
 
         let filtered_inputs = inputs
             .into_iter()
-            .filter(|(_, output, _)| {
+            .filter(|(_, output)| {
                 get_tx_output_destination(output, &|_| None, HtlcSpendingCondition::Skip)
                     .is_some_and(|dest| from_addresses.contains(&dest))
             })
@@ -970,7 +983,7 @@ where
 
             let all_coin_utxos = all_utxos
                 .into_iter()
-                .filter_map(|(o, txo, _)| {
+                .filter_map(|(o, txo)| {
                     let (val, dest) = match &txo {
                         TxOutput::Transfer(val, dest)
                         | TxOutput::LockThenTransfer(val, dest, _) => (val, dest),

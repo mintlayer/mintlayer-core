@@ -26,9 +26,9 @@ use common::{
         output_value::OutputValue,
         stakelock::StakePoolData,
         tokens::{
-            get_token_id_for_tx_output, make_token_id, IsTokenFreezable, IsTokenUnfreezable,
-            RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply,
-            TokenId, TokenIssuance, TokenTotalSupply,
+            make_token_id, IsTokenFreezable, IsTokenUnfreezable, RPCFungibleTokenInfo,
+            RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply, TokenId, TokenIssuance,
+            TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
         OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -49,9 +49,12 @@ use wallet_types::{
     AccountWalletTxId, BlockInfo, WalletTx,
 };
 
-use crate::{destination_getters::get_all_tx_output_destinations, WalletError, WalletResult};
+use crate::{
+    destination_getters::get_all_tx_output_destinations, send_request::get_referenced_token_ids,
+    WalletError, WalletResult,
+};
 
-pub type UtxoWithTxOutput<'a> = (UtxoOutPoint, (&'a TxOutput, Option<TokenId>));
+pub type UtxoWithTxOutput<'a> = (UtxoOutPoint, &'a TxOutput);
 
 #[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct TxInfo {
@@ -1227,7 +1230,7 @@ impl OutputCache {
         &self,
         utxo: &UtxoOutPoint,
         current_block_info: BlockInfo,
-    ) -> WalletResult<(&TxOutput, Option<TokenId>)> {
+    ) -> WalletResult<&TxOutput> {
         let tx = self
             .txs
             .get(&utxo.source_id())
@@ -1262,14 +1265,7 @@ impl OutputCache {
             WalletError::TokenV0Utxo(utxo.clone())
         );
 
-        let token_id = match tx {
-            WalletTx::Tx(tx_data) => {
-                get_token_id_for_tx_output(output, tx_data.get_transaction().inputs())
-            }
-            WalletTx::Block(_) => None,
-        };
-
-        Ok((output, token_id))
+        Ok(output)
     }
 
     pub fn find_used_tokens(
@@ -1277,14 +1273,14 @@ impl OutputCache {
         current_block_info: BlockInfo,
         inputs: &[UtxoOutPoint],
     ) -> WalletResult<BTreeSet<TokenId>> {
-        inputs
-            .iter()
-            .filter_map(|utxo| {
-                self.find_unspent_unlocked_utxo(utxo, current_block_info)
-                    .map(|(_, token_id)| token_id)
-                    .transpose()
-            })
-            .collect()
+        inputs.iter().try_fold(BTreeSet::new(), |mut token_ids, utxo| {
+            let new_ids = self
+                .find_unspent_unlocked_utxo(utxo, current_block_info)
+                .map(get_referenced_token_ids)?;
+            token_ids.extend(new_ids);
+
+            Ok(token_ids)
+        })
     }
 
     pub fn find_utxos(
@@ -1301,13 +1297,13 @@ impl OutputCache {
             .collect()
     }
 
-    pub fn utxos_with_token_ids<F: Fn(&TxOutput) -> bool>(
+    pub fn utxos<F: Fn(&TxOutput) -> bool>(
         &self,
         current_block_info: BlockInfo,
         utxo_states: UtxoStates,
         locked_state: WithLocked,
         output_filter: F,
-    ) -> Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))> {
+    ) -> Vec<(UtxoOutPoint, &TxOutput)> {
         let output_filter = &output_filter;
         self.txs
             .values()
@@ -1331,16 +1327,7 @@ impl OutputCache {
                             && !is_v0_token_output(output)
                             && output_filter(output)
                     })
-                    .map(move |(output, outpoint)| {
-                        let token_id = match tx {
-                            WalletTx::Tx(tx_data) => get_token_id_for_tx_output(
-                                output,
-                                tx_data.get_transaction().inputs(),
-                            ),
-                            WalletTx::Block(_) => None,
-                        };
-                        (outpoint, (output, token_id))
-                    })
+                    .map(|(output, outpoint)| (outpoint, output))
             })
             .collect()
     }

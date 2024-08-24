@@ -1144,7 +1144,7 @@ where
         utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
-    ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>> {
+    ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput)>> {
         let account = self.get_account(account_index)?;
         let utxos = account.get_multisig_utxos(
             utxo_types,
@@ -1152,10 +1152,7 @@ where
             utxo_states,
             with_locked,
         );
-        let utxos = utxos
-            .into_iter()
-            .map(|(outpoint, (txo, token_id))| (outpoint, txo.clone(), token_id))
-            .collect();
+        let utxos = utxos.into_iter().map(|(outpoint, txo)| (outpoint, txo.clone())).collect();
         Ok(utxos)
     }
 
@@ -1165,7 +1162,7 @@ where
         utxo_types: UtxoTypes,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
-    ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>> {
+    ) -> WalletResult<Vec<(UtxoOutPoint, TxOutput)>> {
         let account = self.get_account(account_index)?;
         let utxos = account.get_utxos(
             utxo_types,
@@ -1173,10 +1170,7 @@ where
             utxo_states,
             with_locked,
         );
-        let utxos = utxos
-            .into_iter()
-            .map(|(outpoint, (txo, token_id))| (outpoint, txo.clone(), token_id))
-            .collect();
+        let utxos = utxos.into_iter().map(|(outpoint, txo)| (outpoint, txo.clone())).collect();
         Ok(utxos)
     }
 
@@ -1438,6 +1432,7 @@ where
                 current_fee_rate,
                 consolidate_fee_rate,
                 |_s| (),
+                additional_utxo_infos,
             )?
             .0)
     }
@@ -1463,6 +1458,8 @@ where
             current_fee_rate,
             consolidate_fee_rate,
             |send_request| send_request.destinations().to_owned(),
+            //FIXME:
+            &BTreeMap::new(),
         )?;
 
         let signed_intent = self.for_account_rw_unlocked(
@@ -1494,6 +1491,7 @@ where
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
         additional_data_getter: impl Fn(&SendRequest) -> AddlData,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> WalletResult<(SignedTransaction, AddlData)> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
@@ -1553,14 +1551,12 @@ where
         &mut self,
         account_index: U31,
         destination: Destination,
-        inputs: Vec<(UtxoOutPoint, TxOutput, Option<TokenId>)>,
+        inputs: Vec<(UtxoOutPoint, TxOutput)>,
         current_fee_rate: FeeRate,
         additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_inputs(
-            inputs
-                .into_iter()
-                .map(|(outpoint, output, _)| (TxInput::Utxo(outpoint), output)),
+            inputs.into_iter().map(|(outpoint, output)| (TxInput::Utxo(outpoint), output)),
             &|_| None,
         )?;
 
