@@ -25,7 +25,7 @@ use wallet_types::currency::Currency;
 
 use super::UtxoSelectorError;
 
-pub(crate) fn group_outputs<T, Grouped: Clone>(
+pub fn group_outputs<T, Grouped: Clone>(
     outputs: impl Iterator<Item = T>,
     get_tx_output: impl Fn(&T) -> &TxOutput,
     mut combiner: impl FnMut(&mut Grouped, &T, Amount) -> WalletResult<()>,

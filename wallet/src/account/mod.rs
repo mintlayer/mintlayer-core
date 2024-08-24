@@ -271,10 +271,7 @@ impl<K: AccountKeyChains> Account<K> {
                     )
                 }
                 SelectedInputs::Inputs(ref inputs) => (
-                    inputs
-                        .iter()
-                        .map(|(outpoint, utxo)| (outpoint.clone(), (utxo, None)))
-                        .collect(),
+                    inputs.iter().map(|(outpoint, utxo)| (outpoint.clone(), utxo)).collect(),
                     selection_algo,
                 ),
             }
@@ -445,7 +442,7 @@ impl<K: AccountKeyChains> Account<K> {
         &self,
         fee_rates: CurrentFeeRate,
         pay_fee_with_currency: &Currency,
-        utxos: Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))>,
+        utxos: Vec<(UtxoOutPoint, &TxOutput)>,
     ) -> Result<BTreeMap<Currency, Vec<OutputGroup>>, WalletError> {
         let utxo_to_output_group =
             |(outpoint, txo): (UtxoOutPoint, TxOutput)| -> WalletResult<OutputGroup> {
@@ -473,9 +470,9 @@ impl<K: AccountKeyChains> Account<K> {
 
         currency_grouper::group_utxos_for_input(
             utxos.into_iter(),
-            |(_, (tx_output, _))| tx_output,
+            |(_, tx_output)| tx_output,
             |grouped: &mut Vec<(UtxoOutPoint, TxOutput)>, element, _| -> WalletResult<()> {
-                grouped.push((element.0.clone(), element.1 .0.clone()));
+                grouped.push((element.0.clone(), element.1.clone()));
                 Ok(())
             },
             vec![],
@@ -1286,7 +1283,7 @@ impl<K: AccountKeyChains> Account<K> {
         let nonce = token_info.get_next_nonce()?;
         let tx_input = TxInput::AccountCommand(
             nonce,
-            AccountCommand::ChangeTokenMetadataUri(*token_info.token_id(), metadata_uri),
+            AccountCommand::ChangeTokenMetadataUri(token_info.token_id(), metadata_uri),
         );
         let authority = token_info.authority()?.clone();
 
@@ -1372,8 +1369,7 @@ impl<K: AccountKeyChains> Account<K> {
         outpoint: &UtxoOutPoint,
         current_block_info: BlockInfo,
     ) -> WalletResult<(TxOutput, Destination)> {
-        let (txo, _) =
-            self.output_cache.find_unspent_unlocked_utxo(outpoint, current_block_info)?;
+        let txo = self.output_cache.find_unspent_unlocked_utxo(outpoint, current_block_info)?;
 
         Ok((
             txo.clone(),
@@ -1492,14 +1488,14 @@ impl<K: AccountKeyChains> Account<K> {
         };
         let amounts_by_currency = currency_grouper::group_utxos_for_input(
             self.output_cache
-                .utxos_with_token_ids(
+                .utxos(
                     current_block_info,
                     UtxoState::Confirmed.into(),
                     WithLocked::Unlocked,
                     |txo| get_utxo_type(txo).is_some() && self.is_watched_by(txo, &address),
                 )
                 .into_iter(),
-            |(_, (tx_output, _))| tx_output,
+            |(_, tx_output)| tx_output,
             |total: &mut Amount, _, amount| -> WalletResult<()> {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
                 Ok(())
@@ -1690,7 +1686,7 @@ impl<K: AccountKeyChains> Account<K> {
                 with_locked,
             )
             .into_iter(),
-            |(_, (tx_output, _))| tx_output,
+            |(_, tx_output)| tx_output,
             |total: &mut Amount, _, amount| -> WalletResult<()> {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
                 Ok(())
@@ -1706,20 +1702,15 @@ impl<K: AccountKeyChains> Account<K> {
         median_time: BlockTimestamp,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
-    ) -> Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))> {
+    ) -> Vec<(UtxoOutPoint, &TxOutput)> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
-        self.output_cache.utxos_with_token_ids(
-            current_block_info,
-            utxo_states,
-            with_locked,
-            |txo| {
-                self.is_watched_multisig_output(txo)
-                    && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
-            },
-        )
+        self.output_cache.utxos(current_block_info, utxo_states, with_locked, |txo| {
+            self.is_watched_multisig_output(txo)
+                && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
+        })
     }
 
     pub fn get_utxos(
@@ -1728,17 +1719,14 @@ impl<K: AccountKeyChains> Account<K> {
         median_time: BlockTimestamp,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
-    ) -> Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))> {
+    ) -> Vec<(UtxoOutPoint, &TxOutput)> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
-        self.output_cache.utxos_with_token_ids(
-            current_block_info,
-            utxo_states,
-            with_locked,
-            |txo| self.is_mine(txo) && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v)),
-        )
+        self.output_cache.utxos(current_block_info, utxo_states, with_locked, |txo| {
+            self.is_mine(txo) && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
+        })
     }
 
     pub fn get_transaction_list(&self, skip: usize, count: usize) -> WalletResult<TransactionList> {
