@@ -1501,7 +1501,7 @@ fn spend_from_user_specified_utxos(#[case] seed: Seed) {
 
     let selected_utxos = utxos
         .iter()
-        .map(|(outpoint, _, _)| outpoint)
+        .map(|(outpoint, _)| outpoint)
         .take(rng.gen_range(1..utxos.len()))
         .cloned()
         .collect_vec();
@@ -1635,7 +1635,7 @@ fn create_stake_pool_and_list_pool_ids(#[case] seed: Seed) {
         )
         .unwrap();
     assert_eq!(create_stake_pool_utxos.len(), 1);
-    let (_, output, _) = create_stake_pool_utxos.pop().unwrap();
+    let (_, output) = create_stake_pool_utxos.pop().unwrap();
     match output {
         TxOutput::CreateStakePool(id, data) => {
             assert_eq!(id, *pool_id);
@@ -4557,7 +4557,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
         .unwrap();
 
     assert_eq!(utxos.len(), 1);
-    let (_, output, _) = utxos.pop().unwrap();
+    let (_, output) = utxos.pop().unwrap();
 
     matches!(output, TxOutput::Transfer(OutputValue::Coin(value), dest)
             if value == balance && dest == cold_wallet_address.into_object());
@@ -4876,7 +4876,7 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
         )
         .unwrap();
     assert_eq!(wallet2_utxos.len(), 1);
-    let (_, output, _) = wallet2_utxos.pop().unwrap();
+    let (_, output) = wallet2_utxos.pop().unwrap();
     match output {
         TxOutput::Htlc(actual_output_value, actual_htlc) => {
             assert_eq!(actual_output_value, output_value);

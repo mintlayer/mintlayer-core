@@ -119,7 +119,7 @@ where
                 w.get_multisig_utxos(self.account_index, utxo_types, utxo_states, with_locked)
             }
         }
-        .map(|utxos| utxos.into_iter().map(|(outpoint, output, _)| (outpoint, output)).collect())
+        .map(|utxos| utxos.into_iter().collect())
         .map_err(ControllerError::WalletError)
     }
 
@@ -138,7 +138,6 @@ where
                 w.get_utxos(self.account_index, utxo_types, utxo_states, with_locked)
             }
         }
-        .map(|utxos| utxos.into_iter().map(|(outpoint, output, _)| (outpoint, output)).collect())
         .map_err(ControllerError::WalletError)
     }
 
