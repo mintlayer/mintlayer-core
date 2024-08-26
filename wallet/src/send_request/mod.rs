@@ -29,7 +29,7 @@ use common::primitives::{Amount, BlockHeight};
 use crypto::vrf::VRFPublicKey;
 use utils::ensure;
 use wallet_types::partially_signed_transaction::{
-    PartiallySignedTransaction, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
+    PartiallySignedTransaction, TokenAdditionalInfo, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
 };
 
 use crate::account::currency_grouper::Currency;
@@ -328,6 +328,7 @@ impl SendRequest {
     }
 }
 
+/// Find aditional data for TxOutput, mainly for UI purposes
 fn find_additional_info(
     utxo: &TxOutput,
     additional_info: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
@@ -337,17 +338,22 @@ fn find_additional_info(
         | TxOutput::Htlc(value, _)
         | TxOutput::Transfer(value, _)
         | TxOutput::LockThenTransfer(value, _, _) => {
-            find_additional_info_output_value(value, additional_info)?
+            find_token_additional_info(value, additional_info)?.map(UtxoAdditionalInfo::TokenInfo)
         }
         TxOutput::AnyoneCanTake(data) => {
-            find_additional_info_output_value(data.as_ref().ask(), additional_info)?
+            let ask = find_token_additional_info(data.ask(), additional_info)?;
+            let give = find_token_additional_info(data.give(), additional_info)?;
+
+            Some(UtxoAdditionalInfo::AnyoneCanTake { ask, give })
         }
-        TxOutput::IssueNft(_, data, _) => Some(UtxoAdditionalInfo::TokenInfo {
-            num_decimals: 0,
-            ticker: match data.as_ref() {
-                NftIssuance::V0(data) => data.metadata.ticker().clone(),
-            },
-        }),
+        TxOutput::IssueNft(_, data, _) => {
+            Some(UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                num_decimals: 0,
+                ticker: match data.as_ref() {
+                    NftIssuance::V0(data) => data.metadata.ticker().clone(),
+                },
+            }))
+        }
         TxOutput::CreateStakePool(_, data) => Some(UtxoAdditionalInfo::PoolInfo {
             staker_balance: data.pledge(),
         }),
@@ -364,17 +370,23 @@ fn find_additional_info(
     Ok(additional_info)
 }
 
-fn find_additional_info_output_value(
+fn find_token_additional_info(
     value: &OutputValue,
     additional_info: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
-) -> WalletResult<Option<UtxoAdditionalInfo>> {
+) -> WalletResult<Option<TokenAdditionalInfo>> {
     match value {
         OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(None),
         OutputValue::TokenV1(token_id, _) => additional_info
             .get(&PoolOrTokenId::TokenId(*token_id))
             .ok_or(WalletError::MissingTokenAdditionalData(*token_id))
             .cloned()
-            .map(Some),
+            .map(|data| match data {
+                UtxoAdditionalInfo::TokenInfo(data) => Ok(Some(data.clone())),
+                UtxoAdditionalInfo::PoolInfo { staker_balance: _ }
+                | UtxoAdditionalInfo::AnyoneCanTake { ask: _, give: _ } => {
+                    Err(WalletError::MissmatchedTokenAdditionalData(*token_id))
+                }
+            })?,
     }
 }
 

@@ -37,7 +37,7 @@ use wallet::{
     WalletError,
 };
 use wallet_types::partially_signed_transaction::{
-    PartiallySignedTransaction, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
+    PartiallySignedTransaction, TokenAdditionalInfo, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
 };
 
 use crate::{types::Balances, ControllerError, WalletType2};
@@ -137,6 +137,25 @@ fn pool_id_from_txo(utxo: &TxOutput) -> Option<PoolId> {
     }
 }
 
+async fn fetch_token_extra_info<T>(
+    rpc_client: &T,
+    value: &OutputValue,
+) -> Result<Option<TokenAdditionalInfo>, ControllerError<T>>
+where
+    T: NodeInterface,
+{
+    match value {
+        OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(None),
+        OutputValue::TokenV1(token_id, _) => {
+            let info = fetch_token_info(rpc_client, *token_id).await?;
+            Ok(Some(TokenAdditionalInfo {
+                num_decimals: info.token_number_of_decimals(),
+                ticker: info.token_ticker().to_vec(),
+            }))
+        }
+    }
+}
+
 pub async fn fetch_utxo_extra_info<T>(
     rpc_client: &T,
     utxo: TxOutput,
@@ -148,36 +167,18 @@ where
         TxOutput::Burn(value)
         | TxOutput::Transfer(value, _)
         | TxOutput::LockThenTransfer(value, _, _)
-        | TxOutput::Htlc(value, _) => match value {
-            OutputValue::Coin(_) | OutputValue::TokenV0(_) => {
-                Ok(UtxoWithAdditionalInfo::new(utxo, None))
-            }
-            OutputValue::TokenV1(token_id, _) => {
-                let info = fetch_token_info(rpc_client, *token_id).await?;
-                Ok(UtxoWithAdditionalInfo::new(
-                    utxo,
-                    Some(UtxoAdditionalInfo::TokenInfo {
-                        num_decimals: info.token_number_of_decimals(),
-                        ticker: info.token_ticker().to_vec(),
-                    }),
-                ))
-            }
-        },
-        TxOutput::AnyoneCanTake(order) => match order.ask() {
-            OutputValue::Coin(_) | OutputValue::TokenV0(_) => {
-                Ok(UtxoWithAdditionalInfo::new(utxo, None))
-            }
-            OutputValue::TokenV1(token_id, _) => {
-                let info = fetch_token_info(rpc_client, *token_id).await?;
-                Ok(UtxoWithAdditionalInfo::new(
-                    utxo,
-                    Some(UtxoAdditionalInfo::TokenInfo {
-                        num_decimals: info.token_number_of_decimals(),
-                        ticker: info.token_ticker().to_vec(),
-                    }),
-                ))
-            }
-        },
+        | TxOutput::Htlc(value, _) => {
+            let additional_info = fetch_token_extra_info(rpc_client, value)
+                .await?
+                .map(UtxoAdditionalInfo::TokenInfo);
+            Ok(UtxoWithAdditionalInfo::new(utxo, additional_info))
+        }
+        TxOutput::AnyoneCanTake(order) => {
+            let ask = fetch_token_extra_info(rpc_client, order.ask()).await?;
+            let give = fetch_token_extra_info(rpc_client, order.ask()).await?;
+            let additional_info = Some(UtxoAdditionalInfo::AnyoneCanTake { ask, give });
+            Ok(UtxoWithAdditionalInfo::new(utxo, additional_info))
+        }
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
             let staker_balance = rpc_client
                 .get_staker_balance(*pool_id)
