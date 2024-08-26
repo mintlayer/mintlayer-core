@@ -2631,10 +2631,10 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 
     let additional_info = BTreeMap::from_iter([(
         PoolOrTokenId::TokenId(*token_id),
-        UtxoAdditionalInfo::TokenInfo {
+        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: number_of_decimals,
             ticker: token_ticker.clone(),
-        },
+        }),
     )]);
     let transfer_tokens_transaction = wallet
         .create_transaction_to_addresses(
@@ -2982,10 +2982,10 @@ fn freeze_and_unfreeze_tokens(#[case] seed: Seed) {
 
     let additional_info = BTreeMap::from_iter([(
         PoolOrTokenId::TokenId(issued_token_id),
-        UtxoAdditionalInfo::TokenInfo {
+        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
             num_decimals: unconfirmed_token_info.num_decimals(),
             ticker: unconfirmed_token_info.token_ticker().to_vec(),
-        },
+        }),
     )]);
     let transfer_tokens_transaction = wallet
         .create_transaction_to_addresses(

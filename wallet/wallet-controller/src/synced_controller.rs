@@ -56,7 +56,9 @@ use wallet::{
     WalletError, WalletResult,
 };
 use wallet_types::{
-    partially_signed_transaction::{PartiallySignedTransaction, UtxoAdditionalInfo},
+    partially_signed_transaction::{
+        PartiallySignedTransaction, TokenAdditionalInfo, UtxoAdditionalInfo,
+    },
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
     with_locked::WithLocked,
@@ -206,10 +208,10 @@ where
                     for token_info in token_infos {
                         additional_utxo_infos.insert(
                             PoolOrTokenId::TokenId(token_info.token_id()),
-                            UtxoAdditionalInfo::TokenInfo {
+                            UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
                                 num_decimals: token_info.token_number_of_decimals(),
                                 ticker: token_info.token_ticker().to_vec(),
-                            },
+                            }),
                         );
                     }
                 }
@@ -1211,10 +1213,10 @@ where
                 token_info.check_can_be_used()?;
                 let additional_info = BTreeMap::from_iter([(
                     PoolOrTokenId::TokenId(token_info.token_id()),
-                    UtxoAdditionalInfo::TokenInfo {
+                    UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
                         num_decimals: token_info.num_decimals(),
                         ticker: token_info.token_ticker().to_vec(),
-                    },
+                    }),
                 )]);
                 match wallet {
                     WalletType2::Software(w) => w.create_transaction_to_addresses(
