@@ -42,11 +42,23 @@ pub enum PartiallySignedTransactionCreationError {
     InvalidHtlcSecretsCount,
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+pub struct TokenAdditionalInfo {
+    pub num_decimals: u8,
+    pub ticker: Vec<u8>,
+}
+
 /// Additional info for UTXOs
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub enum UtxoAdditionalInfo {
-    TokenInfo { num_decimals: u8, ticker: Vec<u8> },
-    PoolInfo { staker_balance: Amount },
+    TokenInfo(TokenAdditionalInfo),
+    PoolInfo {
+        staker_balance: Amount,
+    },
+    AnyoneCanTake {
+        ask: Option<TokenAdditionalInfo>,
+        give: Option<TokenAdditionalInfo>,
+    },
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
