@@ -1416,7 +1416,7 @@ async fn accepted_tx_size(#[case] seed: Seed, #[case] tx_size: usize, #[case] ac
     let tf = {
         let chain_config =
             common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
-                .data_deposit_max_size(2_000_000)
+                .data_deposit_max_size(Some(2_000_000))
                 .build();
         TestFramework::builder(&mut rng).with_chain_config(chain_config).build()
     };

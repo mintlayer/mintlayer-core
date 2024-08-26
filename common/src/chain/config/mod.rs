@@ -282,7 +282,7 @@ pub struct ChainConfig {
     epoch_length: NonZeroU64,
     sealed_epoch_distance_from_tip: usize,
     initial_randomness: H256,
-    data_deposit_max_size: usize,
+    data_deposit_max_size: Option<usize>,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_name_len: usize,
@@ -569,8 +569,14 @@ impl ChainConfig {
     }
 
     /// The maximum allowed size for data deposited in DataDeposit output
-    pub fn data_deposit_max_size(&self) -> usize {
-        self.data_deposit_max_size
+    pub fn data_deposit_max_size(&self, height: BlockHeight) -> usize {
+        // Change of the size has nothing to do with htlc, they just come in the same upgrade height
+        self.data_deposit_max_size.unwrap_or_else(|| {
+            match self.chainstate_upgrades.version_at_height(height).1.htlc_activated() {
+                HtlcActivated::No => DATA_DEPOSIT_MAX_SIZE_V0,
+                HtlcActivated::Yes => DATA_DEPOSIT_MAX_SIZE_V1,
+            }
+        })
     }
 
     /// The fee for depositing data
@@ -736,9 +742,10 @@ const TOKEN_FREEZE_FEE_V1: Amount = CoinUnit::from_coins(50).to_amount_atoms();
 const TOKEN_CHANGE_AUTHORITY_FEE_V0: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const TOKEN_CHANGE_AUTHORITY_FEE_V1: Amount = CoinUnit::from_coins(20).to_amount_atoms();
 
-const DATA_DEPOSIT_MAX_SIZE: usize = 128;
+const DATA_DEPOSIT_MAX_SIZE_V0: usize = 128;
+const DATA_DEPOSIT_MAX_SIZE_V1: usize = 384;
 const DATA_DEPOSIT_FEE_V0: Amount = CoinUnit::from_coins(100).to_amount_atoms();
-const DATA_DEPOSIT_FEE_V1: Amount = CoinUnit::from_coins(50).to_amount_atoms(); // FIXME: set value
+const DATA_DEPOSIT_FEE_V1: Amount = CoinUnit::from_coins(20).to_amount_atoms();
 
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
 const TOKEN_MAX_TICKER_LEN: usize = 12;

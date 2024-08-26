@@ -50,7 +50,7 @@ const TESTNET_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78440);
 // The fork, at which we upgrade chainstate to distribute reward to staker proportionally to their balance
 // and change various tokens fees
 const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(138244);
-// The fork, at which txs with htlc outputs become valid, data deposit fee and max future block time offset changed
+// The fork, at which txs with htlc outputs become valid, data deposit fee and size, max future block time offset changed
 // FIXME: set height
 const TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
 // The fork, at which order outputs become valid
@@ -310,7 +310,7 @@ pub struct Builder {
     chainstate_upgrades: NetUpgrades<ChainstateUpgrade>,
     genesis_block: GenesisBlockInit,
     emission_schedule: EmissionScheduleInit,
-    data_deposit_max_size: usize,
+    data_deposit_max_size: Option<usize>,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_name_len: usize,
@@ -357,7 +357,7 @@ impl Builder {
             emission_schedule: EmissionScheduleInit::Mainnet,
             consensus_upgrades,
             chainstate_upgrades: chain_type.default_chainstate_upgrades(),
-            data_deposit_max_size: super::DATA_DEPOSIT_MAX_SIZE,
+            data_deposit_max_size: None,
             token_max_uri_len: super::TOKEN_MAX_URI_LEN,
             token_max_dec_count: super::TOKEN_MAX_DEC_COUNT,
             token_max_name_len: super::TOKEN_MAX_NAME_LEN,
@@ -548,7 +548,7 @@ impl Builder {
     builder_method!(empty_consensus_reward_maturity_block_count: BlockCount);
     builder_method!(epoch_length: NonZeroU64);
     builder_method!(sealed_epoch_distance_from_tip: usize);
-    builder_method!(data_deposit_max_size: usize);
+    builder_method!(data_deposit_max_size: Option<usize>);
     builder_method!(min_stake_pool_pledge: Amount);
 
     pub fn checkpoints(mut self, checkpoints: BTreeMap<BlockHeight, Id<GenBlock>>) -> Self {

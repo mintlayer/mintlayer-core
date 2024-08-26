@@ -41,9 +41,9 @@ fn data_deposited_too_large(#[case] seed: Seed, #[case] expect_success: bool) {
         let mut rng = make_seedable_rng(seed);
 
         let deposited_data_len = if expect_success {
-            tf.chain_config().data_deposit_max_size()
+            tf.chain_config().data_deposit_max_size(BlockHeight::zero())
         } else {
-            tf.chain_config().data_deposit_max_size() + 1
+            tf.chain_config().data_deposit_max_size(BlockHeight::zero()) + 1
         };
         let deposited_data = (0..deposited_data_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
 
@@ -70,7 +70,7 @@ fn data_deposited_too_large(#[case] seed: Seed, #[case] expect_success: bool) {
                     CheckBlockTransactionsError::CheckTransactionError(
                         CheckTransactionError::DataDepositMaxSizeExceeded(
                             deposited_data_len,
-                            tf.chain_config().data_deposit_max_size(),
+                            tf.chain_config().data_deposit_max_size(BlockHeight::zero()),
                             tx.transaction().get_id(),
                         ),
                     ),
@@ -102,7 +102,7 @@ fn data_deposit_insufficient_fee(
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
-        let deposited_data_len = tf.chain_config().data_deposit_max_size();
+        let deposited_data_len = tf.chain_config().data_deposit_max_size(BlockHeight::zero());
         let deposited_data_len = rng.gen_range(0..deposited_data_len);
         let deposited_data = (0..deposited_data_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
 
@@ -181,7 +181,7 @@ fn data_deposit_output_attempt_spend(#[case] seed: Seed) {
         let outpoint_source_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
         let mut rng = make_seedable_rng(seed);
 
-        let deposited_data_len = tf.chain_config().data_deposit_max_size();
+        let deposited_data_len = tf.chain_config().data_deposit_max_size(BlockHeight::zero());
         let deposited_data_len = rng.gen_range(0..deposited_data_len);
         let deposited_data = (0..deposited_data_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
 

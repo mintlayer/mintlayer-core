@@ -159,10 +159,14 @@ pub fn make_stake_output(
 pub fn make_data_deposit_output(
     chain_config: &ChainConfig,
     data: Vec<u8>,
+    current_block_height: BlockHeight,
 ) -> WalletResult<Vec<TxOutput>> {
     ensure!(
-        data.len() <= chain_config.data_deposit_max_size(),
-        WalletError::DataDepositToBig(data.len(), chain_config.data_deposit_max_size())
+        data.len() <= chain_config.data_deposit_max_size(current_block_height),
+        WalletError::DataDepositToBig(
+            data.len(),
+            chain_config.data_deposit_max_size(current_block_height)
+        )
     );
     ensure!(!data.is_empty(), WalletError::EmptyDataDeposit);
 
