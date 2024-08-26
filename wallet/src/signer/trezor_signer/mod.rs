@@ -79,7 +79,7 @@ use wallet_storage::{
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{
-        PartiallySignedTransaction, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
+        PartiallySignedTransaction, TokenAdditionalInfo, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
     },
     signature_status::SignatureStatus,
     AccountId,
@@ -737,16 +737,18 @@ fn to_trezor_output_value(
             let mut token_value = MintlayerTokenOutputValue::new();
             token_value.set_token_id(token_id.to_hash().as_bytes().to_vec());
             match additional_info {
-                Some(UtxoAdditionalInfo::TokenInfo {
+                Some(UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
                     num_decimals,
                     ticker,
-                }) => {
+                })) => {
                     token_value.set_number_of_decimals(*num_decimals as u32);
                     token_value.set_token_ticker(ticker.clone());
                 }
-                Some(UtxoAdditionalInfo::PoolInfo { staker_balance: _ }) | None => {
-                    return Err(SignerError::MissingUtxoExtraInfo)
-                }
+                Some(
+                    UtxoAdditionalInfo::PoolInfo { staker_balance: _ }
+                    | UtxoAdditionalInfo::AnyoneCanTake { ask: _, give: _ },
+                )
+                | None => return Err(SignerError::MissingUtxoExtraInfo),
             }
             value.token = Some(token_value).into();
             value
