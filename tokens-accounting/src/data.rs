@@ -241,6 +241,18 @@ impl FungibleTokenData {
             new_authority,
         )
     }
+
+    pub fn change_metadata_uri(self, new_metadata_uri: Vec<u8>) -> Self {
+        Self::new_unchecked(
+            self.token_ticker,
+            self.number_of_decimals,
+            new_metadata_uri,
+            self.total_supply,
+            self.locked,
+            self.frozen,
+            self.authority,
+        )
+    }
 }
 
 impl From<TokenIssuance> for FungibleTokenData {

@@ -71,6 +71,10 @@ pub enum Error {
     CannotUndoChangeAuthorityForFrozenToken(TokenId),
     #[error("Non-zero circulating supply of non-existing token")]
     InvariantErrorNonZeroSupplyForNonExistingToken,
+    #[error("Cannot change metadata uri for frozen token '{0}`")]
+    CannotChangeMetadataUriForFrozenToken(TokenId),
+    #[error("Cannot undo change metadata uri for frozen token '{0}`")]
+    CannotUndoChangeMetadataUriForFrozenToken(TokenId),
 
     // TODO Need a more granular error reporting in the following
     //      https://github.com/mintlayer/mintlayer-core/issues/811

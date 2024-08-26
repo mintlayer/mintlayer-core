@@ -982,3 +982,134 @@ fn try_change_authority_for_freezed_token(#[case] seed: Seed) {
     );
     assert_eq!(storage, expected_storage);
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn change_metadata_flush_undo(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let token_id = make_token_id(&mut rng);
+    let token_data_1 = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
+    let new_metadata = random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec();
+    let TokenData::FungibleToken(token_data_2) = token_data_1.clone();
+    let token_data_2 =
+        TokenData::FungibleToken(token_data_2.change_metadata_uri(new_metadata.clone()));
+
+    let mut storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data_1.clone())]),
+        BTreeMap::new(),
+    );
+    let original_storage = storage.clone();
+
+    // Change metadata
+    let mut db = TokensAccountingDB::new(&mut storage);
+    let mut cache = TokensAccountingCache::new(&mut db);
+    let undo = cache.change_metadata_uri(token_id, new_metadata).unwrap();
+
+    let consumed_data = cache.consume();
+    db.batch_write_tokens_data(consumed_data).unwrap();
+
+    let expected_storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data_2.clone())]),
+        BTreeMap::new(),
+    );
+    assert_eq!(storage, expected_storage);
+
+    // undo
+    let mut db = TokensAccountingDB::new(&mut storage);
+    let mut cache = TokensAccountingCache::new(&mut db);
+    cache.undo(undo).unwrap();
+
+    let consumed_data = cache.consume();
+    db.batch_write_tokens_data(consumed_data).unwrap();
+
+    assert_eq!(storage, original_storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn change_metadata_twice(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let token_id = make_token_id(&mut rng);
+    let token_data_1 = make_token_data(&mut rng, TokenTotalSupply::Unlimited, false);
+
+    let new_metadata_1 = random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec();
+
+    let new_metadata_2 = random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec();
+    let TokenData::FungibleToken(token_data_3) = token_data_1.clone();
+    let token_data_3 =
+        TokenData::FungibleToken(token_data_3.change_metadata_uri(new_metadata_2.clone()));
+
+    let mut storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data_1.clone())]),
+        BTreeMap::new(),
+    );
+    let mut db = TokensAccountingDB::new(&mut storage);
+
+    // Change metadata
+    let mut cache = TokensAccountingCache::new(&mut db);
+    let _ = cache.change_metadata_uri(token_id, new_metadata_1).unwrap();
+    let _ = cache.change_metadata_uri(token_id, new_metadata_2).unwrap();
+
+    let consumed_data = cache.consume();
+    db.batch_write_tokens_data(consumed_data).unwrap();
+
+    let expected_storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data_3.clone())]),
+        BTreeMap::new(),
+    );
+    assert_eq!(storage, expected_storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn try_change_metadata_for_freezed_token(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let token_issuance =
+        make_token_issuance(&mut rng, TokenTotalSupply::Lockable, IsTokenFreezable::Yes);
+    let token_data = TokenData::FungibleToken(token_issuance.into());
+    let token_id = make_token_id(&mut rng);
+
+    let mut storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data.clone())]),
+        BTreeMap::new(),
+    );
+    let mut db = TokensAccountingDB::new(&mut storage);
+    let mut cache = TokensAccountingCache::new(&mut db);
+
+    // Freeze the token
+    let _ = cache.freeze_token(token_id, IsTokenUnfreezable::Yes).unwrap();
+
+    let new_metadata = random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec();
+    let TokenData::FungibleToken(token_data) = token_data.clone();
+    let new_token_data =
+        TokenData::FungibleToken(token_data.change_metadata_uri(new_metadata.clone()));
+
+    // Try change authority while token is freezed
+    let res = cache.change_metadata_uri(token_id, new_metadata.clone());
+
+    assert_eq!(
+        res.unwrap_err(),
+        crate::Error::CannotChangeMetadataUriForFrozenToken(token_id)
+    );
+
+    // Unfreeze token
+    let _ = cache.unfreeze_token(token_id).unwrap();
+
+    // Change metadata again
+    let _ = cache.change_metadata_uri(token_id, new_metadata).unwrap();
+
+    let consumed_data = cache.consume();
+    db.batch_write_tokens_data(consumed_data).unwrap();
+
+    let expected_storage = InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, new_token_data)]),
+        BTreeMap::new(),
+    );
+    assert_eq!(storage, expected_storage);
+}

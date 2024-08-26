@@ -742,6 +742,8 @@ impl BlockProcessingErrorClassification for tokens_accounting::Error {
             | Error::CannotUndoUnfreezeTokenThatIsFrozen(_)
             | Error::CannotChangeAuthorityForFrozenToken(_)
             | Error::CannotUndoChangeAuthorityForFrozenToken(_)
+            | Error::CannotChangeMetadataUriForFrozenToken(_)
+            | Error::CannotUndoChangeMetadataUriForFrozenToken(_)
             | Error::InvariantErrorNonZeroSupplyForNonExistingToken => {
                 BlockProcessingErrorClass::BadBlock
             }

@@ -434,6 +434,7 @@ impl MempoolBanScore for tokens_accounting::Error {
             tokens_accounting::Error::CannotUnmintFrozenToken(_) => 0,
             tokens_accounting::Error::CannotLockFrozenToken(_) => 0,
             tokens_accounting::Error::CannotChangeAuthorityForFrozenToken(_) => 0,
+            tokens_accounting::Error::CannotChangeMetadataUriForFrozenToken(_) => 0,
             tokens_accounting::Error::InvariantErrorNonZeroSupplyForNonExistingToken => 0,
             tokens_accounting::Error::ViewFail => 0,
             tokens_accounting::Error::StorageWrite => 0,
@@ -446,6 +447,7 @@ impl MempoolBanScore for tokens_accounting::Error {
             tokens_accounting::Error::CannotUndoFreezeTokenThatIsNotFrozen(_) => 0,
             tokens_accounting::Error::CannotUndoUnfreezeTokenThatIsFrozen(_) => 0,
             tokens_accounting::Error::CannotUndoChangeAuthorityForFrozenToken(_) => 0,
+            tokens_accounting::Error::CannotUndoChangeMetadataUriForFrozenToken(_) => 0,
         }
     }
 }

@@ -629,6 +629,8 @@ impl BanScore for tokens_accounting::Error {
             tokens_accounting::Error::CannotLockFrozenToken(_) => 100,
             tokens_accounting::Error::CannotChangeAuthorityForFrozenToken(_) => 100,
             tokens_accounting::Error::CannotUndoChangeAuthorityForFrozenToken(_) => 100,
+            tokens_accounting::Error::CannotChangeMetadataUriForFrozenToken(_) => 100,
+            tokens_accounting::Error::CannotUndoChangeMetadataUriForFrozenToken(_) => 100,
             tokens_accounting::Error::InvariantErrorNonZeroSupplyForNonExistingToken => 100,
             tokens_accounting::Error::ViewFail => 0,
             tokens_accounting::Error::StorageWrite => 0,
