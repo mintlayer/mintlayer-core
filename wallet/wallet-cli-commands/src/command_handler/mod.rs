@@ -34,6 +34,7 @@ use node_comm::node_traits::NodeInterface;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::{QrCode, QrCodeError};
 use wallet::version::get_version;
+use wallet_controller::types::GenericTokenTransfer;
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     Balances, ComposedTransaction, ControllerConfig, MnemonicInfo, NewTransaction, NftMetadata,
@@ -41,13 +42,16 @@ use wallet_rpc_lib::types::{
     RpcValidatedSignatures, TokenMetadata,
 };
 
-use crate::{errors::WalletCliCommandError, ManageableWalletCommand, WalletManagementCommand};
+use crate::{
+    errors::WalletCliCommandError, helper_types::parse_generic_token_transfer,
+    ManageableWalletCommand, WalletManagementCommand,
+};
 
 use self::local_state::WalletWithState;
 
 use super::{
     helper_types::{
-        format_delegation_info, format_pool_info, parse_output, parse_token_supply,
+        format_delegation_info, format_pool_info, parse_coin_output, parse_token_supply,
         parse_utxo_outpoint, CliForceReduce, CliUtxoState,
     },
     ColdWalletCommand, ConsoleCommand, WalletCommand,
@@ -946,13 +950,13 @@ where
                 only_transaction,
             } => {
                 let outputs: Vec<TxOutput> = outputs
-                    .into_iter()
-                    .map(|input| parse_output(input, chain_config))
+                    .iter()
+                    .map(|input| parse_coin_output(input, chain_config))
                     .collect::<Result<Vec<_>, WalletCliCommandError<N>>>()?;
 
                 let input_utxos: Vec<UtxoOutPoint> = utxos
-                    .into_iter()
-                    .map(parse_utxo_outpoint)
+                    .iter()
+                    .map(|s| parse_utxo_outpoint(s))
                     .collect::<Result<Vec<_>, WalletCliCommandError<N>>>(
                 )?;
 
@@ -963,7 +967,7 @@ where
                     .await?;
                 let mut output = format!("The hex encoded transaction is:\n{hex}\n");
 
-                format_fees(&mut output, fees, chain_config);
+                format_fees(&mut output, &fees, chain_config);
 
                 Ok(ConsoleCommand::Print(output))
             }
@@ -1228,8 +1232,8 @@ where
                 utxos,
             } => {
                 let input_utxos: Vec<UtxoOutPoint> = utxos
-                    .into_iter()
-                    .map(parse_utxo_outpoint)
+                    .iter()
+                    .map(|s| parse_utxo_outpoint(s))
                     .collect::<Result<Vec<_>, WalletCliCommandError<N>>>(
                 )?;
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
@@ -1281,7 +1285,7 @@ where
                 utxo,
                 change_address,
             } => {
-                let selected_input = parse_utxo_outpoint(utxo)?;
+                let selected_input = parse_utxo_outpoint(&utxo)?;
                 let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
                 let ComposedTransaction { hex, fees } = wallet
                     .transaction_from_cold_input(
@@ -1306,7 +1310,7 @@ where
                     Pass the following string into the cold wallet with private key to sign:\n\n{hex}\n\n\
                     Or scan the Qr code with it:\n\n{qr_code_string}\n\n{summary}\n"
                 );
-                format_fees(&mut output_str, fees, chain_config);
+                format_fees(&mut output_str, &fees, chain_config);
 
                 Ok(ConsoleCommand::Print(output_str))
             }
@@ -1361,7 +1365,7 @@ where
                 }
 
                 if let Some(fees) = fees {
-                    format_fees(&mut output_str, fees, chain_config);
+                    format_fees(&mut output_str, &fees, chain_config);
                 } else {
                     writeln!(output_str, "Could not calculate fees")
                         .expect("Writing to a memory buffer should not fail");
@@ -1381,6 +1385,71 @@ where
                     .await?;
 
                 Ok(Self::new_tx_submitted_command(new_tx))
+            }
+
+            WalletCommand::MakeTxToSendTokensFromMultisigAddress {
+                from_address,
+                fee_change_address,
+                outputs,
+            } => {
+                let outputs: Vec<GenericTokenTransfer> = outputs
+                    .into_iter()
+                    .map(|input| parse_generic_token_transfer(&input, chain_config))
+                    .collect::<Result<Vec<_>, WalletCliCommandError<N>>>()?;
+
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                let result = wallet
+                    .make_tx_to_send_tokens_from_multisig_address(
+                        selected_account,
+                        from_address,
+                        fee_change_address,
+                        outputs,
+                        self.config,
+                    )
+                    .await?;
+
+                let tx = result.transaction.as_ref();
+
+                let summary = tx.tx().text_summary(chain_config);
+
+                let is_fully_signed = tx.all_signatures_available()
+                    && result
+                        .current_signatures
+                        .iter()
+                        .all(|s| *s == RpcSignatureStatus::FullySigned);
+
+                let mut output_str = if is_fully_signed {
+                    // Note: we can only get here if this wallet owns all keys of the multisig (including the case when
+                    // it's a 1-of-1 multisig).
+
+                    let signed_tx = tx.clone().into_signed_tx().expect("already checked");
+                    let result_hex: HexEncoded<SignedTransaction> = signed_tx.into();
+
+                    format!(
+                        "The transaction has been fully signed and is ready to be broadcast to network. \
+                        You can use the command `node-submit-transaction` in a wallet connected to the internet (this one or elsewhere). \
+                        Pass the following data to the wallet to broadcast:\n\n{result_hex}\n\n{summary}"
+                    )
+                } else {
+                    let current_sigs = result
+                        .current_signatures
+                        .iter()
+                        .enumerate()
+                        .map(format_signature_status)
+                        .join(", ");
+
+                    format!(
+                        "Not all transaction inputs have been signed. This wallet does not have all the keys for that.\n\
+                        The current signature states are:\n{current_sigs}.\n\
+                        Pass the following string into the wallet that has appropriate keys for the inputs to sign what is left:\n\n\
+                        {transaction}\n\n{summary}",
+                        transaction = result.transaction
+                    )
+                };
+
+                format_fees(&mut output_str, &result.fees, chain_config);
+
+                Ok(ConsoleCommand::Print(output_str))
             }
 
             WalletCommand::CreateDelegation { owner, pool_id } => {
@@ -1667,9 +1736,9 @@ fn format_signature_status((idx, status): (usize, &RpcSignatureStatus)) -> Strin
     format!("Signature for input {idx}: {status}")
 }
 
-fn format_fees(output: &mut String, fees: Balances, chain_config: &ChainConfig) {
-    let (coins, tokens) = fees.into_coins_and_tokens();
-    let coins = coins.decimal();
+fn format_fees(output: &mut String, fees: &Balances, chain_config: &ChainConfig) {
+    let coins = fees.coins().decimal();
+    let tokens = fees.tokens();
     writeln!(
         output,
         "Fees that will be paid by the transaction:\nCoins amount: {coins}\n"
@@ -1678,7 +1747,7 @@ fn format_fees(output: &mut String, fees: Balances, chain_config: &ChainConfig) 
 
     for (token_id, amount) in tokens {
         let token_id =
-            Address::new(chain_config, token_id).expect("Encoding token id should never fail");
+            Address::new(chain_config, *token_id).expect("Encoding token id should never fail");
         let amount = amount.decimal();
         writeln!(output, "Token: {token_id} amount: {amount}")
             .expect("Writing to a memory buffer should not fail");

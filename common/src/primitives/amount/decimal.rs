@@ -34,7 +34,7 @@ const TEN: UnsignedIntType = 10;
 ///
 /// The user is expected to convert to a number or a string before comparing to explicitly state
 /// which for of comparison is desired in any given situation.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde_with::DeserializeFromStr, serde_with::SerializeDisplay)]
 pub struct DecimalAmount {
     mantissa: UnsignedIntType,
     decimals: u8,
@@ -88,6 +88,14 @@ impl DecimalAmount {
     pub fn is_same(&self, other: &Self) -> bool {
         (self.mantissa, self.decimals) == (other.mantissa, other.decimals)
     }
+
+    pub fn mantissa(&self) -> UnsignedIntType {
+        self.mantissa
+    }
+
+    pub fn decimals(&self) -> u8 {
+        self.decimals
+    }
 }
 
 fn empty_to_zero(s: &str) -> &str {
@@ -101,7 +109,7 @@ impl std::str::FromStr for DecimalAmount {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        ensure!(s.len() <= 100, ParseError::StringTooLong);
+        ensure!(s.len() <= u8::MAX as usize + 2, ParseError::StringTooLong);
 
         let s = s.trim_matches(' ');
         let s = s.replace('_', "");
@@ -118,11 +126,13 @@ impl std::str::FromStr for DecimalAmount {
 
         let decimals: u8 = frac_str.len().try_into().expect("Checked string length above");
 
-        let mantissa = TEN
-            .checked_pow(decimals as u32)
-            .and_then(|mul| int.checked_mul(mul))
-            .and_then(|shifted| shifted.checked_add(frac))
-            .ok_or(ParseError::OutOfRange)?;
+        let mantissa = if int == 0 {
+            Some(0)
+        } else {
+            TEN.checked_pow(decimals as u32).and_then(|mul| int.checked_mul(mul))
+        }
+        .and_then(|shifted| shifted.checked_add(frac))
+        .ok_or(ParseError::OutOfRange)?;
 
         Ok(Self::from_uint_decimal(mantissa, decimals))
     }
@@ -134,7 +144,8 @@ impl std::fmt::Display for DecimalAmount {
         let decimals = self.decimals as usize;
 
         if decimals > 0 {
-            // Max string length: ceil(log10(u128::MAX)) + 1 for decimal point = 40
+            // ceil(log10(u128::MAX)) + 1 for decimal point = 40
+            // This is not the maximum possible length, but a reasonable expectation of it.
             let mut buffer = String::with_capacity(40);
             write!(&mut buffer, "{mantissa:0>width$}", width = decimals + 1)?;
             assert!(buffer.len() > decimals);
@@ -271,6 +282,13 @@ mod test {
         "34028236692093846346337460743176821.1455",
         DecimalAmount::from_uint_decimal(u128::MAX, 4)
     )]
+    // Lots of decimals, such that 10 to that power doesn't fit into u128.
+    #[case(
+        "0.000000000000000000000000000000000000000000324511014521459738018348907124514301215",
+        DecimalAmount::from_uint_decimal(324511014521459738018348907124514301215, 81)
+    )]
+    // The longest possible string.
+    #[case(&("0.".to_owned() + &"0".repeat(254) + "1"), DecimalAmount::from_uint_decimal(1, 255))]
     fn parse_ok(#[case] s: &str, #[case] amt: DecimalAmount) {
         assert!(amt.is_same(&s.parse().expect("parsing failed")));
 
@@ -297,6 +315,8 @@ mod test {
         "99999_99999_99999_99999_99999.99999_99999_99999_99999_99999",
         ParseError::OutOfRange
     )]
+    // 1 digit longer than the longest possible string.
+    #[case(&("0.".to_owned() + &"0".repeat(255) + "1"), ParseError::StringTooLong)]
     fn parse_err(#[case] s: &str, #[case] expected_err: ParseError) {
         let err = s.parse::<DecimalAmount>().expect_err("parsing succeeded");
         assert_eq!(err, expected_err);

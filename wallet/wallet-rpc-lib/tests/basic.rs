@@ -29,7 +29,7 @@ use utils::{
 use wallet_rpc_lib::{
     types::{
         AddressInfo, Balances, BlockInfo, NewAccountInfo, NewTransaction, RpcAmountIn,
-        TransactionOptions,
+        RpcUtxoState, TransactionOptions,
     },
     TxState,
 };
@@ -123,8 +123,13 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
         .await
         .unwrap();
 
+    let all_utxo_states = enum_iterator::all::<RpcUtxoState>().collect::<Vec<_>>();
+
     // Get balance info
-    let balances: Balances = wallet_rpc.request("account_balance", [ACCOUNT0_ARG]).await.unwrap();
+    let balances: Balances = wallet_rpc
+        .request("account_balance", (ACCOUNT0_ARG, &all_utxo_states))
+        .await
+        .unwrap();
     let coins_before = balances.coins().amount();
     log::debug!("Balances: {balances:?}");
 
@@ -174,7 +179,10 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
         wallet_rpc.request("address_send", params).await.unwrap()
     };
 
-    let balances: Balances = wallet_rpc.request("account_balance", [ACCOUNT0_ARG]).await.unwrap();
+    let balances: Balances = wallet_rpc
+        .request("account_balance", (ACCOUNT0_ARG, &all_utxo_states))
+        .await
+        .unwrap();
 
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
     let evt1 = EventInfo::from_json(wallet_events.next().await.unwrap().unwrap());
@@ -192,7 +200,10 @@ async fn stake_and_send_coins_to_acct1(#[case] seed: Seed) {
     assert!(coins_after <= (coins_before / 2).unwrap());
     assert!(coins_after >= (coins_before / 3).unwrap());
 
-    let balances: Balances = wallet_rpc.request("account_balance", [ACCOUNT1_ARG]).await.unwrap();
+    let balances: Balances = wallet_rpc
+        .request("account_balance", (ACCOUNT1_ARG, &all_utxo_states))
+        .await
+        .unwrap();
     log::debug!("acct1 balances: {balances:?}");
 
     let _result: JsonValue = wallet_rpc

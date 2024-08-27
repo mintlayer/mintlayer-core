@@ -424,6 +424,27 @@ pub enum WalletCommand {
         amount: DecimalAmount,
     },
 
+    /// Create a transaction for sending tokens from a multisig address to other addresses, returning the change to
+    /// the original multisig address.
+    ///
+    /// The utxos to pay fees from will be selected automatically; these will be normal, single-sig utxos.
+    /// The optional `fee_change_address` specifies the destination for the change for the fee payment;
+    /// If it's unset, the destination will be taken from one of existing single-sig utxos.
+    #[clap(name = "token-make-tx-to-send-from-multisig-address")]
+    #[clap(hide = true)]
+    MakeTxToSendTokensFromMultisigAddress {
+        /// The source multisig address; the change will be sent to it as well.
+        from_address: String,
+
+        /// An optional address to which the change for the fee payment should be sent to.
+        #[arg(long = "fee-change-address")]
+        fee_change_address: Option<String>,
+
+        /// The transaction outputs, in the format `transfer(token_id,address,amount)`
+        /// e.g. transfer(tmltk1e7egscactagl7e3met67658hpl4vf9ux0ralaculjvnzhtc4qmsqv9y857,tmt1q8lhgxhycm8e6yk9zpnetdwtn03h73z70c3ha4l7,0.9)
+        outputs: Vec<String>,
+    },
+
     #[clap(name = "address-send")]
     SendToAddress {
         /// The receiving address of the coins

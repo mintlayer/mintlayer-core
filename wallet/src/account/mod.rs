@@ -27,6 +27,7 @@ use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
 use common::size_estimation::{
     input_signature_size, input_signature_size_from_destination, tx_size_with_outputs,
+    DestinationInfoProvider,
 };
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
@@ -85,7 +86,9 @@ pub use self::output_cache::{
 };
 use self::output_cache::{OutputCache, TokenIssuanceData};
 use self::transaction_list::{get_transaction_list, TransactionList};
-use self::utxo_selector::{CoinSelectionAlgo, PayFee};
+use self::utxo_selector::PayFee;
+
+pub use self::utxo_selector::CoinSelectionAlgo;
 
 pub struct CurrentFeeRate {
     pub current_fee_rate: FeeRate,
@@ -191,10 +194,13 @@ impl Account {
         self.output_cache.find_used_tokens(current_block_info, input_utxos)
     }
 
+    // Note: the default selection algo depends on whether input_utxos are empty.
+    #[allow(clippy::too_many_arguments)]
     pub fn select_inputs_for_send_request(
         &mut self,
         request: SendRequest,
         input_utxos: SelectedInputs,
+        selection_algo: Option<CoinSelectionAlgo>,
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         db_tx: &mut impl WalletStorageWriteLocked,
         median_time: BlockTimestamp,
@@ -226,6 +232,7 @@ impl Account {
             fee_rates.current_fee_rate,
             &self.chain_config,
             self.account_info.best_block_height(),
+            Some(self),
         )?;
 
         let (utxos, selection_algo) = if input_utxos.is_empty() {
@@ -236,9 +243,10 @@ impl Account {
                     UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
                     WithLocked::Unlocked,
                 ),
-                CoinSelectionAlgo::Randomize,
+                selection_algo.unwrap_or(CoinSelectionAlgo::Randomize),
             )
         } else {
+            let selection_algo = selection_algo.unwrap_or(CoinSelectionAlgo::UsePreselected);
             match input_utxos {
                 SelectedInputs::Utxos(input_utxos) => {
                     let current_block_info = BlockInfo {
@@ -247,7 +255,7 @@ impl Account {
                     };
                     (
                         self.output_cache.find_utxos(current_block_info, input_utxos)?,
-                        CoinSelectionAlgo::UsePreselected,
+                        selection_algo,
                     )
                 }
                 SelectedInputs::Inputs(ref inputs) => (
@@ -255,7 +263,7 @@ impl Account {
                         .iter()
                         .map(|(outpoint, utxo)| (outpoint.clone(), (utxo, None)))
                         .collect(),
-                    CoinSelectionAlgo::UsePreselected,
+                    selection_algo,
                 ),
             }
         };
@@ -361,10 +369,11 @@ impl Account {
             (amount_to_be_paid_in_currency_with_fees + selection_result.get_total_fees())
                 .ok_or(WalletError::OutputAmountOverflow)?,
         );
-        selected_inputs.insert(pay_fee_with_currency, selection_result);
+        selected_inputs.insert(pay_fee_with_currency.clone(), selection_result);
 
         // Check outputs against inputs and create change
         self.check_outputs_and_add_change(
+            &pay_fee_with_currency,
             output_currency_amounts,
             selected_inputs,
             change_addresses,
@@ -375,6 +384,7 @@ impl Account {
 
     fn check_outputs_and_add_change(
         &mut self,
+        pay_fee_with_currency: &currency_grouper::Currency,
         output_currency_amounts: BTreeMap<currency_grouper::Currency, Amount>,
         selected_inputs: BTreeMap<currency_grouper::Currency, utxo_selector::SelectionResult>,
         mut change_addresses: BTreeMap<Currency, Address<Destination>>,
@@ -387,7 +397,7 @@ impl Account {
             let fees = currency_result.map_or(Amount::ZERO, |result| result.get_total_fees());
 
             if fees > Amount::ZERO {
-                request.add_fee(currency.clone(), fees);
+                request.add_fee(pay_fee_with_currency.clone(), fees)?;
             }
 
             if change_amount > Amount::ZERO {
@@ -427,7 +437,7 @@ impl Account {
                 let tx_input: TxInput = outpoint.into();
                 let input_size = serialization::Encode::encoded_size(&tx_input);
 
-                let inp_sig_size = input_signature_size(&txo)?;
+                let inp_sig_size = input_signature_size(&txo, Some(self))?;
 
                 let fee = fee_rates
                     .current_fee_rate
@@ -486,6 +496,7 @@ impl Account {
             current_fee_rate,
             &self.chain_config,
             self.account_info.best_block_height(),
+            Some(self),
         )?;
 
         let input_fees = grouped_inputs
@@ -568,7 +579,10 @@ impl Account {
             .compute_fee(
                 tx_size_with_outputs(outputs.as_slice())
                     + input_size
-                    + input_signature_size_from_destination(&delegation_data.destination)?,
+                    + input_signature_size_from_destination(
+                        &delegation_data.destination,
+                        Some(self),
+                    )?,
             )
             .map_err(|_| WalletError::OutputAmountOverflow)?
             .into();
@@ -588,16 +602,18 @@ impl Account {
         let mut req = SendRequest::new()
             .with_inputs_and_destinations([(tx_input, delegation_data.destination.clone())])
             .with_outputs([output]);
-        req.add_fee(Currency::Coin, total_fee);
+        req.add_fee(Currency::Coin, total_fee)?;
 
         Ok(req)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn process_send_request(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
         request: SendRequest,
         inputs: SelectedInputs,
+        selection_algo: Option<CoinSelectionAlgo>,
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
@@ -605,6 +621,7 @@ impl Account {
         let mut request = self.select_inputs_for_send_request(
             request,
             inputs,
+            selection_algo,
             change_addresses,
             db_tx,
             median_time,
@@ -629,6 +646,7 @@ impl Account {
         self.select_inputs_for_send_request(
             request,
             inputs,
+            None,
             change_addresses,
             db_tx,
             median_time,
@@ -667,7 +685,10 @@ impl Account {
             current_fee_rate
                 .compute_fee(
                     tx_size_with_outputs(outputs.as_slice())
-                        + input_signature_size_from_destination(&pool_data.decommission_key)?
+                        + input_signature_size_from_destination(
+                            &pool_data.decommission_key,
+                            Some(self),
+                        )?
                         + serialization::Encode::encoded_size(&tx_input),
                 )
                 .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
@@ -692,7 +713,7 @@ impl Account {
                 (*id == pool_id).then_some(pool_data)
             })?
             .with_outputs([output]);
-        req.add_fee(Currency::Coin, network_fee);
+        req.add_fee(Currency::Coin, network_fee)?;
 
         Ok(req)
     }
@@ -756,7 +777,10 @@ impl Account {
         let network_fee: Amount = current_fee_rate
             .compute_fee(
                 tx_size_with_outputs(outputs.as_slice())
-                    + input_signature_size_from_destination(&delegation_data.destination)?,
+                    + input_signature_size_from_destination(
+                        &delegation_data.destination,
+                        Some(self),
+                    )?,
             )
             .map_err(|_| UtxoSelectorError::AmountArithmeticError)?
             .into();
@@ -798,7 +822,7 @@ impl Account {
         let mut req = SendRequest::new()
             .with_inputs_and_destinations([(tx_input, delegation_data.destination.clone())])
             .with_outputs(outputs);
-        req.add_fee(Currency::Coin, total_fee);
+        req.add_fee(Currency::Coin, total_fee)?;
         Ok(req)
     }
 
@@ -883,6 +907,7 @@ impl Account {
         let mut request = self.select_inputs_for_send_request(
             request,
             SelectedInputs::Utxos(vec![]),
+            None,
             BTreeMap::new(),
             db_tx,
             median_time,
@@ -949,6 +974,7 @@ impl Account {
         let mut request = self.select_inputs_for_send_request(
             request,
             SelectedInputs::Utxos(vec![]),
+            None,
             BTreeMap::new(),
             db_tx,
             median_time,
@@ -1156,6 +1182,7 @@ impl Account {
         self.select_inputs_for_send_request(
             request,
             SelectedInputs::Utxos(vec![]),
+            None,
             BTreeMap::new(),
             db_tx,
             median_time,
@@ -2022,6 +2049,17 @@ impl Account {
     }
 }
 
+impl common::size_estimation::DestinationInfoProvider for Account {
+    fn get_multisig_info(
+        &self,
+        destination: &Destination,
+    ) -> Option<common::size_estimation::MultisigInfo> {
+        self.key_chain
+            .get_multisig_challenge(destination)
+            .map(common::size_estimation::MultisigInfo::from_challenge)
+    }
+}
+
 /// There are some preselected inputs like the Token account inputs with a nonce
 /// that need to be included in the request
 /// Here we group them up by currency and sum the total amount and fee they bring to the
@@ -2031,13 +2069,14 @@ fn group_preselected_inputs(
     current_fee_rate: FeeRate,
     chain_config: &ChainConfig,
     block_height: BlockHeight,
+    dest_info_provider: Option<&dyn DestinationInfoProvider>,
 ) -> Result<BTreeMap<currency_grouper::Currency, (Amount, Amount)>, WalletError> {
     let mut preselected_inputs = BTreeMap::new();
     for (input, destination, utxo) in
         izip!(request.inputs(), request.destinations(), request.utxos())
     {
         let input_size = serialization::Encode::encoded_size(&input);
-        let inp_sig_size = input_signature_size_from_destination(destination)?;
+        let inp_sig_size = input_signature_size_from_destination(destination, dest_info_provider)?;
 
         let fee = current_fee_rate
             .compute_fee(input_size + inp_sig_size)

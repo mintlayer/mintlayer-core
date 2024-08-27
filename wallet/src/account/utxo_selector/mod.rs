@@ -654,7 +654,9 @@ fn select_all_coins(
 
 #[derive(Clone, Copy)]
 pub enum CoinSelectionAlgo {
+    /// Use all specified inputs.
     UsePreselected,
+    /// Choose inputs randomly until the target is satisfied.
     Randomize,
 }
 

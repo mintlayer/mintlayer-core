@@ -29,6 +29,7 @@ wallet-types = { path = "../types" }
 async-trait.workspace = true
 bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
 futures = { workspace = true, default-features = false }
+itertools.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }

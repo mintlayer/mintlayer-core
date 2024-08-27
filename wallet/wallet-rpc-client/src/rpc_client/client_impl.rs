@@ -34,7 +34,7 @@ use serialization::DecodeAll;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::TxInfo;
 use wallet_controller::{
-    types::{Balances, CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
+    types::{Balances, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
@@ -42,9 +42,9 @@ use wallet_rpc_lib::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
         NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcInspectTransaction,
-        RpcStandaloneAddresses, RpcTokenId, StakePoolBalance, StakingStatus,
-        StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-        VrfPublicKeyInfo,
+        RpcStandaloneAddresses, RpcTokenId, SendTokensFromMultisigAddressResult, StakePoolBalance,
+        StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TransactionOptions,
+        TxOptionsOverrides, VrfPublicKeyInfo,
     },
     ColdWalletRpcClient, WalletRpcClient,
 };
@@ -331,12 +331,17 @@ impl WalletInterface for ClientWalletRpc {
     async fn get_balance(
         &self,
         account_index: U31,
-        _utxo_states: Vec<UtxoState>,
+        utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
     ) -> Result<Balances, Self::Error> {
-        WalletRpcClient::get_balance(&self.http_client, account_index.into(), Some(with_locked))
-            .await
-            .map_err(WalletRpcError::ResponseError)
+        WalletRpcClient::get_balance(
+            &self.http_client,
+            account_index.into(),
+            utxo_states.iter().map(Into::into).collect(),
+            Some(with_locked),
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn get_multisig_utxos(
@@ -841,6 +846,27 @@ impl WalletInterface for ClientWalletRpc {
             token_id.into(),
             address.into(),
             amount.into(),
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn make_tx_to_send_tokens_from_multisig_address(
+        &self,
+        account_index: U31,
+        from_address: String,
+        fee_change_address: Option<String>,
+        outputs: Vec<GenericTokenTransfer>,
+        config: ControllerConfig,
+    ) -> Result<SendTokensFromMultisigAddressResult, Self::Error> {
+        let options = TransactionOptions::from_controller_config(&config);
+        WalletRpcClient::make_tx_to_send_tokens_from_multisig_address(
+            &self.http_client,
+            account_index.into(),
+            from_address.into(),
+            fee_change_address.map(Into::into),
+            outputs,
             options,
         )
         .await

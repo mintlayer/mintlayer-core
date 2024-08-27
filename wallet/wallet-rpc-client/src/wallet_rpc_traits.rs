@@ -29,15 +29,16 @@ use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::TxInfo;
 use wallet_controller::{
-    types::{CreatedBlockInfo, SeedWithPassPhrase, WalletInfo},
+    types::{CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::types::{
     AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
     DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
     NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcInspectTransaction, RpcSignatureStatus,
-    RpcStandaloneAddresses, RpcTokenId, StakePoolBalance, StakingStatus,
-    StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, VrfPublicKeyInfo,
+    RpcStandaloneAddresses, RpcTokenId, SendTokensFromMultisigAddressResult, StakePoolBalance,
+    StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides,
+    VrfPublicKeyInfo,
 };
 use wallet_types::with_locked::WithLocked;
 
@@ -436,6 +437,15 @@ pub trait WalletInterface {
         amount: DecimalAmount,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
+
+    async fn make_tx_to_send_tokens_from_multisig_address(
+        &self,
+        account_index: U31,
+        from_address: String,
+        fee_change_address: Option<String>,
+        outputs: Vec<GenericTokenTransfer>,
+        config: ControllerConfig,
+    ) -> Result<SendTokensFromMultisigAddressResult, Self::Error>;
 
     async fn deposit_data(
         &self,

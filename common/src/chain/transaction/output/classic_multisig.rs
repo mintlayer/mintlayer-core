@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::NonZeroU8;
+use std::num::{NonZeroU8, NonZeroUsize};
 
 use crypto::key::PublicKey;
 use serialization::{Decode, Encode};
@@ -42,15 +42,22 @@ pub enum ClassicMultisigChallengeError {
 }
 
 impl ClassicMultisigChallenge {
+    pub(crate) fn new_unchecked(
+        min_required_signatures: NonZeroU8,
+        public_keys: Vec<PublicKey>,
+    ) -> Self {
+        Self {
+            min_required_signatures: min_required_signatures.get(),
+            public_keys,
+        }
+    }
+
     pub fn new(
         chain_config: &ChainConfig,
         min_required_signatures: NonZeroU8,
         public_keys: Vec<PublicKey>,
     ) -> Result<Self, ClassicMultisigChallengeError> {
-        let res = Self {
-            min_required_signatures: min_required_signatures.get(),
-            public_keys,
-        };
+        let res = Self::new_unchecked(min_required_signatures, public_keys);
         res.is_valid(chain_config)?;
         Ok(res)
     }
@@ -89,8 +96,18 @@ impl ClassicMultisigChallenge {
         self.min_required_signatures
     }
 
+    pub fn min_required_signatures_as_non_zero(&self) -> NonZeroU8 {
+        NonZeroU8::new(self.min_required_signatures)
+            .expect("Signature count is known to be non-zero")
+    }
+
     pub fn public_keys(&self) -> &[PublicKey] {
         &self.public_keys
+    }
+
+    pub fn public_keys_count_as_non_zero(&self) -> NonZeroUsize {
+        NonZeroUsize::new(self.public_keys.len())
+            .expect("Public keys count is known to be non-zero")
     }
 }
 
