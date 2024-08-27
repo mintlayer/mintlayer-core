@@ -1321,9 +1321,9 @@ impl<B: storage::Backend> Wallet<B> {
     /// * `change_addresses`: if present will use those change_addresses instead of generating new ones
     /// * `current_fee_rate: FeeRate` - The current fee rate based on the mempool to be used for the transaction.
     /// * `consolidate_fee_rate: FeeRate` - The fee rate in case of a consolidation event, if the
-    /// current_fee_rate is lower than the consolidate_fee_rate then the wallet will tend to
-    /// use and consolidate multiple smaller inputs, else if the current_fee_rate is higher it will
-    /// tend to use inputs with lowest fee.
+    ///    current_fee_rate is lower than the consolidate_fee_rate then the wallet will tend to
+    ///    use and consolidate multiple smaller inputs, else if the current_fee_rate is higher it will
+    ///    tend to use inputs with lowest fee.
     ///
     /// # Returns
     ///

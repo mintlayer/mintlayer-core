@@ -71,7 +71,7 @@ use syn::{
 /// # Other notes
 ///
 /// 1. `tracing::instrument` has a similar feature, called `err`. E.g. the following will also log
-/// errors returned by the function:
+///    errors returned by the function:
 ///    ```
 ///    #[tracing::instrument(err)]
 ///    fn my_func() -> std::io::Result<()> { // ...
@@ -85,7 +85,7 @@ use syn::{
 ///        help localize the error either.
 ///
 /// 2. The implementation of `log_error` wraps the function body in a closure; this may lead to
-/// compilation problems if the function's result captures a lifetime. E.g. consider this code:
+///    compilation problems if the function's result captures a lifetime. E.g. consider this code:
 ///    ```ignore
 ///    struct R<'a>(&'a mut u8);
 ///
@@ -121,7 +121,7 @@ use syn::{
 ///    }
 ///    ```
 /// 3. For `async` functions, the implementation wraps the function body in an `async` block. This may also
-/// lead to compilation problems if lifetimes are involved. E.g. this code:
+///    lead to compilation problems if lifetimes are involved. E.g. this code:
 ///     ```ignore
 ///     struct Test<'a>(&'a u32);
 ///

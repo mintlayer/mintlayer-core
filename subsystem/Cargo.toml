@@ -24,3 +24,6 @@ tracing.workspace = true
 [dev-dependencies]
 static_assertions.workspace = true
 testing_logger.workspace = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }

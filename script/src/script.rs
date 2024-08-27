@@ -682,7 +682,7 @@ impl<'de> serde::Deserialize<'de> for Script {
         D: serde::Deserializer<'de>,
     {
         use core::fmt::Formatter;
-        use hashes::hex::FromHex;
+        use hex::FromHex;
 
         if deserializer.is_human_readable() {
             struct Visitor;
@@ -748,7 +748,7 @@ impl serde::Serialize for Script {
         if serializer.is_human_readable() {
             serializer.serialize_str(&format!("{:x}", self))
         } else {
-            serializer.serialize_bytes(&self.as_bytes())
+            serializer.serialize_bytes(self.as_bytes())
         }
     }
 }
@@ -953,8 +953,6 @@ mod test {
     #[test]
     #[cfg(feature = "serde")]
     fn script_json_serialize() {
-        use serde_json;
-
         let original = hex_script!("827651a0698faaa9a8a7a687");
         let json = serde_json::to_value(&original).unwrap();
         assert_eq!(

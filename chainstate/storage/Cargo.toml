@@ -38,3 +38,6 @@ num-traits.workspace = true
 [features]
 mock = [ "mockall" ]
 expensive-reads = []
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }

@@ -53,3 +53,6 @@ serial_test.workspace = true
 
 [features]
 expensive-verification = []
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }

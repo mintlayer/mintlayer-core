@@ -41,3 +41,6 @@ loom.workspace = true
 [[bench]]
 name = "benches"
 harness = false
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
