@@ -51,8 +51,7 @@ const TESTNET_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78440);
 // and change various tokens fees
 const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(138244);
 // The fork, at which txs with htlc outputs become valid, data deposit fee and size, max future block time offset changed
-// FIXME: set height
-const TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
+const TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(291790);
 // The fork, at which order outputs become valid
 const TESTNET_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
 // The fork, at which txs with htlc and orders outputs become valid
