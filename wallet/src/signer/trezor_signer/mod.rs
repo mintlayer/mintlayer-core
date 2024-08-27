@@ -21,10 +21,12 @@ use std::{
 use common::{
     address::Address,
     chain::{
+        htlc::HtlcSecret,
         output_value::OutputValue,
         signature::{
             inputsig::{
                 arbitrary_message::ArbitraryMessageSignature,
+                authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
                 authorize_pubkey_spend::AuthorizedPublicKeySpend,
                 authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
                 classical_multisig::{
@@ -120,8 +122,25 @@ impl TrezorSigner {
         destination: &Destination,
         sighash_type: SigHashType,
         sighash: H256,
+        secret: Option<HtlcSecret>,
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<(Option<InputWitness>, SignatureStatus)> {
+        let add_secret = |sig: StandardInputSignature| {
+            let sig = if let Some(htlc_secret) = secret {
+                let sig_with_secret = AuthorizedHashedTimelockContractSpend::Secret(
+                    htlc_secret,
+                    sig.raw_signature().to_owned(),
+                );
+                let serialized_sig = sig_with_secret.encode();
+
+                StandardInputSignature::new(sig.sighash_type(), serialized_sig)
+            } else {
+                sig
+            };
+
+            InputWitness::Standard(sig)
+        };
+
         match destination {
             Destination::AnyoneCanSpend => Ok((
                 Some(InputWitness::NoSignature(None)),
@@ -135,10 +154,7 @@ impl TrezorSigner {
                     signature.insert(0, 0);
                     let sig = Signature::from_data(signature)?;
                     let sig = AuthorizedPublicKeyHashSpend::new(pk, sig);
-                    let sig = InputWitness::Standard(StandardInputSignature::new(
-                        sighash_type,
-                        sig.encode(),
-                    ));
+                    let sig = add_secret(StandardInputSignature::new(sighash_type, sig.encode()));
 
                     Ok((Some(sig), SignatureStatus::FullySigned))
                 } else {
@@ -151,10 +167,7 @@ impl TrezorSigner {
                     signature.insert(0, 0);
                     let sig = Signature::from_data(signature)?;
                     let sig = AuthorizedPublicKeySpend::new(sig);
-                    let sig = InputWitness::Standard(StandardInputSignature::new(
-                        sighash_type,
-                        sig.encode(),
-                    ));
+                    let sig = add_secret(StandardInputSignature::new(sighash_type, sig.encode()));
 
                     Ok((Some(sig), SignatureStatus::FullySigned))
                 } else {
@@ -200,7 +213,7 @@ impl TrezorSigner {
                         }
                     };
 
-                    let sig = InputWitness::Standard(StandardInputSignature::new(
+                    let sig = add_secret(StandardInputSignature::new(
                         sighash_type,
                         current_signatures.encode(),
                     ));
@@ -364,6 +377,9 @@ impl Signer for TrezorSigner {
                 },
                 None => match (destination, new_signatures.get(i)) {
                     (Some(destination), Some(sig)) => {
+                        // TODO: when HTLC PR is merged get secret from the ptx
+                        let secret = None;
+
                         let sighash_type =
                             SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
                         let sighash = signature_hash(sighash_type, ptx.tx(), &inputs_utxo_refs, i)?;
@@ -372,6 +388,7 @@ impl Signer for TrezorSigner {
                             destination,
                             sighash_type,
                             sighash,
+                            secret,
                             key_chain,
                         )?;
                         Ok((sig, SignatureStatus::NotSigned, status))
