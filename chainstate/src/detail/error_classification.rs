@@ -471,6 +471,7 @@ impl BlockProcessingErrorClassification for TokensError {
             | TokensError::TransferZeroTokens(_, _)
             | TokensError::TokenIdCantBeCalculated
             | TokensError::TokensInBlockReward
+            | TokensError::TokenMetadataUriTooLarge(_)
             | TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_)
             | TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => {
                 BlockProcessingErrorClass::BadBlock

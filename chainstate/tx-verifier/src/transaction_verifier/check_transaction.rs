@@ -21,8 +21,8 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         tokens::{get_tokens_issuance_count, NftIssuance},
-        ChainConfig, HtlcActivated, SignedTransaction, TokenIssuanceVersion, Transaction,
-        TransactionSize, TxOutput,
+        AccountCommand, ChainConfig, HtlcActivated, SignedTransaction, TokenIssuanceVersion,
+        Transaction, TransactionSize, TxInput, TxOutput,
     },
     primitives::{BlockHeight, CoinOrTokenId, Id, Idable},
 };
@@ -199,7 +199,34 @@ fn check_tokens_tx(
         ),)
     );
 
-    // Check tokens
+    // FIXME: check feature activation
+
+    // Check token metadata uri change
+    tx.inputs()
+        .iter()
+        .try_for_each(|input| match input {
+            TxInput::Utxo(_) | TxInput::Account(_) => Ok(()),
+            TxInput::AccountCommand(_, command) => match command {
+                AccountCommand::MintTokens(_, _)
+                | AccountCommand::UnmintTokens(_)
+                | AccountCommand::LockTokenSupply(_)
+                | AccountCommand::FreezeToken(_, _)
+                | AccountCommand::UnfreezeToken(_)
+                | AccountCommand::ChangeTokenAuthority(_, _)
+                | AccountCommand::ConcludeOrder(_)
+                | AccountCommand::FillOrder(_, _, _) => Ok(()),
+                AccountCommand::ChangeTokenMetadataUri(token_id, metadata_uri) => {
+                    ensure!(
+                        metadata_uri.len() <= chain_config.token_max_uri_len(),
+                        TokensError::TokenMetadataUriTooLarge(*token_id)
+                    );
+                    Ok(())
+                }
+            },
+        })
+        .map_err(CheckTransactionError::TokensError)?;
+
+    // Check token issuance
     tx.outputs()
         .iter()
         .try_for_each(|output| match output {

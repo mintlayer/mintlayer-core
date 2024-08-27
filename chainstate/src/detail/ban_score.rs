@@ -335,6 +335,7 @@ impl BanScore for TokensError {
             TokensError::TokensInBlockReward => 100,
             TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
             TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => 100,
+            TokensError::TokenMetadataUriTooLarge(_) => 100,
         }
     }
 }
