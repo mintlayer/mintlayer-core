@@ -20,7 +20,7 @@ use crate::account::PoolData;
 pub enum HtlcSpendingCondition {
     WithSecret,
     WithMultisig,
-    Undefined,
+    Skip,
 }
 
 pub fn get_tx_output_destination<'a, PoolDataGetter>(
@@ -48,7 +48,7 @@ where
         TxOutput::Htlc(_, htlc) => match htlc_spending {
             HtlcSpendingCondition::WithSecret => Some(htlc.spend_key.clone()),
             HtlcSpendingCondition::WithMultisig => Some(htlc.refund_key.clone()),
-            HtlcSpendingCondition::Undefined => None,
+            HtlcSpendingCondition::Skip => None,
         },
     }
 }

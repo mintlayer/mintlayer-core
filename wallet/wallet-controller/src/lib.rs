@@ -776,7 +776,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .iter()
             .map(|txo| {
                 txo.map(|txo| {
-                    get_tx_output_destination(txo, &|_| None, HtlcSpendingCondition::Undefined)
+                    get_tx_output_destination(txo, &|_| None, HtlcSpendingCondition::Skip)
                         .ok_or_else(|| {
                             WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
                         })
@@ -932,7 +932,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 .enumerate()
                 .map(|(i, txo)| {
                     let htlc_spending =
-                        htlc_secrets.as_ref().map_or(HtlcSpendingCondition::Undefined, |secrets| {
+                        htlc_secrets.as_ref().map_or(HtlcSpendingCondition::Skip, |secrets| {
                             secrets.get(i).map_or(HtlcSpendingCondition::WithMultisig, |_| {
                                 HtlcSpendingCondition::WithSecret
                             })

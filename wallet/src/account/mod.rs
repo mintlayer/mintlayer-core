@@ -1329,7 +1329,7 @@ impl Account {
             get_tx_output_destination(
                 txo,
                 &|pool_id| self.output_cache.pool_data(*pool_id).ok(),
-                HtlcSpendingCondition::Undefined,
+                HtlcSpendingCondition::Skip,
             )
             .ok_or(WalletError::InputCannotBeSpent(txo.clone()))?,
         ))

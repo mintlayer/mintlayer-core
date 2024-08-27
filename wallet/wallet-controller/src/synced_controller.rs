@@ -540,7 +540,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             .await?
             .into_iter()
             .filter(|(_, output, _)| {
-                get_tx_output_destination(output, &|_| None, HtlcSpendingCondition::Undefined)
+                get_tx_output_destination(output, &|_| None, HtlcSpendingCondition::Skip)
                     .map_or(false, |dest| from_addresses.contains(&dest))
             })
             .collect::<Vec<_>>();
@@ -618,16 +618,13 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         let change_address = if let Some(change_address) = change_address {
             change_address
         } else {
-            let utxo_dest = get_tx_output_destination(
-                &utxo_output,
-                &|_| None,
-                HtlcSpendingCondition::Undefined,
-            )
-            .ok_or_else(|| {
-                ControllerError::WalletError(WalletError::UnsupportedTransactionOutput(Box::new(
-                    utxo_output.clone(),
-                )))
-            })?;
+            let utxo_dest =
+                get_tx_output_destination(&utxo_output, &|_| None, HtlcSpendingCondition::Skip)
+                    .ok_or_else(|| {
+                        ControllerError::WalletError(WalletError::UnsupportedTransactionOutput(
+                            Box::new(utxo_output.clone()),
+                        ))
+                    })?;
             Address::new(self.chain_config, utxo_dest).expect("addressable")
         };
 

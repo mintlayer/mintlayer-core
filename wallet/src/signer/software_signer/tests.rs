@@ -141,7 +141,7 @@ fn sign_transaction(#[case] seed: Seed) {
         let destination = get_tx_output_destination(
             utxos_ref[i].unwrap(),
             &|_| None,
-            HtlcSpendingCondition::Undefined,
+            HtlcSpendingCondition::Skip,
         )
         .unwrap();
 

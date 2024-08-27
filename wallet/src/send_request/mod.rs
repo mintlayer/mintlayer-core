@@ -203,7 +203,7 @@ impl SendRequest {
         let destinations = utxos
             .iter()
             .map(|utxo| {
-                get_tx_output_destination(utxo, &pool_data_getter, HtlcSpendingCondition::Undefined)
+                get_tx_output_destination(utxo, &pool_data_getter, HtlcSpendingCondition::Skip)
                     .ok_or_else(|| {
                         WalletError::UnsupportedTransactionOutput(Box::new(utxo.clone()))
                     })
@@ -260,12 +260,10 @@ impl SendRequest {
         for (outpoint, txo) in utxos {
             self.inputs.push(outpoint);
             self.destinations.push(
-                get_tx_output_destination(
-                    &txo,
-                    &pool_data_getter,
-                    HtlcSpendingCondition::Undefined,
-                )
-                .ok_or_else(|| WalletError::UnsupportedTransactionOutput(Box::new(txo.clone())))?,
+                get_tx_output_destination(&txo, &pool_data_getter, HtlcSpendingCondition::Skip)
+                    .ok_or_else(|| {
+                        WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
+                    })?,
             );
             self.utxos.push(Some(txo));
         }
