@@ -627,6 +627,11 @@ impl ChainConfig {
         }
     }
 
+    /// The fee for changing token metadata uri
+    pub fn token_change_metadata_uri_fee(&self) -> Amount {
+        TOKEN_CHANGE_METADATA_URI_FEE
+    }
+
     /// The maximum length of a URI contained in a token
     #[must_use]
     pub fn token_max_uri_len(&self) -> usize {
@@ -740,8 +745,7 @@ const TOKEN_FREEZE_FEE_V1: Amount = CoinUnit::from_coins(50).to_amount_atoms();
 const TOKEN_CHANGE_AUTHORITY_FEE_V0: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const TOKEN_CHANGE_AUTHORITY_FEE_V1: Amount = CoinUnit::from_coins(20).to_amount_atoms();
 
-// FIXME: enforce
-const TOKEN_CHANGE_METADATA_FEE: Amount = CoinUnit::from_coins(20).to_amount_atoms();
+const TOKEN_CHANGE_METADATA_URI_FEE: Amount = CoinUnit::from_coins(20).to_amount_atoms();
 
 const DATA_DEPOSIT_MAX_SIZE_V0: usize = 128;
 const DATA_DEPOSIT_MAX_SIZE_V1: usize = 384;
