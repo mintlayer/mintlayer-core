@@ -617,6 +617,7 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
                     | AccountCommand::UnmintTokens(token_id)
                     | AccountCommand::UnfreezeToken(token_id)
                     | AccountCommand::LockTokenSupply(token_id)
+                    | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                     | AccountCommand::ChangeTokenAuthority(token_id, _) => Some(*token_id),
                     AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
                 },
@@ -1138,6 +1139,7 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     )
                     .await;
                 }
+                AccountCommand::ChangeTokenMetadataUri(_, _) => todo!(),
                 AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
                     // TODO(orders)
                 }

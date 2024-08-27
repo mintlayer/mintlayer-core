@@ -350,6 +350,7 @@ impl ConstrainedValueAccumulator {
 
                 Ok((ask_currency, output_value_amount(fill_value)?))
             }
+            AccountCommand::ChangeTokenMetadataUri(_, _) => todo!(),
         }
     }
 

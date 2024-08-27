@@ -226,6 +226,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                 | AccountCommand::LockTokenSupply(token_id)
                 | AccountCommand::FreezeToken(token_id, _)
                 | AccountCommand::UnfreezeToken(token_id)
+                | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                 | AccountCommand::ChangeTokenAuthority(token_id, _) => {
                     let dest = ctx
                         .get_tokens_authority(token_id)?
@@ -335,6 +336,7 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 | AccountCommand::LockTokenSupply(_token_id)
                 | AccountCommand::FreezeToken(_token_id, _)
                 | AccountCommand::UnfreezeToken(_token_id)
+                | AccountCommand::ChangeTokenMetadataUri(_token_id, _)
                 | AccountCommand::ChangeTokenAuthority(_token_id, _) => Ok(WitnessScript::TRUE),
                 AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
                     Ok(WitnessScript::TRUE)
@@ -430,6 +432,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                 | AccountCommand::LockTokenSupply(token_id)
                 | AccountCommand::FreezeToken(token_id, _)
                 | AccountCommand::UnfreezeToken(token_id)
+                | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                 | AccountCommand::ChangeTokenAuthority(token_id, _) => {
                     let dest = ctx
                         .get_tokens_authority(token_id)?

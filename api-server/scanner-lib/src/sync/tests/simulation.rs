@@ -486,6 +486,7 @@ async fn simulation(
                                 chain_config.token_change_authority_fee(block_height);
                             burn_coins(&mut statistics, token_change_authority_fee);
                         }
+                        AccountCommand::ChangeTokenMetadataUri(_token_id, _) => todo!(),
                         AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
                             unimplemented!() // TODO(orders)
                         }

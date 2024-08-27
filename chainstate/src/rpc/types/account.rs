@@ -113,6 +113,7 @@ impl RpcAccountCommand {
                     new_authority: RpcAddress::new(chain_config, destination.clone())?,
                 }
             }
+            AccountCommand::ChangeTokenMetadataUri(_, _) => todo!(),
             AccountCommand::ConcludeOrder(id) => RpcAccountCommand::ConcludeOrder {
                 order_id: RpcAddress::new(chain_config, *id)?,
             },

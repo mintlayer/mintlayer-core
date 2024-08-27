@@ -618,6 +618,7 @@ where
                             });
                         Some(res)
                     }
+                    AccountCommand::ChangeTokenMetadataUri(_, _) => todo!(),
                     AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
                 },
             })
@@ -758,7 +759,8 @@ where
                     | AccountCommand::LockTokenSupply(..)
                     | AccountCommand::FreezeToken(..)
                     | AccountCommand::UnfreezeToken(..)
-                    | AccountCommand::ChangeTokenAuthority(..) => None,
+                    | AccountCommand::ChangeTokenAuthority(..)
+                    | AccountCommand::ChangeTokenMetadataUri(..) => None,
                     AccountCommand::ConcludeOrder(order_id) => {
                         let res = self
                             .spend_input_from_account(*nonce, account_op.clone().into())

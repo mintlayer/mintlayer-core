@@ -361,6 +361,7 @@ pub fn tx_input_to_json(
                     "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
                 })
             }
+            AccountCommand::ChangeTokenMetadataUri(_, _) => todo!(),
         },
     }
 }

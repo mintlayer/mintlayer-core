@@ -1289,6 +1289,7 @@ impl Account {
                         | AccountCommand::UnmintTokens(token_id)
                         | AccountCommand::LockTokenSupply(token_id)
                         | AccountCommand::ChangeTokenAuthority(token_id, _)
+                        | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                         | AccountCommand::FreezeToken(token_id, _)
                         | AccountCommand::UnfreezeToken(token_id) => self
                             .output_cache
@@ -1782,7 +1783,10 @@ impl Account {
                 | AccountCommand::UnmintTokens(token_id)
                 | AccountCommand::LockTokenSupply(token_id)
                 | AccountCommand::FreezeToken(token_id, _)
-                | AccountCommand::UnfreezeToken(token_id) => self.find_token(token_id).is_ok(),
+                | AccountCommand::UnfreezeToken(token_id)
+                | AccountCommand::ChangeTokenMetadataUri(token_id, _) => {
+                    self.find_token(token_id).is_ok()
+                }
                 AccountCommand::ChangeTokenAuthority(token_id, address) => {
                     self.find_token(token_id).is_ok()
                         || self.is_destination_mine_or_watched(address)
@@ -2210,6 +2214,7 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
+                AccountCommand::ChangeTokenMetadataUri(_, _) => todo!(),
                 // TODO(orders)
                 AccountCommand::ConcludeOrder(_) => unimplemented!(),
                 AccountCommand::FillOrder(_, _, _) => unimplemented!(),

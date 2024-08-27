@@ -150,6 +150,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                         | AccountCommand::LockTokenSupply(token_id)
                         | AccountCommand::FreezeToken(token_id, _)
                         | AccountCommand::UnfreezeToken(token_id)
+                        | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                         | AccountCommand::ChangeTokenAuthority(token_id, _) => {
                             let token_data = tokens_view
                                 .get_token_data(token_id)

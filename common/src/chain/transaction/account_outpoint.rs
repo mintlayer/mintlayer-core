@@ -52,7 +52,8 @@ impl From<AccountCommand> for AccountType {
             | AccountCommand::LockTokenSupply(id)
             | AccountCommand::FreezeToken(id, _)
             | AccountCommand::UnfreezeToken(id)
-            | AccountCommand::ChangeTokenAuthority(id, _) => AccountType::Token(id),
+            | AccountCommand::ChangeTokenAuthority(id, _)
+            | AccountCommand::ChangeTokenMetadataUri(id, _) => AccountType::Token(id),
             AccountCommand::ConcludeOrder(id) | AccountCommand::FillOrder(id, _, _) => {
                 AccountType::Order(id)
             }
@@ -119,6 +120,9 @@ pub enum AccountCommand {
     ConcludeOrder(OrderId),
     #[codec(index = 7)]
     FillOrder(OrderId, OutputValue, Destination),
+    // Change token metadata uri
+    #[codec(index = 8)]
+    ChangeTokenMetadataUri(TokenId, Vec<u8>),
 }
 
 /// Type of OutPoint that represents spending from an account
