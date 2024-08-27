@@ -1182,8 +1182,9 @@ where
         let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let random_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
 
+        let token_ticker = "XXXX".as_bytes().to_vec();
         let token_data = FungibleTokenData {
-            token_ticker: "XXXX".as_bytes().to_vec(),
+            token_ticker: token_ticker.clone(),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: "http://uri".as_bytes().to_vec(),
             circulating_supply: Amount::ZERO,
@@ -1217,7 +1218,7 @@ where
                 creator: None,
                 name: "Name".as_bytes().to_vec(),
                 description: "SomeNFT".as_bytes().to_vec(),
-                ticker: "XXXX".as_bytes().to_vec(),
+                ticker: token_ticker.clone(),
                 icon_uri: DataOrNoVec::from(None),
                 additional_metadata_uri: DataOrNoVec::from(None),
                 media_uri: DataOrNoVec::from(None),
@@ -1251,8 +1252,24 @@ where
         assert!(ids.contains(&random_token_id5));
         assert!(ids.contains(&random_token_id6));
 
+        // will return all token and nft ids
+        let ids = db_tx.get_token_ids_by_ticker(6, 0, &token_ticker).await.unwrap();
+        assert!(ids.contains(&random_token_id1));
+        assert!(ids.contains(&random_token_id2));
+        assert!(ids.contains(&random_token_id3));
+
+        assert!(ids.contains(&random_token_id4));
+        assert!(ids.contains(&random_token_id5));
+        assert!(ids.contains(&random_token_id6));
+
         // will return the tokens first
         let ids = db_tx.get_token_ids(3, 0).await.unwrap();
+        assert!(ids.contains(&random_token_id1));
+        assert!(ids.contains(&random_token_id2));
+        assert!(ids.contains(&random_token_id3));
+
+        // will return the tokens first
+        let ids = db_tx.get_token_ids_by_ticker(3, 0, &token_ticker).await.unwrap();
         assert!(ids.contains(&random_token_id1));
         assert!(ids.contains(&random_token_id2));
         assert!(ids.contains(&random_token_id3));
@@ -1262,6 +1279,15 @@ where
         assert!(ids.contains(&random_token_id4));
         assert!(ids.contains(&random_token_id5));
         assert!(ids.contains(&random_token_id6));
+
+        // will return the nft second
+        let ids = db_tx.get_token_ids_by_ticker(3, 3, &token_ticker).await.unwrap();
+        assert!(ids.contains(&random_token_id4));
+        assert!(ids.contains(&random_token_id5));
+        assert!(ids.contains(&random_token_id6));
+
+        let ids = db_tx.get_token_ids_by_ticker(0, 6, "NOT_FOUND".as_bytes()).await.unwrap();
+        assert!(ids.is_empty());
     }
 
     // test coin and token statistics

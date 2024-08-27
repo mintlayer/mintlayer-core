@@ -236,6 +236,15 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         self.transaction.get_token_ids(len, offset)
     }
 
+    async fn get_token_ids_by_ticker(
+        &self,
+        len: u32,
+        offset: u32,
+        ticker: &[u8],
+    ) -> Result<Vec<TokenId>, ApiServerStorageError> {
+        self.transaction.get_token_ids_by_ticker(len, offset, ticker)
+    }
+
     async fn get_statistic(
         &self,
         statistic: CoinOrTokenStatistic,
