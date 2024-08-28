@@ -21,6 +21,7 @@ use common::{
     },
     primitives::amount::RpcAmountOut,
 };
+use rpc::types::RpcHexString;
 
 use super::output::RpcOutputValue;
 
@@ -74,6 +75,10 @@ pub enum RpcAccountCommand {
         token_id: RpcAddress<TokenId>,
         new_authority: RpcAddress<Destination>,
     },
+    ChangeTokenMetadataUri {
+        token_id: RpcAddress<TokenId>,
+        new_metadata_uri: RpcHexString,
+    },
     ConcludeOrder {
         order_id: RpcAddress<OrderId>,
     },
@@ -113,7 +118,12 @@ impl RpcAccountCommand {
                     new_authority: RpcAddress::new(chain_config, destination.clone())?,
                 }
             }
-            AccountCommand::ChangeTokenMetadataUri(_, _) => todo!(),
+            AccountCommand::ChangeTokenMetadataUri(id, metadata_uri) => {
+                RpcAccountCommand::ChangeTokenMetadataUri {
+                    token_id: RpcAddress::new(chain_config, *id)?,
+                    new_metadata_uri: RpcHexString::from_bytes(metadata_uri.clone()),
+                }
+            }
             AccountCommand::ConcludeOrder(id) => RpcAccountCommand::ConcludeOrder {
                 order_id: RpcAddress::new(chain_config, *id)?,
             },

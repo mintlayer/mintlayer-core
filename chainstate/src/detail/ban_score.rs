@@ -365,6 +365,7 @@ impl BanScore for CheckTransactionError {
             CheckTransactionError::HtlcsAreNotActivated => 100,
             CheckTransactionError::OrdersAreNotActivated(_) => 100,
             CheckTransactionError::OrdersCurrenciesMustBeDifferent(_) => 100,
+            CheckTransactionError::ChangeTokenMetadataUriNotActivated => 100,
         }
     }
 }

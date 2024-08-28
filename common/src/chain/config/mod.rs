@@ -52,8 +52,9 @@ use self::emission_schedule::DEFAULT_INITIAL_MINT;
 use super::output_value::OutputValue;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 use super::{
-    ChainstateUpgrade, ConsensusUpgrade, DataDepositFeeVersion, HtlcActivated, OrdersActivated,
-    RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
+    ChainstateUpgrade, ChangeTokenMetadataUriActivated, ConsensusUpgrade, DataDepositFeeVersion,
+    HtlcActivated, OrdersActivated, RewardDistributionVersion, TokenIssuanceVersion,
+    TokensFeeVersion,
 };
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1: Duration = Duration::from_secs(120);
@@ -900,6 +901,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                     RewardDistributionVersion::V1,
                     TokensFeeVersion::V1,
                     DataDepositFeeVersion::V1,
+                    ChangeTokenMetadataUriActivated::Yes,
                     HtlcActivated::Yes,
                     OrdersActivated::Yes,
                 ),

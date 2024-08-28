@@ -57,12 +57,19 @@ pub enum DataDepositFeeVersion {
     V1,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum ChangeTokenMetadataUriActivated {
+    Yes,
+    No,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
     reward_distribution_version: RewardDistributionVersion,
     tokens_fee_version: TokensFeeVersion,
     data_deposit_fee_version: DataDepositFeeVersion,
+    change_token_metadata_uri_activated: ChangeTokenMetadataUriActivated,
     htlc_activated: HtlcActivated,
     orders_activated: OrdersActivated,
 }
@@ -73,6 +80,7 @@ impl ChainstateUpgrade {
         reward_distribution_version: RewardDistributionVersion,
         tokens_fee_version: TokensFeeVersion,
         data_deposit_fee_version: DataDepositFeeVersion,
+        change_token_metadata_uri_activated: ChangeTokenMetadataUriActivated,
         htlc_activated: HtlcActivated,
         orders_activated: OrdersActivated,
     ) -> Self {
@@ -81,6 +89,7 @@ impl ChainstateUpgrade {
             reward_distribution_version,
             tokens_fee_version,
             data_deposit_fee_version,
+            change_token_metadata_uri_activated,
             htlc_activated,
             orders_activated,
         }
@@ -108,6 +117,10 @@ impl ChainstateUpgrade {
 
     pub fn data_deposit_fee_version(&self) -> DataDepositFeeVersion {
         self.data_deposit_fee_version
+    }
+
+    pub fn change_token_metadata_uri_activated(&self) -> ChangeTokenMetadataUriActivated {
+        self.change_token_metadata_uri_activated
     }
 }
 

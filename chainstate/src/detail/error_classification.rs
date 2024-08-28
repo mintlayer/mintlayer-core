@@ -800,6 +800,7 @@ impl BlockProcessingErrorClassification for CheckTransactionError {
             | CheckTransactionError::DeprecatedTokenOperationVersion(_, _)
             | CheckTransactionError::HtlcsAreNotActivated
             | CheckTransactionError::OrdersAreNotActivated(_)
+            | CheckTransactionError::ChangeTokenMetadataUriNotActivated
             | CheckTransactionError::OrdersCurrenciesMustBeDifferent(_) => {
                 BlockProcessingErrorClass::BadBlock
             }

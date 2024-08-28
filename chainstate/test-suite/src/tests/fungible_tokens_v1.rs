@@ -5437,3 +5437,450 @@ fn issue_same_token_alternative_pos_chain(#[case] seed: Seed) {
         assert_eq!(Id::<GenBlock>::from(alt_block_c_id), tf.best_block_id());
     });
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_change_metadata_uri(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (token_id, _, utxo_with_change) = issue_token_from_genesis(
+            &mut rng,
+            &mut tf,
+            TokenTotalSupply::Lockable,
+            IsTokenFreezable::No,
+        );
+
+        // too large metadata
+        let max_len = tf.chain_config().token_max_uri_len();
+        {
+            let too_large_metadata_uri =
+                random_ascii_alphanumeric_string(&mut rng, (max_len + 1)..(max_len * 100))
+                    .as_bytes()
+                    .to_vec();
+            let result = tf
+                .make_block_builder()
+                .add_transaction(
+                    TransactionBuilder::new()
+                        .add_input(
+                            TxInput::from_command(
+                                AccountNonce::new(0),
+                                AccountCommand::ChangeTokenMetadataUri(
+                                    token_id,
+                                    too_large_metadata_uri,
+                                ),
+                            ),
+                            InputWitness::NoSignature(None),
+                        )
+                        .add_input(
+                            utxo_with_change.clone().into(),
+                            InputWitness::NoSignature(None),
+                        )
+                        .build(),
+                )
+                .build_and_process(&mut rng);
+            assert_eq!(
+                result.unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                    chainstate::CheckBlockError::CheckTransactionFailed(
+                        chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                            tx_verifier::CheckTransactionError::TokensError(
+                                TokensError::TokenMetadataUriTooLarge(token_id)
+                            )
+                        )
+                    )
+                ))
+            );
+        }
+
+        let new_metadata_uri =
+            random_ascii_alphanumeric_string(&mut rng, 1..=max_len).as_bytes().to_vec();
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_command(
+                            AccountNonce::new(0),
+                            AccountCommand::ChangeTokenMetadataUri(
+                                token_id,
+                                new_metadata_uri.clone(),
+                            ),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        utxo_with_change.clone().into(),
+                        InputWitness::NoSignature(None),
+                    )
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Check result
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
+        let tokens_accounting::TokenData::FungibleToken(actual_token_data) =
+            actual_token_data.unwrap();
+        assert_eq!(actual_token_data.metadata_uri(), &new_metadata_uri);
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_change_metadata_for_frozen_token(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let unfreeze_fee = tf.chain_config().token_freeze_fee(BlockHeight::zero());
+        let change_metadata_fee = tf.chain_config().token_change_metadata_uri_fee();
+
+        let (token_id, _, utxo_with_change) = issue_token_from_genesis(
+            &mut rng,
+            &mut tf,
+            TokenTotalSupply::Unlimited,
+            IsTokenFreezable::Yes,
+        );
+
+        // Freeze the token
+        let freeze_token_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(0),
+                    AccountCommand::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                utxo_with_change.clone().into(),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((change_metadata_fee + unfreeze_fee).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let freeze_token_tx_id = freeze_token_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(freeze_token_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Try change metadata when the token is frozen
+        let new_metadata_uri =
+            random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec();
+
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_command(
+                            AccountNonce::new(1),
+                            AccountCommand::ChangeTokenMetadataUri(
+                                token_id,
+                                new_metadata_uri.clone(),
+                            ),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(freeze_token_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .build(),
+            )
+            .build_and_process(&mut rng);
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensAccountingError(
+                    tokens_accounting::Error::CannotChangeMetadataUriForFrozenToken(token_id)
+                )
+            ))
+        );
+
+        // Unfreeze token
+        let unfreeze_token_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(1),
+                    AccountCommand::UnfreezeToken(token_id),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(freeze_token_tx_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(change_metadata_fee),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let unfreeze_token_tx_id = unfreeze_token_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(unfreeze_token_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Change metadata after unfreeze
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_command(
+                            AccountNonce::new(2),
+                            AccountCommand::ChangeTokenMetadataUri(
+                                token_id,
+                                new_metadata_uri.clone(),
+                            ),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(unfreeze_token_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Check result
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
+        let tokens_accounting::TokenData::FungibleToken(actual_token_data) =
+            actual_token_data.unwrap();
+        assert_eq!(actual_token_data.metadata_uri(), &new_metadata_uri);
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reorg_metadata_uri_change(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+        let genesis_block_id = tf.best_block_id();
+
+        // Create block `a` with token issuance
+        let token_issuance =
+            make_issuance(&mut rng, TokenTotalSupply::Unlimited, IsTokenFreezable::No);
+        let (token_id, block_a_id, block_a_change_utxo) = issue_token_from_block(
+            &mut rng,
+            &mut tf,
+            genesis_block_id,
+            UtxoOutPoint::new(genesis_block_id.into(), 0),
+            token_issuance.clone(),
+        );
+        assert_eq!(tf.best_block_id(), block_a_id);
+
+        // Create block `b` with token minting
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(2..100_000_000));
+        let (block_b_id, mint_tokens_tx_id) = mint_tokens_in_block(
+            &mut rng,
+            &mut tf,
+            block_a_id.into(),
+            block_a_change_utxo,
+            token_id,
+            amount_to_mint,
+            true,
+        );
+        assert_eq!(tf.best_block_id(), block_b_id);
+
+        let original_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
+        let tokens_accounting::TokenData::FungibleToken(original_token_data) =
+            original_token_data.unwrap();
+        let original_metadata_uri = original_token_data.metadata_uri().to_owned();
+
+        // Create block `c` which changes token metadata uri
+        let new_metadata_uri =
+            random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec();
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_command(
+                            AccountNonce::new(1),
+                            AccountCommand::ChangeTokenMetadataUri(
+                                token_id,
+                                new_metadata_uri.clone(),
+                            ),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(mint_tokens_tx_id.into(), 1),
+                        InputWitness::NoSignature(None),
+                    )
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Check the storage
+        let tokens_accounting::TokenData::FungibleToken(actual_new_token_data) = tf
+            .storage
+            .transaction_ro()
+            .unwrap()
+            .read_tokens_accounting_data()
+            .unwrap()
+            .token_data
+            .get(&token_id)
+            .cloned()
+            .unwrap();
+        let actual_new_metadata_uri = actual_new_token_data.metadata_uri();
+        assert_eq!(actual_new_metadata_uri, new_metadata_uri);
+
+        // Add blocks from genesis to trigger the reorg
+        let block_e_id = tf.create_chain((&block_b_id).into(), 2, &mut rng).unwrap();
+        assert_eq!(tf.best_block_id(), block_e_id);
+
+        // Check the storage
+        let tokens_accounting::TokenData::FungibleToken(actual_token_data) = tf
+            .storage
+            .transaction_ro()
+            .unwrap()
+            .read_tokens_accounting_data()
+            .unwrap()
+            .token_data
+            .get(&token_id)
+            .cloned()
+            .unwrap();
+        let actual_metadata_uri = actual_token_data.metadata_uri();
+        assert_eq!(actual_metadata_uri, original_metadata_uri);
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_change_metadata_uri_activation(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+        // activate feature at height 3
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                common::chain::config::Builder::test_chain()
+                    .chainstate_upgrades(
+                        common::chain::NetUpgrades::initialize(vec![
+                            (
+                                BlockHeight::zero(),
+                                common::chain::ChainstateUpgrade::new(
+                                    common::chain::TokenIssuanceVersion::V1,
+                                    common::chain::RewardDistributionVersion::V1,
+                                    common::chain::TokensFeeVersion::V1,
+                                    common::chain::DataDepositFeeVersion::V1,
+                                    common::chain::ChangeTokenMetadataUriActivated::No,
+                                    common::chain::HtlcActivated::Yes,
+                                    common::chain::OrdersActivated::Yes,
+                                ),
+                            ),
+                            (
+                                BlockHeight::new(3),
+                                common::chain::ChainstateUpgrade::new(
+                                    common::chain::TokenIssuanceVersion::V1,
+                                    common::chain::RewardDistributionVersion::V1,
+                                    common::chain::TokensFeeVersion::V1,
+                                    common::chain::DataDepositFeeVersion::V1,
+                                    common::chain::ChangeTokenMetadataUriActivated::Yes,
+                                    common::chain::HtlcActivated::Yes,
+                                    common::chain::OrdersActivated::Yes,
+                                ),
+                            ),
+                        ])
+                        .unwrap(),
+                    )
+                    .genesis_unittest(Destination::AnyoneCanSpend)
+                    .build(),
+            )
+            .build();
+
+        let (token_id, _, utxo_with_change) = issue_token_from_genesis(
+            &mut rng,
+            &mut tf,
+            TokenTotalSupply::Lockable,
+            IsTokenFreezable::No,
+        );
+
+        let new_metadata_uri =
+            random_ascii_alphanumeric_string(&mut rng, 1..1024).as_bytes().to_vec();
+
+        // Try to change metadata before activation, check an error
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_command(
+                            AccountNonce::new(0),
+                            AccountCommand::ChangeTokenMetadataUri(
+                                token_id,
+                                new_metadata_uri.clone(),
+                            ),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        utxo_with_change.clone().into(),
+                        InputWitness::NoSignature(None),
+                    )
+                    .build(),
+            )
+            .build_and_process(&mut rng);
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                chainstate::CheckBlockError::CheckTransactionFailed(
+                    chainstate::CheckBlockTransactionsError::CheckTransactionError(
+                        tx_verifier::CheckTransactionError::ChangeTokenMetadataUriNotActivated
+                    )
+                )
+            ))
+        );
+
+        // produce an empty block
+        tf.make_block_builder().build_and_process(&mut rng).unwrap();
+
+        // now it should be possible to use htlc output
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_command(
+                            AccountNonce::new(0),
+                            AccountCommand::ChangeTokenMetadataUri(
+                                token_id,
+                                new_metadata_uri.clone(),
+                            ),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        utxo_with_change.clone().into(),
+                        InputWitness::NoSignature(None),
+                    )
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+    });
+}
