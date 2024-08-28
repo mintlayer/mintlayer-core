@@ -158,7 +158,7 @@ class WalletSubmitTransactionSpecificUtxo(BitcoinTestFramework):
 
             # try to select already spent utxo
             already_selected = random.sample(selected_utxos, random.randint(1, len(selected_utxos)))
-            assert_in("Selected UTXO is already consumed", await wallet.send_to_address(address, 1, already_selected))
+            assert_in("is already consumed", await wallet.send_to_address(address, 1, already_selected))
 
             # try to select unknown utxo
             unknown_utxo_id = "0" * len(selected_utxos[0].id)

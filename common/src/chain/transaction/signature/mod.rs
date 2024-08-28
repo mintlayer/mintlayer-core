@@ -30,6 +30,7 @@ use self::{
 pub mod inputsig;
 pub mod sighash;
 
+use serialization::{Decode, Encode};
 use thiserror::Error;
 use utils::ensure;
 
@@ -112,11 +113,21 @@ pub trait Transactable: Signable {
     fn signatures(&self) -> Vec<Option<InputWitness>>;
 }
 
+/// `StandardInputSignature` can contain additional data encoded inside raw signature (e.g. htlc info)
+/// so it's not possible to verify it without evaluating first.
+#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum EvaluatedInputWitness {
+    #[codec(index = 0)]
+    NoSignature(Option<Vec<u8>>),
+    #[codec(index = 1)]
+    Standard(StandardInputSignature),
+}
+
 pub fn verify_signature<T: Signable>(
     chain_config: &ChainConfig,
     outpoint_destination: &Destination,
     tx: &T,
-    input_witness: &InputWitness,
+    input_witness: &EvaluatedInputWitness,
     inputs_utxos: &[Option<&TxOutput>],
     input_num: usize,
 ) -> Result<(), DestinationSigError> {
@@ -127,7 +138,7 @@ pub fn verify_signature<T: Signable>(
     );
 
     match input_witness {
-        InputWitness::NoSignature(_) => match outpoint_destination {
+        EvaluatedInputWitness::NoSignature(_) => match outpoint_destination {
             Destination::PublicKeyHash(_)
             | Destination::PublicKey(_)
             | Destination::ScriptHash(_)
@@ -136,7 +147,7 @@ pub fn verify_signature<T: Signable>(
             }
             Destination::AnyoneCanSpend => {}
         },
-        InputWitness::Standard(witness) => verify_standard_input_signature(
+        EvaluatedInputWitness::Standard(witness) => verify_standard_input_signature(
             chain_config,
             outpoint_destination,
             witness,

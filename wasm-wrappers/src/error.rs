@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::{signature::DestinationSigError, TransactionCreationError};
 use wasm_bindgen::JsValue;
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -40,7 +41,7 @@ pub enum Error {
     #[error("Invalid time lock encoding")]
     InvalidTimeLock,
     #[error("Invalid per thousand {0} valid range is [0, 1000]")]
-    InvalidPerThousedns(u16),
+    InvalidPerThousand(u16),
     #[error("Invalid stake pool data encoding")]
     InvalidStakePoolData,
     #[error("Invalid Transaction output encoding")]
@@ -53,6 +54,16 @@ pub enum Error {
     InvalidTransaction,
     #[error("The number of signatures does not match the number of inputs")]
     InvalidWitnessCount,
+    #[error("Invalid htlc secret encoding")]
+    InvalidHtlcSecret,
+    #[error("Invalid htlc secret hash encoding")]
+    InvalidHtlcSecretHash,
+    #[error("No input outpoint found in transaction")]
+    NoInputOutpointFound,
+    #[error("Invalid multisig challenge encoding")]
+    InvalidMultisigChallenge,
+    #[error("Multisig required signatures cannot be zero")]
+    ZeroMultisigRequiredSigs,
     #[error("Final supply calculation error")]
     FinalSupplyError,
     #[error("Calculating effective balance failed: {0}")]
@@ -61,6 +72,10 @@ pub enum Error {
     FixedTotalSupply,
     #[error("Invalid token parameters: {0}")]
     TokenIssuanceError(#[from] tx_verifier::error::TokenIssuanceError),
+    #[error("Transaction creation error: {0}")]
+    TransactionCreationError(#[from] TransactionCreationError),
+    #[error("Produce signature error: {0}")]
+    ProduceSignatureError(#[from] DestinationSigError),
 }
 
 // This is required to make an error readable in JavaScript

@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use chainstate_types::vrf_tools::ProofOfStakeVRFError;
-use common::chain::ChainConfig;
+use common::chain::{signature::DestinationSigError, ChainConfig};
 use crypto::key::SignatureError;
 use interface::{
     rpc_test_interface::RpcTestFunctionsInterface, rpc_test_interface_impl::RpcTestFunctionsImpl,
@@ -35,6 +35,8 @@ pub enum RpcTestFunctionsError {
     SignatureError(#[from] SignatureError),
     #[error("Proof of stake VRF error: {0}")]
     ProofOfStakeVRFError(#[from] ProofOfStakeVRFError),
+    #[error("Signature error: {0}")]
+    DestSignatureError(#[from] DestinationSigError),
 }
 
 pub struct RpcTestFunctions {

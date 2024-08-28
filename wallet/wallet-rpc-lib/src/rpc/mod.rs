@@ -32,6 +32,7 @@ use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
+use types::RpcHashedTimelockContract;
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
@@ -47,6 +48,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
+        htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
         output_value::OutputValue,
         partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::arbitrary_message::{
@@ -1397,19 +1399,102 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
     }
 
+    pub async fn create_htlc_transaction(
+        &self,
+        account_index: U31,
+        amount: RpcAmountIn,
+        token_id: Option<RpcAddress<TokenId>>,
+        htlc: RpcHashedTimelockContract,
+        config: ControllerConfig,
+    ) -> WRpcResult<SignedTransaction, N> {
+        let secret_hash = HtlcSecretHash::decode_all(&mut htlc.secret_hash.as_bytes())
+            .map_err(|_| RpcError::InvalidHtlcSecretHash)?;
+
+        let spend_key = htlc
+            .spend_address
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidAddress)?;
+
+        let refund_key = htlc
+            .refund_address
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidAddress)?;
+
+        let htlc = HashedTimelockContract {
+            secret_hash,
+            spend_key,
+            refund_timelock: htlc.refund_timelock,
+            refund_key,
+        };
+
+        let token_id = token_id
+            .map(|id| id.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidTokenId))
+            .transpose()?;
+        let coin_decimals = self.chain_config.coin_decimals();
+
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    let value = match token_id {
+                        Some(token_id) => {
+                            let token_info = controller.get_token_info(token_id).await?;
+                            let amount = amount
+                                .to_amount(token_info.token_number_of_decimals())
+                                .ok_or(RpcError::InvalidCoinAmount)?;
+                            OutputValue::TokenV1(token_id, amount)
+                        }
+                        None => {
+                            let amount = amount
+                                .to_amount(coin_decimals)
+                                .ok_or(RpcError::InvalidCoinAmount)?;
+                            OutputValue::Coin(amount)
+                        }
+                    };
+
+                    controller
+                        .synced_controller(account_index, config)
+                        .await?
+                        .create_htlc_tx(value, htlc)
+                        .await
+                        .map_err(RpcError::Controller)
+                })
+            })
+            .await?
+    }
+
     pub async fn compose_transaction(
         &self,
         inputs: Vec<RpcUtxoOutpoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<RpcHexString>>>,
         only_transaction: bool,
     ) -> WRpcResult<(TransactionToSign, Balances), N> {
         ensure!(!inputs.is_empty(), RpcError::ComposeTransactionEmptyInputs);
         let inputs = inputs.into_iter().map(|o| o.into_outpoint()).collect();
+
+        let htlc_secrets = htlc_secrets
+            .map(|htlc_secrets| {
+                htlc_secrets
+                    .into_iter()
+                    .map(|s| {
+                        s.map(|s| -> Result<HtlcSecret, RpcError<N>> {
+                            Ok(HtlcSecret::new(
+                                s.into_bytes()
+                                    .try_into()
+                                    .map_err(|_| RpcError::InvalidHtlcSecret)?,
+                            ))
+                        })
+                        .transpose()
+                    })
+                    .collect()
+            })
+            .transpose()?;
+
         self.wallet
             .call_async(move |w| {
-                Box::pin(
-                    async move { w.compose_transaction(inputs, outputs, only_transaction).await },
-                )
+                Box::pin(async move {
+                    w.compose_transaction(inputs, outputs, htlc_secrets, only_transaction).await
+                })
             })
             .await?
     }

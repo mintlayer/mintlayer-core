@@ -19,6 +19,7 @@ use common::{
     address::{pubkeyhash::PublicKeyHash, Address},
     chain::{
         classic_multisig::ClassicMultisigChallenge,
+        htlc::HashedTimelockContract,
         output_value::OutputValue,
         partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
@@ -47,7 +48,7 @@ use wallet::{
     account::{
         currency_grouper::Currency, CoinSelectionAlgo, TransactionToSign, UnconfirmedTokenInfo,
     },
-    get_tx_output_destination,
+    destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
         make_data_deposit_output, SelectedInputs, StakePoolDataArguments,
@@ -539,7 +540,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             .await?
             .into_iter()
             .filter(|(_, output, _)| {
-                get_tx_output_destination(output, &|_| None)
+                get_tx_output_destination(output, &|_| None, HtlcSpendingCondition::Skip)
                     .map_or(false, |dest| from_addresses.contains(&dest))
             })
             .collect::<Vec<_>>();
@@ -618,11 +619,12 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
             change_address
         } else {
             let utxo_dest =
-                get_tx_output_destination(&utxo_output, &|_| None).ok_or_else(|| {
-                    ControllerError::WalletError(WalletError::UnsupportedTransactionOutput(
-                        Box::new(utxo_output.clone()),
-                    ))
-                })?;
+                get_tx_output_destination(&utxo_output, &|_| None, HtlcSpendingCondition::Skip)
+                    .ok_or_else(|| {
+                        ControllerError::WalletError(WalletError::UnsupportedTransactionOutput(
+                            Box::new(utxo_output.clone()),
+                        ))
+                    })?;
             Address::new(self.chain_config, utxo_dest).expect("addressable")
         };
 
@@ -1006,6 +1008,24 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                 current_fee_rate,
             )
             .map_err(ControllerError::WalletError)
+    }
+
+    pub async fn create_htlc_tx(
+        &mut self,
+        output_value: OutputValue,
+        htlc: HashedTimelockContract,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        let (current_fee_rate, consolidate_fee_rate) =
+            self.get_current_and_consolidation_fee_rate().await?;
+
+        let result = self.wallet.create_htlc_tx(
+            self.account_index,
+            output_value,
+            htlc,
+            current_fee_rate,
+            consolidate_fee_rate,
+        )?;
+        Ok(result)
     }
 
     /// Checks if the wallet has stake pools and marks this account for staking.

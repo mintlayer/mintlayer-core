@@ -54,6 +54,8 @@ use crate::{
     RpcError,
 };
 
+use super::types::RpcHashedTimelockContract;
+
 #[async_trait::async_trait]
 impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletEventsRpcServer
     for WalletRpc<N>
@@ -400,13 +402,9 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         utxo_states: Vec<RpcUtxoState>,
         with_locked: Option<WithLocked>,
     ) -> rpc::RpcResult<Balances> {
-        let utxo_states = utxo_states
-            .iter()
-            .map(|rpc_state| {
-                let state: UtxoState = rpc_state.into();
-                state
-            })
-            .fold(UtxoStates::NONE, |states, state| states | state);
+        let utxo_states = (&utxo_states.iter().map(UtxoState::from).collect::<Vec<_>>())
+            .try_into()
+            .unwrap_or(UtxoStates::ALL);
 
         rpc::handle_result(
             self.get_balance(
@@ -425,17 +423,13 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         utxo_states: Vec<RpcUtxoState>,
         with_locked: Option<WithLocked>,
     ) -> rpc::RpcResult<Vec<JsonValue>> {
-        let utxo_types = if utxo_types.is_empty() {
-            UtxoTypes::ALL
-        } else {
-            utxo_types.iter().map(UtxoType::from).fold(UtxoTypes::NONE, |x, y| x | y)
-        };
+        let utxo_types = (&utxo_types.iter().map(UtxoType::from).collect::<Vec<_>>())
+            .try_into()
+            .unwrap_or(UtxoTypes::ALL);
 
-        let utxo_states = if utxo_states.is_empty() {
-            UtxoState::Confirmed.into()
-        } else {
-            utxo_states.iter().map(UtxoState::from).fold(UtxoStates::NONE, |x, y| x | y)
-        };
+        let utxo_states = (&utxo_states.iter().map(UtxoState::from).collect::<Vec<_>>())
+            .try_into()
+            .unwrap_or(UtxoState::Confirmed.into());
 
         let utxos = self
             .get_multisig_utxos(
@@ -997,6 +991,26 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         )
     }
 
+    async fn create_htlc_transaction(
+        &self,
+        account_arg: AccountArg,
+        amount: RpcAmountIn,
+        token_id: Option<RpcAddress<TokenId>>,
+        htlc: RpcHashedTimelockContract,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<HexEncoded<SignedTransaction>> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb(),
+            broadcast_to_mempool: true,
+        };
+
+        rpc::handle_result(
+            self.create_htlc_transaction(account_arg.index::<N>()?, amount, token_id, htlc, config)
+                .await
+                .map(HexEncoded::new),
+        )
+    }
+
     async fn stake_pool_balance(
         &self,
         pool_id: RpcAddress<PoolId>,
@@ -1156,10 +1170,11 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         &self,
         inputs: Vec<RpcUtxoOutpoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<RpcHexString>>>,
         only_transaction: bool,
     ) -> rpc::RpcResult<ComposedTransaction> {
         rpc::handle_result(
-            self.compose_transaction(inputs, outputs, only_transaction)
+            self.compose_transaction(inputs, outputs, htlc_secrets, only_transaction)
                 .await
                 .map(|(tx, fees)| ComposedTransaction {
                     hex: tx.to_hex(),

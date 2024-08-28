@@ -35,10 +35,10 @@ use wallet_controller::{
 use wallet_rpc_lib::types::{
     AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
     DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcInspectTransaction, RpcSignatureStatus,
-    RpcStandaloneAddresses, RpcTokenId, SendTokensFromMultisigAddressResult, StakePoolBalance,
-    StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides,
-    VrfPublicKeyInfo,
+    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
+    RpcInspectTransaction, RpcSignatureStatus, RpcStandaloneAddresses, RpcTokenId,
+    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, VrfPublicKeyInfo,
 };
 use wallet_types::with_locked::WithLocked;
 
@@ -234,6 +234,7 @@ pub trait WalletInterface {
         &self,
         inputs: Vec<UtxoOutPoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<String>>>,
         only_transaction: bool,
     ) -> Result<ComposedTransaction, Self::Error>;
 
@@ -453,6 +454,15 @@ pub trait WalletInterface {
         data: String,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
+
+    async fn create_htlc_transaction(
+        &self,
+        account_index: U31,
+        amount: DecimalAmount,
+        token_id: Option<String>,
+        htlc: RpcHashedTimelockContract,
+        config: ControllerConfig,
+    ) -> Result<HexEncoded<SignedTransaction>, Self::Error>;
 
     async fn node_version(&self) -> Result<NodeVersion, Self::Error>;
 

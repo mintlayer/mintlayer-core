@@ -44,7 +44,6 @@ use common::{
     },
     primitives::{Amount, Idable},
 };
-use crypto::hash::{self, hash};
 use crypto::key::{KeyKind, PrivateKey, PublicKey};
 use randomness::CryptoRng;
 use serialization::Encode;
@@ -53,12 +52,6 @@ use tx_verifier::{
     error::{InputCheckError, TranslationError},
     input_check::HashlockError,
 };
-
-fn hash_secret(secret: &[u8]) -> HtlcSecretHash {
-    HtlcSecretHash::from_slice(
-        hash::<hash::Ripemd160, _>(hash::<hash::Sha256, _>(secret)).as_slice(),
-    )
-}
 
 struct TestFixture {
     alice_sk: PrivateKey,
@@ -96,7 +89,7 @@ impl TestFixture {
         let destination_multisig: PublicKeyHash = (&refund_challenge).into();
 
         let htlc = HashedTimelockContract {
-            secret_hash: hash_secret(self.secret.secret()),
+            secret_hash: self.secret.hash(),
             spend_key: Destination::PublicKeyHash((&bob_pk).into()),
             refund_timelock: OutputTimeLock::ForSeconds(200),
             refund_key: Destination::ClassicMultisig(destination_multisig),

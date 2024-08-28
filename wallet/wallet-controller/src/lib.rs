@@ -52,9 +52,10 @@ use sync::InSync;
 use synced_controller::SyncedController;
 
 use common::{
-    address::AddressError,
+    address::{AddressError, RpcAddress},
     chain::{
         block::timestamp::BlockTimestamp,
+        htlc::HtlcSecret,
         partially_signed_transaction::PartiallySignedTransaction,
         signature::{inputsig::InputWitness, DestinationSigError, Transactable},
         tokens::{RPCTokenInfo, TokenId},
@@ -82,7 +83,7 @@ use wallet::{
         currency_grouper::{self, Currency},
         TransactionToSign,
     },
-    get_tx_output_destination,
+    destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
     DefaultWallet, WalletError, WalletResult,
@@ -775,9 +776,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
             .iter()
             .map(|txo| {
                 txo.map(|txo| {
-                    get_tx_output_destination(txo, &|_| None).ok_or_else(|| {
-                        WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
-                    })
+                    get_tx_output_destination(txo, &|_| None, HtlcSpendingCondition::Skip)
+                        .ok_or_else(|| {
+                            WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
+                        })
                 })
                 .transpose()
             })
@@ -910,6 +912,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         &self,
         inputs: Vec<UtxoOutPoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
         only_transaction: bool,
     ) -> Result<(TransactionToSign, Balances), ControllerError<T>> {
         let input_utxos = self.fetch_utxos(&inputs).await?;
@@ -926,8 +929,16 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         } else {
             let destinations = input_utxos
                 .iter()
-                .map(|txo| {
-                    get_tx_output_destination(txo, &|_| None).ok_or_else(|| {
+                .enumerate()
+                .map(|(i, txo)| {
+                    let htlc_spending =
+                        htlc_secrets.as_ref().map_or(HtlcSpendingCondition::Skip, |secrets| {
+                            secrets.get(i).map_or(HtlcSpendingCondition::WithMultisig, |_| {
+                                HtlcSpendingCondition::WithSecret
+                            })
+                        });
+
+                    get_tx_output_destination(txo, &|_| None, htlc_spending).ok_or_else(|| {
                         WalletError::UnsupportedTransactionOutput(Box::new(txo.clone()))
                     })
                 })
@@ -939,6 +950,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
                 vec![None; num_inputs],
                 input_utxos.into_iter().map(Option::Some).collect(),
                 destinations.into_iter().map(Option::Some).collect(),
+                htlc_secrets,
             )
             .map_err(WalletError::TransactionCreation)?;
 
@@ -954,7 +966,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         outputs: &[TxOutput],
     ) -> Result<Balances, ControllerError<T>> {
         let mut inputs = self.group_inputs(inputs)?;
-        let outputs = self.group_outpus(outputs)?;
+        let outputs = self.group_outputs(outputs)?;
 
         let mut fees = BTreeMap::new();
 
@@ -974,7 +986,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         into_balances(&self.rpc_client, &self.chain_config, fees).await
     }
 
-    fn group_outpus(
+    fn group_outputs(
         &self,
         outputs: &[TxOutput],
     ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
@@ -1151,6 +1163,7 @@ pub async fn into_balances<T: NodeInterface>(
             fetch_token_info(rpc_client, token_id).await.map(|info| {
                 let decimals = info.token_number_of_decimals();
                 let amount = RpcAmountOut::from_amount_no_padding(amount, decimals);
+                let token_id = RpcAddress::new(chain_config, token_id).expect("addressable");
                 (token_id, amount)
             })
         })

@@ -41,10 +41,11 @@ use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcInspectTransaction,
-        RpcStandaloneAddresses, RpcTokenId, SendTokensFromMultisigAddressResult, StakePoolBalance,
-        StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TransactionOptions,
-        TxOptionsOverrides, VrfPublicKeyInfo,
+        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
+        RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
+        SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+        StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
+        VrfPublicKeyInfo,
     },
     ColdWalletRpcClient, WalletRpcClient,
 };
@@ -890,6 +891,27 @@ impl WalletInterface for ClientWalletRpc {
         .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn create_htlc_transaction(
+        &self,
+        account_index: U31,
+        amount: DecimalAmount,
+        token_id: Option<String>,
+        htlc: RpcHashedTimelockContract,
+        config: ControllerConfig,
+    ) -> Result<HexEncoded<SignedTransaction>, Self::Error> {
+        let options = TransactionOptions::from_controller_config(&config);
+        WalletRpcClient::create_htlc_transaction(
+            &self.http_client,
+            account_index.into(),
+            amount.into(),
+            token_id.map(|id| id.into()),
+            htlc,
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error> {
         WalletRpcClient::node_version(&self.http_client)
             .await
@@ -1179,12 +1201,22 @@ impl WalletInterface for ClientWalletRpc {
         &self,
         inputs: Vec<UtxoOutPoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<String>>>,
         only_transaction: bool,
     ) -> Result<ComposedTransaction, Self::Error> {
         let inputs = inputs.into_iter().map(Into::into).collect();
-        WalletRpcClient::compose_transaction(&self.http_client, inputs, outputs, only_transaction)
-            .await
-            .map_err(WalletRpcError::ResponseError)
+        let htlc_secrets = htlc_secrets
+            .map(|s| s.into_iter().map(|s| s.map(|s| s.parse()).transpose()).collect())
+            .transpose()?;
+        WalletRpcClient::compose_transaction(
+            &self.http_client,
+            inputs,
+            outputs,
+            htlc_secrets,
+            only_transaction,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
     }
 
     async fn node_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {

@@ -174,6 +174,16 @@ this function creates an output that issues that NFT.
 
 Given data to be deposited in the blockchain, this function provides the output that deposits this data
 
+### Function: `encode_output_htlc`
+
+Given the parameters needed to create hash timelock contract, and a network type (mainnet, testnet, etc),
+this function creates an output.
+
+### Function: `extract_htlc_secret`
+
+Given a signed transaction and input outpoint that spends an htlc utxo, extract a secret that is
+encoded in the corresponding input signature
+
 ### Function: `encode_input_for_utxo`
 
 Given an output source id as bytes, and an output index, together representing a utxo,
@@ -208,9 +218,27 @@ Encode an input witness of the variant that contains no signature.
 Given a private key, inputs and an input number to sign, and the destination that owns that output (through the utxo),
 and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
 
+### Function: `encode_witness_htlc_secret`
+
+Given a private key, inputs and an input number to sign, and the destination that owns that output (through the utxo),
+and a network type (mainnet, testnet, etc), and an htlc secret this function returns a witness to be used in a signed transaction, as bytes.
+
+### Function: `encode_multisig_challenge`
+
+Given an arbitrary number of public keys as bytes, number of minimum required signatures, and a network type, this function returns
+the multisig challenge, as bytes.
+
+### Function: `encode_witness_htlc_multisig`
+
+Given a private key, inputs and an input number to sign, and multisig challenge,
+and a network type (mainnet, testnet, etc), this function returns a witness to be used in a signed transaction, as bytes.
+
+`key_index` parameter is an index of a public key in the challenge, against which is the signature produces from private key is to be verified.
+`input_witness` parameter can be either empty or a result of previous calls to this function.
+
 ### Function: `encode_signed_transaction`
 
-Given an unsigned transaction, and signatures, this function returns a SignedTransaction object as bytes.
+Given an unsigned transaction and signatures, this function returns a SignedTransaction object as bytes.
 
 ### Function: `get_transaction_id`
 

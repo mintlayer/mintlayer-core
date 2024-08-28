@@ -39,6 +39,8 @@ use common::address::pubkeyhash::PublicKeyHash;
 use common::address::{Address, AddressError, RpcAddress};
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
+use common::chain::htlc::HashedTimelockContract;
+use common::chain::output_value::OutputValue;
 use common::chain::partially_signed_transaction::PartiallySignedTransaction;
 use common::chain::signature::inputsig::arbitrary_message::{
     ArbitraryMessageSignature, SignArbitraryMessageError,
@@ -170,13 +172,13 @@ pub enum WalletError {
     AddressError(#[from] AddressError),
     #[error("Unknown pool id {0}")]
     UnknownPoolId(PoolId),
-    #[error("Cannot find UTXO")]
+    #[error("Cannot find UTXO {0:?}")]
     CannotFindUtxo(UtxoOutPoint),
-    #[error("Selected UTXO is already consumed")]
+    #[error("Selected UTXO {0:?} is already consumed")]
     ConsumedUtxo(UtxoOutPoint),
-    #[error("Selected UTXO is still locked")]
+    #[error("Selected UTXO {0:?} is still locked")]
     LockedUtxo(UtxoOutPoint),
-    #[error("Selected UTXO is a token v0 and cannot be used")]
+    #[error("Selected UTXO {0:?} is a token v0 and cannot be used")]
     TokenV0Utxo(UtxoOutPoint),
     #[error("Cannot change a Locked Token supply")]
     CannotChangeLockedTokenSupply,
@@ -1742,6 +1744,29 @@ impl<B: storage::Backend> Wallet<B> {
                 return Err(WalletError::FullySignedTransactionInDecommissionReq);
             }
             Ok(ptx)
+        })
+    }
+
+    pub fn create_htlc_tx(
+        &mut self,
+        account_index: U31,
+        output_value: OutputValue,
+        htlc: HashedTimelockContract,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
+            account.create_htlc_tx(
+                db_tx,
+                output_value,
+                htlc,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
         })
     }
 

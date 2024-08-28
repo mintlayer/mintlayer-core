@@ -16,14 +16,19 @@
 use std::sync::Arc;
 
 use common::chain::{
+    htlc::HtlcSecret,
     partially_signed_transaction::PartiallySignedTransaction,
     signature::{
         inputsig::{
             arbitrary_message::ArbitraryMessageSignature,
-            classical_multisig::authorize_classical_multisig::{
-                sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
-                ClassicalMultisigCompletionStatus,
+            classical_multisig::{
+                authorize_classical_multisig::{
+                    sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
+                    ClassicalMultisigCompletionStatus,
+                },
+                encode_decode_multisig_spend::{decode_multisig_spend, encode_multisig_spend},
             },
+            htlc::produce_uniparty_signature_for_htlc_input,
             standard_signature::StandardInputSignature,
             InputWitness,
         },
@@ -39,7 +44,6 @@ use crypto::key::{
 };
 use itertools::Itertools;
 use randomness::make_true_rng;
-use serialization::Encode;
 use wallet_storage::WalletStorageReadUnlocked;
 use wallet_types::signature_status::SignatureStatus;
 
@@ -94,8 +98,9 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
         tx: &Transaction,
         destination: &Destination,
         input_index: usize,
-        input_utxos: &[Option<&TxOutput>],
+        inputs_utxo_refs: &[Option<&TxOutput>],
         key_chain: &impl AccountKeyChains,
+        htlc_secret: &Option<HtlcSecret>,
     ) -> SignerResult<(Option<InputWitness>, SignatureStatus)> {
         match destination {
             Destination::AnyoneCanSpend => Ok((
@@ -108,18 +113,31 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
                     .map(|private_key| {
                         let sighash_type =
                             SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
-
-                        StandardInputSignature::produce_uniparty_signature_for_input(
-                            &private_key,
-                            sighash_type,
-                            destination.clone(),
-                            tx,
-                            input_utxos,
-                            input_index,
-                            make_true_rng(),
-                        )
-                        .map(InputWitness::Standard)
-                        .map_err(SignerError::SigningError)
+                        match htlc_secret {
+                            Some(htlc_secret) => produce_uniparty_signature_for_htlc_input(
+                                &private_key,
+                                sighash_type,
+                                destination.clone(),
+                                tx,
+                                inputs_utxo_refs,
+                                input_index,
+                                htlc_secret.clone(),
+                                make_true_rng(),
+                            )
+                            .map(InputWitness::Standard)
+                            .map_err(SignerError::SigningError),
+                            None => StandardInputSignature::produce_uniparty_signature_for_input(
+                                &private_key,
+                                sighash_type,
+                                destination.clone(),
+                                tx,
+                                inputs_utxo_refs,
+                                input_index,
+                                make_true_rng(),
+                            )
+                            .map(InputWitness::Standard)
+                            .map_err(SignerError::SigningError),
+                        }
                     })
                     .transpose()?;
 
@@ -137,11 +155,14 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
                     let (sig, _, status) = self.sign_multisig_input(
                         tx,
                         input_index,
-                        input_utxos,
+                        inputs_utxo_refs,
                         current_signatures,
                         key_chain,
                     )?;
-                    return Ok((sig, status));
+
+                    let signature = encode_multisig_spend(&sig, inputs_utxo_refs[input_index]);
+
+                    return Ok((Some(InputWitness::Standard(signature)), status));
                 }
 
                 Ok((None, SignatureStatus::NotSigned))
@@ -157,7 +178,11 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
         input_utxos: &[Option<&TxOutput>],
         mut current_signatures: AuthorizedClassicalMultisigSpend,
         key_chain: &impl AccountKeyChains,
-    ) -> SignerResult<(Option<InputWitness>, SignatureStatus, SignatureStatus)> {
+    ) -> SignerResult<(
+        AuthorizedClassicalMultisigSpend,
+        SignatureStatus,
+        SignatureStatus,
+    )> {
         let sighash_type = SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
 
         let challenge = current_signatures.challenge().clone();
@@ -208,14 +233,7 @@ impl<'a, T: WalletStorageReadUnlocked> SoftwareSigner<'a, T> {
             }
         }
 
-        Ok((
-            Some(InputWitness::Standard(StandardInputSignature::new(
-                sighash_type,
-                current_signatures.encode(),
-            ))),
-            previous_status,
-            final_status,
-        ))
+        Ok((current_signatures, previous_status, final_status))
     }
 }
 
@@ -236,7 +254,8 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
             .iter()
             .enumerate()
             .zip(ptx.destinations())
-            .map(|((i, witness), destination)| match witness {
+            .zip(ptx.htlc_secrets())
+            .map(|(((i, witness), destination), htlc_secret)| match witness {
                 Some(w) => match w {
                     InputWitness::NoSignature(_) => Ok((
                         Some(w.clone()),
@@ -262,17 +281,27 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
                                     SignatureStatus::FullySigned,
                                 ))
                             } else if let Destination::ClassicMultisig(_) = destination {
-                                let sig_components = AuthorizedClassicalMultisigSpend::from_data(
-                                    sig.raw_signature(),
-                                )?;
+                                let sig_components =
+                                    decode_multisig_spend(sig, inputs_utxo_refs[i])
+                                        .map_err(SignerError::SigningError)?;
 
-                                self.sign_multisig_input(
-                                    ptx.tx(),
-                                    i,
-                                    &inputs_utxo_refs,
-                                    sig_components,
-                                    key_chain,
-                                )
+                                let (sig_component, previous_status, final_status) = self
+                                    .sign_multisig_input(
+                                        ptx.tx(),
+                                        i,
+                                        &inputs_utxo_refs,
+                                        sig_components,
+                                        key_chain,
+                                    )?;
+
+                                let signature =
+                                    encode_multisig_spend(&sig_component, inputs_utxo_refs[i]);
+
+                                Ok((
+                                    Some(InputWitness::Standard(signature)),
+                                    previous_status,
+                                    final_status,
+                                ))
                             } else {
                                 Ok((
                                     None,
@@ -296,6 +325,7 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
                             i,
                             &inputs_utxo_refs,
                             key_chain,
+                            htlc_secret,
                         )?;
                         Ok((sig, SignatureStatus::NotSigned, status))
                     }

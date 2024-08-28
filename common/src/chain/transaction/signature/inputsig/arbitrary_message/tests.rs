@@ -315,6 +315,8 @@ fn verify_corrupted_signature(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
+    use crate::chain::signature::tests::utils::verify_signature;
+
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = chain::config::create_testnet();
@@ -363,7 +365,7 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
         let signed_tx =
             SignedTransaction::new(tx.clone(), vec![InputWitness::Standard(sig)]).unwrap();
 
-        chain::signature::verify_signature(
+        verify_signature(
             &chain_config,
             &destination,
             &signed_tx,
@@ -390,7 +392,7 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
     let sig = StandardInputSignature::new(sighash_type, msg_sig.raw_signature);
     let signed_tx = SignedTransaction::new(tx, vec![InputWitness::Standard(sig)]).unwrap();
 
-    let ver_err = chain::signature::verify_signature(
+    let ver_err = verify_signature(
         &chain_config,
         &destination,
         &signed_tx,

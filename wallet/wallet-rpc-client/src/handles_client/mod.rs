@@ -40,9 +40,10 @@ use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcInspectTransaction,
-        RpcStandaloneAddresses, RpcTokenId, SendTokensFromMultisigAddressResult, StakePoolBalance,
-        StakingStatus, StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
+        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
+        RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
+        SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+        StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
         VrfPublicKeyInfo,
     },
     RpcError, WalletRpc,
@@ -542,11 +543,15 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         &self,
         inputs: Vec<UtxoOutPoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<String>>>,
         only_transaction: bool,
     ) -> Result<ComposedTransaction, Self::Error> {
         let inputs = inputs.into_iter().map(Into::into).collect();
+        let htlc_secrets = htlc_secrets
+            .map(|s| s.into_iter().map(|s| s.map(|s| s.parse()).transpose()).collect())
+            .transpose()?;
         self.wallet_rpc
-            .compose_transaction(inputs, outputs, only_transaction)
+            .compose_transaction(inputs, outputs, htlc_secrets, only_transaction)
             .await
             .map(|(tx, fees)| ComposedTransaction {
                 hex: tx.to_hex(),
@@ -1012,6 +1017,27 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
+    async fn create_htlc_transaction(
+        &self,
+        account_index: U31,
+        amount: DecimalAmount,
+        token_id: Option<String>,
+        htlc: RpcHashedTimelockContract,
+        config: ControllerConfig,
+    ) -> Result<HexEncoded<SignedTransaction>, Self::Error> {
+        self.wallet_rpc
+            .create_htlc_transaction(
+                account_index,
+                amount.into(),
+                token_id.map(|id| id.into()),
+                htlc,
+                config,
+            )
+            .await
+            .map(HexEncoded::new)
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error> {
         self.wallet_rpc
             .node_version()
@@ -1222,7 +1248,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
                     && cur_signatures.iter().all(|s| *s == SignatureStatus::FullySigned);
 
                 let tx = if is_fully_signed {
-                    PartialOrSignedTx::Signed(ptx.into_signed_tx().expect("already checked"))
+                    PartialOrSignedTx::Signed(ptx.into_signed_tx().expect("already checked2"))
                 } else {
                     PartialOrSignedTx::Partial(ptx)
                 };

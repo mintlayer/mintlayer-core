@@ -22,6 +22,7 @@ use common::{
         classic_multisig::ClassicMultisigChallengeError,
         partially_signed_transaction::PartiallySignedTransaction,
         signature::DestinationSigError,
+        timelock::OutputTimeLock,
         tokens::{self, IsTokenFreezable, Metadata, TokenCreator, TokenId},
         ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
         UtxoOutPoint,
@@ -144,6 +145,12 @@ pub enum RpcError<N: NodeInterface> {
 
     #[error("No outputs specified")]
     NoOutputsSpecified,
+
+    #[error("Invalid HTLC secret")]
+    InvalidHtlcSecret,
+
+    #[error("Invalid HTLC secret hash")]
+    InvalidHtlcSecretHash,
 }
 
 impl<N: NodeInterface> From<RpcError<N>> for rpc::Error {
@@ -472,6 +479,7 @@ pub enum RpcUtxoType {
     IssueNft,
     CreateStakePool,
     ProduceBlockFromStake,
+    Htlc,
 }
 
 impl From<&RpcUtxoType> for UtxoType {
@@ -482,6 +490,7 @@ impl From<&RpcUtxoType> for UtxoType {
             RpcUtxoType::IssueNft => UtxoType::IssueNft,
             RpcUtxoType::CreateStakePool => UtxoType::CreateStakePool,
             RpcUtxoType::ProduceBlockFromStake => UtxoType::ProduceBlockFromStake,
+            RpcUtxoType::Htlc => UtxoType::Htlc,
         }
     }
 }
@@ -494,6 +503,7 @@ impl From<&UtxoType> for RpcUtxoType {
             UtxoType::IssueNft => RpcUtxoType::IssueNft,
             UtxoType::CreateStakePool => RpcUtxoType::CreateStakePool,
             UtxoType::ProduceBlockFromStake => RpcUtxoType::ProduceBlockFromStake,
+            UtxoType::Htlc => RpcUtxoType::Htlc,
         }
     }
 }
@@ -751,6 +761,14 @@ impl From<InspectTransaction> for RpcInspectTransaction {
             stats: value.stats.into(),
         }
     }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct RpcHashedTimelockContract {
+    pub secret_hash: RpcHexString,
+    pub spend_address: RpcAddress<Destination>,
+    pub refund_address: RpcAddress<Destination>,
+    pub refund_timelock: OutputTimeLock,
 }
 
 #[cfg(test)]

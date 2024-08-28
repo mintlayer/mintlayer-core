@@ -27,7 +27,12 @@ import {
   encode_output_lock_then_transfer,
   encode_output_token_lock_then_transfer,
   encode_stake_pool_data,
+  encode_output_htlc,
   encode_witness,
+  encode_witness_htlc_secret,
+  encode_multisig_challenge,
+  encode_witness_htlc_multisig,
+  extract_htlc_secret,
   SignatureHashType,
   encode_input_for_withdraw_from_delegation,
   estimate_transaction_size,
@@ -635,6 +640,31 @@ export async function run_test() {
 
     assert_eq_arrays(outputs, expected_outputs);
 
+    const secret = [0, 229, 233, 72, 110, 22, 64, 36, 69, 188, 238, 51, 130, 168, 185, 241, 73, 48, 120, 151, 140, 45, 46, 39, 50, 207, 18, 50, 243, 30, 115, 93]
+    const secret_hash = "b5a48c7780e597de8012346fb30761965248e3f2"
+
+    const htlc_coins_output = encode_output_htlc(
+      Amount.from_atoms("40000"),
+      undefined,
+      secret_hash,
+      address,
+      address,
+      encode_lock_until_height(BigInt(100)),
+      Network.Testnet
+    );
+    console.log("htlc with coins encoding ok");
+
+    const htlc_tokens_output = encode_output_htlc(
+      Amount.from_atoms("40000"),
+      token_id,
+      secret_hash,
+      address,
+      address,
+      encode_lock_until_height(BigInt(100)),
+      Network.Testnet
+    );
+    console.log("htlc with tokens encoding ok");
+
     try {
       const invalid_inputs = "invalid inputs";
       encode_transaction(invalid_inputs, outputs, BigInt(0));
@@ -882,6 +912,62 @@ export async function run_test() {
       2, 254, 122, 169, 127, 235, 158, 62, 127, 177, 12, 228,
     ];
     assert_eq_arrays(signed_tx, expected_signed_tx);
+
+    const opt_htlc_utxos = [1, ...htlc_coins_output, 1, ...htlc_tokens_output];
+    const htlc_tx = encode_transaction(inputs, outputs, BigInt(0));
+    // encode witness with secret
+    const witness_with_htlc_secret = encode_witness_htlc_secret(
+      SignatureHashType.ALL,
+      receiving_privkey,
+      address,
+      htlc_tx,
+      opt_htlc_utxos,
+      0,
+      secret,
+      Network.Testnet
+    );
+    console.log("Tested encode witness with htlc secret successfully");
+
+    // encode multisig challenge
+    const alice_sk = make_private_key();
+    const alice_pk = public_key_from_private_key(alice_sk);
+    const bob_sk = make_private_key();
+    const bob_pk = public_key_from_private_key(bob_sk);
+    let challenge = encode_multisig_challenge([...alice_pk, ...bob_pk], 2, Network.Testnet);
+    console.log("Tested multisig challenge successfully");
+
+    // encode mutlisig witness
+    const witness_with_htlc_multisig_1 = encode_witness_htlc_multisig(
+      SignatureHashType.ALL,
+      alice_sk,
+      0,
+      new Uint8Array([]),
+      challenge,
+      tx,
+      opt_htlc_utxos,
+      1,
+      Network.Testnet
+    );
+    console.log("Tested encode multisig witness 0 successfully");
+
+    const witness_with_htlc_multisig = encode_witness_htlc_multisig(
+      SignatureHashType.ALL,
+      bob_sk,
+      1,
+      witness_with_htlc_multisig_1,
+      challenge,
+      tx,
+      opt_htlc_utxos,
+      1,
+      Network.Testnet
+    );
+    console.log("Tested encode multisig witness 1 successfully");
+
+    // encode signed tx with secret and multi
+    const htlc_signed_tx = encode_signed_transaction(htlc_tx, [...witness_with_htlc_secret, ...witness_with_htlc_multisig]);
+    // extract secret from signed tx
+    const secret_extracted = extract_htlc_secret(htlc_signed_tx, true, tx_outpoint, 1);
+    assert_eq_arrays(secret, secret_extracted);
 
     const estimated_size = estimate_transaction_size(
       inputs,

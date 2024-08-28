@@ -38,9 +38,9 @@ use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
     CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
     MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcInspectTransaction,
-    RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
-    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
+    RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
+    RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
     VrfPublicKeyInfo,
 };
@@ -654,6 +654,18 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
+    /// Creates a transaction that locks a given number of coins or tokens in a Hashed Timelock Contract.
+    /// Created transaction is not broadcasted by this function.
+    #[method(name = "create_htlc_transaction")]
+    async fn create_htlc_transaction(
+        &self,
+        account: AccountArg,
+        amount: RpcAmountIn,
+        token_id: Option<RpcAddress<TokenId>>,
+        htlc: RpcHashedTimelockContract,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<HexEncoded<SignedTransaction>>;
+
     /// Node version
     #[method(name = "node_version")]
     async fn node_version(&self) -> rpc::RpcResult<NodeVersion>;
@@ -784,6 +796,7 @@ trait WalletRpc {
         &self,
         inputs: Vec<RpcUtxoOutpoint>,
         outputs: Vec<TxOutput>,
+        htlc_secrets: Option<Vec<Option<RpcHexString>>>,
         only_transaction: bool,
     ) -> rpc::RpcResult<ComposedTransaction>;
 

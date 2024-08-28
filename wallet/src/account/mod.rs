@@ -21,6 +21,7 @@ mod utxo_selector;
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
+use common::chain::htlc::HashedTimelockContract;
 use common::chain::partially_signed_transaction::PartiallySignedTransaction;
 use common::chain::{AccountCommand, AccountOutPoint, AccountSpending};
 use common::primitives::id::WithId;
@@ -40,6 +41,7 @@ use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
+use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
 use crate::key_chain::{AccountKeyChainImpl, KeyChainError};
 use crate::send_request::{
     make_address_output, make_address_output_from_delegation, make_address_output_token,
@@ -48,7 +50,7 @@ use crate::send_request::{
 };
 use crate::wallet::WalletPoolsFilter;
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
-use crate::{get_tx_output_destination, SendRequest, WalletError, WalletResult};
+use crate::{SendRequest, WalletError, WalletResult};
 use common::address::{Address, RpcAddress};
 use common::chain::output_value::OutputValue;
 use common::chain::tokens::{
@@ -949,6 +951,28 @@ impl Account {
         Ok(request)
     }
 
+    pub fn create_htlc_tx(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        output_value: OutputValue,
+        htlc: HashedTimelockContract,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SendRequest> {
+        let output = TxOutput::Htlc(output_value, Box::new(htlc));
+        let request = SendRequest::new().with_outputs([output]);
+
+        self.select_inputs_for_send_request(
+            request,
+            SelectedInputs::Utxos(vec![]),
+            None,
+            BTreeMap::new(),
+            db_tx,
+            median_time,
+            fee_rate,
+        )
+    }
+
     pub fn create_issue_nft_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
@@ -1282,8 +1306,13 @@ impl Account {
             .unzip();
 
         let num_inputs = tx.inputs().len();
-        let ptx =
-            PartiallySignedTransaction::new(tx, vec![None; num_inputs], input_utxos, destinations)?;
+        let ptx = PartiallySignedTransaction::new(
+            tx,
+            vec![None; num_inputs],
+            input_utxos,
+            destinations,
+            None,
+        )?;
         Ok(ptx)
     }
 
@@ -1297,8 +1326,12 @@ impl Account {
 
         Ok((
             txo.clone(),
-            get_tx_output_destination(txo, &|pool_id| self.output_cache.pool_data(*pool_id).ok())
-                .ok_or(WalletError::InputCannotBeSpent(txo.clone()))?,
+            get_tx_output_destination(
+                txo,
+                &|pool_id| self.output_cache.pool_data(*pool_id).ok(),
+                HtlcSpendingCondition::Skip,
+            )
+            .ok_or(WalletError::InputCannotBeSpent(txo.clone()))?,
         ))
     }
 

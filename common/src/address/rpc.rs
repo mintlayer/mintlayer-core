@@ -16,7 +16,7 @@
 use super::{Address, AddressError, Addressable, ChainConfig};
 
 /// Address string for use in RPC. Not guaranteed to hold a valid address.
-#[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
 pub struct RpcAddress<T> {
     address: String,

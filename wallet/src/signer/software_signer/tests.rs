@@ -16,6 +16,7 @@
 use std::ops::{Add, Div, Mul, Sub};
 
 use super::*;
+use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
 use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
 use crate::{Account, SendRequest};
 use common::chain::config::create_regtest;
@@ -137,13 +138,17 @@ fn sign_transaction(#[case] seed: Seed) {
     let utxos_ref = utxos.iter().map(Some).collect::<Vec<_>>();
 
     for i in 0..sig_tx.inputs().len() {
-        let destination =
-            crate::get_tx_output_destination(utxos_ref[i].unwrap(), &|_| None).unwrap();
-        common::chain::signature::verify_signature(
+        let destination = get_tx_output_destination(
+            utxos_ref[i].unwrap(),
+            &|_| None,
+            HtlcSpendingCondition::Skip,
+        )
+        .unwrap();
+
+        tx_verifier::input_check::signature_only_check::verify_tx_signature(
             &config,
             &destination,
             &sig_tx,
-            &sig_tx.signatures()[i],
             &utxos_ref,
             i,
         )
