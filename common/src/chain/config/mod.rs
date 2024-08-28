@@ -52,8 +52,8 @@ use self::emission_schedule::DEFAULT_INITIAL_MINT;
 use super::output_value::OutputValue;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 use super::{
-    ChainstateUpgrade, ConsensusUpgrade, HtlcActivated, OrdersActivated, RewardDistributionVersion,
-    TokenIssuanceVersion, TokensFeeVersion,
+    ChainstateUpgrade, ConsensusUpgrade, DataDepositFeeVersion, HtlcActivated, OrdersActivated,
+    RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
 };
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1: Duration = Duration::from_secs(120);
@@ -570,21 +570,19 @@ impl ChainConfig {
 
     /// The maximum allowed size for data deposited in DataDeposit output
     pub fn data_deposit_max_size(&self, height: BlockHeight) -> usize {
-        // Change of the size has nothing to do with htlc, they just come in the same upgrade height
         self.data_deposit_max_size.unwrap_or_else(|| {
-            match self.chainstate_upgrades.version_at_height(height).1.htlc_activated() {
-                HtlcActivated::No => DATA_DEPOSIT_MAX_SIZE_V0,
-                HtlcActivated::Yes => DATA_DEPOSIT_MAX_SIZE_V1,
+            match self.chainstate_upgrades.version_at_height(height).1.data_deposit_fee_version() {
+                DataDepositFeeVersion::V0 => DATA_DEPOSIT_MAX_SIZE_V0,
+                DataDepositFeeVersion::V1 => DATA_DEPOSIT_MAX_SIZE_V1,
             }
         })
     }
 
     /// The fee for depositing data
     pub fn data_deposit_fee(&self, height: BlockHeight) -> Amount {
-        // Change of the fee has nothing to do with htlc, they just come in the same upgrade height
-        match self.chainstate_upgrades.version_at_height(height).1.htlc_activated() {
-            HtlcActivated::No => DATA_DEPOSIT_FEE_V0,
-            HtlcActivated::Yes => DATA_DEPOSIT_FEE_V1,
+        match self.chainstate_upgrades.version_at_height(height).1.data_deposit_fee_version() {
+            DataDepositFeeVersion::V0 => DATA_DEPOSIT_FEE_V0,
+            DataDepositFeeVersion::V1 => DATA_DEPOSIT_FEE_V1,
         }
     }
 
@@ -894,6 +892,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                     TokenIssuanceVersion::V1,
                     RewardDistributionVersion::V1,
                     TokensFeeVersion::V1,
+                    DataDepositFeeVersion::V1,
                     HtlcActivated::Yes,
                     OrdersActivated::Yes,
                 ),
