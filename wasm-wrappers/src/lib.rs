@@ -26,7 +26,9 @@ use common::{
         output_value::OutputValue::{self, Coin, TokenV1},
         signature::{
             inputsig::{
+                arbitrary_message::{produce_message_challenge, ArbitraryMessageSignature},
                 authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
+                authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
                 classical_multisig::authorize_classical_multisig::{
                     sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
                 },
@@ -338,6 +340,40 @@ pub fn verify_signature_for_spending(
         Signature::decode_all(&mut &signature[..]).map_err(|_| Error::InvalidSignatureEncoding)?;
     let verifcation_result = public_key.verify_message(&signature, message);
     Ok(verifcation_result)
+}
+
+/// Given a message and a private key, create and sign a challenge with the given private key
+/// This kind of signature is to be used when signing challenges.
+#[wasm_bindgen]
+pub fn sign_challenge(private_key: &[u8], message: &[u8]) -> Result<Vec<u8>, Error> {
+    let private_key = PrivateKey::decode_all(&mut &private_key[..])
+        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+
+    let challenge = produce_message_challenge(message);
+    let public_key = PublicKey::from_private_key(&private_key);
+
+    let signature = private_key.sign_message(&challenge.encode(), randomness::make_true_rng())?;
+    let signature = AuthorizedPublicKeyHashSpend::new(public_key, signature);
+    Ok(signature.encode())
+}
+
+/// Given a signed challenge, an address and a message. Verify that
+/// the signature is produced by signing the message with the private key
+/// that derived the given public key.
+/// Note that this function is used for verifying messages related challenges.
+#[wasm_bindgen]
+pub fn verify_challenge(
+    address: &str,
+    network: Network,
+    signed_challenge: &[u8],
+    message: &[u8],
+) -> Result<bool, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let destination = parse_addressable::<Destination>(&chain_config, address)?;
+    let message_challenge = produce_message_challenge(message);
+    let sig = ArbitraryMessageSignature::from_data(signed_challenge.to_vec());
+    sig.verify_signature(&chain_config, &destination, &message_challenge)?;
+    Ok(true)
 }
 
 fn parse_addressable<T: Addressable>(

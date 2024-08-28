@@ -47,6 +47,18 @@ that derived the given public key.
 Note that this function is used for verifying messages related to spending,
 such as transaction input witness.
 
+### Function: `sign_challenge`
+
+Given a message and a private key, create and sign a challenge with the given private key
+This kind of signature is to be used when signing challenges.
+
+### Function: `verify_challenge`
+
+Given a signed challenge, an address and a message. Verify that
+the signature is produced by signing the message with the private key
+that derived the given public key.
+Note that this function is used for verifying messages related challenges.
+
 ### Function: `encode_output_transfer`
 
 Given a destination address, an amount and a network type (mainnet, testnet, etc), this function
