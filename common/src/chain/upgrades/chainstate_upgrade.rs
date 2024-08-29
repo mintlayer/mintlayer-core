@@ -51,11 +51,18 @@ pub enum OrdersActivated {
     No,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum DataDepositFeeVersion {
+    V0,
+    V1,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
     reward_distribution_version: RewardDistributionVersion,
     tokens_fee_version: TokensFeeVersion,
+    data_deposit_fee_version: DataDepositFeeVersion,
     htlc_activated: HtlcActivated,
     orders_activated: OrdersActivated,
 }
@@ -65,6 +72,7 @@ impl ChainstateUpgrade {
         token_issuance_version: TokenIssuanceVersion,
         reward_distribution_version: RewardDistributionVersion,
         tokens_fee_version: TokensFeeVersion,
+        data_deposit_fee_version: DataDepositFeeVersion,
         htlc_activated: HtlcActivated,
         orders_activated: OrdersActivated,
     ) -> Self {
@@ -72,6 +80,7 @@ impl ChainstateUpgrade {
             token_issuance_version,
             reward_distribution_version,
             tokens_fee_version,
+            data_deposit_fee_version,
             htlc_activated,
             orders_activated,
         }
@@ -95,6 +104,10 @@ impl ChainstateUpgrade {
 
     pub fn orders_activated(&self) -> OrdersActivated {
         self.orders_activated
+    }
+
+    pub fn data_deposit_fee_version(&self) -> DataDepositFeeVersion {
+        self.data_deposit_fee_version
     }
 }
 

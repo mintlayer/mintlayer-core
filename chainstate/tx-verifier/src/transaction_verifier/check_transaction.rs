@@ -74,7 +74,7 @@ pub fn check_transaction(
     check_witness_count(tx)?;
     check_tokens_tx(chain_config, block_height, tx)?;
     check_no_signature_size(chain_config, tx)?;
-    check_data_deposit_outputs(chain_config, tx)?;
+    check_data_deposit_outputs(chain_config, block_height, tx)?;
     check_htlc_outputs(chain_config, block_height, tx)?;
     check_order_outputs(chain_config, block_height, tx)?;
     Ok(())
@@ -258,6 +258,7 @@ fn check_no_signature_size(
 
 fn check_data_deposit_outputs(
     chain_config: &ChainConfig,
+    block_height: BlockHeight,
     tx: &SignedTransaction,
 ) -> Result<(), CheckTransactionError> {
     for output in tx.outputs() {
@@ -275,10 +276,10 @@ fn check_data_deposit_outputs(
             | TxOutput::AnyoneCanTake(..) => { /* Do nothing */ }
             TxOutput::DataDeposit(v) => {
                 // Ensure the size of the data doesn't exceed the max allowed
-                if v.len() > chain_config.data_deposit_max_size() {
+                if v.len() > chain_config.data_deposit_max_size(block_height) {
                     return Err(CheckTransactionError::DataDepositMaxSizeExceeded(
                         v.len(),
-                        chain_config.data_deposit_max_size(),
+                        chain_config.data_deposit_max_size(block_height),
                         tx.transaction().get_id(),
                     ));
                 }

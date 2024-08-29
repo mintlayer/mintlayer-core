@@ -466,8 +466,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         &mut self,
         data: Vec<u8>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        let outputs = make_data_deposit_output(self.chain_config, data)
-            .map_err(ControllerError::WalletError)?;
+        let (_, best_block_height) = self.wallet.get_best_block_for_account(self.account_index)?;
+        let outputs = make_data_deposit_output(self.chain_config, data, best_block_height)?;
 
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,

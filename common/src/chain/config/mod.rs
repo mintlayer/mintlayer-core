@@ -52,8 +52,8 @@ use self::emission_schedule::DEFAULT_INITIAL_MINT;
 use super::output_value::OutputValue;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 use super::{
-    ChainstateUpgrade, ConsensusUpgrade, HtlcActivated, OrdersActivated, RewardDistributionVersion,
-    TokenIssuanceVersion, TokensFeeVersion,
+    ChainstateUpgrade, ConsensusUpgrade, DataDepositFeeVersion, HtlcActivated, OrdersActivated,
+    RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
 };
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1: Duration = Duration::from_secs(120);
@@ -282,8 +282,7 @@ pub struct ChainConfig {
     epoch_length: NonZeroU64,
     sealed_epoch_distance_from_tip: usize,
     initial_randomness: H256,
-    data_deposit_max_size: usize,
-    data_deposit_fee: Amount,
+    data_deposit_max_size: Option<usize>,
     token_max_uri_len: usize,
     token_max_dec_count: u8,
     token_max_name_len: usize,
@@ -570,13 +569,21 @@ impl ChainConfig {
     }
 
     /// The maximum allowed size for data deposited in DataDeposit output
-    pub fn data_deposit_max_size(&self) -> usize {
-        self.data_deposit_max_size
+    pub fn data_deposit_max_size(&self, height: BlockHeight) -> usize {
+        self.data_deposit_max_size.unwrap_or_else(|| {
+            match self.chainstate_upgrades.version_at_height(height).1.data_deposit_fee_version() {
+                DataDepositFeeVersion::V0 => DATA_DEPOSIT_MAX_SIZE_V0,
+                DataDepositFeeVersion::V1 => DATA_DEPOSIT_MAX_SIZE_V1,
+            }
+        })
     }
 
     /// The fee for depositing data
-    pub fn data_deposit_fee(&self) -> Amount {
-        self.data_deposit_fee
+    pub fn data_deposit_fee(&self, height: BlockHeight) -> Amount {
+        match self.chainstate_upgrades.version_at_height(height).1.data_deposit_fee_version() {
+            DataDepositFeeVersion::V0 => DATA_DEPOSIT_FEE_V0,
+            DataDepositFeeVersion::V1 => DATA_DEPOSIT_FEE_V1,
+        }
     }
 
     /// The fee for issuing a fungible token
@@ -733,8 +740,10 @@ const TOKEN_FREEZE_FEE_V1: Amount = CoinUnit::from_coins(50).to_amount_atoms();
 const TOKEN_CHANGE_AUTHORITY_FEE_V0: Amount = CoinUnit::from_coins(100).to_amount_atoms();
 const TOKEN_CHANGE_AUTHORITY_FEE_V1: Amount = CoinUnit::from_coins(20).to_amount_atoms();
 
-const DATA_DEPOSIT_MAX_SIZE: usize = 128;
-const DATA_DEPOSIT_FEE: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const DATA_DEPOSIT_MAX_SIZE_V0: usize = 128;
+const DATA_DEPOSIT_MAX_SIZE_V1: usize = 384;
+const DATA_DEPOSIT_FEE_V0: Amount = CoinUnit::from_coins(100).to_amount_atoms();
+const DATA_DEPOSIT_FEE_V1: Amount = CoinUnit::from_coins(20).to_amount_atoms();
 
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
 const TOKEN_MAX_TICKER_LEN: usize = 12;
@@ -883,6 +892,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                     TokenIssuanceVersion::V1,
                     RewardDistributionVersion::V1,
                     TokensFeeVersion::V1,
+                    DataDepositFeeVersion::V1,
                     HtlcActivated::Yes,
                     OrdersActivated::Yes,
                 ),

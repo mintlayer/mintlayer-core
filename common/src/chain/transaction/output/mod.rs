@@ -141,6 +141,13 @@ pub enum TxOutput {
     /// Transfer an output under Hashed TimeLock Contract.
     #[codec(index = 10)]
     Htlc(OutputValue, Box<HashedTimelockContract>),
+    /// Creates an account with an order.
+    /// An account contains 2 balances: the one that is "given" by creator and the one that is filled
+    /// by takers.
+    /// Anyone can take a part or the whole "given" balance by transferring the corresponding amount
+    /// of "asked" currency to the account balance in exchange.
+    /// At the same time only the destination specified in OrderData::conclude_key can conclude the order
+    /// and transfer remaining balances out closing the account.
     #[codec(index = 11)]
     AnyoneCanTake(Box<OrderData>),
 }

@@ -106,8 +106,8 @@ class WalletDataDeposit(BitcoinTestFramework):
             # sync the wallet
             assert_in("Success", await wallet.sync())
 
-            large_data_size = random.randint(129, 10000)
-            assert_in(f'The size of the data to be deposited: {large_data_size} is too big, max size is: 128', await wallet.deposit_data((b'a' * large_data_size).hex()))
+            large_data_size = random.randint(385, 10000)
+            assert_in(f'The size of the data to be deposited: {large_data_size} is too big, max size is: 384', await wallet.deposit_data((b'a' * large_data_size).hex()))
 
             assert_in('Cannot deposit empty data', await wallet.deposit_data(''))
 
@@ -116,7 +116,7 @@ class WalletDataDeposit(BitcoinTestFramework):
 
             self.generate_block()
             assert_in("Success", await wallet.sync())
-            assert_in(f"Coins amount: 99", await wallet.get_balance())
+            assert_in(f"Coins amount: 179", await wallet.get_balance())
 
 
 if __name__ == '__main__':

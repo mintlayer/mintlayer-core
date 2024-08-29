@@ -1392,7 +1392,7 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                 .await;
             }
             TxOutput::DataDeposit(_) => {
-                let amount = chain_config.data_deposit_fee();
+                let amount = chain_config.data_deposit_fee(block_height);
                 increase_statistic_amount(
                     db_tx,
                     CoinOrTokenStatistic::Burned,

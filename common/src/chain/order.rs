@@ -86,7 +86,8 @@ pub struct OrderData {
     /// The key that can authorize conclusion of an order
     conclude_key: Destination,
     /// `Ask` and `give` fields represent amounts of currencies
-    /// that an order maker wants to exchange, e.g. 5 coins for 10 tokens
+    /// that an order maker wants to exchange.
+    /// E.g. Creator of an order asks for 5 coins and gives 10 tokens in exchange.
     ask: OutputValue,
     give: OutputValue,
 }

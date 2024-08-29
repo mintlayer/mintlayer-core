@@ -1009,12 +1009,15 @@ impl<'a> RandomTxMaker<'a> {
                 }
             } else if switch == 6 {
                 // data deposit
-                let min_tx_fee = self.chainstate.get_chain_config().data_deposit_fee();
+                let min_tx_fee =
+                    self.chainstate.get_chain_config().data_deposit_fee(BlockHeight::zero());
                 if amount_to_spend >= min_tx_fee {
                     let change = (amount_to_spend - min_tx_fee).unwrap();
 
-                    let deposited_data_len =
-                        self.chainstate.get_chain_config().data_deposit_max_size();
+                    let deposited_data_len = self
+                        .chainstate
+                        .get_chain_config()
+                        .data_deposit_max_size(BlockHeight::zero());
                     let deposited_data_len = rng.gen_range(0..deposited_data_len);
                     let deposited_data =
                         (0..deposited_data_len).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
