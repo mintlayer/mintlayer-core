@@ -122,7 +122,7 @@ impl ExtendedPublicKey {
         }
     }
 
-    pub fn from_hardware_public_key(public_key: Secp256k1ExtendedPublicKey) -> Self {
+    pub fn new(public_key: Secp256k1ExtendedPublicKey) -> Self {
         Self {
             pub_key: ExtendedPublicKeyHolder::Secp256k1Schnorr(public_key),
         }

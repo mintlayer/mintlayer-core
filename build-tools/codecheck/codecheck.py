@@ -268,7 +268,7 @@ def check_local_licenses():
     template = re.compile('(?:' + r')\n(?:'.join(LICENSE_TEMPLATE) + ')')
 
     ok = True
-    for path in rs_sources(['wallet/trezor-client']):
+    for path in rs_sources():
         if any(fnmatch.fnmatch(os.path.abspath(path), os.path.abspath(exempted))
                for exempted in exempted_files):
             continue
