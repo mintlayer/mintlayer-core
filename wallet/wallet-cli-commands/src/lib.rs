@@ -19,7 +19,7 @@ mod helper_types;
 
 pub use command_handler::CommandHandler;
 pub use errors::WalletCliCommandError;
-use helper_types::{CLIHardwareWalletType, YesNo};
+use helper_types::{CliHardwareWalletType, YesNo};
 use rpc::description::{Described, Module};
 use wallet_rpc_lib::{types::NodeInterface, ColdWalletRpcDescription, WalletRpcDescription};
 
@@ -66,7 +66,7 @@ pub enum WalletManagementCommand {
         /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
         /// the software wallet
         #[arg(long, conflicts_with_all(["mnemonic", "passphrase"]))]
-        hardware_wallet: Option<CLIHardwareWalletType>,
+        hardware_wallet: Option<CliHardwareWalletType>,
     },
 
     #[clap(name = "wallet-recover")]
@@ -91,7 +91,7 @@ pub enum WalletManagementCommand {
         /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
         /// the software wallet
         #[arg(long, conflicts_with_all(["mnemonic", "passphrase"]))]
-        hardware_wallet: Option<CLIHardwareWalletType>,
+        hardware_wallet: Option<CliHardwareWalletType>,
     },
 
     #[clap(name = "wallet-open")]
@@ -106,7 +106,7 @@ pub enum WalletManagementCommand {
 
         /// Open a wallet file related to a connected hardware wallet.
         #[arg(long)]
-        hardware_wallet: Option<CLIHardwareWalletType>,
+        hardware_wallet: Option<CliHardwareWalletType>,
     },
 
     #[clap(name = "wallet-close")]
