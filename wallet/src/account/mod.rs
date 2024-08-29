@@ -2214,7 +2214,8 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
-                AccountCommand::ChangeTokenMetadataUri(_, _) => todo!(),
+                // TODO(metadata)
+                AccountCommand::ChangeTokenMetadataUri(_, _) => unimplemented!(),
                 // TODO(orders)
                 AccountCommand::ConcludeOrder(_) => unimplemented!(),
                 AccountCommand::FillOrder(_, _, _) => unimplemented!(),

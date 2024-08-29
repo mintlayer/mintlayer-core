@@ -361,7 +361,14 @@ pub fn tx_input_to_json(
                     "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
                 })
             }
-            AccountCommand::ChangeTokenMetadataUri(_, _) => todo!(),
+            AccountCommand::ChangeTokenMetadataUri(token_id, metadata_uri) => {
+                json!({
+                    "input_type": "AccountCommand",
+                    "command": "ChangeTokenMetadataUri",
+                    "token_id": Address::new(chain_config, *token_id).expect("addressable").to_string(),
+                    "metadata_uri": metadata_uri,
+                })
+            }
         },
     }
 }
