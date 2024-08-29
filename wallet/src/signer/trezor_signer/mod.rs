@@ -69,7 +69,6 @@ use trezor_client::{
         MintlayerTxOutput, MintlayerUnfreezeToken, MintlayerUnmintTokens, MintlayerUtxoType,
     },
 };
-#[allow(clippy::all)]
 use trezor_client::{
     protos::{MintlayerTransferTxOutput, MintlayerUtxoTxInput},
     Trezor,
@@ -118,7 +117,7 @@ impl TrezorSigner {
 
     fn make_signature(
         &self,
-        signature: &Vec<MintlayerSignature>,
+        signature: &[MintlayerSignature],
         destination: &Destination,
         sighash_type: SigHashType,
         sighash: H256,
@@ -282,12 +281,13 @@ impl Signer for TrezorSigner {
                     )),
                     InputWitness::Standard(sig) => match destination {
                         Some(destination) => {
-                            let sighash =
-                                signature_hash(sig.sighash_type(), ptx.tx(), &inputs_utxo_refs, i)?;
-
-                            if sig
-                                .verify_signature(&self.chain_config, destination, &sighash)
-                                .is_ok()
+                            if tx_verifier::input_check::signature_only_check::verify_tx_signature(
+                                &self.chain_config,
+                                destination,
+                                &ptx,
+                                &inputs_utxo_refs,
+                                i,
+                            ).is_ok()
                             {
                                 Ok((
                                     Some(w.clone()),
@@ -295,6 +295,9 @@ impl Signer for TrezorSigner {
                                     SignatureStatus::FullySigned,
                                 ))
                             } else if let Destination::ClassicMultisig(_) = destination {
+                                let sighash =
+                                    signature_hash(sig.sighash_type(), ptx.tx(), &inputs_utxo_refs, i)?;
+
                                 let mut current_signatures = AuthorizedClassicalMultisigSpend::from_data(
                                     sig.raw_signature(),
                                 )?;
@@ -1053,12 +1056,12 @@ impl TrezorSignerProvider {
             .mintlayer_get_public_key(account_path)
             .map_err(|e| SignerError::TrezorError(TrezorError::DeviceError(e)))?;
         let chain_code = ChainCode::from(xpub.chain_code.0);
-        let account_pubkey = Secp256k1ExtendedPublicKey::from_hardware_wallet(
+        let account_pubkey = Secp256k1ExtendedPublicKey::new(
             derivation_path,
             chain_code,
             Secp256k1PublicKey::from_bytes(&xpub.public_key.serialize()).expect(""),
         );
-        let account_pubkey = ExtendedPublicKey::from_hardware_public_key(account_pubkey);
+        let account_pubkey = ExtendedPublicKey::new(account_pubkey);
         Ok(account_pubkey)
     }
 }
