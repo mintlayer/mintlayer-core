@@ -47,7 +47,7 @@ use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
 
 use crate::{
     errors::WalletCliCommandError, helper_types::parse_generic_token_transfer,
-    helper_types::CLIHardwareWalletType, ManageableWalletCommand, WalletManagementCommand,
+    helper_types::CliHardwareWalletType, ManageableWalletCommand, WalletManagementCommand,
 };
 
 use self::local_state::WalletWithState;
@@ -152,8 +152,8 @@ where
             } => {
                 let hardware_wallet = hardware_wallet.and_then(|t| match t {
                     #[cfg(feature = "trezor")]
-                    CLIHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
-                    CLIHardwareWalletType::None => None,
+                    CliHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
+                    CliHardwareWalletType::None => None,
                 });
 
                 let newly_generated_mnemonic = self
@@ -208,8 +208,8 @@ where
             } => {
                 let hardware_wallet = hardware_wallet.and_then(|t| match t {
                     #[cfg(feature = "trezor")]
-                    CLIHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
-                    CLIHardwareWalletType::None => None,
+                    CliHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
+                    CliHardwareWalletType::None => None,
                 });
 
                 let newly_generated_mnemonic = self
@@ -263,8 +263,8 @@ where
             } => {
                 let hardware_wallet = hardware_wallet.and_then(|t| match t {
                     #[cfg(feature = "trezor")]
-                    CLIHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
-                    CLIHardwareWalletType::None => None,
+                    CliHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
+                    CliHardwareWalletType::None => None,
                 });
                 self.wallet()
                     .await?

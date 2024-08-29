@@ -176,7 +176,7 @@ impl WalletTypeArgs {
             Self::Trezor => WalletType::Trezor,
         }
     }
-    pub fn user_supplied_menmonic(&self) -> bool {
+    pub fn user_supplied_mnemonic(&self) -> bool {
         match self {
             Self::Software {
                 mnemonic,
