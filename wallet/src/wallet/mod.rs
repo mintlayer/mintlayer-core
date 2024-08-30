@@ -250,6 +250,8 @@ pub enum WalletError {
     MissingTokenAdditionalData(TokenId),
     #[error("Missmatched additional data for token {0}")]
     MissmatchedTokenAdditionalData(TokenId),
+    #[error("Unsupported operation for a Hardware wallet")]
+    UnsupportedHardwareWalletOperation,
 }
 
 /// Result type used for the wallet
