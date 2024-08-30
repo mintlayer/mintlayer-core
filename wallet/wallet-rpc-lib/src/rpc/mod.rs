@@ -1782,6 +1782,32 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
     }
 
+    pub async fn change_token_metadata_uri(
+        &self,
+        account_index: U31,
+        token_id: RpcAddress<TokenId>,
+        metadata_uri: RpcHexString,
+        config: ControllerConfig,
+    ) -> WRpcResult<NewTransaction, N> {
+        let token_id = token_id
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidTokenId)?;
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    let token_info = w.get_token_info(token_id).await?;
+
+                    w.synced_controller(account_index, config)
+                        .await?
+                        .change_token_metadata_uri(token_info, metadata_uri.into_bytes())
+                        .await
+                        .map_err(RpcError::Controller)
+                        .map(NewTransaction::new)
+                })
+            })
+            .await?
+    }
+
     pub async fn rescan(&self) -> WRpcResult<(), N> {
         self.wallet
             .call_async(move |controller| {

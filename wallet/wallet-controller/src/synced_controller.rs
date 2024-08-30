@@ -462,6 +462,30 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         .await
     }
 
+    pub async fn change_token_metadata_uri(
+        &mut self,
+        token_info: RPCTokenInfo,
+        metadata_uri: Vec<u8>,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        self.create_and_send_token_tx(
+            &token_info,
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31,
+                  token_info: &UnconfirmedTokenInfo| {
+                wallet.change_token_metadata_uri(
+                    account_index,
+                    token_info,
+                    metadata_uri,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
+    }
+
     pub async fn deposit_data(
         &mut self,
         data: Vec<u8>,

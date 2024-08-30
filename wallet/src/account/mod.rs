@@ -1190,6 +1190,31 @@ impl Account {
         )
     }
 
+    pub fn change_token_metadata_uri(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        token_info: &UnconfirmedTokenInfo,
+        metadata_uri: Vec<u8>,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SendRequest> {
+        let nonce = token_info.get_next_nonce()?;
+        let tx_input = TxInput::AccountCommand(
+            nonce,
+            AccountCommand::ChangeTokenMetadataUri(*token_info.token_id(), metadata_uri),
+        );
+        let authority = token_info.authority()?.clone();
+
+        self.change_token_supply_transaction(
+            authority,
+            tx_input,
+            vec![],
+            db_tx,
+            median_time,
+            fee_rate,
+        )
+    }
+
     fn change_token_supply_transaction(
         &mut self,
         authority: Destination,

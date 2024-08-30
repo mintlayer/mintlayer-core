@@ -559,6 +559,16 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
+    /// Change the metadata URI of a token
+    #[method(name = "token_change_metadata_uri")]
+    async fn change_token_metadata_uri(
+        &self,
+        account: AccountArg,
+        token_id: RpcAddress<TokenId>,
+        metadata_uri: RpcHexString,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction>;
+
     /// Given a token that is already issued, mint new tokens and increase the total supply
     #[method(name = "token_mint")]
     async fn mint_tokens(
