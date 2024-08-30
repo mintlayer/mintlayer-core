@@ -18,6 +18,7 @@
 mod helpers;
 pub mod mnemonic;
 pub mod read;
+mod runtime_wallet;
 mod sync;
 pub mod synced_controller;
 pub mod types;
@@ -32,6 +33,7 @@ use chainstate::tx_verifier::{
 use futures::{never::Never, stream::FuturesOrdered, TryStreamExt};
 use helpers::{fetch_token_info, fetch_utxo, fetch_utxo_extra_info, into_balances};
 use node_comm::rpc_client::ColdWalletClient;
+use runtime_wallet::RuntimeWallet;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -90,7 +92,7 @@ use wallet::{
     signer::software_signer::SoftwareSignerProvider,
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
-    Wallet, WalletError, WalletResult,
+    WalletError, WalletResult,
 };
 
 pub use wallet_types::{
@@ -151,8 +153,6 @@ pub enum ControllerError<T: NodeInterface> {
     InvalidTxOutput(GenericCurrencyTransferToTxOutputConversionError),
     #[error("The specified token {0} is not a fungible token")]
     NotFungibleToken(TokenId),
-    #[error("Unsupported operation for a Hardware wallet")]
-    UnsupportedHardwareWalletOperation,
 }
 
 #[derive(Clone, Copy)]
@@ -167,18 +167,12 @@ pub struct ControllerConfig {
     pub broadcast_to_mempool: bool,
 }
 
-pub enum WalletType2<B: storage::Backend + 'static> {
-    Software(Wallet<B, SoftwareSignerProvider>),
-    #[cfg(feature = "trezor")]
-    Trezor(Wallet<B, TrezorSignerProvider>),
-}
-
 pub struct Controller<T, W, B: storage::Backend + 'static> {
     chain_config: Arc<ChainConfig>,
 
     rpc_client: T,
 
-    wallet: WalletType2<B>,
+    wallet: RuntimeWallet<B>,
 
     staking_started: BTreeSet<U31>,
 
@@ -204,7 +198,7 @@ where
     pub async fn new(
         chain_config: Arc<ChainConfig>,
         rpc_client: T,
-        wallet: WalletType2<DefaultBackend>,
+        wallet: RuntimeWallet<DefaultBackend>,
         wallet_events: W,
     ) -> Result<Self, ControllerError<T>> {
         let mut controller = Self {
@@ -224,7 +218,7 @@ where
     pub fn new_unsynced(
         chain_config: Arc<ChainConfig>,
         rpc_client: T,
-        wallet: WalletType2<DefaultBackend>,
+        wallet: RuntimeWallet<DefaultBackend>,
         wallet_events: W,
     ) -> Self {
         Self {
@@ -242,7 +236,7 @@ where
         args: WalletTypeArgsComputed,
         best_block: (BlockHeight, Id<GenBlock>),
         wallet_type: WalletType,
-    ) -> Result<WalletType2<DefaultBackend>, ControllerError<T>> {
+    ) -> Result<RuntimeWallet<DefaultBackend>, ControllerError<T>> {
         utils::ensure!(
             !file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -277,7 +271,7 @@ where
                     },
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(WalletType2::Software(wallet))
+                Ok(RuntimeWallet::Software(wallet))
             }
             #[cfg(feature = "trezor")]
             WalletTypeArgsComputed::Trezor => {
@@ -289,7 +283,7 @@ where
                     |_db_tx| Ok(TrezorSignerProvider::new().map_err(SignerError::TrezorError)?),
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(WalletType2::Trezor(wallet))
+                Ok(RuntimeWallet::Trezor(wallet))
             }
         }
     }
@@ -299,7 +293,7 @@ where
         file_path: impl AsRef<Path>,
         args: WalletTypeArgsComputed,
         wallet_type: WalletType,
-    ) -> Result<WalletType2<DefaultBackend>, ControllerError<T>> {
+    ) -> Result<RuntimeWallet<DefaultBackend>, ControllerError<T>> {
         utils::ensure!(
             !file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -334,7 +328,7 @@ where
                     },
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(WalletType2::Software(wallet))
+                Ok(RuntimeWallet::Software(wallet))
             }
             #[cfg(feature = "trezor")]
             WalletTypeArgsComputed::Trezor => {
@@ -345,7 +339,7 @@ where
                     |_db_tx| Ok(TrezorSignerProvider::new().map_err(SignerError::TrezorError)?),
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(WalletType2::Trezor(wallet))
+                Ok(RuntimeWallet::Trezor(wallet))
             }
         }
     }
@@ -384,7 +378,7 @@ where
         current_controller_mode: WalletControllerMode,
         force_change_wallet_type: bool,
         open_as_wallet_type: WalletType,
-    ) -> Result<WalletType2<DefaultBackend>, ControllerError<T>> {
+    ) -> Result<RuntimeWallet<DefaultBackend>, ControllerError<T>> {
         utils::ensure!(
             file_path.as_ref().exists(),
             ControllerError::WalletFileError(
@@ -408,7 +402,7 @@ where
                     |db_tx| SoftwareSignerProvider::load_from_database(chain_config.clone(), db_tx),
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(WalletType2::Software(wallet))
+                Ok(RuntimeWallet::Software(wallet))
             }
             #[cfg(feature = "trezor")]
             WalletType::Trezor => {
@@ -422,41 +416,30 @@ where
                     |db_tx| TrezorSignerProvider::load_from_database(chain_config.clone(), db_tx),
                 )
                 .map_err(ControllerError::WalletError)?;
-                Ok(WalletType2::Trezor(wallet))
+                Ok(RuntimeWallet::Trezor(wallet))
             }
         }
     }
 
     pub fn seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<T>> {
-        match &self.wallet {
-            WalletType2::Software(w) => w.seed_phrase(),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.seed_phrase(),
-        }
-        .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
-        .map_err(ControllerError::WalletError)
+        self.wallet
+            .seed_phrase()
+            .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
+            .map_err(ControllerError::WalletError)
     }
 
     /// Delete the seed phrase if stored in the database
     pub fn delete_seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<T>> {
-        match &self.wallet {
-            WalletType2::Software(w) => w.delete_seed_phrase(),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.delete_seed_phrase(),
-        }
-        .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
-        .map_err(ControllerError::WalletError)
+        self.wallet
+            .delete_seed_phrase()
+            .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))
+            .map_err(ControllerError::WalletError)
     }
 
     /// Rescan the blockchain
     /// Resets the wallet to the genesis block
     pub fn reset_wallet_to_genesis(&mut self) -> Result<(), ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => w.reset_wallet_to_genesis(),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.reset_wallet_to_genesis(),
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet.reset_wallet_to_genesis().map_err(ControllerError::WalletError)
     }
 
     /// Encrypts the wallet using the specified `password`, or removes the existing encryption if `password` is `None`.
@@ -469,12 +452,7 @@ where
     ///
     /// This method returns an error if the wallet is locked
     pub fn encrypt_wallet(&mut self, password: &Option<String>) -> Result<(), ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => w.encrypt_wallet(password),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.encrypt_wallet(password),
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet.encrypt_wallet(password).map_err(ControllerError::WalletError)
     }
 
     /// Unlocks the wallet using the specified password.
@@ -487,12 +465,7 @@ where
     ///
     /// This method returns an error if the password is incorrect
     pub fn unlock_wallet(&mut self, password: &String) -> Result<(), ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => w.unlock_wallet(password),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.unlock_wallet(password),
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet.unlock_wallet(password).map_err(ControllerError::WalletError)
     }
 
     /// Locks the wallet by making the encrypted private keys inaccessible.
@@ -505,12 +478,7 @@ where
             self.staking_started.is_empty(),
             ControllerError::StakingRunning
         );
-        match &mut self.wallet {
-            WalletType2::Software(w) => w.lock_wallet(),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.lock_wallet(),
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet.lock_wallet().map_err(ControllerError::WalletError)
     }
 
     /// Sets the lookahead size for key generation
@@ -525,20 +493,13 @@ where
     ) -> Result<(), ControllerError<T>> {
         utils::ensure!(lookahead_size > 0, ControllerError::InvalidLookaheadSize);
 
-        match &mut self.wallet {
-            WalletType2::Software(w) => w.set_lookahead_size(lookahead_size, force_reduce),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.set_lookahead_size(lookahead_size, force_reduce),
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet
+            .set_lookahead_size(lookahead_size, force_reduce)
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn wallet_info(&self) -> WalletInfo {
-        let (wallet_id, account_names) = match &self.wallet {
-            WalletType2::Software(w) => w.wallet_info(),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.wallet_info(),
-        };
+        let (wallet_id, account_names) = self.wallet.wallet_info();
         WalletInfo {
             wallet_id,
             account_names,
@@ -580,14 +541,10 @@ where
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, ControllerError<T>> {
-        let pos_data = match &self.wallet {
-            WalletType2::Software(w) => w.get_pos_gen_block_data(account_index, pool_id),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(_) => {
-                return Err(ControllerError::UnsupportedHardwareWalletOperation)
-            }
-        }
-        .map_err(ControllerError::WalletError)?;
+        let pos_data = self
+            .wallet
+            .get_pos_gen_block_data(account_index, pool_id)
+            .map_err(ControllerError::WalletError)?;
 
         let public_key = self
             .rpc_client
@@ -624,12 +581,10 @@ where
         transaction_ids: Vec<Id<Transaction>>,
         packing_strategy: PackingStrategy,
     ) -> Result<Block, ControllerError<T>> {
-        let pools = match &self.wallet {
-            WalletType2::Software(w) => w.get_pool_ids(account_index, WalletPoolsFilter::Stake),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.get_pool_ids(account_index, WalletPoolsFilter::Stake),
-        }
-        .map_err(ControllerError::WalletError)?;
+        let pools = self
+            .wallet
+            .get_pool_ids(account_index, WalletPoolsFilter::Stake)
+            .map_err(ControllerError::WalletError)?;
 
         let mut last_error = ControllerError::NoStakingPool;
         for (pool_id, _) in pools {
@@ -695,14 +650,10 @@ where
         seconds_to_check_for_height: u64,
         check_all_timestamps_between_blocks: bool,
     ) -> Result<BTreeMap<BlockHeight, Vec<BlockTimestamp>>, ControllerError<T>> {
-        let pos_data = match &self.wallet {
-            WalletType2::Software(w) => w.get_pos_gen_block_data_by_pool_id(pool_id),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(_) => {
-                return Err(ControllerError::UnsupportedHardwareWalletOperation)
-            }
-        }
-        .map_err(ControllerError::WalletError)?;
+        let pos_data = self
+            .wallet
+            .get_pos_gen_block_data_by_pool_id(pool_id)
+            .map_err(ControllerError::WalletError)?;
 
         let input_data =
             PoSTimestampSearchInputData::new(pool_id, pos_data.vrf_private_key().clone());
@@ -728,12 +679,7 @@ where
         &mut self,
         name: Option<String>,
     ) -> Result<(U31, Option<String>), ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => w.create_next_account(name),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.create_next_account(name),
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet.create_next_account(name).map_err(ControllerError::WalletError)
     }
 
     pub fn update_account_name(
@@ -741,12 +687,9 @@ where
         account_index: U31,
         name: Option<String>,
     ) -> Result<(U31, Option<String>), ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => w.set_account_name(account_index, name),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.set_account_name(account_index, name),
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet
+            .set_account_name(account_index, name)
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn stop_staking(&mut self, account_index: U31) -> Result<(), ControllerError<T>> {
@@ -760,36 +703,27 @@ where
     }
 
     pub fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
-        *match &self.wallet {
-            WalletType2::Software(w) => w.get_best_block(),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.get_best_block(),
-        }
-        .values()
-        .min_by_key(|(_block_id, block_height)| block_height)
-        .expect("there must be at least one account")
+        *self
+            .wallet
+            .get_best_block()
+            .values()
+            .min_by_key(|(_block_id, block_height)| block_height)
+            .expect("there must be at least one account")
     }
 
     pub async fn get_stake_pool_balances(
         &self,
         account_index: U31,
     ) -> Result<BTreeMap<PoolId, Amount>, ControllerError<T>> {
-        let stake_pool_utxos = match &self.wallet {
-            WalletType2::Software(w) => w.get_utxos(
+        let stake_pool_utxos = self
+            .wallet
+            .get_utxos(
                 account_index,
                 UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
                 UtxoState::Confirmed.into(),
                 WithLocked::Unlocked,
-            ),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.get_utxos(
-                account_index,
-                UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake,
-                UtxoState::Confirmed.into(),
-                WithLocked::Unlocked,
-            ),
-        }
-        .map_err(ControllerError::WalletError)?;
+            )
+            .map_err(ControllerError::WalletError)?;
         let pool_ids = stake_pool_utxos.into_iter().filter_map(|(_, utxo)| match utxo {
             TxOutput::ProduceBlockFromStake(_, pool_id) | TxOutput::CreateStakePool(pool_id, _) => {
                 Some(pool_id)
@@ -822,11 +756,11 @@ where
     /// Synchronize the wallet to the current node tip height and return
     pub async fn sync_once(&mut self) -> Result<(), ControllerError<T>> {
         let res = match &mut self.wallet {
-            WalletType2::Software(w) => {
+            RuntimeWallet::Software(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events).await
             }
             #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => {
+            RuntimeWallet::Trezor(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events).await
             }
         }?;
@@ -839,12 +773,12 @@ where
 
     pub async fn try_sync_once(&mut self) -> Result<(), ControllerError<T>> {
         match &mut self.wallet {
-            WalletType2::Software(w) => {
+            RuntimeWallet::Software(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events)
                     .await?;
             }
             #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => {
+            RuntimeWallet::Trezor(w) => {
                 sync::sync_once(&self.chain_config, &self.rpc_client, w, &self.wallet_events)
                     .await?;
             }
@@ -1293,11 +1227,7 @@ where
     /// Rebroadcast not confirmed transactions
     async fn rebroadcast_txs(&mut self, rebroadcast_txs_again_at: &mut Time) {
         if get_time() >= *rebroadcast_txs_again_at {
-            let txs = match &self.wallet {
-                WalletType2::Software(w) => w.get_transactions_to_be_broadcast(),
-                #[cfg(feature = "trezor")]
-                WalletType2::Trezor(w) => w.get_transactions_to_be_broadcast(),
-            };
+            let txs = self.wallet.get_transactions_to_be_broadcast();
             match txs {
                 Err(error) => {
                     log::error!("Fetching transactions for rebroadcasting failed: {error}");
