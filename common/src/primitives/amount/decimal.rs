@@ -157,7 +157,7 @@ impl std::fmt::Display for DecimalAmount {
     }
 }
 
-#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum ParseError {
     #[error("Resulting number is too big")]
     OutOfRange,
