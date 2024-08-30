@@ -955,6 +955,28 @@ Returns:
 { "tx_id": hex string }
 ```
 
+### Method `token_change_metadata_uri`
+
+Change the metadata URI of a token
+
+
+Parameters:
+```
+{
+    "account": number,
+    "token_id": bech32 string,
+    "metadata_uri": hex string,
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
+}
+```
+
+Returns:
+```
+{ "tx_id": hex string }
+```
+
 ### Method `token_mint`
 
 Given a token that is already issued, mint new tokens and increase the total supply
