@@ -40,7 +40,7 @@ use wallet_types::partially_signed_transaction::{
     PartiallySignedTransaction, TokenAdditionalInfo, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
 };
 
-use crate::{types::Balances, ControllerError, WalletType2};
+use crate::{runtime_wallet::RuntimeWallet, types::Balances, ControllerError};
 
 pub async fn fetch_token_info<T: NodeInterface>(
     rpc_client: &T,
@@ -58,13 +58,13 @@ pub async fn fetch_token_info<T: NodeInterface>(
 pub async fn fetch_utxo<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
     input: &UtxoOutPoint,
-    wallet: &WalletType2<B>,
+    wallet: &RuntimeWallet<B>,
 ) -> Result<TxOutput, ControllerError<T>> {
     // search locally for the unspent utxo
     if let Some(out) = match &wallet {
-        WalletType2::Software(w) => w.find_unspent_utxo_with_destination(input),
+        RuntimeWallet::Software(w) => w.find_unspent_utxo_with_destination(input),
         #[cfg(feature = "trezor")]
-        WalletType2::Trezor(w) => w.find_unspent_utxo_with_destination(input),
+        RuntimeWallet::Trezor(w) => w.find_unspent_utxo_with_destination(input),
     } {
         return Ok(out.0);
     }
@@ -82,13 +82,13 @@ pub async fn fetch_utxo<T: NodeInterface, B: storage::Backend>(
 pub async fn fetch_utxo_with_destination<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
     input: &UtxoOutPoint,
-    wallet: &WalletType2<B>,
+    wallet: &RuntimeWallet<B>,
 ) -> Result<(TxOutput, Destination), ControllerError<T>> {
     // search locally for the unspent utxo
     if let Some(out) = match &wallet {
-        WalletType2::Software(w) => w.find_unspent_utxo_with_destination(input),
+        RuntimeWallet::Software(w) => w.find_unspent_utxo_with_destination(input),
         #[cfg(feature = "trezor")]
-        WalletType2::Trezor(w) => w.find_unspent_utxo_with_destination(input),
+        RuntimeWallet::Trezor(w) => w.find_unspent_utxo_with_destination(input),
     } {
         return Ok(out);
     }
@@ -109,7 +109,6 @@ pub async fn fetch_utxo_with_destination<T: NodeInterface, B: storage::Backend>(
             .await
             .map_err(ControllerError::NodeCallError)?
     } else {
-        // FIXME
         get_tx_output_destination(&utxo, &|_| None, HtlcSpendingCondition::Skip)
     }
     .ok_or(ControllerError::WalletError(WalletError::CannotFindUtxo(
@@ -229,7 +228,7 @@ pub async fn into_balances<T: NodeInterface>(
 
 pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
-    wallet: &WalletType2<B>,
+    wallet: &RuntimeWallet<B>,
     tx: Transaction,
 ) -> Result<PartiallySignedTransaction, ControllerError<T>> {
     let tasks: FuturesOrdered<_> = tx
@@ -266,7 +265,7 @@ pub async fn tx_to_partially_signed_tx<T: NodeInterface, B: storage::Backend>(
 
 async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
     rpc_client: &T,
-    wallet: &WalletType2<B>,
+    wallet: &RuntimeWallet<B>,
     tx_inp: &TxInput,
 ) -> Result<(Option<UtxoWithAdditionalInfo>, Option<Destination>), ControllerError<T>> {
     Ok(match tx_inp {
@@ -278,18 +277,18 @@ async fn into_utxo_and_destination<T: NodeInterface, B: storage::Backend>(
         TxInput::Account(acc_outpoint) => {
             // find delegation destination
             let dest = match &wallet {
-                WalletType2::Software(w) => w.find_account_destination(acc_outpoint),
+                RuntimeWallet::Software(w) => w.find_account_destination(acc_outpoint),
                 #[cfg(feature = "trezor")]
-                WalletType2::Trezor(w) => w.find_account_destination(acc_outpoint),
+                RuntimeWallet::Trezor(w) => w.find_account_destination(acc_outpoint),
             };
             (None, dest)
         }
         TxInput::AccountCommand(_, cmd) => {
             // find authority of the token
             let dest = match &wallet {
-                WalletType2::Software(w) => w.find_account_command_destination(cmd),
+                RuntimeWallet::Software(w) => w.find_account_command_destination(cmd),
                 #[cfg(feature = "trezor")]
-                WalletType2::Trezor(w) => w.find_account_command_destination(cmd),
+                RuntimeWallet::Trezor(w) => w.find_account_command_destination(cmd),
             };
             (None, dest)
         }
