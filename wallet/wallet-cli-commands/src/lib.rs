@@ -376,6 +376,12 @@ pub enum WalletCommand {
     #[clap(name = "token-change-authority")]
     ChangeTokenAuthority { token_id: String, address: String },
 
+    #[clap(name = "token-change-metadata-uri")]
+    ChangeTokenMetadataUri {
+        token_id: String,
+        metadata_uri: String,
+    },
+
     #[clap(name = "token-mint")]
     MintTokens {
         /// The token id of the tokens to be minted
