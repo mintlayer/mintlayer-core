@@ -2239,8 +2239,14 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
-                // TODO(metadata)
-                AccountCommand::ChangeTokenMetadataUri(_, _) => unimplemented!(),
+                AccountCommand::ChangeTokenMetadataUri(token_id, _) => {
+                    update_preselected_inputs(
+                        currency_grouper::Currency::Token(*token_id),
+                        Amount::ZERO,
+                        (*fee + chain_config.token_change_metadata_uri_fee())
+                            .ok_or(WalletError::OutputAmountOverflow)?,
+                    )?;
+                }
                 // TODO(orders)
                 AccountCommand::ConcludeOrder(_) => unimplemented!(),
                 AccountCommand::FillOrder(_, _, _) => unimplemented!(),

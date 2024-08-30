@@ -357,6 +357,9 @@ class WalletCliController:
     async def change_token_authority(self, token_id: str, new_authority: str) -> str:
         return await self._write_command(f"token-change-authority {token_id} {new_authority}\n")
 
+    async def change_token_metadata_uri(self, token_id: str, new_metadata_uri: str) -> str:
+        return await self._write_command(f"token-change-metadata-uri {token_id} {new_metadata_uri}\n")
+
     async def issue_new_nft(self,
                             destination_address: str,
                             media_hash: str,
