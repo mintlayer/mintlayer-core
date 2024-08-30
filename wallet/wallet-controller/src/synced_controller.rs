@@ -68,12 +68,13 @@ use wallet_types::{
 
 use crate::{
     helpers::{fetch_token_info, fetch_utxo, into_balances, tx_to_partially_signed_tx},
+    runtime_wallet::RuntimeWallet,
     types::{Balances, GenericCurrencyTransfer},
-    ControllerConfig, ControllerError, WalletType2,
+    ControllerConfig, ControllerError,
 };
 
 pub struct SyncedController<'a, T, W, B: storage::Backend + 'static> {
-    wallet: &'a mut WalletType2<B>,
+    wallet: &'a mut RuntimeWallet<B>,
     rpc_client: T,
     chain_config: &'a ChainConfig,
     wallet_events: &'a W,
@@ -89,7 +90,7 @@ where
     W: WalletEvents,
 {
     pub fn new(
-        wallet: &'a mut WalletType2<B>,
+        wallet: &'a mut RuntimeWallet<B>,
         rpc_client: T,
         chain_config: &'a ChainConfig,
         wallet_events: &'a W,
@@ -124,12 +125,10 @@ where
         &self,
         input_utxos: &[UtxoOutPoint],
     ) -> Result<(), ControllerError<T>> {
-        let token_ids = match &self.wallet {
-            WalletType2::Software(w) => w.find_used_tokens(self.account_index, input_utxos),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.find_used_tokens(self.account_index, input_utxos),
-        }
-        .map_err(ControllerError::WalletError)?;
+        let token_ids = self
+            .wallet
+            .find_used_tokens(self.account_index, input_utxos)
+            .map_err(ControllerError::WalletError)?;
 
         for token_info in self.fetch_token_infos(token_ids).await? {
             match token_info {
@@ -146,16 +145,11 @@ where
         &self,
         token_info: RPCFungibleTokenInfo,
     ) -> Result<(), ControllerError<T>> {
-        match &self.wallet {
-            WalletType2::Software(w) => {
-                w.get_token_unconfirmed_info(self.account_index, token_info)
-            }
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.get_token_unconfirmed_info(self.account_index, token_info),
-        }
-        .map_err(ControllerError::WalletError)?
-        .check_can_be_used()
-        .map_err(ControllerError::WalletError)?;
+        self.wallet
+            .get_token_unconfirmed_info(self.account_index, token_info)
+            .map_err(ControllerError::WalletError)?
+            .check_can_be_used()
+            .map_err(ControllerError::WalletError)?;
 
         Ok(())
     }
@@ -184,20 +178,15 @@ where
                     |all_ok, token_info| -> Result<bool, ControllerError<T>> {
                         let all_ok = all_ok
                             && match &token_info {
-                                RPCTokenInfo::FungibleToken(token_info) => match &self.wallet {
-                                    WalletType2::Software(w) => w.get_token_unconfirmed_info(
+                                RPCTokenInfo::FungibleToken(token_info) => self
+                                    .wallet
+                                    .get_token_unconfirmed_info(
                                         self.account_index,
                                         token_info.clone(),
-                                    ),
-                                    #[cfg(feature = "trezor")]
-                                    WalletType2::Trezor(w) => w.get_token_unconfirmed_info(
-                                        self.account_index,
-                                        token_info.clone(),
-                                    ),
-                                }
-                                .map_err(ControllerError::WalletError)?
-                                .check_can_be_used()
-                                .is_ok(),
+                                    )
+                                    .map_err(ControllerError::WalletError)?
+                                    .check_can_be_used()
+                                    .is_ok(),
                                 RPCTokenInfo::NonFungibleToken(_) => true,
                             };
                         Ok(all_ok)
@@ -226,12 +215,9 @@ where
         &mut self,
         tx_id: Id<Transaction>,
     ) -> Result<(), ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => w.abandon_transaction(self.account_index, tx_id),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.abandon_transaction(self.account_index, tx_id),
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet
+            .abandon_transaction(self.account_index, tx_id)
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn standalone_address_label_rename(
@@ -239,16 +225,9 @@ where
         address: Destination,
         label: Option<String>,
     ) -> Result<(), ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => {
-                w.standalone_address_label_rename(self.account_index, address, label)
-            }
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => {
-                w.standalone_address_label_rename(self.account_index, address, label)
-            }
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet
+            .standalone_address_label_rename(self.account_index, address, label)
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn add_standalone_address(
@@ -256,14 +235,9 @@ where
         address: PublicKeyHash,
         label: Option<String>,
     ) -> Result<(), ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => {
-                w.add_standalone_address(self.account_index, address, label)
-            }
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.add_standalone_address(self.account_index, address, label),
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet
+            .add_standalone_address(self.account_index, address, label)
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn add_standalone_private_key(
@@ -271,16 +245,9 @@ where
         private_key: PrivateKey,
         label: Option<String>,
     ) -> Result<(), ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => {
-                w.add_standalone_private_key(self.account_index, private_key, label)
-            }
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => {
-                w.add_standalone_private_key(self.account_index, private_key, label)
-            }
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet
+            .add_standalone_private_key(self.account_index, private_key, label)
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn add_standalone_multisig(
@@ -288,51 +255,34 @@ where
         challenge: ClassicMultisigChallenge,
         label: Option<String>,
     ) -> Result<PublicKeyHash, ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => {
-                w.add_standalone_multisig(self.account_index, challenge, label)
-            }
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => {
-                w.add_standalone_multisig(self.account_index, challenge, label)
-            }
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet
+            .add_standalone_multisig(self.account_index, challenge, label)
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn new_address(
         &mut self,
     ) -> Result<(ChildNumber, Address<Destination>), ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => w.get_new_address(self.account_index),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.get_new_address(self.account_index),
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet
+            .get_new_address(self.account_index)
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn find_public_key(
         &mut self,
         address: Destination,
     ) -> Result<PublicKey, ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => w.find_public_key(self.account_index, address),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.find_public_key(self.account_index, address),
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet
+            .find_public_key(self.account_index, address)
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn new_vrf_key(
         &mut self,
     ) -> Result<(ChildNumber, Address<VRFPublicKey>), ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => {
-                w.get_vrf_key(self.account_index).map_err(ControllerError::WalletError)
-            }
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(_) => Err(ControllerError::UnsupportedHardwareWalletOperation),
-        }
+        self.wallet
+            .get_vrf_key(self.account_index)
+            .map_err(ControllerError::WalletError)
     }
 
     pub async fn issue_new_token(
@@ -347,37 +297,21 @@ where
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                match wallet {
-                    WalletType2::Software(w) => w.issue_new_token(
-                        account_index,
-                        TokenIssuance::V1(TokenIssuanceV1 {
-                            token_ticker,
-                            number_of_decimals,
-                            metadata_uri,
-                            total_supply: token_total_supply,
-                            authority: address.into_object(),
-                            is_freezable,
-                        }),
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.issue_new_token(
-                        account_index,
-                        TokenIssuance::V1(TokenIssuanceV1 {
-                            token_ticker,
-                            number_of_decimals,
-                            metadata_uri,
-                            total_supply: token_total_supply,
-                            authority: address.into_object(),
-                            is_freezable,
-                        }),
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                }
+                wallet.issue_new_token(
+                    account_index,
+                    TokenIssuance::V1(TokenIssuanceV1 {
+                        token_ticker,
+                        number_of_decimals,
+                        metadata_uri,
+                        total_supply: token_total_supply,
+                        authority: address.into_object(),
+                        is_freezable,
+                    }),
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
             },
         )
         .await
@@ -391,25 +325,15 @@ where
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                match wallet {
-                    WalletType2::Software(w) => w.issue_new_nft(
-                        account_index,
-                        address,
-                        metadata,
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.issue_new_nft(
-                        account_index,
-                        address,
-                        metadata,
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                }
+                wallet.issue_new_nft(
+                    account_index,
+                    address,
+                    metadata,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
             },
         )
         .await
@@ -425,29 +349,18 @@ where
             token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
-                match wallet {
-                    WalletType2::Software(w) => w.mint_tokens(
-                        account_index,
-                        token_info,
-                        amount,
-                        address,
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.mint_tokens(
-                        account_index,
-                        token_info,
-                        amount,
-                        address,
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                }
+                wallet.mint_tokens(
+                    account_index,
+                    token_info,
+                    amount,
+                    address,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
             },
         )
         .await
@@ -461,27 +374,17 @@ where
             token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
-                match wallet {
-                    WalletType2::Software(w) => w.unmint_tokens(
-                        account_index,
-                        token_info,
-                        amount,
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.unmint_tokens(
-                        account_index,
-                        token_info,
-                        amount,
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                }
+                wallet.unmint_tokens(
+                    account_index,
+                    token_info,
+                    amount,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
             },
         )
         .await
@@ -495,25 +398,16 @@ where
             token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
-                match wallet {
-                    WalletType2::Software(w) => w.lock_token_supply(
-                        account_index,
-                        token_info,
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.lock_token_supply(
-                        account_index,
-                        token_info,
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                }
+                wallet.lock_token_supply(
+                    account_index,
+                    token_info,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
             },
         )
         .await
@@ -530,26 +424,16 @@ where
             token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
-                match wallet {
-                    WalletType2::Software(w) => w.freeze_token(
-                        account_index,
-                        token_info,
-                        is_token_unfreezable,
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.freeze_token(
-                        account_index,
-                        token_info,
-                        is_token_unfreezable,
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                }
+                wallet.freeze_token(
+                    account_index,
+                    token_info,
+                    is_token_unfreezable,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
             },
         )
         .await
@@ -564,24 +448,15 @@ where
             token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
-                match wallet {
-                    WalletType2::Software(w) => w.unfreeze_token(
-                        account_index,
-                        token_info,
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.unfreeze_token(
-                        account_index,
-                        token_info,
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                }
+                wallet.unfreeze_token(
+                    account_index,
+                    token_info,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
             },
         )
         .await
@@ -598,26 +473,16 @@ where
             token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
-                match wallet {
-                    WalletType2::Software(w) => w.change_token_authority(
-                        account_index,
-                        token_info,
-                        address,
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.change_token_authority(
-                        account_index,
-                        token_info,
-                        address,
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                }
+                wallet.change_token_authority(
+                    account_index,
+                    token_info,
+                    address,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
             },
         )
         .await
@@ -633,29 +498,17 @@ where
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                match wallet {
-                    WalletType2::Software(w) => w.create_transaction_to_addresses(
-                        account_index,
-                        outputs,
-                        SelectedInputs::Utxos(vec![]),
-                        BTreeMap::new(),
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                        &BTreeMap::new(),
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.create_transaction_to_addresses(
-                        account_index,
-                        outputs,
-                        SelectedInputs::Utxos(vec![]),
-                        BTreeMap::new(),
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                        &BTreeMap::new(),
-                    ),
-                }
+                wallet.create_transaction_to_addresses(
+                    account_index,
+                    outputs,
+                    SelectedInputs::Utxos(vec![]),
+                    BTreeMap::new(),
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    &BTreeMap::new(),
+                )
             },
         )
         .await
@@ -677,29 +530,17 @@ where
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                match wallet {
-                    WalletType2::Software(w) => w.create_transaction_to_addresses(
-                        account_index,
-                        [output],
-                        SelectedInputs::Utxos(selected_utxos),
-                        BTreeMap::new(),
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                        &BTreeMap::new(),
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.create_transaction_to_addresses(
-                        account_index,
-                        [output],
-                        SelectedInputs::Utxos(selected_utxos),
-                        BTreeMap::new(),
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                        &BTreeMap::new(),
-                    ),
-                }
+                wallet.create_transaction_to_addresses(
+                    account_index,
+                    [output],
+                    SelectedInputs::Utxos(selected_utxos),
+                    BTreeMap::new(),
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    &BTreeMap::new(),
+                )
             },
         )
         .await
@@ -712,22 +553,12 @@ where
         destination_address: Destination,
         from_addresses: BTreeSet<Destination>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        let selected_utxos = match &self.wallet {
-            WalletType2::Software(w) => w.get_utxos(
-                self.account_index,
-                UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
-                UtxoState::Confirmed | UtxoState::Inactive,
-                WithLocked::Unlocked,
-            ),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.get_utxos(
-                self.account_index,
-                UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
-                UtxoState::Confirmed | UtxoState::Inactive,
-                WithLocked::Unlocked,
-            ),
-        }
-        .map_err(ControllerError::WalletError)?;
+        let selected_utxos = self.wallet.get_utxos(
+            self.account_index,
+            UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
+            UtxoState::Confirmed | UtxoState::Inactive,
+            WithLocked::Unlocked,
+        )?;
 
         let (inputs, additional_utxo_infos) =
             self.filter_out_utxos_with_frozen_tokens(selected_utxos).await?;
@@ -743,25 +574,15 @@ where
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   _consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                match wallet {
-                    WalletType2::Software(w) => w.create_sweep_transaction(
-                        account_index,
-                        destination_address,
-                        filtered_inputs,
-                        current_fee_rate,
-                        &additional_utxo_infos,
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.create_sweep_transaction(
-                        account_index,
-                        destination_address,
-                        filtered_inputs,
-                        current_fee_rate,
-                        &additional_utxo_infos,
-                    ),
-                }
+                wallet.create_sweep_transaction(
+                    account_index,
+                    destination_address,
+                    filtered_inputs,
+                    current_fee_rate,
+                    additional_utxo_infos,
+                )
             },
         )
         .await
@@ -774,13 +595,11 @@ where
         destination_address: Address<Destination>,
         delegation_id: DelegationId,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        let pool_id = match &self.wallet {
-            WalletType2::Software(w) => w.get_delegation(self.account_index, delegation_id),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.get_delegation(self.account_index, delegation_id),
-        }
-        .map_err(ControllerError::WalletError)?
-        .pool_id;
+        let pool_id = self
+            .wallet
+            .get_delegation(self.account_index, delegation_id)
+            .map_err(ControllerError::WalletError)?
+            .pool_id;
 
         let delegation_share = self
             .rpc_client
@@ -794,25 +613,15 @@ where
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   _consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                match wallet {
-                    WalletType2::Software(w) => w.create_sweep_from_delegation_transaction(
-                        account_index,
-                        destination_address,
-                        delegation_id,
-                        delegation_share,
-                        current_fee_rate,
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.create_sweep_from_delegation_transaction(
-                        account_index,
-                        destination_address,
-                        delegation_id,
-                        delegation_share,
-                        current_fee_rate,
-                    ),
-                }
+                wallet.create_sweep_from_delegation_transaction(
+                    account_index,
+                    destination_address,
+                    delegation_id,
+                    delegation_share,
+                    current_fee_rate,
+                )
             },
         )
         .await
@@ -851,8 +660,9 @@ where
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
-        let (req, fees) = match &mut self.wallet {
-            WalletType2::Software(w) => w.create_unsigned_transaction_to_addresses(
+        let (req, fees) = self
+            .wallet
+            .create_unsigned_transaction_to_addresses(
                 self.account_index,
                 [output],
                 selected_inputs,
@@ -860,19 +670,8 @@ where
                 [(Currency::Coin, change_address)].into(),
                 current_fee_rate,
                 consolidate_fee_rate,
-            ),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.create_unsigned_transaction_to_addresses(
-                self.account_index,
-                [output],
-                selected_inputs,
-                None,
-                [(Currency::Coin, change_address)].into(),
-                current_fee_rate,
-                consolidate_fee_rate,
-            ),
-        }
-        .map_err(ControllerError::WalletError)?;
+            )
+            .map_err(ControllerError::WalletError)?;
 
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
 
@@ -943,22 +742,12 @@ where
             let mut inputs = inputs;
             let mut change_addresses = change_addresses;
 
-            let all_utxos = match &self.wallet {
-                WalletType2::Software(w) => w.get_utxos(
-                    self.account_index,
-                    UtxoType::Transfer | UtxoType::LockThenTransfer,
-                    UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
-                    WithLocked::Unlocked,
-                ),
-                #[cfg(feature = "trezor")]
-                WalletType2::Trezor(w) => w.get_utxos(
-                    self.account_index,
-                    UtxoType::Transfer | UtxoType::LockThenTransfer,
-                    UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
-                    WithLocked::Unlocked,
-                ),
-            }
-            .map_err(ControllerError::WalletError)?;
+            let all_utxos = self.wallet.get_utxos(
+                self.account_index,
+                UtxoType::Transfer | UtxoType::LockThenTransfer,
+                UtxoState::Confirmed | UtxoState::InMempool | UtxoState::Inactive,
+                WithLocked::Unlocked,
+            )?;
 
             let all_coin_utxos = all_utxos
                 .into_iter()
@@ -1016,28 +805,15 @@ where
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
-        let (tx, fees) = match &mut self.wallet {
-            WalletType2::Software(w) => w.create_unsigned_transaction_to_addresses(
-                self.account_index,
-                outputs,
-                selected_inputs,
-                Some(CoinSelectionAlgo::Randomize),
-                change_addresses,
-                current_fee_rate,
-                consolidate_fee_rate,
-            ),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.create_unsigned_transaction_to_addresses(
-                self.account_index,
-                outputs,
-                selected_inputs,
-                Some(CoinSelectionAlgo::Randomize),
-                change_addresses,
-                current_fee_rate,
-                consolidate_fee_rate,
-            ),
-        }
-        .map_err(ControllerError::WalletError)?;
+        let (tx, fees) = self.wallet.create_unsigned_transaction_to_addresses(
+            self.account_index,
+            outputs,
+            selected_inputs,
+            Some(CoinSelectionAlgo::Randomize),
+            change_addresses,
+            current_fee_rate,
+            consolidate_fee_rate,
+        )?;
 
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
 
@@ -1056,23 +832,14 @@ where
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                match wallet {
-                    WalletType2::Software(w) => w.create_delegation(
-                        account_index,
-                        vec![output],
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.create_delegation(
-                        account_index,
-                        vec![output],
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                    ),
-                }
+                wallet.create_delegation(
+                    account_index,
+                    output,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
             },
         )
         .await
@@ -1089,29 +856,17 @@ where
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                match wallet {
-                    WalletType2::Software(w) => w.create_transaction_to_addresses(
-                        account_index,
-                        [output],
-                        SelectedInputs::Utxos(vec![]),
-                        BTreeMap::new(),
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                        &BTreeMap::new(),
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.create_transaction_to_addresses(
-                        account_index,
-                        [output],
-                        SelectedInputs::Utxos(vec![]),
-                        BTreeMap::new(),
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                        &BTreeMap::new(),
-                    ),
-                }
+                wallet.create_transaction_to_addresses(
+                    account_index,
+                    [output],
+                    SelectedInputs::Utxos(vec![]),
+                    BTreeMap::new(),
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    &BTreeMap::new(),
+                )
             },
         )
         .await
@@ -1125,13 +880,7 @@ where
         amount: Amount,
         delegation_id: DelegationId,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        let pool_id = match &self.wallet {
-            WalletType2::Software(w) => w.get_delegation(self.account_index, delegation_id),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.get_delegation(self.account_index, delegation_id),
-        }
-        .map_err(ControllerError::WalletError)?
-        .pool_id;
+        let pool_id = self.wallet.get_delegation(self.account_index, delegation_id)?.pool_id;
 
         let delegation_share = self
             .rpc_client
@@ -1145,27 +894,16 @@ where
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   _consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                match wallet {
-                    WalletType2::Software(w) => w.create_transaction_to_addresses_from_delegation(
-                        account_index,
-                        address,
-                        amount,
-                        delegation_id,
-                        delegation_share,
-                        current_fee_rate,
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.create_transaction_to_addresses_from_delegation(
-                        account_index,
-                        address,
-                        amount,
-                        delegation_id,
-                        delegation_share,
-                        current_fee_rate,
-                    ),
-                }
+                wallet.create_transaction_to_addresses_from_delegation(
+                    account_index,
+                    address,
+                    amount,
+                    delegation_id,
+                    delegation_share,
+                    current_fee_rate,
+                )
             },
         )
         .await
@@ -1184,7 +922,7 @@ where
             token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
@@ -1195,27 +933,15 @@ where
                         ticker: token_info.token_ticker().to_vec(),
                     }),
                 )]);
-                match wallet {
-                    WalletType2::Software(w) => w.create_transaction_to_addresses(
-                        account_index,
-                        [output],
-                        SelectedInputs::Utxos(vec![]),
-                        BTreeMap::new(),
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                        &additional_info,
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.create_transaction_to_addresses(
-                        account_index,
-                        [output],
-                        SelectedInputs::Utxos(vec![]),
-                        BTreeMap::new(),
-                        current_fee_rate,
-                        consolidate_fee_rate,
-                        &additional_info,
-                    ),
-                }
+                wallet.create_transaction_to_addresses(
+                    account_index,
+                    [output],
+                    SelectedInputs::Utxos(vec![]),
+                    BTreeMap::new(),
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    &additional_info,
+                )
             },
         )
         .await
@@ -1232,27 +958,19 @@ where
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                match wallet {
-                    WalletType2::Software(w) => w
-                        .create_stake_pool_tx(
-                            account_index,
-                            current_fee_rate,
-                            consolidate_fee_rate,
-                            StakePoolDataArguments {
-                                amount,
-                                margin_ratio_per_thousand,
-                                cost_per_block,
-                                decommission_key,
-                            },
-                        )
-                        .map_err(ControllerError::WalletError),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(_) => {
-                        Err(ControllerError::UnsupportedHardwareWalletOperation)
-                    }
-                }
+                wallet.create_stake_pool_tx(
+                    account_index,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                    StakePoolDataArguments {
+                        amount,
+                        margin_ratio_per_thousand,
+                        cost_per_block,
+                        decommission_key,
+                    },
+                )
             },
         )
         .await
@@ -1276,25 +994,15 @@ where
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   _consolidate_fee_rate: FeeRate,
-                  wallet: &mut WalletType2<B>,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                match wallet {
-                    WalletType2::Software(w) => w.decommission_stake_pool(
-                        account_index,
-                        pool_id,
-                        staker_balance,
-                        output_address,
-                        current_fee_rate,
-                    ),
-                    #[cfg(feature = "trezor")]
-                    WalletType2::Trezor(w) => w.decommission_stake_pool(
-                        account_index,
-                        pool_id,
-                        staker_balance,
-                        output_address,
-                        current_fee_rate,
-                    ),
-                }
+                wallet.decommission_stake_pool(
+                    account_index,
+                    pool_id,
+                    staker_balance,
+                    output_address,
+                    current_fee_rate,
+                )
             },
         )
         .await
@@ -1317,24 +1025,15 @@ where
 
         let (current_fee_rate, _) = self.get_current_and_consolidation_fee_rate().await?;
 
-        match &mut self.wallet {
-            WalletType2::Software(w) => w.decommission_stake_pool_request(
+        self.wallet
+            .decommission_stake_pool_request(
                 self.account_index,
                 pool_id,
                 staker_balance,
                 output_address,
                 current_fee_rate,
-            ),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.decommission_stake_pool_request(
-                self.account_index,
-                pool_id,
-                staker_balance,
-                output_address,
-                current_fee_rate,
-            ),
-        }
-        .map_err(ControllerError::WalletError)
+            )
+            .map_err(ControllerError::WalletError)
     }
 
     pub async fn create_htlc_tx(
@@ -1345,45 +1044,21 @@ where
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
-        let result = match self.wallet {
-            WalletType2::Software(w) => w.create_htlc_tx(
-                self.account_index,
-                output_value,
-                htlc,
-                current_fee_rate,
-                consolidate_fee_rate,
-            )?,
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.create_htlc_tx(
-                self.account_index,
-                output_value,
-                htlc,
-                current_fee_rate,
-                consolidate_fee_rate,
-            )?,
-        };
+        let result = self.wallet.create_htlc_tx(
+            self.account_index,
+            output_value,
+            htlc,
+            current_fee_rate,
+            consolidate_fee_rate,
+        )?;
         Ok(result)
     }
 
     /// Checks if the wallet has stake pools and marks this account for staking.
     pub fn start_staking(&mut self) -> Result<(), ControllerError<T>> {
-        utils::ensure!(
-            !match &self.wallet {
-                WalletType2::Software(w) => w.is_locked(),
-                #[cfg(feature = "trezor")]
-                WalletType2::Trezor(w) => w.is_locked(),
-            },
-            ControllerError::WalletIsLocked
-        );
+        utils::ensure!(!self.wallet.is_locked(), ControllerError::WalletIsLocked);
         // Make sure that account_index is valid and that pools exist
-        let pool_ids = match &mut self.wallet {
-            WalletType2::Software(w) => {
-                w.get_pool_ids(self.account_index, WalletPoolsFilter::Stake)
-            }
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.get_pool_ids(self.account_index, WalletPoolsFilter::Stake),
-        }
-        .map_err(ControllerError::WalletError)?;
+        let pool_ids = self.wallet.get_pool_ids(self.account_index, WalletPoolsFilter::Stake)?;
         utils::ensure!(!pool_ids.is_empty(), ControllerError::NoStakingPool);
         log::info!("Start staking, account_index: {}", self.account_index);
         self.staking_started.insert(self.account_index);
@@ -1410,12 +1085,9 @@ where
             }
         };
 
-        match &mut self.wallet {
-            WalletType2::Software(w) => w.sign_raw_transaction(self.account_index, ptx),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.sign_raw_transaction(self.account_index, ptx),
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet
+            .sign_raw_transaction(self.account_index, ptx)
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn sign_challenge(
@@ -1423,23 +1095,15 @@ where
         challenge: Vec<u8>,
         destination: Destination,
     ) -> Result<ArbitraryMessageSignature, ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => {
-                w.sign_challenge(self.account_index, challenge, destination)
-            }
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.sign_challenge(self.account_index, challenge, destination),
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet
+            .sign_challenge(self.account_index, challenge, destination)
+            .map_err(ControllerError::WalletError)
     }
 
     pub fn add_unconfirmed_tx(&mut self, tx: SignedTransaction) -> Result<(), ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => w.add_unconfirmed_tx(tx, self.wallet_events),
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => w.add_unconfirmed_tx(tx, self.wallet_events),
-        }
-        .map_err(ControllerError::WalletError)
+        self.wallet
+            .add_unconfirmed_tx(tx, self.wallet_events)
+            .map_err(ControllerError::WalletError)
     }
 
     async fn get_current_and_consolidation_fee_rate(
@@ -1460,16 +1124,9 @@ where
         &mut self,
         tx: SignedTransaction,
     ) -> Result<SignedTransaction, ControllerError<T>> {
-        match &mut self.wallet {
-            WalletType2::Software(w) => {
-                w.add_account_unconfirmed_tx(self.account_index, tx.clone(), self.wallet_events)
-            }
-            #[cfg(feature = "trezor")]
-            WalletType2::Trezor(w) => {
-                w.add_account_unconfirmed_tx(self.account_index, tx.clone(), self.wallet_events)
-            }
-        }
-        .map_err(ControllerError::WalletError)?;
+        self.wallet
+            .add_account_unconfirmed_tx(self.account_index, &tx, self.wallet_events)
+            .map_err(ControllerError::WalletError)?;
 
         self.rpc_client
             .submit_transaction(tx.clone(), Default::default())
@@ -1498,7 +1155,7 @@ where
         tx_maker: F,
     ) -> Result<SignedTransaction, ControllerError<T>>
     where
-        F: FnOnce(FeeRate, FeeRate, &mut WalletType2<B>, U31) -> Result<SignedTransaction, E>,
+        F: FnOnce(FeeRate, FeeRate, &mut RuntimeWallet<B>, U31) -> Result<SignedTransaction, E>,
         ControllerError<T>: From<E>,
     {
         let (current_fee_rate, consolidate_fee_rate) =
@@ -1520,7 +1177,7 @@ where
         F: FnOnce(
             FeeRate,
             FeeRate,
-            &mut WalletType2<B>,
+            &mut RuntimeWallet<B>,
             U31,
             &UnconfirmedTokenInfo,
         ) -> WalletResult<SignedTransaction>,
@@ -1531,16 +1188,9 @@ where
     ) -> Result<SignedTransaction, ControllerError<T>> {
         // make sure we can use the token before create an tx using it
         let token_freezable_info = match token_info {
-            RPCTokenInfo::FungibleToken(token_info) => match &self.wallet {
-                WalletType2::Software(w) => {
-                    w.get_token_unconfirmed_info(self.account_index, token_info)
-                }
-                #[cfg(feature = "trezor")]
-                WalletType2::Trezor(w) => {
-                    w.get_token_unconfirmed_info(self.account_index, token_info)
-                }
+            RPCTokenInfo::FungibleToken(token_info) => {
+                self.wallet.get_token_unconfirmed_info(self.account_index, token_info)?
             }
-            .map_err(ControllerError::WalletError)?,
             RPCTokenInfo::NonFungibleToken(info) => {
                 UnconfirmedTokenInfo::NonFungibleToken(info.token_id, info.as_ref().into())
             }
@@ -1565,7 +1215,12 @@ where
     /// e.g. newly issued token, nft or delegation id
     async fn create_and_send_tx_with_id<
         ID,
-        F: FnOnce(FeeRate, FeeRate, &mut WalletType2<B>, U31) -> WalletResult<(ID, SignedTransaction)>,
+        F: FnOnce(
+            FeeRate,
+            FeeRate,
+            &mut RuntimeWallet<B>,
+            U31,
+        ) -> WalletResult<(ID, SignedTransaction)>,
     >(
         &mut self,
         tx_maker: F,
