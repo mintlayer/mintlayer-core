@@ -38,7 +38,7 @@ use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
 use wallet_types::account_id::AccountPrefixedId;
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
-use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
+use wallet_types::partially_signed_transaction::{PartiallySignedTransaction, UtxoAdditionalInfo};
 use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
@@ -47,8 +47,8 @@ use crate::key_chain::{AccountKeyChains, KeyChainError, VRFAccountKeyChains};
 use crate::send_request::{
     make_address_output, make_address_output_from_delegation, make_address_output_token,
     make_decommission_stake_pool_output, make_mint_token_outputs, make_stake_output,
-    make_unmint_token_outputs, IssueNftArguments, SelectedInputs, StakePoolCreationArguments,
-    StakePoolCreationResolvedArguments,
+    make_unmint_token_outputs, IssueNftArguments, PoolOrTokenId, SelectedInputs,
+    StakePoolCreationArguments, StakePoolCreationResolvedArguments,
 };
 use crate::wallet::WalletPoolsFilter;
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
@@ -633,6 +633,7 @@ impl<K: AccountKeyChains> Account<K> {
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
         let mut request = self.select_inputs_for_send_request(
             request,
@@ -646,7 +647,7 @@ impl<K: AccountKeyChains> Account<K> {
         )?;
 
         let fees = request.get_fees();
-        let ptx = request.into_partially_signed_tx(&BTreeMap::new())?;
+        let ptx = request.into_partially_signed_tx(additional_utxo_infos)?;
 
         Ok((ptx, fees))
     }

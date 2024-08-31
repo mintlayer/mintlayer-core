@@ -354,7 +354,7 @@ fn find_additional_info(
         | TxOutput::LockThenTransfer(value, _, _) => {
             find_token_additional_info(value, additional_info)?.map(UtxoAdditionalInfo::TokenInfo)
         }
-        TxOutput::AnyoneCanTake(data) => {
+        TxOutput::CreateOrder(data) => {
             let ask = find_token_additional_info(data.ask(), additional_info)?;
             let give = find_token_additional_info(data.give(), additional_info)?;
 
@@ -412,7 +412,7 @@ pub fn get_referenced_token_ids(output: &TxOutput) -> BTreeSet<TokenId> {
         | TxOutput::LockThenTransfer(v, _, _)
         | TxOutput::Burn(v)
         | TxOutput::Htlc(v, _) => referenced_token_id(v),
-        | TxOutput::AnyoneCanTake(data) => {
+        | TxOutput::CreateOrder(data) => {
             let mut tokens = referenced_token_id(data.ask());
             tokens.extend(referenced_token_id(data.give()));
             tokens
