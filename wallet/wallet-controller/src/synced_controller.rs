@@ -670,6 +670,7 @@ where
                 [(Currency::Coin, change_address)].into(),
                 current_fee_rate,
                 consolidate_fee_rate,
+                &BTreeMap::new(),
             )
             .map_err(ControllerError::WalletError)?;
 
@@ -713,11 +714,19 @@ where
             ControllerError::<T>::ExpectingNonEmptyOutputs
         );
 
-        let outputs = {
+        let (outputs, additional_utxo_infos) = {
             let mut result = Vec::new();
+            let mut additional_utxo_infos = BTreeMap::new();
 
             for (token_id, outputs_vec) in outputs {
                 let token_info = fetch_token_info(&self.rpc_client, token_id).await?;
+                additional_utxo_infos.insert(
+                    PoolOrTokenId::TokenId(token_id),
+                    UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                        num_decimals: token_info.token_number_of_decimals(),
+                        ticker: token_info.token_ticker().to_vec(),
+                    }),
+                );
 
                 match &token_info {
                     RPCTokenInfo::FungibleToken(token_info) => {
@@ -735,7 +744,7 @@ where
                 .map_err(ControllerError::InvalidTxOutput)?;
             }
 
-            result
+            (result, additional_utxo_infos)
         };
 
         let (inputs, change_addresses) = {
@@ -813,6 +822,7 @@ where
             change_addresses,
             current_fee_rate,
             consolidate_fee_rate,
+            &additional_utxo_infos,
         )?;
 
         let fees = into_balances(&self.rpc_client, self.chain_config, fees).await?;
@@ -1040,6 +1050,7 @@ where
         &mut self,
         output_value: OutputValue,
         htlc: HashedTimelockContract,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
@@ -1050,6 +1061,7 @@ where
             htlc,
             current_fee_rate,
             consolidate_fee_rate,
+            additional_utxo_infos,
         )?;
         Ok(result)
     }

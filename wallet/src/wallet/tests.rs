@@ -4504,6 +4504,7 @@ fn sign_send_request_cold_wallet(#[case] seed: Seed) {
             [(Currency::Coin, cold_wallet_address.clone())].into(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         )
         .unwrap();
 
@@ -4841,6 +4842,7 @@ fn create_htlc_and_spend(#[case] seed: Seed) {
             htlc.clone(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         )
         .unwrap();
     let create_htlc_tx_id = create_htlc_tx.transaction().get_id();
@@ -4986,6 +4988,7 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
             htlc.clone(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &BTreeMap::new(),
         )
         .unwrap();
     let create_htlc_tx_id = create_htlc_tx.transaction().get_id();
