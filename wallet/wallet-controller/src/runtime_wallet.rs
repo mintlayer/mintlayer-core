@@ -850,6 +850,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
         match self {
             RuntimeWallet::Software(w) => w.create_unsigned_transaction_to_addresses(
@@ -860,6 +861,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 change_addresses,
                 current_fee_rate,
                 consolidate_fee_rate,
+                additional_utxo_infos,
             ),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.create_unsigned_transaction_to_addresses(
@@ -870,6 +872,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 change_addresses,
                 current_fee_rate,
                 consolidate_fee_rate,
+                additional_utxo_infos,
             ),
         }
     }
@@ -1008,6 +1011,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         htlc: HashedTimelockContract,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         match self {
             RuntimeWallet::Software(w) => w.create_htlc_tx(
@@ -1016,6 +1020,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 htlc,
                 current_fee_rate,
                 consolidate_fee_rate,
+                additional_utxo_infos,
             ),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.create_htlc_tx(
@@ -1024,6 +1029,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 htlc,
                 current_fee_rate,
                 consolidate_fee_rate,
+                additional_utxo_infos,
             ),
         }
     }
