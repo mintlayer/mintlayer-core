@@ -1451,6 +1451,7 @@ where
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
@@ -1466,6 +1467,7 @@ where
                     current_fee_rate,
                     consolidate_fee_rate,
                 },
+                additional_utxo_infos,
             )
         })
     }
@@ -1700,10 +1702,10 @@ where
         let latest_median_time = self.latest_median_time;
         let additional_utxo_infos = BTreeMap::from_iter([(
             PoolOrTokenId::TokenId(token_info.token_id()),
-            UtxoAdditionalInfo::TokenInfo {
+            UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
                 num_decimals: token_info.num_decimals(),
                 ticker: token_info.token_ticker().to_vec(),
-            },
+            }),
         )]);
         self.for_account_rw_unlocked_and_check_tx(
             account_index,
@@ -1891,11 +1893,12 @@ where
         htlc: HashedTimelockContract,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked_and_check_tx(
             account_index,
-            &BTreeMap::new(),
+            additional_utxo_infos,
             |account, db_tx| {
                 account.create_htlc_tx(
                     db_tx,
