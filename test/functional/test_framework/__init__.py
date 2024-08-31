@@ -198,6 +198,31 @@ def init_mintlayer_types():
                 ],
             },
 
+            "TokenAdditionalInfo": {
+                "type": "struct",
+                "type_mapping": [
+                    ["num_decimals", "u8"],
+                    ["ticker", "Vec<u8>"],
+                ]
+            },
+
+            "UtxoAdditionalInfo": {
+                "type": "enum",
+                "type_mapping": [
+                    ["TokenInfo", "TokenAdditionalInfo"],
+                    ["PoolInfo", "(Amount)"],
+                    ["AnyoneCanTake", ""], # TODO
+                ],
+            },
+
+            "UtxoWithAdditionalInfo": {
+                "type": "struct",
+                "type_mapping": [
+                    ["utxo", "TxOutput"],
+                    ["additional_info", "Option<UtxoAdditionalInfo>"],
+                ]
+            },
+
             "StandardInputSignature": {
                 "type": "struct",
                 "type_mapping": [
@@ -219,9 +244,10 @@ def init_mintlayer_types():
                 "type_mapping": [
                     ["tx", "TransactionV1"],
                     ["witnesses", "Vec<Option<InputWitness>>"],
-                    ["input_utxos", "Vec<Option<TxOutput>>"],
+                    ["input_utxos", "Vec<Option<UtxoWithAdditionalInfo>>"],
                     ["destinations", "Vec<Option<Destination>>"],
                     ["htlc_secrets", "Vec<Option<[u8; 32]>>"],
+                    ["output_additional_infos", "Vec<Option<UtxoAdditionalInfo>>"],
                 ]
             },
 
