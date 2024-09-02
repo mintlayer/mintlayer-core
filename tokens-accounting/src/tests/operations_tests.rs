@@ -934,7 +934,7 @@ fn change_authority_twice(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn try_change_authority_for_freezed_token(#[case] seed: Seed) {
+fn try_change_authority_for_frozen_token(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_issuance =
@@ -959,7 +959,7 @@ fn try_change_authority_for_freezed_token(#[case] seed: Seed) {
     let new_token_data =
         TokenData::FungibleToken(token_data.change_authority(new_authority.clone()));
 
-    // Try change authority while token is freezed
+    // Try change authority while token is frozen
     let res = cache.change_authority(token_id, new_authority.clone());
 
     assert_eq!(
@@ -1067,7 +1067,7 @@ fn change_metadata_twice(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn try_change_metadata_for_freezed_token(#[case] seed: Seed) {
+fn try_change_metadata_for_frozen_token(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let token_issuance =
@@ -1090,7 +1090,7 @@ fn try_change_metadata_for_freezed_token(#[case] seed: Seed) {
     let new_token_data =
         TokenData::FungibleToken(token_data.change_metadata_uri(new_metadata.clone()));
 
-    // Try change authority while token is freezed
+    // Try change authority while token is frozen
     let res = cache.change_metadata_uri(token_id, new_metadata.clone());
 
     assert_eq!(
