@@ -72,6 +72,7 @@ impl TxDependency {
             | AccountCommand::LockTokenSupply(_)
             | AccountCommand::FreezeToken(_, _)
             | AccountCommand::UnfreezeToken(_)
+            | AccountCommand::ChangeTokenMetadataUri(_, _)
             | AccountCommand::ChangeTokenAuthority(_, _) => {
                 Self::TokenSupplyAccount(TxAccountDependency::new(acct.clone().into(), nonce))
             }

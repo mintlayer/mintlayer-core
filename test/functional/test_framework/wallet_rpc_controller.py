@@ -318,6 +318,9 @@ class WalletRpcController:
     async def change_token_authority(self, token_id: str, new_authority: str) -> str:
         return self._write_command("token_change_authority", [self.account, token_id, new_authority, {'in_top_x_mb': 5}])['result']
 
+    async def change_token_metadata_uri(self, token_id: str, new_metadata_uri: str) -> str:
+        return self._write_command("token_change_metadata_uri", [self.account, token_id, new_metadata_uri, {'in_top_x_mb': 5}])['result']
+
     async def issue_new_nft(self,
                             destination_address: str,
                             media_hash: str,

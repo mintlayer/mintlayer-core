@@ -881,6 +881,24 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
+    async fn change_token_metadata_uri(
+        &self,
+        account_index: U31,
+        token_id: String,
+        metadata_uri: String,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        self.wallet_rpc
+            .change_token_metadata_uri(
+                account_index,
+                token_id.into(),
+                RpcHexString::from_str(&metadata_uri)?,
+                config,
+            )
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
     async fn mint_tokens(
         &self,
         account_index: U31,

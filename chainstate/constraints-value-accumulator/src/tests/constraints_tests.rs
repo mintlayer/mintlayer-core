@@ -749,7 +749,7 @@ fn calculate_fee_for_token_issuance(#[case] seed: Seed) {
         0,
     ))];
     let input_utxos = vec![Some(TxOutput::Transfer(
-        OutputValue::Coin((token_issuance_fee * 2).unwrap()),
+        OutputValue::Coin(token_issuance_fee),
         Destination::AnyoneCanSpend,
     ))];
 
@@ -781,7 +781,7 @@ fn calculate_fee_for_token_issuance(#[case] seed: Seed) {
         .map_into_block_fees(&chain_config, block_height)
         .unwrap();
 
-    assert_eq!(accumulated_fee, Fee(token_issuance_fee));
+    assert_eq!(accumulated_fee, Fee(Amount::ZERO));
 }
 
 // Check that token supply change fee is not accounted in accumulated fee and is burned rather then goes to staker.
@@ -833,7 +833,7 @@ fn calculate_token_supply_change_fee(#[case] seed: Seed) {
         let input_utxos = vec![
             None,
             Some(TxOutput::Transfer(
-                OutputValue::Coin((supply_change_fee * 2).unwrap()),
+                OutputValue::Coin(supply_change_fee),
                 Destination::AnyoneCanSpend,
             )),
         ];
@@ -862,7 +862,7 @@ fn calculate_token_supply_change_fee(#[case] seed: Seed) {
             .map_into_block_fees(&chain_config, block_height)
             .unwrap();
 
-        assert_eq!(accumulated_fee, Fee(supply_change_fee));
+        assert_eq!(accumulated_fee, Fee(Amount::ZERO));
     }
 
     // Unmint
@@ -877,7 +877,7 @@ fn calculate_token_supply_change_fee(#[case] seed: Seed) {
         let input_utxos = vec![
             None,
             Some(TxOutput::Transfer(
-                OutputValue::Coin((supply_change_fee * 2).unwrap()),
+                OutputValue::Coin(supply_change_fee),
                 Destination::AnyoneCanSpend,
             )),
         ];
@@ -906,7 +906,7 @@ fn calculate_token_supply_change_fee(#[case] seed: Seed) {
             .map_into_block_fees(&chain_config, block_height)
             .unwrap();
 
-        assert_eq!(accumulated_fee, Fee(supply_change_fee));
+        assert_eq!(accumulated_fee, Fee(Amount::ZERO));
     }
 
     // Lock supply
@@ -924,7 +924,7 @@ fn calculate_token_supply_change_fee(#[case] seed: Seed) {
         let input_utxos = vec![
             None,
             Some(TxOutput::Transfer(
-                OutputValue::Coin((supply_change_fee * 2).unwrap()),
+                OutputValue::Coin(supply_change_fee),
                 Destination::AnyoneCanSpend,
             )),
         ];
@@ -953,7 +953,7 @@ fn calculate_token_supply_change_fee(#[case] seed: Seed) {
             .map_into_block_fees(&chain_config, block_height)
             .unwrap();
 
-        assert_eq!(accumulated_fee, Fee(supply_change_fee));
+        assert_eq!(accumulated_fee, Fee(Amount::ZERO));
     }
 }
 
@@ -1009,7 +1009,7 @@ fn calculate_token_fee_freeze(#[case] seed: Seed) {
         let input_utxos = vec![
             None,
             Some(TxOutput::Transfer(
-                OutputValue::Coin((supply_change_fee * 2).unwrap()),
+                OutputValue::Coin(supply_change_fee),
                 Destination::AnyoneCanSpend,
             )),
         ];
@@ -1038,7 +1038,7 @@ fn calculate_token_fee_freeze(#[case] seed: Seed) {
             .map_into_block_fees(&chain_config, block_height)
             .unwrap();
 
-        assert_eq!(accumulated_fee, Fee(supply_change_fee));
+        assert_eq!(accumulated_fee, Fee(Amount::ZERO));
     }
 
     // Unfreeze
@@ -1056,7 +1056,7 @@ fn calculate_token_fee_freeze(#[case] seed: Seed) {
         let input_utxos = vec![
             None,
             Some(TxOutput::Transfer(
-                OutputValue::Coin((supply_change_fee * 2).unwrap()),
+                OutputValue::Coin(supply_change_fee),
                 Destination::AnyoneCanSpend,
             )),
         ];
@@ -1085,7 +1085,7 @@ fn calculate_token_fee_freeze(#[case] seed: Seed) {
             .map_into_block_fees(&chain_config, block_height)
             .unwrap();
 
-        assert_eq!(accumulated_fee, Fee(supply_change_fee));
+        assert_eq!(accumulated_fee, Fee(Amount::ZERO));
     }
 }
 
@@ -1136,7 +1136,7 @@ fn calculate_token_fee_change_authority(#[case] seed: Seed) {
     let input_utxos = vec![
         None,
         Some(TxOutput::Transfer(
-            OutputValue::Coin((supply_change_fee * 2).unwrap()),
+            OutputValue::Coin(supply_change_fee),
             Destination::AnyoneCanSpend,
         )),
     ];
@@ -1164,7 +1164,7 @@ fn calculate_token_fee_change_authority(#[case] seed: Seed) {
         .map_into_block_fees(&chain_config, block_height)
         .unwrap();
 
-    assert_eq!(accumulated_fee, Fee(supply_change_fee));
+    assert_eq!(accumulated_fee, Fee(Amount::ZERO));
 }
 
 // Check that data deposit fee is not accounted in accumulated fee and is burned rather then goes to staker.
@@ -1194,7 +1194,7 @@ fn calculate_data_deposit_fee(#[case] seed: Seed) {
         0,
     ))];
     let input_utxos = vec![Some(TxOutput::Transfer(
-        OutputValue::Coin((data_deposit_fee * 2).unwrap()),
+        OutputValue::Coin(data_deposit_fee),
         Destination::AnyoneCanSpend,
     ))];
 
@@ -1220,7 +1220,7 @@ fn calculate_data_deposit_fee(#[case] seed: Seed) {
         .map_into_block_fees(&chain_config, block_height)
         .unwrap();
 
-    assert_eq!(accumulated_fee, Fee(data_deposit_fee));
+    assert_eq!(accumulated_fee, Fee(Amount::ZERO));
 }
 
 // Check that nft issuance fee is not accounted in accumulated fee and is burned rather then goes to staker.
@@ -1250,7 +1250,7 @@ fn calculate_nft_issuance_fee(#[case] seed: Seed) {
         0,
     ))];
     let input_utxos = vec![Some(TxOutput::Transfer(
-        OutputValue::Coin((nft_issuance_fee * 2).unwrap()),
+        OutputValue::Coin(nft_issuance_fee),
         Destination::AnyoneCanSpend,
     ))];
 
@@ -1281,5 +1281,83 @@ fn calculate_nft_issuance_fee(#[case] seed: Seed) {
         .map_into_block_fees(&chain_config, block_height)
         .unwrap();
 
-    assert_eq!(accumulated_fee, Fee(nft_issuance_fee));
+    assert_eq!(accumulated_fee, Fee(Amount::ZERO));
+}
+
+// Check that token metadata change fee is not accounted in accumulated fee and is burned rather then goes to staker.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn calculate_token_fee_change_metadata_uri(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
+        .consensus_upgrades(NetUpgrades::regtest_with_pos())
+        .build();
+    let block_height = BlockHeight::new(1);
+    let change_metadata_uri_fee = chain_config.token_change_metadata_uri_fee();
+
+    let pos_store = InMemoryPoSAccounting::new();
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
+    let token_data = tokens_accounting::TokenData::FungibleToken(
+        TokenIssuance::V1(test_utils::nft_utils::random_token_issuance_v1(
+            &chain_config,
+            Destination::AnyoneCanSpend,
+            &mut rng,
+        ))
+        .into(),
+    );
+    let token_id = TokenId::random_using(&mut rng);
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::from_values(
+        BTreeMap::from_iter([(token_id, token_data)]),
+        BTreeMap::new(),
+    );
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
+
+    let inputs = vec![
+        TxInput::AccountCommand(
+            AccountNonce::new(0),
+            AccountCommand::ChangeTokenMetadataUri(token_id, Vec::new()),
+        ),
+        TxInput::Utxo(UtxoOutPoint::new(
+            OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+            0,
+        )),
+    ];
+    let input_utxos = vec![
+        None,
+        Some(TxOutput::Transfer(
+            OutputValue::Coin(change_metadata_uri_fee),
+            Destination::AnyoneCanSpend,
+        )),
+    ];
+
+    let outputs =
+        vec![TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)];
+
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        &chain_config,
+        block_height,
+        &orders_db,
+        &pos_db,
+        &tokens_db,
+        &inputs,
+        &input_utxos,
+    )
+    .unwrap();
+
+    let outputs_accumulator =
+        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
+
+    let accumulated_fee = inputs_accumulator
+        .satisfy_with(outputs_accumulator)
+        .unwrap()
+        .map_into_block_fees(&chain_config, block_height)
+        .unwrap();
+
+    assert_eq!(accumulated_fee, Fee(Amount::ZERO));
 }

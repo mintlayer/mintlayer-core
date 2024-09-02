@@ -56,6 +56,7 @@ pub fn get_token_supply_change_count(inputs: &[TxInput]) -> usize {
                 AccountCommand::FreezeToken(_, _)
                 | AccountCommand::UnfreezeToken(_)
                 | AccountCommand::ChangeTokenAuthority(_, _)
+                | AccountCommand::ChangeTokenMetadataUri(_, _)
                 | AccountCommand::ConcludeOrder(_)
                 | AccountCommand::FillOrder(_, _, _) => false,
                 AccountCommand::MintTokens(_, _)

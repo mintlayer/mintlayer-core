@@ -18,8 +18,8 @@ mod consensus_upgrade;
 mod netupgrade;
 
 pub use chainstate_upgrade::{
-    ChainstateUpgrade, DataDepositFeeVersion, HtlcActivated, OrdersActivated,
-    RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
+    ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion, HtlcActivated,
+    OrdersActivated, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
 };
 pub use consensus_upgrade::{ConsensusUpgrade, PoSStatus, PoWStatus, RequiredConsensus};
 pub use netupgrade::{Activate, NetUpgrades};

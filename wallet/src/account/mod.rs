@@ -1190,6 +1190,31 @@ impl Account {
         )
     }
 
+    pub fn change_token_metadata_uri(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        token_info: &UnconfirmedTokenInfo,
+        metadata_uri: Vec<u8>,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SendRequest> {
+        let nonce = token_info.get_next_nonce()?;
+        let tx_input = TxInput::AccountCommand(
+            nonce,
+            AccountCommand::ChangeTokenMetadataUri(*token_info.token_id(), metadata_uri),
+        );
+        let authority = token_info.authority()?.clone();
+
+        self.change_token_supply_transaction(
+            authority,
+            tx_input,
+            vec![],
+            db_tx,
+            median_time,
+            fee_rate,
+        )
+    }
+
     fn change_token_supply_transaction(
         &mut self,
         authority: Destination,
@@ -1289,6 +1314,7 @@ impl Account {
                         | AccountCommand::UnmintTokens(token_id)
                         | AccountCommand::LockTokenSupply(token_id)
                         | AccountCommand::ChangeTokenAuthority(token_id, _)
+                        | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                         | AccountCommand::FreezeToken(token_id, _)
                         | AccountCommand::UnfreezeToken(token_id) => self
                             .output_cache
@@ -1782,7 +1808,10 @@ impl Account {
                 | AccountCommand::UnmintTokens(token_id)
                 | AccountCommand::LockTokenSupply(token_id)
                 | AccountCommand::FreezeToken(token_id, _)
-                | AccountCommand::UnfreezeToken(token_id) => self.find_token(token_id).is_ok(),
+                | AccountCommand::UnfreezeToken(token_id)
+                | AccountCommand::ChangeTokenMetadataUri(token_id, _) => {
+                    self.find_token(token_id).is_ok()
+                }
                 AccountCommand::ChangeTokenAuthority(token_id, address) => {
                     self.find_token(token_id).is_ok()
                         || self.is_destination_mine_or_watched(address)
@@ -2207,6 +2236,14 @@ fn group_preselected_inputs(
                         currency_grouper::Currency::Token(*token_id),
                         Amount::ZERO,
                         (*fee + chain_config.token_change_authority_fee(block_height))
+                            .ok_or(WalletError::OutputAmountOverflow)?,
+                    )?;
+                }
+                AccountCommand::ChangeTokenMetadataUri(token_id, _) => {
+                    update_preselected_inputs(
+                        currency_grouper::Currency::Token(*token_id),
+                        Amount::ZERO,
+                        (*fee + chain_config.token_change_metadata_uri_fee())
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }

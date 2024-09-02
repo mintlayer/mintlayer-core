@@ -1577,6 +1577,29 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
+    pub fn change_token_metadata_uri(
+        &mut self,
+        account_index: U31,
+        token_info: &UnconfirmedTokenInfo,
+        metadata_uri: Vec<u8>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
+            account.change_token_metadata_uri(
+                db_tx,
+                token_info,
+                metadata_uri,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+
     pub fn find_used_tokens(
         &self,
         account_index: U31,

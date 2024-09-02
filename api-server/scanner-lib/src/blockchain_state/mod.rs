@@ -617,6 +617,7 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
                     | AccountCommand::UnmintTokens(token_id)
                     | AccountCommand::UnfreezeToken(token_id)
                     | AccountCommand::LockTokenSupply(token_id)
+                    | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                     | AccountCommand::ChangeTokenAuthority(token_id, _) => Some(*token_id),
                     AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
                 },
@@ -1121,6 +1122,30 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     let issuance = issuance.change_authority(destination.clone());
                     db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
                     let amount = chain_config.token_change_authority_fee(block_height);
+                    increase_statistic_amount(
+                        db_tx,
+                        CoinOrTokenStatistic::Burned,
+                        &amount,
+                        CoinOrTokenId::Coin,
+                        block_height,
+                    )
+                    .await;
+                    decrease_statistic_amount(
+                        db_tx,
+                        CoinOrTokenStatistic::CirculatingSupply,
+                        &amount,
+                        CoinOrTokenId::Coin,
+                        block_height,
+                    )
+                    .await;
+                }
+                AccountCommand::ChangeTokenMetadataUri(token_id, metadata_uri) => {
+                    let issuance =
+                        db_tx.get_fungible_token_issuance(*token_id).await?.expect("must exist");
+
+                    let issuance = issuance.change_metadata_uri(metadata_uri.clone());
+                    db_tx.set_fungible_token_issuance(*token_id, block_height, issuance).await?;
+                    let amount = chain_config.token_change_metadata_uri_fee();
                     increase_statistic_amount(
                         db_tx,
                         CoinOrTokenStatistic::Burned,

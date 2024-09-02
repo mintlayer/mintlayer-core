@@ -835,6 +835,29 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         )
     }
 
+    async fn change_token_metadata_uri(
+        &self,
+        account_arg: AccountArg,
+        token_id: RpcAddress<TokenId>,
+        metadata_uri: RpcHexString,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb(),
+            broadcast_to_mempool: true,
+        };
+
+        rpc::handle_result(
+            self.change_token_metadata_uri(
+                account_arg.index::<N>()?,
+                token_id,
+                metadata_uri,
+                config,
+            )
+            .await,
+        )
+    }
+
     async fn mint_tokens(
         &self,
         account_arg: AccountArg,

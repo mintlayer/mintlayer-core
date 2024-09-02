@@ -618,6 +618,16 @@ where
                             });
                         Some(res)
                     }
+                    AccountCommand::ChangeTokenMetadataUri(token_id, new_metadata_uri) => {
+                        let res = self
+                            .spend_input_from_account(*nonce, account_op.clone().into())
+                            .and_then(|_| {
+                                self.tokens_accounting_cache
+                                    .change_metadata_uri(*token_id, new_metadata_uri.clone())
+                                    .map_err(ConnectTransactionError::TokensAccountingError)
+                            });
+                        Some(res)
+                    }
                     AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
                 },
             })
@@ -758,7 +768,8 @@ where
                     | AccountCommand::LockTokenSupply(..)
                     | AccountCommand::FreezeToken(..)
                     | AccountCommand::UnfreezeToken(..)
-                    | AccountCommand::ChangeTokenAuthority(..) => None,
+                    | AccountCommand::ChangeTokenAuthority(..)
+                    | AccountCommand::ChangeTokenMetadataUri(..) => None,
                     AccountCommand::ConcludeOrder(order_id) => {
                         let res = self
                             .spend_input_from_account(*nonce, account_op.clone().into())

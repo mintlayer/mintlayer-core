@@ -69,6 +69,12 @@ pub struct ChangeTokenAuthorityUndo {
     pub(crate) undo_data: DataDeltaUndo<TokenData>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct ChangeTokenMetadataUriUndo {
+    pub(crate) id: TokenId,
+    pub(crate) undo_data: DataDeltaUndo<TokenData>,
+}
+
 #[must_use]
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, VariantCount)]
 pub enum TokenAccountingUndo {
@@ -86,6 +92,8 @@ pub enum TokenAccountingUndo {
     UnfreezeToken(UnfreezeTokenUndo),
     #[codec(index = 6)]
     ChangeTokenAuthority(ChangeTokenAuthorityUndo),
+    #[codec(index = 7)]
+    ChangeTokenMetadataUri(ChangeTokenMetadataUriUndo),
 }
 
 pub fn random_undo_for_test(rng: &mut impl Rng) -> TokenAccountingUndo {
@@ -116,6 +124,12 @@ pub trait TokensAccountingOperations {
         &mut self,
         id: TokenId,
         new_authority: Destination,
+    ) -> Result<TokenAccountingUndo>;
+
+    fn change_metadata_uri(
+        &mut self,
+        id: TokenId,
+        metadata_uri: Vec<u8>,
     ) -> Result<TokenAccountingUndo>;
 
     fn undo(&mut self, undo_data: TokenAccountingUndo) -> Result<()>;

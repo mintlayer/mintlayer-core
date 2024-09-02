@@ -1107,6 +1107,23 @@ where
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
 
+            WalletCommand::ChangeTokenMetadataUri {
+                token_id,
+                metadata_uri,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                let new_tx = wallet
+                    .change_token_metadata_uri(
+                        selected_account,
+                        token_id,
+                        metadata_uri,
+                        self.config,
+                    )
+                    .await?;
+
+                Ok(Self::new_tx_submitted_command(new_tx))
+            }
+
             WalletCommand::Rescan => {
                 self.non_empty_wallet().await?.rescan().await?;
                 Ok(ConsoleCommand::Print(

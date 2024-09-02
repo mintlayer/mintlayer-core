@@ -668,6 +668,7 @@ impl OutputCache {
                 AccountCommand::MintTokens(_, _)
                 | AccountCommand::UnmintTokens(_)
                 | AccountCommand::LockTokenSupply(_)
+                | AccountCommand::ChangeTokenMetadataUri(_, _)
                 | AccountCommand::ChangeTokenAuthority(_, _)
                 | AccountCommand::UnfreezeToken(_)
                 | AccountCommand::ConcludeOrder(_)
@@ -730,6 +731,7 @@ impl OutputCache {
                 | AccountCommand::MintTokens(token_id, _)
                 | AccountCommand::FreezeToken(token_id, _)
                 | AccountCommand::UnfreezeToken(token_id)
+                | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                 | AccountCommand::ChangeTokenAuthority(token_id, _)
                 | AccountCommand::UnmintTokens(token_id) => frozen_token_id == token_id,
                 // TODO(orders)
@@ -886,7 +888,8 @@ impl OutputCache {
                     | AccountCommand::UnmintTokens(token_id)
                     | AccountCommand::LockTokenSupply(token_id)
                     | AccountCommand::FreezeToken(token_id, _)
-                    | AccountCommand::UnfreezeToken(token_id) => {
+                    | AccountCommand::UnfreezeToken(token_id)
+                    | AccountCommand::ChangeTokenMetadataUri(token_id, _) => {
                         if let Some(data) = self.token_issuance.get_mut(token_id) {
                             if !already_present {
                                 Self::update_token_issuance_state(
@@ -1022,6 +1025,7 @@ impl OutputCache {
                         | AccountCommand::LockTokenSupply(token_id)
                         | AccountCommand::FreezeToken(token_id, _)
                         | AccountCommand::UnfreezeToken(token_id)
+                        | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                         | AccountCommand::ChangeTokenAuthority(token_id, _) => {
                             if let Some(data) = self.token_issuance.get_mut(token_id) {
                                 data.last_nonce = nonce.decrement();
@@ -1313,6 +1317,7 @@ impl OutputCache {
                                         | AccountCommand::LockTokenSupply(token_id)
                                         | AccountCommand::FreezeToken(token_id, _)
                                         | AccountCommand::UnfreezeToken(token_id)
+                                        | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                                         | AccountCommand::ChangeTokenAuthority(token_id, _) => {
                                             if let Some(data) =
                                                 self.token_issuance.get_mut(token_id)
@@ -1533,6 +1538,7 @@ fn apply_freeze_mutations_from_tx(
                 AccountCommand::MintTokens(_, _)
                 | AccountCommand::UnmintTokens(_)
                 | AccountCommand::LockTokenSupply(_)
+                | AccountCommand::ChangeTokenMetadataUri(_, _)
                 | AccountCommand::ChangeTokenAuthority(_, _) => {}
                 // TODO(orders)
                 AccountCommand::ConcludeOrder(_) => unimplemented!(),
@@ -1575,6 +1581,7 @@ fn apply_total_supply_mutations_from_tx(
                 }
                 AccountCommand::FreezeToken(_, _)
                 | AccountCommand::UnfreezeToken(_)
+                | AccountCommand::ChangeTokenMetadataUri(_, _)
                 | AccountCommand::ChangeTokenAuthority(_, _) => {}
                 // TODO(orders)
                 AccountCommand::ConcludeOrder(_) => unimplemented!(),

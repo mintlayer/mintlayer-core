@@ -355,6 +355,11 @@ impl FungibleTokenData {
         self.authority = authority;
         self
     }
+
+    pub fn change_metadata_uri(mut self, metadata_uri: Vec<u8>) -> Self {
+        self.metadata_uri = metadata_uri;
+        self
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]

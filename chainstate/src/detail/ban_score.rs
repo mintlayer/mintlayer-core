@@ -335,6 +335,7 @@ impl BanScore for TokensError {
             TokensError::TokensInBlockReward => 100,
             TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_) => 100,
             TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => 100,
+            TokensError::TokenMetadataUriTooLarge(_) => 100,
         }
     }
 }
@@ -364,6 +365,7 @@ impl BanScore for CheckTransactionError {
             CheckTransactionError::HtlcsAreNotActivated => 100,
             CheckTransactionError::OrdersAreNotActivated(_) => 100,
             CheckTransactionError::OrdersCurrenciesMustBeDifferent(_) => 100,
+            CheckTransactionError::ChangeTokenMetadataUriNotActivated => 100,
         }
     }
 }
@@ -629,6 +631,8 @@ impl BanScore for tokens_accounting::Error {
             tokens_accounting::Error::CannotLockFrozenToken(_) => 100,
             tokens_accounting::Error::CannotChangeAuthorityForFrozenToken(_) => 100,
             tokens_accounting::Error::CannotUndoChangeAuthorityForFrozenToken(_) => 100,
+            tokens_accounting::Error::CannotChangeMetadataUriForFrozenToken(_) => 100,
+            tokens_accounting::Error::CannotUndoChangeMetadataUriForFrozenToken(_) => 100,
             tokens_accounting::Error::InvariantErrorNonZeroSupplyForNonExistingToken => 100,
             tokens_accounting::Error::ViewFail => 0,
             tokens_accounting::Error::StorageWrite => 0,

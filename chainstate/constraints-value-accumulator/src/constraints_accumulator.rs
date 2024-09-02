@@ -290,6 +290,10 @@ impl ConstrainedValueAccumulator {
                 CoinOrTokenId::Coin,
                 chain_config.token_change_authority_fee(block_height),
             )),
+            AccountCommand::ChangeTokenMetadataUri(_, _) => Ok((
+                CoinOrTokenId::Coin,
+                chain_config.token_change_metadata_uri_fee(),
+            )),
             AccountCommand::ConcludeOrder(id) => {
                 let order_data = orders_accounting_delta
                     .get_order_data(id)

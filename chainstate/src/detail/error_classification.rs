@@ -471,6 +471,7 @@ impl BlockProcessingErrorClassification for TokensError {
             | TokensError::TransferZeroTokens(_, _)
             | TokensError::TokenIdCantBeCalculated
             | TokensError::TokensInBlockReward
+            | TokensError::TokenMetadataUriTooLarge(_)
             | TokensError::InvariantBrokenUndoIssuanceOnNonexistentToken(_)
             | TokensError::InvariantBrokenRegisterIssuanceWithDuplicateId(_) => {
                 BlockProcessingErrorClass::BadBlock
@@ -742,6 +743,8 @@ impl BlockProcessingErrorClassification for tokens_accounting::Error {
             | Error::CannotUndoUnfreezeTokenThatIsFrozen(_)
             | Error::CannotChangeAuthorityForFrozenToken(_)
             | Error::CannotUndoChangeAuthorityForFrozenToken(_)
+            | Error::CannotChangeMetadataUriForFrozenToken(_)
+            | Error::CannotUndoChangeMetadataUriForFrozenToken(_)
             | Error::InvariantErrorNonZeroSupplyForNonExistingToken => {
                 BlockProcessingErrorClass::BadBlock
             }
@@ -797,6 +800,7 @@ impl BlockProcessingErrorClassification for CheckTransactionError {
             | CheckTransactionError::DeprecatedTokenOperationVersion(_, _)
             | CheckTransactionError::HtlcsAreNotActivated
             | CheckTransactionError::OrdersAreNotActivated(_)
+            | CheckTransactionError::ChangeTokenMetadataUriNotActivated
             | CheckTransactionError::OrdersCurrenciesMustBeDifferent(_) => {
                 BlockProcessingErrorClass::BadBlock
             }

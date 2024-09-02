@@ -150,6 +150,8 @@ BASE_SCRIPTS = [
     'wallet_tokens_transfer_from_multisig_addr.py',
     'wallet_tokens_transfer_from_multisig_addr_rpc.py',
     'wallet_tokens_change_authority.py',
+    'wallet_tokens_change_metadata_uri.py',
+    'wallet_tokens_change_metadata_uri_rpc.py',
     'wallet_tokens_change_supply.py',
     'wallet_nfts.py',
     'wallet_decommission_genesis.py',

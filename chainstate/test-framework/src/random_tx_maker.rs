@@ -53,7 +53,7 @@ use pos_accounting::{
     PoolData,
 };
 use randomness::{seq::IteratorRandom, CryptoRng, Rng, SliceRandom};
-use test_utils::nft_utils::*;
+use test_utils::{nft_utils::*, random_ascii_alphanumeric_string};
 use tokens_accounting::{
     InMemoryTokensAccounting, TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
     TokensAccountingOperations, TokensAccountingView,
@@ -646,6 +646,28 @@ impl<'a> RandomTxMaker<'a> {
                 .chainstate
                 .get_chain_config()
                 .token_change_authority_fee(BlockHeight::zero());
+            let fee_change_output = TxOutput::Transfer(
+                OutputValue::Coin((fee_available_amount - required_fee).unwrap()),
+                Destination::AnyoneCanSpend,
+            );
+
+            (vec![account_input, fee_input], vec![fee_change_output])
+        } else if rng.gen_bool(0.1) {
+            // Change token metadata uri
+            let new_nonce = self.get_next_nonce(AccountType::Token(token_id));
+            let max_len = self.chainstate.get_chain_config().token_max_uri_len();
+            let new_metadata_uri =
+                random_ascii_alphanumeric_string(rng, 1..=max_len).as_bytes().to_vec();
+            let account_input = TxInput::AccountCommand(
+                new_nonce,
+                AccountCommand::ChangeTokenMetadataUri(token_id, new_metadata_uri.clone()),
+            );
+
+            let _ = tokens_cache.change_metadata_uri(token_id, new_metadata_uri).unwrap();
+            self.account_command_used = true;
+            self.fee_input = None;
+
+            let required_fee = self.chainstate.get_chain_config().token_change_metadata_uri_fee();
             let fee_change_output = TxOutput::Transfer(
                 OutputValue::Coin((fee_available_amount - required_fee).unwrap()),
                 Destination::AnyoneCanSpend,

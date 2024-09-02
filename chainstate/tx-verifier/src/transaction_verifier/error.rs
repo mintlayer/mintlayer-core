@@ -221,6 +221,8 @@ pub enum TokensError {
     InvariantBrokenUndoIssuanceOnNonexistentToken(TokenId),
     #[error("Invariant broken - attempt register issuance on non-existent token {0}")]
     InvariantBrokenRegisterIssuanceWithDuplicateId(TokenId),
+    #[error("Token {0} metadata uri is to large")]
+    TokenMetadataUriTooLarge(TokenId),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

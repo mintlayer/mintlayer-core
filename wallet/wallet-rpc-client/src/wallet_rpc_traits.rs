@@ -391,6 +391,14 @@ pub trait WalletInterface {
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
 
+    async fn change_token_metadata_uri(
+        &self,
+        account_index: U31,
+        token_id: String,
+        metadata_uri: String,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error>;
+
     async fn mint_tokens(
         &self,
         account_index: U31,
