@@ -25,7 +25,7 @@ use mempool_types::{tx_options::TxOptionsOverrides, tx_origin::LocalTxOrigin, Tx
 use serialization::hex_encoded::HexEncoded;
 use utils::tap_log::TapLog;
 
-use crate::{FeeRate, MempoolMaxSize, TxStatus};
+use crate::{rpc_event::RpcEvent, FeeRate, MempoolMaxSize, TxStatus};
 
 use rpc::RpcResult;
 
@@ -102,6 +102,12 @@ trait MempoolRpc {
     /// Get the curve data points that represent the fee rate as a function of transaction size.
     #[method(name = "get_fee_rate_points")]
     async fn get_fee_rate_points(&self) -> RpcResult<Vec<(usize, FeeRate)>>;
+
+    /// Subscribe to mempool events, such as tx processed.
+    ///
+    /// After a successful subscription, the node will message the subscriber with a message on every event.
+    #[subscription(name = "subscribe_events", item = RpcEvent)]
+    async fn subscribe_events(&self) -> rpc::subscription::Reply;
 }
 
 #[async_trait::async_trait]
@@ -181,5 +187,13 @@ impl MempoolRpcServer for super::MempoolHandle {
         // MIN(1) + 9 = 10, to keep it as const
         const NUM_POINTS: NonZeroUsize = NonZeroUsize::MIN.saturating_add(9);
         rpc::handle_result(self.call(move |this| this.get_fee_rate_points(NUM_POINTS)).await)
+    }
+
+    async fn subscribe_events(
+        &self,
+        pending: rpc::subscription::Pending,
+    ) -> rpc::subscription::Reply {
+        let event_rx = self.call_mut(move |this| this.subscribe_to_rpc_events()).await?;
+        rpc::subscription::connect_broadcast_map(event_rx, pending, RpcEvent::from_event).await
     }
 }
