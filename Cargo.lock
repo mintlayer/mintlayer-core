@@ -4136,6 +4136,7 @@ dependencies = [
  "tokio",
  "tracing",
  "utils",
+ "utils-networking",
  "utxo",
 ]
 
