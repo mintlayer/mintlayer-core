@@ -72,8 +72,11 @@ pub trait MempoolInterface: Send + Sync {
         packing_strategy: PackingStrategy,
     ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError>;
 
-    /// Subscribe to events emitted by mempool
-    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
+    /// Subscribe to events emitted by mempool subsystem
+    fn subscribe_to_subsystem_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
+
+    /// Subscribe to broadcast mempool events
+    fn subscribe_to_rpc_events(&mut self) -> utils_networking::broadcaster::Receiver<MempoolEvent>;
 
     /// Get current memory usage
     fn memory_usage(&self) -> usize;
