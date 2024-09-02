@@ -41,6 +41,8 @@ import {
   effective_pool_balance,
   Amount,
   encode_output_issue_nft,
+  sign_challenge,
+  verify_challenge,
 } from "../pkg/wasm_wrappers.js";
 
 function assert_eq_arrays(arr1, arr2) {
@@ -101,6 +103,27 @@ export async function run_test() {
       throw e;
     }
     console.log("Tested invalid menemonic successfully");
+  }
+
+  {
+    let challenge = sign_challenge(priv_key, message);
+    let address = pubkey_to_pubkeyhash_address(pub_key, Network.Testnet);
+    let result = verify_challenge(address, Network.Testnet, challenge, message);
+    if (!result) {
+      throw new Error("Invalid sing and verify challenge");
+    }
+
+    const different_priv_key = make_private_key();
+    const different_pub_key = public_key_from_private_key(different_priv_key);
+    let different_address = pubkey_to_pubkeyhash_address(different_pub_key, Network.Testnet);
+    try {
+      verify_challenge(different_address, Network.Testnet, challenge, message);
+    } catch (e) {
+      if (!e.includes("Public key to address mismatch")) {
+        throw e;
+      }
+      console.log("Tested verify with different address successfully");
+    }
   }
 
   try {
