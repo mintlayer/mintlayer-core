@@ -6,6 +6,12 @@ version.workspace = true
 license.workspace = true
 authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
 
+[package.metadata.wix]
+upgrade-guid = "1F0D44A3-01B0-4A9A-A4E4-BC4B2B505EE9"
+path-guid = "38D4CC73-6E48-4C0C-B705-1D1CD371ED31"
+license = false
+eula = false
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

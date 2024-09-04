@@ -1,0 +1,71 @@
+name: macOS Build and Package
+
+on:
+  push:
+    tags:
+      - '**[0-9]+.[0-9]+.[0-9]+*'
+  pull_request:
+
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Build Release
+      run: cargo build --release
+
+    - name: Install create-dmg
+      run: brew install create-dmg
+
+    - name: Create App Bundle
+      run: |
+        mkdir -p target/${{ matrix.target }}/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS
+        mkdir -p target/${{ matrix.target }}/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Resources
+        cp target/${{ matrix.target }}/node-gui target/${{ matrix.target }}/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS/
+        cp logo.icns target/${{ matrix.target }}/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Resources/
+
+    - name: Generate Info.plist (macOS only)
+      run: |
+        VERSION=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "node-gui") | .version')
+        BUILD_NUMBER=$(date +%Y%m%d.%H%M%S)
+        sed -e "s/VERSION_PLACEHOLDER/$VERSION/g" -e "s/BUILD_PLACEHOLDER/$BUILD_NUMBER/g" build-tools/osx/Info.plist.template > target/${{ matrix.target }}/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Info.plist
+
+    - name: Code Sign
+      env:
+        MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+        MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+      run: |
+        echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+        security create-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+        security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+        /usr/bin/codesign --force -s "${{ secrets.CERTIFICATE_NAME }}" --options runtime target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v
+
+    - name: Create DMG
+      run: |
+        create-dmg \
+          --volname "Mintlayer Node GUI" \
+          --window-pos 200 120 \
+          --window-size 600 400 \
+          --icon-size 100 \
+          --icon "Mintlayer Node GUI.app" 175 120 \
+          --hide-extension "Mintlayer Node GUI.app" \
+          --app-drop-link 425 120 \
+          "Mintlayer_Node_GUI.dmg" \
+          "target/release/bundle/osx/"
+
+    - name: Upload DMG
+      uses: actions/upload-artifact@v2
+      with:
+        name: Mintlayer_Node_GUI
+        path: Mintlayer_Node_GUI.dmg

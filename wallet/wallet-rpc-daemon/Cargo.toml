@@ -4,7 +4,17 @@ license.workspace = true
 edition.workspace = true
 version.workspace = true
 rust-version.workspace = true
-authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
+authors = [
+    "Samer Afach <samer.afach@mintlayer.org>",
+    "Ben Marsh <benjamin.marsh@mintlayer.org>",
+    "Enrico Rubboli <enrico.rubboli@mintlayer.org>",
+]
+
+[package.metadata.wix]
+upgrade-guid = "875D98FA-5A26-487C-ABFF-9E44EFB3B0A3"
+path-guid = "9829BB41-3334-4AD7-B2CD-39C758D47919"
+license = false
+eula = false
 
 [dependencies]
 
