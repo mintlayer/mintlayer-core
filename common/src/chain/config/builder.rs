@@ -47,12 +47,12 @@ use super::{
 };
 
 // The fork, at which we upgrade consensus to dis-incentivize large pools + enable tokens v1
-const TESTNET_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78440);
+const TESTNET_TOKEN_FORK_HEIGHT: BlockHeight = BlockHeight::new(78_440);
 // The fork, at which we upgrade chainstate to distribute reward to staker proportionally to their balance
 // and change various tokens fees
-const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(138244);
+const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(138_244);
 // The fork, at which txs with htlc outputs become valid, data deposit fee and size, max future block time offset changed
-const TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(291790);
+const TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(297_550);
 // The fork, at which order outputs become valid
 const TESTNET_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
 // The fork, at which txs with htlc and orders outputs become valid
