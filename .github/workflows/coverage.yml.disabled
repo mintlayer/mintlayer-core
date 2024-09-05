@@ -70,7 +70,7 @@
 #       - name: Collect coverage data with grcov
 #         run: grcov . --source-dir . --output-type lcov --branch --ignore-not-existing --binary-path ./target/debug/ -o grcov-report-${{ matrix.partition }}
 
-#       - uses: actions/upload-artifact@v2
+#       - uses: actions/upload-artifact@v4
 #         with:
 #           name: code-coverage-report-${{ matrix.partition }}
 #           path: grcov-report-${{ matrix.partition }}

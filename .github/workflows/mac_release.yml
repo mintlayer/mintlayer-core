@@ -65,7 +65,7 @@ jobs:
           "target/release/bundle/osx/"
 
     - name: Upload DMG
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: Mintlayer_Node_GUI
         path: Mintlayer_Node_GUI.dmg
