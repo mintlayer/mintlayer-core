@@ -94,17 +94,17 @@ jobs:
         fi
 
     - name: Code Sign
-        env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-        run: |
-          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
-          security create-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
-          security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
-          /usr/bin/codesign --force -s "${{ secrets.CERTIFICATE_NAME }}" --options runtime target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v
+      env:
+        MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+        MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+      run: |
+        echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+        security create-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+        security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+        /usr/bin/codesign --force -s "${{ secrets.CERTIFICATE_NAME }}" --options runtime target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v
 
     - name: Create DMG
       run: |
