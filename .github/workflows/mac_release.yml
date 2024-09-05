@@ -27,10 +27,10 @@ jobs:
 
     - name: Create App Bundle
       run: |
-        mkdir -p target/${{ matrix.target }}/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS
-        mkdir -p target/${{ matrix.target }}/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Resources
-        cp target/${{ matrix.target }}/node-gui target/${{ matrix.target }}/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS/
-        cp logo.icns target/${{ matrix.target }}/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Resources/
+        mkdir -p target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS
+        mkdir -p target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Resources
+        cp target/release/node-gui target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS/
+        cp logo.icns target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Resources/
 
     - name: Generate Info.plist (macOS only)
       run: |
