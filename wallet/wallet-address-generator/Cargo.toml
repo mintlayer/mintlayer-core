@@ -4,13 +4,11 @@ license.workspace = true
 edition.workspace = true
 version.workspace = true
 rust-version.workspace = true
-authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
-
-[package.metadata.wix]
-upgrade-guid = "8925275C-6AA4-4966-A9BB-1E5AED2025C1"
-path-guid = "ED873B3C-F1D2-4D64-BC7D-8A85993688F3"
-license = false
-eula = false
+authors = [
+    "Samer Afach <samer.afach@mintlayer.org>",
+    "Ben Marsh <benjamin.marsh@mintlayer.org>",
+    "Enrico Rubboli <enrico.rubboli@mintlayer.org>",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

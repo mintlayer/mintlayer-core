@@ -6,6 +6,8 @@
     <string>English</string>
     <key>CFBundleDisplayName</key>
     <string>Mintlayer Node GUI</string>
+    <key>CFBundleIdentifier</key>
+    <string>org.mintlayer.mintlayer-core.node-gui</string>
     <key>CFBundleExecutable</key>
     <string>node-gui</string>
     <key>CFBundleIconFile</key>
@@ -22,11 +24,15 @@
     <string>VERSION_PLACEHOLDER</string>
     <key>CFBundleVersion</key>
     <string>BUILD_PLACEHOLDER</string>
-    <key>CSResourcesFileMapped</key>
-    <true/>
-    <key>LSRequiresCarbon</key>
-    <true/>
+    <key>LSMinimumSystemVersion</key>
+    <string>10.13</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.finance</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>This app requires access to send Apple Events for automation purposes.</string>
 </dict>
 </plist>

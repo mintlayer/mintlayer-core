@@ -5,13 +5,11 @@ license.workspace = true
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
-
-[package.metadata.wix]
-upgrade-guid = "EE04F2A1-4683-4D66-8770-438889AC3FD7"
-path-guid = "6AEFEEB1-61AB-407A-8D84-AAF263A1F2F8"
-license = false
-eula = false
+authors = [
+    "Samer Afach <samer.afach@mintlayer.org>",
+    "Ben Marsh <benjamin.marsh@mintlayer.org>",
+    "Enrico Rubboli <enrico.rubboli@mintlayer.org>",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -30,9 +28,9 @@ utils = { path = "../utils" }
 wallet = { path = "../wallet" }
 wallet-controller = { path = "../wallet/wallet-controller" }
 wallet-types = { path = "../wallet/types" }
-wallet-rpc-lib = { path = "../wallet/wallet-rpc-lib"}
-wallet-rpc-client = { path = "../wallet/wallet-rpc-client"}
-wallet-cli-commands = { path = "../wallet/wallet-cli-commands"}
+wallet-rpc-lib = { path = "../wallet/wallet-rpc-lib" }
+wallet-rpc-client = { path = "../wallet/wallet-rpc-client" }
+wallet-cli-commands = { path = "../wallet/wallet-cli-commands" }
 
 anyhow.workspace = true
 chrono.workspace = true
