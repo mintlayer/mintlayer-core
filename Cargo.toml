@@ -256,7 +256,12 @@ ci = ["github"]
 # The installers to generate for each app
 installers = ["shell", "powershell", "homebrew"]
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "x86_64-unknown-linux-gnu",
+  "x86_64-pc-windows-msvc",
+]
 # Extra static files to include in each App (path relative to this Cargo.toml's dir)
 include = ["Mintlayer_Node_GUI.dmg"]
 additional-files = ["Mintlayer_Node_GUI.dmg"]
@@ -266,6 +271,9 @@ pr-run-mode = "plan"
 tap = "mintlayer/homebrew"
 # Publish jobs to run in CI
 publish-jobs = ["homebrew"]
+# needed to run upload-artifact@v4
+allow-dirty = ["ci"]
+
 
 [workspace.metadata.dist.dependencies.apt]
 "libatk1.0-0" = "*"
