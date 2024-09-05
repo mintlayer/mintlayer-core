@@ -39,7 +39,7 @@ jobs:
           path: dist-manifest.json
 
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-14-arm64
     needs: plan
     steps:
     - uses: actions/checkout@v4
