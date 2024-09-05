@@ -37,19 +37,74 @@ jobs:
         VERSION=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "node-gui") | .version')
         BUILD_NUMBER=$(date +%Y%m%d.%H%M%S)
         sed -e "s/VERSION_PLACEHOLDER/$VERSION/g" -e "s/BUILD_PLACEHOLDER/$BUILD_NUMBER/g" build-tools/osx/Info.plist.template > target/${{ matrix.target }}/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Info.plist
-
-    - name: Code Sign
+        
+    - name: Debug Certificate Import
       env:
         MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
         MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
       run: |
+        echo "Certificate length: ${#MACOS_CERTIFICATE}"
+        echo "Certificate password length: ${#MACOS_CERTIFICATE_PWD}"
+        echo "Keychain password length: ${#KEYCHAIN_PASSWORD}"
+        
+        # Decode certificate
         echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
-        security create-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+        echo "Certificate decoded. File size: $(wc -c < certificate.p12) bytes"
+        
+        # Create and configure keychain
+        security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
         security default-keychain -s build.keychain
-        security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
-        security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
-        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
-        /usr/bin/codesign --force -s "${{ secrets.CERTIFICATE_NAME }}" --options runtime target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+        
+        # Set keychain settings
+        security set-keychain-settings -t 3600 -l build.keychain
+        
+        # Import certificate
+        if security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign; then
+          echo "Certificate imported successfully"
+        else
+          echo "Failed to import certificate. Error code: $?"
+          security error $?
+        fi
+        
+        # Set key partition list
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+        
+        # List keychains and identities
+        echo "Listing keychains:"
+        security list-keychains
+        echo "Listing identities:"
+        security find-identity -v -p codesigning
+
+    - name: Sign the Mac App
+      env:
+        CERTIFICATE_NAME: ${{ secrets.CERTIFICATE_NAME }}
+      run: |
+        echo "Certificate name: $CERTIFICATE_NAME"
+        if [ -n "$CERTIFICATE_NAME" ]; then
+          if /usr/bin/codesign --force -s "$CERTIFICATE_NAME" --options runtime target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v; then
+            echo "Codesigning successful"
+          else
+            echo "Codesigning failed. Error code: $?"
+            codesign -vv -d target/release/bundle/osx/Mintlayer\ Node\ GUI.app
+          fi
+        else
+          echo "CERTIFICATE_NAME is empty"
+        fi
+
+    - name: Code Sign
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+          security create-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+          security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+          /usr/bin/codesign --force -s "${{ secrets.CERTIFICATE_NAME }}" --options runtime target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v
 
     - name: Create DMG
       run: |
