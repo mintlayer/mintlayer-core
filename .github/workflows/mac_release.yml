@@ -69,3 +69,20 @@ jobs:
       with:
         name: Mintlayer_Node_GUI
         path: Mintlayer_Node_GUI.dmg
+
+    - name: Get the version
+      id: get_version
+      run: echo ::set-output name=VERSION::${GITHUB_REF#refs/tags/}
+
+    - name: Rename DMG with version
+      run: mv Mintlayer_Node_GUI.dmg Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}.dmg
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}.dmg
+        asset_name: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}.dmg
+        asset_content_type: application/x-apple-diskimage
