@@ -6,6 +6,8 @@
     <string>English</string>
     <key>CFBundleDisplayName</key>
     <string>Mintlayer Node GUI</string>
+    <key>CFBundleIdentifier</key>
+    <string>org.mintlayer.mintlayer-core.node-gui</string>
     <key>CFBundleExecutable</key>
     <string>node-gui</string>
     <key>CFBundleIconFile</key>

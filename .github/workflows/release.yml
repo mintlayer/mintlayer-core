@@ -37,7 +37,6 @@ jobs:
         with:
           name: dist-manifest-${{ github.run_id }}
           path: dist-manifest.json
-
   build-macos:
     runs-on: macos-latest
     needs: plan
@@ -50,15 +49,25 @@ jobs:
       with:
         toolchain: stable
         override: true
-    - name: Build Release
-      run: cargo build --release --bin node-gui
+        target: aarch64-apple-darwin
+    - name: Add x86_64 target
+      run: rustup target add x86_64-apple-darwin
+    - name: Build Release (ARM64)
+      run: cargo build --release --bin node-gui --target aarch64-apple-darwin
+    - name: Build Release (x86_64)
+      run: cargo build --release --bin node-gui --target x86_64-apple-darwin
+    - name: Create Universal Binary
+      run: |
+        lipo -create -output target/release/node-gui-universal \
+          target/aarch64-apple-darwin/release/node-gui \
+          target/x86_64-apple-darwin/release/node-gui
     - name: Install create-dmg
       run: brew install create-dmg
     - name: Create App Bundle
       run: |
         mkdir -p target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS
         mkdir -p target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Resources
-        cp target/release/node-gui target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS/
+        cp target/release/node-gui-universal target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS/node-gui
         cp logo.icns target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Resources/
     - name: Generate Info.plist
       run: |
@@ -76,7 +85,7 @@ jobs:
         security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
         security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
         security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
-        /usr/bin/codesign --force -s "${{ secrets.CERTIFICATE_NAME }}" --options runtime target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v
+        /usr/bin/codesign --force -s "${{ secrets.CERTIFICATE_NAME }}" --options runtime --timestamp target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v
     - name: Create DMG
       run: |
         create-dmg \
@@ -89,11 +98,65 @@ jobs:
           --app-drop-link 425 120 \
           "Mintlayer_Node_GUI.dmg" \
           "target/release/bundle/osx/"
+    - name: Notarize and Staple DMG
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+      run: |
+        # Submit for notarization
+        xcrun notarytool submit Mintlayer_Node_GUI.dmg --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_ID_PASSWORD" --wait > notarization_output.txt
+        
+        # Extract submission ID
+        SUBMISSION_ID=$(grep -o 'id: [a-f0-9-]\+' notarization_output.txt | cut -d' ' -f2)
+        
+        if [ -z "$SUBMISSION_ID" ]; then
+          echo "Failed to extract submission ID. Notarization may have failed."
+          cat notarization_output.txt
+          exit 1
+        fi
+        
+        echo "Notarization submission ID: $SUBMISSION_ID"
+        
+        # Check notarization status in a loop
+        for i in {1..30}; do
+          xcrun notarytool info $SUBMISSION_ID --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_ID_PASSWORD" > status_output.txt
+          
+          if grep -q "status: Accepted" status_output.txt; then
+            echo "Notarization successful. Proceeding to staple."
+            xcrun stapler staple Mintlayer_Node_GUI.dmg
+            echo "Stapling complete."
+            break
+          elif grep -q "status: Invalid" status_output.txt; then
+            echo "Notarization failed. Check status_output.txt for details."
+            cat status_output.txt
+            exit 1
+          else
+            echo "Notarization still in progress. Waiting 60 seconds before checking again."
+            sleep 60
+          fi
+          
+          if [ $i -eq 30 ]; then
+            echo "Notarization timed out after 30 attempts. Check status manually."
+            cat status_output.txt
+            exit 1
+          fi
+        done
+    - name: Verify Notarization
+      run: |
+        spctl -a -vvv -t install Mintlayer_Node_GUI.dmg
     - name: Upload DMG Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: macos-dmg-${{ github.run_id }}
+        name: macos-universal-dmg-${{ github.run_id }}
         path: Mintlayer_Node_GUI.dmg
+    - name: Upload Notarization Logs
+      uses: actions/upload-artifact@v4
+      with:
+        name: notarization-logs-${{ github.run_id }}
+        path: |
+          notarization_output.txt
+          status_output.txt
 
   build-local-artifacts:
     name: build-local-artifacts (${{ join(matrix.targets, ', ') }})
