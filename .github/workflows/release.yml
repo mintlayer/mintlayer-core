@@ -45,11 +45,10 @@ jobs:
       with:
         submodules: recursive
     - name: Set up Rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
-        override: true
-        target: aarch64-apple-darwin
+        targets: aarch64-apple-darwin, x86_64-apple-darwin
     - name: Add x86_64 target
       run: rustup target add x86_64-apple-darwin
     - name: Build Release (ARM64)
@@ -74,17 +73,32 @@ jobs:
         VERSION=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "node-gui") | .version')
         BUILD_NUMBER=$(date +%Y%m%d.%H%M%S)
         sed -e "s/VERSION_PLACEHOLDER/$VERSION/g" -e "s/BUILD_PLACEHOLDER/$BUILD_NUMBER/g" build-tools/osx/Info.plist.template > target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Info.plist
+    - name: Install the Apple certificate
+      env:
+        BUILD_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE }}
+        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      run: |
+        # Create variables
+        CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.cer
+        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+        # Import certificate from secrets
+        echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode --output $CERTIFICATE_PATH
+        # Create temporary keychain
+        security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+        security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+        # Import certificate to keychain
+        security import $CERTIFICATE_PATH -P "" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+        security list-keychain -d user -s $KEYCHAIN_PATH
+        # Allow codesign to access the keychain
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+        # Clean up
+        rm $CERTIFICATE_PATH
     - name: Code Sign
       env:
-        MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-        MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}  
       run: |
-        echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
-        security create-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
-        security default-keychain -s build.keychain
-        security unlock-keychain -p "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
-        security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
-        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${{ secrets.KEYCHAIN_PASSWORD }}" build.keychain
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" $RUNNER_TEMP/app-signing.keychain-db
         /usr/bin/codesign --force -s "${{ secrets.CERTIFICATE_NAME }}" --options runtime --timestamp target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v
     - name: Create DMG
       run: |
@@ -98,6 +112,7 @@ jobs:
           --app-drop-link 425 120 \
           "Mintlayer_Node_GUI.dmg" \
           "target/release/bundle/osx/"
+          
     - name: Notarize and Staple DMG
       env:
         APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -105,14 +120,15 @@ jobs:
         APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
       run: |
         # Submit for notarization
-        xcrun notarytool submit Mintlayer_Node_GUI.dmg --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_ID_PASSWORD" --wait > notarization_output.txt
+        NOTARIZATION_OUTPUT=$(xcrun notarytool submit Mintlayer_Node_GUI.dmg --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_ID_PASSWORD" --wait)
+        echo "$NOTARIZATION_OUTPUT"
 
         # Extract submission ID
-        SUBMISSION_ID=$(grep -o 'id: [a-f0-9-]\+' notarization_output.txt | cut -d' ' -f2)
+        SUBMISSION_ID=$(echo "$NOTARIZATION_OUTPUT" | grep -o 'id: [a-f0-9-]\+' | cut -d' ' -f2)
 
         if [ -z "$SUBMISSION_ID" ]; then
           echo "Failed to extract submission ID. Notarization may have failed."
-          cat notarization_output.txt
+          echo "$NOTARIZATION_OUTPUT"
           exit 1
         fi
 
@@ -120,16 +136,16 @@ jobs:
 
         # Check notarization status in a loop
         for i in {1..30}; do
-          xcrun notarytool info $SUBMISSION_ID --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_ID_PASSWORD" > status_output.txt
+          STATUS_OUTPUT=$(xcrun notarytool info "$SUBMISSION_ID" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_ID_PASSWORD")
+          echo "$STATUS_OUTPUT"
 
-          if grep -q "status: Accepted" status_output.txt; then
+          if echo "$STATUS_OUTPUT" | grep -q "status: Accepted"; then
             echo "Notarization successful. Proceeding to staple."
             xcrun stapler staple Mintlayer_Node_GUI.dmg
             echo "Stapling complete."
             break
-          elif grep -q "status: Invalid" status_output.txt; then
-            echo "Notarization failed. Check status_output.txt for details."
-            cat status_output.txt
+          elif echo "$STATUS_OUTPUT" | grep -q "status: Invalid"; then
+            echo "Notarization failed. Check status output for details."
             exit 1
           else
             echo "Notarization still in progress. Waiting 60 seconds before checking again."
@@ -138,10 +154,10 @@ jobs:
 
           if [ $i -eq 30 ]; then
             echo "Notarization timed out after 30 attempts. Check status manually."
-            cat status_output.txt
             exit 1
           fi
         done
+
     - name: Verify Notarization
       run: |
         spctl -a -vvv -t install Mintlayer_Node_GUI.dmg
@@ -286,8 +302,8 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PLAN: ${{ needs.plan.outputs.val }}
-      GITHUB_USER: "axo bot"
-      GITHUB_EMAIL: "admin+bot@axo.dev"
+      GITHUB_USER: "Mintlayer CI"
+      GITHUB_EMAIL: "devs@mintlayer.org"
     if: ${{ !fromJson(needs.plan.outputs.val).announcement_is_prerelease || fromJson(needs.plan.outputs.val).publish_prereleases }}
     steps:
       - uses: actions/checkout@v4
@@ -307,8 +323,13 @@ jobs:
           for release in $(echo "$PLAN" | jq --compact-output '.releases[]'); do
             name=$(echo "$release" | jq .app_name --raw-output)
             version=$(echo "$release" | jq .app_version --raw-output)
+            formula_file="Formula/${name}.rb"
 
-            git add Formula/${name}.rb
+            if [ -f "$formula_file" ]; then
+              git add "$formula_file"
+            else
+              echo "Warning: Formula file $formula_file not found. Skipping."
+            fi
             git commit -m "${name} ${version}"
           done
           git push

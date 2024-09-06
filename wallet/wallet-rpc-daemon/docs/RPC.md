@@ -1,6 +1,6 @@
 # RPC documentation for Mintlayer node wallet
 
-Version `0.99.14`.
+Version `0.99.15`.
 
 ## Module `WalletRpc`
 
