@@ -106,22 +106,22 @@ jobs:
       run: |
         # Submit for notarization
         xcrun notarytool submit Mintlayer_Node_GUI.dmg --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_ID_PASSWORD" --wait > notarization_output.txt
-        
+
         # Extract submission ID
         SUBMISSION_ID=$(grep -o 'id: [a-f0-9-]\+' notarization_output.txt | cut -d' ' -f2)
-        
+
         if [ -z "$SUBMISSION_ID" ]; then
           echo "Failed to extract submission ID. Notarization may have failed."
           cat notarization_output.txt
           exit 1
         fi
-        
+
         echo "Notarization submission ID: $SUBMISSION_ID"
-        
+
         # Check notarization status in a loop
         for i in {1..30}; do
           xcrun notarytool info $SUBMISSION_ID --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_ID_PASSWORD" > status_output.txt
-          
+
           if grep -q "status: Accepted" status_output.txt; then
             echo "Notarization successful. Proceeding to staple."
             xcrun stapler staple Mintlayer_Node_GUI.dmg
@@ -135,7 +135,7 @@ jobs:
             echo "Notarization still in progress. Waiting 60 seconds before checking again."
             sleep 60
           fi
-          
+
           if [ $i -eq 30 ]; then
             echo "Notarization timed out after 30 attempts. Check status manually."
             cat status_output.txt
