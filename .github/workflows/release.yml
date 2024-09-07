@@ -91,12 +91,25 @@ jobs:
         openssl x509 -in $CERTIFICATE_PATH -inform DER -out $RUNNER_TEMP/build_certificate.pem -outform PEM
         # Import certificate to keychain
         security import $RUNNER_TEMP/build_certificate.pem -k $KEYCHAIN_PATH -T /usr/bin/codesign
-        security list-keychain -d user -s $KEYCHAIN_PATH
+        # Debug: List all certificates in the keychain
+        security find-certificate -a $KEYCHAIN_PATH
+        # Set keychain search list
+        security list-keychains -d user -s $KEYCHAIN_PATH $(security list-keychains -d user | sed s/\"//g)
+        # Make the keychain the default
+        security default-keychain -s $KEYCHAIN_PATH
+        # Unlock the keychain
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
         # Allow codesign to access the keychain
         security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+        # Debug: Try to find the certificate
+        security find-certificate -c "Developer ID Application" $KEYCHAIN_PATH
         # Clean up
         rm $CERTIFICATE_PATH
         rm $RUNNER_TEMP/build_certificate.pem
+        # Final debug: List keychains and their status
+        security list-keychains
+        security default-keychain
+        security show-keychain-info $KEYCHAIN_PATH
     - name: Code Sign
       env:
         KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}  
