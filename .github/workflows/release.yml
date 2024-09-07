@@ -87,35 +87,42 @@ jobs:
         security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
         security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
         security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-        # Convert certificate to PEM format
-        openssl x509 -in $CERTIFICATE_PATH -inform DER -out $RUNNER_TEMP/build_certificate.pem -outform PEM
         # Import certificate to keychain
-        security import $RUNNER_TEMP/build_certificate.pem -k $KEYCHAIN_PATH -T /usr/bin/codesign
-        # Debug: List all certificates in the keychain
-        security find-certificate -a $KEYCHAIN_PATH
-        # Set keychain search list
+        security import $CERTIFICATE_PATH -k $KEYCHAIN_PATH -T /usr/bin/codesign
+        # Add keychain to search list
         security list-keychains -d user -s $KEYCHAIN_PATH $(security list-keychains -d user | sed s/\"//g)
-        # Make the keychain the default
+        # Set as default keychain
         security default-keychain -s $KEYCHAIN_PATH
         # Unlock the keychain
         security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-        # Allow codesign to access the keychain
+        # Enable codesigning from this keychain
         security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-        # Debug: Try to find the certificate
-        security find-certificate -c "Developer ID Application" $KEYCHAIN_PATH
+        # Debug: List all certificates in the keychain
+        security find-certificate -a $KEYCHAIN_PATH
+        # Debug: Try to find the specific certificate
+        security find-certificate -c "RBB SRL" $KEYCHAIN_PATH
+        # Debug: List codesigning identities
+        security find-identity -v -p codesigning $KEYCHAIN_PATH
         # Clean up
         rm $CERTIFICATE_PATH
-        rm $RUNNER_TEMP/build_certificate.pem
         # Final debug: List keychains and their status
         security list-keychains
         security default-keychain
         security show-keychain-info $KEYCHAIN_PATH
-    - name: Code Sign
+    
+    - name: Build and sign the app
       env:
-        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}  
+        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
       run: |
         security unlock-keychain -p "$KEYCHAIN_PASSWORD" $RUNNER_TEMP/app-signing.keychain-db
-        /usr/bin/codesign --force -s "${{ secrets.CERTIFICATE_NAME }}" --options runtime --timestamp target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v
+        # Debug: List codesigning identities again
+        security find-identity -v -p codesigning $RUNNER_TEMP/app-signing.keychain-db
+        # Get the exact name of the certificate
+        CERT_NAME=$(security find-certificate -c "RBB SRL" $RUNNER_TEMP/app-signing.keychain-db | grep "alis" | cut -d '"' -f 4)
+        echo "Certificate name: $CERT_NAME"
+        # Your build and sign commands here
+        /usr/bin/codesign --force -s "$CERT_NAME" --options runtime --timestamp target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v --keychain $RUNNER_TEMP/app-signing.keychain-db
+
     - name: Create DMG
       run: |
         create-dmg \
