@@ -44,6 +44,22 @@ jobs:
       run: |
         ./build-tools/osx/build_and_sign.sh ${{ matrix.arch }}
 
+    - name: Upload DMG
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_GUI_${{ matrix.arch }}
+        path: Mintlayer_Node_GUI_${{ matrix.arch }}_${{ steps.get_version.outputs.VERSION }}.dmg
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./Mintlayer_Node_GUI_${{ matrix.arch }}_${{ steps.get_version.outputs.VERSION }}.dmg
+        asset_name: Mintlayer_Node_GUI_${{ matrix.arch }}_${{ steps.get_version.outputs.VERSION }}.dmg
+        asset_content_type: application/x-apple-diskimage
+
   create-release:
     needs: build-macos
     runs-on: ubuntu-latest
