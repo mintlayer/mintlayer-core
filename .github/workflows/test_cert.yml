@@ -10,22 +10,84 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
+      
+      - name: Debug - List Environment Variables
+        run: |
+          env | sort
+      
       - name: Setup Certificate
         env:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
+          echo "Debug: Decoding certificate"
           echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+          echo "Debug: Certificate decoded, checking file"
+          ls -l certificate.p12
+          
+          echo "Debug: Creating keychain"
           security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          echo "Debug: Setting default keychain"
           security default-keychain -s build.keychain
+          echo "Debug: Unlocking keychain"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          
+          echo "Debug: Importing certificate"
           security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+          echo "Debug: Setting key partition list"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+      
       - name: Verify Certificate
         run: |
+          echo "Debug: Listing identities in build.keychain"
           security find-identity -v -p codesigning build.keychain
+          echo "Debug: Checking codesign authorities"
           /usr/bin/codesign -dv --verbose=4 /usr/bin/codesign 2>&1 | grep "Authority"
+      
+      - name: Install create-dmg
+        run: |
+          echo "Debug: Installing create-dmg"
+          brew install create-dmg
+      
+      - name: Create App Bundle
+        run: |
+          echo "Debug: Creating app bundle directories"
+          mkdir -p target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS
+          mkdir -p target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Resources
+          echo "Debug: Copying files to app bundle"
+          cp /bin/bash target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS/node-gui
+          touch target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Resources/logo.icns
+          ls -R target/release/bundle/osx
+      
+      - name: Generate Info.plist
+        run: |
+          VERSION="0.99.15"
+          BUILD_NUMBER=$(date +%Y%m%d.%H%M%S)
+          sed -e "s/VERSION_PLACEHOLDER/$VERSION/g" -e "s/BUILD_PLACEHOLDER/$BUILD_NUMBER/g" build-tools/osx/Info.plist.template > target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Info.plist
+      
+      - name: Attempt Code Signing
+        env:
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          echo "Debug: Unlocking keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          echo "Debug: Listing codesigning identities"
+          security find-identity -v -p codesigning build.keychain
+          echo "Debug: Attempting to get certificate name"
+          CERT_NAME=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application" | head -n 1 | sed -n 's/.*"\(.*\)"/\1/p')
+          echo "Certificate name: $CERT_NAME"
+          if [ -z "$CERT_NAME" ]; then
+            echo "Error: Unable to find certificate name"
+            exit 1
+          fi
+          echo "Debug: Attempting code signing"
+          /usr/bin/codesign --force -s "$CERT_NAME" --options runtime --timestamp target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v
+          echo "Debug: Verifying code signature"
+          /usr/bin/codesign -dv --verbose=4 target/release/bundle/osx/Mintlayer\ Node\ GUI.app
+      
       - name: Cleanup
         if: always()
-        run: security delete-keychain build.keychain
+        run: |
+          echo "Debug: Deleting keychain"
+          security delete-keychain build.keychain
