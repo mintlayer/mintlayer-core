@@ -1,0 +1,35 @@
+name: macOS Certificate Test
+
+on:
+  push:
+    branches:
+      - main  # or your default branch name
+  pull_request:
+    branches:
+      - main  # or your default branch name
+
+jobs:
+  test-macos-certificate:
+    name: Test macOS Certificate
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Certificate
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+      - name: Verify Certificate
+        run: |
+          security find-identity -v -p codesigning build.keychain
+          /usr/bin/codesign -dv --verbose=4 /usr/bin/codesign 2>&1 | grep "Authority"
+      - name: Cleanup
+        if: always()
+        run: security delete-keychain build.keychain
