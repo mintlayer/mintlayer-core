@@ -34,7 +34,7 @@ jobs:
         path: Mintlayer_Node_GUI_${{ matrix.arch }}.dmg
     - name: Build, Sign, and Notarize
       env:
-        MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+        MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE }}
         MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
         MACOS_CERTIFICATE_NAME: ${{ secrets.MACOS_CERTIFICATE_NAME }}
         APPLE_ID: ${{ secrets.APPLE_ID }}
