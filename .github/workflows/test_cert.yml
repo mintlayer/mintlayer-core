@@ -1,4 +1,4 @@
-name: macOS Certificate Test
+name: macOS Certificate Test (.cer format)
 
 on:
   push:
@@ -11,10 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       
-      - name: Debug - List Environment Variables
-        run: |
-          env | sort
-      
       - name: Setup Certificate
         env:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
@@ -22,50 +18,28 @@ jobs:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           echo "Debug: Decoding certificate"
-          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+          echo "$MACOS_CERTIFICATE" | base64 --decode > certificate.cer
           echo "Debug: Certificate decoded, checking file"
-          ls -l certificate.p12
+          ls -l certificate.cer
           
           echo "Debug: Creating keychain"
           security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          echo "Debug: Setting default keychain"
           security default-keychain -s build.keychain
-          echo "Debug: Unlocking keychain"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
           
           echo "Debug: Importing certificate"
-          security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+          security import certificate.cer -k build.keychain -T /usr/bin/codesign
+          
           echo "Debug: Setting key partition list"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
-      
+
       - name: Verify Certificate
         run: |
           echo "Debug: Listing identities in build.keychain"
           security find-identity -v -p codesigning build.keychain
-          echo "Debug: Checking codesign authorities"
-          /usr/bin/codesign -dv --verbose=4 /usr/bin/codesign 2>&1 | grep "Authority"
-      
-      - name: Install create-dmg
-        run: |
-          echo "Debug: Installing create-dmg"
-          brew install create-dmg
-      
-      - name: Create App Bundle
-        run: |
-          echo "Debug: Creating app bundle directories"
-          mkdir -p target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS
-          mkdir -p target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Resources
-          echo "Debug: Copying files to app bundle"
-          cp /bin/bash target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS/node-gui
-          touch target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Resources/logo.icns
-          ls -R target/release/bundle/osx
-      
-      - name: Generate Info.plist
-        run: |
-          VERSION="0.99.15"
-          BUILD_NUMBER=$(date +%Y%m%d.%H%M%S)
-          sed -e "s/VERSION_PLACEHOLDER/$VERSION/g" -e "s/BUILD_PLACEHOLDER/$BUILD_NUMBER/g" build-tools/osx/Info.plist.template > target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Info.plist
-      
+          echo "Debug: Checking certificate details"
+          security find-certificate -c "Developer ID Application" -a -Z | sed -n 's/SHA-1 hash: //p' | xargs -I {} security find-certificate -Z {} -p build.keychain
+
       - name: Attempt Code Signing
         env:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
@@ -81,11 +55,13 @@ jobs:
             echo "Error: Unable to find certificate name"
             exit 1
           fi
+          echo "Debug: Creating a test file for signing"
+          echo "Test file" > test_file.txt
           echo "Debug: Attempting code signing"
-          /usr/bin/codesign --force -s "$CERT_NAME" --options runtime --timestamp target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v
+          /usr/bin/codesign --force -s "$CERT_NAME" --keychain build.keychain test_file.txt
           echo "Debug: Verifying code signature"
-          /usr/bin/codesign -dv --verbose=4 target/release/bundle/osx/Mintlayer\ Node\ GUI.app
-      
+          /usr/bin/codesign -dv --verbose=4 test_file.txt
+
       - name: Cleanup
         if: always()
         run: |
