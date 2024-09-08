@@ -73,7 +73,8 @@ jobs:
         VERSION=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "node-gui") | .version')
         BUILD_NUMBER=$(date +%Y%m%d.%H%M%S)
         sed -e "s/VERSION_PLACEHOLDER/$VERSION/g" -e "s/BUILD_PLACEHOLDER/$BUILD_NUMBER/g" build-tools/osx/Info.plist.template > target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Info.plist
-    - name: Install the Apple certificate
+
+    - name: Install and Debug Apple Certificate
       env:
         BUILD_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE }}
         KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
@@ -83,6 +84,9 @@ jobs:
         KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
         # Import certificate from secrets
         echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode --output $CERTIFICATE_PATH
+        # Debug: Check certificate file
+        echo "Certificate file contents:"
+        openssl x509 -in $CERTIFICATE_PATH -text -noout
         # Create temporary keychain
         security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
         security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
@@ -97,30 +101,36 @@ jobs:
         security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
         # Enable codesigning from this keychain
         security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-        # Debug: List all certificates in the keychain
+        echo "Debug: Listing all certificates in the keychain"
         security find-certificate -a $KEYCHAIN_PATH
-        # Debug: Try to find the specific certificate
+        echo "Debug: Trying to find the specific certificate"
         security find-certificate -c "RBB SRL" $KEYCHAIN_PATH
-        # Debug: List codesigning identities
+        echo "Debug: Listing codesigning identities"
         security find-identity -v -p codesigning $KEYCHAIN_PATH
+        echo "Debug: Listing all keychains"
+        security list-keychains
+        echo "Debug: Showing default keychain"
+        security default-keychain
+        echo "Debug: Showing keychain info"
+        security show-keychain-info $KEYCHAIN_PATH
         # Clean up
         rm $CERTIFICATE_PATH
-        # Final debug: List keychains and their status
-        security list-keychains
-        security default-keychain
-        security show-keychain-info $KEYCHAIN_PATH
     
-    - name: Build and sign the app
+    - name: Attempt Code Signing
       env:
         KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
       run: |
         security unlock-keychain -p "$KEYCHAIN_PASSWORD" $RUNNER_TEMP/app-signing.keychain-db
-        # Debug: List codesigning identities again
+        echo "Debug: Listing codesigning identities again"
         security find-identity -v -p codesigning $RUNNER_TEMP/app-signing.keychain-db
-        # Get the exact name of the certificate
-        CERT_NAME=$(security find-certificate -c "RBB SRL" $RUNNER_TEMP/app-signing.keychain-db | grep "alis" | cut -d '"' -f 4)
+        echo "Debug: Attempting to get certificate name"
+        CERT_NAME=$(security find-certificate -a $RUNNER_TEMP/app-signing.keychain-db | grep "alis" | head -n 1 | cut -d '"' -f 4)
         echo "Certificate name: $CERT_NAME"
-        # Your build and sign commands here
+        if [ -z "$CERT_NAME" ]; then
+          echo "Error: Unable to find certificate name"
+          exit 1
+        fi
+        echo "Debug: Attempting code signing"
         /usr/bin/codesign --force -s "$CERT_NAME" --options runtime --timestamp target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v --keychain $RUNNER_TEMP/app-signing.keychain-db
 
     - name: Create DMG
@@ -201,7 +211,8 @@ jobs:
     name: build-local-artifacts (${{ join(matrix.targets, ', ') }})
     needs:
       - plan
-    if: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix.include != null && (needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload') }}
+    # if: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix.include != null && (needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload') }}
+    if: false
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix }}
