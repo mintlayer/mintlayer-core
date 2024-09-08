@@ -1,4 +1,4 @@
-name: macOS Build, Sign, and Notarize
+name: macOS Build, Sign, and Release
 
 on:
   push:
@@ -17,21 +17,21 @@ jobs:
       with:
         submodules: recursive
 
+    - name: Extract version from tag
+      id: get_version
+      run: |
+        # Extract version from GITHUB_REF
+        VERSION=${GITHUB_REF#refs/tags/}
+        # Remove 'v' prefix if present
+        VERSION=${VERSION#v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version extracted: $VERSION"
+
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
         targets: ${{ matrix.arch }}-apple-darwin
-
-    - name: Build Binary
-      run: |
-        cargo build --release --bin node-gui --target ${{ matrix.arch }}-apple-darwin
-
-    - name: Upload DMG Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: macos-${{ matrix.arch }}-dmg-${{ github.run_id }}
-        path: Mintlayer_Node_GUI_${{ matrix.arch }}.dmg
 
     - name: Build, Sign, and Notarize
       env:
@@ -41,24 +41,15 @@ jobs:
         APPLE_ID: ${{ secrets.APPLE_ID }}
         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+        VERSION: ${{ steps.get_version.outputs.VERSION }}
       run: |
-        ./build-tools/osx/build_and_sign.sh ${{ matrix.arch }}
+        ./build-tools/osx/build_and_sign.sh ${{ matrix.arch }} ${{ steps.get_version.outputs.VERSION }}
 
-    - name: Upload DMG
+    - name: Upload DMG Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_GUI_${{ matrix.arch }}
-        path: Mintlayer_Node_GUI_${{ matrix.arch }}_${{ steps.get_version.outputs.VERSION }}.dmg
-
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./Mintlayer_Node_GUI_${{ matrix.arch }}_${{ steps.get_version.outputs.VERSION }}.dmg
-        asset_name: Mintlayer_Node_GUI_${{ matrix.arch }}_${{ steps.get_version.outputs.VERSION }}.dmg
-        asset_content_type: application/x-apple-diskimage
+        name: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+        path: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.dmg
 
   create-release:
     needs: build-macos
@@ -66,12 +57,24 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     steps:
     - uses: actions/checkout@v4
+    
+    - name: Extract version from tag
+      id: get_version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        VERSION=${VERSION#v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
     - name: Download DMG Artifacts
       uses: actions/download-artifact@v4
       with:
         path: dmg-artifacts
+
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
         artifacts: "dmg-artifacts/**/*.dmg"
+        artifactErrorsFailBuild: true
+        name: "Release ${{ steps.get_version.outputs.VERSION }}"
+        body: "Release version ${{ steps.get_version.outputs.VERSION }}"
         token: ${{ secrets.GITHUB_TOKEN }}

@@ -2,23 +2,21 @@
 
 set -e
 
+ARCH=$1
+VERSION=$2
+
 # Configuration
 APP_NAME="Mintlayer Node GUI"
-DMG_NAME="Mintlayer_Node_GUI"
+DMG_NAME="Mintlayer_Node_GUI_${VERSION}_${ARCH}.dmg"
 KEYCHAIN_NAME="build.keychain"
 KEYCHAIN_PASSWORD="temporary_password"
 NOTARIZATION_TIMEOUT=60 # Maximum wait time for notarization in seconds
 
-# Set RUNNER_TEMP to a local temporary directory if it's not already set
-if [ -z "$RUNNER_TEMP" ]; then
-    RUNNER_TEMP=$(mktemp -d)
-    echo "RUNNER_TEMP is not set. Using temporary directory: $RUNNER_TEMP"
-fi
-
 # Function to display usage information
 usage() {
-    echo "Usage: $0 <architecture>"
+    echo "Usage: $0 <architecture> <version>"
     echo "  architecture: aarch64 or x86_64"
+    echo "  version: in the format x.y.z"
     echo
     echo "Environment variables (can be set in .env file):"
     echo "  MACOS_CERTIFICATE_BASE64: Base64 encoded certificate"
@@ -110,11 +108,11 @@ create_and_sign_dmg() {
       --icon "${APP_NAME}.app" 175 120 \
       --hide-extension "${APP_NAME}.app" \
       --app-drop-link 425 120 \
-      "${DMG_NAME}_${ARCH}.dmg" \
+      $DMG_NAME \
       "target/release/bundle/${ARCH}/"
 
     echo "Signing the DMG..."
-    /usr/bin/codesign --force -s "$MACOS_CERTIFICATE_NAME" --options runtime --timestamp "${DMG_NAME}_${ARCH}.dmg" -v
+    /usr/bin/codesign --force -s "$MACOS_CERTIFICATE_NAME" --options runtime --timestamp $DMG_NAME -v
 }
 
 # Function to notarize and staple
@@ -122,7 +120,7 @@ create_and_sign_dmg() {
 notarize_and_staple() {
     echo "Notarizing the DMG..."
     local notarization_output
-    notarization_output=$(xcrun notarytool submit "${DMG_NAME}_${ARCH}.dmg" \
+    notarization_output=$(xcrun notarytool submit $DMG_NAME \
         --apple-id "$APPLE_ID" \
         --team-id "$APPLE_TEAM_ID" \
         --password "$APPLE_ID_PASSWORD" \
@@ -175,10 +173,10 @@ notarize_and_staple() {
     done
 
     echo "Stapling the notarization ticket..."
-    xcrun stapler staple "${DMG_NAME}_${ARCH}.dmg"
+    xcrun stapler staple $DMG_NAME
 
     echo "Verifying notarization..."
-    spctl -a -vv -t install "${DMG_NAME}_${ARCH}.dmg"
+    spctl -a -vv -t install $DMG_NAME
 }
 
 # Function to clean up
@@ -197,8 +195,6 @@ main() {
         usage
     fi
 
-    ARCH=$1
-
     if [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "x86_64" ]; then
         echo "Invalid architecture. Use aarch64 or x86_64."
         exit 1
@@ -208,6 +204,12 @@ main() {
         set -a
         source .env
         set +a
+    fi
+
+    # Set RUNNER_TEMP to a local temporary directory if it's not already set
+    if [ -z "$RUNNER_TEMP" ]; then
+        RUNNER_TEMP=$(mktemp -d)
+        echo "RUNNER_TEMP is not set. Using temporary directory: $RUNNER_TEMP"
     fi
 
     check_env_vars
