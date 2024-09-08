@@ -27,103 +27,21 @@ jobs:
       run: |
         cargo build --release --bin node-gui --target ${{ matrix.arch }}-apple-darwin
 
-    - name: Create App Bundle
-      run: |
-        mkdir -p target/release/bundle/${{ matrix.arch }}/Mintlayer\ Node\ GUI.app/Contents/{MacOS,Resources}
-        cp target/${{ matrix.arch }}-apple-darwin/release/node-gui target/release/bundle/${{ matrix.arch }}/Mintlayer\ Node\ GUI.app/Contents/MacOS/
-        cp logo.icns target/release/bundle/${{ matrix.arch }}/Mintlayer\ Node\ GUI.app/Contents/Resources/
-        VERSION=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "node-gui") | .version')
-        BUILD_NUMBER=$(date +%Y%m%d.%H%M%S)
-        sed -e "s/VERSION_PLACEHOLDER/$VERSION/g" -e "s/BUILD_PLACEHOLDER/$BUILD_NUMBER/g" \
-          build-tools/osx/Info.plist.template > target/release/bundle/${{ matrix.arch }}/Mintlayer\ Node\ GUI.app/Contents/Info.plist
-
-    - name: Install and Configure Certificates
-      env:
-        BUILD_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE }}
-        BUILD_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-      run: |
-        CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-        echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode --output $CERTIFICATE_PATH
-        security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-        security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-        security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-        security import $CERTIFICATE_PATH -k $KEYCHAIN_PATH -P "$BUILD_CERTIFICATE_PASSWORD" -A
-        security list-keychains -d user -s $KEYCHAIN_PATH
-        security default-keychain -s $KEYCHAIN_PATH
-        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-
-    - name: Sign Application
-      env:
-        CERTIFICATE_NAME: ${{ secrets.CERTIFICATE_NAME }}
-        KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-      run: |
-        security unlock-keychain -p "$KEYCHAIN_PASSWORD" $RUNNER_TEMP/app-signing.keychain-db
-        /usr/bin/codesign --force -s "$CERTIFICATE_NAME" --options runtime --timestamp target/release/bundle/${{ matrix.arch }}/Mintlayer\ Node\ GUI.app -v
-
-    - name: Create and Sign DMG
-      env:
-        CERTIFICATE_NAME: ${{ secrets.CERTIFICATE_NAME }}
-      run: |
-        brew install create-dmg
-        create-dmg \
-          --volname "Mintlayer Node GUI (${{ matrix.arch }})" \
-          --window-pos 200 120 \
-          --window-size 600 400 \
-          --icon-size 100 \
-          --icon "Mintlayer Node GUI.app" 175 120 \
-          --hide-extension "Mintlayer Node GUI.app" \
-          --app-drop-link 425 120 \
-          "Mintlayer_Node_GUI_${{ matrix.arch }}.dmg" \
-          "target/release/bundle/${{ matrix.arch }}/"
-        /usr/bin/codesign --force -s "$CERTIFICATE_NAME" --options runtime --timestamp Mintlayer_Node_GUI_${{ matrix.arch }}.dmg -v
-
-    - name: Notarize DMG
-      env:
-        APPLE_ID: ${{ secrets.APPLE_ID }}
-        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-      run: |
-        # Submit for notarization
-        NOTARIZATION_INFO=$(xcrun notarytool submit Mintlayer_Node_GUI_${{ matrix.arch }}.dmg --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_ID_PASSWORD" --wait --timeout 3600)
-        echo "Notarization submission info: $NOTARIZATION_INFO"
-        # Extract submission ID
-        SUBMISSION_ID=$(echo "$NOTARIZATION_INFO" | awk '/id:/ {print $2; exit}')
-        if [ -z "$SUBMISSION_ID" ]; then
-          echo "Failed to extract submission ID. Notarization may have failed."
-          exit 1
-        fi
-        echo "Notarization submission ID: $SUBMISSION_ID"
-        # Check notarization status in a loop
-        for i in {1..60}; do
-          STATUS_INFO=$(xcrun notarytool info "$SUBMISSION_ID" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_ID_PASSWORD")
-          echo "Notarization status info: $STATUS_INFO"
-          if echo "$STATUS_INFO" | grep -q "status: Accepted"; then
-            echo "Notarization successful. Proceeding to staple."
-            xcrun stapler staple Mintlayer_Node_GUI_${{ matrix.arch }}.dmg
-            echo "Stapling complete."
-            exit 0
-          elif echo "$STATUS_INFO" | grep -q "status: Invalid"; then
-            echo "Notarization failed. Check status info for details."
-            exit 1
-          else
-            echo "Notarization still in progress. Waiting 60 seconds before checking again."
-            sleep 60
-          fi
-        done
-        echo "Notarization timed out after 60 attempts. Check status manually."
-        exit 1
-
-    - name: Verify Notarization
-      run: spctl -a -vvv -t install Mintlayer_Node_GUI_${{ matrix.arch }}.dmg
-
     - name: Upload DMG Artifact
       uses: actions/upload-artifact@v4
       with:
         name: macos-${{ matrix.arch }}-dmg-${{ github.run_id }}
         path: Mintlayer_Node_GUI_${{ matrix.arch }}.dmg
-
+    - name: Build, Sign, and Notarize
+      env:
+        MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+        MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        MACOS_CERTIFICATE_NAME: ${{ secrets.MACOS_CERTIFICATE_NAME }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+      run: |
+        ./build-tools/osx/build_and_sign.sh ${{ matrix.arch }}
   create-release:
     needs: build-macos
     runs-on: ubuntu-latest
