@@ -6,6 +6,9 @@ on:
       - '**[0-9]+.[0-9]+.[0-9]+*'
   pull_request:
 
+env:
+  BINARY_LIST: api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon
+
 jobs:
   build-macos:
     runs-on: macos-12
@@ -50,7 +53,10 @@ jobs:
     - name: Package Mintlayer Node (without GUI)
       run: |
         mkdir -p Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
-        cp target/${{ matrix.arch }}-apple-darwin/release/{api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon,wasm-doc-gen} Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/
+        IFS=',' read -ra BINARIES <<< "${{ env.BINARY_LIST }}"
+        for binary in "${BINARIES[@]}"; do
+          cp target/${{ matrix.arch }}-apple-darwin/release/$binary Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/
+        done
         zip -r Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.zip Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
     
     - name: Upload DMG Artifact (GUI)
@@ -116,7 +122,10 @@ jobs:
       run: |
         mkdir -p debian-node/DEBIAN
         mkdir -p debian-node/usr/bin
-        cp target/release/{api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon,wasm-doc-gen} debian-node/usr/bin/
+        IFS=',' read -ra BINARIES <<< "${{ env.BINARY_LIST }}"
+        for binary in "${BINARIES[@]}"; do
+          cp target/release/$binary debian-node/usr/bin/
+        done
         cat << EOF > debian-node/DEBIAN/control
         Package: mintlayer-node
         Version: ${{ steps.get_version.outputs.VERSION }}
@@ -133,7 +142,10 @@ jobs:
     - name: Package Mintlayer Node (without GUI) as ZIP
       run: |
         mkdir -p Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_amd64
-        cp target/release/{api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon,wasm-doc-gen} Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_amd64/
+        IFS=',' read -ra BINARIES <<< "${{ env.BINARY_LIST }}"
+        for binary in "${BINARIES[@]}"; do
+          cp target/release/$binary Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_amd64/
+        done
         zip -r Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_amd64.zip Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_amd64
     
     - name: Upload GUI DEB Artifact
