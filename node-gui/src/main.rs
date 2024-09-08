@@ -18,6 +18,7 @@ mod main_window;
 mod widgets;
 
 use std::convert::identity;
+use std::env;
 
 use backend::messages::{BackendEvent, BackendRequest};
 use backend::{node_initialize, BackendControls, BackendSender};
@@ -39,6 +40,11 @@ const TEST_NETWORK_TOOLTIP: &str = "The 'Testnet' is the network with coins that
 
 pub fn main() -> iced::Result {
     utils::rust_backtrace::enable();
+    #[cfg(target_os = "windows")]
+    {
+        use winresource::WindowsResource;
+        WindowsResource::new().set_icon("../icon.ico").compile()?;
+    }
 
     MintlayerNodeGUI::run(Settings {
         id: Some("mintlayer-gui".to_owned()),
