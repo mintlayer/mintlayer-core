@@ -247,6 +247,9 @@ trust-dns-server = "0.23"
 variant_count = "1.1"
 zeroize = "1.5"
 
+[target.'cfg(windows)'.dependencies]
+winres = "0.1"
+
 # Config for 'cargo dist'
 [workspace.metadata.dist]
 # The preferred cargo-dist version to use in CI (Cargo.toml SemVer syntax)
@@ -271,8 +274,8 @@ publish-jobs = ["homebrew"]
 # needed to run upload-artifact@v4
 allow-dirty = ["ci"]
 [workspace.metadata.dist.github-custom-runners]
-aarch64-apple-darwin = "macos-12"
-x86_64-apple-darwin = "macos-12"
+aarch64-apple-darwin = "macos-11"
+x86_64-apple-darwin = "macos-11"
 
 [workspace.metadata.dist.dependencies.apt]
 "libatk1.0-0" = "*"

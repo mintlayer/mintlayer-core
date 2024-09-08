@@ -42,8 +42,8 @@ pub fn main() -> iced::Result {
     utils::rust_backtrace::enable();
     #[cfg(target_os = "windows")]
     {
-        use winresource::WindowsResource;
-        WindowsResource::new().set_icon("../icon.ico").compile()?;
+        let mut res = winres::WindowsResource::new();
+        res.set_icon("../icon.ico").compile()?;
     }
 
     MintlayerNodeGUI::run(Settings {
