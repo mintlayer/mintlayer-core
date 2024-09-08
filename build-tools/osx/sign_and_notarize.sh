@@ -94,7 +94,10 @@ setup_keychain() {
 # Function to sign the app
 sign_app() {
     echo "Signing the app..."
-    /usr/bin/codesign --force -s "$MACOS_CERTIFICATE_NAME" --options runtime --timestamp "target/release/bundle/${ARCH}/${APP_NAME}.app" -v
+    /usr/bin/codesign --force -s "$MACOS_CERTIFICATE_NAME" \
+        --options runtime \
+        --entitlements "build-tools/osx/entitlements.plist" \
+        --timestamp "target/release/bundle/${ARCH}/${APP_NAME}.app" -v
 }
 
 # Function to create and sign DMG
@@ -112,7 +115,9 @@ create_and_sign_dmg() {
       "target/release/bundle/${ARCH}/"
 
     echo "Signing the DMG..."
-    /usr/bin/codesign --force -s "$MACOS_CERTIFICATE_NAME" --options runtime --timestamp $DMG_NAME -v
+    /usr/bin/codesign --force -s "$MACOS_CERTIFICATE_NAME" \
+        --options runtime \
+        --timestamp $DMG_NAME -v
 }
 
 # Function to notarize and staple
