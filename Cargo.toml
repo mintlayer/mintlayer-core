@@ -271,8 +271,8 @@ publish-jobs = ["homebrew"]
 # needed to run upload-artifact@v4
 allow-dirty = ["ci"]
 [workspace.metadata.dist.github-custom-runners]
-aarch64-apple-darwin = "macos-14"
-x86_64-apple-darwin = "macos-14"
+aarch64-apple-darwin = "macos-12"
+x86_64-apple-darwin = "macos-12"
 
 [workspace.metadata.dist.dependencies.apt]
 "libatk1.0-0" = "*"
