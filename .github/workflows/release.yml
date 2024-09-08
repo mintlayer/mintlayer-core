@@ -21,7 +21,6 @@ jobs:
         targets: aarch64-apple-darwin, x86_64-apple-darwin
 
     - name: Build Universal Binary
-      if: false
       run: |
         cargo build --release --bin node-gui --target aarch64-apple-darwin
         cargo build --release --bin node-gui --target x86_64-apple-darwin
@@ -32,8 +31,7 @@ jobs:
     - name: Create App Bundle
       run: |
         mkdir -p target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/{MacOS,Resources}
-        # cp target/release/node-gui-universal target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS/node-gui
-        cp /bin/bash target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS/node-gui
+        cp target/release/node-gui-universal target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS/node-gui
         cp logo.icns target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Resources/
         VERSION=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "node-gui") | .version')
         BUILD_NUMBER=$(date +%Y%m%d.%H%M%S)
@@ -49,24 +47,10 @@ jobs:
         CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
         KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
         echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode --output $CERTIFICATE_PATH
-        
-        # Debug: Check the file type and content
-        echo "Debug: File type of the certificate:"
-        file $CERTIFICATE_PATH
-
-        echo "Debug: First few bytes of the certificate file (hexdump):"
-        hexdump -C -n 32 $CERTIFICATE_PATH
-
-        echo "Debug: Certificate file size:"
-        ls -l $CERTIFICATE_PATH
-
-        echo "Debug: Attempting to view certificate info:"
-        openssl pkcs12 -info -in $CERTIFICATE_PATH -noout -nomacver -password pass:$BUILD_CERTIFICATE_PASSWORD
-
         security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
         security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
         security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-        security import $CERTIFICATE_PATH -k $KEYCHAIN_PATH -P "$BUILD_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+        security import $CERTIFICATE_PATH -k $KEYCHAIN_PATH -P "$BUILD_CERTIFICATE_PASSWORD" -A
         security list-keychains -d user -s $KEYCHAIN_PATH
         security default-keychain -s $KEYCHAIN_PATH
         security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
