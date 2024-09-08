@@ -32,6 +32,7 @@ jobs:
       with:
         name: macos-${{ matrix.arch }}-dmg-${{ github.run_id }}
         path: Mintlayer_Node_GUI_${{ matrix.arch }}.dmg
+
     - name: Build, Sign, and Notarize
       env:
         MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE }}
@@ -42,6 +43,7 @@ jobs:
         APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
       run: |
         ./build-tools/osx/build_and_sign.sh ${{ matrix.arch }}
+
   create-release:
     needs: build-macos
     runs-on: ubuntu-latest

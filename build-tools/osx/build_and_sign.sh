@@ -49,10 +49,14 @@ check_env_vars() {
     done
 }
 
-# Function to build the project
-build_project() {
-    echo "Building for $ARCH..."
-    MACOSX_DEPLOYMENT_TARGET=10.13 cargo build --release --bin node-gui --target ${ARCH}-apple-darwin
+# Function to ensure create-dmg is installed
+ensure_create_dmg_is_installed() {
+    if ! command -v create-dmg &> /dev/null; then
+        echo "create-dmg not found. Installing..."
+        brew install create-dmg
+    else
+        echo "create-dmg is already installed."
+    fi
 }
 
 # Function to create app bundle
@@ -207,7 +211,7 @@ main() {
     fi
 
     check_env_vars
-    build_project
+    ensure_create_dmg_is_installed
     create_app_bundle
     setup_keychain
     sign_app
