@@ -9,6 +9,9 @@ on:
 jobs:
   build-macos:
     runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [aarch64, x86_64]
     steps:
     - uses: actions/checkout@v4
       with:
@@ -18,25 +21,21 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
-        targets: aarch64-apple-darwin, x86_64-apple-darwin
+        targets: ${{ matrix.arch }}-apple-darwin
 
-    - name: Build Universal Binary
+    - name: Build Binary
       run: |
-        cargo build --release --bin node-gui --target aarch64-apple-darwin
-        cargo build --release --bin node-gui --target x86_64-apple-darwin
-        lipo -create -output target/release/node-gui-universal \
-          target/aarch64-apple-darwin/release/node-gui \
-          target/x86_64-apple-darwin/release/node-gui
+        cargo build --release --bin node-gui --target ${{ matrix.arch }}-apple-darwin
 
     - name: Create App Bundle
       run: |
-        mkdir -p target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/{MacOS,Resources}
-        cp target/release/node-gui-universal target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/MacOS/node-gui
-        cp logo.icns target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Resources/
+        mkdir -p target/release/bundle/${{ matrix.arch }}/Mintlayer\ Node\ GUI.app/Contents/{MacOS,Resources}
+        cp target/${{ matrix.arch }}-apple-darwin/release/node-gui target/release/bundle/${{ matrix.arch }}/Mintlayer\ Node\ GUI.app/Contents/MacOS/
+        cp logo.icns target/release/bundle/${{ matrix.arch }}/Mintlayer\ Node\ GUI.app/Contents/Resources/
         VERSION=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "node-gui") | .version')
         BUILD_NUMBER=$(date +%Y%m%d.%H%M%S)
         sed -e "s/VERSION_PLACEHOLDER/$VERSION/g" -e "s/BUILD_PLACEHOLDER/$BUILD_NUMBER/g" \
-          build-tools/osx/Info.plist.template > target/release/bundle/osx/Mintlayer\ Node\ GUI.app/Contents/Info.plist
+          build-tools/osx/Info.plist.template > target/release/bundle/${{ matrix.arch }}/Mintlayer\ Node\ GUI.app/Contents/Info.plist
 
     - name: Install and Configure Certificates
       env:
@@ -61,7 +60,7 @@ jobs:
         KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
       run: |
         security unlock-keychain -p "$KEYCHAIN_PASSWORD" $RUNNER_TEMP/app-signing.keychain-db
-        /usr/bin/codesign --force -s "$CERTIFICATE_NAME" --options runtime --timestamp target/release/bundle/osx/Mintlayer\ Node\ GUI.app -v
+        /usr/bin/codesign --force -s "$CERTIFICATE_NAME" --options runtime --timestamp target/release/bundle/${{ matrix.arch }}/Mintlayer\ Node\ GUI.app -v
 
     - name: Create and Sign DMG
       env:
@@ -69,16 +68,16 @@ jobs:
       run: |
         brew install create-dmg
         create-dmg \
-          --volname "Mintlayer Node GUI" \
+          --volname "Mintlayer Node GUI (${{ matrix.arch }})" \
           --window-pos 200 120 \
           --window-size 600 400 \
           --icon-size 100 \
           --icon "Mintlayer Node GUI.app" 175 120 \
           --hide-extension "Mintlayer Node GUI.app" \
           --app-drop-link 425 120 \
-          "Mintlayer_Node_GUI.dmg" \
-          "target/release/bundle/osx/"
-        /usr/bin/codesign --force -s "$CERTIFICATE_NAME" --options runtime --timestamp Mintlayer_Node_GUI.dmg -v
+          "Mintlayer_Node_GUI_${{ matrix.arch }}.dmg" \
+          "target/release/bundle/${{ matrix.arch }}/"
+        /usr/bin/codesign --force -s "$CERTIFICATE_NAME" --options runtime --timestamp Mintlayer_Node_GUI_${{ matrix.arch }}.dmg -v
 
     - name: Notarize DMG
       env:
@@ -87,7 +86,7 @@ jobs:
         APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
       run: |
         # Submit for notarization
-        NOTARIZATION_INFO=$(xcrun notarytool submit Mintlayer_Node_GUI.dmg --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_ID_PASSWORD" --wait --timeout 3600)
+        NOTARIZATION_INFO=$(xcrun notarytool submit Mintlayer_Node_GUI_${{ matrix.arch }}.dmg --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_ID_PASSWORD" --wait --timeout 3600)
         echo "Notarization submission info: $NOTARIZATION_INFO"
         # Extract submission ID
         SUBMISSION_ID=$(echo "$NOTARIZATION_INFO" | awk '/id:/ {print $2; exit}')
@@ -102,7 +101,7 @@ jobs:
           echo "Notarization status info: $STATUS_INFO"
           if echo "$STATUS_INFO" | grep -q "status: Accepted"; then
             echo "Notarization successful. Proceeding to staple."
-            xcrun stapler staple Mintlayer_Node_GUI.dmg
+            xcrun stapler staple Mintlayer_Node_GUI_${{ matrix.arch }}.dmg
             echo "Stapling complete."
             exit 0
           elif echo "$STATUS_INFO" | grep -q "status: Invalid"; then
@@ -115,14 +114,15 @@ jobs:
         done
         echo "Notarization timed out after 60 attempts. Check status manually."
         exit 1
+
     - name: Verify Notarization
-      run: spctl -a -vvv -t install Mintlayer_Node_GUI.dmg
+      run: spctl -a -vvv -t install Mintlayer_Node_GUI_${{ matrix.arch }}.dmg
 
     - name: Upload DMG Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: macos-universal-dmg-${{ github.run_id }}
-        path: Mintlayer_Node_GUI.dmg
+        name: macos-${{ matrix.arch }}-dmg-${{ github.run_id }}
+        path: Mintlayer_Node_GUI_${{ matrix.arch }}.dmg
 
   create-release:
     needs: build-macos
@@ -130,12 +130,12 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     steps:
     - uses: actions/checkout@v4
-    - name: Download DMG Artifact
+    - name: Download DMG Artifacts
       uses: actions/download-artifact@v4
       with:
-        name: macos-universal-dmg-${{ github.run_id }}
+        path: dmg-artifacts
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
-        artifacts: "Mintlayer_Node_GUI.dmg"
+        artifacts: "dmg-artifacts/**/*.dmg"
         token: ${{ secrets.GITHUB_TOKEN }}
