@@ -1,0 +1,70 @@
+name: Build macOS
+
+on:
+  workflow_call:
+    inputs:
+      binary_list:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: macos-12
+    strategy:
+      matrix:
+        arch: [aarch64, x86_64]
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Extract version from tag
+      id: get_version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        VERSION=${VERSION#v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version extracted: $VERSION"
+    
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+        targets: ${{ matrix.arch }}-apple-darwin
+    
+    - name: Build
+      run: |
+        cargo build --release --target ${{ matrix.arch }}-apple-darwin
+    
+    - name: Sign and Notarize GUI
+      env:
+        MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE }}
+        MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        MACOS_CERTIFICATE_NAME: ${{ secrets.MACOS_CERTIFICATE_NAME }}
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+        VERSION: ${{ steps.get_version.outputs.VERSION }}
+      run: |
+        ./build-tools/osx/sign_and_notarize.sh ${{ matrix.arch }} ${{ steps.get_version.outputs.VERSION }}
+    
+    - name: Package Mintlayer Node (without GUI)
+      run: |
+        mkdir -p Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+        IFS=',' read -ra BINARIES <<< "${{ inputs.binary_list }}"
+        for binary in "${BINARIES[@]}"; do
+          cp target/${{ matrix.arch }}-apple-darwin/release/$binary Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/
+        done
+        zip -r Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.zip Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+    
+    - name: Upload DMG Artifact (GUI)
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+        path: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.dmg
+    
+    - name: Upload Node Artifact (without GUI)
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+        path: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.zip
