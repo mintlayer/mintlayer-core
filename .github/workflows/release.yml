@@ -33,7 +33,11 @@ jobs:
         toolchain: stable
         targets: ${{ matrix.arch }}-apple-darwin
 
-    - name: Build, Sign, and Notarize
+    - name: Build
+      run: |
+        cargo build --release --bin node-gui --target ${{ matrix.arch }}-apple-darwin
+  
+    - name: Sign and Notarize
       env:
         MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE }}
         MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
@@ -43,7 +47,7 @@ jobs:
         APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
         VERSION: ${{ steps.get_version.outputs.VERSION }}
       run: |
-        ./build-tools/osx/build_and_sign.sh ${{ matrix.arch }} ${{ steps.get_version.outputs.VERSION }}
+        ./build-tools/osx/sign_and_notarize.sh ${{ matrix.arch }} ${{ steps.get_version.outputs.VERSION }}
 
     - name: Upload DMG Artifact
       uses: actions/upload-artifact@v4
