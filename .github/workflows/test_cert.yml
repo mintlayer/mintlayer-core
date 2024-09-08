@@ -3,11 +3,7 @@ name: macOS Certificate Test
 on:
   push:
     branches:
-      - main  # or your default branch name
-  pull_request:
-    branches:
-      - main  # or your default branch name
-
+      - master 
 jobs:
   test-macos-certificate:
     name: Test macOS Certificate
