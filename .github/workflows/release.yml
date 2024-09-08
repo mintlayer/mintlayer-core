@@ -1,4 +1,4 @@
-name: macOS Build, Sign, and Release
+name: Build, Sign, and Release
 
 on:
   push:
@@ -16,28 +16,26 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-
+    
     - name: Extract version from tag
       id: get_version
       run: |
-        # Extract version from GITHUB_REF
         VERSION=${GITHUB_REF#refs/tags/}
-        # Remove 'v' prefix if present
         VERSION=${VERSION#v}
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Version extracted: $VERSION"
-
+    
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
         targets: ${{ matrix.arch }}-apple-darwin
-
+    
     - name: Build
       run: |
-        cargo build --release --bin node-gui --target ${{ matrix.arch }}-apple-darwin
-  
-    - name: Sign and Notarize
+        cargo build --release --target ${{ matrix.arch }}-apple-darwin
+    
+    - name: Sign and Notarize GUI
       env:
         MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE }}
         MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
@@ -48,15 +46,116 @@ jobs:
         VERSION: ${{ steps.get_version.outputs.VERSION }}
       run: |
         ./build-tools/osx/sign_and_notarize.sh ${{ matrix.arch }} ${{ steps.get_version.outputs.VERSION }}
-
-    - name: Upload DMG Artifact
+    
+    - name: Package Mintlayer Node (without GUI)
+      run: |
+        mkdir -p Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+        cp target/${{ matrix.arch }}-apple-darwin/release/{api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon,wasm-doc-gen} Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/
+        zip -r Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.zip Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+    
+    - name: Upload DMG Artifact (GUI)
       uses: actions/upload-artifact@v4
       with:
         name: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
         path: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.dmg
+    
+    - name: Upload Node Artifact (without GUI)
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+        path: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Extract version from tag
+      id: get_version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        VERSION=${VERSION#v}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version extracted: $VERSION"
+    
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y debhelper zip
+    
+    - name: Build
+      run: |
+        cargo build --release
+    
+    - name: Create Debian package for GUI
+      run: |
+        mkdir -p debian-gui/DEBIAN
+        mkdir -p debian-gui/usr/bin
+        cp target/release/node-gui debian-gui/usr/bin/
+        cat << EOF > debian-gui/DEBIAN/control
+        Package: mintlayer-node-gui
+        Version: ${{ steps.get_version.outputs.VERSION }}
+        Section: utils
+        Priority: optional
+        Architecture: amd64
+        Maintainer: Your Name <your.email@example.com>
+        Description: Mintlayer Node GUI
+         A graphical user interface for the Mintlayer node.
+        EOF
+        dpkg-deb --build debian-gui
+        mv debian-gui.deb Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_amd64.deb
+    
+    - name: Create Debian package for Node (without GUI)
+      run: |
+        mkdir -p debian-node/DEBIAN
+        mkdir -p debian-node/usr/bin
+        cp target/release/{api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon,wasm-doc-gen} debian-node/usr/bin/
+        cat << EOF > debian-node/DEBIAN/control
+        Package: mintlayer-node
+        Version: ${{ steps.get_version.outputs.VERSION }}
+        Section: utils
+        Priority: optional
+        Architecture: amd64
+        Maintainer: Your Name <your.email@example.com>
+        Description: Mintlayer Node
+         Mintlayer node and associated tools.
+        EOF
+        dpkg-deb --build debian-node
+        mv debian-node.deb Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_amd64.deb
+    
+    - name: Package Mintlayer Node (without GUI) as ZIP
+      run: |
+        mkdir -p Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_amd64
+        cp target/release/{api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon,wasm-doc-gen} Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_amd64/
+        zip -r Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_amd64.zip Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_amd64
+    
+    - name: Upload GUI DEB Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_amd64_deb
+        path: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_amd64.deb
+    
+    - name: Upload Node DEB Artifact (without GUI)
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_amd64_deb
+        path: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_amd64.deb
+    
+    - name: Upload Node ZIP Artifact (without GUI)
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_amd64_zip
+        path: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_amd64.zip
 
   create-release:
-    needs: build-macos
+    needs: [build-macos, build-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
@@ -68,16 +167,14 @@ jobs:
         VERSION=${GITHUB_REF#refs/tags/}
         VERSION=${VERSION#v}
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-
-    - name: Download DMG Artifacts
+    
+    - name: Download Artifacts
       uses: actions/download-artifact@v4
-      with:
-        path: dmg-artifacts
-
+    
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
-        artifacts: "dmg-artifacts/**/*.dmg"
+        artifacts: "Mintlayer_Node_GUI_*/*.dmg,Mintlayer_Node_GUI_*/*.deb,Mintlayer_Node_*/*.zip,Mintlayer_Node_*/*.deb"
         artifactErrorsFailBuild: true
         name: "Release ${{ steps.get_version.outputs.VERSION }}"
         body: "Release version ${{ steps.get_version.outputs.VERSION }}"
