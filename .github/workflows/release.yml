@@ -49,6 +49,20 @@ jobs:
         CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
         KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
         echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode --output $CERTIFICATE_PATH
+        
+        # Debug: Check the file type and content
+        echo "Debug: File type of the certificate:"
+        file $CERTIFICATE_PATH
+
+        echo "Debug: First few bytes of the certificate file (hexdump):"
+        hexdump -C -n 32 $CERTIFICATE_PATH
+
+        echo "Debug: Certificate file size:"
+        ls -l $CERTIFICATE_PATH
+
+        echo "Debug: Attempting to view certificate info:"
+        openssl pkcs12 -info -in $CERTIFICATE_PATH -noout -nomacver -password pass:$BUILD_CERTIFICATE_PASSWORD
+
         security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
         security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
         security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
