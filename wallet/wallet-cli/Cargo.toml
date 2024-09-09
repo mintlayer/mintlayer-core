@@ -4,13 +4,11 @@ license.workspace = true
 edition.workspace = true
 version.workspace = true
 rust-version.workspace = true
-authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
-
-[package.metadata.wix]
-upgrade-guid = "7CDC9926-E567-4391-B1FD-4C31885AFE39"
-path-guid = "B9812B67-3EEB-4A0D-8174-9B34D4CDCB14"
-license = false
-eula = false
+authors = [
+    "Samer Afach <samer.afach@mintlayer.org>",
+    "Ben Marsh <benjamin.marsh@mintlayer.org>",
+    "Enrico Rubboli <enrico.rubboli@mintlayer.org>",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -19,4 +17,10 @@ utils = { path = "../../utils" }
 wallet-cli-lib = { path = "../wallet-cli-lib" }
 
 clap = { workspace = true, features = ["derive"] }
-tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+tokio = { workspace = true, default-features = false, features = [
+    "io-util",
+    "macros",
+    "net",
+    "rt",
+    "sync",
+] }

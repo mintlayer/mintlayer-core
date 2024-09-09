@@ -40,11 +40,6 @@ const TEST_NETWORK_TOOLTIP: &str = "The 'Testnet' is the network with coins that
 
 pub fn main() -> iced::Result {
     utils::rust_backtrace::enable();
-    #[cfg(target_os = "windows")]
-    {
-        let mut res = winres::WindowsResource::new();
-        res.set_icon("../icon.ico").compile()?;
-    }
 
     MintlayerNodeGUI::run(Settings {
         id: Some("mintlayer-gui".to_owned()),

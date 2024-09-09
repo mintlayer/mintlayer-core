@@ -5,12 +5,6 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
-[package.metadata.wix]
-upgrade-guid = "661F3360-B50D-483F-97B0-6ADA8335CDEE"
-path-guid = "B5102A6D-96AC-4981-BF1A-2454C1A52A74"
-license = false
-eula = false
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

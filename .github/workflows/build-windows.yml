@@ -14,7 +14,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
-    
+
     - name: Extract version from tag
       id: get_version
       run: |
@@ -22,15 +22,15 @@ jobs:
         echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
         echo "Version extracted: $VERSION"
       shell: pwsh
-    
+
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
-    
+
     - name: Build
       run: cargo build --release
-    
+
     - name: Package Mintlayer Node (without GUI)
       run: |
         $VERSION = "${{ steps.get_version.outputs.VERSION }}"
@@ -41,7 +41,7 @@ jobs:
         }
         Compress-Archive -Path $DEST -DestinationPath "${DEST}.zip"
       shell: pwsh
-    
+
     - name: Package Mintlayer Node GUI
       run: |
         $VERSION = "${{ steps.get_version.outputs.VERSION }}"
@@ -50,13 +50,13 @@ jobs:
         Copy-Item "target\release\node-gui.exe" -Destination $DEST
         Compress-Archive -Path $DEST -DestinationPath "${DEST}.zip"
       shell: pwsh
-    
+
     - name: Upload Node ZIP Artifact (without GUI)
       uses: actions/upload-artifact@v4
       with:
         name: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_win64_zip
         path: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_win64.zip
-    
+
     - name: Upload GUI ZIP Artifact
       uses: actions/upload-artifact@v4
       with:

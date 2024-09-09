@@ -31,21 +31,21 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Extract version from tag
       id: get_version
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
         VERSION=${VERSION#v}
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-    
+
     - name: Download Artifacts
       uses: actions/download-artifact@v4
-    
+
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
-        artifacts: "Mintlayer_Node_GUI_*/*.dmg,Mintlayer_Node_GUI_*/*.deb,Mintlayer_Node_GUI_*/*.rpm,Mintlayer_Node_GUI_*/*.zip,Mintlayer_Node_*/*.zip,Mintlayer_Node_*/*.deb,Mintlayer_Node_*/*.rpm"
+        artifacts: "Mintlayer_Node_GUI_*/*.dmg,Mintlayer_Node_GUI_*/*.deb,Mintlayer_Node_GUI_*/*.zip,Mintlayer_Node_*/*.zip,Mintlayer_Node_*/*.deb"
         artifactErrorsFailBuild: true
         name: "Release ${{ steps.get_version.outputs.VERSION }}"
         body: |
@@ -58,8 +58,8 @@ jobs:
           - Mintlayer Node (ZIP) for Intel and Apple Silicon
 
           Linux:
-          - Mintlayer Node GUI (DEB and RPM) for x86_64 and ARM64
-          - Mintlayer Node (DEB, RPM, and ZIP) for x86_64 and ARM64
+          - Mintlayer Node GUI (DEB) for x86_64 and ARM64
+          - Mintlayer Node (DEB and ZIP) for x86_64 and ARM64
 
           Windows:
           - Mintlayer Node GUI (ZIP) for x64
