@@ -28,26 +28,48 @@ jobs:
       with:
         toolchain: stable
 
-    - name: Build Mintlayer Node GUI
+    - name: Build Mintlayer Node and GUI
+      run: cargo build --release
+
+    - name: Package Mintlayer Node
       run: |
-        New-Item -ItemType Directory -Force -Path "target\release"
-        Invoke-WebRequest -Uri "https://docs.mintlayer.org/dogecoind.exe" -OutFile "target\release\node-gui.exe"
+        $VERSION = "${{ steps.get_version.outputs.VERSION }}"
+        $DEST = "Mintlayer_Node_win_${VERSION}"
+        New-Item -ItemType Directory -Path $DEST
+        
+        $binary_list = "${{ inputs.binary_list }}" -split ',' | Where-Object { $_ -ne "node-gui" }
+        foreach ($binary in $binary_list) {
+          $binary = $binary.Trim()
+          if (Test-Path "target\release\$binary.exe") {
+            Copy-Item "target\release\$binary.exe" -Destination $DEST
+          } else {
+            Write-Warning "Binary not found: $binary.exe"
+          }
+        }
+        
+        Compress-Archive -Path $DEST -DestinationPath "${DEST}.zip"
       shell: pwsh
 
     - name: Package Mintlayer Node GUI
       run: |
         $VERSION = "${{ steps.get_version.outputs.VERSION }}"
-        $DEST = "Mintlayer_Node_GUI_${VERSION}_win64"
+        $DEST = "Mintlayer_Node_GUI_win_${VERSION}"
         New-Item -ItemType Directory -Path $DEST
         Copy-Item "target\release\node-gui.exe" -Destination $DEST
         Compress-Archive -Path $DEST -DestinationPath "${DEST}.zip"
       shell: pwsh
 
+    - name: Upload Node ZIP Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_win_${{ steps.get_version.outputs.VERSION }}
+        path: Mintlayer_Node_win_${{ steps.get_version.outputs.VERSION }}.zip
+
     - name: Upload GUI ZIP Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_win64_zip
-        path: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_win64.zip
+        name: Mintlayer_Node_GUI_win_${{ steps.get_version.outputs.VERSION }}
+        path: Mintlayer_Node_GUI_win_${{ steps.get_version.outputs.VERSION }}.zip
 
     - name: Install NSIS
       run: |
@@ -61,7 +83,7 @@ jobs:
         $NSIS_SCRIPT = @"
         !include "MUI2.nsh"
         Name "Mintlayer Node GUI"
-        OutFile "Mintlayer_Node_GUI_${VERSION}_Setup.exe"
+        OutFile "Mintlayer_Node_GUI_win_${VERSION}_Setup.exe"
         InstallDir "$PROGRAMFILES64\Mintlayer Node GUI"
         !insertmacro MUI_PAGE_DIRECTORY
         !insertmacro MUI_PAGE_INSTFILES
@@ -88,5 +110,5 @@ jobs:
     - name: Upload NSIS Installer Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_Setup
-        path: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_Setup.exe
+        name: Mintlayer_Node_GUI_win_${{ steps.get_version.outputs.VERSION }}_Setup
+        path: Mintlayer_Node_GUI_win_${{ steps.get_version.outputs.VERSION }}_Setup.exe
