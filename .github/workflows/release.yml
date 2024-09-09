@@ -20,7 +20,6 @@ jobs:
     secrets: inherit
 
   build-windows:
-    if: false
     uses: ./.github/workflows/build-windows.yml
     with:
       binary_list: api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon

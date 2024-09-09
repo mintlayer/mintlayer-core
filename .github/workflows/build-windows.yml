@@ -43,36 +43,6 @@ jobs:
         Compress-Archive -Path $DEST -DestinationPath "${DEST}.zip"
       shell: pwsh
 
-    - name: Package Mintlayer Node (without GUI)
-      run: |
-        $VERSION = "${{ steps.get_version.outputs.VERSION }}"
-        $DEST = "Mintlayer_Node_${VERSION}_win64"
-        New-Item -ItemType Directory -Path $DEST -Force
-
-        # Print environment variable
-        Write-Output "Binary List: $env:BINARY_LIST"
-
-        # Print the contents of the target\release directory
-        Write-Output "Contents of target\\release:"
-        Get-ChildItem -Path "target\release" | ForEach-Object { Write-Output $_.FullName }
-
-        # Copy files
-        $env:BINARY_LIST -split ',' | ForEach-Object {
-          $filePath = "target\release\$_.exe"
-          Write-Output "Trying to copy $filePath"
-          Copy-Item $filePath -Destination $DEST -ErrorAction Stop
-        }
-
-        # Compress archive
-        Compress-Archive -Path $DEST -DestinationPath "${DEST}.zip"
-      shell: pwsh
-
-    - name: Upload Node ZIP Artifact (without GUI)
-      uses: actions/upload-artifact@v4
-      with:
-        name: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_win64_zip
-        path: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_win64.zip
-
     - name: Upload GUI ZIP Artifact
       uses: actions/upload-artifact@v4
       with:
