@@ -31,27 +31,41 @@ jobs:
 
     - name: Install OpenSSL
       run: choco install openssl
-
-    - name: Prepare Certificate
+    
+    - name: Prepare and Analyze Certificate
       run: |
-        echo "${{ secrets.WINDOWS_PEM_CERT }}" > certificate.pem
-      shell: bash
-
-    - name: Verify Certificate
-      run: |
-        $certContent = Get-Content -Path certificate.pem
-        if ($certContent.Length -gt 0) {
-          Write-Host "Certificate file is not empty. Number of lines: $($certContent.Length)"
-        } else {
-          Write-Error "Certificate file is empty"
+        $cert_content = '${{ secrets.WINDOWS_PEM_CERT }}'
+        $cert_content | Out-File -FilePath certificate.pem -Encoding ascii
+        
+        $has_private_key = $cert_content -match "BEGIN PRIVATE KEY"
+        $has_certificate = $cert_content -match "BEGIN CERTIFICATE"
+        
+        Write-Host "Certificate file created. Size: $((Get-Item certificate.pem).Length) bytes"
+        Write-Host "Contains private key: $has_private_key"
+        Write-Host "Contains certificate: $has_certificate"
+        
+        if (-not $has_private_key) {
+          Write-Host "WARNING: The certificate file does not contain a private key, which is required for code signing."
+        }
+        
+        if (-not $has_certificate) {
+          Write-Error "ERROR: The certificate file does not contain a certificate."
           exit 1
         }
+        
+        Write-Host "Certificate structure (redacted):"
+        Get-Content certificate.pem | ForEach-Object { $_ -replace '.', '*' }
       shell: pwsh
 
-    - name: Convert PEM to PFX
+    - name: Attempt PFX Conversion
       run: |
         $pfxPassword = [System.Guid]::NewGuid().ToString("N")
-        openssl pkcs12 -export -out certificate.pfx -inkey certificate.pem -in certificate.pem -passout pass:$pfxPassword
+        $result = openssl pkcs12 -export -out certificate.pfx -inkey certificate.pem -in certificate.pem -passout pass:$pfxPassword 2>&1
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "OpenSSL Error: $result"
+          Write-Host "Unable to create PFX. This might be due to missing private key or invalid certificate format."
+          exit 1
+        }
         echo "PFX_PASSWORD=$pfxPassword" >> $env:GITHUB_ENV
       shell: pwsh
 
