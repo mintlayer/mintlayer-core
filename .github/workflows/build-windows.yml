@@ -1,7 +1,11 @@
 name: Test Windows Signing and Installer
 
 on:
-  workflow_dispatch:  # This allows manual triggering
+    workflow_call:
+      inputs:
+        binary_list:
+          required: true
+          type: string
 
 jobs:
   test-signing:
