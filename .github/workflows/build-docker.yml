@@ -2,10 +2,6 @@ name: Build Docker
 
 on:
   workflow_call:
-    inputs:
-      binary_list:
-        required: true
-        type: string
 
 jobs:
   build-docker-images:
