@@ -25,6 +25,10 @@ jobs:
       binary_list: api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon
     secrets: inherit
 
+  build-docker:
+      uses: ./.github/workflows/build-docker.yml
+      secrets: inherit
+  
   create-release:
     needs: [build-macos, build-linux, build-windows]
     runs-on: ubuntu-latest
