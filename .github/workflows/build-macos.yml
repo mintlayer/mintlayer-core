@@ -53,7 +53,7 @@ jobs:
         mkdir -p Mintlayer_Node_macos_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
         IFS=',' read -ra BINARIES <<< "${{ inputs.binary_list }}"
         for binary in "${BINARIES[@]}"; do
-          cp target/${{ matrix.arch }}-apple-darwin/release/$binary Mintlayer_Node_maco_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/
+          cp target/${{ matrix.arch }}-apple-darwin/release/$binary Mintlayer_Node_macos_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/
         done
         zip -r Mintlayer_Node_macos_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.zip Mintlayer_Node_macos_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
 
