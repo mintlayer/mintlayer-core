@@ -46,7 +46,7 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         allowUpdates: true    
-        artifacts: "Mintlayer_Node_GUI_*/*.dmg,Mintlayer_Node_GUI_*/*.deb,Mintlayer_Node_*/*.zip,Mintlayer_Node_*/*.deb"
+        artifacts: "Mintlayer_Node_*/*.dmg,Mintlayer_Node_*/*.deb,Mintlayer_Node_*/*.zip"
         artifactErrorsFailBuild: true
         name: "Release ${{ steps.get_version.outputs.VERSION }}"
         body: |
