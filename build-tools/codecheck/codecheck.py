@@ -350,7 +350,7 @@ def check_trailing_whitespaces():
         'script/src/test/test_vectors_4opc.csv.gz',
         'wasm-wrappers/pkg/wasm_wrappers_bg.wasm',
         'wasm-wrappers/doc/*',
-        './logo.icns'
+        'build-tools/assets/*'
     ]
 
     ok = True

@@ -63,7 +63,7 @@ create_app_bundle() {
     local bundle_path="target/release/bundle/${ARCH}/${APP_NAME}.app"
     mkdir -p "${bundle_path}/Contents/"{MacOS,Resources}
     cp "target/${ARCH}-apple-darwin/release/node-gui" "${bundle_path}/Contents/MacOS/"
-    cp "logo.icns" "${bundle_path}/Contents/Resources/"
+    cp "build-tools/assets/logo.icns" "${bundle_path}/Contents/Resources/"
 
     echo "Generating Info.plist..."
     local version=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "node-gui") | .version')
@@ -120,7 +120,6 @@ create_and_sign_dmg() {
         --timestamp $DMG_NAME -v
 }
 
-# Function to notarize and staple
 # Function to notarize and staple
 notarize_and_staple() {
     echo "Notarizing the DMG..."

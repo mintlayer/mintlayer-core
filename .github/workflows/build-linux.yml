@@ -39,7 +39,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt-get install -y debhelper zip
+        sudo apt-get install -y debhelper zip imagemagick
 
     - name: Build
       run: |
@@ -49,14 +49,36 @@ jobs:
       run: |
         mkdir -p debian-gui/DEBIAN
         mkdir -p debian-gui/usr/bin
+        mkdir -p debian-gui/usr/share/applications
+        mkdir -p debian-gui/usr/share/icons/hicolor/512x512/apps
+        mkdir -p debian-gui/usr/share/icons/hicolor/256x256/apps
+        mkdir -p debian-gui/usr/share/icons/hicolor/128x128/apps
+        mkdir -p debian-gui/usr/share/icons/hicolor/64x64/apps
         cp target/${{ matrix.arch }}-unknown-linux-gnu/release/node-gui debian-gui/usr/bin/
+        
+        # Copy and convert icon files
+        cp build-tools/assets/node-gui-icon_512.png debian-gui/usr/share/icons/hicolor/512x512/apps/mintlayer-node-gui.png
+        convert build-tools/assets/node-gui-icon_512.png -resize 256x256 debian-gui/usr/share/icons/hicolor/256x256/apps/mintlayer-node-gui.png
+        convert build-tools/assets/node-gui-icon_512.png -resize 128x128 debian-gui/usr/share/icons/hicolor/128x128/apps/mintlayer-node-gui.png
+        convert build-tools/assets/node-gui-icon_512.png -resize 64x64 debian-gui/usr/share/icons/hicolor/64x64/apps/mintlayer-node-gui.png
+        
+        # Create .desktop file
+        cat << EOF > debian-gui/usr/share/applications/mintlayer-node-gui.desktop
+        [Desktop Entry]
+        Name=Mintlayer Node GUI
+        Exec=/usr/bin/node-gui
+        Icon=mintlayer-node-gui
+        Type=Application
+        Categories=Utility;Network;
+        EOF
+        
         cat << EOF > debian-gui/DEBIAN/control
         Package: mintlayer-node-gui
         Version: ${{ steps.get_version.outputs.VERSION }}
         Section: utils
         Priority: optional
         Architecture: ${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}
-        Maintainer: Your Name <your.email@example.com>
+        Maintainer: Mintlayer <devs@mintlayer.org>
         Description: Mintlayer Node GUI
          A graphical user interface for the Mintlayer node.
         EOF
@@ -77,7 +99,7 @@ jobs:
         Section: utils
         Priority: optional
         Architecture: ${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}
-        Maintainer: Your Name <your.email@example.com>
+        Maintainer: Mintlayer <devs@mintlayer.org>
         Description: Mintlayer Node
          Mintlayer node and associated tools.
         EOF
