@@ -109,7 +109,9 @@ jobs:
     - name: Create RPM package for GUI
       run: |
         mkdir -p rpm-gui/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-        cp -r debian-gui/usr rpm-gui/BUILD/
+        mkdir -p rpm-gui/BUILDROOT/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}
+        cp -r debian-gui/usr rpm-gui/BUILDROOT/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}/
+        
         cat << EOF > rpm-gui/SPECS/mintlayer-node-gui.spec
         Name: mintlayer-node-gui
         Version: ${{ steps.get_version.outputs.VERSION }}
@@ -130,16 +132,19 @@ jobs:
         /usr/share/icons/hicolor/64x64/apps/mintlayer-node-gui.png
 
         %changelog
-        * $(date "+%a %b %d %Y") Your Name <your.email@example.com> - ${{ steps.get_version.outputs.VERSION }}-1
+        * $(date "+%a %b %d %Y") Mintlayer <devs@mintlayer.org> - ${{ steps.get_version.outputs.VERSION }}-1
         - Initial RPM release
         EOF
-        rpmbuild -bb --define "_topdir $(pwd)/rpm-gui" rpm-gui/SPECS/mintlayer-node-gui.spec
+        
+        rpmbuild -bb --define "_topdir $(pwd)/rpm-gui" --buildroot $(pwd)/rpm-gui/BUILDROOT/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }} rpm-gui/SPECS/mintlayer-node-gui.spec
         mv rpm-gui/RPMS/${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm
 
     - name: Create RPM package for Node (without GUI)
       run: |
         mkdir -p rpm-node/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-        cp -r debian-node/usr rpm-node/BUILD/
+        mkdir -p rpm-node/BUILDROOT/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}
+        cp -r debian-node/usr rpm-node/BUILDROOT/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}/
+        
         cat << EOF > rpm-node/SPECS/mintlayer-node.spec
         Name: mintlayer-node
         Version: ${{ steps.get_version.outputs.VERSION }}
@@ -155,10 +160,11 @@ jobs:
         /usr/bin/*
 
         %changelog
-        * $(date "+%a %b %d %Y") Your Name <your.email@example.com> - ${{ steps.get_version.outputs.VERSION }}-1
+        * $(date "+%a %b %d %Y") Mintlayer <devs@mintlayer.org> - ${{ steps.get_version.outputs.VERSION }}-1
         - Initial RPM release
         EOF
-        rpmbuild -bb --define "_topdir $(pwd)/rpm-node" rpm-node/SPECS/mintlayer-node.spec
+        
+        rpmbuild -bb --define "_topdir $(pwd)/rpm-node" --buildroot $(pwd)/rpm-node/BUILDROOT/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }} rpm-node/SPECS/mintlayer-node.spec
         mv rpm-node/RPMS/${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm
 
     - name: Package Mintlayer Node (without GUI) as ZIP
