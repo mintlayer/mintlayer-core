@@ -26,8 +26,8 @@ jobs:
     secrets: inherit
 
   build-docker:
-      uses: ./.github/workflows/build-docker.yml
-      secrets: inherit
+    uses: ./.github/workflows/build-docker.yml
+    secrets: inherit
   
   create-release:
     needs: [build-macos, build-linux, build-windows]
@@ -46,6 +46,51 @@ jobs:
     - name: Download Artifacts
       uses: actions/download-artifact@v4
 
+    - name: Generate Hashes
+      id: generate_hashes
+      run: |
+        echo "HASHES<<EOF" >> $GITHUB_OUTPUT
+        for file in Mintlayer_Node_*/*.dmg Mintlayer_Node_*/*.deb Mintlayer_Node_*/*.rpm Mintlayer_Node_*/*.zip Mintlayer_Node_*/*_Setup.exe; do
+          if [ -f "$file" ]; then
+            echo "$(sha256sum $file | awk '{print $1}')  $(basename $file)" >> $GITHUB_OUTPUT
+          fi
+        done
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Generate Release Body
+      id: generate_body
+      run: |
+        echo "BODY<<EOF" >> $GITHUB_OUTPUT
+        echo "Release version ${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo "This release includes the following packages:" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo "macOS:" >> $GITHUB_OUTPUT
+        echo "- Mintlayer Node GUI (DMG) for Intel and Apple Silicon" >> $GITHUB_OUTPUT
+        echo "- Mintlayer Node (ZIP) for Intel and Apple Silicon" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo "Linux:" >> $GITHUB_OUTPUT
+        echo "- Mintlayer Node GUI (DEB) for x86_64 and ARM64" >> $GITHUB_OUTPUT
+        echo "- Mintlayer Node (DEB and ZIP) for x86_64 and ARM64" >> $GITHUB_OUTPUT
+        echo "- Mintlayer Node GUI (RPM) for x86_64" >> $GITHUB_OUTPUT
+        echo "- Mintlayer Node (RPM) for x86_64" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo "Windows:" >> $GITHUB_OUTPUT
+        echo "- Mintlayer Node GUI (ZIP) for x64" >> $GITHUB_OUTPUT
+        echo "- Mintlayer Node GUI Installer (EXE) for x64" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo "Please download the appropriate package for your system." >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo "Docker Images" >> $GITHUB_OUTPUT
+        echo "Find docker images in the docker hub:" >> $GITHUB_OUTPUT
+        echo "https://hub.docker.com/u/mintlayer" >> $GITHUB_OUTPUT
+        echo "" >> $GITHUB_OUTPUT
+        echo "File Hashes (SHA256):" >> $GITHUB_OUTPUT
+        echo "\`\`\`" >> $GITHUB_OUTPUT
+        echo "${{ steps.generate_hashes.outputs.HASHES }}" >> $GITHUB_OUTPUT
+        echo "\`\`\`" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
@@ -53,29 +98,5 @@ jobs:
         artifacts: "Mintlayer_Node_*/*.dmg,Mintlayer_Node_*/*.deb,Mintlayer_Node_*/*.rpm,Mintlayer_Node_*/*.zip,Mintlayer_Node_*/*_Setup.exe"
         artifactErrorsFailBuild: true
         name: "Release ${{ steps.get_version.outputs.VERSION }}"
-        body: |
-          Release version ${{ steps.get_version.outputs.VERSION }}
-
-          This release includes the following packages:
-
-          macOS:
-          - Mintlayer Node GUI (DMG) for Intel and Apple Silicon
-          - Mintlayer Node (ZIP) for Intel and Apple Silicon
-
-          Linux:
-          - Mintlayer Node GUI (DEB) for x86_64 and ARM64
-          - Mintlayer Node (DEB and ZIP) for x86_64 and ARM64
-          - Mintlayer Node GUI (RPM) for x86_64 
-          - Mintlayer Node (RPM) for x86_64
-
-          Windows:
-          - Mintlayer Node GUI (ZIP) for x64
-          - Mintlayer Node GUI Installer (EXE) for x64
-
-          Please download the appropriate package for your system.
-
-          Docker Images
-          Find docker images in the docker hub:
-          https://hub.docker.com/u/mintlayer
-
+        body: ${{ steps.generate_body.outputs.BODY }}
         token: ${{ secrets.GITHUB_TOKEN }}
