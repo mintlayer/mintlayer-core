@@ -7,7 +7,7 @@ VERSION=$2
 
 # Configuration
 APP_NAME="Mintlayer Node GUI"
-DMG_NAME="Mintlayer_Node_GUI_${VERSION}_${ARCH}.dmg"
+DMG_NAME="Mintlayer_Node_GUI_macos_${VERSION}_${ARCH}.dmg"
 KEYCHAIN_NAME="build.keychain"
 KEYCHAIN_PASSWORD="temporary_password"
 NOTARIZATION_TIMEOUT=60 # Maximum wait time for notarization in seconds

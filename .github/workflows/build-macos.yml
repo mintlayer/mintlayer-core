@@ -50,21 +50,21 @@ jobs:
 
     - name: Package Mintlayer Node (without GUI)
       run: |
-        mkdir -p Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+        mkdir -p Mintlayer_Node_macos${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
         IFS=',' read -ra BINARIES <<< "${{ inputs.binary_list }}"
         for binary in "${BINARIES[@]}"; do
-          cp target/${{ matrix.arch }}-apple-darwin/release/$binary Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/
+          cp target/${{ matrix.arch }}-apple-darwin/release/$binary Mintlayer_Node_macos${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/
         done
-        zip -r Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.zip Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+        zip -r Mintlayer_Node_macos${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.zip Mintlayer_Node_macos${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
 
     - name: Upload DMG Artifact (GUI)
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
-        path: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.dmg
+        name: Mintlayer_Node_GUI_macos${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+        path: Mintlayer_Node_GUI_macos${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.dmg
 
     - name: Upload Node Artifact (without GUI)
       uses: actions/upload-artifact@v4
       with:
         name: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
-        path: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.zip
+        path: Mintlayer_Node_macos${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.zip

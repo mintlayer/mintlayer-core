@@ -61,7 +61,7 @@ jobs:
          A graphical user interface for the Mintlayer node.
         EOF
         dpkg-deb --build debian-gui
-        mv debian-gui.deb Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
+        mv debian-gui.deb Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
 
     - name: Create Debian package for Node (without GUI)
       run: |
@@ -82,31 +82,31 @@ jobs:
          Mintlayer node and associated tools.
         EOF
         dpkg-deb --build debian-node
-        mv debian-node.deb Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
+        mv debian-node.deb Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
 
     - name: Package Mintlayer Node (without GUI) as ZIP
       run: |
-        mkdir -p Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+        mkdir -p Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
         IFS=',' read -ra BINARIES <<< "${{ inputs.binary_list }}"
         for binary in "${BINARIES[@]}"; do
-          cp target/${{ matrix.arch }}-unknown-linux-gnu/release/$binary Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/
+          cp target/${{ matrix.arch }}-unknown-linux-gnu/release/$binary Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/
         done
-        zip -r Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.zip Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+        zip -r Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.zip Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
 
     - name: Upload GUI DEB Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_deb
-        path: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
+        name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_deb
+        path: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
 
     - name: Upload Node DEB Artifact (without GUI)
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_deb
-        path: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
+        name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_deb
+        path: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
 
     - name: Upload Node ZIP Artifact (without GUI)
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_zip
-        path: Mintlayer_Node_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.zip
+        name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_zip
+        path: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.zip
