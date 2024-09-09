@@ -39,7 +39,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt-get install -y debhelper zip imagemagick
+        sudo apt-get install -y debhelper zip imagemagick rpm
 
     - name: Build
       run: |
@@ -106,6 +106,61 @@ jobs:
         dpkg-deb --build debian-node
         mv debian-node.deb Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
 
+    - name: Create RPM package for GUI
+      run: |
+        mkdir -p rpm-gui/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+        cp -r debian-gui/usr rpm-gui/BUILD/
+        cat << EOF > rpm-gui/SPECS/mintlayer-node-gui.spec
+        Name: mintlayer-node-gui
+        Version: ${{ steps.get_version.outputs.VERSION }}
+        Release: 1
+        Summary: Mintlayer Node GUI
+        License: MIT
+        BuildArch: ${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}
+
+        %description
+        A graphical user interface for the Mintlayer node.
+
+        %files
+        /usr/bin/node-gui
+        /usr/share/applications/mintlayer-node-gui.desktop
+        /usr/share/icons/hicolor/512x512/apps/mintlayer-node-gui.png
+        /usr/share/icons/hicolor/256x256/apps/mintlayer-node-gui.png
+        /usr/share/icons/hicolor/128x128/apps/mintlayer-node-gui.png
+        /usr/share/icons/hicolor/64x64/apps/mintlayer-node-gui.png
+
+        %changelog
+        * $(date "+%a %b %d %Y") Your Name <your.email@example.com> - ${{ steps.get_version.outputs.VERSION }}-1
+        - Initial RPM release
+        EOF
+        rpmbuild -bb --define "_topdir $(pwd)/rpm-gui" rpm-gui/SPECS/mintlayer-node-gui.spec
+        mv rpm-gui/RPMS/${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm
+
+    - name: Create RPM package for Node (without GUI)
+      run: |
+        mkdir -p rpm-node/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+        cp -r debian-node/usr rpm-node/BUILD/
+        cat << EOF > rpm-node/SPECS/mintlayer-node.spec
+        Name: mintlayer-node
+        Version: ${{ steps.get_version.outputs.VERSION }}
+        Release: 1
+        Summary: Mintlayer Node
+        License: MIT
+        BuildArch: ${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}
+
+        %description
+        Mintlayer node and associated tools.
+
+        %files
+        /usr/bin/*
+
+        %changelog
+        * $(date "+%a %b %d %Y") Your Name <your.email@example.com> - ${{ steps.get_version.outputs.VERSION }}-1
+        - Initial RPM release
+        EOF
+        rpmbuild -bb --define "_topdir $(pwd)/rpm-node" rpm-node/SPECS/mintlayer-node.spec
+        mv rpm-node/RPMS/${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm
+
     - name: Package Mintlayer Node (without GUI) as ZIP
       run: |
         mkdir -p Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
@@ -126,6 +181,18 @@ jobs:
       with:
         name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_deb
         path: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
+
+    - name: Upload GUI RPM Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_rpm
+        path: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm
+
+    - name: Upload Node RPM Artifact (without GUI)
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_rpm
+        path: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm
 
     - name: Upload Node ZIP Artifact (without GUI)
       uses: actions/upload-artifact@v4
