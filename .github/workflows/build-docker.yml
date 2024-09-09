@@ -1,21 +1,11 @@
-name: Build and Push Docker Images
+name: Build Docker
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
-  pull_request:
-    branches:
-      - main
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      push_images:
-        description: 'Push images to Docker Hub'
+      binary_list:
         required: true
-        type: boolean
-        default: false
+        type: string
 
 jobs:
   build-docker-images:
@@ -54,13 +44,8 @@ jobs:
           echo "VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
         fi
 
-    - name: Build Docker images
-      run: python build-tools/docker/build.py --version ${{ steps.version.outputs.VERSION }}
-    
-    - name: Push Docker images
-      if: github.event_name != 'pull_request' && (github.event_name == 'push' || github.event.inputs.push_images == 'true')
-      run: |
-        python build-tools/docker/build.py --push --docker-hub-user ${{ secrets.DOCKERHUB_USERNAME }} --version ${{ steps.version.outputs.VERSION }} --latest
+    - name: Build and Push Docker images
+      run: python build-tools/docker/build.py --push --docker-hub-user ${{ secrets.DOCKERHUB_USERNAME }} --version ${{ steps.version.outputs.VERSION }} --latest
 
     env:
       DOCKER_BUILDKIT: 1
