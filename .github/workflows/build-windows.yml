@@ -45,3 +45,43 @@ jobs:
       with:
         name: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_win64_zip
         path: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_win64.zip
+
+    - name: Create NSIS Installer Script
+      run: |
+        $VERSION = "${{ steps.get_version.outputs.VERSION }}"
+        $NSIS_SCRIPT = @"
+        !include "MUI2.nsh"
+        Name "Mintlayer Node GUI"
+        OutFile "Mintlayer_Node_GUI_${VERSION}_Setup.exe"
+        InstallDir "$PROGRAMFILES64\Mintlayer Node GUI"
+        !insertmacro MUI_PAGE_DIRECTORY
+        !insertmacro MUI_PAGE_INSTFILES
+        !insertmacro MUI_LANGUAGE "English"
+        Section "Install"
+          SetOutPath "$INSTDIR"
+          File "target\release\node-gui.exe"
+          CreateShortCut "$DESKTOP\Mintlayer Node GUI.lnk" "$INSTDIR\node-gui.exe"
+          WriteUninstaller "$INSTDIR\uninstall.exe"
+        SectionEnd
+        Section "Uninstall"
+          Delete "$INSTDIR\node-gui.exe"
+          Delete "$INSTDIR\uninstall.exe"
+          Delete "$DESKTOP\Mintlayer Node GUI.lnk"
+          RMDir "$INSTDIR"
+        SectionEnd
+        "@
+        $NSIS_SCRIPT | Out-File -FilePath "installer.nsi" -Encoding utf8
+      shell: pwsh
+
+    - name: Install NSIS
+      uses: repolevedavaj/install-nsis@v1.0.0
+
+    - name: Build NSIS Installer
+      run: |
+        makensis installer.nsi
+
+    - name: Upload NSIS Installer Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_Setup
+        path: Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_Setup.exe

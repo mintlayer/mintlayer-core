@@ -39,7 +39,10 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt-get install -y debhelper zip imagemagick rpm
+        sudo apt-get install -y debhelper zip imagemagick
+        if [ "${{ matrix.arch }}" = "x86_64" ]; then
+          sudo apt-get install -y rpm
+        fi
 
     - name: Build
       run: |
@@ -107,10 +110,11 @@ jobs:
         mv debian-node.deb Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
 
     - name: Create RPM package for GUI
+      if: matrix.arch == 'x86_64'
       run: |
         mkdir -p rpm-gui/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-        mkdir -p rpm-gui/BUILDROOT/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}
-        cp -r debian-gui/usr rpm-gui/BUILDROOT/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}/
+        mkdir -p rpm-gui/BUILDROOT/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.x86_64
+        cp -r debian-gui/usr rpm-gui/BUILDROOT/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.x86_64/
         
         cat << EOF > rpm-gui/SPECS/mintlayer-node-gui.spec
         Name: mintlayer-node-gui
@@ -118,7 +122,7 @@ jobs:
         Release: 1
         Summary: Mintlayer Node GUI
         License: MIT
-        BuildArch: ${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}
+        BuildArch: x86_64
 
         %description
         A graphical user interface for the Mintlayer node.
@@ -136,14 +140,15 @@ jobs:
         - Initial RPM release
         EOF
         
-        rpmbuild -bb --define "_topdir $(pwd)/rpm-gui" --buildroot $(pwd)/rpm-gui/BUILDROOT/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }} rpm-gui/SPECS/mintlayer-node-gui.spec
-        mv rpm-gui/RPMS/${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm
+        rpmbuild -bb --define "_topdir $(pwd)/rpm-gui" --buildroot $(pwd)/rpm-gui/BUILDROOT/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.x86_64 rpm-gui/SPECS/mintlayer-node-gui.spec
+        mv rpm-gui/RPMS/x86_64/mintlayer-node-gui-${{ steps.get_version.outputs.VERSION }}-1.x86_64.rpm Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_x86_64.rpm
 
     - name: Create RPM package for Node (without GUI)
+      if: matrix.arch == 'x86_64'
       run: |
         mkdir -p rpm-node/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-        mkdir -p rpm-node/BUILDROOT/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}
-        cp -r debian-node/usr rpm-node/BUILDROOT/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}/
+        mkdir -p rpm-node/BUILDROOT/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.x86_64
+        cp -r debian-node/usr rpm-node/BUILDROOT/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.x86_64/
         
         cat << EOF > rpm-node/SPECS/mintlayer-node.spec
         Name: mintlayer-node
@@ -151,7 +156,7 @@ jobs:
         Release: 1
         Summary: Mintlayer Node
         License: MIT
-        BuildArch: ${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}
+        BuildArch: x86_64
 
         %description
         Mintlayer node and associated tools.
@@ -164,8 +169,8 @@ jobs:
         - Initial RPM release
         EOF
         
-        rpmbuild -bb --define "_topdir $(pwd)/rpm-node" --buildroot $(pwd)/rpm-node/BUILDROOT/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }} rpm-node/SPECS/mintlayer-node.spec
-        mv rpm-node/RPMS/${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm
+        rpmbuild -bb --define "_topdir $(pwd)/rpm-node" --buildroot $(pwd)/rpm-node/BUILDROOT/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.x86_64 rpm-node/SPECS/mintlayer-node.spec
+        mv rpm-node/RPMS/x86_64/mintlayer-node-${{ steps.get_version.outputs.VERSION }}-1.x86_64.rpm Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_x86_64.rpm
 
     - name: Package Mintlayer Node (without GUI) as ZIP
       run: |
@@ -189,16 +194,18 @@ jobs:
         path: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'amd64' || 'arm64' }}.deb
 
     - name: Upload GUI RPM Artifact
+      if: matrix.arch == 'x86_64'
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_rpm
-        path: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm
+        name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_x86_64_rpm
+        path: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_x86_64.rpm
 
     - name: Upload Node RPM Artifact (without GUI)
+      if: matrix.arch == 'x86_64'
       uses: actions/upload-artifact@v4
       with:
-        name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_rpm
-        path: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch == 'x86_64' && 'x86_64' || 'aarch64' }}.rpm
+        name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_x86_64_rpm
+        path: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_x86_64.rpm
 
     - name: Upload Node ZIP Artifact (without GUI)
       uses: actions/upload-artifact@v4

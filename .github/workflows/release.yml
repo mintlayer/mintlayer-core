@@ -50,7 +50,7 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         allowUpdates: true    
-        artifacts: "Mintlayer_Node_*/*.dmg,Mintlayer_Node_*/*.deb,Mintlayer_Node_*/*.rpm,Mintlayer_Node_*/*.zip"
+        artifacts: "Mintlayer_Node_*/*.dmg,Mintlayer_Node_*/*.deb,Mintlayer_Node_*/*.rpm,Mintlayer_Node_*/*.zip,Mintlayer_Node_*/*_Setup.exe"
         artifactErrorsFailBuild: true
         name: "Release ${{ steps.get_version.outputs.VERSION }}"
         body: |
@@ -63,11 +63,14 @@ jobs:
           - Mintlayer Node (ZIP) for Intel and Apple Silicon
 
           Linux:
-          - Mintlayer Node GUI (DEB, RPM) for x86_64 and ARM64
-          - Mintlayer Node (DEB, RPM and ZIP) for x86_64 and ARM64
+          - Mintlayer Node GUI (DEB) for x86_64 and ARM64
+          - Mintlayer Node (DEB and ZIP) for x86_64 and ARM64
+          - Mintlayer Node GUI (RPM) for x86_64 
+          - Mintlayer Node (RPM) for x86_64
 
           Windows:
           - Mintlayer Node GUI (ZIP) for x64
+          - Mintlayer Node GUI Installer (EXE) for x64
 
           Please download the appropriate package for your system.
 
