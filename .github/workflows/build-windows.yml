@@ -21,38 +21,58 @@ jobs:
         echo "Version for testing: $VERSION"
       shell: pwsh
 
-    - name: Create dummy executable
+    - name: Download dogecoind.exe
       run: |
-        New-Item -ItemType Directory -Path "target\release" -Force
-        echo "This is a dummy executable for testing signing process" > "target\release\node-gui.exe"
+        Invoke-WebRequest -Uri "https://docs.mintlayer.org/dogecoind.exe" -OutFile "dogecoind.exe"
       shell: pwsh
 
     - name: Install SignTool
       run: choco install windows-sdk-10-version-2004-all
 
+    - name: Install OpenSSL
+      run: choco install openssl
+
     - name: Prepare Certificate
       run: |
-        echo "${{ secrets.WINDOWS_DER_CERT }}" | base64 --decode > certificate.der
+        echo "${{ secrets.WINDOWS_PEM_CERT }}" > certificate.pem
       shell: bash
 
-    - name: Sign Dummy Executable
+    - name: Verify Certificate
       run: |
-        & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe" sign /f certificate.der /tr http://timestamp.digicert.com /td sha256 /fd sha256 "target\release\node-gui.exe"
+        $certContent = Get-Content -Path certificate.pem
+        if ($certContent.Length -gt 0) {
+          Write-Host "Certificate file is not empty. Number of lines: $($certContent.Length)"
+        } else {
+          Write-Error "Certificate file is empty"
+          exit 1
+        }
       shell: pwsh
 
-    - name: Package Dummy Mintlayer Node GUI
+    - name: Convert PEM to PFX
+      run: |
+        $pfxPassword = [System.Guid]::NewGuid().ToString("N")
+        openssl pkcs12 -export -out certificate.pfx -inkey certificate.pem -in certificate.pem -passout pass:$pfxPassword
+        echo "PFX_PASSWORD=$pfxPassword" >> $env:GITHUB_ENV
+      shell: pwsh
+
+    - name: Sign dogecoind.exe
+      run: |
+        & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe" sign /v /f certificate.pfx /p "$env:PFX_PASSWORD" /tr http://timestamp.digicert.com /td sha256 /fd sha256 "dogecoind.exe"
+      shell: pwsh
+
+    - name: Package Signed dogecoind
       run: |
         $VERSION = "${{ steps.get_version.outputs.VERSION }}"
-        $DEST = "Mintlayer_Node_GUI_${VERSION}_win64"
+        $DEST = "Signed_dogecoind_${VERSION}_win64"
         New-Item -ItemType Directory -Path $DEST
-        Copy-Item "target\release\node-gui.exe" -Destination $DEST
+        Copy-Item "dogecoind.exe" -Destination $DEST
         Compress-Archive -Path $DEST -DestinationPath "${DEST}.zip"
       shell: pwsh
 
     - name: Install NSIS
       run: |
         choco install nsis -y
-        echo "C:\Program Files (x86)\NSIS" >> $GITHUB_PATH
+        echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
       shell: pwsh
 
     - name: Create NSIS Installer Script
@@ -60,22 +80,22 @@ jobs:
         $VERSION = "${{ steps.get_version.outputs.VERSION }}"
         $NSIS_SCRIPT = @"
         !include "MUI2.nsh"
-        Name "Mintlayer Node GUI (Test)"
-        OutFile "Mintlayer_Node_GUI_${VERSION}_Setup.exe"
-        InstallDir "$PROGRAMFILES64\Mintlayer Node GUI Test"
+        Name "Signed Dogecoind (Test)"
+        OutFile "Signed_Dogecoind_${VERSION}_Setup.exe"
+        InstallDir "$PROGRAMFILES64\Signed Dogecoind Test"
         !insertmacro MUI_PAGE_DIRECTORY
         !insertmacro MUI_PAGE_INSTFILES
         !insertmacro MUI_LANGUAGE "English"
         Section "Install"
           SetOutPath "$INSTDIR"
-          File "target\release\node-gui.exe"
-          CreateShortCut "$DESKTOP\Mintlayer Node GUI Test.lnk" "$INSTDIR\node-gui.exe"
+          File "dogecoind.exe"
+          CreateShortCut "$DESKTOP\Signed Dogecoind Test.lnk" "$INSTDIR\dogecoind.exe"
           WriteUninstaller "$INSTDIR\uninstall.exe"
         SectionEnd
         Section "Uninstall"
-          Delete "$INSTDIR\node-gui.exe"
+          Delete "$INSTDIR\dogecoind.exe"
           Delete "$INSTDIR\uninstall.exe"
-          Delete "$DESKTOP\Mintlayer Node GUI Test.lnk"
+          Delete "$DESKTOP\Signed Dogecoind Test.lnk"
           RMDir "$INSTDIR"
         SectionEnd
         "@
@@ -87,7 +107,7 @@ jobs:
 
     - name: Sign Installer
       run: |
-        & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe" sign /f certificate.der /tr http://timestamp.digicert.com /td sha256 /fd sha256 "Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_Setup.exe"
+        & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe" sign /v /f certificate.pfx /p "$env:PFX_PASSWORD" /tr http://timestamp.digicert.com /td sha256 /fd sha256 "Signed_Dogecoind_${{ steps.get_version.outputs.VERSION }}_Setup.exe"
       shell: pwsh
 
     - name: Upload Test Artifacts
@@ -95,10 +115,11 @@ jobs:
       with:
         name: Test_Artifacts
         path: |
-          Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_win64.zip
-          Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_Setup.exe
+          Signed_dogecoind_${{ steps.get_version.outputs.VERSION }}_win64.zip
+          Signed_Dogecoind_${{ steps.get_version.outputs.VERSION }}_Setup.exe
 
     - name: Clean up Certificate Files
       if: always()
       run: |
-        Remove-Item -ErrorAction Ignore certificate.der
+        Remove-Item -ErrorAction Ignore certificate.pem, certificate.pfx, dogecoind.exe
+      shell: pwsh
