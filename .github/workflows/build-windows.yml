@@ -41,7 +41,8 @@ jobs:
 
     - name: Sign Executable
       run: |
-        "C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe" sign /f certificate.der /tr http://timestamp.digicert.com /td sha256 /fd sha256 target\release\node-gui.exe
+        & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe" sign /f certificate.der /tr http://timestamp.digicert.com /td sha256 /fd sha256 "target\release\node-gui.exe"
+      shell: pwsh
 
     - name: Package Mintlayer Node GUI
       run: |
@@ -96,7 +97,8 @@ jobs:
 
     - name: Sign Installer
       run: |
-        "C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe" sign /f certificate.der /tr http://timestamp.digicert.com /td sha256 /fd sha256 "Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_Setup.exe"
+        & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe" sign /f certificate.der /tr http://timestamp.digicert.com /td sha256 /fd sha256 "Mintlayer_Node_GUI_${{ steps.get_version.outputs.VERSION }}_Setup.exe"
+      shell: pwsh
 
     - name: Upload NSIS Installer Artifact
       uses: actions/upload-artifact@v4
