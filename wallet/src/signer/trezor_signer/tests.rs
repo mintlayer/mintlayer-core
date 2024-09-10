@@ -16,7 +16,6 @@
 use std::ops::{Add, Div, Mul, Sub};
 
 use super::*;
-use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
 use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
 use crate::{Account, SendRequest};
 use common::chain::config::create_regtest;
@@ -194,6 +193,7 @@ fn sign_transaction(#[case] seed: Seed) {
             Destination::AnyoneCanSpend,
             PoolId::new(H256::random_using(&mut rng)),
         ),
+        TxOutput::DataDeposit(vec![1, 2, 3]),
         TxOutput::DelegateStaking(
             Amount::from_atoms(200),
             DelegationId::new(H256::random_using(&mut rng)),
@@ -205,6 +205,7 @@ fn sign_transaction(#[case] seed: Seed) {
         .unwrap()
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
+    let destinations = req.destinations().to_vec();
     let ptx = req.into_partially_signed_tx(&BTreeMap::default()).unwrap();
 
     let mut devices = find_devices(false);
@@ -222,17 +223,10 @@ fn sign_transaction(#[case] seed: Seed) {
     let utxos_ref =
         utxos.iter().map(Some).chain(acc_dests.iter().map(|_| None)).collect::<Vec<_>>();
 
-    for i in 0..sig_tx.inputs().len() {
-        let destination = get_tx_output_destination(
-            utxos_ref[i].unwrap(),
-            &|_| None,
-            HtlcSpendingCondition::Skip,
-        )
-        .unwrap();
-
+    for (i, dest) in destinations.iter().enumerate() {
         tx_verifier::input_check::signature_only_check::verify_tx_signature(
             &chain_config,
-            &destination,
+            dest,
             &sig_tx,
             &utxos_ref,
             i,
