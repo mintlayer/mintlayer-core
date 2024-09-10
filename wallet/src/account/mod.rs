@@ -1118,7 +1118,7 @@ impl<K: AccountKeyChains> Account<K> {
         let nonce = token_info.get_next_nonce()?;
         let tx_input = TxInput::AccountCommand(
             nonce,
-            AccountCommand::ChangeTokenMetadataUri(*token_info.token_id(), metadata_uri),
+            AccountCommand::ChangeTokenMetadataUri(token_info.token_id(), metadata_uri),
         );
         let authority = token_info.authority()?.clone();
 
