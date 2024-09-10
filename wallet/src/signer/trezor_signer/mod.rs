@@ -59,7 +59,7 @@ use trezor_client::{
     find_devices,
     protos::{
         MintlayerAccountCommandTxInput, MintlayerAccountTxInput, MintlayerAddressPath,
-        MintlayerBurnTxOutput, MintlayerChangeTokenAuhtority, MintlayerChangeTokenMediaUri,
+        MintlayerBurnTxOutput, MintlayerChangeTokenAuhtority, MintlayerChangeTokenMetadataUri,
         MintlayerCreateDelegationIdTxOutput, MintlayerCreateStakePoolTxOutput,
         MintlayerDataDepositTxOutput, MintlayerDelegateStakingTxOutput, MintlayerFreezeToken,
         MintlayerIssueFungibleTokenTxOutput, MintlayerIssueNftTxOutput,
@@ -603,9 +603,9 @@ fn to_trezor_account_command_input(
             inp_req.change_token_authority = Some(req).into();
         }
         AccountCommand::ChangeTokenMetadataUri(token_id, uri) => {
-            let mut req = MintlayerChangeTokenMediaUri::new();
+            let mut req = MintlayerChangeTokenMetadataUri::new();
             req.set_token_id(token_id.to_hash().as_bytes().to_vec());
-            req.set_media_uri(uri.clone());
+            req.set_metadata_uri(uri.clone());
 
             inp_req.change_token_metadata_uri = Some(req).into();
         }

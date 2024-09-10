@@ -197,6 +197,17 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         }
     }
 
+    pub fn get_best_block_for_account(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
+        match self {
+            RuntimeWallet::Software(w) => w.get_best_block_for_account(account_index),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.get_best_block_for_account(account_index),
+        }
+    }
+
     pub fn is_locked(&self) -> bool {
         match self {
             RuntimeWallet::Software(w) => w.is_locked(),
@@ -734,6 +745,33 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 account_index,
                 token_info,
                 address,
+                current_fee_rate,
+                consolidate_fee_rate,
+            ),
+        }
+    }
+
+    pub fn change_token_metadata_uri(
+        &mut self,
+        account_index: U31,
+        token_info: &UnconfirmedTokenInfo,
+        metadata_uri: Vec<u8>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> Result<SignedTransaction, WalletError> {
+        match self {
+            RuntimeWallet::Software(w) => w.change_token_metadata_uri(
+                account_index,
+                token_info,
+                metadata_uri,
+                current_fee_rate,
+                consolidate_fee_rate,
+            ),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.change_token_metadata_uri(
+                account_index,
+                token_info,
+                metadata_uri,
                 current_fee_rate,
                 consolidate_fee_rate,
             ),
