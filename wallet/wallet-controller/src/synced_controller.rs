@@ -493,10 +493,10 @@ where
         metadata_uri: Vec<u8>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 wallet.change_token_metadata_uri(
