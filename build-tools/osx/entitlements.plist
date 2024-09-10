@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- File System Access -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    <key>com.apple.security.files.user-selected.read-only</key>
+    <true/>
+    <key>com.apple.security.files.downloads.read-write</key>
+    <false/>
+
+    <!-- Network Access -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <key>com.apple.security.network.server</key>
+    <true/>
+
+    <!-- Hardware Access -->
+    <key>com.apple.security.device.audio-input</key>
+    <false/>
+    <key>com.apple.security.device.camera</key>
+    <false/>
+    <key>com.apple.security.device.usb</key>
+    <false/>
+    <key>com.apple.security.device.print</key>
+    <false/>
+
+    <!-- App Sandbox Exceptions -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <false/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <false/>
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <false/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <false/>
+
+    <!-- Debugging (remove for production) -->
+    <key>com.apple.security.get-task-allow</key>
+    <false/>
+
+    <!-- Personal Information Access -->
+    <key>com.apple.security.personal-information.addressbook</key>
+    <false/>
+    <key>com.apple.security.personal-information.calendars</key>
+    <false/>
+    <key>com.apple.security.personal-information.location</key>
+    <false/>
+</dict>
+</plist>

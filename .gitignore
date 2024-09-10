@@ -17,6 +17,9 @@
 #exclude python env
 env/
 
+#exclude env 
+.env
+
 # Test Python cache
 test/**/__pycache__
 

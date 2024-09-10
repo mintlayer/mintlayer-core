@@ -82,7 +82,7 @@ jobs:
         run: cp README.md wasm-wrappers-builds/ && cp WASM-API.md wasm-wrappers-builds/
 
       - name: Create artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: wasm_builds
           path: |
