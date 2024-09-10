@@ -1,6 +1,6 @@
 # RPC documentation for Mintlayer node
 
-Version `0.99.15`.
+Version `0.99.0`.
 
 ## Module `node`
 

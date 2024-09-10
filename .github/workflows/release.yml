@@ -78,6 +78,7 @@ jobs:
         echo "Windows:" >> $GITHUB_OUTPUT
         echo "- Mintlayer Node GUI (ZIP) for x64" >> $GITHUB_OUTPUT
         echo "- Mintlayer Node GUI Installer (EXE) for x64" >> $GITHUB_OUTPUT
+        echo "- Mintlayer Node (ZIP) for x86" >> $GITHUB_OUTPUT
         echo "" >> $GITHUB_OUTPUT
         echo "Please download the appropriate package for your system." >> $GITHUB_OUTPUT
         echo "" >> $GITHUB_OUTPUT
