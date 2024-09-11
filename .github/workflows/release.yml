@@ -1,36 +1,36 @@
-name: Build, Sign, and Release
+name: Build, Sign and Release
 
 on:
   push:
     tags:
       - '**[0-9]+.[0-9]+.[0-9]+*'
-  pull_request:
- 
+
 jobs:
   build-macos:
-    uses: ./.github/workflows/build-macos.yml
+    uses: ./.github/workflows/release_macos.yml
     with:
       binary_list: api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon
     secrets: inherit
 
   build-linux:
-    uses: ./.github/workflows/build-linux.yml
+    uses: ./.github/workflows/release_linux.yml
     with:
       binary_list: api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon
     secrets: inherit
 
   build-windows:
-    uses: ./.github/workflows/build-windows.yml
+    uses: ./.github/workflows/release_windows.yml
     with:
       binary_list: api-blockchain-scanner-daemon,api-web-server,dns-server,node-daemon,wallet-address-generator,wallet-cli,wallet-rpc-daemon
     secrets: inherit
 
   build-docker:
-    uses: ./.github/workflows/build-docker.yml
-    secrets: inherit
-  
-  create-release:
     needs: [build-macos, build-linux, build-windows]
+    uses: ./.github/workflows/release_docker.yml
+    secrets: inherit
+
+  create-release:
+    needs: [build-macos, build-linux, build-windows, build-docker]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
@@ -71,7 +71,7 @@ jobs:
         echo "" >> $GITHUB_OUTPUT
         echo "Linux:" >> $GITHUB_OUTPUT
         echo "- Mintlayer Node GUI (DEB) for x86_64 and ARM64" >> $GITHUB_OUTPUT
-        echo "- Mintlayer Node (DEB and ZIP) for x86_64 and ARM64" >> $GITHUB_OUTPUT
+        echo "- Mintlayer Node (DEB and TGZ) for x86_64 and ARM64" >> $GITHUB_OUTPUT
         echo "- Mintlayer Node GUI (RPM) for x86_64" >> $GITHUB_OUTPUT
         echo "- Mintlayer Node (RPM) for x86_64" >> $GITHUB_OUTPUT
         echo "" >> $GITHUB_OUTPUT
@@ -96,7 +96,7 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         allowUpdates: true    
-        artifacts: "Mintlayer_Node_*/*.dmg,Mintlayer_Node_*/*.deb,Mintlayer_Node_*/*.rpm,Mintlayer_Node_*/*.zip,Mintlayer_Node_*/*_Setup.exe"
+        artifacts: "Mintlayer_Node_*/*.dmg,Mintlayer_Node_*/*.deb,Mintlayer_Node_*/*.rpm,Mintlayer_Node_*/*.zip,Mintlayer_Node_*/*.tar.gz,Mintlayer_Node_*/*_Setup.exe"
         artifactErrorsFailBuild: true
         name: "Release ${{ steps.get_version.outputs.VERSION }}"
         body: ${{ steps.generate_body.outputs.BODY }}

@@ -37,3 +37,6 @@ rfd = { workspace = true, features = ["xdg-portal", "tokio"] }
 thiserror.workspace = true
 tokio.workspace = true
 variant_count.workspace = true
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"

@@ -36,18 +36,42 @@ jobs:
         $VERSION = "${{ steps.get_version.outputs.VERSION }}"
         $DEST = "Mintlayer_Node_win_${VERSION}"
         New-Item -ItemType Directory -Path $DEST
-        
         $binary_list = "${{ inputs.binary_list }}" -split ',' | Where-Object { $_ -ne "node-gui" }
         foreach ($binary in $binary_list) {
           $binary = $binary.Trim()
-          if (Test-Path "target\release\$binary.exe") {
+        if (Test-Path "target\release\$binary.exe") {
             Copy-Item "target\release\$binary.exe" -Destination $DEST
           } else {
             Write-Warning "Binary not found: $binary.exe"
           }
         }
-        
         Compress-Archive -Path $DEST -DestinationPath "${DEST}.zip"
+      shell: pwsh
+
+    - name: Install NSIS
+      run: |
+        choco install nsis -y --force
+        echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
+      shell: pwsh
+
+    - name: Create License File
+      run: .\build-tools\win\create-license.ps1
+      shell: pwsh
+
+    - name: Create NSIS Installer Script
+      run: .\build-tools\win\create-nsis-script.ps1 -Version "${{ steps.get_version.outputs.VERSION }}"
+      shell: pwsh
+
+    - name: Build NSIS Installer
+      run: |
+        $makensisPath = (Get-Command makensis.exe).Source
+        Write-Host "Using makensis at: $makensisPath"
+        & $makensisPath installer.nsi
+      shell: pwsh
+
+    - name: Display NSIS Script
+      run: |
+        Get-Content -Path installer.nsi
       shell: pwsh
 
     - name: Package Mintlayer Node GUI
@@ -70,42 +94,6 @@ jobs:
       with:
         name: Mintlayer_Node_GUI_win_${{ steps.get_version.outputs.VERSION }}
         path: Mintlayer_Node_GUI_win_${{ steps.get_version.outputs.VERSION }}.zip
-
-    - name: Install NSIS
-      run: |
-        choco install nsis -y
-        echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
-      shell: pwsh
-
-    - name: Create NSIS Installer Script
-      run: |
-        $VERSION = "${{ steps.get_version.outputs.VERSION }}"
-        $NSIS_SCRIPT = @"
-        !include "MUI2.nsh"
-        Name "Mintlayer Node GUI"
-        OutFile "Mintlayer_Node_GUI_win_${VERSION}_Setup.exe"
-        InstallDir "$PROGRAMFILES64\Mintlayer Node GUI"
-        !insertmacro MUI_PAGE_DIRECTORY
-        !insertmacro MUI_PAGE_INSTFILES
-        !insertmacro MUI_LANGUAGE "English"
-        Section "Install"
-          SetOutPath "$INSTDIR"
-          File "target\release\node-gui.exe"
-          CreateShortCut "$DESKTOP\Mintlayer Node GUI.lnk" "$INSTDIR\node-gui.exe"
-          WriteUninstaller "$INSTDIR\uninstall.exe"
-        SectionEnd
-        Section "Uninstall"
-          Delete "$INSTDIR\node-gui.exe"
-          Delete "$INSTDIR\uninstall.exe"
-          Delete "$DESKTOP\Mintlayer Node GUI.lnk"
-          RMDir "$INSTDIR"
-        SectionEnd
-        "@
-        $NSIS_SCRIPT | Out-File -FilePath "installer.nsi" -Encoding utf8
-      shell: pwsh
-
-    - name: Build NSIS Installer
-      run: makensis installer.nsi
 
     - name: Upload NSIS Installer Artifact
       uses: actions/upload-artifact@v4
