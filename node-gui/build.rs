@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use std::fs;
     use winres::WindowsResource;
 
-    if !fs::metadata("app.manifest").is_ok() {
+    if fs::metadata("app.manifest").is_err() {
         return Err(format!("app.manifest not found in: {:?}", env::current_dir()?).into());
     }
 
