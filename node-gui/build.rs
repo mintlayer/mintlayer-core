@@ -13,15 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(windows)]
-extern crate winres;
+use std::path::Path;
 
 #[cfg(windows)]
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let manifest_path = Path::new("app.manifest");
+    if !manifest_path.exists() {
+        return Err(format!("app.manifest not found in: {:?}", std::env::current_dir()?).into());
+    }
+
     let mut res = winres::WindowsResource::new();
     res.set_icon("../build-tools/assets/logo.ico");
-    res.set_manifest_file("app.manifest");
-    res.compile().unwrap();
+    res.set_manifest_file(manifest_path);
+
+    res.compile()?;
+
+    println!("Resource compilation successful");
+    Ok(())
 }
 
 #[cfg(not(windows))]
