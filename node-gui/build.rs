@@ -14,15 +14,17 @@
 // limitations under the License.
 //
 
-use std::fs;
-
 #[cfg(windows)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    use std::env;
+    use std::fs;
+    use winres::WindowsResource;
+
     if !fs::metadata("app.manifest").is_ok() {
-        return Err(format!("app.manifest not found in: {:?}", std::env::current_dir()?).into());
+        return Err(format!("app.manifest not found in: {:?}", env::current_dir()?).into());
     }
 
-    let mut res = winres::WindowsResource::new();
+    let mut res = WindowsResource::new();
     res.set_icon("../build-tools/assets/logo.ico");
     res.set_manifest_file("app.manifest");
 
