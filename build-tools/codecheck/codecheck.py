@@ -351,7 +351,7 @@ def check_trailing_whitespaces():
         'wasm-wrappers/pkg/wasm_wrappers_bg.wasm',
         'wasm-wrappers/doc/*',
         'build-tools/assets/*',
-        'build-tools\osx\DeveloperIDG2CA.cer'
+        'build-tools/osx/DeveloperIDG2CA.cer'
     ]
 
     ok = True

@@ -95,7 +95,7 @@ jobs:
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
-        allowUpdates: true    
+        allowUpdates: true
         artifacts: "Mintlayer_Node_*/*.dmg,Mintlayer_Node_*/*.deb,Mintlayer_Node_*/*.rpm,Mintlayer_Node_*/*.zip,Mintlayer_Node_*/*.tar.gz,Mintlayer_Node_*/*_Setup.exe"
         artifactErrorsFailBuild: true
         name: "Release ${{ steps.get_version.outputs.VERSION }}"
