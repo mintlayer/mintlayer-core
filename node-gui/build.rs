@@ -14,6 +14,8 @@
 // limitations under the License.
 //
 
+use std::fs;
+
 #[cfg(windows)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !fs::metadata("app.manifest").is_ok() {
