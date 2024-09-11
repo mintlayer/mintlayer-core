@@ -99,7 +99,7 @@ pub enum TrezorError {
     #[error("No connected Trezor device found")]
     NoDeviceFound,
     #[error("Trezor device error: {0}")]
-    DeviceError(#[from] trezor_client::Error),
+    DeviceError(String),
 }
 
 pub struct TrezorSigner {
@@ -262,7 +262,7 @@ impl Signer for TrezorSigner {
             .lock()
             .expect("poisoned lock")
             .mintlayer_sign_tx(inputs, outputs, utxos)
-            .map_err(TrezorError::DeviceError)?;
+            .map_err(|err| TrezorError::DeviceError(err.to_string()))?;
 
         let inputs_utxo_refs: Vec<_> =
             ptx.input_utxos().iter().map(|u| u.as_ref().map(|x| &x.utxo)).collect();
@@ -433,7 +433,7 @@ impl Signer for TrezorSigner {
                     .lock()
                     .expect("poisoned lock")
                     .mintlayer_sign_message(address_n, addr, message.to_vec())
-                    .map_err(TrezorError::DeviceError)?;
+                    .map_err(|err| TrezorError::DeviceError(err.to_string()))?;
                 let mut signature = sig;
                 signature.insert(0, 0);
                 let signature = Signature::from_data(signature)?;
@@ -1019,7 +1019,8 @@ impl std::fmt::Debug for TrezorSignerProvider {
 
 impl TrezorSignerProvider {
     pub fn new() -> Result<Self, TrezorError> {
-        let client = find_trezor_device()?;
+        let client =
+            find_trezor_device().map_err(|err| TrezorError::DeviceError(err.to_string()))?;
 
         Ok(Self {
             client: Arc::new(Mutex::new(client)),
@@ -1054,7 +1055,7 @@ impl TrezorSignerProvider {
             .lock()
             .expect("poisoned lock")
             .mintlayer_get_public_key(account_path)
-            .map_err(|e| SignerError::TrezorError(TrezorError::DeviceError(e)))?;
+            .map_err(|e| SignerError::TrezorError(TrezorError::DeviceError(e.to_string())))?;
         let chain_code = ChainCode::from(xpub.chain_code.0);
         let account_pubkey = Secp256k1ExtendedPublicKey::new(
             derivation_path,
@@ -1093,7 +1094,7 @@ fn check_public_keys(
 fn find_trezor_device() -> Result<Trezor, TrezorError> {
     let mut devices = find_devices(false);
     let device = devices.pop().ok_or(TrezorError::NoDeviceFound)?;
-    let client = device.connect()?;
+    let client = device.connect().map_err(|e| TrezorError::DeviceError(e.to_string()))?;
     Ok(client)
 }
 
