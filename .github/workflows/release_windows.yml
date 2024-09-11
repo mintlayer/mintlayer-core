@@ -1,0 +1,102 @@
+name: Build Windows
+
+on:
+  workflow_call:
+    inputs:
+      binary_list:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Extract version from tag
+      id: get_version
+      run: |
+        $VERSION = $env:GITHUB_REF -replace 'refs/tags/', '' -replace '^v', ''
+        echo "VERSION=$VERSION" >> $env:GITHUB_OUTPUT
+        echo "Version extracted: $VERSION"
+      shell: pwsh
+
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+
+    - name: Build Mintlayer Node and GUI
+      run: cargo build --release
+
+    - name: Package Mintlayer Node
+      run: |
+        $VERSION = "${{ steps.get_version.outputs.VERSION }}"
+        $DEST = "Mintlayer_Node_win_${VERSION}"
+        New-Item -ItemType Directory -Path $DEST
+        $binary_list = "${{ inputs.binary_list }}" -split ',' | Where-Object { $_ -ne "node-gui" }
+        foreach ($binary in $binary_list) {
+          $binary = $binary.Trim()
+        if (Test-Path "target\release\$binary.exe") {
+            Copy-Item "target\release\$binary.exe" -Destination $DEST
+          } else {
+            Write-Warning "Binary not found: $binary.exe"
+          }
+        }
+        Compress-Archive -Path $DEST -DestinationPath "${DEST}.zip"
+      shell: pwsh
+
+    - name: Install NSIS
+      run: |
+        choco install nsis -y --force
+        echo "C:\Program Files (x86)\NSIS" >> $env:GITHUB_PATH
+      shell: pwsh
+
+    - name: Create License File
+      run: .\build-tools\win\create-license.ps1
+      shell: pwsh
+
+    - name: Create NSIS Installer Script
+      run: .\build-tools\win\create-nsis-script.ps1 -Version "${{ steps.get_version.outputs.VERSION }}"
+      shell: pwsh
+
+    - name: Build NSIS Installer
+      run: |
+        $makensisPath = (Get-Command makensis.exe).Source
+        Write-Host "Using makensis at: $makensisPath"
+        & $makensisPath installer.nsi
+      shell: pwsh
+
+    - name: Display NSIS Script
+      run: |
+        Get-Content -Path installer.nsi
+      shell: pwsh
+
+    - name: Package Mintlayer Node GUI
+      run: |
+        $VERSION = "${{ steps.get_version.outputs.VERSION }}"
+        $DEST = "Mintlayer_Node_GUI_win_${VERSION}"
+        New-Item -ItemType Directory -Path $DEST
+        Copy-Item "target\release\node-gui.exe" -Destination $DEST
+        Compress-Archive -Path $DEST -DestinationPath "${DEST}.zip"
+      shell: pwsh
+
+    - name: Upload Node ZIP Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_win_${{ steps.get_version.outputs.VERSION }}
+        path: Mintlayer_Node_win_${{ steps.get_version.outputs.VERSION }}.zip
+
+    - name: Upload GUI ZIP Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_GUI_win_${{ steps.get_version.outputs.VERSION }}
+        path: Mintlayer_Node_GUI_win_${{ steps.get_version.outputs.VERSION }}.zip
+
+    - name: Upload NSIS Installer Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Mintlayer_Node_GUI_win_${{ steps.get_version.outputs.VERSION }}_Setup
+        path: Mintlayer_Node_GUI_win_${{ steps.get_version.outputs.VERSION }}_Setup.exe

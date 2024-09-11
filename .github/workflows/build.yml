@@ -40,7 +40,7 @@ jobs:
         run: cargo test --release test_4opc_sequences -- --ignored
       - name: Run functional tests
         run: cargo test --release -p mintlayer-test --test functional -- --ignored
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: windows-functional-test-artifacts
@@ -78,7 +78,7 @@ jobs:
         run: cargo test --release test_4opc_sequences
       - name: Run functional tests
         run: cargo test --release -p mintlayer-test --test functional -- --ignored
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: ubuntu-functional-test-artifacts
@@ -110,7 +110,7 @@ jobs:
         run: cargo test --release test_4opc_sequences
       - name: Run functional tests
         run: cargo test --release -p mintlayer-test --test functional -- --ignored
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: macos-functional-test-artifacts

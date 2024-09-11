@@ -13,11 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![windows_subsystem = "windows"]
+
 mod backend;
 mod main_window;
 mod widgets;
 
 use std::convert::identity;
+use std::env;
 
 use backend::messages::{BackendEvent, BackendRequest};
 use backend::{node_initialize, BackendControls, BackendSender};
