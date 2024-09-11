@@ -239,8 +239,6 @@ trust-dns-server = "0.23"
 variant_count = "1.1"
 zeroize = "1.5"
 
-# Publish jobs to run in CI
-pr-run-mode = "plan"
 [workspace.metadata.dist.dependencies.apt]
 "libatk1.0-0" = "*"
 "libatk1.0-dev" = "*"
