@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+set -o nounset
 
 ARCH=$1
 VERSION=$2
@@ -40,7 +41,7 @@ check_env_vars() {
     )
 
     for var in "${required_vars[@]}"; do
-        if [ -z "${!var}" ]; then
+        if [ -z "${!var+x}" ]; then
             echo "Error: $var is not set. Please set it in your environment or .env file."
             exit 1
         fi
@@ -66,7 +67,12 @@ create_app_bundle() {
     cp "build-tools/assets/logo.icns" "${bundle_path}/Contents/Resources/"
 
     echo "Generating Info.plist..."
-    local version=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "node-gui") | .version')
+    local version
+    version=$(cargo metadata --format-version 1 | jq -r '.packages[] | select(.name == "node-gui") | .version')
+    if [ -z "${version+x}" ]; then
+        echo "Error: Failed to retrieve version from cargo metadata"
+        exit 1
+    fi
     local build_number=$(date +%Y%m%d.%H%M%S)
     sed -e "s/VERSION_PLACEHOLDER/$version/g" \
         -e "s/BUILD_PLACEHOLDER/$build_number/g" \
@@ -136,7 +142,7 @@ notarize_and_staple() {
     local submission_id
     submission_id=$(echo "$notarization_output" | grep "id:" | head -n 1 | awk '{print $2}')
 
-    if [ -z "$submission_id" ]; then
+    if [ -z "${submission_id+x}" ]; then
         echo "Failed to extract submission ID. Notarization may have failed."
         exit 1
     fi
@@ -156,6 +162,11 @@ notarize_and_staple() {
 
         local status
         status=$(echo "$status_output" | grep "status:" | awk '{print $2}')
+
+        if [ -z "${status+x}" ]; then
+            echo "Error: Failed to extract status from notarization info"
+            exit 1
+        fi
 
         echo "Notarization status: $status"
 
@@ -188,14 +199,14 @@ cleanup() {
     echo "Cleaning up..."
     security delete-keychain "$RUNNER_TEMP/$KEYCHAIN_NAME"
     rm "$RUNNER_TEMP/build_certificate.p12"
-    if [ -z "${RUNNER_TEMP_PRESERVE}" ]; then
+    if [ -z "${RUNNER_TEMP_PRESERVE+x}" ]; then
         rm -rf "$RUNNER_TEMP"
     fi
 }
 
 # Main execution
 main() {
-    if [ $# -eq 0 ]; then
+    if [ $# -ne 2 ]; then
         usage
     fi
 
@@ -211,7 +222,7 @@ main() {
     fi
 
     # Set RUNNER_TEMP to a local temporary directory if it's not already set
-    if [ -z "$RUNNER_TEMP" ]; then
+    if [ -z "${RUNNER_TEMP+x}" ]; then
         RUNNER_TEMP=$(mktemp -d)
         echo "RUNNER_TEMP is not set. Using temporary directory: $RUNNER_TEMP"
     fi
