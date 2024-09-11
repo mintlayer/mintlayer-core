@@ -85,7 +85,7 @@ Section "Uninstall"
     ; Remove shortcuts
     Delete "`${DESKTOP}\`${APPNAME}.lnk"
     Delete "`${SMPROGRAMS}\`${COMPANYNAME}\`${APPNAME}.lnk"
-    RMDir  "`${SMPROGRAMS}\`${COMPANYNAME}" 
+    RMDir  "`${SMPROGRAMS}\`${COMPANYNAME}"
 
     ; Remove directories used
     RMDir "`$`INSTDIR"
