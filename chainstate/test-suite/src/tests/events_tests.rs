@@ -177,6 +177,8 @@ fn orphan_block(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn custom_orphan_error_hook(#[case] seed: Seed) {
+    use test_utils::assert_matches;
+
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let (orphan_error_hook, errors) = orphan_error_hook();
@@ -222,9 +224,14 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
         assert_eq!(events.lock().unwrap().len(), 1);
         let errors_guard = errors.lock().unwrap();
         assert_eq!(errors_guard.len(), 1);
-        assert_eq!(
+        assert_matches!(
             errors_guard[0],
-            BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture(second_block_id))
+            BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture {
+                block_id,
+                block_timestamp: _,
+                current_time: _
+            })
+            if block_id == second_block_id
         );
     });
 }
