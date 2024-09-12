@@ -2152,7 +2152,7 @@ nothing
 
 ### Method `wallet_show_seed_phrase`
 
-Show the seed phrase for the loaded wallet if it has been s
+Show the seed phrase for the loaded wallet if it has been stored.
 
 
 Parameters:

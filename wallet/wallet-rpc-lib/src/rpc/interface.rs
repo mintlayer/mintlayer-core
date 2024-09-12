@@ -107,7 +107,7 @@ trait ColdWalletRpc {
     #[method(name = "wallet_lock_private_keys")]
     async fn lock_private_key_encryption(&self) -> rpc::RpcResult<()>;
 
-    /// Show the seed phrase for the loaded wallet if it has been s
+    /// Show the seed phrase for the loaded wallet if it has been stored.
     #[method(name = "wallet_show_seed_phrase")]
     async fn get_seed_phrase(&self) -> rpc::RpcResult<Option<SeedWithPassPhrase>>;
 

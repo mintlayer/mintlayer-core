@@ -656,11 +656,16 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let max_future_offset = self
             .chain_config
             .max_future_block_time_offset(parent_block_index.block_height().next_height());
-        let current_time = self.current_time().as_duration_since_epoch();
+        let current_time = self.current_time();
+        let current_time_as_secs = current_time.as_duration_since_epoch();
         let block_timestamp = header.timestamp();
         ensure!(
-            block_timestamp.as_duration_since_epoch() <= current_time + max_future_offset,
-            CheckBlockError::BlockFromTheFuture(header.block_id()),
+            block_timestamp.as_duration_since_epoch() <= current_time_as_secs + max_future_offset,
+            CheckBlockError::BlockFromTheFuture {
+                block_id: header.block_id(),
+                block_timestamp,
+                current_time
+            },
         );
         Ok(())
     }
