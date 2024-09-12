@@ -58,7 +58,7 @@ use crypto::{
 use randomness::Rng;
 use rstest::rstest;
 use test_utils::{
-    assert_matches,
+    assert_matches, assert_matches_return_val,
     mock_time_getter::mocked_time_getter_seconds,
     random::{make_seedable_rng, Seed},
 };
@@ -1094,7 +1094,7 @@ fn blocks_from_the_future(#[case] seed: Seed) {
                     .build_and_process(&mut rng)
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                    CheckBlockError::BlockFromTheFuture(_)
+                    CheckBlockError::BlockFromTheFuture { .. }
                 ))
             );
         }
@@ -1242,13 +1242,23 @@ fn temporarily_bad_block_not_invalidated_during_integration(#[case] seed: Seed) 
         let future_block_id = future_block.get_id();
         let error = tf.process_block(future_block.clone(), BlockSource::Local).unwrap_err();
 
-        let expected_error =
-            BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture(future_block_id));
+        let inner_error = assert_matches_return_val!(
+            error,
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                inner_error @ CheckBlockError::BlockFromTheFuture {
+                    block_id,
+                    block_timestamp: _,
+                    current_time: _
+                }
+
+            ))
+            if block_id == future_block_id,
+            inner_error
+        );
         assert_eq!(
-            expected_error.classify(),
+            inner_error.classify(),
             BlockProcessingErrorClass::TemporarilyBadBlock
         );
-        assert_eq!(error, ChainstateError::ProcessBlockError(expected_error));
 
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
@@ -1338,13 +1348,23 @@ fn temporarily_bad_block_not_invalidated_after_reorg(#[case] seed: Seed) {
         let c2_id = c2.get_id();
         let error = tf.process_block(c2.clone(), BlockSource::Local).unwrap_err();
 
-        let expected_error =
-            BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture(future_block_id));
+        let inner_error = assert_matches_return_val!(
+            error,
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                inner_error @ CheckBlockError::BlockFromTheFuture {
+                    block_id,
+                    block_timestamp: _,
+                    current_time: _
+                }
+
+            ))
+            if block_id == future_block_id,
+            inner_error
+        );
         assert_eq!(
-            expected_error.classify(),
+            inner_error.classify(),
             BlockProcessingErrorClass::TemporarilyBadBlock
         );
-        assert_eq!(error, ChainstateError::ProcessBlockError(expected_error));
 
         assert_eq!(tf.best_block_id(), m2_id);
         assert_fully_valid_blocks(&tf, &[m0_id, m1_id, m2_id]);
