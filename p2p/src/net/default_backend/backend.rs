@@ -666,7 +666,7 @@ where
                     }
                 }
 
-                // If the peer was previously disconnected by us, the `peers' will be empty.
+                // If the peer was previously disconnected by us, the `peers` will be empty.
                 // `ConnectionClosed` should be ignored in such case.
                 if self.peers.contains_key(&peer_id) {
                     self.destroy_peer(peer_id)?;
