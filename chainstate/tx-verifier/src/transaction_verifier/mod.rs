@@ -691,7 +691,8 @@ where
                 match output {
                     TxOutput::Transfer(output_value, _)
                     | TxOutput::Burn(output_value)
-                    | TxOutput::LockThenTransfer(output_value, _, _) => {
+                    | TxOutput::LockThenTransfer(output_value, _, _)
+                    | TxOutput::Htlc(output_value, _) => {
                         match output_value {
                             OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(()),
                             OutputValue::TokenV1(ref token_id, _) => {
@@ -719,7 +720,6 @@ where
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::IssueNft(_, _, _)
                     | TxOutput::DataDeposit(_)
-                    | TxOutput::Htlc(_, _)
                     | TxOutput::AnyoneCanTake(_) => Ok(()),
                 }
             })
