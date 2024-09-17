@@ -70,6 +70,7 @@ use trezor_client::{
         MintlayerTxInput, MintlayerTxOutput, MintlayerUnfreezeToken, MintlayerUnmintTokens,
         MintlayerUtxoType,
     },
+    Model,
 };
 use trezor_client::{
     protos::{MintlayerTransferTxOutput, MintlayerUtxoTxInput},
@@ -483,23 +484,31 @@ impl Signer for TrezorSigner {
     }
 }
 
-fn tx_output_value(out: &TxOutput) -> OutputValue {
-    match out {
+fn utxo_output_value(out: &UtxoWithAdditionalInfo) -> SignerResult<OutputValue> {
+    match &out.utxo {
         TxOutput::Transfer(value, _)
         | TxOutput::Htlc(value, _)
-        | TxOutput::LockThenTransfer(value, _, _)
-        | TxOutput::Burn(value) => value.clone(),
-        TxOutput::DelegateStaking(amount, _) => OutputValue::Coin(*amount),
+        | TxOutput::LockThenTransfer(value, _, _) => Ok(value.clone()),
         TxOutput::IssueNft(token_id, _, _) => {
-            OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
+            Ok(OutputValue::TokenV1(*token_id, Amount::from_atoms(1)))
         }
-        TxOutput::CreateStakePool(_, data) => OutputValue::Coin(data.pledge()),
-        TxOutput::AnyoneCanTake(data) => data.give().clone(),
+        TxOutput::CreateStakePool(_, data) => Ok(OutputValue::Coin(data.pledge())),
+        TxOutput::ProduceBlockFromStake(_, _) => match out.additional_info {
+            Some(UtxoAdditionalInfo::PoolInfo { staker_balance }) => {
+                Ok(OutputValue::Coin(staker_balance))
+            }
+            Some(
+                UtxoAdditionalInfo::AnyoneCanTake { ask: _, give: _ }
+                | UtxoAdditionalInfo::TokenInfo(_),
+            )
+            | None => Err(SignerError::MissingUtxoExtraInfo),
+        },
         TxOutput::CreateDelegationId(_, _)
-        | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::IssueFungibleToken(_)
+        | TxOutput::Burn(_)
         | TxOutput::CreateOrder(_)
-        | TxOutput::DataDeposit(_) => OutputValue::Coin(Amount::ZERO),
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::DataDeposit(_) => Err(SignerError::InvalidUtxo),
     }
 }
 
@@ -704,7 +713,7 @@ fn to_trezor_utxo_input(
     inp_req.set_prev_hash(id.to_vec());
     inp_req.set_prev_index(outpoint.output_index());
 
-    let output_value = tx_output_value(&utxo.utxo);
+    let output_value = utxo_output_value(utxo)?;
     inp_req.value = Some(to_trezor_output_value(
         &output_value,
         &utxo.additional_info,
@@ -1177,8 +1186,10 @@ fn check_public_keys(
 }
 
 fn find_trezor_device() -> Result<Trezor, TrezorError> {
-    let mut devices = find_devices(false);
-    let device = devices.pop().ok_or(TrezorError::NoDeviceFound)?;
+    let device = find_devices(false)
+        .into_iter()
+        .find(|device| device.model == Model::Trezor)
+        .ok_or(TrezorError::NoDeviceFound)?;
     let client = device.connect().map_err(|e| TrezorError::DeviceError(e.to_string()))?;
     Ok(client)
 }
