@@ -57,7 +57,7 @@ jobs:
         mkdir -p debian-gui/usr/share/icons/hicolor/256x256/apps
         mkdir -p debian-gui/usr/share/icons/hicolor/128x128/apps
         mkdir -p debian-gui/usr/share/icons/hicolor/64x64/apps
-        cp target/${{ matrix.arch }}-unknown-linux-gnu/release/node-gui debian-gui/usr/bin/
+        cp target/${{ matrix.arch }}-unknown-linux-gnu/release/node-gui debian-gui/usr/bin/mintlayer-node-gui
 
         # Copy and convert icon files
         cp build-tools/assets/node-gui-icon_512.png debian-gui/usr/share/icons/hicolor/512x512/apps/mintlayer-node-gui.png
@@ -69,7 +69,7 @@ jobs:
         cat << EOF > debian-gui/usr/share/applications/mintlayer-node-gui.desktop
         [Desktop Entry]
         Name=Mintlayer Node GUI
-        Exec=/usr/bin/node-gui
+        Exec=/usr/bin/mintlayer-node-gui
         Icon=mintlayer-node-gui
         Type=Application
         Categories=Utility;Network;
@@ -94,7 +94,7 @@ jobs:
         mkdir -p debian-node/usr/bin
         IFS=',' read -ra BINARIES <<< "${{ inputs.binary_list }}"
         for binary in "${BINARIES[@]}"; do
-          cp target/${{ matrix.arch }}-unknown-linux-gnu/release/$binary debian-node/usr/bin/
+          cp target/${{ matrix.arch }}-unknown-linux-gnu/release/$binary debian-node/usr/bin/mintlayer-$binary
         done
         cat << EOF > debian-node/DEBIAN/control
         Package: mintlayer-node
@@ -128,7 +128,7 @@ jobs:
         A graphical user interface for the Mintlayer node.
 
         %files
-        /usr/bin/node-gui
+        /usr/bin/mintlayer-node-gui
         /usr/share/applications/mintlayer-node-gui.desktop
         /usr/share/icons/hicolor/512x512/apps/mintlayer-node-gui.png
         /usr/share/icons/hicolor/256x256/apps/mintlayer-node-gui.png
@@ -177,9 +177,15 @@ jobs:
         mkdir -p Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
         IFS=',' read -ra BINARIES <<< "${{ inputs.binary_list }}"
         for binary in "${BINARIES[@]}"; do
-          cp target/${{ matrix.arch }}-unknown-linux-gnu/release/$binary Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/
+          cp target/${{ matrix.arch }}-unknown-linux-gnu/release/$binary Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/mintlayer-$binary
         done
         tar -czvf Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.tar.gz Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+
+    - name: Package Mintlayer Node GUI as tar.gz
+      run: |
+        mkdir -p Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
+        cp target/${{ matrix.arch }}-unknown-linux-gnu/release/node-gui Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}/mintlayer-node-gui
+        tar -czvf Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}.tar.gz Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}
 
     - name: Upload GUI DEB Artifact
       uses: actions/upload-artifact@v4
@@ -212,17 +218,16 @@ jobs:
         echo "Matching tar.gz files:"
         ls -l Mintlayer_Node_linux_*.tar.gz
 
+    - name: Upload Node GUI tar.gz Artifact
+      uses: actions/upload-artifact@v4
+      continue-on-error: true
+      with:
+        name: Mintlayer_Node_GUI_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_tar.gz
+        path: Mintlayer_Node_GUI_linux_*.tar.gz
+
     - name: Upload Node tar.gz Artifact (without GUI)
-      id: upload_artifact  # Add this id to reference this step
       uses: actions/upload-artifact@v4
       continue-on-error: true
       with:
         name: Mintlayer_Node_linux_${{ steps.get_version.outputs.VERSION }}_${{ matrix.arch }}_tar.gz
         path: Mintlayer_Node_linux_*.tar.gz
-        if-no-files-found: warn
-
-    - name: Check artifact upload status
-      if: steps.upload_artifact.outcome == 'failure'
-      run: |
-        echo "Warning: Artifact upload failed or found duplicate files."
-        echo "Please check the artifacts manually."

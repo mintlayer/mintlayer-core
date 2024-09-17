@@ -3995,6 +3995,8 @@ fn token_issue_mint_and_data_deposit_not_enough_fee(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn check_freezable_supply(#[case] seed: Seed) {
+    use common::chain::htlc::{HashedTimelockContract, HtlcSecret};
+
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -4187,6 +4189,36 @@ fn check_freezable_supply(#[case] seed: Seed) {
                         token_id,
                         amount_to_mint,
                     )))
+                    .build(),
+            )
+            .build_and_process(&mut rng);
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
+            ))
+        );
+
+        // Try to spend with htlc
+        let htlc = HashedTimelockContract {
+            secret_hash: HtlcSecret::new_from_rng(&mut rng).hash(),
+            spend_key: Destination::AnyoneCanSpend,
+            refund_timelock: OutputTimeLock::ForSeconds(200),
+            refund_key: Destination::AnyoneCanSpend,
+        };
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Htlc(
+                        OutputValue::TokenV1(token_id, amount_to_mint),
+                        Box::new(htlc),
+                    ))
                     .build(),
             )
             .build_and_process(&mut rng);
