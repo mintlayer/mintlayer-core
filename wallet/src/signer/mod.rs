@@ -78,6 +78,8 @@ pub enum SignerError {
     MissingUtxoExtraInfo,
     #[error("Tokens V0 are not supported")]
     UnsupportedTokensV0,
+    #[error("Invalid TxOutput type as UTXO, cannot be spent")]
+    InvalidUtxo,
 }
 
 type SignerResult<T> = Result<T, SignerError>;
