@@ -94,7 +94,7 @@ jobs:
         mkdir -p debian-node/usr/bin
         IFS=',' read -ra BINARIES <<< "${{ inputs.binary_list }}"
         for binary in "${BINARIES[@]}"; do
-          cp target/${{ matrix.arch }}-unknown-linux-gnu/release/$binary debian-node/usr/bin/
+          cp target/${{ matrix.arch }}-unknown-linux-gnu/release/$binary debian-node/usr/bin/mintlayer-$binary
         done
         cat << EOF > debian-node/DEBIAN/control
         Package: mintlayer-node
@@ -128,7 +128,7 @@ jobs:
         A graphical user interface for the Mintlayer node.
 
         %files
-        /usr/bin/node-gui
+        /usr/bin/mintlayer-node-gui
         /usr/share/applications/mintlayer-node-gui.desktop
         /usr/share/icons/hicolor/512x512/apps/mintlayer-node-gui.png
         /usr/share/icons/hicolor/256x256/apps/mintlayer-node-gui.png
