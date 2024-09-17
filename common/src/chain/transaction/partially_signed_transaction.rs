@@ -41,34 +41,43 @@ impl PartiallySignedTransaction {
         destinations: Vec<Option<Destination>>,
         htlc_secrets: Option<Vec<Option<HtlcSecret>>>,
     ) -> Result<Self, TransactionCreationError> {
-        ensure!(
-            tx.inputs().len() == witnesses.len(),
-            TransactionCreationError::InvalidWitnessCount
-        );
-
-        ensure!(
-            tx.inputs().len() == input_utxos.len(),
-            TransactionCreationError::InvalidInputUtxosCount,
-        );
-
-        ensure!(
-            tx.inputs().len() == destinations.len(),
-            TransactionCreationError::InvalidDestinationsCount
-        );
-
         let htlc_secrets = htlc_secrets.unwrap_or_else(|| vec![None; tx.inputs().len()]);
-        ensure!(
-            htlc_secrets.len() == tx.inputs().len(),
-            TransactionCreationError::InvalidHtlcSecretsCount
-        );
 
-        Ok(Self {
+        let this = Self {
             tx,
             witnesses,
             input_utxos,
             destinations,
             htlc_secrets,
-        })
+        };
+
+        this.ensure_consistency()?;
+
+        Ok(this)
+    }
+
+    pub fn ensure_consistency(&self) -> Result<(), TransactionCreationError> {
+        ensure!(
+            self.tx.inputs().len() == self.witnesses.len(),
+            TransactionCreationError::InvalidWitnessCount
+        );
+
+        ensure!(
+            self.tx.inputs().len() == self.input_utxos.len(),
+            TransactionCreationError::InvalidInputUtxosCount,
+        );
+
+        ensure!(
+            self.tx.inputs().len() == self.destinations.len(),
+            TransactionCreationError::InvalidDestinationsCount
+        );
+
+        ensure!(
+            self.tx.inputs().len() == self.htlc_secrets.len(),
+            TransactionCreationError::InvalidHtlcSecretsCount
+        );
+
+        Ok(())
     }
 
     pub fn with_witnesses(mut self, witnesses: Vec<Option<InputWitness>>) -> Self {
