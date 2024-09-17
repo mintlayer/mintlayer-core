@@ -59,14 +59,16 @@ use trezor_client::{
     find_devices,
     protos::{
         MintlayerAccountCommandTxInput, MintlayerAccountTxInput, MintlayerAddressPath,
-        MintlayerBurnTxOutput, MintlayerChangeTokenAuhtority, MintlayerChangeTokenMetadataUri,
+        MintlayerAnyoneCanTakeTxOutput, MintlayerBurnTxOutput, MintlayerChangeTokenAuhtority,
+        MintlayerChangeTokenMetadataUri, MintlayerConcludeOrder,
         MintlayerCreateDelegationIdTxOutput, MintlayerCreateStakePoolTxOutput,
-        MintlayerDataDepositTxOutput, MintlayerDelegateStakingTxOutput, MintlayerFreezeToken,
-        MintlayerIssueFungibleTokenTxOutput, MintlayerIssueNftTxOutput,
-        MintlayerLockThenTransferTxOutput, MintlayerLockTokenSupply, MintlayerMintTokens,
-        MintlayerOutputValue, MintlayerProduceBlockFromStakeTxOutput, MintlayerTokenOutputValue,
-        MintlayerTokenTotalSupply, MintlayerTokenTotalSupplyType, MintlayerTxInput,
-        MintlayerTxOutput, MintlayerUnfreezeToken, MintlayerUnmintTokens, MintlayerUtxoType,
+        MintlayerDataDepositTxOutput, MintlayerDelegateStakingTxOutput, MintlayerFillOrder,
+        MintlayerFreezeToken, MintlayerHtlcTxOutput, MintlayerIssueFungibleTokenTxOutput,
+        MintlayerIssueNftTxOutput, MintlayerLockThenTransferTxOutput, MintlayerLockTokenSupply,
+        MintlayerMintTokens, MintlayerOutputValue, MintlayerProduceBlockFromStakeTxOutput,
+        MintlayerTokenOutputValue, MintlayerTokenTotalSupply, MintlayerTokenTotalSupplyType,
+        MintlayerTxInput, MintlayerTxOutput, MintlayerUnfreezeToken, MintlayerUnmintTokens,
+        MintlayerUtxoType,
     },
 };
 use trezor_client::{
@@ -272,7 +274,8 @@ impl Signer for TrezorSigner {
             .iter()
             .enumerate()
             .zip(ptx.destinations())
-            .map(|((i, witness), destination)| match witness {
+            .zip(ptx.htlc_secrets())
+            .map(|(((i, witness), destination), secret)| match witness {
                 Some(w) => match w {
                     InputWitness::NoSignature(_) => Ok((
                         Some(w.clone()),
@@ -380,9 +383,6 @@ impl Signer for TrezorSigner {
                 },
                 None => match (destination, new_signatures.get(i)) {
                     (Some(destination), Some(sig)) => {
-                        // TODO: when HTLC PR is merged get secret from the ptx
-                        let secret = None;
-
                         let sighash_type =
                             SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
                         let sighash = signature_hash(sighash_type, ptx.tx(), &inputs_utxo_refs, i)?;
@@ -391,7 +391,7 @@ impl Signer for TrezorSigner {
                             destination,
                             sighash_type,
                             sighash,
-                            secret,
+                            secret.clone(),
                             key_chain,
                         )?;
                         Ok((sig, SignatureStatus::NotSigned, status))
@@ -494,6 +494,7 @@ fn tx_output_value(out: &TxOutput) -> OutputValue {
             OutputValue::TokenV1(*token_id, Amount::from_atoms(1))
         }
         TxOutput::CreateStakePool(_, data) => OutputValue::Coin(data.pledge()),
+        TxOutput::AnyoneCanTake(data) => data.give().clone(),
         TxOutput::CreateDelegationId(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::IssueFungibleToken(_)
@@ -522,9 +523,9 @@ fn to_trezor_input_msgs(
                 key_chain,
                 outpoint,
             )),
-            (TxInput::AccountCommand(nonce, command), _, Some(dest)) => Ok(
-                to_trezor_account_command_input(chain_config, dest, key_chain, nonce, command),
-            ),
+            (TxInput::AccountCommand(nonce, command), _, Some(dest)) => {
+                to_trezor_account_command_input(chain_config, dest, key_chain, nonce, command)
+            }
             (_, _, None) => Err(SignerError::MissingDestinationInTransaction),
             (TxInput::Utxo(_), _, _) => Err(SignerError::MissingUtxo),
         })
@@ -537,7 +538,7 @@ fn to_trezor_account_command_input(
     key_chain: &impl AccountKeyChains,
     nonce: &common::chain::AccountNonce,
     command: &AccountCommand,
-) -> MintlayerTxInput {
+) -> SignerResult<MintlayerTxInput> {
     let mut inp_req = MintlayerAccountCommandTxInput::new();
     inp_req
         .set_address(Address::new(chain_config, dest.clone()).expect("addressable").into_string());
@@ -609,14 +610,36 @@ fn to_trezor_account_command_input(
 
             inp_req.change_token_metadata_uri = Some(req).into();
         }
-        AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
-            unimplemented!("order commands")
+        AccountCommand::ConcludeOrder(order_id) => {
+            let mut req = MintlayerConcludeOrder::new();
+            req.set_order_id(order_id.to_hash().as_bytes().to_vec());
+
+            inp_req.conclude_order = Some(req).into();
+        }
+        AccountCommand::FillOrder(order_id, value, dest) => {
+            let mut req = MintlayerFillOrder::new();
+            req.set_order_id(order_id.to_hash().as_bytes().to_vec());
+            match value {
+                OutputValue::Coin(amount) => {
+                    req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
+                }
+                OutputValue::TokenV1(token_id, amount) => {
+                    req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
+                    req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+                }
+                OutputValue::TokenV0(_) => return Err(SignerError::UnsupportedTokensV0),
+            }
+            req.set_destination(
+                Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
+            );
+
+            inp_req.fill_order = Some(req).into();
         }
         AccountCommand::ChangeTokenMetadataUri(_, _) => unimplemented!("FIXME"),
     }
     let mut inp = MintlayerTxInput::new();
     inp.account_command = Some(inp_req).into();
-    inp
+    Ok(inp)
 }
 
 fn to_trezor_account_input(
@@ -745,37 +768,13 @@ fn to_trezor_output_value(
     output_value: &OutputValue,
     additional_info: &Option<UtxoAdditionalInfo>,
 ) -> SignerResult<MintlayerOutputValue> {
-    let value = match output_value {
-        OutputValue::Coin(amount) => {
-            let mut value = MintlayerOutputValue::new();
-            value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-            value
-        }
-        OutputValue::TokenV1(token_id, amount) => {
-            let mut value = MintlayerOutputValue::new();
-            value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-            let mut token_value = MintlayerTokenOutputValue::new();
-            token_value.set_token_id(token_id.to_hash().as_bytes().to_vec());
-            match additional_info {
-                Some(UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
-                    num_decimals,
-                    ticker,
-                })) => {
-                    token_value.set_number_of_decimals(*num_decimals as u32);
-                    token_value.set_token_ticker(ticker.clone());
-                }
-                Some(
-                    UtxoAdditionalInfo::PoolInfo { staker_balance: _ }
-                    | UtxoAdditionalInfo::AnyoneCanTake { ask: _, give: _ },
-                )
-                | None => return Err(SignerError::MissingUtxoExtraInfo),
-            }
-            value.token = Some(token_value).into();
-            value
-        }
-        OutputValue::TokenV0(_) => return Err(SignerError::UnsupportedTokensV0),
-    };
-    Ok(value)
+    let token_info = additional_info.as_ref().and_then(|info| match info {
+        UtxoAdditionalInfo::TokenInfo(token_info) => Some(token_info),
+        UtxoAdditionalInfo::PoolInfo { staker_balance: _ }
+        | UtxoAdditionalInfo::AnyoneCanTake { ask: _, give: _ } => None,
+    });
+
+    to_trezor_output_value_with_token_info(output_value, &token_info)
 }
 
 fn to_trezor_utxo_msgs(
@@ -828,22 +827,7 @@ fn to_trezor_output_msg(
                 Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
             );
 
-            let mut lock_req = trezor_client::protos::MintlayerOutputTimeLock::new();
-            match lock {
-                OutputTimeLock::UntilTime(time) => {
-                    lock_req.set_until_time(time.as_int_seconds());
-                }
-                OutputTimeLock::UntilHeight(height) => {
-                    lock_req.set_until_height(height.into_int());
-                }
-                OutputTimeLock::ForSeconds(sec) => {
-                    lock_req.set_for_seconds(*sec);
-                }
-                OutputTimeLock::ForBlockCount(count) => {
-                    lock_req.set_for_block_count(*count);
-                }
-            }
-            out_req.lock = Some(lock_req).into();
+            out_req.lock = Some(to_trezor_output_lock(lock)).into();
 
             let mut out = MintlayerTxOutput::new();
             out.lock_then_transfer = Some(out_req).into();
@@ -1000,10 +984,111 @@ fn to_trezor_output_msg(
             out.data_deposit = Some(out_req).into();
             out
         }
-        TxOutput::Htlc(_, _) => unimplemented!("HTLC"),
-        TxOutput::CreateOrder(_) => unimplemented!("CreateOrder"),
+        TxOutput::Htlc(value, lock) => {
+            let mut out_req = MintlayerHtlcTxOutput::new();
+            out_req.value = Some(to_trezor_output_value(value, additional_info)?).into();
+            out_req.secret_hash = Some(lock.secret_hash.as_bytes().to_vec());
+
+            out_req.set_spend_key(
+                Address::new(chain_config, lock.spend_key.clone())
+                    .expect("addressable")
+                    .into_string(),
+            );
+            out_req.set_refund_key(
+                Address::new(chain_config, lock.refund_key.clone())
+                    .expect("addressable")
+                    .into_string(),
+            );
+
+            out_req.refund_timelock = Some(to_trezor_output_lock(&lock.refund_timelock)).into();
+
+            let mut out = MintlayerTxOutput::new();
+            out.htlc = Some(out_req).into();
+            out
+        }
+        TxOutput::CreateOrder(data) => {
+            let mut out_req = MintlayerAnyoneCanTakeTxOutput::new();
+
+            out_req.set_conclude_key(
+                Address::new(chain_config, data.conclude_key().clone())
+                    .expect("addressable")
+                    .into_string(),
+            );
+
+            match additional_info {
+                Some(UtxoAdditionalInfo::AnyoneCanTake { ask, give }) => {
+                    out_req.ask = Some(to_trezor_output_value_with_token_info(
+                        data.ask(),
+                        &ask.as_ref(),
+                    )?)
+                    .into();
+                    out_req.give = Some(to_trezor_output_value_with_token_info(
+                        data.give(),
+                        &give.as_ref(),
+                    )?)
+                    .into();
+                }
+                Some(
+                    UtxoAdditionalInfo::PoolInfo { staker_balance: _ }
+                    | UtxoAdditionalInfo::TokenInfo(_),
+                )
+                | None => return Err(SignerError::MissingUtxoExtraInfo),
+            }
+
+            let mut out = MintlayerTxOutput::new();
+            out.anyone_can_take = Some(out_req).into();
+            out
+        }
     };
     Ok(res)
+}
+
+fn to_trezor_output_value_with_token_info(
+    value: &OutputValue,
+    token_info: &Option<&TokenAdditionalInfo>,
+) -> Result<MintlayerOutputValue, SignerError> {
+    match value {
+        OutputValue::Coin(amount) => {
+            let mut value = MintlayerOutputValue::new();
+            value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
+            Ok(value)
+        }
+        OutputValue::TokenV1(token_id, amount) => {
+            let mut value = MintlayerOutputValue::new();
+            value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
+            let mut token_value = MintlayerTokenOutputValue::new();
+            token_value.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            match &token_info {
+                Some(info) => {
+                    token_value.set_number_of_decimals(info.num_decimals as u32);
+                    token_value.set_token_ticker(info.ticker.clone());
+                }
+                None => return Err(SignerError::MissingUtxoExtraInfo),
+            }
+            value.token = Some(token_value).into();
+            Ok(value)
+        }
+        OutputValue::TokenV0(_) => Err(SignerError::UnsupportedTokensV0),
+    }
+}
+
+fn to_trezor_output_lock(lock: &OutputTimeLock) -> trezor_client::protos::MintlayerOutputTimeLock {
+    let mut lock_req = trezor_client::protos::MintlayerOutputTimeLock::new();
+    match lock {
+        OutputTimeLock::UntilTime(time) => {
+            lock_req.set_until_time(time.as_int_seconds());
+        }
+        OutputTimeLock::UntilHeight(height) => {
+            lock_req.set_until_height(height.into_int());
+        }
+        OutputTimeLock::ForSeconds(sec) => {
+            lock_req.set_for_seconds(*sec);
+        }
+        OutputTimeLock::ForBlockCount(count) => {
+            lock_req.set_for_block_count(*count);
+        }
+    }
+    lock_req
 }
 
 #[derive(Clone)]
