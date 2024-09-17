@@ -105,7 +105,7 @@ pub enum WalletManagementCommand {
         force_change_wallet_type: bool,
 
         /// Open a wallet file related to a connected hardware wallet.
-        #[arg(long)]
+        #[arg(long, conflicts_with_all(["force_change_wallet_type"]))]
         hardware_wallet: Option<CliHardwareWalletType>,
     },
 
