@@ -144,6 +144,13 @@ pub struct MultisigInfo {
 }
 
 impl MultisigInfo {
+    pub fn new(total_keys: NonZeroUsize, min_required_signatures: NonZeroU8) -> Self {
+        Self {
+            total_keys,
+            min_required_signatures,
+        }
+    }
+
     pub fn from_challenge(challenge: &ClassicMultisigChallenge) -> Self {
         Self {
             total_keys: challenge.public_keys_count_as_non_zero(),
