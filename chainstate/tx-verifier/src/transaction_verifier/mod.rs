@@ -75,7 +75,8 @@ use common::{
         signed_transaction::SignedTransaction,
         tokens::make_token_id,
         AccountCommand, AccountNonce, AccountSpending, AccountType, Block, ChainConfig,
-        DelegationId, GenBlock, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        DelegationId, FrozenTokensValidationVersion, GenBlock, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Fee, Id, Idable},
 };
@@ -542,7 +543,7 @@ where
         tx_source: &TransactionSourceForConnect,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        self.check_operations_with_frozen_tokens(tx)?;
+        self.check_operations_with_frozen_tokens(tx, tx_source.expected_block_height())?;
 
         let input_undos = tx
             .inputs()
@@ -685,6 +686,7 @@ where
     fn check_operations_with_frozen_tokens(
         &self,
         tx: &Transaction,
+        block_height: BlockHeight,
     ) -> Result<(), ConnectTransactionError> {
         let check_not_frozen = |token_id| {
             // TODO: when NFTs are stored in accounting None should become an error
@@ -735,7 +737,18 @@ where
                             .ok_or(ConnectTransactionError::MissingOutputOrSpent(
                                 utxo_outpoint.clone(),
                             ))?;
-                        check_tx_output(utxo.output())
+
+                        match self
+                            .chain_config
+                            .as_ref()
+                            .chainstate_upgrades()
+                            .version_at_height(block_height)
+                            .1
+                            .frozen_tokens_validation_version()
+                        {
+                            FrozenTokensValidationVersion::V0 => Ok(()),
+                            FrozenTokensValidationVersion::V1 => check_tx_output(utxo.output()),
+                        }
                     }
                     TxInput::Account(account_outpoint) => match account_outpoint.account() {
                         AccountSpending::DelegationBalance(_, _) => Ok(()),

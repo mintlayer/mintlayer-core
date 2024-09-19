@@ -29,9 +29,9 @@ use crate::{
         pos_initial_difficulty,
         pow::PoWChainConfigBuilder,
         ChainstateUpgrade, ChangeTokenMetadataUriActivated, CoinUnit, ConsensusUpgrade,
-        DataDepositFeeVersion, Destination, GenBlock, Genesis, HtlcActivated, NetUpgrades,
-        OrdersActivated, PoSChainConfig, PoSConsensusVersion, PoWChainConfig,
-        RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
+        DataDepositFeeVersion, Destination, FrozenTokensValidationVersion, GenBlock, Genesis,
+        HtlcActivated, NetUpgrades, OrdersActivated, PoSChainConfig, PoSConsensusVersion,
+        PoWChainConfig, RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, semver::SemVer, Amount, BlockCount, BlockDistance,
@@ -55,6 +55,8 @@ const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeigh
 const TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(297_550);
 // The fork, at which order outputs become valid
 const TESTNET_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
+// The fork, at which rules for validating frozen tokens changed
+const MAINNET_FROZEN_TOKENS_VALIDATION_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
 // The fork, at which txs with htlc and orders outputs become valid
 const MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
 
@@ -172,8 +174,22 @@ impl ChainType {
                             TokensFeeVersion::V1,
                             DataDepositFeeVersion::V0,
                             ChangeTokenMetadataUriActivated::No,
+                            FrozenTokensValidationVersion::V0,
                             HtlcActivated::No,
                             OrdersActivated::No,
+                        ),
+                    ),
+                    (
+                        MAINNET_FROZEN_TOKENS_VALIDATION_FORK_HEIGHT,
+                        ChainstateUpgrade::new(
+                            TokenIssuanceVersion::V1,
+                            RewardDistributionVersion::V1,
+                            TokensFeeVersion::V1,
+                            DataDepositFeeVersion::V1,
+                            ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V1,
+                            HtlcActivated::Yes,
+                            OrdersActivated::Yes,
                         ),
                     ),
                     (
@@ -184,6 +200,7 @@ impl ChainType {
                             TokensFeeVersion::V1,
                             DataDepositFeeVersion::V1,
                             ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V1,
                             HtlcActivated::Yes,
                             OrdersActivated::Yes,
                         ),
@@ -200,6 +217,7 @@ impl ChainType {
                         TokensFeeVersion::V1,
                         DataDepositFeeVersion::V1,
                         ChangeTokenMetadataUriActivated::Yes,
+                        FrozenTokensValidationVersion::V1,
                         HtlcActivated::Yes,
                         OrdersActivated::Yes,
                     ),
@@ -216,6 +234,7 @@ impl ChainType {
                             TokensFeeVersion::V0,
                             DataDepositFeeVersion::V0,
                             ChangeTokenMetadataUriActivated::No,
+                            FrozenTokensValidationVersion::V0,
                             HtlcActivated::No,
                             OrdersActivated::No,
                         ),
@@ -228,6 +247,7 @@ impl ChainType {
                             TokensFeeVersion::V0,
                             DataDepositFeeVersion::V0,
                             ChangeTokenMetadataUriActivated::No,
+                            FrozenTokensValidationVersion::V0,
                             HtlcActivated::No,
                             OrdersActivated::No,
                         ),
@@ -240,6 +260,7 @@ impl ChainType {
                             TokensFeeVersion::V1,
                             DataDepositFeeVersion::V0,
                             ChangeTokenMetadataUriActivated::No,
+                            FrozenTokensValidationVersion::V0,
                             HtlcActivated::No,
                             OrdersActivated::No,
                         ),
@@ -252,6 +273,7 @@ impl ChainType {
                             TokensFeeVersion::V1,
                             DataDepositFeeVersion::V1,
                             ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V0,
                             HtlcActivated::Yes,
                             OrdersActivated::No,
                         ),
@@ -264,6 +286,7 @@ impl ChainType {
                             TokensFeeVersion::V1,
                             DataDepositFeeVersion::V1,
                             ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V1,
                             HtlcActivated::Yes,
                             OrdersActivated::Yes,
                         ),

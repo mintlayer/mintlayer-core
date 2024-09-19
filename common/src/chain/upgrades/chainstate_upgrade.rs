@@ -63,6 +63,12 @@ pub enum ChangeTokenMetadataUriActivated {
     No,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+pub enum FrozenTokensValidationVersion {
+    V0,
+    V1,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChainstateUpgrade {
     token_issuance_version: TokenIssuanceVersion,
@@ -70,17 +76,20 @@ pub struct ChainstateUpgrade {
     tokens_fee_version: TokensFeeVersion,
     data_deposit_fee_version: DataDepositFeeVersion,
     change_token_metadata_uri_activated: ChangeTokenMetadataUriActivated,
+    frozen_tokens_validation_version: FrozenTokensValidationVersion,
     htlc_activated: HtlcActivated,
     orders_activated: OrdersActivated,
 }
 
 impl ChainstateUpgrade {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         token_issuance_version: TokenIssuanceVersion,
         reward_distribution_version: RewardDistributionVersion,
         tokens_fee_version: TokensFeeVersion,
         data_deposit_fee_version: DataDepositFeeVersion,
         change_token_metadata_uri_activated: ChangeTokenMetadataUriActivated,
+        frozen_tokens_validation_version: FrozenTokensValidationVersion,
         htlc_activated: HtlcActivated,
         orders_activated: OrdersActivated,
     ) -> Self {
@@ -90,6 +99,7 @@ impl ChainstateUpgrade {
             tokens_fee_version,
             data_deposit_fee_version,
             change_token_metadata_uri_activated,
+            frozen_tokens_validation_version,
             htlc_activated,
             orders_activated,
         }
@@ -121,6 +131,10 @@ impl ChainstateUpgrade {
 
     pub fn change_token_metadata_uri_activated(&self) -> ChangeTokenMetadataUriActivated {
         self.change_token_metadata_uri_activated
+    }
+
+    pub fn frozen_tokens_validation_version(&self) -> FrozenTokensValidationVersion {
+        self.frozen_tokens_validation_version
     }
 }
 

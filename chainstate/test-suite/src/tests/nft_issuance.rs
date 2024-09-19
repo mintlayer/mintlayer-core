@@ -23,8 +23,8 @@ use common::chain::{
     signature::inputsig::InputWitness,
     tokens::{is_rfc3986_valid_symbol, make_token_id, Metadata, NftIssuance, NftIssuanceV0},
     Block, ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion, Destination,
-    HtlcActivated, OrdersActivated, OutPointSourceId, RewardDistributionVersion,
-    TokenIssuanceVersion, TokensFeeVersion, TxInput, TxOutput,
+    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, OutPointSourceId,
+    RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion, TxInput, TxOutput,
 };
 use common::primitives::{BlockHeight, Idable};
 use randomness::{CryptoRng, Rng};
@@ -1654,6 +1654,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                                 TokensFeeVersion::V1,
                                 DataDepositFeeVersion::V1,
                                 ChangeTokenMetadataUriActivated::Yes,
+                                FrozenTokensValidationVersion::V1,
                                 HtlcActivated::Yes,
                                 OrdersActivated::Yes,
                             ),
@@ -1720,6 +1721,7 @@ fn only_ascii_alphanumeric_after_v1(#[case] seed: Seed) {
                                 TokensFeeVersion::V1,
                                 DataDepositFeeVersion::V1,
                                 ChangeTokenMetadataUriActivated::Yes,
+                                FrozenTokensValidationVersion::V1,
                                 HtlcActivated::Yes,
                                 OrdersActivated::Yes,
                             ),

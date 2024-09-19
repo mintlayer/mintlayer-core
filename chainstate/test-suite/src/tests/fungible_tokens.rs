@@ -21,7 +21,7 @@ use chainstate::{
 };
 use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::chain::tokens::{Metadata, NftIssuanceV0, TokenIssuanceV0, TokenTransfer};
-use common::chain::{RewardDistributionVersion, UtxoOutPoint};
+use common::chain::{FrozenTokensValidationVersion, RewardDistributionVersion, UtxoOutPoint};
 use common::primitives::{id, BlockHeight, Id};
 use common::{
     chain::{
@@ -59,6 +59,7 @@ fn make_test_framework_with_v0(rng: &mut (impl Rng + CryptoRng)) -> TestFramewor
                             TokensFeeVersion::V1,
                             DataDepositFeeVersion::V1,
                             ChangeTokenMetadataUriActivated::Yes,
+                            FrozenTokensValidationVersion::V1,
                             HtlcActivated::Yes,
                             OrdersActivated::Yes,
                         ),
@@ -966,6 +967,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                                 TokensFeeVersion::V1,
                                 DataDepositFeeVersion::V1,
                                 ChangeTokenMetadataUriActivated::Yes,
+                                FrozenTokensValidationVersion::V1,
                                 HtlcActivated::Yes,
                                 OrdersActivated::Yes,
                             ),
@@ -1032,6 +1034,7 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
                                     TokensFeeVersion::V1,
                                     DataDepositFeeVersion::V1,
                                     ChangeTokenMetadataUriActivated::Yes,
+                                    FrozenTokensValidationVersion::V1,
                                     HtlcActivated::Yes,
                                     OrdersActivated::Yes,
                                 ),
@@ -1044,6 +1047,7 @@ fn no_v0_transfer_after_v1(#[case] seed: Seed) {
                                     TokensFeeVersion::V1,
                                     DataDepositFeeVersion::V1,
                                     ChangeTokenMetadataUriActivated::Yes,
+                                    FrozenTokensValidationVersion::V1,
                                     HtlcActivated::Yes,
                                     OrdersActivated::Yes,
                                 ),
