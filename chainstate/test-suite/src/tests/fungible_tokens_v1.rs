@@ -33,8 +33,8 @@ use common::{
             make_token_id, IsTokenFreezable, IsTokenUnfreezable, TokenId, TokenIssuance,
             TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OutPointSourceId,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountType, Block, Destination, GenBlock, OrderData,
+        OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{amount::SignedAmount, Amount, BlockHeight, CoinOrTokenId, Id, Idable},
 };
@@ -4121,9 +4121,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensAccountingError(
-                    tokens_accounting::Error::CannotLockFrozenToken(token_id)
-                )
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
             ))
         );
 
@@ -4230,6 +4228,89 @@ fn check_freezable_supply(#[case] seed: Seed) {
             ))
         );
 
+        // Try to implicitly burn frozen tokens
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    // token input
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    // coin input
+                    .add_input(
+                        TxInput::from_utxo(freeze_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    // coin output
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin(token_supply_change_fee),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build(),
+            )
+            .build_and_process(&mut rng);
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
+            ))
+        );
+
+        // Try to create an order with frozen token
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::TokenV1(token_id, amount_to_mint),
+            OutputValue::Coin(Amount::ZERO),
+        );
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::AnyoneCanTake(Box::new(order_data)))
+                    .build(),
+            )
+            .build_and_process(&mut rng);
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
+            ))
+        );
+
+        // Try to create an order with frozen token
+        let order_data = OrderData::new(
+            Destination::AnyoneCanSpend,
+            OutputValue::Coin(Amount::ZERO),
+            OutputValue::TokenV1(token_id, amount_to_mint),
+        );
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_utxo(mint_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::AnyoneCanTake(Box::new(order_data)))
+                    .build(),
+            )
+            .build_and_process(&mut rng);
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
+            ))
+        );
+
         // Unfreeze the token
         let unfreeze_tx = TransactionBuilder::new()
             .add_input(
@@ -4264,7 +4345,181 @@ fn check_freezable_supply(#[case] seed: Seed) {
             tokens_accounting::TokenData::FungibleToken(data) => assert!(!data.is_frozen()),
         };
 
-        // Now all operations are available again. Try mint/unmint/transfer
+        // Now all operations are available again. Try mint/transfer
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_command(
+                            AccountNonce::new(3),
+                            AccountCommand::MintTokens(token_id, amount_to_mint),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(unfreeze_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, amount_to_mint),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build(),
+            )
+            .build_and_process(&mut rng)
+            .unwrap();
+    });
+}
+
+// Check that if token is frozen/unfrozen by an input command it takes effect only
+// after tx is processed. Meaning tx outputs are not aware of state change by inputs in the same tx.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_freeze_unfreeze_takes_effect_after_submit(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let token_supply_change_fee =
+            tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
+
+        let (token_id, _, utxo_with_change) = issue_token_from_genesis(
+            &mut rng,
+            &mut tf,
+            TokenTotalSupply::Lockable,
+            IsTokenFreezable::Yes,
+        );
+
+        // Mint some tokens
+        let amount_to_mint = Amount::from_atoms(rng.gen_range(1..100_000_000));
+        let best_block_id = tf.best_block_id();
+        let (_, mint_tx_id) = mint_tokens_in_block(
+            &mut rng,
+            &mut tf,
+            best_block_id,
+            utxo_with_change,
+            token_id,
+            amount_to_mint,
+            true,
+        );
+
+        // Freeze the token and transfer at the same tx
+        let freeze_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(1),
+                    AccountCommand::FreezeToken(token_id, IsTokenUnfreezable::Yes),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 0),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(mint_tx_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::TokenV1(token_id, amount_to_mint),
+                Destination::AnyoneCanSpend,
+            ))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((token_supply_change_fee * 5).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let freeze_tx_id = freeze_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(freeze_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Check result
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
+        match actual_token_data.unwrap() {
+            tokens_accounting::TokenData::FungibleToken(data) => assert!(data.is_frozen()),
+        };
+
+        // Try unfreeze the token and transfer at the same tx
+        let result = tf
+            .make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(
+                        TxInput::from_command(
+                            AccountNonce::new(2),
+                            AccountCommand::UnfreezeToken(token_id),
+                        ),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(freeze_tx_id.into(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_input(
+                        TxInput::from_utxo(freeze_tx_id.into(), 1),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::Coin((token_supply_change_fee * 3).unwrap()),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .add_output(TxOutput::Transfer(
+                        OutputValue::TokenV1(token_id, amount_to_mint),
+                        Destination::AnyoneCanSpend,
+                    ))
+                    .build(),
+            )
+            .build_and_process(&mut rng);
+
+        assert_eq!(
+            result.unwrap_err(),
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
+            ))
+        );
+
+        // Unfreeze the token
+        let unfreeze_tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::from_command(
+                    AccountNonce::new(2),
+                    AccountCommand::UnfreezeToken(token_id),
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_input(
+                TxInput::from_utxo(freeze_tx_id.into(), 1),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin((token_supply_change_fee * 3).unwrap()),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+        let unfreeze_tx_id = unfreeze_tx.transaction().get_id();
+        tf.make_block_builder()
+            .add_transaction(unfreeze_tx)
+            .build_and_process(&mut rng)
+            .unwrap();
+
+        // Check result
+        let actual_token_data = TokensAccountingStorageRead::get_token_data(
+            &tf.storage.transaction_ro().unwrap(),
+            &token_id,
+        )
+        .unwrap();
+        match actual_token_data.unwrap() {
+            tokens_accounting::TokenData::FungibleToken(data) => assert!(!data.is_frozen()),
+        };
+
+        // Now all operations are available again. Try mint/transfer
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
@@ -5110,9 +5365,7 @@ fn check_change_authority_for_frozen_token(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensAccountingError(
-                    tokens_accounting::Error::CannotChangeAuthorityForFrozenToken(token_id)
-                )
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
             ))
         );
 
@@ -5634,9 +5887,7 @@ fn check_change_metadata_for_frozen_token(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensAccountingError(
-                    tokens_accounting::Error::CannotChangeMetadataUriForFrozenToken(token_id)
-                )
+                ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
             ))
         );
 

@@ -32,7 +32,8 @@ use accounting::BlockRewardUndo;
 use constraints_value_accumulator::AccumulatedFee;
 use orders_accounting::{
     OrdersAccountingCache, OrdersAccountingDB, OrdersAccountingDeltaData,
-    OrdersAccountingOperations, OrdersAccountingUndo, OrdersAccountingView,
+    OrdersAccountingOperations, OrdersAccountingStorageRead, OrdersAccountingUndo,
+    OrdersAccountingView,
 };
 use tokens_accounting::{
     TokenAccountingUndo, TokensAccountingCache, TokensAccountingDB, TokensAccountingDeltaData,
@@ -82,7 +83,7 @@ use pos_accounting::{
     PoSAccountingDB, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations,
     PoSAccountingUndo, PoSAccountingView,
 };
-use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
+use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosStorageRead, UtxosView};
 
 /// The change that a block has caused to the blockchain state
 #[derive(Debug, Eq, PartialEq)]
@@ -685,43 +686,102 @@ where
         &self,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
+        let check_not_frozen = |token_id| {
+            // TODO: when NFTs are stored in accounting None should become an error
+            if let Some(token_data) = self.get_token_data(&token_id)? {
+                match token_data {
+                    tokens_accounting::TokenData::FungibleToken(data) => {
+                        ensure!(
+                            !data.is_frozen(),
+                            ConnectTransactionError::AttemptToSpendFrozenToken(token_id)
+                        );
+                    }
+                };
+            }
+            Ok(())
+        };
+
+        let check_tx_output = |output: &TxOutput| match output {
+            TxOutput::Transfer(output_value, _)
+            | TxOutput::Burn(output_value)
+            | TxOutput::LockThenTransfer(output_value, _, _)
+            | TxOutput::Htlc(output_value, _) => match output_value {
+                OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(()),
+                OutputValue::TokenV1(ref token_id, _) => check_not_frozen(*token_id),
+            },
+            TxOutput::AnyoneCanTake(data) => {
+                [data.ask(), data.give()].iter().try_for_each(|v| match v {
+                    OutputValue::TokenV0(_) | OutputValue::Coin(_) => Ok(()),
+                    OutputValue::TokenV1(token_id, _) => check_not_frozen(*token_id),
+                })
+            }
+            TxOutput::CreateStakePool(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::IssueFungibleToken(_)
+            | TxOutput::IssueNft(_, _, _)
+            | TxOutput::DataDeposit(_) => Ok(()),
+        };
+
+        tx.inputs()
+            .iter()
+            .try_for_each(|input| -> Result<(), ConnectTransactionError> {
+                match input {
+                    TxInput::Utxo(utxo_outpoint) => {
+                        let utxo = self
+                            .get_utxo(utxo_outpoint)
+                            .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
+                            .ok_or(ConnectTransactionError::MissingOutputOrSpent(
+                                utxo_outpoint.clone(),
+                            ))?;
+                        check_tx_output(utxo.output())
+                    }
+                    TxInput::Account(account_outpoint) => match account_outpoint.account() {
+                        AccountSpending::DelegationBalance(_, _) => Ok(()),
+                    },
+                    TxInput::AccountCommand(_, account_command) => match account_command {
+                        AccountCommand::MintTokens(id, _)
+                        | AccountCommand::UnmintTokens(id)
+                        | AccountCommand::LockTokenSupply(id)
+                        | AccountCommand::FreezeToken(id, _)
+                        | AccountCommand::ChangeTokenAuthority(id, _)
+                        | AccountCommand::ChangeTokenMetadataUri(id, _) => check_not_frozen(*id),
+                        | AccountCommand::UnfreezeToken(_) => Ok(()),
+                        AccountCommand::ConcludeOrder(id) => {
+                            let order_data = self.get_order_data(id)?.ok_or(
+                                ConnectTransactionError::OrdersAccountingError(
+                                    orders_accounting::Error::OrderDataNotFound(*id),
+                                ),
+                            )?;
+                            [order_data.ask(), order_data.give()].iter().try_for_each(|v| match v {
+                                OutputValue::TokenV0(_) | OutputValue::Coin(_) => Ok(()),
+                                OutputValue::TokenV1(token_id, _) => check_not_frozen(*token_id),
+                            })
+                        }
+                        AccountCommand::FillOrder(id, fill_value, _) => {
+                            let order_data = self.get_order_data(id)?.ok_or(
+                                ConnectTransactionError::OrdersAccountingError(
+                                    orders_accounting::Error::OrderDataNotFound(*id),
+                                ),
+                            )?;
+                            [fill_value, order_data.ask(), order_data.give()].iter().try_for_each(
+                                |v| match v {
+                                    OutputValue::TokenV0(_) | OutputValue::Coin(_) => Ok(()),
+                                    OutputValue::TokenV1(token_id, _) => {
+                                        check_not_frozen(*token_id)
+                                    }
+                                },
+                            )
+                        }
+                    },
+                }
+            })?;
+
         tx.outputs()
             .iter()
             .try_for_each(|output| -> Result<(), ConnectTransactionError> {
-                match output {
-                    TxOutput::Transfer(output_value, _)
-                    | TxOutput::Burn(output_value)
-                    | TxOutput::LockThenTransfer(output_value, _, _)
-                    | TxOutput::Htlc(output_value, _) => {
-                        match output_value {
-                            OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(()),
-                            OutputValue::TokenV1(ref token_id, _) => {
-                                // TODO: when NFTs are stored in accounting None should become an error
-                                if let Some(token_data) = self.get_token_data(token_id)? {
-                                    match token_data {
-                                        tokens_accounting::TokenData::FungibleToken(data) => {
-                                            ensure!(
-                                                !data.is_frozen(),
-                                                ConnectTransactionError::AttemptToSpendFrozenToken(
-                                                    *token_id
-                                                )
-                                            );
-                                        }
-                                    };
-                                }
-                                Ok(())
-                            }
-                        }
-                    }
-                    TxOutput::CreateStakePool(_, _)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::DataDeposit(_)
-                    | TxOutput::AnyoneCanTake(_) => Ok(()),
-                }
+                check_tx_output(output)
             })
     }
 
