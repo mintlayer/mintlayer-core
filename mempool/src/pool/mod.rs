@@ -336,10 +336,9 @@ impl<'a> TxFinalizer<'a> {
                 let origin = transaction.origin();
                 log::trace!("Rejected transaction {tx_id}, checking orphan status");
 
-                self.try_add_orphan(tx_pool, transaction, error).map_err(|err| {
+                self.try_add_orphan(tx_pool, transaction, error).inspect_err(|err| {
                     let evt = event::TransactionProcessed::rejected(tx_id, err.clone(), origin);
                     self.events_controller.broadcast(evt.into());
-                    err
                 })
             }
         }

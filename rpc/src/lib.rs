@@ -141,8 +141,8 @@ impl Rpc {
                 .set_http_middleware(middleware.clone())
                 .build(http_bind_addr)
                 .await
-                .map_err(|e| {
-                    logging::log::error!("\n\nError: Failed to bind RPC to address {http_bind_addr}; the port is probably reserved by another application. Assuming the node is not already running, either pick another port (bind address) or disable RPC.\n"); e
+                .inspect_err(|_| {
+                    logging::log::error!("\n\nError: Failed to bind RPC to address {http_bind_addr}; the port is probably reserved by another application. Assuming the node is not already running, either pick another port (bind address) or disable RPC.\n");
                 })?;
             let http_address = http_server.local_addr()?;
             let http_handle = http_server.start(methods.clone());
