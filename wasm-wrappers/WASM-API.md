@@ -186,6 +186,10 @@ this function creates an output that issues that NFT.
 
 Given data to be deposited in the blockchain, this function provides the output that deposits this data
 
+### Function: `data_deposit_fee`
+
+Returns the fee that needs to be paid by a transaction for issuing a data deposit
+
 ### Function: `encode_output_htlc`
 
 Given the parameters needed to create hash timelock contract, and a network type (mainnet, testnet, etc),

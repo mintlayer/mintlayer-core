@@ -676,8 +676,8 @@ pub fn token_change_authority_fee(current_block_height: u64, network: Network) -
 #[wasm_bindgen]
 pub fn encode_output_issue_fungible_token(
     authority: &str,
-    token_ticker: &[u8],
-    metadata_uri: &[u8],
+    token_ticker: &str,
+    metadata_uri: &str,
     number_of_decimals: u8,
     total_supply: TotalSupply,
     supply_amount: Option<Amount>,
@@ -718,10 +718,10 @@ pub fn encode_output_issue_nft(
     ticker: &str,
     description: &str,
     media_hash: &[u8],
-    creator: Option<String>,
-    media_uri: Option<Vec<u8>>,
-    icon_uri: Option<Vec<u8>>,
-    additional_metadata_uri: Option<Vec<u8>>,
+    creator: Option<Vec<u8>>,
+    media_uri: Option<String>,
+    icon_uri: Option<String>,
+    additional_metadata_uri: Option<String>,
     _current_block_height: u64,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
@@ -730,21 +730,15 @@ pub fn encode_output_issue_nft(
     let authority = parse_addressable(&chain_config, authority)?;
     let name = name.into();
     let ticker = ticker.into();
-    let media_uri = media_uri.into();
-    let icon_uri = icon_uri.into();
+    let media_uri = media_uri.map(Into::into).into();
+    let icon_uri = icon_uri.map(Into::into).into();
     let media_hash = media_hash.into();
-    let additional_metadata_uri = additional_metadata_uri.into();
+    let additional_metadata_uri = additional_metadata_uri.map(Into::into).into();
     let creator = creator
-        .map(|addr| parse_addressable::<Destination>(&chain_config, &addr))
-        .transpose()?
-        .map(|dest| match dest {
-            Destination::PublicKey(public_key) => Ok(TokenCreator { public_key }),
-            Destination::AnyoneCanSpend
-            | Destination::ScriptHash(_)
-            | Destination::PublicKeyHash(_)
-            | Destination::ClassicMultisig(_) => Err(Error::InvalidCreatorPublicKey),
-        })
-        .transpose()?;
+        .map(|pk| PublicKey::decode_all(&mut pk.as_slice()))
+        .transpose()
+        .map_err(|_| Error::InvalidCreatorPublicKey)?
+        .map(|public_key| TokenCreator { public_key });
 
     let nft_issuance = NftIssuanceV0 {
         metadata: Metadata {
@@ -770,6 +764,15 @@ pub fn encode_output_issue_nft(
 pub fn encode_output_data_deposit(data: &[u8]) -> Result<Vec<u8>, Error> {
     let output = TxOutput::DataDeposit(data.into());
     Ok(output.encode())
+}
+
+/// Returns the fee that needs to be paid by a transaction for issuing a data deposit
+#[wasm_bindgen]
+pub fn data_deposit_fee(current_block_height: u64, network: Network) -> Amount {
+    let chain_config = Builder::new(network.into()).build();
+    Amount::from_internal_amount(
+        chain_config.data_deposit_fee(BlockHeight::new(current_block_height)),
+    )
 }
 
 /// Given the parameters needed to create hash timelock contract, and a network type (mainnet, testnet, etc),
