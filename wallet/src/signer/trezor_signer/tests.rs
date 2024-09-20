@@ -19,14 +19,17 @@ use super::*;
 use crate::key_chain::{MasterKeyChain, LOOKAHEAD_SIZE};
 use crate::{Account, SendRequest};
 use common::chain::config::create_regtest;
+use common::chain::htlc::HashedTimelockContract;
 use common::chain::output_value::OutputValue;
 use common::chain::signature::inputsig::arbitrary_message::produce_message_challenge;
+use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock;
-use common::chain::tokens::TokenId;
+use common::chain::tokens::{NftIssuanceV0, TokenId};
 use common::chain::{
-    AccountNonce, AccountOutPoint, DelegationId, GenBlock, PoolId, Transaction, TxInput,
+    AccountNonce, AccountOutPoint, DelegationId, GenBlock, OrderData, PoolId, Transaction, TxInput,
 };
-use common::primitives::{Amount, Id, H256};
+use common::primitives::per_thousand::PerThousand;
+use common::primitives::{Amount, BlockHeight, Id, H256};
 use crypto::key::{KeyKind, PrivateKey};
 use randomness::{Rng, RngCore};
 use rstest::rstest;
@@ -83,6 +86,13 @@ fn sign_message(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn sign_transaction(#[case] seed: Seed) {
+    use common::chain::{
+        tokens::{IsTokenUnfreezable, Metadata, TokenIssuanceV1},
+        OrderId,
+    };
+    use crypto::vrf::VRFPrivateKey;
+    use serialization::extras::non_empty_vec::DataOrNoVec;
+
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_regtest());
@@ -147,7 +157,55 @@ fn sign_transaction(#[case] seed: Seed) {
         )),
         TxInput::AccountCommand(
             AccountNonce::new(rng.next_u64()),
+            AccountCommand::MintTokens(
+                TokenId::new(H256::random_using(&mut rng)),
+                Amount::from_atoms(100),
+            ),
+        ),
+        TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
             AccountCommand::UnmintTokens(TokenId::new(H256::random_using(&mut rng))),
+        ),
+        TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
+            AccountCommand::LockTokenSupply(TokenId::new(H256::random_using(&mut rng))),
+        ),
+        TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
+            AccountCommand::FreezeToken(
+                TokenId::new(H256::random_using(&mut rng)),
+                IsTokenUnfreezable::Yes,
+            ),
+        ),
+        TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
+            AccountCommand::UnfreezeToken(TokenId::new(H256::random_using(&mut rng))),
+        ),
+        TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
+            AccountCommand::ChangeTokenAuthority(
+                TokenId::new(H256::random_using(&mut rng)),
+                Destination::AnyoneCanSpend,
+            ),
+        ),
+        TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
+            AccountCommand::ConcludeOrder(OrderId::new(H256::random_using(&mut rng))),
+        ),
+        TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
+            AccountCommand::FillOrder(
+                OrderId::new(H256::random_using(&mut rng)),
+                OutputValue::Coin(Amount::from_atoms(123)),
+                Destination::AnyoneCanSpend,
+            ),
+        ),
+        TxInput::AccountCommand(
+            AccountNonce::new(rng.next_u64()),
+            AccountCommand::ChangeTokenMetadataUri(
+                TokenId::new(H256::random_using(&mut rng)),
+                "http://uri".as_bytes().to_vec(),
+            ),
         ),
     ];
     let acc_dests: Vec<Destination> = acc_inputs
@@ -173,6 +231,53 @@ fn sign_transaction(#[case] seed: Seed) {
     let _fee_amount = total_amount.sub(outputs_amounts_sum).unwrap();
 
     let (_dest_prv, dest_pub) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let (_, vrf_public_key) = VRFPrivateKey::new_from_entropy(crypto::vrf::VRFKeyKind::Schnorrkel);
+
+    let pool_id = PoolId::new(H256::random());
+    let delegation_id = DelegationId::new(H256::random());
+    let pool_data = StakePoolData::new(
+        Amount::from_atoms(5000000),
+        Destination::PublicKey(dest_pub.clone()),
+        vrf_public_key,
+        Destination::PublicKey(dest_pub.clone()),
+        PerThousand::new_from_rng(&mut rng),
+        Amount::from_atoms(100),
+    );
+    let token_issuance = TokenIssuance::V1(TokenIssuanceV1 {
+        token_ticker: "XXXX".as_bytes().to_vec(),
+        number_of_decimals: rng.gen_range(1..18),
+        metadata_uri: "http://uri".as_bytes().to_vec(),
+        total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
+        authority: Destination::PublicKey(dest_pub.clone()),
+        is_freezable: common::chain::tokens::IsTokenFreezable::No,
+    });
+
+    let nft_issuance = NftIssuance::V0(NftIssuanceV0 {
+        metadata: Metadata {
+            creator: None,
+            name: "Name".as_bytes().to_vec(),
+            description: "SomeNFT".as_bytes().to_vec(),
+            ticker: "NFTX".as_bytes().to_vec(),
+            icon_uri: DataOrNoVec::from(None),
+            additional_metadata_uri: DataOrNoVec::from(None),
+            media_uri: DataOrNoVec::from(None),
+            media_hash: "123456".as_bytes().to_vec(),
+        },
+    });
+    let nft_id = TokenId::new(H256::random());
+
+    let hash_lock = HashedTimelockContract {
+        secret_hash: common::chain::htlc::HtlcSecretHash([1; 20]),
+        spend_key: Destination::PublicKey(dest_pub.clone()),
+        refund_timelock: OutputTimeLock::UntilHeight(BlockHeight::new(123)),
+        refund_key: Destination::AnyoneCanSpend,
+    };
+
+    let order_data = OrderData::new(
+        Destination::PublicKey(dest_pub.clone()),
+        OutputValue::Coin(Amount::from_atoms(100)),
+        OutputValue::Coin(total_amount),
+    );
 
     let outputs = vec![
         TxOutput::Transfer(
@@ -185,20 +290,29 @@ fn sign_transaction(#[case] seed: Seed) {
             OutputTimeLock::ForSeconds(rng.next_u64()),
         ),
         TxOutput::Burn(OutputValue::Coin(burn_amount)),
-        TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(100_000_000_000)),
-            account.get_new_address(&mut db_tx, Change).unwrap().1.into_object(),
-        ),
+        TxOutput::CreateStakePool(pool_id, Box::new(pool_data)),
         TxOutput::CreateDelegationId(
             Destination::AnyoneCanSpend,
             PoolId::new(H256::random_using(&mut rng)),
         ),
+        TxOutput::DelegateStaking(burn_amount, delegation_id),
+        TxOutput::IssueFungibleToken(Box::new(token_issuance)),
+        TxOutput::IssueNft(
+            nft_id,
+            Box::new(nft_issuance.clone()),
+            Destination::AnyoneCanSpend,
+        ),
         TxOutput::DataDeposit(vec![1, 2, 3]),
-        TxOutput::DelegateStaking(
-            Amount::from_atoms(200),
-            DelegationId::new(H256::random_using(&mut rng)),
+        TxOutput::Htlc(OutputValue::Coin(burn_amount), Box::new(hash_lock)),
+        TxOutput::AnyoneCanTake(Box::new(order_data)),
+        TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(100_000_000_000)),
+            account.get_new_address(&mut db_tx, Change).unwrap().1.into_object(),
         ),
     ];
+
+    let nft = TxOutput::IssueNft(nft_id, Box::new(nft_issuance), Destination::AnyoneCanSpend);
+    eprintln!("encoded nft: {:?}", nft.encode());
 
     let req = SendRequest::new()
         .with_inputs(inputs.clone().into_iter().zip(utxos.clone()), &|_| None)
@@ -206,7 +320,8 @@ fn sign_transaction(#[case] seed: Seed) {
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
     let destinations = req.destinations().to_vec();
-    let ptx = req.into_partially_signed_tx(&BTreeMap::default()).unwrap();
+    let additional_info = BTreeMap::new();
+    let ptx = req.into_partially_signed_tx(&additional_info).unwrap();
 
     let mut devices = find_devices(false);
     assert!(!devices.is_empty());
