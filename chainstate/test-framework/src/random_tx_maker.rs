@@ -95,7 +95,13 @@ fn get_random_token<'a>(
         .iter()
         .choose(rng)
         .and_then(|(token_id, _)| {
-            tip_view.get_token_data(token_id).unwrap().is_some().then_some(*token_id)
+            tip_view
+                .get_token_data(token_id)
+                .unwrap()
+                .is_some_and(|data| match data {
+                    tokens_accounting::TokenData::FungibleToken(data) => !data.is_frozen(),
+                })
+                .then_some(*token_id)
         })
         .map(|token_id| {
             (
@@ -257,6 +263,20 @@ impl<'a> RandomTxMaker<'a> {
         let orders_db = OrdersAccountingDB::new(self.orders_store);
         let mut orders_cache = OrdersAccountingCache::new(&orders_db);
 
+        // Select random number of accounts to spend from
+        let account_inputs = self.select_accounts(rng);
+
+        // Spend from accounts first then from utxo because account commands affect the state (like freezing tokens)
+        let (account_inputs, account_outputs) = self.create_account_spending(
+            rng,
+            &mut tokens_cache,
+            &pos_db,
+            &mut pos_delta,
+            &mut orders_cache,
+            &account_inputs,
+            key_manager,
+        );
+
         // Select random number of utxos to spend
         let inputs_with_utxos = {
             let mut inputs_with_utxos = self.select_utxos(rng);
@@ -296,19 +316,6 @@ impl<'a> RandomTxMaker<'a> {
             &mut orders_cache,
             key_manager,
             inputs_with_utxos,
-        );
-
-        // Select random number of accounts to spend from
-        let account_inputs = self.select_accounts(rng);
-
-        let (account_inputs, account_outputs) = self.create_account_spending(
-            rng,
-            &mut tokens_cache,
-            &pos_db,
-            &mut pos_delta,
-            &mut orders_cache,
-            &account_inputs,
-            key_manager,
         );
 
         let mut inputs: Vec<_> = inputs.into_iter().chain(account_inputs).collect();

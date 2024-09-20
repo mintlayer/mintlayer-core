@@ -34,8 +34,8 @@ use common::{
             TokenTotalSupply,
         },
         ChainConfig, ChainstateUpgrade, ChangeTokenMetadataUriActivated, DataDepositFeeVersion,
-        Destination, HtlcActivated, NetUpgrades, OrdersActivated, TokenIssuanceVersion,
-        TokensFeeVersion, TxInput, TxOutput, UtxoOutPoint,
+        Destination, FrozenTokensValidationVersion, HtlcActivated, NetUpgrades, OrdersActivated,
+        TokenIssuanceVersion, TokensFeeVersion, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Fee, Idable},
 };
@@ -579,6 +579,7 @@ fn issue_fungible_token_v0(#[case] seed: Seed) {
                                 TokensFeeVersion::V1,
                                 DataDepositFeeVersion::V1,
                                 ChangeTokenMetadataUriActivated::Yes,
+                                FrozenTokensValidationVersion::V1,
                                 HtlcActivated::Yes,
                                 OrdersActivated::Yes,
                             ),

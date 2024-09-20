@@ -21,7 +21,7 @@ use common::chain::{
     HtlcActivated, OrdersActivated, RewardDistributionVersion, TokenIssuanceVersion,
     TokensFeeVersion, TxInput, TxOutput,
 };
-use common::chain::{OutPointSourceId, UtxoOutPoint};
+use common::chain::{FrozenTokensValidationVersion, OutPointSourceId, UtxoOutPoint};
 use common::primitives::{Amount, BlockHeight, CoinOrTokenId, Idable};
 use randomness::Rng;
 use rstest::rstest;
@@ -218,6 +218,7 @@ fn no_v0_issuance_after_v1(#[case] seed: Seed) {
                                 TokensFeeVersion::V1,
                                 DataDepositFeeVersion::V1,
                                 ChangeTokenMetadataUriActivated::Yes,
+                                FrozenTokensValidationVersion::V1,
                                 HtlcActivated::Yes,
                                 OrdersActivated::Yes,
                             ),

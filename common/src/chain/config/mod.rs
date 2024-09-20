@@ -53,8 +53,8 @@ use super::output_value::OutputValue;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 use super::{
     ChainstateUpgrade, ChangeTokenMetadataUriActivated, ConsensusUpgrade, DataDepositFeeVersion,
-    HtlcActivated, OrdersActivated, RewardDistributionVersion, TokenIssuanceVersion,
-    TokensFeeVersion,
+    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, RewardDistributionVersion,
+    TokenIssuanceVersion, TokensFeeVersion,
 };
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1: Duration = Duration::from_secs(120);
@@ -902,6 +902,7 @@ pub fn create_unit_test_config_builder() -> Builder {
                     TokensFeeVersion::V1,
                     DataDepositFeeVersion::V1,
                     ChangeTokenMetadataUriActivated::Yes,
+                    FrozenTokensValidationVersion::V1,
                     HtlcActivated::Yes,
                     OrdersActivated::Yes,
                 ),
