@@ -22,6 +22,7 @@ use std::{
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
+        make_order_id,
         output_value::OutputValue,
         stakelock::StakePoolData,
         tokens::{
@@ -30,9 +31,11 @@ use common::{
             TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
-        OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
+    primitives::{
+        id::WithId, per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable,
+    },
 };
 use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
@@ -48,6 +51,8 @@ use wallet_types::{
 };
 
 use crate::{destination_getters::get_all_tx_output_destinations, WalletError, WalletResult};
+
+use super::currency_grouper::Currency;
 
 pub type UtxoWithTxOutput<'a> = (UtxoOutPoint, (&'a TxOutput, Option<TokenId>));
 
@@ -76,6 +81,7 @@ pub struct DelegationData {
     pub last_parent: Option<OutPointSourceId>,
     pub not_staked_yet: bool,
 }
+
 impl DelegationData {
     fn new(pool_id: PoolId, destination: Destination) -> DelegationData {
         DelegationData {
@@ -473,6 +479,28 @@ impl TokenIssuanceData {
     }
 }
 
+pub struct OrderData {
+    pub conclude_key: Destination,
+    pub give_currency: Currency,
+    pub ask_currency: Currency,
+
+    pub last_nonce: Option<AccountNonce>,
+    /// last parent transaction if the parent is unconfirmed
+    pub last_parent: Option<OutPointSourceId>,
+}
+
+impl OrderData {
+    pub fn new(conclude_key: Destination, give_currency: Currency, ask_currency: Currency) -> Self {
+        Self {
+            conclude_key,
+            give_currency,
+            ask_currency,
+            last_nonce: None,
+            last_parent: None,
+        }
+    }
+}
+
 /// A helper structure for the UTXO search.
 ///
 /// All transactions and blocks from the DB are cached here. If a transaction
@@ -491,6 +519,7 @@ pub struct OutputCache {
     pools: BTreeMap<PoolId, PoolData>,
     delegations: BTreeMap<DelegationId, DelegationData>,
     token_issuance: BTreeMap<TokenId, TokenIssuanceData>,
+    orders: BTreeMap<OrderId, OrderData>,
 }
 
 impl OutputCache {
@@ -502,6 +531,7 @@ impl OutputCache {
             pools: BTreeMap::new(),
             delegations: BTreeMap::new(),
             token_issuance: BTreeMap::new(),
+            orders: BTreeMap::new(),
         }
     }
 
@@ -592,6 +622,10 @@ impl OutputCache {
 
     pub fn token_data(&self, token_id: &TokenId) -> Option<&TokenIssuanceData> {
         self.token_issuance.get(token_id)
+    }
+
+    pub fn order_data(&self, order_id: &OrderId) -> Option<&OrderData> {
+        self.orders.get(order_id)
     }
 
     pub fn get_token_unconfirmed_info<F: Fn(&Destination) -> bool>(
@@ -715,6 +749,12 @@ impl OutputCache {
                         OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
                         OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
                     },
+                    TxOutput::AnyoneCanTake(data) => {
+                        [data.ask(), data.give()].iter().any(|v| match v {
+                            OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
+                            OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
+                        })
+                    }
                     TxOutput::IssueNft(_, _, _)
                     | TxOutput::DataDeposit(_)
                     | TxOutput::CreateStakePool(_, _)
@@ -722,8 +762,6 @@ impl OutputCache {
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::ProduceBlockFromStake(_, _) => false,
-                    // TODO(orders)
-                    TxOutput::AnyoneCanTake(_) => unimplemented!(),
                 }
             }),
             TxInput::AccountCommand(_, cmd) => match cmd {
@@ -734,9 +772,18 @@ impl OutputCache {
                 | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                 | AccountCommand::ChangeTokenAuthority(token_id, _)
                 | AccountCommand::UnmintTokens(token_id) => frozen_token_id == token_id,
-                // TODO(orders)
-                AccountCommand::ConcludeOrder(_) => unimplemented!(),
-                AccountCommand::FillOrder(_, _, _) => unimplemented!(),
+                AccountCommand::ConcludeOrder(order_id) => {
+                    self.order_data(order_id).is_some_and(|data| {
+                        [data.ask_currency, data.give_currency].iter().any(|v| match v {
+                            Currency::Coin => false,
+                            Currency::Token(token_id) => frozen_token_id == token_id,
+                        })
+                    })
+                }
+                AccountCommand::FillOrder(_, output_value, _) => match output_value {
+                    OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
+                    OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
+                },
             },
             TxInput::Account(_) => false,
         })
@@ -839,8 +886,27 @@ impl OutputCache {
                     }
                 }
                 TxOutput::IssueNft(_, _, _) => {}
-                // TODO(orders)
-                TxOutput::AnyoneCanTake(_) => unimplemented!(),
+                TxOutput::AnyoneCanTake(order_data) => {
+                    let input0_outpoint = tx
+                        .inputs()
+                        .first()
+                        .ok_or(WalletError::NoUtxos)?
+                        .utxo_outpoint()
+                        .ok_or(WalletError::NoUtxos)?;
+                    let order_id = make_order_id(input0_outpoint);
+                    let give_currency = Currency::from_output_value(order_data.give())
+                        .ok_or(WalletError::TokenV0(tx.id()))?;
+                    let ask_currency = Currency::from_output_value(order_data.ask())
+                        .ok_or(WalletError::TokenV0(tx.id()))?;
+                    self.orders.insert(
+                        order_id,
+                        OrderData::new(
+                            order_data.conclude_key().clone(),
+                            give_currency,
+                            ask_currency,
+                        ),
+                    );
+                }
             };
         }
         Ok(())
@@ -930,9 +996,20 @@ impl OutputCache {
                             self.token_issuance.insert(*token_id, data);
                         }
                     }
-                    // TODO(orders)
-                    AccountCommand::ConcludeOrder(_) => unimplemented!(),
-                    AccountCommand::FillOrder(_, _, _) => unimplemented!(),
+                    AccountCommand::ConcludeOrder(order_id)
+                    | AccountCommand::FillOrder(order_id, _, _) => {
+                        if !already_present {
+                            if let Some(data) = self.orders.get_mut(order_id) {
+                                Self::update_order_state(
+                                    &mut self.unconfirmed_descendants,
+                                    data,
+                                    order_id,
+                                    *nonce,
+                                    tx_id,
+                                )?;
+                            }
+                        }
+                    }
                 },
             }
         }
@@ -1001,6 +1078,37 @@ impl OutputCache {
         Ok(())
     }
 
+    /// Update order state with new tx input
+    fn update_order_state(
+        unconfirmed_descendants: &mut BTreeMap<OutPointSourceId, BTreeSet<OutPointSourceId>>,
+        data: &mut OrderData,
+        order_id: &OrderId,
+        nonce: AccountNonce,
+        tx_id: &OutPointSourceId,
+    ) -> Result<(), WalletError> {
+        let next_nonce = data
+            .last_nonce
+            .map_or(Some(AccountNonce::new(0)), |nonce| nonce.increment())
+            .ok_or(WalletError::OrderNonceOverflow(*order_id))?;
+
+        ensure!(
+            nonce == next_nonce,
+            WalletError::InconsistentOrderDuplicateNonce(*order_id, nonce)
+        );
+
+        data.last_nonce = Some(nonce);
+        // update unconfirmed descendants
+        if let Some(descendants) = data
+            .last_parent
+            .as_ref()
+            .and_then(|parent_tx_id| unconfirmed_descendants.get_mut(parent_tx_id))
+        {
+            descendants.insert(tx_id.clone());
+        }
+        data.last_parent = Some(tx_id.clone());
+        Ok(())
+    }
+
     pub fn remove_tx(&mut self, tx_id: &OutPointSourceId) -> WalletResult<()> {
         let tx_opt = self.txs.remove(tx_id);
         if let Some(tx) = tx_opt {
@@ -1034,9 +1142,14 @@ impl OutputCache {
                                 data.unconfirmed_txs.remove(tx_id);
                             }
                         }
-                        // TODO(orders)
-                        AccountCommand::ConcludeOrder(_) => unimplemented!(),
-                        AccountCommand::FillOrder(_, _, _) => unimplemented!(),
+                        AccountCommand::ConcludeOrder(order_id)
+                        | AccountCommand::FillOrder(order_id, _, _) => {
+                            if let Some(data) = self.orders.get_mut(order_id) {
+                                data.last_nonce = nonce.decrement();
+                                data.last_parent =
+                                    find_parent(&self.unconfirmed_descendants, tx_id.clone());
+                            }
+                        }
                     },
                 }
             }
@@ -1061,9 +1174,8 @@ impl OutputCache {
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::Htlc(_, _) => {}
-                    // TODO(orders)
-                    TxOutput::AnyoneCanTake(_) => unimplemented!(),
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::AnyoneCanTake(_) => {}
                 }
             }
         }
@@ -1330,9 +1442,16 @@ impl OutputCache {
                                                 data.unconfirmed_txs.remove(&tx_id.into());
                                             }
                                         }
-                                        // TODO(orders)
-                                        AccountCommand::ConcludeOrder(_) => unimplemented!(),
-                                        AccountCommand::FillOrder(_, _, _) => unimplemented!(),
+                                        AccountCommand::ConcludeOrder(order_id)
+                                        | AccountCommand::FillOrder(order_id, _, _) => {
+                                            if let Some(data) = self.orders.get_mut(order_id) {
+                                                data.last_nonce = nonce.decrement();
+                                                data.last_parent = find_parent(
+                                                    &self.unconfirmed_descendants,
+                                                    tx_id.into(),
+                                                );
+                                            }
+                                        }
                                     },
                                 }
                             }
@@ -1539,10 +1658,9 @@ fn apply_freeze_mutations_from_tx(
                 | AccountCommand::UnmintTokens(_)
                 | AccountCommand::LockTokenSupply(_)
                 | AccountCommand::ChangeTokenMetadataUri(_, _)
-                | AccountCommand::ChangeTokenAuthority(_, _) => {}
-                // TODO(orders)
-                AccountCommand::ConcludeOrder(_) => unimplemented!(),
-                AccountCommand::FillOrder(_, _, _) => unimplemented!(),
+                | AccountCommand::ChangeTokenAuthority(_, _)
+                | AccountCommand::ConcludeOrder(_)
+                | AccountCommand::FillOrder(_, _, _) => {}
             },
         }
     }
@@ -1582,10 +1700,9 @@ fn apply_total_supply_mutations_from_tx(
                 AccountCommand::FreezeToken(_, _)
                 | AccountCommand::UnfreezeToken(_)
                 | AccountCommand::ChangeTokenMetadataUri(_, _)
-                | AccountCommand::ChangeTokenAuthority(_, _) => {}
-                // TODO(orders)
-                AccountCommand::ConcludeOrder(_) => unimplemented!(),
-                AccountCommand::FillOrder(_, _, _) => unimplemented!(),
+                | AccountCommand::ChangeTokenAuthority(_, _)
+                | AccountCommand::ConcludeOrder(_)
+                | AccountCommand::FillOrder(_, _, _) => {}
             },
         }
     }

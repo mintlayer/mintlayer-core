@@ -50,8 +50,9 @@ use common::chain::tokens::{
     make_token_id, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
 use common::chain::{
-    AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
-    SignedTransaction, Transaction, TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
+    AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId,
+    OutPointSourceId, PoolId, SignedTransaction, Transaction, TransactionCreationError, TxInput,
+    TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::{hash_encoded, WithId};
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -142,12 +143,18 @@ pub enum WalletError {
     DelegationNonceOverflow(DelegationId),
     #[error("Token issuance nonce overflow for id: {0}")]
     TokenIssuanceNonceOverflow(TokenId),
+    #[error("Order nonce overflow for id: {0}")]
+    OrderNonceOverflow(OrderId),
     #[error("Token with id: {0} with duplicate AccountNonce: {1}")]
     InconsistentTokenIssuanceDuplicateNonce(TokenId, AccountNonce),
+    #[error("Order with id: {0} with duplicate AccountNonce: {1}")]
+    InconsistentOrderDuplicateNonce(OrderId, AccountNonce),
     #[error("Empty inputs in token issuance transaction")]
     MissingTokenId,
     #[error("Unknown token with Id {0}")]
     UnknownTokenId(TokenId),
+    #[error("Unknown order with Id {0}")]
+    UnknownOrderId(OrderId),
     #[error("Transaction creation error: {0}")]
     TransactionCreation(#[from] TransactionCreationError),
     #[error("Transaction signing error: {0}")]
@@ -180,6 +187,8 @@ pub enum WalletError {
     LockedUtxo(UtxoOutPoint),
     #[error("Selected UTXO {0:?} is a token v0 and cannot be used")]
     TokenV0Utxo(UtxoOutPoint),
+    #[error("Token v0 from {0:?} is deprecated and cannot be used")]
+    TokenV0(OutPointSourceId),
     #[error("Cannot change a Locked Token supply")]
     CannotChangeLockedTokenSupply,
     #[error("Cannot lock Token supply in state: {0}")]

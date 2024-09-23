@@ -23,7 +23,7 @@ use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::htlc::HashedTimelockContract;
 use common::chain::partially_signed_transaction::PartiallySignedTransaction;
-use common::chain::{AccountCommand, AccountOutPoint, AccountSpending};
+use common::chain::{AccountCommand, AccountOutPoint, AccountSpending, OrderId};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
 use common::size_estimation::{
@@ -33,6 +33,7 @@ use common::size_estimation::{
 use common::Uint256;
 use crypto::key::hdkd::child_number::ChildNumber;
 use mempool::FeeRate;
+use output_cache::OrderData;
 use serialization::hex_encoded::HexEncoded;
 use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
@@ -877,6 +878,13 @@ impl Account {
             .ok_or(WalletError::UnknownTokenId(*token_id))
     }
 
+    pub fn find_order(&self, order_id: &OrderId) -> WalletResult<&OrderData> {
+        self.output_cache
+            .order_data(order_id)
+            .filter(|data| self.is_destination_mine(&data.conclude_key))
+            .ok_or(WalletError::UnknownOrderId(*order_id))
+    }
+
     pub fn get_token_unconfirmed_info(
         &self,
         token_info: &RPCFungibleTokenInfo,
@@ -1308,8 +1316,8 @@ impl Account {
                     }
                 }
                 TxInput::AccountCommand(_, cmd) => {
-                    // find authority of the token
                     match cmd {
+                        // find authority of the token
                         AccountCommand::MintTokens(token_id, _)
                         | AccountCommand::UnmintTokens(token_id)
                         | AccountCommand::LockTokenSupply(token_id)
@@ -1321,9 +1329,13 @@ impl Account {
                             .token_data(token_id)
                             .map(|data| (None, Some(data.authority.clone())))
                             .ok_or(WalletError::UnknownTokenId(*token_id)),
-                        // TODO(orders)
-                        AccountCommand::ConcludeOrder(_) => unimplemented!(),
-                        AccountCommand::FillOrder(_, _, _) => unimplemented!(),
+                        // find authority of the order
+                        AccountCommand::ConcludeOrder(order_id) => self
+                            .output_cache
+                            .order_data(order_id)
+                            .map(|data| (None, Some(data.conclude_key.clone())))
+                            .ok_or(WalletError::UnknownOrderId(*order_id)),
+                        AccountCommand::FillOrder(_, _, dest) => Ok((None, Some(dest.clone()))),
                     }
                 }
             })
@@ -1816,9 +1828,8 @@ impl Account {
                     self.find_token(token_id).is_ok()
                         || self.is_destination_mine_or_watched(address)
                 }
-                // TODO(orders)
-                AccountCommand::ConcludeOrder(_) => unimplemented!(),
-                AccountCommand::FillOrder(_, _, _) => unimplemented!(),
+                AccountCommand::ConcludeOrder(order_id) => self.find_order(order_id).is_ok(),
+                AccountCommand::FillOrder(_, _, dest) => self.is_destination_mine_or_watched(dest),
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
@@ -2189,13 +2200,12 @@ fn group_preselected_inputs(
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::DataDeposit(_) => {
+                    | TxOutput::DataDeposit(_)
+                    | TxOutput::AnyoneCanTake(_) => {
                         return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                             output.clone(),
                         )))
                     }
-                    // TODO(orders)
-                    TxOutput::AnyoneCanTake(_) => unimplemented!(),
                 };
                 update_preselected_inputs(currency, value, *fee)?;
             }
@@ -2247,9 +2257,8 @@ fn group_preselected_inputs(
                             .ok_or(WalletError::OutputAmountOverflow)?,
                     )?;
                 }
-                // TODO(orders)
-                AccountCommand::ConcludeOrder(_) => unimplemented!(),
-                AccountCommand::FillOrder(_, _, _) => unimplemented!(),
+                AccountCommand::ConcludeOrder(_) => todo!(),
+                AccountCommand::FillOrder(_, _, _) => todo!(),
             },
         }
     }
