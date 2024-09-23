@@ -76,6 +76,8 @@ pub enum Error {
     TransactionCreationError(#[from] TransactionCreationError),
     #[error("Produce signature error: {0}")]
     ProduceSignatureError(#[from] DestinationSigError),
+    #[error("No UTXO input found in the provided inputs")]
+    NoUtxoInInputs,
 }
 
 // This is required to make an error readable in JavaScript

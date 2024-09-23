@@ -42,8 +42,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{
-            IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenCreator, TokenId,
-            TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
+            make_token_id, IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenCreator,
+            TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
         AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination, OutPointSourceId,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -705,6 +705,24 @@ pub fn encode_output_issue_fungible_token(
 
     let output = TxOutput::IssueFungibleToken(Box::new(token_issuance));
     Ok(output.encode())
+}
+
+/// Returns the Fungible/NFT Token ID for the given inputs of a transaction
+#[wasm_bindgen]
+pub fn get_token_id(mut inputs: &[u8], network: Network) -> Result<String, Error> {
+    let chain_config = Builder::new(network.into()).build();
+
+    let mut tx_inputs = vec![];
+    while !inputs.is_empty() {
+        let input = TxInput::decode(&mut inputs).map_err(|_| Error::InvalidInput)?;
+        tx_inputs.push(input);
+    }
+
+    let token_id = make_token_id(&tx_inputs).ok_or(Error::NoUtxoInInputs)?;
+
+    Ok(Address::new(&chain_config, token_id)
+        .expect("Should not fail to create address")
+        .to_string())
 }
 
 /// Given the parameters needed to issue an NFT, and a network type (mainnet, testnet, etc),

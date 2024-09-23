@@ -46,6 +46,7 @@ import {
   encode_output_issue_fungible_token,
   sign_challenge,
   verify_challenge,
+  get_token_id,
 } from "../pkg/wasm_wrappers.js";
 
 function assert_eq_arrays(arr1, arr2) {
@@ -283,6 +284,28 @@ export async function run_test() {
     ];
 
     assert_eq_arrays(inputs, expected_inputs);
+
+    try {
+      get_token_id([], Network.Testnet);
+      throw "Token Id generated without a UTXO input somehow!";
+    } catch (e) {
+      if (!e.includes("No UTXO input found")) {
+        throw e;
+      }
+      console.log("Tested no UTXO inputs for token ID successfully");
+    }
+
+    {
+      const expected_token_id =
+        "tmltk13cncdptay55g9ajhrkaw0fp46r0tspq9kptul8vj2q7yvd69n4zsl24gea";
+      const token_id = get_token_id(inputs, Network.Testnet);
+      console.log(token_id);
+
+      if (token_id != expected_token_id) {
+        throw new Error("Different token id");
+      }
+
+    }
 
     const token_id =
       "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
