@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use crate::{
-    account::currency_grouper::Currency,
     key_chain::{make_account_path, LOOKAHEAD_SIZE},
     send_request::{make_address_output, make_create_delegation_output},
     wallet_events::WalletEventsNoOp,
@@ -55,6 +54,7 @@ use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     seed_phrase::PassPhrase,
     utxo_types::{UtxoState, UtxoType},
+    Currency,
 };
 use wallet_types::{seed_phrase::SeedPhraseLanguage, AccountWalletTxId};
 

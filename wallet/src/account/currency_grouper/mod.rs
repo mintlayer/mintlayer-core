@@ -18,33 +18,12 @@ use crate::{WalletError, WalletResult};
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{
-        output_value::{self, OutputValue},
-        tokens::TokenId,
-        ChainConfig, TxOutput,
-    },
+    chain::{output_value::OutputValue, ChainConfig, TxOutput},
     primitives::{Amount, BlockHeight},
 };
+use wallet_types::currency::Currency;
 
 use super::UtxoSelectorError;
-
-#[derive(
-    PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug, serde::Serialize, serde::Deserialize,
-)]
-pub enum Currency {
-    Coin,
-    Token(TokenId),
-}
-
-impl Currency {
-    pub fn from_output_value(output_value: &OutputValue) -> Option<Currency> {
-        match output_value {
-            OutputValue::Coin(_) => Some(Currency::Coin),
-            OutputValue::TokenV0(_) => None,
-            OutputValue::TokenV1(id, _) => Some(Currency::Token(*id)),
-        }
-    }
-}
 
 pub(crate) fn group_outputs<T, Grouped: Clone>(
     outputs: impl Iterator<Item = T>,

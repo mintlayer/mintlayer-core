@@ -18,11 +18,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::account::transaction_list::TransactionList;
-use crate::account::{
-    currency_grouper::Currency, CurrentFeeRate, DelegationData, PoolData, TransactionToSign,
-    UnconfirmedTokenInfo, UtxoSelectorError,
-};
 use crate::account::{CoinSelectionAlgo, TxInfo};
+use crate::account::{
+    CurrentFeeRate, DelegationData, PoolData, TransactionToSign, UnconfirmedTokenInfo,
+    UtxoSelectorError,
+};
 use crate::key_chain::{
     make_account_path, make_path_to_vrf_key, KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE,
     VRF_INDEX,
@@ -82,7 +82,9 @@ use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::{TxData, TxState};
 use wallet_types::wallet_type::WalletType;
 use wallet_types::with_locked::WithLocked;
-use wallet_types::{AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState};
+use wallet_types::{
+    AccountId, AccountKeyPurposeId, BlockInfo, Currency, KeyPurpose, KeychainUsageState,
+};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;

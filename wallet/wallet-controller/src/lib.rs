@@ -80,7 +80,7 @@ pub use node_comm::{
 use randomness::{make_pseudo_rng, make_true_rng, Rng};
 use wallet::{
     account::{
-        currency_grouper::{self, Currency},
+        currency_grouper::{self},
         TransactionToSign,
     },
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
@@ -94,7 +94,7 @@ pub use wallet_types::{
 };
 use wallet_types::{
     seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, wallet_type::WalletType,
-    with_locked::WithLocked,
+    with_locked::WithLocked, Currency,
 };
 
 #[derive(thiserror::Error, Debug)]

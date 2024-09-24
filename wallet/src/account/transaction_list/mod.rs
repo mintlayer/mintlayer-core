@@ -20,6 +20,7 @@ use common::{
     primitives::{Amount, BlockHeight, Id, Idable},
 };
 use wallet_types::{
+    currency::Currency,
     wallet_tx::{TxData, TxState},
     KeyPurpose, WalletTx,
 };
@@ -184,12 +185,8 @@ fn get_transaction(
         Amount::ZERO,
     )?;
 
-    let recv_amount = *own_output_amounts
-        .get(&super::currency_grouper::Currency::Coin)
-        .unwrap_or(&Amount::ZERO);
-    let non_own_recv_amount = *non_own_output_amounts
-        .get(&super::currency_grouper::Currency::Coin)
-        .unwrap_or(&Amount::ZERO);
+    let recv_amount = *own_output_amounts.get(&Currency::Coin).unwrap_or(&Amount::ZERO);
+    let non_own_recv_amount = *non_own_output_amounts.get(&Currency::Coin).unwrap_or(&Amount::ZERO);
 
     let tx_type = if own_inputs.len() == all_inputs.len() && own_outputs.len() == all_outputs.len()
     {

@@ -16,6 +16,7 @@
 pub mod account_id;
 pub mod account_info;
 pub mod chain_info;
+pub mod currency;
 pub mod keys;
 pub mod seed_phrase;
 pub mod signature_status;
@@ -29,5 +30,6 @@ pub use account_id::{
     AccountWalletTxId,
 };
 pub use account_info::AccountInfo;
+pub use currency::Currency;
 pub use keys::{KeyPurpose, KeychainUsageState, RootKeys};
 pub use wallet_tx::{BlockInfo, WalletTx};

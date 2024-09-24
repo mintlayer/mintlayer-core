@@ -45,9 +45,7 @@ use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
 use utils::ensure;
 use wallet::{
-    account::{
-        currency_grouper::Currency, CoinSelectionAlgo, TransactionToSign, UnconfirmedTokenInfo,
-    },
+    account::{CoinSelectionAlgo, TransactionToSign, UnconfirmedTokenInfo},
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
@@ -61,6 +59,7 @@ use wallet_types::{
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
     with_locked::WithLocked,
+    Currency,
 };
 
 use crate::{

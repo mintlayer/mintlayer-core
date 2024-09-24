@@ -30,10 +30,7 @@ use futures::{stream::FuturesUnordered, FutureExt, TryStreamExt};
 use node_comm::node_traits::NodeInterface;
 use utils::tap_log::TapLog;
 use wallet::{
-    account::{
-        currency_grouper::Currency, transaction_list::TransactionList, DelegationData, PoolData,
-        TxInfo,
-    },
+    account::{transaction_list::TransactionList, DelegationData, PoolData, TxInfo},
     wallet::WalletPoolsFilter,
     DefaultWallet,
 };
@@ -42,7 +39,7 @@ use wallet_types::{
     utxo_types::{UtxoStates, UtxoTypes},
     wallet_tx::TxData,
     with_locked::WithLocked,
-    KeychainUsageState,
+    Currency, KeychainUsageState,
 };
 
 use crate::{

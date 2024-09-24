@@ -36,10 +36,7 @@ use types::RpcHashedTimelockContract;
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
-    account::{
-        currency_grouper::Currency, transaction_list::TransactionList, PoolData, TransactionToSign,
-        TxInfo,
-    },
+    account::{transaction_list::TransactionList, PoolData, TransactionToSign, TxInfo},
     WalletError,
 };
 
@@ -77,7 +74,7 @@ use wallet_controller::{
 };
 use wallet_types::{
     account_info::StandaloneAddressDetails, seed_phrase::StoreSeedPhrase,
-    signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked,
+    signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked, Currency,
 };
 
 use crate::{service::CreatedWallet, WalletHandle, WalletRpcConfig};

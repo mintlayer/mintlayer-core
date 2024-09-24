@@ -79,11 +79,10 @@ use wallet_storage::{
 use wallet_types::utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes};
 use wallet_types::wallet_tx::{BlockData, TxData, TxState};
 use wallet_types::{
-    AccountId, AccountInfo, AccountWalletCreatedTxId, AccountWalletTxId, BlockInfo, KeyPurpose,
-    KeychainUsageState, WalletTx,
+    AccountId, AccountInfo, AccountWalletCreatedTxId, AccountWalletTxId, BlockInfo, Currency,
+    KeyPurpose, KeychainUsageState, WalletTx,
 };
 
-use self::currency_grouper::Currency;
 pub use self::output_cache::{
     DelegationData, FungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
 };
@@ -210,7 +209,7 @@ impl Account {
         fee_rates: CurrentFeeRate,
     ) -> WalletResult<SendRequest> {
         // TODO: allow to pay fees with different currency?
-        let pay_fee_with_currency = currency_grouper::Currency::Coin;
+        let pay_fee_with_currency = Currency::Coin;
 
         let mut output_currency_amounts = currency_grouper::group_outputs_with_issuance_fee(
             request.outputs().iter(),
@@ -293,8 +292,8 @@ impl Account {
                 )?;
 
                 let cost_of_change = match currency {
-                    currency_grouper::Currency::Coin => coin_change_fee,
-                    currency_grouper::Currency::Token(_) => token_change_fee,
+                    Currency::Coin => coin_change_fee,
+                    Currency::Token(_) => token_change_fee,
                 };
                 let selection_result = select_coins(
                     utxos,
@@ -345,8 +344,8 @@ impl Account {
             change_addresses.get(&pay_fee_with_currency),
         )?;
         let cost_of_change = match pay_fee_with_currency {
-            currency_grouper::Currency::Coin => coin_change_fee,
-            currency_grouper::Currency::Token(_) => token_change_fee,
+            Currency::Coin => coin_change_fee,
+            Currency::Token(_) => token_change_fee,
         };
 
         let selection_result = select_coins(
@@ -387,9 +386,9 @@ impl Account {
 
     fn check_outputs_and_add_change(
         &mut self,
-        pay_fee_with_currency: &currency_grouper::Currency,
-        output_currency_amounts: BTreeMap<currency_grouper::Currency, Amount>,
-        selected_inputs: BTreeMap<currency_grouper::Currency, utxo_selector::SelectionResult>,
+        pay_fee_with_currency: &Currency,
+        output_currency_amounts: BTreeMap<Currency, Amount>,
+        selected_inputs: BTreeMap<Currency, utxo_selector::SelectionResult>,
         mut change_addresses: BTreeMap<Currency, Address<Destination>>,
         db_tx: &mut impl WalletStorageWriteLocked,
         mut request: SendRequest,
@@ -412,10 +411,8 @@ impl Account {
                 };
 
                 let change_output = match currency {
-                    currency_grouper::Currency::Coin => {
-                        make_address_output(change_address, change_amount)
-                    }
-                    currency_grouper::Currency::Token(token_id) => {
+                    Currency::Coin => make_address_output(change_address, change_amount),
+                    Currency::Token(token_id) => {
                         make_address_output_token(change_address, change_amount, *token_id)
                     }
                 };
@@ -432,9 +429,9 @@ impl Account {
     fn utxo_output_groups_by_currency(
         &self,
         fee_rates: CurrentFeeRate,
-        pay_fee_with_currency: &currency_grouper::Currency,
+        pay_fee_with_currency: &Currency,
         utxos: Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))>,
-    ) -> Result<BTreeMap<currency_grouper::Currency, Vec<OutputGroup>>, WalletError> {
+    ) -> Result<BTreeMap<Currency, Vec<OutputGroup>>, WalletError> {
         let utxo_to_output_group =
             |(outpoint, txo): (UtxoOutPoint, TxOutput)| -> WalletResult<OutputGroup> {
                 let tx_input: TxInput = outpoint.into();
@@ -470,7 +467,7 @@ impl Account {
         )?
         .into_iter()
         .map(
-            |(currency, utxos)| -> WalletResult<(currency_grouper::Currency, Vec<OutputGroup>)> {
+            |(currency, utxos)| -> WalletResult<(Currency, Vec<OutputGroup>)> {
                 let utxo_groups = utxos
                     .into_iter()
                     // TODO: group outputs by destination
@@ -1688,7 +1685,7 @@ impl Account {
         utxo_states: UtxoStates,
         median_time: BlockTimestamp,
         with_locked: WithLocked,
-    ) -> WalletResult<BTreeMap<currency_grouper::Currency, Amount>> {
+    ) -> WalletResult<BTreeMap<Currency, Amount>> {
         let amounts_by_currency = currency_grouper::group_utxos_for_input(
             self.get_utxos(
                 UtxoType::Transfer | UtxoType::LockThenTransfer | UtxoType::IssueNft,
@@ -2143,7 +2140,7 @@ fn group_preselected_inputs(
     chain_config: &ChainConfig,
     block_height: BlockHeight,
     dest_info_provider: Option<&dyn DestinationInfoProvider>,
-) -> Result<BTreeMap<currency_grouper::Currency, (Amount, Amount)>, WalletError> {
+) -> Result<BTreeMap<Currency, (Amount, Amount)>, WalletError> {
     let mut preselected_inputs = BTreeMap::new();
     for (input, destination, utxo) in
         izip!(request.inputs(), request.destinations(), request.utxos())
@@ -2155,24 +2152,22 @@ fn group_preselected_inputs(
             .compute_fee(input_size + inp_sig_size)
             .map_err(|_| UtxoSelectorError::AmountArithmeticError)?;
 
-        let mut update_preselected_inputs = |currency: currency_grouper::Currency,
-                                             amount: Amount,
-                                             fee: Amount|
-         -> WalletResult<()> {
-            match preselected_inputs.entry(currency) {
-                Entry::Vacant(entry) => {
-                    entry.insert((amount, fee));
+        let mut update_preselected_inputs =
+            |currency: Currency, amount: Amount, fee: Amount| -> WalletResult<()> {
+                match preselected_inputs.entry(currency) {
+                    Entry::Vacant(entry) => {
+                        entry.insert((amount, fee));
+                    }
+                    Entry::Occupied(mut entry) => {
+                        let (existing_amount, existing_fee) = entry.get_mut();
+                        *existing_amount =
+                            (*existing_amount + amount).ok_or(WalletError::OutputAmountOverflow)?;
+                        *existing_fee =
+                            (*existing_fee + fee).ok_or(WalletError::OutputAmountOverflow)?;
+                    }
                 }
-                Entry::Occupied(mut entry) => {
-                    let (existing_amount, existing_fee) = entry.get_mut();
-                    *existing_amount =
-                        (*existing_amount + amount).ok_or(WalletError::OutputAmountOverflow)?;
-                    *existing_fee =
-                        (*existing_fee + fee).ok_or(WalletError::OutputAmountOverflow)?;
-                }
-            }
-            Ok(())
-        };
+                Ok(())
+            };
 
         match input {
             TxInput::Utxo(_) => {
@@ -2211,13 +2206,13 @@ fn group_preselected_inputs(
             }
             TxInput::Account(outpoint) => match outpoint.account() {
                 AccountSpending::DelegationBalance(_, amount) => {
-                    update_preselected_inputs(currency_grouper::Currency::Coin, *amount, *fee)?;
+                    update_preselected_inputs(Currency::Coin, *amount, *fee)?;
                 }
             },
             TxInput::AccountCommand(_, op) => match op {
                 AccountCommand::MintTokens(token_id, amount) => {
                     update_preselected_inputs(
-                        currency_grouper::Currency::Token(*token_id),
+                        Currency::Token(*token_id),
                         *amount,
                         (*fee + chain_config.token_supply_change_fee(block_height))
                             .ok_or(WalletError::OutputAmountOverflow)?,
@@ -2226,7 +2221,7 @@ fn group_preselected_inputs(
                 AccountCommand::LockTokenSupply(token_id)
                 | AccountCommand::UnmintTokens(token_id) => {
                     update_preselected_inputs(
-                        currency_grouper::Currency::Token(*token_id),
+                        Currency::Token(*token_id),
                         Amount::ZERO,
                         (*fee + chain_config.token_supply_change_fee(block_height))
                             .ok_or(WalletError::OutputAmountOverflow)?,
@@ -2235,7 +2230,7 @@ fn group_preselected_inputs(
                 AccountCommand::FreezeToken(token_id, _)
                 | AccountCommand::UnfreezeToken(token_id) => {
                     update_preselected_inputs(
-                        currency_grouper::Currency::Token(*token_id),
+                        Currency::Token(*token_id),
                         Amount::ZERO,
                         (*fee + chain_config.token_freeze_fee(block_height))
                             .ok_or(WalletError::OutputAmountOverflow)?,
@@ -2243,7 +2238,7 @@ fn group_preselected_inputs(
                 }
                 AccountCommand::ChangeTokenAuthority(token_id, _) => {
                     update_preselected_inputs(
-                        currency_grouper::Currency::Token(*token_id),
+                        Currency::Token(*token_id),
                         Amount::ZERO,
                         (*fee + chain_config.token_change_authority_fee(block_height))
                             .ok_or(WalletError::OutputAmountOverflow)?,
@@ -2251,7 +2246,7 @@ fn group_preselected_inputs(
                 }
                 AccountCommand::ChangeTokenMetadataUri(token_id, _) => {
                     update_preselected_inputs(
-                        currency_grouper::Currency::Token(*token_id),
+                        Currency::Token(*token_id),
                         Amount::ZERO,
                         (*fee + chain_config.token_change_metadata_uri_fee())
                             .ok_or(WalletError::OutputAmountOverflow)?,

@@ -33,9 +33,7 @@ use common::{
         AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
         OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{
-        id::WithId, per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable,
-    },
+    primitives::{id::WithId, per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
 };
 use crypto::vrf::VRFPublicKey;
 use itertools::Itertools;
@@ -44,6 +42,7 @@ use rpc_description::HasValueHint;
 use tx_verifier::transaction_verifier::calculate_tokens_burned_in_outputs;
 use utils::ensure;
 use wallet_types::{
+    currency::Currency,
     utxo_types::{get_utxo_state, UtxoState, UtxoStates},
     wallet_tx::{TxData, TxState},
     with_locked::WithLocked,
@@ -51,8 +50,6 @@ use wallet_types::{
 };
 
 use crate::{destination_getters::get_all_tx_output_destinations, WalletError, WalletResult};
-
-use super::currency_grouper::Currency;
 
 pub type UtxoWithTxOutput<'a> = (UtxoOutPoint, (&'a TxOutput, Option<TokenId>));
 
