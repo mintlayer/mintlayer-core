@@ -54,7 +54,7 @@ use crate::{
     RpcError,
 };
 
-use super::types::RpcHashedTimelockContract;
+use super::types::{RpcCurrency, RpcHashedTimelockContract};
 
 #[async_trait::async_trait]
 impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletEventsRpcServer
@@ -1031,6 +1031,35 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
             self.create_htlc_transaction(account_arg.index::<N>()?, amount, token_id, htlc, config)
                 .await
                 .map(HexEncoded::new),
+        )
+    }
+
+    async fn create_order(
+        &self,
+        account_arg: AccountArg,
+        ask_currency: RpcCurrency,
+        ask_amount: RpcAmountIn,
+        give_currency: RpcCurrency,
+        give_amount: RpcAmountIn,
+        conclude_address: RpcAddress<Destination>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb(),
+            broadcast_to_mempool: true,
+        };
+
+        rpc::handle_result(
+            self.create_order(
+                account_arg.index::<N>()?,
+                ask_currency,
+                ask_amount,
+                give_currency,
+                give_amount,
+                conclude_address,
+                config,
+            )
+            .await,
         )
     }
 

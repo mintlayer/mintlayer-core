@@ -38,7 +38,7 @@ use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
     CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
     MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
+    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcCurrency, RpcHashedTimelockContract,
     RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
     RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
@@ -675,6 +675,18 @@ trait WalletRpc {
         htlc: RpcHashedTimelockContract,
         options: TransactionOptions,
     ) -> rpc::RpcResult<HexEncoded<SignedTransaction>>;
+
+    #[method(name = "create_order")]
+    async fn create_order(
+        &self,
+        account: AccountArg,
+        ask_currency: RpcCurrency,
+        ask_amount: RpcAmountIn,
+        give_currency: RpcCurrency,
+        give_amount: RpcAmountIn,
+        conclude_address: RpcAddress<Destination>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction>;
 
     /// Node version
     #[method(name = "node_version")]

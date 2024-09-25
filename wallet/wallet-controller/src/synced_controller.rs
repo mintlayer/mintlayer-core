@@ -1051,6 +1051,30 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         Ok(result)
     }
 
+    pub async fn create_order(
+        &mut self,
+        ask_value: OutputValue,
+        give_value: OutputValue,
+        conclude_key: Address<Destination>,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_order_tx(
+                    account_index,
+                    ask_value,
+                    give_value,
+                    conclude_key,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
+    }
+
     /// Checks if the wallet has stake pools and marks this account for staking.
     pub fn start_staking(&mut self) -> Result<(), ControllerError<T>> {
         utils::ensure!(!self.wallet.is_locked(), ControllerError::WalletIsLocked);

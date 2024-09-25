@@ -40,7 +40,7 @@ use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
+        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcCurrency, RpcHashedTimelockContract,
         RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
@@ -1053,6 +1053,34 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             )
             .await
             .map(HexEncoded::new)
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn create_order(
+        &self,
+        account_index: U31,
+        ask_token_id: Option<String>,
+        ask_amount: DecimalAmount,
+        give_token_id: Option<String>,
+        give_amount: DecimalAmount,
+        conclude_address: String,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        self.wallet_rpc
+            .create_order(
+                account_index.into(),
+                ask_token_id.map_or(RpcCurrency::Coin, |v| RpcCurrency::Token {
+                    token_id: v.into(),
+                }),
+                ask_amount.into(),
+                give_token_id.map_or(RpcCurrency::Coin, |v| RpcCurrency::Token {
+                    token_id: v.into(),
+                }),
+                give_amount.into(),
+                conclude_address.into(),
+                config,
+            )
+            .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 

@@ -771,6 +771,13 @@ pub struct RpcHashedTimelockContract {
     pub refund_timelock: OutputTimeLock,
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type", content = "content")]
+pub enum RpcCurrency {
+    Coin,
+    Token { token_id: RpcAddress<TokenId> },
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

@@ -978,6 +978,31 @@ impl Account {
         )
     }
 
+    pub fn create_order_tx(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        ask_value: OutputValue,
+        give_value: OutputValue,
+        conclude_address: Address<Destination>,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SendRequest> {
+        let order_data =
+            common::chain::OrderData::new(conclude_address.into_object(), ask_value, give_value);
+        let output = TxOutput::AnyoneCanTake(Box::new(order_data));
+        let request = SendRequest::new().with_outputs([output]);
+
+        self.select_inputs_for_send_request(
+            request,
+            SelectedInputs::Utxos(vec![]),
+            None,
+            BTreeMap::new(),
+            db_tx,
+            median_time,
+            fee_rate,
+        )
+    }
+
     pub fn create_issue_nft_tx(
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,

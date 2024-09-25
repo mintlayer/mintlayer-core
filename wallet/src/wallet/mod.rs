@@ -1804,6 +1804,31 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
+    pub fn create_order_tx(
+        &mut self,
+        account_index: U31,
+        ask_value: OutputValue,
+        give_value: OutputValue,
+        conclude_key: Address<Destination>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
+            account.create_order_tx(
+                db_tx,
+                ask_value,
+                give_value,
+                conclude_key,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+
     pub fn sign_raw_transaction(
         &mut self,
         account_index: U31,

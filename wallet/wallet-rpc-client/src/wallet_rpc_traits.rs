@@ -472,6 +472,17 @@ pub trait WalletInterface {
         config: ControllerConfig,
     ) -> Result<HexEncoded<SignedTransaction>, Self::Error>;
 
+    async fn create_order(
+        &self,
+        account_index: U31,
+        ask_token_id: Option<String>,
+        ask_amount: DecimalAmount,
+        give_token_id: Option<String>,
+        give_amount: DecimalAmount,
+        conclude_address: String,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error>;
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error>;
 
     async fn node_shutdown(&self) -> Result<(), Self::Error>;

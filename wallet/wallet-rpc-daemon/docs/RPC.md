@@ -1249,6 +1249,42 @@ Returns:
 hex string
 ```
 
+### Method `create_order`
+
+Parameters:
+```
+{
+    "account": number,
+    "ask_currency": EITHER OF
+         1) { "type": "Coin" }
+         2) {
+                "type": "Token",
+                "content": { "token_id": bech32 string },
+            },
+    "ask_amount": EITHER OF
+         1) { "atoms": number string }
+         2) { "decimal": decimal string },
+    "give_currency": EITHER OF
+         1) { "type": "Coin" }
+         2) {
+                "type": "Token",
+                "content": { "token_id": bech32 string },
+            },
+    "give_amount": EITHER OF
+         1) { "atoms": number string }
+         2) { "decimal": decimal string },
+    "conclude_address": bech32 string,
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
+}
+```
+
+Returns:
+```
+{ "tx_id": hex string }
+```
+
 ### Method `node_version`
 
 Node version

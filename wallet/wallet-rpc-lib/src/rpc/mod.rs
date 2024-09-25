@@ -32,7 +32,7 @@ use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
-use types::RpcHashedTimelockContract;
+use types::{RpcCurrency, RpcHashedTimelockContract};
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
@@ -77,7 +77,10 @@ use wallet_types::{
     signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked, Currency,
 };
 
-use crate::{service::CreatedWallet, WalletHandle, WalletRpcConfig};
+use crate::{
+    service::{CreatedWallet, WalletController},
+    WalletHandle, WalletRpcConfig,
+};
 
 pub use self::types::RpcError;
 use self::types::{
@@ -1454,6 +1457,89 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                         .create_htlc_tx(value, htlc)
                         .await
                         .map_err(RpcError::Controller)
+                })
+            })
+            .await?
+    }
+
+    async fn convert_currency_to_output_value(
+        controller: &WalletController<N>,
+        currency: Currency,
+        amount: RpcAmountIn,
+        coin_decimals: u8,
+    ) -> Result<OutputValue, RpcError<N>> {
+        match currency {
+            Currency::Coin => {
+                let amount =
+                    amount.to_amount(coin_decimals).ok_or(RpcError::<N>::InvalidCoinAmount)?;
+                Ok::<_, RpcError<N>>(OutputValue::Coin(amount))
+            }
+            Currency::Token(token_id) => {
+                let token_info = controller.get_token_info(token_id).await?;
+                let amount = amount
+                    .to_amount(token_info.token_number_of_decimals())
+                    .ok_or(RpcError::InvalidCoinAmount)?;
+                Ok(OutputValue::TokenV1(token_id, amount))
+            }
+        }
+    }
+
+    pub async fn create_order(
+        &self,
+        account_index: U31,
+        ask_currency: RpcCurrency,
+        ask_amount: RpcAmountIn,
+        give_currency: RpcCurrency,
+        give_amount: RpcAmountIn,
+        conclude_address: RpcAddress<Destination>,
+        config: ControllerConfig,
+    ) -> WRpcResult<NewTransaction, N> {
+        let coin_decimals = self.chain_config.coin_decimals();
+
+        let convert_currency = |rpc_currency| -> Result<_, RpcError<N>> {
+            match rpc_currency {
+                RpcCurrency::Coin => Ok(Currency::Coin),
+                RpcCurrency::Token { token_id } => {
+                    let token_id = token_id
+                        .decode_object(&self.chain_config)
+                        .map_err(|_| RpcError::InvalidTokenId)?;
+                    Ok(Currency::Token(token_id))
+                }
+            }
+        };
+
+        let ask_currency = convert_currency(ask_currency)?;
+        let give_currency = convert_currency(give_currency)?;
+
+        let conclude_dest = conclude_address
+            .into_address(&self.chain_config)
+            .map_err(|_| RpcError::InvalidAddress)?;
+
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    let ask_value = Self::convert_currency_to_output_value(
+                        controller,
+                        ask_currency,
+                        ask_amount,
+                        coin_decimals,
+                    )
+                    .await?;
+                    let give_value = Self::convert_currency_to_output_value(
+                        controller,
+                        give_currency,
+                        give_amount,
+                        coin_decimals,
+                    )
+                    .await?;
+
+                    controller
+                        .synced_controller(account_index, config)
+                        .await?
+                        .create_order(ask_value, give_value, conclude_dest)
+                        .await
+                        .map_err(RpcError::Controller)
+                        .map(NewTransaction::new)
                 })
             })
             .await?
