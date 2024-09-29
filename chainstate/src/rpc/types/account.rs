@@ -23,8 +23,6 @@ use common::{
 };
 use rpc::types::RpcHexString;
 
-use super::output::RpcOutputValue;
-
 #[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RpcAccountSpending {
@@ -84,7 +82,7 @@ pub enum RpcAccountCommand {
     },
     FillOrder {
         order_id: RpcAddress<OrderId>,
-        fill_value: RpcOutputValue,
+        fill_value: RpcAmountOut,
         destination: RpcAddress<Destination>,
     },
 }
@@ -129,7 +127,7 @@ impl RpcAccountCommand {
             },
             AccountCommand::FillOrder(id, fill, dest) => RpcAccountCommand::FillOrder {
                 order_id: RpcAddress::new(chain_config, *id)?,
-                fill_value: RpcOutputValue::new(chain_config, fill.clone())?,
+                fill_value: RpcAmountOut::from_amount(*fill, chain_config.coin_decimals()),
                 destination: RpcAddress::new(chain_config, dest.clone())?,
             },
         };
