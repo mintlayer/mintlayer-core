@@ -30,6 +30,7 @@ use serialization::{Decode, Encode};
     Decode,
     serde::Serialize,
     serde::Deserialize,
+    rpc_description::HasValueHint,
 )]
 pub struct AccountNonce(#[codec(compact)] u64);
 

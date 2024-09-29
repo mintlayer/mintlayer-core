@@ -20,7 +20,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp, tokens::TokenId,
         transaction::partially_signed_transaction::PartiallySignedTransaction, Block, DelegationId,
-        Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
+        Destination, GenBlock, OrderId, PoolId, SignedTransaction, Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -676,6 +676,10 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<HexEncoded<SignedTransaction>>;
 
+    /// Create an order for exchanging "given" amount of an arbitrary currency (coins or tokens) for
+    /// an arbitrary amount of "asked" currency.
+    /// Conclude key is the key that can authorize a conclude order command closing the order and withdrawing
+    /// all the remaining funds from it.
     #[method(name = "create_order")]
     async fn create_order(
         &self,
@@ -685,6 +689,18 @@ trait WalletRpc {
         give_currency: RpcCurrency,
         give_amount: RpcAmountIn,
         conclude_address: RpcAddress<Destination>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction>;
+
+    /// Conclude an order, given its id. This assumes that the conclude key is owned
+    /// by the selected account in this wallet.
+    /// Optionally output address can be provided where remaining funds from the order are transferred.
+    #[method(name = "conclude_order")]
+    async fn conclude_order(
+        &self,
+        account: AccountArg,
+        order_id: RpcAddress<OrderId>,
+        output_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 

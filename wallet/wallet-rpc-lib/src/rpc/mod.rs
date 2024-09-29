@@ -52,8 +52,8 @@ use common::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
         tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenTotalSupply},
-        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, time::Time, Amount, BlockHeight, Id, Idable,
@@ -1537,6 +1537,36 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                         .synced_controller(account_index, config)
                         .await?
                         .create_order(ask_value, give_value, conclude_dest)
+                        .await
+                        .map_err(RpcError::Controller)
+                        .map(NewTransaction::new)
+                })
+            })
+            .await?
+    }
+
+    pub async fn conclude_order(
+        &self,
+        account_index: U31,
+        order_id: RpcAddress<OrderId>,
+        output_address: Option<RpcAddress<Destination>>,
+        config: ControllerConfig,
+    ) -> WRpcResult<NewTransaction, N> {
+        let order_id = order_id
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidTokenId)?;
+        let output_address = output_address
+            .map(|a| a.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidAddress))
+            .transpose()?;
+
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    let order_info = w.get_order_info(order_id).await?;
+
+                    w.synced_controller(account_index, config)
+                        .await?
+                        .conclude_order(order_id, order_info, output_address)
                         .await
                         .map_err(RpcError::Controller)
                         .map(NewTransaction::new)

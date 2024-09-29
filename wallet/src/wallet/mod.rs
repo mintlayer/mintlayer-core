@@ -51,8 +51,8 @@ use common::chain::tokens::{
 };
 use common::chain::{
     AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId,
-    OutPointSourceId, PoolId, SignedTransaction, Transaction, TransactionCreationError, TxInput,
-    TxOutput, UtxoOutPoint,
+    OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction, Transaction,
+    TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::{hash_encoded, WithId};
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -245,6 +245,8 @@ pub enum WalletError {
     StandaloneAddressNotFound(RpcAddress<Destination>),
     #[error("Signer error: {0}")]
     SignerError(#[from] SignerError),
+    #[error("Info for the order {0} is missing")]
+    OrderInfoMissing(OrderId),
 }
 
 /// Result type used for the wallet
@@ -1820,6 +1822,31 @@ impl<B: storage::Backend> Wallet<B> {
                 ask_value,
                 give_value,
                 conclude_key,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+
+    pub fn create_conclude_order_tx(
+        &mut self,
+        account_index: U31,
+        order_id: OrderId,
+        order_info: RpcOrderInfo,
+        output_address: Option<Destination>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
+            account.create_conclude_order_tx(
+                db_tx,
+                order_id,
+                order_info,
+                output_address,
                 latest_median_time,
                 CurrentFeeRate {
                     current_fee_rate,

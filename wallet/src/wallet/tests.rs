@@ -36,7 +36,7 @@ use common::{
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
         tokens::{RPCIsTokenFrozen, TokenData, TokenIssuanceV0, TokenIssuanceV1},
-        Destination, Genesis, OutPointSourceId, TxInput,
+        Destination, Genesis, OutPointSourceId, RpcOrderValue, TxInput,
     },
     primitives::{per_thousand::PerThousand, Idable, H256},
 };
@@ -5044,7 +5044,6 @@ fn create_order(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
-    println!("{:?}", create_order_tx);
 
     let _ = create_block(
         &chain_config,
@@ -5057,4 +5056,164 @@ fn create_order(#[case] seed: Seed) {
     let (coin_balance, token_balances) = get_currency_balances(&wallet);
     assert_eq!(coin_balance, expected_balance);
     assert!(token_balances.is_empty());
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_order_and_conclude(#[case] seed: Seed) {
+    use common::chain::make_order_id;
+    use test_utils::nft_utils::random_token_issuance_v1;
+
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_unit_test_config());
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+        + chain_config.fungible_token_issuance_fee())
+    .unwrap();
+
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    // Issue a token
+    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+
+    let token_issuance =
+        random_token_issuance_v1(&chain_config, address2.as_object().clone(), &mut rng);
+    let (issued_token_id, token_issuance_transaction) = wallet
+        .issue_new_token(
+            DEFAULT_ACCOUNT_INDEX,
+            TokenIssuance::V1(token_issuance.clone()),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![token_issuance_transaction],
+        block2_amount,
+        1,
+    );
+
+    // Mint some tokens
+    let freezable = token_issuance.is_freezable.as_bool();
+    let token_info = RPCFungibleTokenInfo::new(
+        issued_token_id,
+        token_issuance.token_ticker,
+        token_issuance.number_of_decimals,
+        token_issuance.metadata_uri,
+        Amount::ZERO,
+        token_issuance.total_supply.into(),
+        false,
+        RPCIsTokenFrozen::NotFrozen { freezable },
+        token_issuance.authority,
+    );
+
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+
+    let token_amount_to_mint = Amount::from_atoms(rng.gen_range(2..100));
+    let mint_transaction = wallet
+        .mint_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            &unconfirmed_token_info,
+            token_amount_to_mint,
+            address2.clone(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![mint_transaction],
+        Amount::ZERO,
+        2,
+    );
+
+    let expected_balance = (block1_amount - chain_config.fungible_token_issuance_fee()).unwrap();
+    let (coin_balance, token_balances) = get_currency_balances(&wallet);
+    assert_eq!(coin_balance, expected_balance);
+    assert_eq!(
+        token_balances.first(),
+        Some(&(issued_token_id, token_amount_to_mint))
+    );
+
+    // Create an order selling tokens for coins
+    let ask_value = OutputValue::Coin(Amount::from_atoms(111));
+    let give_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
+    let create_order_tx = wallet
+        .create_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            ask_value.clone(),
+            give_value.clone(),
+            address2.clone(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+    let order_id = make_order_id(create_order_tx.inputs()[0].utxo_outpoint().unwrap());
+    let order_info = RpcOrderInfo {
+        conclude_key: address2.clone().into_object(),
+        initially_asked: RpcOrderValue::Coin {
+            amount: Amount::from_atoms(111),
+        },
+        initially_given: RpcOrderValue::Token {
+            id: issued_token_id,
+            amount: token_amount_to_mint,
+        },
+        give_balance: token_amount_to_mint,
+        ask_balance: Amount::from_atoms(111),
+        nonce: None,
+    };
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![create_order_tx],
+        Amount::ZERO,
+        3,
+    );
+
+    let (coin_balance, token_balances) = get_currency_balances(&wallet);
+    assert_eq!(coin_balance, expected_balance);
+    assert!(token_balances.is_empty());
+
+    let conclude_order_tx = wallet
+        .create_conclude_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            order_id,
+            order_info,
+            None,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![conclude_order_tx],
+        Amount::ZERO,
+        4,
+    );
+
+    let (coin_balance, token_balances) = get_currency_balances(&wallet);
+    assert_eq!(coin_balance, expected_balance);
+    assert_eq!(
+        token_balances.first(),
+        Some(&(issued_token_id, token_amount_to_mint))
+    );
 }

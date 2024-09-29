@@ -25,7 +25,7 @@ use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        DelegationId, PoolId, SignedTransaction, Transaction,
+        DelegationId, OrderId, PoolId, RpcOrderInfo, SignedTransaction, Transaction,
     },
     primitives::{time::Time, Amount},
 };
@@ -287,6 +287,13 @@ impl NodeInterface for MockNode {
         &self,
         _token_id: TokenId,
     ) -> Result<Option<RPCTokenInfo>, Self::Error> {
+        unreachable!()
+    }
+
+    async fn get_order_info(
+        &self,
+        _order_id: OrderId,
+    ) -> Result<Option<RpcOrderInfo>, Self::Error> {
         unreachable!()
     }
 

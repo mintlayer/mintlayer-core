@@ -21,8 +21,8 @@ use common::{
         block::timestamp::BlockTimestamp,
         partially_signed_transaction::PartiallySignedTransaction,
         tokens::{IsTokenUnfreezable, TokenId},
-        Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
-        TxOutput,
+        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, SignedTransaction,
+        Transaction, TxOutput,
     },
     primitives::{time::Time, BlockHeight, Id, Idable},
 };
@@ -1060,6 +1060,24 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
                 config,
             )
             .await,
+        )
+    }
+
+    async fn conclude_order(
+        &self,
+        account_arg: AccountArg,
+        order_id: RpcAddress<OrderId>,
+        output_address: Option<RpcAddress<Destination>>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb(),
+            broadcast_to_mempool: true,
+        };
+
+        rpc::handle_result(
+            self.conclude_order(account_arg.index::<N>()?, order_id, output_address, config)
+                .await,
         )
     }
 

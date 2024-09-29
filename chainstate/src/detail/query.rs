@@ -24,7 +24,8 @@ use common::{
             NftIssuance, RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo,
             RPCTokenInfo, TokenAuxiliaryData, TokenId,
         },
-        Block, GenBlock, OrderData, OrderId, Transaction, TxOutput,
+        AccountType, Block, GenBlock, OrderData, OrderId, RpcOrderInfo, RpcOrderValue, Transaction,
+        TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
@@ -420,5 +421,40 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         id: &OrderId,
     ) -> Result<Option<Amount>, PropertyQueryError> {
         self.chainstate_ref.get_give_balance(id).map_err(PropertyQueryError::from)
+    }
+
+    pub fn get_order_info_for_rpc(
+        &self,
+        order_id: OrderId,
+    ) -> Result<Option<RpcOrderInfo>, PropertyQueryError> {
+        self.get_order_data(&order_id)?
+            .map(|order_data| {
+                let ask_balance = self
+                    .get_order_ask_balance(&order_id)?
+                    .ok_or(PropertyQueryError::OrderBalanceNotFound(order_id))?;
+                let give_balance = self
+                    .get_order_give_balance(&order_id)?
+                    .ok_or(PropertyQueryError::OrderBalanceNotFound(order_id))?;
+
+                let nonce =
+                    self.chainstate_ref.get_account_nonce_count(AccountType::Order(order_id))?;
+
+                let initially_asked = RpcOrderValue::from_output_value(order_data.ask())
+                    .ok_or(PropertyQueryError::UnsupportedTokenV0InOrder(order_id))?;
+                let initially_given = RpcOrderValue::from_output_value(order_data.give())
+                    .ok_or(PropertyQueryError::UnsupportedTokenV0InOrder(order_id))?;
+
+                let info = RpcOrderInfo {
+                    conclude_key: order_data.conclude_key().clone(),
+                    initially_asked,
+                    initially_given,
+                    give_balance,
+                    ask_balance,
+                    nonce,
+                };
+
+                Ok(info)
+            })
+            .transpose()
     }
 }

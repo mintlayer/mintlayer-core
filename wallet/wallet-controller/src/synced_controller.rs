@@ -27,8 +27,8 @@ use common::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, RPCTokenInfo,
             TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
-        ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, Id},
 };
@@ -1067,6 +1067,30 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     ask_value,
                     give_value,
                     conclude_key,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
+    }
+
+    pub async fn conclude_order(
+        &mut self,
+        order_id: OrderId,
+        order_info: RpcOrderInfo,
+        output_address: Option<Destination>,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_conclude_order_tx(
+                    account_index,
+                    order_id,
+                    order_info,
+                    output_address,
                     current_fee_rate,
                     consolidate_fee_rate,
                 )
