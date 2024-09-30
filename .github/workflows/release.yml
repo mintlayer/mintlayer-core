@@ -53,7 +53,7 @@ jobs:
       id: generate_hashes
       run: |
         echo "HASHES<<EOF" >> $GITHUB_OUTPUT
-        for file in Mintlayer_Node_*/*.dmg Mintlayer_Node_*/*.deb Mintlayer_Node_*/*.rpm Mintlayer_Node_*/*.zip Mintlayer_Node_*/*_Setup.exe; do
+        for file in Mintlayer*/*; do
           if [ -f "$file" ]; then
             echo "$(sha256sum $file | awk '{print $1}')  $(basename $file)" >> $GITHUB_OUTPUT
           fi
@@ -65,23 +65,6 @@ jobs:
       run: |
         echo "BODY<<EOF" >> $GITHUB_OUTPUT
         echo "Release version ${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
-        echo "" >> $GITHUB_OUTPUT
-        echo "This release includes the following packages:" >> $GITHUB_OUTPUT
-        echo "" >> $GITHUB_OUTPUT
-        echo "macOS:" >> $GITHUB_OUTPUT
-        echo "- Mintlayer Node GUI (DMG) for Intel and Apple Silicon" >> $GITHUB_OUTPUT
-        echo "- Mintlayer Node (ZIP) for Intel and Apple Silicon" >> $GITHUB_OUTPUT
-        echo "" >> $GITHUB_OUTPUT
-        echo "Linux:" >> $GITHUB_OUTPUT
-        echo "- Mintlayer Node GUI (DEB) for x86_64 and ARM64" >> $GITHUB_OUTPUT
-        echo "- Mintlayer Node (DEB and TGZ) for x86_64 and ARM64" >> $GITHUB_OUTPUT
-        echo "- Mintlayer Node GUI (RPM) for x86_64" >> $GITHUB_OUTPUT
-        echo "- Mintlayer Node (RPM) for x86_64" >> $GITHUB_OUTPUT
-        echo "" >> $GITHUB_OUTPUT
-        echo "Windows:" >> $GITHUB_OUTPUT
-        echo "- Mintlayer Node GUI (ZIP) for x64" >> $GITHUB_OUTPUT
-        echo "- Mintlayer Node GUI Installer (EXE) for x64" >> $GITHUB_OUTPUT
-        echo "- Mintlayer Node (ZIP) for x86" >> $GITHUB_OUTPUT
         echo "" >> $GITHUB_OUTPUT
         echo "Please download the appropriate package for your system." >> $GITHUB_OUTPUT
         echo "" >> $GITHUB_OUTPUT
@@ -98,9 +81,9 @@ jobs:
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
-        allowUpdates: true
-        artifacts: "Mintlayer_Node_*/*.dmg,Mintlayer_Node_*/*.deb,Mintlayer_Node_*/*.rpm,Mintlayer_Node_*/*.zip,Mintlayer_Node_*/*.tar.gz,Mintlayer_Node_*/*_Setup.exe"
-        artifactErrorsFailBuild: true
-        name: "Release ${{ steps.get_version.outputs.VERSION }}"
-        body: ${{ steps.generate_body.outputs.BODY }}
-        token: ${{ secrets.GITHUB_TOKEN }}
+          allowUpdates: true
+          artifacts: "Mintlayer*/*"
+          artifactErrorsFailBuild: true
+          name: "Release ${{ steps.get_version.outputs.VERSION }}"
+          body: ${{ steps.generate_body.outputs.BODY }}
+          token: ${{ secrets.GITHUB_TOKEN }}
