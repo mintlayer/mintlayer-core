@@ -81,9 +81,9 @@ jobs:
     - name: Create Release
       uses: ncipollo/release-action@v1
       with:
-          allowUpdates: true
-          artifacts: "Mintlayer*/*"
-          artifactErrorsFailBuild: true
-          name: "Release ${{ steps.get_version.outputs.VERSION }}"
-          body: ${{ steps.generate_body.outputs.BODY }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+        allowUpdates: true
+        artifacts: "Mintlayer*/*"
+        artifactErrorsFailBuild: true
+        name: "Release ${{ steps.get_version.outputs.VERSION }}"
+        body: ${{ steps.generate_body.outputs.BODY }}
+        token: ${{ secrets.GITHUB_TOKEN }}
