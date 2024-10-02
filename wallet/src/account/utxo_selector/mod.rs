@@ -670,7 +670,10 @@ pub fn select_coins(
     if selection_target == Amount::ZERO && pay_fees == PayFee::DoNotPayFeeWithThisCurrency {
         return Ok(SelectionResult::new(selection_target));
     }
-    ensure!(!utxo_pool.is_empty(), UtxoSelectorError::NoUtxos);
+    //ensure!(!utxo_pool.is_empty(), UtxoSelectorError::NoUtxos);
+    if utxo_pool.is_empty() {
+        return Err(UtxoSelectorError::NoUtxos);
+    }
 
     let total_available_value = utxo_pool
         .iter()

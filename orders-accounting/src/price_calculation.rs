@@ -31,11 +31,11 @@ pub fn calculate_fill_order(
         Error::OrderOverbid(order_id, ask_balance, fill_amount)
     );
 
-    calculate_filled_amount_impl(ask_balance, give_balance, fill_amount)
+    calculate_filled_amount(ask_balance, give_balance, fill_amount)
         .ok_or(Error::OrderOverflow(order_id))
 }
 
-fn calculate_filled_amount_impl(ask: Amount, give: Amount, fill: Amount) -> Option<Amount> {
+pub fn calculate_filled_amount(ask: Amount, give: Amount, fill: Amount) -> Option<Amount> {
     let give = Uint256::from_u128(give.into_atoms());
     let fill = Uint256::from_u128(fill.into_atoms());
     let ask = Uint256::from_u128(ask.into_atoms());
@@ -114,7 +114,7 @@ mod tests {
     ) {
         assert_eq!(
             result.map(Amount::from_atoms),
-            calculate_filled_amount_impl(
+            calculate_filled_amount(
                 Amount::from_atoms(ask),
                 Amount::from_atoms(give),
                 Amount::from_atoms(fill)

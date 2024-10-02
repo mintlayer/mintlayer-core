@@ -1856,6 +1856,34 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_fill_order_tx(
+        &mut self,
+        account_index: U31,
+        order_id: OrderId,
+        order_info: RpcOrderInfo,
+        fill_amount: Amount,
+        output_address: Option<Destination>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
+            account.create_fill_order_tx(
+                db_tx,
+                order_id,
+                order_info,
+                fill_amount,
+                output_address,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+
     pub fn sign_raw_transaction(
         &mut self,
         account_index: U31,

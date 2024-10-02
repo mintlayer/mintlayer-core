@@ -769,7 +769,8 @@ impl OutputCache {
                 | AccountCommand::ChangeTokenMetadataUri(token_id, _)
                 | AccountCommand::ChangeTokenAuthority(token_id, _)
                 | AccountCommand::UnmintTokens(token_id) => frozen_token_id == token_id,
-                AccountCommand::ConcludeOrder(order_id) => {
+                AccountCommand::ConcludeOrder(order_id)
+                | AccountCommand::FillOrder(order_id, _, _) => {
                     self.order_data(order_id).is_some_and(|data| {
                         [data.ask_currency, data.give_currency].iter().any(|v| match v {
                             Currency::Coin => false,
@@ -777,10 +778,6 @@ impl OutputCache {
                         })
                     })
                 }
-                AccountCommand::FillOrder(_, output_value, _) => match output_value {
-                    OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
-                    OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
-                },
             },
             TxInput::Account(_) => false,
         })
