@@ -980,6 +980,27 @@ impl WalletInterface for ClientWalletRpc {
         .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn fill_order(
+        &self,
+        account_index: U31,
+        order_id: String,
+        fill_amount: DecimalAmount,
+        output_address: Option<String>,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        let options = TransactionOptions::from_controller_config(&config);
+        WalletRpcClient::fill_order(
+            &self.http_client,
+            account_index.into(),
+            order_id.into(),
+            fill_amount.into(),
+            output_address.map(|addr| addr.into()),
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error> {
         WalletRpcClient::node_version(&self.http_client)
             .await

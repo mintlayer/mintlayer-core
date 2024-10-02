@@ -1102,6 +1102,26 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
+    async fn fill_order(
+        &self,
+        account_index: U31,
+        order_id: String,
+        fill_amount: DecimalAmount,
+        output_address: Option<String>,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        self.wallet_rpc
+            .fill_order(
+                account_index.into(),
+                order_id.into(),
+                fill_amount.into(),
+                output_address.map(|addr| addr.into()),
+                config,
+            )
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
     async fn node_version(&self) -> Result<NodeVersion, Self::Error> {
         self.wallet_rpc
             .node_version()

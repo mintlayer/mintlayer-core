@@ -1251,6 +1251,12 @@ hex string
 
 ### Method `create_order`
 
+Create an order for exchanging "given" amount of an arbitrary currency (coins or tokens) for
+an arbitrary amount of "asked" currency.
+Conclude key is the key that can authorize a conclude order command closing the order and withdrawing
+all the remaining funds from it.
+
+
 Parameters:
 ```
 {
@@ -1274,6 +1280,60 @@ Parameters:
          1) { "atoms": number string }
          2) { "decimal": decimal string },
     "conclude_address": bech32 string,
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
+}
+```
+
+Returns:
+```
+{ "tx_id": hex string }
+```
+
+### Method `conclude_order`
+
+Conclude an order, given its id. This assumes that the conclude key is owned
+by the selected account in this wallet.
+Optionally output address can be provided where remaining funds from the order are transferred.
+
+
+Parameters:
+```
+{
+    "account": number,
+    "order_id": bech32 string,
+    "output_address": EITHER OF
+         1) bech32 string
+         2) null,
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
+}
+```
+
+Returns:
+```
+{ "tx_id": hex string }
+```
+
+### Method `fill_order`
+
+Fill order completely or partially given its id and an amount that satisfy what an order can offer.
+Optionally output address can be provided where the exchanged funds from the order are transferred.
+
+
+Parameters:
+```
+{
+    "account": number,
+    "order_id": bech32 string,
+    "fill_amount": EITHER OF
+         1) { "atoms": number string }
+         2) { "decimal": decimal string },
+    "output_address": EITHER OF
+         1) bech32 string
+         2) null,
     "options": { "in_top_x_mb": EITHER OF
          1) number
          2) null },

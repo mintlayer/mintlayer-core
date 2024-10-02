@@ -704,6 +704,18 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
+    /// Fill order completely or partially given its id and an amount that satisfy what an order can offer.
+    /// Optionally output address can be provided where the exchanged funds from the order are transferred.
+    #[method(name = "fill_order")]
+    async fn fill_order(
+        &self,
+        account: AccountArg,
+        order_id: RpcAddress<OrderId>,
+        fill_amount: RpcAmountIn,
+        output_address: Option<RpcAddress<Destination>>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction>;
+
     /// Node version
     #[method(name = "node_version")]
     async fn node_version(&self) -> rpc::RpcResult<NodeVersion>;

@@ -52,7 +52,7 @@ use common::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
         tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenTotalSupply},
-        Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
+        Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderValue,
         SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{
@@ -1567,6 +1567,49 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                     w.synced_controller(account_index, config)
                         .await?
                         .conclude_order(order_id, order_info, output_address)
+                        .await
+                        .map_err(RpcError::Controller)
+                        .map(NewTransaction::new)
+                })
+            })
+            .await?
+    }
+
+    pub async fn fill_order(
+        &self,
+        account_index: U31,
+        order_id: RpcAddress<OrderId>,
+        fill_amount: RpcAmountIn,
+        output_address: Option<RpcAddress<Destination>>,
+        config: ControllerConfig,
+    ) -> WRpcResult<NewTransaction, N> {
+        let coin_decimals = self.chain_config.coin_decimals();
+        let order_id = order_id
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidTokenId)?;
+        let output_address = output_address
+            .map(|a| a.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidAddress))
+            .transpose()?;
+
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    let order_info = w.get_order_info(order_id).await?;
+                    let fill_amount = match order_info.initially_asked {
+                        RpcOrderValue::Coin { .. } => fill_amount
+                            .to_amount(coin_decimals)
+                            .ok_or(RpcError::<N>::InvalidCoinAmount)?,
+                        RpcOrderValue::Token { id, amount: _ } => {
+                            let token_info = w.get_token_info(id).await?;
+                            fill_amount
+                                .to_amount(token_info.token_number_of_decimals())
+                                .ok_or(RpcError::InvalidCoinAmount)?
+                        }
+                    };
+
+                    w.synced_controller(account_index, config)
+                        .await?
+                        .fill_order(order_id, order_info, fill_amount, output_address)
                         .await
                         .map_err(RpcError::Controller)
                         .map(NewTransaction::new)
