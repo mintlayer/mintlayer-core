@@ -20,7 +20,8 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp, tokens::TokenId,
         transaction::partially_signed_transaction::PartiallySignedTransaction, Block, DelegationId,
-        Destination, GenBlock, OrderId, PoolId, SignedTransaction, Transaction, TxOutput,
+        Destination, GenBlock, OrderId, PoolId, RpcOrderValueIn, SignedTransaction, Transaction,
+        TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -38,7 +39,7 @@ use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
     CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
     MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcCurrency, RpcHashedTimelockContract,
+    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
     RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
     RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
@@ -684,10 +685,8 @@ trait WalletRpc {
     async fn create_order(
         &self,
         account: AccountArg,
-        ask_currency: RpcCurrency,
-        ask_amount: RpcAmountIn,
-        give_currency: RpcCurrency,
-        give_amount: RpcAmountIn,
+        ask: RpcOrderValueIn,
+        give: RpcOrderValueIn,
         conclude_address: RpcAddress<Destination>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;

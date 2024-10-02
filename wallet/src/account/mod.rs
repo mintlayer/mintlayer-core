@@ -1109,7 +1109,7 @@ impl Account {
             order_info.give_balance,
             fill_amount,
         )
-        .unwrap();
+        .ok_or(WalletError::CalculateOrderFilledAmountFailed(order_id))?;
         let output_value = match order_info.initially_given {
             RpcOrderValue::Coin { .. } => OutputValue::Coin(filled_amount),
             RpcOrderValue::Token { id, .. } => OutputValue::TokenV1(id, filled_amount),
@@ -2491,7 +2491,7 @@ fn group_preselected_inputs(
                         order_info.give_balance,
                         *fill_amount,
                     )
-                    .unwrap();
+                    .ok_or(WalletError::CalculateOrderFilledAmountFailed(*order_id))?;
                     match order_info.initially_given {
                         RpcOrderValue::Coin { .. } => {
                             update_preselected_inputs(

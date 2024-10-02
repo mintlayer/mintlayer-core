@@ -23,7 +23,7 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        Block, GenBlock, RpcOrderValueIn, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -42,7 +42,7 @@ use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcCurrency, RpcHashedTimelockContract,
+        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
         RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
@@ -946,14 +946,24 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::create_order(
             &self.http_client,
             account_index.into(),
-            ask_token_id.map_or(RpcCurrency::Coin, |v| RpcCurrency::Token {
-                token_id: v.into(),
-            }),
-            ask_amount.into(),
-            give_token_id.map_or(RpcCurrency::Coin, |v| RpcCurrency::Token {
-                token_id: v.into(),
-            }),
-            give_amount.into(),
+            ask_token_id.map_or(
+                RpcOrderValueIn::Coin {
+                    amount: ask_amount.into(),
+                },
+                |v| RpcOrderValueIn::Token {
+                    id: v.into(),
+                    amount: ask_amount.into(),
+                },
+            ),
+            give_token_id.map_or(
+                RpcOrderValueIn::Coin {
+                    amount: give_amount.into(),
+                },
+                |v| RpcOrderValueIn::Token {
+                    id: v.into(),
+                    amount: give_amount.into(),
+                },
+            ),
             conclude_address.into(),
             options,
         )

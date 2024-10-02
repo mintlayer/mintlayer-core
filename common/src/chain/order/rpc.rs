@@ -16,9 +16,22 @@
 use rpc_description::HasValueHint;
 
 use crate::{
+    address::RpcAddress,
     chain::{output_value::OutputValue, tokens::TokenId, AccountNonce, Destination},
-    primitives::Amount,
+    primitives::{amount::RpcAmountIn, Amount},
 };
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type", content = "content")]
+pub enum RpcOrderValueIn {
+    Coin {
+        amount: RpcAmountIn,
+    },
+    Token {
+        id: RpcAddress<TokenId>,
+        amount: RpcAmountIn,
+    },
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 #[serde(tag = "type", content = "content")]

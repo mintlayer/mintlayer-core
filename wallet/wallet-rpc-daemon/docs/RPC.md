@@ -1261,24 +1261,38 @@ Parameters:
 ```
 {
     "account": number,
-    "ask_currency": EITHER OF
-         1) { "type": "Coin" }
+    "ask": EITHER OF
+         1) {
+                "type": "Coin",
+                "content": { "amount": EITHER OF
+                     1) { "atoms": number string }
+                     2) { "decimal": decimal string } },
+            }
          2) {
                 "type": "Token",
-                "content": { "token_id": bech32 string },
+                "content": {
+                    "id": bech32 string,
+                    "amount": EITHER OF
+                         1) { "atoms": number string }
+                         2) { "decimal": decimal string },
+                },
             },
-    "ask_amount": EITHER OF
-         1) { "atoms": number string }
-         2) { "decimal": decimal string },
-    "give_currency": EITHER OF
-         1) { "type": "Coin" }
+    "give": EITHER OF
+         1) {
+                "type": "Coin",
+                "content": { "amount": EITHER OF
+                     1) { "atoms": number string }
+                     2) { "decimal": decimal string } },
+            }
          2) {
                 "type": "Token",
-                "content": { "token_id": bech32 string },
+                "content": {
+                    "id": bech32 string,
+                    "amount": EITHER OF
+                         1) { "atoms": number string }
+                         2) { "decimal": decimal string },
+                },
             },
-    "give_amount": EITHER OF
-         1) { "atoms": number string }
-         2) { "decimal": decimal string },
     "conclude_address": bech32 string,
     "options": { "in_top_x_mb": EITHER OF
          1) number

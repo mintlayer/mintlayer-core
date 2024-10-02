@@ -32,7 +32,7 @@ use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
-use types::{RpcCurrency, RpcHashedTimelockContract};
+use types::RpcHashedTimelockContract;
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
@@ -53,7 +53,7 @@ use common::{
         },
         tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenTotalSupply},
         Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderValue,
-        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        RpcOrderValueIn, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, time::Time, Amount, BlockHeight, Id, Idable,
@@ -1487,10 +1487,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     pub async fn create_order(
         &self,
         account_index: U31,
-        ask_currency: RpcCurrency,
-        ask_amount: RpcAmountIn,
-        give_currency: RpcCurrency,
-        give_amount: RpcAmountIn,
+        ask: RpcOrderValueIn,
+        give: RpcOrderValueIn,
         conclude_address: RpcAddress<Destination>,
         config: ControllerConfig,
     ) -> WRpcResult<NewTransaction, N> {
@@ -1498,18 +1496,18 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
 
         let convert_currency = |rpc_currency| -> Result<_, RpcError<N>> {
             match rpc_currency {
-                RpcCurrency::Coin => Ok(Currency::Coin),
-                RpcCurrency::Token { token_id } => {
-                    let token_id = token_id
+                RpcOrderValueIn::Coin { amount } => Ok((Currency::Coin, amount)),
+                RpcOrderValueIn::Token { id, amount } => {
+                    let token_id = id
                         .decode_object(&self.chain_config)
                         .map_err(|_| RpcError::InvalidTokenId)?;
-                    Ok(Currency::Token(token_id))
+                    Ok((Currency::Token(token_id), amount))
                 }
             }
         };
 
-        let ask_currency = convert_currency(ask_currency)?;
-        let give_currency = convert_currency(give_currency)?;
+        let (ask_currency, ask_amount) = convert_currency(ask)?;
+        let (give_currency, give_amount) = convert_currency(give)?;
 
         let conclude_dest = conclude_address
             .into_address(&self.chain_config)

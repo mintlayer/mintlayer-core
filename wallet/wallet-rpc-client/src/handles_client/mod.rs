@@ -20,8 +20,8 @@ use common::{
     address::{dehexify::dehexify_all_addresses, AddressError},
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        tokens::IsTokenUnfreezable, Block, GenBlock, RpcOrderValueIn, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -40,7 +40,7 @@ use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
         DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcCurrency, RpcHashedTimelockContract,
+        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
         RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo,
@@ -1068,15 +1068,25 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
             .create_order(
-                account_index.into(),
-                ask_token_id.map_or(RpcCurrency::Coin, |v| RpcCurrency::Token {
-                    token_id: v.into(),
-                }),
-                ask_amount.into(),
-                give_token_id.map_or(RpcCurrency::Coin, |v| RpcCurrency::Token {
-                    token_id: v.into(),
-                }),
-                give_amount.into(),
+                account_index,
+                ask_token_id.map_or(
+                    RpcOrderValueIn::Coin {
+                        amount: ask_amount.into(),
+                    },
+                    |v| RpcOrderValueIn::Token {
+                        id: v.into(),
+                        amount: ask_amount.into(),
+                    },
+                ),
+                give_token_id.map_or(
+                    RpcOrderValueIn::Coin {
+                        amount: give_amount.into(),
+                    },
+                    |v| RpcOrderValueIn::Token {
+                        id: v.into(),
+                        amount: give_amount.into(),
+                    },
+                ),
                 conclude_address.into(),
                 config,
             )
@@ -1093,7 +1103,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
             .conclude_order(
-                account_index.into(),
+                account_index,
                 order_id.into(),
                 output_address.map(|addr| addr.into()),
                 config,
@@ -1112,7 +1122,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
     ) -> Result<NewTransaction, Self::Error> {
         self.wallet_rpc
             .fill_order(
-                account_index.into(),
+                account_index,
                 order_id.into(),
                 fill_amount.into(),
                 output_address.map(|addr| addr.into()),

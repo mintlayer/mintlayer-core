@@ -21,8 +21,8 @@ use common::{
         block::timestamp::BlockTimestamp,
         partially_signed_transaction::PartiallySignedTransaction,
         tokens::{IsTokenUnfreezable, TokenId},
-        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, SignedTransaction,
-        Transaction, TxOutput,
+        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderValueIn,
+        SignedTransaction, Transaction, TxOutput,
     },
     primitives::{time::Time, BlockHeight, Id, Idable},
 };
@@ -54,7 +54,7 @@ use crate::{
     RpcError,
 };
 
-use super::types::{RpcCurrency, RpcHashedTimelockContract};
+use super::types::RpcHashedTimelockContract;
 
 #[async_trait::async_trait]
 impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletEventsRpcServer
@@ -1037,10 +1037,8 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
     async fn create_order(
         &self,
         account_arg: AccountArg,
-        ask_currency: RpcCurrency,
-        ask_amount: RpcAmountIn,
-        give_currency: RpcCurrency,
-        give_amount: RpcAmountIn,
+        ask: RpcOrderValueIn,
+        give: RpcOrderValueIn,
         conclude_address: RpcAddress<Destination>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
@@ -1052,10 +1050,8 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         rpc::handle_result(
             self.create_order(
                 account_arg.index::<N>()?,
-                ask_currency,
-                ask_amount,
-                give_currency,
-                give_amount,
+                ask,
+                give,
                 conclude_address,
                 config,
             )

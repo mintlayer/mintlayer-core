@@ -247,6 +247,8 @@ pub enum WalletError {
     SignerError(#[from] SignerError),
     #[error("Info for the order {0} is missing")]
     OrderInfoMissing(OrderId),
+    #[error("Calculating filled amount for order {0} failed")]
+    CalculateOrderFilledAmountFailed(OrderId),
 }
 
 /// Result type used for the wallet

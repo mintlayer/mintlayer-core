@@ -472,6 +472,7 @@ pub trait WalletInterface {
         config: ControllerConfig,
     ) -> Result<HexEncoded<SignedTransaction>, Self::Error>;
 
+    #[allow(clippy::too_many_arguments)]
     async fn create_order(
         &self,
         account_index: U31,
