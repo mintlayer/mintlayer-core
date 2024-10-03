@@ -820,6 +820,42 @@ fn fill_partially_then_conclude(#[case] seed: Seed) {
             None,
             tf.chainstate.get_order_give_balance(&order_id).unwrap()
         );
+
+        {
+            // Try filling concluded order
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::AccountCommand(
+                        AccountNonce::new(2),
+                        AccountCommand::FillOrder(
+                            order_id,
+                            (give_amount - filled_amount).unwrap(),
+                            Destination::AnyoneCanSpend,
+                        ),
+                    ),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::TokenV1(token_id, filled_amount),
+                    Destination::AnyoneCanSpend,
+                ))
+                .build();
+            let tx_id = tx.transaction().get_id();
+            let res = tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng);
+            assert_eq!(
+                res.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(
+                    chainstate::BlockError::StateUpdateFailed(
+                        ConnectTransactionError::ConstrainedValueAccumulatorError(
+                            constraints_value_accumulator::Error::OrdersAccountingError(
+                                orders_accounting::Error::OrderDataNotFound(order_id)
+                            ),
+                            tx_id.into()
+                        )
+                    )
+                )
+            );
+        }
     });
 }
 

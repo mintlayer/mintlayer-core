@@ -5427,7 +5427,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         },
         give_balance: (sell_amount - Amount::from_atoms(100)).unwrap(),
         ask_balance: (token_amount_to_mint - Amount::from_atoms(10)).unwrap(),
-        nonce: None,
+        nonce: Some(AccountNonce::new(0)),
     };
 
     let fill_order_tx_2 = wallet2
@@ -5477,7 +5477,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         },
         give_balance: Amount::ZERO,
         ask_balance: Amount::ZERO,
-        nonce: None,
+        nonce: Some(AccountNonce::new(1)),
     };
     let conclude_order_tx = wallet1
         .create_conclude_order_tx(
@@ -5731,7 +5731,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         },
         give_balance: (sell_amount - Amount::from_atoms(100)).unwrap(),
         ask_balance: (token_amount_to_mint - Amount::from_atoms(10)).unwrap(),
-        nonce: None,
+        nonce: Some(AccountNonce::new(0)),
     };
 
     let conclude_order_tx = wallet1

@@ -1069,7 +1069,10 @@ impl Account {
             outputs.push(TxOutput::Transfer(output_value, output_destination));
         }
 
-        let nonce = order_info.nonce.unwrap_or(AccountNonce::new(0));
+        let nonce = order_info
+            .nonce
+            .map_or(Some(AccountNonce::new(0)), |n| n.increment())
+            .ok_or(WalletError::OrderNonceOverflow(order_id))?;
         let request = SendRequest::new().with_outputs(outputs).with_inputs_and_destinations([(
             TxInput::AccountCommand(nonce, AccountCommand::ConcludeOrder(order_id)),
             order_info.conclude_key.clone(),
@@ -1116,7 +1119,10 @@ impl Account {
         };
         let outputs = vec![TxOutput::Transfer(output_value, output_destination.clone())];
 
-        let nonce = order_info.nonce.unwrap_or(AccountNonce::new(0));
+        let nonce = order_info
+            .nonce
+            .map_or(Some(AccountNonce::new(0)), |n| n.increment())
+            .ok_or(WalletError::OrderNonceOverflow(order_id))?;
         let request = SendRequest::new().with_outputs(outputs).with_inputs_and_destinations([(
             TxInput::AccountCommand(
                 nonce,
@@ -1987,7 +1993,9 @@ impl Account {
                         || self.is_destination_mine_or_watched(address)
                 }
                 AccountCommand::ConcludeOrder(order_id) => self.find_order(order_id).is_ok(),
-                AccountCommand::FillOrder(_, _, dest) => self.is_destination_mine_or_watched(dest),
+                AccountCommand::FillOrder(order_id, _, dest) => {
+                    self.find_order(order_id).is_ok() || self.is_destination_mine_or_watched(dest)
+                }
             },
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
