@@ -38,7 +38,9 @@ use common::{
 use rpc::{subscription, RpcResult};
 use serialization::hex_encoded::HexEncoded;
 pub use types::{
-    input::RpcUtxoOutpoint, output::RpcTxOutput, signed_transaction::RpcSignedTransaction,
+    input::RpcUtxoOutpoint,
+    output::{RpcOutputValue, RpcTxOutput},
+    signed_transaction::RpcSignedTransaction,
 };
 
 #[rpc::describe]

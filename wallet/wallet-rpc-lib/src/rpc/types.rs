@@ -40,7 +40,7 @@ use rpc::description::HasValueHint;
 use wallet::account::PoolData;
 
 pub use chainstate::{
-    rpc::{RpcSignedTransaction, RpcTxOutput, RpcUtxoOutpoint},
+    rpc::{RpcOutputValue, RpcSignedTransaction, RpcTxOutput, RpcUtxoOutpoint},
     ChainInfo,
 };
 pub use common::{
