@@ -316,7 +316,7 @@ impl VrfPublicKeyInfo {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct UtxoInfo {
     pub outpoint: RpcUtxoOutpoint,
     pub output: RpcTxOutput,
