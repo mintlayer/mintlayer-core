@@ -1056,8 +1056,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         ask_value: OutputValue,
         give_value: OutputValue,
         conclude_key: Address<Destination>,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
-        self.create_and_send_tx(
+    ) -> Result<(SignedTransaction, OrderId), ControllerError<T>> {
+        self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut DefaultWallet,
@@ -1298,8 +1298,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         )
         .map_err(ControllerError::WalletError)?;
 
-        let tx_id = self.broadcast_to_mempool_if_needed(tx).await?;
-        Ok((tx_id, id))
+        let tx = self.broadcast_to_mempool_if_needed(tx).await?;
+        Ok((tx, id))
     }
 
     async fn fetch_utxo(&self, input: &UtxoOutPoint) -> Result<TxOutput, ControllerError<T>> {

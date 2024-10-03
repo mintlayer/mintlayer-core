@@ -1302,7 +1302,10 @@ Parameters:
 
 Returns:
 ```
-{ "tx_id": hex string }
+{
+    "tx_id": hex string,
+    "order_id": bech32 string,
+}
 ```
 
 ### Method `conclude_order`

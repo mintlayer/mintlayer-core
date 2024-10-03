@@ -50,7 +50,7 @@ use common::chain::tokens::{
     make_token_id, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
 use common::chain::{
-    AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId,
+    make_order_id, AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId,
     OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction, Transaction,
     TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
 };
@@ -1816,9 +1816,9 @@ impl<B: storage::Backend> Wallet<B> {
         conclude_key: Address<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<(OrderId, SignedTransaction)> {
         let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
+        let tx = self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
             account.create_order_tx(
                 db_tx,
                 ask_value,
@@ -1830,7 +1830,16 @@ impl<B: storage::Backend> Wallet<B> {
                     consolidate_fee_rate,
                 },
             )
-        })
+        })?;
+        let input0_outpoint = tx
+            .transaction()
+            .inputs()
+            .first()
+            .ok_or(WalletError::NoUtxos)?
+            .utxo_outpoint()
+            .ok_or(WalletError::NoUtxos)?;
+        let order_id = make_order_id(input0_outpoint);
+        Ok((order_id, tx))
     }
 
     pub fn create_conclude_order_tx(

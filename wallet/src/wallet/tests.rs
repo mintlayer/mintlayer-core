@@ -32,7 +32,6 @@ use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
         config::{create_mainnet, create_regtest, create_unit_test_config, Builder, ChainType},
-        make_order_id,
         output_value::OutputValue,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
@@ -5034,7 +5033,7 @@ fn create_order(#[case] seed: Seed) {
     // Create an order selling tokens for coins
     let ask_value = OutputValue::Coin(Amount::from_atoms(111));
     let give_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
-    let create_order_tx = wallet
+    let (_, create_order_tx) = wallet
         .create_order_tx(
             DEFAULT_ACCOUNT_INDEX,
             ask_value.clone(),
@@ -5151,7 +5150,7 @@ fn create_order_and_conclude(#[case] seed: Seed) {
     // Create an order selling tokens for coins
     let ask_value = OutputValue::Coin(Amount::from_atoms(111));
     let give_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
-    let create_order_tx = wallet
+    let (order_id, create_order_tx) = wallet
         .create_order_tx(
             DEFAULT_ACCOUNT_INDEX,
             ask_value.clone(),
@@ -5161,7 +5160,6 @@ fn create_order_and_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
-    let order_id = make_order_id(create_order_tx.inputs()[0].utxo_outpoint().unwrap());
     let order_info = RpcOrderInfo {
         conclude_key: address2.clone().into_object(),
         initially_asked: RpcOrderValue::Coin {
@@ -5324,7 +5322,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
     let ask_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
     let sell_amount = Amount::from_atoms(1000);
     let give_value = OutputValue::Coin(sell_amount);
-    let create_order_tx = wallet1
+    let (order_id, create_order_tx) = wallet1
         .create_order_tx(
             DEFAULT_ACCOUNT_INDEX,
             ask_value.clone(),
@@ -5334,7 +5332,6 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
-    let order_id = make_order_id(create_order_tx.inputs()[0].utxo_outpoint().unwrap());
     let order_info = RpcOrderInfo {
         conclude_key: address1.clone().into_object(),
         initially_asked: RpcOrderValue::Token {
@@ -5629,7 +5626,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     let ask_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
     let sell_amount = Amount::from_atoms(1000);
     let give_value = OutputValue::Coin(sell_amount);
-    let create_order_tx = wallet1
+    let (order_id, create_order_tx) = wallet1
         .create_order_tx(
             DEFAULT_ACCOUNT_INDEX,
             ask_value.clone(),
@@ -5639,7 +5636,6 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             FeeRate::from_amount_per_kb(Amount::ZERO),
         )
         .unwrap();
-    let order_id = make_order_id(create_order_tx.inputs()[0].utxo_outpoint().unwrap());
     let order_info = RpcOrderInfo {
         conclude_key: address1.clone().into_object(),
         initially_asked: RpcOrderValue::Token {

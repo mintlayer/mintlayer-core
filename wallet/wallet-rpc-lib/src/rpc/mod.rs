@@ -32,7 +32,7 @@ use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
-use types::RpcHashedTimelockContract;
+use types::{NewOrder, RpcHashedTimelockContract};
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
@@ -1491,7 +1491,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         give: RpcOrderValueIn,
         conclude_address: RpcAddress<Destination>,
         config: ControllerConfig,
-    ) -> WRpcResult<NewTransaction, N> {
+    ) -> WRpcResult<NewOrder, N> {
         let coin_decimals = self.chain_config.coin_decimals();
 
         let convert_currency = |rpc_currency| -> Result<_, RpcError<N>> {
@@ -1537,10 +1537,14 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                         .create_order(ask_value, give_value, conclude_dest)
                         .await
                         .map_err(RpcError::Controller)
-                        .map(NewTransaction::new)
                 })
             })
             .await?
+            .map(|(tx, order_id)| NewOrder {
+                tx_id: tx.transaction().get_id(),
+                order_id: RpcAddress::new(&self.chain_config, order_id)
+                    .expect("addressable delegation id"),
+            })
     }
 
     pub async fn conclude_order(

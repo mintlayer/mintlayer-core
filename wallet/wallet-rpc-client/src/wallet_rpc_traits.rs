@@ -34,8 +34,8 @@ use wallet_controller::{
 };
 use wallet_rpc_lib::types::{
     AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
-    DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-    NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
+    DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewOrder,
+    NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
     RpcInspectTransaction, RpcSignatureStatus, RpcStandaloneAddresses, RpcTokenId,
     SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, VrfPublicKeyInfo,
@@ -482,7 +482,7 @@ pub trait WalletInterface {
         give_amount: DecimalAmount,
         conclude_address: String,
         config: ControllerConfig,
-    ) -> Result<NewTransaction, Self::Error>;
+    ) -> Result<NewOrder, Self::Error>;
 
     async fn conclude_order(
         &self,

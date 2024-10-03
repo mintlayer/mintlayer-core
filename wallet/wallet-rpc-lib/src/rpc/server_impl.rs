@@ -54,7 +54,7 @@ use crate::{
     RpcError,
 };
 
-use super::types::RpcHashedTimelockContract;
+use super::types::{NewOrder, RpcHashedTimelockContract};
 
 #[async_trait::async_trait]
 impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletEventsRpcServer
@@ -1041,7 +1041,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         give: RpcOrderValueIn,
         conclude_address: RpcAddress<Destination>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction> {
+    ) -> rpc::RpcResult<NewOrder> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,

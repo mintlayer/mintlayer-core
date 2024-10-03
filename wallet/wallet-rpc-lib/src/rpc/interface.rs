@@ -38,7 +38,7 @@ use wallet_types::with_locked::WithLocked;
 use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
     CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
-    MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
+    MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewOrder, NewTransaction, NftMetadata,
     NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
     RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
     RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
@@ -689,7 +689,7 @@ trait WalletRpc {
         give: RpcOrderValueIn,
         conclude_address: RpcAddress<Destination>,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<NewTransaction>;
+    ) -> rpc::RpcResult<NewOrder>;
 
     /// Conclude an order, given its id. This assumes that the conclude key is owned
     /// by the selected account in this wallet.
