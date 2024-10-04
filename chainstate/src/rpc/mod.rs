@@ -174,8 +174,8 @@ trait ChainstateRpc {
     /// Subscribe to chainstate events, such as new tip.
     ///
     /// After a successful subscription, the node will message the subscriber with a message on every event.
-    #[subscription(name = "subscribe_events", item = RpcEvent)]
-    async fn subscribe_events(&self) -> rpc::subscription::Reply;
+    #[subscription(name = "subscribe_to_events", item = RpcEvent)]
+    async fn subscribe_to_events(&self) -> rpc::subscription::Reply;
 }
 
 #[async_trait::async_trait]
@@ -405,7 +405,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         rpc::handle_result(self.call(move |this| this.info()).await)
     }
 
-    async fn subscribe_events(&self, pending: subscription::Pending) -> subscription::Reply {
+    async fn subscribe_to_events(&self, pending: subscription::Pending) -> subscription::Reply {
         let event_rx = self.call_mut(move |this| this.subscribe_to_rpc_events()).await?;
         rpc::subscription::connect_broadcast_map(event_rx, pending, RpcEvent::from_event).await
     }

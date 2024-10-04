@@ -532,7 +532,7 @@ Returns:
 }
 ```
 
-### Subscription `chainstate_subscribe_events`
+### Subscription `chainstate_subscribe_to_events`
 
 Subscribe to chainstate events, such as new tip.
 
@@ -555,7 +555,7 @@ Produces:
 }
 ```
 
-Unsubscribe using `chainstate_unsubscribe_events`.
+Unsubscribe using `chainstate_unsubscribe_to_events`.
 
 Note: Subscriptions only work over WebSockets.
 
@@ -760,7 +760,7 @@ Returns:
 ], .. ]
 ```
 
-### Subscription `mempool_subscribe_events`
+### Subscription `mempool_subscribe_to_events`
 
 Subscribe to mempool events, such as tx processed.
 
@@ -806,7 +806,7 @@ EITHER OF
         }
 ```
 
-Unsubscribe using `mempool_unsubscribe_events`.
+Unsubscribe using `mempool_unsubscribe_to_events`.
 
 Note: Subscriptions only work over WebSockets.
 

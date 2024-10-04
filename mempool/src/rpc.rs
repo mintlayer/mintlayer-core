@@ -106,8 +106,8 @@ trait MempoolRpc {
     /// Subscribe to mempool events, such as tx processed.
     ///
     /// After a successful subscription, the node will message the subscriber with a message on every event.
-    #[subscription(name = "subscribe_events", item = RpcEvent)]
-    async fn subscribe_events(&self) -> rpc::subscription::Reply;
+    #[subscription(name = "subscribe_to_events", item = RpcEvent)]
+    async fn subscribe_to_events(&self) -> rpc::subscription::Reply;
 }
 
 #[async_trait::async_trait]
@@ -189,7 +189,7 @@ impl MempoolRpcServer for super::MempoolHandle {
         rpc::handle_result(self.call(move |this| this.get_fee_rate_points(NUM_POINTS)).await)
     }
 
-    async fn subscribe_events(
+    async fn subscribe_to_events(
         &self,
         pending: rpc::subscription::Pending,
     ) -> rpc::subscription::Reply {
