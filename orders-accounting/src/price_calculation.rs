@@ -13,11 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{
-    chain::{output_value::OutputValue, OrderId},
-    primitives::Amount,
-    Uint256,
-};
+use common::{chain::OrderId, primitives::Amount, Uint256};
 use utils::ensure;
 
 use crate::{error::Result, Error, OrdersAccountingView};
@@ -25,29 +21,15 @@ use crate::{error::Result, Error, OrdersAccountingView};
 pub fn calculate_fill_order(
     view: &impl OrdersAccountingView,
     order_id: OrderId,
-    fill_value: &OutputValue,
+    fill_amount: Amount,
 ) -> Result<Amount> {
-    let order_data = view
-        .get_order_data(&order_id)
-        .map_err(|_| crate::Error::ViewFail)?
-        .ok_or(Error::OrderDataNotFound(order_id))?;
     let ask_balance = view.get_ask_balance(&order_id).map_err(|_| crate::Error::ViewFail)?;
     let give_balance = view.get_give_balance(&order_id).map_err(|_| crate::Error::ViewFail)?;
 
-    {
-        let ask_balance = match order_data.ask() {
-            OutputValue::Coin(_) => OutputValue::Coin(ask_balance),
-            OutputValue::TokenV0(_) => return Err(Error::UnsupportedTokenVersion),
-            OutputValue::TokenV1(token_id, _) => OutputValue::TokenV1(*token_id, ask_balance),
-        };
-
-        ensure_currencies_and_amounts_match(order_id, &ask_balance, fill_value)?;
-    }
-
-    let fill_amount = match fill_value {
-        OutputValue::Coin(amount) | OutputValue::TokenV1(_, amount) => *amount,
-        OutputValue::TokenV0(_) => return Err(Error::UnsupportedTokenVersion),
-    };
+    ensure!(
+        ask_balance >= fill_amount,
+        Error::OrderOverbid(order_id, ask_balance, fill_amount)
+    );
 
     calculate_filled_amount_impl(ask_balance, give_balance, fill_amount)
         .ok_or(Error::OrderOverflow(order_id))
@@ -64,41 +46,24 @@ fn calculate_filled_amount_impl(ask: Amount, give: Amount, fill: Amount) -> Opti
     Some(Amount::from_atoms(result))
 }
 
-fn ensure_currencies_and_amounts_match(
-    order_id: OrderId,
-    ask: &OutputValue,
-    fill: &OutputValue,
-) -> Result<()> {
-    match (ask, fill) {
-        (OutputValue::Coin(ask), OutputValue::Coin(fill)) => {
-            ensure!(ask >= fill, Error::OrderOverbid(order_id, *ask, *fill));
-            Ok(())
-        }
-        (OutputValue::TokenV1(id1, ask), OutputValue::TokenV1(id2, fill)) => {
-            ensure!(ask >= fill, Error::OrderOverbid(order_id, *ask, *fill));
-            ensure!(id1 == id2, Error::CurrencyMismatch);
-            Ok(())
-        }
-        (OutputValue::Coin(_), OutputValue::TokenV1(_, _))
-        | (OutputValue::TokenV1(_, _), OutputValue::Coin(_)) => Err(Error::CurrencyMismatch),
-        (OutputValue::TokenV0(_), _) | (_, OutputValue::TokenV0(_)) => {
-            Err(Error::UnsupportedTokenVersion)
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
     use common::{
-        chain::{tokens::TokenId, Destination, OrderData},
+        chain::{output_value::OutputValue, tokens::TokenId, Destination, OrderData},
         primitives::H256,
     };
     use rstest::rstest;
 
     use crate::{InMemoryOrdersAccounting, OrdersAccountingDB};
+
+    macro_rules! amount {
+        ($value:expr) => {
+            Amount::from_atoms($value)
+        };
+    }
 
     macro_rules! coin {
         ($value:expr) => {
@@ -158,40 +123,40 @@ mod tests {
     }
 
     #[rstest]
-    #[case(token!(1), coin!(0), token!(0), 0)]
-    #[case(token!(1), coin!(0), token!(1), 0)]
-    #[case(token!(3), coin!(100), token!(0), 0)]
-    #[case(token!(3), coin!(100), token!(1), 33)]
-    #[case(token!(3), coin!(100), token!(2), 66)]
-    #[case(token!(3), coin!(100), token!(3), 100)]
-    #[case(token!(5), coin!(100), token!(0), 0)]
-    #[case(token!(5), coin!(100), token!(1), 20)]
-    #[case(token!(5), coin!(100), token!(2), 40)]
-    #[case(token!(5), coin!(100), token!(3), 60)]
-    #[case(token!(5), coin!(100), token!(4), 80)]
-    #[case(token!(5), coin!(100), token!(5), 100)]
-    #[case(coin!(100), token!(3), coin!(0), 0)]
-    #[case(coin!(100), token!(3), coin!(1), 0)]
-    #[case(coin!(100), token!(3), coin!(33), 0)]
-    #[case(coin!(100), token!(3), coin!(34), 1)]
-    #[case(coin!(100), token!(3), coin!(66), 1)]
-    #[case(coin!(100), token!(3), coin!(67), 2)]
-    #[case(coin!(100), token!(3), coin!(99), 2)]
-    #[case(coin!(100), token!(3), coin!(100), 3)]
-    #[case(token!(3), token2!(100), token!(0), 0)]
-    #[case(token!(3), token2!(100), token!(1), 33)]
-    #[case(token!(3), token2!(100), token!(2), 66)]
-    #[case(token!(3), token2!(100), token!(3), 100)]
-    #[case(coin!(3), coin!(100), coin!(0), 0)]
-    #[case(coin!(3), coin!(100), coin!(1), 33)]
-    #[case(coin!(3), coin!(100), coin!(2), 66)]
-    #[case(coin!(3), coin!(100), coin!(3), 100)]
-    #[case(coin!(1), token!(u128::MAX), coin!(1), u128::MAX)]
-    #[case(coin!(2), token!(u128::MAX), coin!(2), u128::MAX)]
+    #[case(token!(1), coin!(0), amount!(0), 0)]
+    #[case(token!(1), coin!(0), amount!(1), 0)]
+    #[case(token!(3), coin!(100), amount!(0), 0)]
+    #[case(token!(3), coin!(100), amount!(1), 33)]
+    #[case(token!(3), coin!(100), amount!(2), 66)]
+    #[case(token!(3), coin!(100), amount!(3), 100)]
+    #[case(token!(5), coin!(100), amount!(0), 0)]
+    #[case(token!(5), coin!(100), amount!(1), 20)]
+    #[case(token!(5), coin!(100), amount!(2), 40)]
+    #[case(token!(5), coin!(100), amount!(3), 60)]
+    #[case(token!(5), coin!(100), amount!(4), 80)]
+    #[case(token!(5), coin!(100), amount!(5), 100)]
+    #[case(coin!(100), token!(3), amount!(0), 0)]
+    #[case(coin!(100), token!(3), amount!(1), 0)]
+    #[case(coin!(100), token!(3), amount!(33), 0)]
+    #[case(coin!(100), token!(3), amount!(34), 1)]
+    #[case(coin!(100), token!(3), amount!(66), 1)]
+    #[case(coin!(100), token!(3), amount!(67), 2)]
+    #[case(coin!(100), token!(3), amount!(99), 2)]
+    #[case(coin!(100), token!(3), amount!(100), 3)]
+    #[case(token!(3), token2!(100), amount!(0), 0)]
+    #[case(token!(3), token2!(100), amount!(1), 33)]
+    #[case(token!(3), token2!(100), amount!(2), 66)]
+    #[case(token!(3), token2!(100), amount!(3), 100)]
+    #[case(coin!(3), coin!(100), amount!(0), 0)]
+    #[case(coin!(3), coin!(100), amount!(1), 33)]
+    #[case(coin!(3), coin!(100), amount!(2), 66)]
+    #[case(coin!(3), coin!(100), amount!(3), 100)]
+    #[case(coin!(1), token!(u128::MAX), amount!(1), u128::MAX)]
+    #[case(coin!(2), token!(u128::MAX), amount!(2), u128::MAX)]
     fn fill_order_valid_values(
         #[case] ask: OutputValue,
         #[case] give: OutputValue,
-        #[case] fill: OutputValue,
+        #[case] fill: Amount,
         #[case] result: u128,
     ) {
         let order_id = OrderId::zero();
@@ -206,23 +171,20 @@ mod tests {
         let orders_db = OrdersAccountingDB::new(&orders_store);
 
         assert_eq!(
-            calculate_fill_order(&orders_db, order_id, &fill),
+            calculate_fill_order(&orders_db, order_id, fill),
             Ok(Amount::from_atoms(result))
         );
     }
 
     #[rstest]
-    #[case(token!(0), coin!(1), token!(0), Error::OrderOverflow(OrderId::zero()))]
-    #[case(token!(0), coin!(1), token!(1), Error::OrderOverbid(OrderId::zero(), Amount::from_atoms(0), Amount::from_atoms(1)))]
-    #[case(coin!(1), token!(1), coin!(2), Error::OrderOverbid(OrderId::zero(), Amount::from_atoms(1), Amount::from_atoms(2)))]
-    #[case(coin!(1), token!(u128::MAX), coin!(2), Error::OrderOverbid(OrderId::zero(), Amount::from_atoms(1), Amount::from_atoms(2)))]
-    #[case(coin!(1), token!(1), token!(1), Error::CurrencyMismatch)]
-    #[case(coin!(1), token!(1), token!(1), Error::CurrencyMismatch)]
-    #[case(token!(1), token2!(1), token2!(1), Error::CurrencyMismatch)]
+    #[case(token!(0), coin!(1), amount!(0), Error::OrderOverflow(OrderId::zero()))]
+    #[case(token!(0), coin!(1), amount!(1), Error::OrderOverbid(OrderId::zero(), Amount::from_atoms(0), Amount::from_atoms(1)))]
+    #[case(coin!(1), token!(1), amount!(2), Error::OrderOverbid(OrderId::zero(), Amount::from_atoms(1), Amount::from_atoms(2)))]
+    #[case(coin!(1), token!(u128::MAX), amount!(2), Error::OrderOverbid(OrderId::zero(), Amount::from_atoms(1), Amount::from_atoms(2)))]
     fn fill_order_invalid_values(
         #[case] ask: OutputValue,
         #[case] give: OutputValue,
-        #[case] fill: OutputValue,
+        #[case] fill: Amount,
         #[case] error: Error,
     ) {
         let order_id = OrderId::zero();
@@ -236,9 +198,6 @@ mod tests {
         );
         let orders_db = OrdersAccountingDB::new(&orders_store);
 
-        assert_eq!(
-            calculate_fill_order(&orders_db, order_id, &fill),
-            Err(error)
-        );
+        assert_eq!(calculate_fill_order(&orders_db, order_id, fill), Err(error));
     }
 }

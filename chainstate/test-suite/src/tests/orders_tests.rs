@@ -584,22 +584,20 @@ fn fill_order_check_storage(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Fill the order partially
-        let fill_value = OutputValue::Coin(Amount::from_atoms(
-            rng.gen_range(1..ask_amount.into_atoms()),
-        ));
+        let fill_amount = Amount::from_atoms(rng.gen_range(1..ask_amount.into_atoms()));
         let filled_amount = {
             let db_tx = tf.storage.transaction_ro().unwrap();
             let orders_db = OrdersAccountingDB::new(&db_tx);
-            orders_accounting::calculate_fill_order(&orders_db, order_id, &fill_value).unwrap()
+            orders_accounting::calculate_fill_order(&orders_db, order_id, fill_amount).unwrap()
         };
-        let left_to_fill = (ask_amount - output_value_amount(&fill_value)).unwrap();
+        let left_to_fill = (ask_amount - fill_amount).unwrap();
 
         let tx = TransactionBuilder::new()
             .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
             .add_input(
                 TxInput::AccountCommand(
                     AccountNonce::new(0),
-                    AccountCommand::FillOrder(order_id, fill_value, Destination::AnyoneCanSpend),
+                    AccountCommand::FillOrder(order_id, fill_amount, Destination::AnyoneCanSpend),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -629,11 +627,10 @@ fn fill_order_check_storage(#[case] seed: Seed) {
         );
 
         // Fill the rest of the order
-        let fill_value = OutputValue::Coin(left_to_fill);
         let filled_amount = {
             let db_tx = tf.storage.transaction_ro().unwrap();
             let orders_db = OrdersAccountingDB::new(&db_tx);
-            orders_accounting::calculate_fill_order(&orders_db, order_id, &fill_value).unwrap()
+            orders_accounting::calculate_fill_order(&orders_db, order_id, left_to_fill).unwrap()
         };
 
         let tx = TransactionBuilder::new()
@@ -644,7 +641,7 @@ fn fill_order_check_storage(#[case] seed: Seed) {
             .add_input(
                 TxInput::AccountCommand(
                     AccountNonce::new(1),
-                    AccountCommand::FillOrder(order_id, fill_value, Destination::AnyoneCanSpend),
+                    AccountCommand::FillOrder(order_id, left_to_fill, Destination::AnyoneCanSpend),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -700,13 +697,11 @@ fn fill_partially_then_conclude(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Fill the order partially
-        let fill_value = OutputValue::Coin(Amount::from_atoms(
-            rng.gen_range(1..=ask_amount.into_atoms()),
-        ));
+        let fill_amount = Amount::from_atoms(rng.gen_range(1..=ask_amount.into_atoms()));
         let filled_amount = {
             let db_tx = tf.storage.transaction_ro().unwrap();
             let orders_db = OrdersAccountingDB::new(&db_tx);
-            orders_accounting::calculate_fill_order(&orders_db, order_id, &fill_value).unwrap()
+            orders_accounting::calculate_fill_order(&orders_db, order_id, fill_amount).unwrap()
         };
 
         let tx = TransactionBuilder::new()
@@ -714,11 +709,7 @@ fn fill_partially_then_conclude(#[case] seed: Seed) {
             .add_input(
                 TxInput::AccountCommand(
                     AccountNonce::new(0),
-                    AccountCommand::FillOrder(
-                        order_id,
-                        fill_value.clone(),
-                        Destination::AnyoneCanSpend,
-                    ),
+                    AccountCommand::FillOrder(order_id, fill_amount, Destination::AnyoneCanSpend),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -749,7 +740,7 @@ fn fill_partially_then_conclude(#[case] seed: Seed) {
                     Destination::AnyoneCanSpend,
                 ))
                 .add_output(TxOutput::Transfer(
-                    OutputValue::Coin(output_value_amount(&fill_value)),
+                    OutputValue::Coin(fill_amount),
                     Destination::AnyoneCanSpend,
                 ))
                 .build();
@@ -782,9 +773,7 @@ fn fill_partially_then_conclude(#[case] seed: Seed) {
                     Destination::AnyoneCanSpend,
                 ))
                 .add_output(TxOutput::Transfer(
-                    OutputValue::Coin(
-                        (output_value_amount(&fill_value) + Amount::from_atoms(1)).unwrap(),
-                    ),
+                    OutputValue::Coin((fill_amount + Amount::from_atoms(1)).unwrap()),
                     Destination::AnyoneCanSpend,
                 ))
                 .build();
@@ -816,7 +805,7 @@ fn fill_partially_then_conclude(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .add_output(TxOutput::Transfer(
-                OutputValue::Coin(output_value_amount(&fill_value)),
+                OutputValue::Coin(fill_amount),
                 Destination::AnyoneCanSpend,
             ))
             .build();
@@ -881,11 +870,7 @@ fn try_overbid_order_in_multiple_txs(#[case] seed: Seed) {
             .add_input(
                 TxInput::AccountCommand(
                     AccountNonce::new(0),
-                    AccountCommand::FillOrder(
-                        order_id,
-                        OutputValue::Coin(ask_amount),
-                        Destination::AnyoneCanSpend,
-                    ),
+                    AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -903,11 +888,7 @@ fn try_overbid_order_in_multiple_txs(#[case] seed: Seed) {
             .add_input(
                 TxInput::AccountCommand(
                     AccountNonce::new(1),
-                    AccountCommand::FillOrder(
-                        order_id,
-                        OutputValue::Coin(ask_amount),
-                        Destination::AnyoneCanSpend,
-                    ),
+                    AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -979,7 +960,7 @@ fn fill_completely_then_conclude(#[case] seed: Seed) {
                         AccountNonce::new(0),
                         AccountCommand::FillOrder(
                             order_id,
-                            OutputValue::Coin(ask_amount),
+                            ask_amount,
                             Destination::AnyoneCanSpend,
                         ),
                     ),
@@ -1016,7 +997,7 @@ fn fill_completely_then_conclude(#[case] seed: Seed) {
                         AccountNonce::new(0),
                         AccountCommand::FillOrder(
                             order_id,
-                            OutputValue::Coin((ask_amount + Amount::from_atoms(1)).unwrap()),
+                            (ask_amount + Amount::from_atoms(1)).unwrap(),
                             Destination::AnyoneCanSpend,
                         ),
                     ),
@@ -1053,11 +1034,7 @@ fn fill_completely_then_conclude(#[case] seed: Seed) {
             .add_input(
                 TxInput::AccountCommand(
                     AccountNonce::new(0),
-                    AccountCommand::FillOrder(
-                        order_id,
-                        OutputValue::Coin(ask_amount),
-                        Destination::AnyoneCanSpend,
-                    ),
+                    AccountCommand::FillOrder(order_id, ask_amount, Destination::AnyoneCanSpend),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -1308,22 +1285,20 @@ fn reorg_before_create(#[case] seed: Seed) {
         tf.make_block_builder().add_transaction(tx).build_and_process(&mut rng).unwrap();
 
         // Fill the order partially
-        let fill_value = OutputValue::Coin(Amount::from_atoms(
-            rng.gen_range(1..ask_amount.into_atoms()),
-        ));
+        let fill_amount = Amount::from_atoms(rng.gen_range(1..ask_amount.into_atoms()));
         let filled_amount = {
             let db_tx = tf.storage.transaction_ro().unwrap();
             let orders_db = OrdersAccountingDB::new(&db_tx);
-            orders_accounting::calculate_fill_order(&orders_db, order_id, &fill_value).unwrap()
+            orders_accounting::calculate_fill_order(&orders_db, order_id, fill_amount).unwrap()
         };
-        let left_to_fill = (ask_amount - output_value_amount(&fill_value)).unwrap();
+        let left_to_fill = (ask_amount - fill_amount).unwrap();
 
         let tx = TransactionBuilder::new()
             .add_input(coins_outpoint.into(), InputWitness::NoSignature(None))
             .add_input(
                 TxInput::AccountCommand(
                     AccountNonce::new(0),
-                    AccountCommand::FillOrder(order_id, fill_value, Destination::AnyoneCanSpend),
+                    AccountCommand::FillOrder(order_id, fill_amount, Destination::AnyoneCanSpend),
                 ),
                 InputWitness::NoSignature(None),
             )
@@ -1405,15 +1380,13 @@ fn reorg_after_create(#[case] seed: Seed) {
         let reorg_common_ancestor = tf.best_block_id();
 
         // Fill the order partially
-        let fill_value = OutputValue::Coin(Amount::from_atoms(
-            rng.gen_range(1..ask_amount.into_atoms()),
-        ));
+        let fill_amount = Amount::from_atoms(rng.gen_range(1..ask_amount.into_atoms()));
         let filled_amount = {
             let db_tx = tf.storage.transaction_ro().unwrap();
             let orders_db = OrdersAccountingDB::new(&db_tx);
-            orders_accounting::calculate_fill_order(&orders_db, order_id, &fill_value).unwrap()
+            orders_accounting::calculate_fill_order(&orders_db, order_id, fill_amount).unwrap()
         };
-        let left_to_fill = (ask_amount - output_value_amount(&fill_value)).unwrap();
+        let left_to_fill = (ask_amount - fill_amount).unwrap();
 
         tf.make_block_builder()
             .add_transaction(
@@ -1424,7 +1397,7 @@ fn reorg_after_create(#[case] seed: Seed) {
                             AccountNonce::new(0),
                             AccountCommand::FillOrder(
                                 order_id,
-                                fill_value,
+                                fill_amount,
                                 Destination::AnyoneCanSpend,
                             ),
                         ),

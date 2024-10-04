@@ -254,45 +254,6 @@ fn conclude_order_and_undo(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn fill_order_wrong_currency(#[case] seed: Seed) {
-    let mut rng = make_seedable_rng(seed);
-
-    let order_id = OrderId::random_using(&mut rng);
-    let order_data = make_order_data(&mut rng);
-
-    let mut storage = InMemoryOrdersAccounting::from_values(
-        BTreeMap::from_iter([(order_id, order_data.clone())]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.ask()))]),
-        BTreeMap::from_iter([(order_id, output_value_amount(order_data.give()))]),
-    );
-    let mut db = OrdersAccountingDB::new(&mut storage);
-    let mut cache = OrdersAccountingCache::new(&db);
-
-    // try to fill with random token instead of a coin
-    {
-        let random_token_id = TokenId::random_using(&mut rng);
-        let result = cache.fill_order(
-            order_id,
-            OutputValue::TokenV1(random_token_id, Amount::from_atoms(1)),
-        );
-        assert_eq!(result.unwrap_err(), Error::CurrencyMismatch);
-    }
-
-    let _ = cache.fill_order(order_id, order_data.ask().clone()).unwrap();
-
-    db.batch_write_orders_data(cache.consume()).unwrap();
-
-    let expected_storage = InMemoryOrdersAccounting::from_values(
-        BTreeMap::from_iter([(order_id, order_data)]),
-        BTreeMap::new(),
-        BTreeMap::new(),
-    );
-    assert_eq!(expected_storage, storage);
-}
-
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
 fn fill_entire_order_and_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
@@ -310,14 +271,14 @@ fn fill_entire_order_and_flush(#[case] seed: Seed) {
     // try to fill non-existing order
     {
         let random_order = OrderId::random_using(&mut rng);
-        let result = cache.fill_order(random_order, order_data.ask().clone());
+        let result = cache.fill_order(random_order, output_value_amount(order_data.ask()));
         assert_eq!(result.unwrap_err(), Error::OrderDataNotFound(random_order));
     }
 
     // try to overbid
     {
         let ask_amount = output_value_amount(order_data.ask());
-        let fill = OutputValue::Coin((ask_amount + Amount::from_atoms(1)).unwrap());
+        let fill = (ask_amount + Amount::from_atoms(1)).unwrap();
         let result = cache.fill_order(order_id, fill);
         assert_eq!(
             result.unwrap_err(),
@@ -329,7 +290,7 @@ fn fill_entire_order_and_flush(#[case] seed: Seed) {
         );
     }
 
-    let _ = cache.fill_order(order_id, order_data.ask().clone()).unwrap();
+    let _ = cache.fill_order(order_id, output_value_amount(order_data.ask())).unwrap();
 
     db.batch_write_orders_data(cache.consume()).unwrap();
 
@@ -363,12 +324,7 @@ fn fill_order_partially_and_flush(#[case] seed: Seed) {
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
 
-    let _ = cache
-        .fill_order(
-            order_id,
-            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
-        )
-        .unwrap();
+    let _ = cache.fill_order(order_id, Amount::from_atoms(1)).unwrap();
 
     assert_eq!(
         Some(&order_data),
@@ -383,12 +339,7 @@ fn fill_order_partially_and_flush(#[case] seed: Seed) {
         cache.get_give_balance(&order_id).unwrap()
     );
 
-    let _ = cache
-        .fill_order(
-            order_id,
-            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
-        )
-        .unwrap();
+    let _ = cache.fill_order(order_id, Amount::from_atoms(1)).unwrap();
 
     assert_eq!(
         Some(&order_data),
@@ -403,12 +354,7 @@ fn fill_order_partially_and_flush(#[case] seed: Seed) {
         cache.get_give_balance(&order_id).unwrap()
     );
 
-    let _ = cache
-        .fill_order(
-            order_id,
-            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
-        )
-        .unwrap();
+    let _ = cache.fill_order(order_id, Amount::from_atoms(1)).unwrap();
 
     db.batch_write_orders_data(cache.consume()).unwrap();
 
@@ -443,26 +389,11 @@ fn fill_order_partially_and_undo(#[case] seed: Seed) {
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
 
-    let undo1 = cache
-        .fill_order(
-            order_id,
-            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
-        )
-        .unwrap();
+    let undo1 = cache.fill_order(order_id, Amount::from_atoms(1)).unwrap();
 
-    let undo2 = cache
-        .fill_order(
-            order_id,
-            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
-        )
-        .unwrap();
+    let undo2 = cache.fill_order(order_id, Amount::from_atoms(1)).unwrap();
 
-    let undo3 = cache
-        .fill_order(
-            order_id,
-            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
-        )
-        .unwrap();
+    let undo3 = cache.fill_order(order_id, Amount::from_atoms(1)).unwrap();
 
     assert_eq!(
         Some(&order_data),
@@ -543,12 +474,7 @@ fn fill_order_partially_and_conclude(#[case] seed: Seed) {
     let mut db = OrdersAccountingDB::new(&mut storage);
     let mut cache = OrdersAccountingCache::new(&db);
 
-    let _ = cache
-        .fill_order(
-            order_id,
-            OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
-        )
-        .unwrap();
+    let _ = cache.fill_order(order_id, Amount::from_atoms(1)).unwrap();
 
     assert_eq!(
         Some(&order_data),
@@ -596,7 +522,7 @@ fn fill_order_must_converge(#[case] seed: Seed) {
     let mut cache = OrdersAccountingCache::new(&db);
 
     for fill in fill_orders {
-        let _ = cache.fill_order(order_id, OutputValue::Coin(Amount::from_atoms(fill))).unwrap();
+        let _ = cache.fill_order(order_id, Amount::from_atoms(fill)).unwrap();
     }
 
     db.batch_write_orders_data(cache.consume()).unwrap();

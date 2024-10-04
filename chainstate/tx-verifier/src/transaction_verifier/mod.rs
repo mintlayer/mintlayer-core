@@ -761,31 +761,17 @@ where
                         | AccountCommand::ChangeTokenAuthority(id, _)
                         | AccountCommand::ChangeTokenMetadataUri(id, _) => check_not_frozen(*id),
                         | AccountCommand::UnfreezeToken(_) => Ok(()),
-                        AccountCommand::ConcludeOrder(id) => {
-                            let order_data = self.get_order_data(id)?.ok_or(
+                        AccountCommand::ConcludeOrder(order_id)
+                        | AccountCommand::FillOrder(order_id, _, _) => {
+                            let order_data = self.get_order_data(order_id)?.ok_or(
                                 ConnectTransactionError::OrdersAccountingError(
-                                    orders_accounting::Error::OrderDataNotFound(*id),
+                                    orders_accounting::Error::OrderDataNotFound(*order_id),
                                 ),
                             )?;
                             [order_data.ask(), order_data.give()].iter().try_for_each(|v| match v {
                                 OutputValue::TokenV0(_) | OutputValue::Coin(_) => Ok(()),
                                 OutputValue::TokenV1(token_id, _) => check_not_frozen(*token_id),
                             })
-                        }
-                        AccountCommand::FillOrder(id, fill_value, _) => {
-                            let order_data = self.get_order_data(id)?.ok_or(
-                                ConnectTransactionError::OrdersAccountingError(
-                                    orders_accounting::Error::OrderDataNotFound(*id),
-                                ),
-                            )?;
-                            [fill_value, order_data.ask(), order_data.give()].iter().try_for_each(
-                                |v| match v {
-                                    OutputValue::TokenV0(_) | OutputValue::Coin(_) => Ok(()),
-                                    OutputValue::TokenV1(token_id, _) => {
-                                        check_not_frozen(*token_id)
-                                    }
-                                },
-                            )
                         }
                     },
                 }
@@ -858,7 +844,7 @@ where
                             .spend_input_from_account(*nonce, account_op.clone().into())
                             .and_then(|_| {
                                 self.orders_accounting_cache
-                                    .fill_order(*order_id, fill.clone())
+                                    .fill_order(*order_id, *fill)
                                     .map_err(ConnectTransactionError::OrdersAccountingError)
                             });
                         Some(res)

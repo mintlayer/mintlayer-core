@@ -254,11 +254,7 @@ pub fn utxo_outpoint_to_json(utxo: &UtxoOutPoint) -> serde_json::Value {
     }
 }
 
-pub fn tx_input_to_json(
-    inp: &TxInput,
-    chain_config: &ChainConfig,
-    token_decimals: &TokenDecimals,
-) -> serde_json::Value {
+pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json::Value {
     match inp {
         TxInput::Utxo(utxo) => match utxo.source_id() {
             OutPointSourceId::Transaction(tx_id) => {
@@ -357,7 +353,8 @@ pub fn tx_input_to_json(
                     "input_type": "AccountCommand",
                     "command": "FillOrder",
                     "order_id": Address::new(chain_config, *order_id).expect("addressable").to_string(),
-                    "fill_value": outputvalue_to_json(fill, chain_config, token_decimals),
+                    // TODO(orders)
+                    "fill_atoms": json!({"atoms": fill.into_atoms().to_string()}),
                     "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
                 })
             }
@@ -385,7 +382,7 @@ pub fn tx_to_json(
     "flags": tx.flags(),
     "fee": amount_to_json(additional_info.fee, chain_config.coin_decimals()),
     "inputs": tx.inputs().iter().zip(additional_info.input_utxos.iter()).map(|(inp, utxo)| json!({
-        "input": tx_input_to_json(inp, chain_config, &(&additional_info.token_decimals).into()),
+        "input": tx_input_to_json(inp, chain_config),
         "utxo": utxo.as_ref().map(|txo| txoutput_to_json(txo, chain_config, &(&additional_info.token_decimals).into())),
         })).collect::<Vec<_>>(),
     "outputs": tx.outputs()

@@ -1010,7 +1010,7 @@ impl<'a> RandomTxMaker<'a> {
                     get_random_order_to_fill(self.orders_store, &orders_cache, &fill_value)
                 {
                     let filled_value =
-                        calculate_filled_order_value(&orders_cache, order_id, &fill_value);
+                        calculate_filled_order_value(&orders_cache, order_id, amount_to_spend);
 
                     if !is_frozen_token(&filled_value, tokens_cache) {
                         let new_nonce = self.get_next_nonce(AccountType::Order(order_id));
@@ -1018,7 +1018,7 @@ impl<'a> RandomTxMaker<'a> {
                             new_nonce,
                             AccountCommand::FillOrder(
                                 order_id,
-                                fill_value.clone(),
+                                amount_to_spend,
                                 key_manager
                                     .new_destination(self.chainstate.get_chain_config(), rng),
                             ),
@@ -1029,7 +1029,7 @@ impl<'a> RandomTxMaker<'a> {
                             key_manager.new_destination(self.chainstate.get_chain_config(), rng),
                         );
 
-                        let _ = orders_cache.fill_order(order_id, fill_value).unwrap();
+                        let _ = orders_cache.fill_order(order_id, amount_to_spend).unwrap();
                         self.account_command_used = true;
 
                         result_inputs.push(input);
@@ -1236,8 +1236,11 @@ impl<'a> RandomTxMaker<'a> {
                     if let Some(order_id) =
                         get_random_order_to_fill(self.orders_store, &orders_cache, &output_value)
                     {
-                        let filled_value =
-                            calculate_filled_order_value(&orders_cache, order_id, &output_value);
+                        let filled_value = calculate_filled_order_value(
+                            &orders_cache,
+                            order_id,
+                            Amount::from_atoms(atoms),
+                        );
 
                         if !is_frozen_token(&filled_value, tokens_cache) {
                             result_outputs.push(TxOutput::Transfer(
@@ -1251,13 +1254,15 @@ impl<'a> RandomTxMaker<'a> {
                                 new_nonce,
                                 AccountCommand::FillOrder(
                                     order_id,
-                                    output_value.clone(),
+                                    Amount::from_atoms(atoms),
                                     key_manager
                                         .new_destination(self.chainstate.get_chain_config(), rng),
                                 ),
                             ));
 
-                            let _ = orders_cache.fill_order(order_id, output_value).unwrap();
+                            let _ = orders_cache
+                                .fill_order(order_id, Amount::from_atoms(atoms))
+                                .unwrap();
                             self.account_command_used = true;
                         }
                     }
@@ -1478,12 +1483,11 @@ fn is_frozen_token(value: &OutputValue, view: &impl TokensAccountingView) -> boo
 fn calculate_filled_order_value(
     view: &impl OrdersAccountingView,
     order_id: OrderId,
-    fill_value: &OutputValue,
+    fill: Amount,
 ) -> OutputValue {
     let order_data = view.get_order_data(&order_id).unwrap().unwrap();
 
-    let filled_amount =
-        orders_accounting::calculate_fill_order(view, order_id, fill_value).unwrap();
+    let filled_amount = orders_accounting::calculate_fill_order(view, order_id, fill).unwrap();
 
     output_value_with_amount(order_data.give(), filled_amount)
 }

@@ -255,8 +255,7 @@ fn conclude_order(id: OrderId) -> TestInputInfo {
 }
 
 fn fill_order(id: OrderId) -> TestInputInfo {
-    let command =
-        AccountCommand::FillOrder(id, OutputValue::Coin(Amount::from_atoms(1)), dest_pk(0x4));
+    let command = AccountCommand::FillOrder(id, Amount::from_atoms(1), dest_pk(0x4));
     TestInputInfo::AccountCommand { command }
 }
 

@@ -674,7 +674,6 @@ impl BanScore for orders_accounting::Error {
             Error::InvariantOrderDataExistForConcludeUndo(_) => 100,
             Error::InvariantOrderAskBalanceExistForConcludeUndo(_) => 100,
             Error::InvariantOrderGiveBalanceExistForConcludeUndo(_) => 100,
-            Error::CurrencyMismatch => 100,
             Error::OrderOverflow(_) => 100,
             Error::OrderOverbid(_, _, _) => 100,
             Error::AttemptedConcludeNonexistingOrderData(_) => 100,

@@ -43,8 +43,6 @@ pub enum Error {
     InvariantNonzeroAskBalanceForMissingOrder(OrderId),
     #[error("Give balance for non-existing order `{0}` is not zero")]
     InvariantNonzeroGiveBalanceForMissingOrder(OrderId),
-    #[error("Coin type mismatch")]
-    CurrencyMismatch,
     #[error("Order overflow: `{0}`")]
     OrderOverflow(OrderId),
     #[error("Order `{0}` can provide `{1:?}` amount; but attempted to fill `{2:?}`")]

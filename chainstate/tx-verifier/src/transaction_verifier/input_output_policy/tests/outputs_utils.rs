@@ -158,11 +158,7 @@ pub fn all_account_inputs() -> [TxInput; 9] {
         ),
         TxInput::from_command(
             AccountNonce::new(0),
-            AccountCommand::FillOrder(
-                OrderId::zero(),
-                OutputValue::Coin(Amount::ZERO),
-                Destination::AnyoneCanSpend,
-            ),
+            AccountCommand::FillOrder(OrderId::zero(), Amount::ZERO, Destination::AnyoneCanSpend),
         ),
     ]
 }

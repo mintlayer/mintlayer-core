@@ -909,7 +909,6 @@ impl BlockProcessingErrorClassification for orders_accounting::Error {
             | Error::InvariantOrderDataExistForConcludeUndo(_)
             | Error::InvariantOrderAskBalanceExistForConcludeUndo(_)
             | Error::InvariantOrderGiveBalanceExistForConcludeUndo(_)
-            | Error::CurrencyMismatch
             | Error::OrderOverflow(_)
             | Error::OrderOverbid(_, _, _)
             | Error::AttemptedConcludeNonexistingOrderData(_)
