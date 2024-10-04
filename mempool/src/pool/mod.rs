@@ -67,8 +67,7 @@ pub struct Mempool<M> {
     tx_pool: tx_pool::TxPool<M>,
     orphans: TxOrphanPool,
     work_queue: WorkQueue,
-    subsystem_events: EventsController<MempoolEvent>,
-    rpc_events: broadcaster::Broadcaster<MempoolEvent>,
+    events_broadcast: EventsBroadcast,
     clock: TimeGetter,
 }
 
@@ -91,18 +90,17 @@ impl<M> Mempool<M> {
             tx_pool,
             orphans: orphans::TxOrphanPool::new(),
             work_queue: WorkQueue::new(),
-            subsystem_events: EventsController::new(),
-            rpc_events: broadcaster::Broadcaster::new(),
+            events_broadcast: EventsBroadcast::new(),
             clock,
         }
     }
 
     pub fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
-        self.subsystem_events.subscribe_to_events(handler)
+        self.events_broadcast.subscribe_to_events(handler)
     }
 
     pub fn subscribe_to_event_broadcast(&mut self) -> broadcaster::Receiver<MempoolEvent> {
-        self.rpc_events.subscribe()
+        self.events_broadcast.subscribe_to_event_broadcast()
     }
 
     pub fn on_peer_disconnected(&mut self, peer_id: p2p_types::PeerId) {
@@ -147,12 +145,11 @@ impl<M> Mempool<M> {
             tx_pool,
             orphans,
             work_queue,
-            subsystem_events,
-            rpc_events,
+            events_broadcast,
             clock,
         } = self;
 
-        let finalizer = TxFinalizer::new(orphans, clock, subsystem_events, rpc_events, work_queue);
+        let finalizer = TxFinalizer::new(orphans, clock, events_broadcast, work_queue);
         (tx_pool, finalizer)
     }
 }
@@ -252,8 +249,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
         let new_tip = event::NewTip::new(block_id, height);
         let event = new_tip.into();
-        self.rpc_events.broadcast(&event);
-        self.subsystem_events.broadcast(event);
+        self.events_broadcast.broadcast(event);
 
         Ok(())
     }
@@ -291,6 +287,33 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     }
 }
 
+struct EventsBroadcast {
+    events_controller: EventsController<MempoolEvent>,
+    events_broadcaster: broadcaster::Broadcaster<MempoolEvent>,
+}
+
+impl EventsBroadcast {
+    fn new() -> Self {
+        Self {
+            events_controller: EventsController::new(),
+            events_broadcaster: broadcaster::Broadcaster::new(),
+        }
+    }
+
+    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
+        self.events_controller.subscribe_to_events(handler)
+    }
+
+    fn subscribe_to_event_broadcast(&mut self) -> broadcaster::Receiver<MempoolEvent> {
+        self.events_broadcaster.subscribe()
+    }
+
+    fn broadcast(&mut self, event: MempoolEvent) {
+        self.events_broadcaster.broadcast(&event);
+        self.events_controller.broadcast(event);
+    }
+}
+
 /// [TxFinalizer] holds data needed to finalize the transaction processing after it's been processed
 /// by the transaction pool.
 ///
@@ -301,8 +324,7 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 struct TxFinalizer<'a> {
     orphan_pool: &'a mut TxOrphanPool,
     cur_time: Time,
-    subsystem_events: &'a EventsController<MempoolEvent>,
-    rpc_events: &'a mut broadcaster::Broadcaster<MempoolEvent>,
+    events_broadcast: &'a mut EventsBroadcast,
     work_queue: &'a mut WorkQueue,
 }
 
@@ -310,15 +332,13 @@ impl<'a> TxFinalizer<'a> {
     pub fn new(
         orphan_pool: &'a mut TxOrphanPool,
         clock: &TimeGetter,
-        subsystem_events: &'a EventsController<MempoolEvent>,
-        rpc_events: &'a mut broadcaster::Broadcaster<MempoolEvent>,
+        events_broadcast: &'a mut EventsBroadcast,
         work_queue: &'a mut WorkQueue,
     ) -> Self {
         Self {
             orphan_pool,
             cur_time: clock.get_time(),
-            subsystem_events,
-            rpc_events,
+            events_broadcast,
             work_queue,
         }
     }
@@ -338,8 +358,7 @@ impl<'a> TxFinalizer<'a> {
                 self.enqueue_children(transaction.tx_entry());
                 let event = event::TransactionProcessed::accepted(tx_id, relay_policy, origin);
                 let event = event.into();
-                self.rpc_events.broadcast(&event);
-                self.subsystem_events.broadcast(event);
+                self.events_broadcast.broadcast(event);
                 Ok(TxStatus::InMempool)
             }
             TxAdditionOutcome::Duplicate { transaction } => {
@@ -354,8 +373,7 @@ impl<'a> TxFinalizer<'a> {
                 self.try_add_orphan(tx_pool, transaction, error).inspect_err(|err| {
                     let event = event::TransactionProcessed::rejected(tx_id, err.clone(), origin);
                     let event = event.into();
-                    self.rpc_events.broadcast(&event);
-                    self.subsystem_events.broadcast(event);
+                    self.events_broadcast.broadcast(event);
                 })
             }
         }
