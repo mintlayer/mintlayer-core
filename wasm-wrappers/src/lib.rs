@@ -42,8 +42,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{
-            IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenCreator, TokenId,
-            TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
+            make_token_id, IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenCreator,
+            TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
         AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination, OutPointSourceId,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -676,8 +676,8 @@ pub fn token_change_authority_fee(current_block_height: u64, network: Network) -
 #[wasm_bindgen]
 pub fn encode_output_issue_fungible_token(
     authority: &str,
-    token_ticker: &[u8],
-    metadata_uri: &[u8],
+    token_ticker: &str,
+    metadata_uri: &str,
     number_of_decimals: u8,
     total_supply: TotalSupply,
     supply_amount: Option<Amount>,
@@ -707,6 +707,24 @@ pub fn encode_output_issue_fungible_token(
     Ok(output.encode())
 }
 
+/// Returns the Fungible/NFT Token ID for the given inputs of a transaction
+#[wasm_bindgen]
+pub fn get_token_id(mut inputs: &[u8], network: Network) -> Result<String, Error> {
+    let chain_config = Builder::new(network.into()).build();
+
+    let mut tx_inputs = vec![];
+    while !inputs.is_empty() {
+        let input = TxInput::decode(&mut inputs).map_err(|_| Error::InvalidInput)?;
+        tx_inputs.push(input);
+    }
+
+    let token_id = make_token_id(&tx_inputs).ok_or(Error::NoUtxoInInputs)?;
+
+    Ok(Address::new(&chain_config, token_id)
+        .expect("Should not fail to create address")
+        .to_string())
+}
+
 /// Given the parameters needed to issue an NFT, and a network type (mainnet, testnet, etc),
 /// this function creates an output that issues that NFT.
 #[allow(clippy::too_many_arguments)]
@@ -718,10 +736,10 @@ pub fn encode_output_issue_nft(
     ticker: &str,
     description: &str,
     media_hash: &[u8],
-    creator: Option<String>,
-    media_uri: Option<Vec<u8>>,
-    icon_uri: Option<Vec<u8>>,
-    additional_metadata_uri: Option<Vec<u8>>,
+    creator: Option<Vec<u8>>,
+    media_uri: Option<String>,
+    icon_uri: Option<String>,
+    additional_metadata_uri: Option<String>,
     _current_block_height: u64,
     network: Network,
 ) -> Result<Vec<u8>, Error> {
@@ -730,21 +748,15 @@ pub fn encode_output_issue_nft(
     let authority = parse_addressable(&chain_config, authority)?;
     let name = name.into();
     let ticker = ticker.into();
-    let media_uri = media_uri.into();
-    let icon_uri = icon_uri.into();
+    let media_uri = media_uri.map(Into::into).into();
+    let icon_uri = icon_uri.map(Into::into).into();
     let media_hash = media_hash.into();
-    let additional_metadata_uri = additional_metadata_uri.into();
+    let additional_metadata_uri = additional_metadata_uri.map(Into::into).into();
     let creator = creator
-        .map(|addr| parse_addressable::<Destination>(&chain_config, &addr))
-        .transpose()?
-        .map(|dest| match dest {
-            Destination::PublicKey(public_key) => Ok(TokenCreator { public_key }),
-            Destination::AnyoneCanSpend
-            | Destination::ScriptHash(_)
-            | Destination::PublicKeyHash(_)
-            | Destination::ClassicMultisig(_) => Err(Error::InvalidCreatorPublicKey),
-        })
-        .transpose()?;
+        .map(|pk| PublicKey::decode_all(&mut pk.as_slice()))
+        .transpose()
+        .map_err(|_| Error::InvalidCreatorPublicKey)?
+        .map(|public_key| TokenCreator { public_key });
 
     let nft_issuance = NftIssuanceV0 {
         metadata: Metadata {
@@ -770,6 +782,15 @@ pub fn encode_output_issue_nft(
 pub fn encode_output_data_deposit(data: &[u8]) -> Result<Vec<u8>, Error> {
     let output = TxOutput::DataDeposit(data.into());
     Ok(output.encode())
+}
+
+/// Returns the fee that needs to be paid by a transaction for issuing a data deposit
+#[wasm_bindgen]
+pub fn data_deposit_fee(current_block_height: u64, network: Network) -> Amount {
+    let chain_config = Builder::new(network.into()).build();
+    Amount::from_internal_amount(
+        chain_config.data_deposit_fee(BlockHeight::new(current_block_height)),
+    )
 }
 
 /// Given the parameters needed to create hash timelock contract, and a network type (mainnet, testnet, etc),

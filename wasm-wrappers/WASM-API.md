@@ -177,6 +177,10 @@ The current block height information is used in case a network upgrade changed t
 Given the parameters needed to issue a fungible token, and a network type (mainnet, testnet, etc),
 this function creates an output that issues that token.
 
+### Function: `get_token_id`
+
+Returns the Fungible/NFT Token ID for the given inputs of a transaction
+
 ### Function: `encode_output_issue_nft`
 
 Given the parameters needed to issue an NFT, and a network type (mainnet, testnet, etc),
@@ -185,6 +189,10 @@ this function creates an output that issues that NFT.
 ### Function: `encode_output_data_deposit`
 
 Given data to be deposited in the blockchain, this function provides the output that deposits this data
+
+### Function: `data_deposit_fee`
+
+Returns the fee that needs to be paid by a transaction for issuing a data deposit
 
 ### Function: `encode_output_htlc`
 

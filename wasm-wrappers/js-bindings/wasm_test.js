@@ -40,9 +40,13 @@ import {
   get_transaction_id,
   effective_pool_balance,
   Amount,
+  TotalSupply,
+  FreezableToken,
   encode_output_issue_nft,
+  encode_output_issue_fungible_token,
   sign_challenge,
   verify_challenge,
+  get_token_id,
 } from "../pkg/wasm_wrappers.js";
 
 function assert_eq_arrays(arr1, arr2) {
@@ -83,7 +87,7 @@ export async function run_test() {
   // Attempt to use a bad private key to get a public key (test returned Result<> object, which will become a string error)
   const bad_priv_key = "bad";
   try {
-    const bad_pub_key = public_key_from_private_key(bad_priv_key);
+    public_key_from_private_key(bad_priv_key);
     throw new Error("Invalid private key worked somehow!");
   } catch (e) {
     if (!e.includes("Invalid private key encoding")) {
@@ -280,6 +284,28 @@ export async function run_test() {
     ];
 
     assert_eq_arrays(inputs, expected_inputs);
+
+    try {
+      get_token_id([], Network.Testnet);
+      throw "Token Id generated without a UTXO input somehow!";
+    } catch (e) {
+      if (!e.includes("No UTXO input found")) {
+        throw e;
+      }
+      console.log("Tested no UTXO inputs for token ID successfully");
+    }
+
+    {
+      const expected_token_id =
+        "tmltk13cncdptay55g9ajhrkaw0fp46r0tspq9kptul8vj2q7yvd69n4zsl24gea";
+      const token_id = get_token_id(inputs, Network.Testnet);
+      console.log(token_id);
+
+      if (token_id != expected_token_id) {
+        throw new Error("Different token id");
+      }
+
+    }
 
     const token_id =
       "tmltk15tgfrs49rv88v8utcllqh0nvpaqtgvn26vdxhuner5m6ewg9c3msn9fxns";
@@ -502,6 +528,68 @@ export async function run_test() {
 
     assert_eq_arrays(pool_data, expected_pool_data);
 
+    let encoded_fungible_token = encode_output_issue_fungible_token(
+      address,
+      "XXX",
+      "http://uri.com",
+      2,
+      TotalSupply.Unlimited,
+      null,
+      FreezableToken.Yes,
+      BigInt(1),
+      Network.Testnet
+    );
+
+    const expected_fungible_token = [
+      7, 1, 12, 88, 88, 88, 2, 56, 104, 116,
+      116, 112, 58, 47, 47, 117, 114, 105, 46, 99,
+      111, 109, 2, 1, 91, 58, 110, 176, 100, 207,
+      6, 194, 41, 193, 30, 91, 4, 195, 202, 103,
+      207, 80, 217, 178, 1
+    ];
+
+    assert_eq_arrays(encoded_fungible_token, expected_fungible_token);
+
+
+    const account_pubkey = make_default_account_privkey(
+      mnemonic,
+      Network.Testnet
+    );
+    const receiving_privkey = make_receiving_address(account_pubkey, 0);
+    const receiving_pubkey = public_key_from_private_key(receiving_privkey);
+
+    let encoded_nft = encode_output_issue_nft(
+      token_id,
+      address,
+      "nft",
+      "XXX",
+      "desc",
+      "1234",
+      receiving_pubkey,
+      "http://uri",
+      "http://icon",
+      "http://foo",
+      BigInt(1),
+      Network.Testnet
+    );
+
+    const expected_nft_encoding = [
+      8, 162, 208, 145, 194, 165, 27, 14, 118, 31, 139, 199,
+      254, 11, 190, 108, 15, 64, 180, 50, 106, 211, 26, 107,
+      242, 121, 29, 55, 172, 185, 5, 196, 119, 0, 1, 0,
+      2, 227, 252, 33, 195, 223, 44, 38, 35, 73, 145, 212,
+      180, 49, 115, 4, 150, 204, 250, 205, 123, 131, 201, 114,
+      130, 186, 209, 98, 181, 118, 233, 133, 89, 12, 110, 102,
+      116, 16, 100, 101, 115, 99, 12, 88, 88, 88, 44, 104,
+      116, 116, 112, 58, 47, 47, 105, 99, 111, 110, 40, 104,
+      116, 116, 112, 58, 47, 47, 102, 111, 111, 40, 104, 116,
+      116, 112, 58, 47, 47, 117, 114, 105, 16, 1, 2, 3,
+      4, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41, 193,
+      30, 91, 4, 195, 202, 103, 207, 80, 217, 178
+    ];
+
+    assert_eq_arrays(encoded_nft, expected_nft_encoding);
+
     try {
       const invalid_token_id = "asd";
       encode_output_issue_nft(
@@ -510,7 +598,7 @@ export async function run_test() {
         "nft",
         "XXX",
         "desc",
-        "123",
+        "12345",
         undefined,
         undefined,
         undefined,
@@ -731,12 +819,6 @@ export async function run_test() {
     const expected_no_signature_witness = [0, 0];
     assert_eq_arrays(witness, expected_no_signature_witness);
     console.log("empty witness encoding ok");
-
-    const account_pubkey = make_default_account_privkey(
-      mnemonic,
-      Network.Testnet
-    );
-    const receiving_privkey = make_receiving_address(account_pubkey, 0);
 
     const opt_utxos = [1, ...output, 1, ...stake_pool_output];
 
