@@ -22,8 +22,8 @@ use super::{ClientWalletRpc, WalletRpcError};
 use chainstate::ChainInfo;
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, Block, GenBlock, SignedTransaction, Transaction,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -41,16 +41,18 @@ use wallet_controller::{
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
-        DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
-        RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
+        DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
+        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
+        RpcHashedTimelockContract, RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
         VrfPublicKeyInfo,
     },
     ColdWalletRpcClient, WalletRpcClient,
 };
-use wallet_types::with_locked::WithLocked;
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, with_locked::WithLocked,
+};
 
 #[async_trait::async_trait]
 impl WalletInterface for ClientWalletRpc {
@@ -82,6 +84,7 @@ impl WalletInterface for ClientWalletRpc {
         store_seed_phrase: bool,
         mnemonic: Option<String>,
         passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<CreatedWallet, Self::Error> {
         ColdWalletRpcClient::create_wallet(
             &self.http_client,
@@ -89,6 +92,27 @@ impl WalletInterface for ClientWalletRpc {
             store_seed_phrase,
             mnemonic,
             passphrase,
+            hardware_wallet,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn recover_wallet(
+        &self,
+        path: PathBuf,
+        store_seed_phrase: bool,
+        mnemonic: Option<String>,
+        passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
+    ) -> Result<CreatedWallet, Self::Error> {
+        ColdWalletRpcClient::recover_wallet(
+            &self.http_client,
+            path.to_string_lossy().to_string(),
+            store_seed_phrase,
+            mnemonic,
+            passphrase,
+            hardware_wallet,
         )
         .await
         .map_err(WalletRpcError::ResponseError)
@@ -99,12 +123,14 @@ impl WalletInterface for ClientWalletRpc {
         path: PathBuf,
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<(), Self::Error> {
         ColdWalletRpcClient::open_wallet(
             &self.http_client,
             path.to_string_lossy().to_string(),
             password,
             force_migrate_wallet_type,
+            hardware_wallet,
         )
         .await
         .map_err(WalletRpcError::ResponseError)

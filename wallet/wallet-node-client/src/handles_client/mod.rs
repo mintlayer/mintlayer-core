@@ -20,7 +20,7 @@ use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
+        Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
 };
@@ -37,7 +37,7 @@ use p2p::{
 };
 use serialization::hex::HexError;
 use utils_networking::IpOrSocketAddress;
-use wallet_types::wallet_type::WalletType;
+use wallet_types::wallet_type::WalletControllerMode;
 
 use crate::node_traits::NodeInterface;
 
@@ -102,8 +102,8 @@ impl WalletHandlesClient {
 impl NodeInterface for WalletHandlesClient {
     type Error = WalletHandlesClientError;
 
-    fn is_cold_wallet_node(&self) -> WalletType {
-        WalletType::Hot
+    fn is_cold_wallet_node(&self) -> WalletControllerMode {
+        WalletControllerMode::Hot
     }
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
@@ -192,6 +192,18 @@ impl NodeInterface for WalletHandlesClient {
                     chainstate::PropertyQueryError::StakerBalanceOverflow(pool_id),
                 )
             })?;
+        Ok(result)
+    }
+
+    async fn get_pool_decommission_destination(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<Destination>, Self::Error> {
+        let result = self
+            .chainstate
+            .call(move |this| this.get_stake_pool_data(pool_id))
+            .await??
+            .map(|data| data.decommission_destination().clone());
         Ok(result)
     }
 

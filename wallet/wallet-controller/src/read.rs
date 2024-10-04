@@ -35,7 +35,6 @@ use wallet::{
         TxInfo,
     },
     wallet::WalletPoolsFilter,
-    DefaultWallet,
 };
 use wallet_types::{
     account_info::StandaloneAddresses,
@@ -46,12 +45,13 @@ use wallet_types::{
 };
 
 use crate::{
+    runtime_wallet::RuntimeWallet,
     types::{AccountStandaloneKeyDetails, Balances, CreatedBlockInfo},
     ControllerError,
 };
 
-pub struct ReadOnlyController<'a, T> {
-    wallet: &'a DefaultWallet,
+pub struct ReadOnlyController<'a, T, B: storage::Backend + 'static> {
+    wallet: &'a RuntimeWallet<B>,
     rpc_client: T,
     chain_config: &'a ChainConfig,
     account_index: U31,
@@ -60,9 +60,13 @@ pub struct ReadOnlyController<'a, T> {
 /// A Map between the derived child number and the Address with whether it is marked as used or not
 type MapAddressWithUsage<T> = BTreeMap<ChildNumber, (Address<T>, bool)>;
 
-impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
+impl<'a, T, B> ReadOnlyController<'a, T, B>
+where
+    T: NodeInterface,
+    B: storage::Backend + 'static,
+{
     pub fn new(
-        wallet: &'a DefaultWallet,
+        wallet: &'a RuntimeWallet<B>,
         rpc_client: T,
         chain_config: &'a ChainConfig,
         account_index: U31,
@@ -106,9 +110,7 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ControllerError<T>> {
         self.wallet
             .get_multisig_utxos(self.account_index, utxo_types, utxo_states, with_locked)
-            .map(|utxos| {
-                utxos.into_iter().map(|(outpoint, output, _)| (outpoint, output)).collect()
-            })
+            .map(|utxos| utxos.into_iter().collect())
             .map_err(ControllerError::WalletError)
     }
 
@@ -120,9 +122,6 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     ) -> Result<Vec<(UtxoOutPoint, TxOutput)>, ControllerError<T>> {
         self.wallet
             .get_utxos(self.account_index, utxo_types, utxo_states, with_locked)
-            .map(|utxos| {
-                utxos.into_iter().map(|(outpoint, output, _)| (outpoint, output)).collect()
-            })
             .map_err(ControllerError::WalletError)
     }
 
@@ -312,25 +311,46 @@ impl<'a, T: NodeInterface> ReadOnlyController<'a, T> {
     pub async fn get_delegations(
         &self,
     ) -> Result<Vec<(DelegationId, PoolId, Amount)>, ControllerError<T>> {
-        let delegations = self
-            .wallet
-            .get_delegations(self.account_index)
-            .map_err(ControllerError::WalletError)?;
-
-        let tasks: FuturesUnordered<_> = delegations
-            .into_iter()
-            .map(|(delegation_id, delegation_data)| {
-                self.get_delegation_share(delegation_data, *delegation_id).map(|res| {
-                    res.map(|opt| {
-                        opt.map(|(delegation_id, amount)| {
-                            (delegation_id, delegation_data.pool_id, amount)
+        let delegations = match &self.wallet {
+            RuntimeWallet::Software(w) => {
+                let delegations =
+                    w.get_delegations(self.account_index).map_err(ControllerError::WalletError)?;
+                let tasks: FuturesUnordered<_> = delegations
+                    .into_iter()
+                    .map(|(delegation_id, delegation_data)| {
+                        self.get_delegation_share(delegation_data, *delegation_id).map(|res| {
+                            res.map(|opt| {
+                                opt.map(|(delegation_id, amount)| {
+                                    (delegation_id, delegation_data.pool_id, amount)
+                                })
+                            })
                         })
                     })
-                })
-            })
-            .collect();
+                    .collect();
 
-        let delegations = tasks.try_collect::<Vec<_>>().await?.into_iter().flatten().collect();
+                tasks.try_collect::<Vec<_>>().await?.into_iter().flatten().collect()
+            }
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => {
+                let delegations =
+                    w.get_delegations(self.account_index).map_err(ControllerError::WalletError)?;
+                let tasks: FuturesUnordered<_> = delegations
+                    .into_iter()
+                    .map(|(delegation_id, delegation_data)| {
+                        self.get_delegation_share(delegation_data, *delegation_id).map(|res| {
+                            res.map(|opt| {
+                                opt.map(|(delegation_id, amount)| {
+                                    (delegation_id, delegation_data.pool_id, amount)
+                                })
+                            })
+                        })
+                    })
+                    .collect();
+
+                tasks.try_collect::<Vec<_>>().await?.into_iter().flatten().collect()
+            }
+        };
+
         Ok(delegations)
     }
 

@@ -20,9 +20,8 @@ use std::{fmt::Write, str::FromStr};
 use common::{
     address::Address,
     chain::{
-        config::checkpoints_data::print_block_heights_ids_as_checkpoints_data,
-        partially_signed_transaction::PartiallySignedTransaction, ChainConfig, Destination,
-        SignedTransaction, TxOutput, UtxoOutPoint,
+        config::checkpoints_data::print_block_heights_ids_as_checkpoints_data, ChainConfig,
+        Destination, SignedTransaction, TxOutput, UtxoOutPoint,
     },
     primitives::H256,
     text_summary::TextSummary,
@@ -42,9 +41,13 @@ use wallet_rpc_lib::types::{
     RpcValidatedSignatures, TokenMetadata,
 };
 
+#[cfg(feature = "trezor")]
+use wallet_rpc_lib::types::HardwareWalletType;
+use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
+
 use crate::{
     errors::WalletCliCommandError, helper_types::parse_generic_token_transfer,
-    ManageableWalletCommand, WalletManagementCommand,
+    helper_types::CliHardwareWalletType, ManageableWalletCommand, WalletManagementCommand,
 };
 
 use self::local_state::WalletWithState;
@@ -145,7 +148,14 @@ where
                 mnemonic,
                 whether_to_store_seed_phrase,
                 passphrase,
+                hardware_wallet,
             } => {
+                let hardware_wallet = hardware_wallet.and_then(|t| match t {
+                    #[cfg(feature = "trezor")]
+                    CliHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
+                    CliHardwareWalletType::None => None,
+                });
+
                 let newly_generated_mnemonic = self
                     .wallet()
                     .await?
@@ -154,6 +164,63 @@ where
                         whether_to_store_seed_phrase.to_bool(),
                         mnemonic,
                         passphrase,
+                        hardware_wallet,
+                    )
+                    .await?;
+
+                self.wallet.update_wallet::<N>().await;
+
+                let msg = match newly_generated_mnemonic.mnemonic {
+                    MnemonicInfo::NewlyGenerated {
+                        mnemonic,
+                        passphrase,
+                    } => {
+                        let passphrase = if let Some(passphrase) = passphrase {
+                            format!("passphrase: {passphrase}\n")
+                        } else {
+                            String::new()
+                        };
+                        format!(
+                            "New wallet created successfully\nYour mnemonic: {}\n{passphrase}\
+                        Please write it somewhere safe to be able to restore your wallet. \
+                        It's recommended that you attempt to recover the wallet now as practice\
+                        to check that you arrive at the same addresses, \
+                        to ensure that you have done everything correctly.
+                        ",
+                            mnemonic
+                        )
+                    }
+                    MnemonicInfo::UserProvided => "New wallet created successfully".to_owned(),
+                };
+
+                Ok(ConsoleCommand::SetStatus {
+                    status: self.repl_status().await?,
+                    print_message: msg,
+                })
+            }
+
+            WalletManagementCommand::RecoverWallet {
+                wallet_path,
+                mnemonic,
+                whether_to_store_seed_phrase,
+                passphrase,
+                hardware_wallet,
+            } => {
+                let hardware_wallet = hardware_wallet.and_then(|t| match t {
+                    #[cfg(feature = "trezor")]
+                    CliHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
+                    CliHardwareWalletType::None => None,
+                });
+
+                let newly_generated_mnemonic = self
+                    .wallet()
+                    .await?
+                    .recover_wallet(
+                        wallet_path,
+                        whether_to_store_seed_phrase.to_bool(),
+                        mnemonic,
+                        passphrase,
+                        hardware_wallet,
                     )
                     .await?;
 
@@ -192,13 +259,20 @@ where
                 wallet_path,
                 encryption_password,
                 force_change_wallet_type,
+                hardware_wallet,
             } => {
+                let hardware_wallet = hardware_wallet.and_then(|t| match t {
+                    #[cfg(feature = "trezor")]
+                    CliHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
+                    CliHardwareWalletType::None => None,
+                });
                 self.wallet()
                     .await?
                     .open_wallet(
                         wallet_path,
                         encryption_password,
                         Some(force_change_wallet_type),
+                        hardware_wallet,
                     )
                     .await?;
                 self.wallet.update_wallet::<N>().await;

@@ -14,6 +14,8 @@
 // limitations under the License.
 
 pub mod confirm_broadcast;
+#[cfg(feature = "trezor")]
+pub mod create_hw_wallet;
 pub mod new_wallet_account;
 pub mod popup_dialog;
 pub mod wallet_mnemonic;

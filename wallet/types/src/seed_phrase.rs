@@ -17,6 +17,7 @@ use serialization::{Decode, Encode};
 
 pub const MNEMONIC_24_WORDS_ENTROPY_SIZE: usize = 32;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StoreSeedPhrase {
     Store,
     DoNotStore,

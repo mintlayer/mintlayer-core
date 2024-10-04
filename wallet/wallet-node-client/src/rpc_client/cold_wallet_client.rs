@@ -20,7 +20,7 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
+        Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
 };
@@ -32,7 +32,7 @@ use p2p::{
     types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId},
 };
 use utils_networking::IpOrSocketAddress;
-use wallet_types::wallet_type::WalletType;
+use wallet_types::wallet_type::WalletControllerMode;
 
 use crate::node_traits::NodeInterface;
 
@@ -48,8 +48,8 @@ pub enum ColdWalletRpcError {
 impl NodeInterface for ColdWalletClient {
     type Error = ColdWalletRpcError;
 
-    fn is_cold_wallet_node(&self) -> WalletType {
-        WalletType::Cold
+    fn is_cold_wallet_node(&self) -> WalletControllerMode {
+        WalletControllerMode::Cold
     }
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
@@ -115,6 +115,13 @@ impl NodeInterface for ColdWalletClient {
     }
 
     async fn get_staker_balance(&self, _pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn get_pool_decommission_destination(
+        &self,
+        _pool_id: PoolId,
+    ) -> Result<Option<Destination>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 

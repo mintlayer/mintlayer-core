@@ -1886,7 +1886,7 @@ string
 
 ### Method `wallet_create`
 
-Create new wallet
+Create a new wallet, this will skip scanning the blockchain
 
 
 Parameters:
@@ -1900,6 +1900,42 @@ Parameters:
     "passphrase": EITHER OF
          1) string
          2) null,
+    "hardware_wallet": null,
+}
+```
+
+Returns:
+```
+{ "mnemonic": EITHER OF
+     1) { "type": "UserProvided" }
+     2) {
+            "type": "NewlyGenerated",
+            "content": {
+                "mnemonic": string,
+                "passphrase": EITHER OF
+                     1) string
+                     2) null,
+            },
+        } }
+```
+
+### Method `wallet_recover`
+
+Recover new wallet, this will rescan the blockchain upon creation
+
+
+Parameters:
+```
+{
+    "path": string,
+    "store_seed_phrase": bool,
+    "mnemonic": EITHER OF
+         1) string
+         2) null,
+    "passphrase": EITHER OF
+         1) string
+         2) null,
+    "hardware_wallet": null,
 }
 ```
 
@@ -1933,6 +1969,7 @@ Parameters:
     "force_migrate_wallet_type": EITHER OF
          1) bool
          2) null,
+    "hardware_wallet": null,
 }
 ```
 
