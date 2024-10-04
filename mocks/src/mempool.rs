@@ -61,7 +61,9 @@ mockall::mock! {
             packing_strategy: PackingStrategy,
         ) -> Result<Option<Box<dyn TransactionAccumulator>>, BlockConstructionError>;
 
-        fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
+        fn subscribe_to_subsystem_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>);
+        fn subscribe_to_rpc_events(&mut self) -> utils_networking::broadcaster::Receiver<MempoolEvent>;
+
         fn memory_usage(&self) -> usize;
         fn get_size_limit(&self) -> MempoolMaxSize;
         fn set_size_limit(&mut self, max_size: MempoolMaxSize) -> Result<(), Error>;

@@ -150,8 +150,12 @@ impl MempoolInterface for Mempool {
         self.collect_txs(tx_accumulator, transaction_ids, packing_strategy)
     }
 
-    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
+    fn subscribe_to_subsystem_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
         self.subscribe_to_events(handler);
+    }
+
+    fn subscribe_to_rpc_events(&mut self) -> utils_networking::broadcaster::Receiver<MempoolEvent> {
+        self.subscribe_to_event_broadcast()
     }
 
     fn memory_usage(&self) -> usize {

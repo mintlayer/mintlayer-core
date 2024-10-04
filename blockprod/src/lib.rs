@@ -201,7 +201,7 @@ mod tests {
         let tip_sx = utils::sync::Mutex::new(Some(tip_sx));
         mempool
             .call_mut(move |m| {
-                m.subscribe_to_events(Arc::new({
+                m.subscribe_to_subsystem_events(Arc::new({
                     move |evt| match evt {
                         mempool::event::MempoolEvent::NewTip(tip) => {
                             if let Some(tip_sx) = tip_sx.lock().unwrap().take() {

@@ -532,7 +532,7 @@ Returns:
 }
 ```
 
-### Subscription `chainstate_subscribe_events`
+### Subscription `chainstate_subscribe_to_events`
 
 Subscribe to chainstate events, such as new tip.
 
@@ -555,7 +555,7 @@ Produces:
 }
 ```
 
-Unsubscribe using `chainstate_unsubscribe_events`.
+Unsubscribe using `chainstate_unsubscribe_to_events`.
 
 Note: Subscriptions only work over WebSockets.
 
@@ -759,6 +759,56 @@ Returns:
     { "amount_per_kb": { "atoms": number string } },
 ], .. ]
 ```
+
+### Subscription `mempool_subscribe_to_events`
+
+Subscribe to mempool events, such as tx processed.
+
+After a successful subscription, the node will message the subscriber with a message on every event.
+
+
+Parameters:
+```
+{}
+```
+
+Produces:
+```
+EITHER OF
+     1) {
+            "type": "NewTip",
+            "content": {
+                "id": hex string,
+                "height": number,
+            },
+        }
+     2) {
+            "type": "TransactionProcessed",
+            "content": {
+                "tx_id": hex string,
+                "origin": EITHER OF
+                     1) {
+                            "type": "Local",
+                            "content": { "origin": EITHER OF
+                                 1) { "type": "Mempool" }
+                                 2) { "type": "P2p" }
+                                 3) { "type": "PastBlock" } },
+                        }
+                     2) {
+                            "type": "Remote",
+                            "content": { "peer_id": number },
+                        },
+                "relay": EITHER OF
+                     1) { "type": "DoRelay" }
+                     2) { "type": "DontRelay" },
+                "successful": bool,
+            },
+        }
+```
+
+Unsubscribe using `mempool_unsubscribe_to_events`.
+
+Note: Subscriptions only work over WebSockets.
 
 ## Module `p2p`
 

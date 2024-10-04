@@ -26,6 +26,7 @@ serialization = { path = "../serialization" }
 subsystem = { path = "../subsystem" }
 tokens-accounting = { path = "../tokens-accounting" }
 utils = { path = "../utils" }
+utils-networking = {path = '../utils/networking'}
 utxo = { path = "../utxo" }
 
 anyhow.workspace = true
