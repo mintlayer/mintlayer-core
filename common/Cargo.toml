@@ -31,15 +31,15 @@ merkletree-mintlayer = { workspace = true, features = ["scale-codec"] }
 num.workspace = true
 once_cell.workspace = true
 parity-scale-codec.workspace = true
+paste.workspace = true
 ref-cast.workspace = true
+regex.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_with.workspace = true
 static_assertions.workspace = true
+strum.workspace = true
 thiserror.workspace = true
-variant_count.workspace = true
-paste.workspace = true
-regex.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
