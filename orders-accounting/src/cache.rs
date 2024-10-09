@@ -202,22 +202,30 @@ impl<P: OrdersAccountingView> OrdersAccountingOperations for OrdersAccountingCac
         }))
     }
 
-    fn fill_order(&mut self, id: OrderId, fill_amount: Amount) -> Result<OrdersAccountingUndo> {
-        log::debug!("Filling an order: {:?} {:?}", id, fill_amount);
+    fn fill_order(
+        &mut self,
+        id: OrderId,
+        fill_amount_in_ask_currency: Amount,
+    ) -> Result<OrdersAccountingUndo> {
+        log::debug!(
+            "Filling an order: {:?} {:?}",
+            id,
+            fill_amount_in_ask_currency
+        );
 
         ensure!(
             self.get_order_data(&id)?.is_some(),
             Error::OrderDataNotFound(id)
         );
 
-        let filled_amount = calculate_fill_order(self, id, fill_amount)?;
+        let filled_amount = calculate_fill_order(self, id, fill_amount_in_ask_currency)?;
 
         self.data.give_balances.sub_unsigned(id, filled_amount)?;
-        self.data.ask_balances.sub_unsigned(id, fill_amount)?;
+        self.data.ask_balances.sub_unsigned(id, fill_amount_in_ask_currency)?;
 
         Ok(OrdersAccountingUndo::FillOrder(FillOrderUndo {
             id,
-            ask_balance: fill_amount,
+            ask_balance: fill_amount_in_ask_currency,
             give_balance: filled_amount,
         }))
     }

@@ -426,7 +426,8 @@ impl BlockProcessingErrorClassification for PropertyQueryError {
             | PropertyQueryError::BlockForHeightNotFound(_)
             | PropertyQueryError::GenesisHeaderRequested
             | PropertyQueryError::InvalidStartingBlockHeightForMainchainBlocks(_)
-            | PropertyQueryError::InvalidBlockHeightRange { .. } => {
+            | PropertyQueryError::InvalidBlockHeightRange { .. }
+            | PropertyQueryError::UnsupportedTokenV0InOrder(_) => {
                 BlockProcessingErrorClass::General
             }
             // Note: these errors are strange - sometimes they don't look like General, judging
@@ -435,7 +436,8 @@ impl BlockProcessingErrorClassification for PropertyQueryError {
             // For now, since their p2p ban score is 0, let's consider them General.
             PropertyQueryError::StakePoolDataNotFound(_)
             | PropertyQueryError::StakerBalanceOverflow(_)
-            | PropertyQueryError::PoolBalanceNotFound(_) => BlockProcessingErrorClass::General,
+            | PropertyQueryError::PoolBalanceNotFound(_)
+            | PropertyQueryError::OrderBalanceNotFound(_) => BlockProcessingErrorClass::General,
 
             PropertyQueryError::StorageError(err) => err.classify(),
             PropertyQueryError::GetAncestorError(err) => err.classify(),

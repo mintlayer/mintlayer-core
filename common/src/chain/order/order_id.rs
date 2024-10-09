@@ -15,14 +15,12 @@
 
 use crate::{
     address::{hexified::HexifiedAddress, traits::Addressable, AddressError},
-    chain::ChainConfig,
+    chain::{ChainConfig, UtxoOutPoint},
     primitives::{id::hash_encoded, Id, H256},
 };
 use randomness::{CryptoRng, Rng};
-use serialization::{Decode, DecodeAll, Encode};
+use serialization::{DecodeAll, Encode};
 use typename::TypeName;
-
-use super::{output_value::OutputValue, Destination, UtxoOutPoint};
 
 #[derive(Eq, PartialEq, TypeName)]
 pub enum Order {}
@@ -76,40 +74,4 @@ impl<'de> serde::Deserialize<'de> for OrderId {
 
 pub fn make_order_id(input0_outpoint: &UtxoOutPoint) -> OrderId {
     OrderId::new(hash_encoded(input0_outpoint))
-}
-
-/// Order data provides unified data structure to represent an order.
-/// There are no buy or sell types of orders per se but rather exchanges.
-/// The fields represent currencies and amounts to be exchanged and the trading pair can be deducted from it.
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
-pub struct OrderData {
-    /// The key that can authorize conclusion of an order
-    conclude_key: Destination,
-    /// `Ask` and `give` fields represent amounts of currencies
-    /// that an order maker wants to exchange.
-    /// E.g. Creator of an order asks for 5 coins and gives 10 tokens in exchange.
-    ask: OutputValue,
-    give: OutputValue,
-}
-
-impl OrderData {
-    pub fn new(conclude_key: Destination, ask: OutputValue, give: OutputValue) -> Self {
-        Self {
-            conclude_key,
-            ask,
-            give,
-        }
-    }
-
-    pub fn conclude_key(&self) -> &Destination {
-        &self.conclude_key
-    }
-
-    pub fn ask(&self) -> &OutputValue {
-        &self.ask
-    }
-
-    pub fn give(&self) -> &OutputValue {
-        &self.give
-    }
 }

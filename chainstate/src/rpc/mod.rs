@@ -31,14 +31,16 @@ use common::{
     address::{dehexify::to_dehexified_json, Address},
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        ChainConfig, DelegationId, PoolId, TxOutput,
+        ChainConfig, DelegationId, OrderId, PoolId, RpcOrderInfo, TxOutput,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use rpc::{subscription, RpcResult};
 use serialization::hex_encoded::HexEncoded;
 pub use types::{
-    input::RpcUtxoOutpoint, output::RpcTxOutput, signed_transaction::RpcSignedTransaction,
+    input::RpcUtxoOutpoint,
+    output::{RpcOutputValueIn, RpcOutputValueOut, RpcTxOutput},
+    signed_transaction::RpcSignedTransaction,
 };
 
 #[rpc::describe]
@@ -154,6 +156,10 @@ trait ChainstateRpc {
     /// Get token information, given a token id, in address form.
     #[method(name = "token_info")]
     async fn token_info(&self, token_id: String) -> RpcResult<Option<RPCTokenInfo>>;
+
+    /// Get order information, given an order id, in address form.
+    #[method(name = "order_info")]
+    async fn order_info(&self, order_id: String) -> RpcResult<Option<RpcOrderInfo>>;
 
     /// Exports a "bootstrap file", which contains all blocks
     #[method(name = "export_bootstrap_file")]
@@ -371,6 +377,21 @@ impl ChainstateRpcServer for super::ChainstateHandle {
                         .and_then(|token_id| dynamize_err(this.get_token_info_for_rpc(token_id)));
 
                 token_info_result
+            })
+            .await,
+        )
+    }
+
+    async fn order_info(&self, order_id: String) -> RpcResult<Option<RpcOrderInfo>> {
+        rpc::handle_result(
+            self.call(move |this| {
+                let chain_config = this.get_chain_config();
+                let result: Result<Option<RpcOrderInfo>, _> =
+                    dynamize_err(Address::<OrderId>::from_string(chain_config, order_id))
+                        .map(|address| address.into_object())
+                        .and_then(|order_id| dynamize_err(this.get_order_info_for_rpc(order_id)));
+
+                result
             })
             .await,
         )

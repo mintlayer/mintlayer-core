@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2024 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,23 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod account_id;
-pub mod account_info;
-pub mod chain_info;
-pub mod currency;
-pub mod keys;
-pub mod seed_phrase;
-pub mod signature_status;
-pub mod utxo_types;
-pub mod wallet_tx;
-pub mod wallet_type;
-pub mod with_locked;
+use rpc_description::HasValueHint;
 
-pub use account_id::{
-    AccountDerivationPathId, AccountId, AccountKeyPurposeId, AccountWalletCreatedTxId,
-    AccountWalletTxId,
+use crate::{
+    chain::{output_value::RpcOutputValue, AccountNonce, Destination},
+    primitives::Amount,
 };
-pub use account_info::AccountInfo;
-pub use currency::Currency;
-pub use keys::{KeyPurpose, KeychainUsageState, RootKeys};
-pub use wallet_tx::{BlockInfo, WalletTx};
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct RpcOrderInfo {
+    pub conclude_key: Destination,
+
+    pub initially_asked: RpcOutputValue,
+    pub initially_given: RpcOutputValue,
+
+    // left to offer
+    pub give_balance: Amount,
+    // how much more is expected to get in return
+    pub ask_balance: Amount,
+
+    pub nonce: Option<AccountNonce>,
+}

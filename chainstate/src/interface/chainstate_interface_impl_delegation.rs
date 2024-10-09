@@ -27,7 +27,7 @@ use common::{
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         AccountNonce, AccountType, Block, DelegationId, GenBlock, OrderData, OrderId, PoolId,
-        Transaction, TxInput, UtxoOutPoint,
+        RpcOrderInfo, Transaction, TxInput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -420,6 +420,13 @@ where
 
     fn get_order_give_balance(&self, id: &OrderId) -> Result<Option<Amount>, ChainstateError> {
         self.deref().get_order_give_balance(id)
+    }
+
+    fn get_order_info_for_rpc(
+        &self,
+        order_id: OrderId,
+    ) -> Result<Option<RpcOrderInfo>, ChainstateError> {
+        self.deref().get_order_info_for_rpc(order_id)
     }
 }
 

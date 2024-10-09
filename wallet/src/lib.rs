@@ -22,6 +22,8 @@ pub mod version;
 pub mod wallet;
 pub mod wallet_events;
 
+mod utils;
+
 pub use crate::account::Account;
 pub use crate::send_request::SendRequest;
 pub use crate::wallet::{Wallet, WalletError, WalletResult};

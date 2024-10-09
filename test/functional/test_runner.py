@@ -163,6 +163,7 @@ BASE_SCRIPTS = [
     'wallet_connect_to_rpc.py',
     'wallet_multisig_address.py',
     'wallet_watch_address.py',
+    'wallet_orders.py',
     'mempool_basic_reorg.py',
     'mempool_eviction.py',
     'mempool_ibd.py',

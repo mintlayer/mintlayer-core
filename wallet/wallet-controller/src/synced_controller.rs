@@ -27,8 +27,8 @@ use common::{
             IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, RPCTokenInfo,
             TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
-        ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, Id},
 };
@@ -45,9 +45,7 @@ use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
 use utils::ensure;
 use wallet::{
-    account::{
-        currency_grouper::Currency, CoinSelectionAlgo, TransactionToSign, UnconfirmedTokenInfo,
-    },
+    account::{CoinSelectionAlgo, TransactionToSign, UnconfirmedTokenInfo},
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     send_request::{
         make_address_output, make_address_output_token, make_create_delegation_output,
@@ -61,6 +59,7 @@ use wallet_types::{
     signature_status::SignatureStatus,
     utxo_types::{UtxoState, UtxoType},
     with_locked::WithLocked,
+    Currency,
 };
 
 use crate::{
@@ -1052,6 +1051,80 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         Ok(result)
     }
 
+    pub async fn create_order(
+        &mut self,
+        ask_value: OutputValue,
+        give_value: OutputValue,
+        conclude_key: Address<Destination>,
+    ) -> Result<(SignedTransaction, OrderId), ControllerError<T>> {
+        self.create_and_send_tx_with_id(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_order_tx(
+                    account_index,
+                    ask_value,
+                    give_value,
+                    conclude_key,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
+    }
+
+    pub async fn conclude_order(
+        &mut self,
+        order_id: OrderId,
+        order_info: RpcOrderInfo,
+        output_address: Option<Destination>,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_conclude_order_tx(
+                    account_index,
+                    order_id,
+                    order_info,
+                    output_address,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
+    }
+
+    pub async fn fill_order(
+        &mut self,
+        order_id: OrderId,
+        order_info: RpcOrderInfo,
+        fill_amount_in_ask_currency: Amount,
+        output_address: Option<Destination>,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31| {
+                wallet.create_fill_order_tx(
+                    account_index,
+                    order_id,
+                    order_info,
+                    fill_amount_in_ask_currency,
+                    output_address,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
+    }
+
     /// Checks if the wallet has stake pools and marks this account for staking.
     pub fn start_staking(&mut self) -> Result<(), ControllerError<T>> {
         utils::ensure!(!self.wallet.is_locked(), ControllerError::WalletIsLocked);
@@ -1225,8 +1298,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         )
         .map_err(ControllerError::WalletError)?;
 
-        let tx_id = self.broadcast_to_mempool_if_needed(tx).await?;
-        Ok((tx_id, id))
+        let tx = self.broadcast_to_mempool_if_needed(tx).await?;
+        Ok((tx, id))
     }
 
     async fn fetch_utxo(&self, input: &UtxoOutPoint) -> Result<TxOutput, ControllerError<T>> {

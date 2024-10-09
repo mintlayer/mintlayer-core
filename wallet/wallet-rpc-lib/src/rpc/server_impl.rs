@@ -15,14 +15,15 @@
 
 use std::{collections::BTreeMap, fmt::Debug, num::NonZeroUsize, str::FromStr, time::Duration};
 
+use chainstate::rpc::RpcOutputValueIn;
 use common::{
     address::dehexify::dehexify_all_addresses,
     chain::{
         block::timestamp::BlockTimestamp,
         partially_signed_transaction::PartiallySignedTransaction,
         tokens::{IsTokenUnfreezable, TokenId},
-        Block, DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction,
-        TxOutput,
+        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, SignedTransaction,
+        Transaction, TxOutput,
     },
     primitives::{time::Time, BlockHeight, Id, Idable},
 };
@@ -54,7 +55,7 @@ use crate::{
     RpcError,
 };
 
-use super::types::RpcHashedTimelockContract;
+use super::types::{NewOrder, RpcHashedTimelockContract};
 
 #[async_trait::async_trait]
 impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletEventsRpcServer
@@ -1031,6 +1032,74 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
             self.create_htlc_transaction(account_arg.index::<N>()?, amount, token_id, htlc, config)
                 .await
                 .map(HexEncoded::new),
+        )
+    }
+
+    async fn create_order(
+        &self,
+        account_arg: AccountArg,
+        ask: RpcOutputValueIn,
+        give: RpcOutputValueIn,
+        conclude_address: RpcAddress<Destination>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewOrder> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb(),
+            broadcast_to_mempool: true,
+        };
+
+        rpc::handle_result(
+            self.create_order(
+                account_arg.index::<N>()?,
+                ask,
+                give,
+                conclude_address,
+                config,
+            )
+            .await,
+        )
+    }
+
+    async fn conclude_order(
+        &self,
+        account_arg: AccountArg,
+        order_id: RpcAddress<OrderId>,
+        output_address: Option<RpcAddress<Destination>>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb(),
+            broadcast_to_mempool: true,
+        };
+
+        rpc::handle_result(
+            self.conclude_order(account_arg.index::<N>()?, order_id, output_address, config)
+                .await,
+        )
+    }
+
+    async fn fill_order(
+        &self,
+        account_arg: AccountArg,
+        order_id: RpcAddress<OrderId>,
+        fill_amount_in_ask_currency: RpcAmountIn,
+        output_address: Option<RpcAddress<Destination>>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb(),
+            broadcast_to_mempool: true,
+        };
+
+        rpc::handle_result(
+            self.fill_order(
+                account_arg.index::<N>()?,
+                order_id,
+                fill_amount_in_ask_currency,
+                output_address,
+                config,
+            )
+            .await,
         )
     }
 

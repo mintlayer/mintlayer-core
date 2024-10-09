@@ -157,7 +157,7 @@ class WalletRpcController:
     def _write_command(self, method: str, params = []) -> dict:
         encoded_cmd = method.encode()
         encoded_params = str(params).encode()
-        self.wallet_commands_file.write(b"writhing command: ")
+        self.wallet_commands_file.write(b"writing command: ")
         self.wallet_commands_file.write(encoded_cmd)
         self.wallet_commands_file.write(encoded_params)
 
@@ -560,3 +560,38 @@ class WalletRpcController:
         object = [self.account, {'decimal': str(amount)}, token_id, htlc, {'in_top_x_mb': 5}]
         result = self._write_command("create_htlc_transaction", object)
         return result['result']
+
+    async def create_order(self,
+                         ask_token_id: Optional[str],
+                         ask_amount: int,
+                         give_token_id: Optional[str],
+                         give_amount: int,
+                         conclude_address: str) -> str:
+        if ask_token_id is not None:
+            ask = {"type": "Token", "content": {"id": ask_token_id, "amount": {'decimal': str(ask_amount)}}}
+        else:
+            ask = {"type": "Coin", "content": {"amount": {'decimal': str(ask_amount)}}}
+
+        if give_token_id is not None:
+            give = {"type": "Token", "content": {"id": give_token_id, "amount": {'decimal': str(give_amount)}}}
+        else:
+            give = {"type": "Coin", "content": {"amount": {'decimal': str(give_amount)}}}
+
+        object = [self.account, ask, give, conclude_address, {'in_top_x_mb': 5}]
+        result = self._write_command("create_order", object)
+        return result
+
+    async def fill_order(self,
+                         order_id: str,
+                         fill_amount: int,
+                         output_address: Optional[str] = None) -> str:
+        object = [self.account, order_id, {'decimal': str(fill_amount)}, output_address, {'in_top_x_mb': 5}]
+        result = self._write_command("fill_order", object)
+        return result
+
+    async def conclude_order(self,
+                         order_id: str,
+                         output_address: Optional[str] = None) -> str:
+        object = [self.account, order_id, output_address, {'in_top_x_mb': 5}]
+        result = self._write_command("conclude_order", object)
+        return result

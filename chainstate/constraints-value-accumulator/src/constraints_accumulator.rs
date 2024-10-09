@@ -327,7 +327,7 @@ impl ConstrainedValueAccumulator {
 
                 Ok((CoinOrTokenId::Coin, Amount::ZERO))
             }
-            AccountCommand::FillOrder(id, fill_amount, _) => {
+            AccountCommand::FillOrder(id, fill_amount_in_ask_currency, _) => {
                 let order_data = orders_accounting_delta
                     .get_order_data(id)
                     .map_err(|_| orders_accounting::Error::ViewFail)?
@@ -335,12 +335,13 @@ impl ConstrainedValueAccumulator {
                 let filled_amount = orders_accounting::calculate_fill_order(
                     &orders_accounting_delta,
                     *id,
-                    *fill_amount,
+                    *fill_amount_in_ask_currency,
                 )?;
 
                 {
                     // Ensure that spending won't result in negative balance
-                    let _ = orders_accounting_delta.fill_order(*id, *fill_amount)?;
+                    let _ =
+                        orders_accounting_delta.fill_order(*id, *fill_amount_in_ask_currency)?;
                     let _ = orders_accounting_delta.get_ask_balance(id)?;
                     let _ = orders_accounting_delta.get_give_balance(id)?;
                 }
@@ -352,7 +353,7 @@ impl ConstrainedValueAccumulator {
                 let ask_currency = CoinOrTokenId::from_output_value(order_data.ask())
                     .ok_or(Error::UnsupportedTokenVersion)?;
 
-                Ok((ask_currency, *fill_amount))
+                Ok((ask_currency, *fill_amount_in_ask_currency))
             }
         }
     }

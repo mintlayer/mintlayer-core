@@ -20,16 +20,28 @@ use common::{
         timelock::OutputTimeLock, tokens::TokenId, ChainConfig, DelegationId, Destination, PoolId,
         TxOutput,
     },
-    primitives::amount::RpcAmountOut,
+    primitives::amount::{RpcAmountIn, RpcAmountOut},
 };
 use crypto::vrf::VRFPublicKey;
 use rpc::types::RpcHexString;
 
 use super::token::{RpcNftIssuance, RpcTokenIssuance};
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
+#[serde(tag = "type", content = "content")]
+pub enum RpcOutputValueIn {
+    Coin {
+        amount: RpcAmountIn,
+    },
+    Token {
+        id: RpcAddress<TokenId>,
+        amount: RpcAmountIn,
+    },
+}
+
 #[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
-pub enum RpcOutputValue {
+pub enum RpcOutputValueOut {
     Coin {
         amount: RpcAmountOut,
     },
@@ -39,14 +51,14 @@ pub enum RpcOutputValue {
     },
 }
 
-impl RpcOutputValue {
+impl RpcOutputValueOut {
     pub fn new(chain_config: &ChainConfig, value: OutputValue) -> Result<Self, AddressError> {
         let result = match value {
-            OutputValue::Coin(amount) => RpcOutputValue::Coin {
+            OutputValue::Coin(amount) => RpcOutputValueOut::Coin {
                 amount: RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
             },
             OutputValue::TokenV0(_) => unimplemented!(),
-            OutputValue::TokenV1(token_id, amount) => RpcOutputValue::Token {
+            OutputValue::TokenV1(token_id, amount) => RpcOutputValueOut::Token {
                 id: RpcAddress::new(chain_config, token_id)?,
                 amount: RpcAmountOut::from_amount(amount, chain_config.coin_decimals()),
             },
@@ -109,16 +121,16 @@ impl RpcHashedTimelockContract {
 #[serde(tag = "type", content = "content")]
 pub enum RpcTxOutput {
     Transfer {
-        value: RpcOutputValue,
+        value: RpcOutputValueOut,
         destination: RpcAddress<Destination>,
     },
     LockThenTransfer {
-        value: RpcOutputValue,
+        value: RpcOutputValueOut,
         destination: RpcAddress<Destination>,
         timelock: OutputTimeLock,
     },
     Burn {
-        value: RpcOutputValue,
+        value: RpcOutputValueOut,
     },
     CreateStakePool {
         pool_id: RpcAddress<PoolId>,
@@ -148,13 +160,13 @@ pub enum RpcTxOutput {
         data: RpcHexString,
     },
     Htlc {
-        value: RpcOutputValue,
+        value: RpcOutputValueOut,
         htlc: RpcHashedTimelockContract,
     },
     AnyoneCanTake {
         authority: RpcAddress<Destination>,
-        ask_value: RpcOutputValue,
-        give_value: RpcOutputValue,
+        ask_value: RpcOutputValueOut,
+        give_value: RpcOutputValueOut,
     },
 }
 
@@ -162,22 +174,22 @@ impl RpcTxOutput {
     pub fn new(chain_config: &ChainConfig, output: TxOutput) -> Result<Self, AddressError> {
         let result = match output {
             TxOutput::Transfer(value, destination) => RpcTxOutput::Transfer {
-                value: RpcOutputValue::new(chain_config, value)?,
+                value: RpcOutputValueOut::new(chain_config, value)?,
                 destination: RpcAddress::new(chain_config, destination)?,
             },
             TxOutput::LockThenTransfer(value, destination, timelock) => {
                 RpcTxOutput::LockThenTransfer {
-                    value: RpcOutputValue::new(chain_config, value)?,
+                    value: RpcOutputValueOut::new(chain_config, value)?,
                     destination: RpcAddress::new(chain_config, destination)?,
                     timelock,
                 }
             }
             TxOutput::Htlc(value, htlc) => RpcTxOutput::Htlc {
-                value: RpcOutputValue::new(chain_config, value)?,
+                value: RpcOutputValueOut::new(chain_config, value)?,
                 htlc: RpcHashedTimelockContract::new(chain_config, &htlc)?,
             },
             TxOutput::Burn(value) => RpcTxOutput::Burn {
-                value: RpcOutputValue::new(chain_config, value)?,
+                value: RpcOutputValueOut::new(chain_config, value)?,
             },
             TxOutput::CreateStakePool(id, data) => RpcTxOutput::CreateStakePool {
                 pool_id: RpcAddress::new(chain_config, id)?,
@@ -210,8 +222,8 @@ impl RpcTxOutput {
             },
             TxOutput::AnyoneCanTake(data) => RpcTxOutput::AnyoneCanTake {
                 authority: RpcAddress::new(chain_config, data.conclude_key().clone())?,
-                ask_value: RpcOutputValue::new(chain_config, data.ask().clone())?,
-                give_value: RpcOutputValue::new(chain_config, data.give().clone())?,
+                ask_value: RpcOutputValueOut::new(chain_config, data.ask().clone())?,
+                give_value: RpcOutputValueOut::new(chain_config, data.give().clone())?,
             },
         };
         Ok(result)

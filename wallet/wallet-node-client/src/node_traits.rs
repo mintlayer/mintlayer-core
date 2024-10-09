@@ -19,8 +19,8 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        Block, DelegationId, GenBlock, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
 };
@@ -71,6 +71,7 @@ pub trait NodeInterface {
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error>;
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error>;
+    async fn get_order_info(&self, order_id: OrderId) -> Result<Option<RpcOrderInfo>, Self::Error>;
     async fn blockprod_e2e_public_key(&self) -> Result<EndToEndPublicKey, Self::Error>;
     async fn generate_block(
         &self,

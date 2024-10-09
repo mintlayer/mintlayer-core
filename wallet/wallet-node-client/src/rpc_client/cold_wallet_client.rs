@@ -20,7 +20,8 @@ use chainstate::ChainInfo;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
+        Block, DelegationId, GenBlock, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
+        Transaction,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
 };
@@ -130,6 +131,13 @@ impl NodeInterface for ColdWalletClient {
         &self,
         _token_id: TokenId,
     ) -> Result<Option<RPCTokenInfo>, Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
+    async fn get_order_info(
+        &self,
+        _order_id: OrderId,
+    ) -> Result<Option<RpcOrderInfo>, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }
 

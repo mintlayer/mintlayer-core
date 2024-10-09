@@ -478,6 +478,54 @@ EITHER OF
      3) null
 ```
 
+### Method `chainstate_order_info`
+
+Get order information, given an order id, in address form.
+
+
+Parameters:
+```
+{ "order_id": string }
+```
+
+Returns:
+```
+EITHER OF
+     1) {
+            "conclude_key": bech32 string,
+            "initially_asked": EITHER OF
+                 1) {
+                        "type": "Coin",
+                        "content": { "amount": { "atoms": number string } },
+                    }
+                 2) {
+                        "type": "Token",
+                        "content": {
+                            "id": hex string,
+                            "amount": { "atoms": number string },
+                        },
+                    },
+            "initially_given": EITHER OF
+                 1) {
+                        "type": "Coin",
+                        "content": { "amount": { "atoms": number string } },
+                    }
+                 2) {
+                        "type": "Token",
+                        "content": {
+                            "id": hex string,
+                            "amount": { "atoms": number string },
+                        },
+                    },
+            "give_balance": { "atoms": number string },
+            "ask_balance": { "atoms": number string },
+            "nonce": EITHER OF
+                 1) number
+                 2) null,
+        }
+     2) null
+```
+
 ### Method `chainstate_export_bootstrap_file`
 
 Exports a "bootstrap file", which contains all blocks

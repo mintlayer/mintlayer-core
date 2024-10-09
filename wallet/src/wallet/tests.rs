@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use crate::{
-    account::currency_grouper::Currency,
     key_chain::{make_account_path, LOOKAHEAD_SIZE},
     send_request::{make_address_output, make_create_delegation_output},
     wallet_events::WalletEventsNoOp,
@@ -32,8 +31,8 @@ use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
-        config::{create_mainnet, create_regtest, Builder, ChainType},
-        output_value::OutputValue,
+        config::{create_mainnet, create_regtest, create_unit_test_config, Builder, ChainType},
+        output_value::{OutputValue, RpcOutputValue},
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
         tokens::{RPCIsTokenFrozen, TokenData, TokenIssuanceV0, TokenIssuanceV1},
@@ -49,12 +48,14 @@ use randomness::{CryptoRng, Rng, SliceRandom};
 use rstest::rstest;
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use storage::raw::DbMapId;
+use test_utils::nft_utils::random_token_issuance_v1;
 use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::{schema, WalletStorageEncryptionRead};
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     seed_phrase::PassPhrase,
     utxo_types::{UtxoState, UtxoType},
+    Currency,
 };
 use wallet_types::{seed_phrase::SeedPhraseLanguage, AccountWalletTxId};
 
@@ -4938,3 +4939,843 @@ fn create_htlc_and_refund(#[case] seed: Seed) {
     assert_eq!(get_coin_balance(&wallet1), coin_balance);
     assert_eq!(get_coin_balance(&wallet2), Amount::ZERO);
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_order(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_unit_test_config());
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+        + chain_config.fungible_token_issuance_fee())
+    .unwrap();
+
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    // Issue a token
+    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+
+    let token_issuance =
+        random_token_issuance_v1(&chain_config, address2.as_object().clone(), &mut rng);
+    let (issued_token_id, token_issuance_transaction) = wallet
+        .issue_new_token(
+            DEFAULT_ACCOUNT_INDEX,
+            TokenIssuance::V1(token_issuance.clone()),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![token_issuance_transaction],
+        block2_amount,
+        1,
+    );
+
+    // Mint some tokens
+    let freezable = token_issuance.is_freezable.as_bool();
+    let token_info = RPCFungibleTokenInfo::new(
+        issued_token_id,
+        token_issuance.token_ticker,
+        token_issuance.number_of_decimals,
+        token_issuance.metadata_uri,
+        Amount::ZERO,
+        token_issuance.total_supply.into(),
+        false,
+        RPCIsTokenFrozen::NotFrozen { freezable },
+        token_issuance.authority,
+    );
+
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+
+    let token_amount_to_mint = Amount::from_atoms(rng.gen_range(2..100));
+    let mint_transaction = wallet
+        .mint_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            &unconfirmed_token_info,
+            token_amount_to_mint,
+            address2.clone(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![mint_transaction],
+        Amount::ZERO,
+        2,
+    );
+
+    let expected_balance = (block1_amount - chain_config.fungible_token_issuance_fee()).unwrap();
+    let (coin_balance, token_balances) = get_currency_balances(&wallet);
+    assert_eq!(coin_balance, expected_balance);
+    assert_eq!(
+        token_balances.first(),
+        Some(&(issued_token_id, token_amount_to_mint))
+    );
+
+    // Create an order selling tokens for coins
+    let ask_value = OutputValue::Coin(Amount::from_atoms(111));
+    let give_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
+    let (_, create_order_tx) = wallet
+        .create_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            ask_value.clone(),
+            give_value.clone(),
+            address2.clone(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![create_order_tx],
+        Amount::ZERO,
+        3,
+    );
+
+    let (coin_balance, token_balances) = get_currency_balances(&wallet);
+    assert_eq!(coin_balance, expected_balance);
+    assert!(token_balances.is_empty());
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_order_and_conclude(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_unit_test_config());
+
+    let mut wallet = create_wallet(chain_config.clone());
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+        + chain_config.fungible_token_issuance_fee())
+    .unwrap();
+
+    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, block1_amount);
+
+    // Issue a token
+    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+
+    let token_issuance =
+        random_token_issuance_v1(&chain_config, address2.as_object().clone(), &mut rng);
+    let (issued_token_id, token_issuance_transaction) = wallet
+        .issue_new_token(
+            DEFAULT_ACCOUNT_INDEX,
+            TokenIssuance::V1(token_issuance.clone()),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![token_issuance_transaction],
+        block2_amount,
+        1,
+    );
+
+    // Mint some tokens
+    let freezable = token_issuance.is_freezable.as_bool();
+    let token_info = RPCFungibleTokenInfo::new(
+        issued_token_id,
+        token_issuance.token_ticker,
+        token_issuance.number_of_decimals,
+        token_issuance.metadata_uri,
+        Amount::ZERO,
+        token_issuance.total_supply.into(),
+        false,
+        RPCIsTokenFrozen::NotFrozen { freezable },
+        token_issuance.authority,
+    );
+
+    let unconfirmed_token_info =
+        wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+
+    let token_amount_to_mint = Amount::from_atoms(rng.gen_range(2..100));
+    let mint_transaction = wallet
+        .mint_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            &unconfirmed_token_info,
+            token_amount_to_mint,
+            address2.clone(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![mint_transaction],
+        Amount::ZERO,
+        2,
+    );
+
+    let expected_balance = (block1_amount - chain_config.fungible_token_issuance_fee()).unwrap();
+    let (coin_balance, token_balances) = get_currency_balances(&wallet);
+    assert_eq!(coin_balance, expected_balance);
+    assert_eq!(
+        token_balances.first(),
+        Some(&(issued_token_id, token_amount_to_mint))
+    );
+
+    // Create an order selling tokens for coins
+    let ask_value = OutputValue::Coin(Amount::from_atoms(111));
+    let give_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
+    let (order_id, create_order_tx) = wallet
+        .create_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            ask_value.clone(),
+            give_value.clone(),
+            address2.clone(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+    let order_info = RpcOrderInfo {
+        conclude_key: address2.clone().into_object(),
+        initially_asked: RpcOutputValue::Coin {
+            amount: Amount::from_atoms(111),
+        },
+        initially_given: RpcOutputValue::Token {
+            id: issued_token_id,
+            amount: token_amount_to_mint,
+        },
+        give_balance: token_amount_to_mint,
+        ask_balance: Amount::from_atoms(111),
+        nonce: None,
+    };
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![create_order_tx],
+        Amount::ZERO,
+        3,
+    );
+
+    let (coin_balance, token_balances) = get_currency_balances(&wallet);
+    assert_eq!(coin_balance, expected_balance);
+    assert!(token_balances.is_empty());
+
+    let conclude_order_tx = wallet
+        .create_conclude_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            order_id,
+            order_info,
+            None,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let _ = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![conclude_order_tx],
+        Amount::ZERO,
+        4,
+    );
+
+    let (coin_balance, token_balances) = get_currency_balances(&wallet);
+    assert_eq!(coin_balance, expected_balance);
+    assert_eq!(
+        token_balances.first(),
+        Some(&(issued_token_id, token_amount_to_mint))
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_order_fill_completely_conclude(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_unit_test_config());
+
+    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
+
+    assert_eq!(get_coin_balance(&wallet1), Amount::ZERO);
+    assert_eq!(get_coin_balance(&wallet2), Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+        + chain_config.fungible_token_issuance_fee())
+    .unwrap();
+
+    let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
+
+    let coin_balance = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance, block1_amount);
+
+    // Issue a token
+    let address1 = wallet1.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+
+    let token_issuance =
+        random_token_issuance_v1(&chain_config, address1.as_object().clone(), &mut rng);
+    let (issued_token_id, token_issuance_transaction) = wallet1
+        .issue_new_token(
+            DEFAULT_ACCOUNT_INDEX,
+            TokenIssuance::V1(token_issuance.clone()),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
+    let (_, block2) = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![token_issuance_transaction],
+        block2_amount,
+        1,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]);
+
+    // Mint some tokens
+    let address2 = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+
+    let freezable = token_issuance.is_freezable.as_bool();
+    let token_info = RPCFungibleTokenInfo::new(
+        issued_token_id,
+        token_issuance.token_ticker,
+        token_issuance.number_of_decimals,
+        token_issuance.metadata_uri,
+        Amount::ZERO,
+        token_issuance.total_supply.into(),
+        false,
+        RPCIsTokenFrozen::NotFrozen { freezable },
+        token_issuance.authority,
+    );
+
+    let unconfirmed_token_info =
+        wallet1.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+
+    let token_amount_to_mint = Amount::from_atoms(100);
+    let mint_transaction = wallet1
+        .mint_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            &unconfirmed_token_info,
+            token_amount_to_mint,
+            address2.clone(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let (_, block3) = create_block(
+        &chain_config,
+        &mut wallet2,
+        vec![mint_transaction],
+        Amount::from_atoms(NETWORK_FEE),
+        2,
+    );
+    scan_wallet(&mut wallet1, BlockHeight::new(2), vec![block3]);
+
+    {
+        let expected_balance =
+            (block1_amount - chain_config.fungible_token_issuance_fee()).unwrap();
+        let (coin_balance, token_balances) = get_currency_balances(&wallet1);
+        assert_eq!(coin_balance, expected_balance);
+        assert!(token_balances.is_empty(),);
+    }
+
+    {
+        let (coin_balance, token_balances) = get_currency_balances(&wallet2);
+        assert_eq!(coin_balance, Amount::from_atoms(NETWORK_FEE));
+        assert_eq!(
+            token_balances.first(),
+            Some(&(issued_token_id, token_amount_to_mint))
+        );
+    }
+
+    // Create an order selling coins for tokens
+    let ask_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
+    let sell_amount = Amount::from_atoms(1000);
+    let give_value = OutputValue::Coin(sell_amount);
+    let (order_id, create_order_tx) = wallet1
+        .create_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            ask_value.clone(),
+            give_value.clone(),
+            address1.clone(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+    let order_info = RpcOrderInfo {
+        conclude_key: address1.clone().into_object(),
+        initially_asked: RpcOutputValue::Token {
+            id: issued_token_id,
+            amount: token_amount_to_mint,
+        },
+        initially_given: RpcOutputValue::Coin {
+            amount: sell_amount,
+        },
+        give_balance: sell_amount,
+        ask_balance: token_amount_to_mint,
+        nonce: None,
+    };
+
+    let (_, block4) = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![create_order_tx],
+        Amount::ZERO,
+        3,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]);
+
+    {
+        let expected_balance =
+            ((block1_amount - chain_config.fungible_token_issuance_fee()).unwrap() - sell_amount)
+                .unwrap();
+        let (coin_balance, token_balances) = get_currency_balances(&wallet1);
+        assert_eq!(coin_balance, expected_balance);
+        assert!(token_balances.is_empty());
+    }
+
+    {
+        let (coin_balance, token_balances) = get_currency_balances(&wallet2);
+        assert_eq!(coin_balance, Amount::from_atoms(NETWORK_FEE));
+        assert_eq!(
+            token_balances.first(),
+            Some(&(issued_token_id, token_amount_to_mint))
+        );
+    }
+
+    // Fill order partially
+    let fill_order_tx_1 = wallet2
+        .create_fill_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            order_id,
+            order_info,
+            Amount::from_atoms(10),
+            None,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let (_, block5) = create_block(
+        &chain_config,
+        &mut wallet2,
+        vec![fill_order_tx_1],
+        Amount::ZERO,
+        4,
+    );
+    scan_wallet(&mut wallet1, BlockHeight::new(4), vec![block5]);
+
+    {
+        let expected_balance =
+            ((block1_amount - chain_config.fungible_token_issuance_fee()).unwrap() - sell_amount)
+                .unwrap();
+        let (coin_balance, token_balances) = get_currency_balances(&wallet1);
+        assert_eq!(coin_balance, expected_balance);
+        assert!(token_balances.is_empty());
+    }
+    {
+        let (coin_balance, token_balances) = get_currency_balances(&wallet2);
+        assert_eq!(coin_balance, Amount::from_atoms(NETWORK_FEE + 100));
+        assert_eq!(
+            token_balances.first(),
+            Some(&(
+                issued_token_id,
+                (token_amount_to_mint - Amount::from_atoms(10)).unwrap()
+            ))
+        );
+    }
+
+    // Fill order completely
+    let order_info = RpcOrderInfo {
+        conclude_key: address1.clone().into_object(),
+        initially_asked: RpcOutputValue::Token {
+            id: issued_token_id,
+            amount: token_amount_to_mint,
+        },
+        initially_given: RpcOutputValue::Coin {
+            amount: sell_amount,
+        },
+        give_balance: (sell_amount - Amount::from_atoms(100)).unwrap(),
+        ask_balance: (token_amount_to_mint - Amount::from_atoms(10)).unwrap(),
+        nonce: Some(AccountNonce::new(0)),
+    };
+
+    let fill_order_tx_2 = wallet2
+        .create_fill_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            order_id,
+            order_info,
+            (token_amount_to_mint - Amount::from_atoms(10)).unwrap(),
+            None,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let (_, block6) = create_block(
+        &chain_config,
+        &mut wallet2,
+        vec![fill_order_tx_2],
+        Amount::ZERO,
+        5,
+    );
+    scan_wallet(&mut wallet1, BlockHeight::new(5), vec![block6]);
+
+    {
+        let expected_balance =
+            ((block1_amount - chain_config.fungible_token_issuance_fee()).unwrap() - sell_amount)
+                .unwrap();
+        let (coin_balance, token_balances) = get_currency_balances(&wallet1);
+        assert_eq!(coin_balance, expected_balance);
+        assert!(token_balances.is_empty());
+    }
+    {
+        let (coin_balance, token_balances) = get_currency_balances(&wallet2);
+        assert_eq!(coin_balance, Amount::from_atoms(NETWORK_FEE + 1000));
+        assert!(token_balances.is_empty());
+    }
+
+    // Conclude the order
+    let order_info = RpcOrderInfo {
+        conclude_key: address1.clone().into_object(),
+        initially_asked: RpcOutputValue::Token {
+            id: issued_token_id,
+            amount: token_amount_to_mint,
+        },
+        initially_given: RpcOutputValue::Coin {
+            amount: sell_amount,
+        },
+        give_balance: Amount::ZERO,
+        ask_balance: Amount::ZERO,
+        nonce: Some(AccountNonce::new(1)),
+    };
+    let conclude_order_tx = wallet1
+        .create_conclude_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            order_id,
+            order_info,
+            None,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let (_, block7) = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![conclude_order_tx],
+        Amount::ZERO,
+        6,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(6), vec![block7]);
+
+    {
+        let expected_balance =
+            ((block1_amount - chain_config.fungible_token_issuance_fee()).unwrap() - sell_amount)
+                .unwrap();
+        let (coin_balance, token_balances) = get_currency_balances(&wallet1);
+        assert_eq!(coin_balance, expected_balance);
+        assert_eq!(
+            token_balances.first(),
+            Some(&(issued_token_id, Amount::from_atoms(100)))
+        );
+    }
+    {
+        let (coin_balance, token_balances) = get_currency_balances(&wallet2);
+        assert_eq!(coin_balance, Amount::from_atoms(NETWORK_FEE + 1000));
+        assert!(token_balances.is_empty());
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn create_order_fill_partially_conclude(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_unit_test_config());
+
+    let mut wallet1 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
+
+    assert_eq!(get_coin_balance(&wallet1), Amount::ZERO);
+    assert_eq!(get_coin_balance(&wallet2), Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000))
+        + chain_config.fungible_token_issuance_fee())
+    .unwrap();
+
+    let (_, block1) = create_block(&chain_config, &mut wallet1, vec![], block1_amount, 0);
+    scan_wallet(&mut wallet2, BlockHeight::new(0), vec![block1]);
+
+    let coin_balance = get_coin_balance(&wallet1);
+    assert_eq!(coin_balance, block1_amount);
+
+    // Issue a token
+    let address1 = wallet1.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+
+    let token_issuance =
+        random_token_issuance_v1(&chain_config, address1.as_object().clone(), &mut rng);
+    let (issued_token_id, token_issuance_transaction) = wallet1
+        .issue_new_token(
+            DEFAULT_ACCOUNT_INDEX,
+            TokenIssuance::V1(token_issuance.clone()),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block2_amount = chain_config.token_supply_change_fee(BlockHeight::zero());
+    let (_, block2) = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![token_issuance_transaction],
+        block2_amount,
+        1,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(1), vec![block2]);
+
+    // Mint some tokens
+    let address2 = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+
+    let freezable = token_issuance.is_freezable.as_bool();
+    let token_info = RPCFungibleTokenInfo::new(
+        issued_token_id,
+        token_issuance.token_ticker,
+        token_issuance.number_of_decimals,
+        token_issuance.metadata_uri,
+        Amount::ZERO,
+        token_issuance.total_supply.into(),
+        false,
+        RPCIsTokenFrozen::NotFrozen { freezable },
+        token_issuance.authority,
+    );
+
+    let unconfirmed_token_info =
+        wallet1.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
+
+    let token_amount_to_mint = Amount::from_atoms(100);
+    let mint_transaction = wallet1
+        .mint_tokens(
+            DEFAULT_ACCOUNT_INDEX,
+            &unconfirmed_token_info,
+            token_amount_to_mint,
+            address2.clone(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let (_, block3) = create_block(
+        &chain_config,
+        &mut wallet2,
+        vec![mint_transaction],
+        Amount::from_atoms(NETWORK_FEE),
+        2,
+    );
+    scan_wallet(&mut wallet1, BlockHeight::new(2), vec![block3]);
+
+    {
+        let expected_balance =
+            (block1_amount - chain_config.fungible_token_issuance_fee()).unwrap();
+        let (coin_balance, token_balances) = get_currency_balances(&wallet1);
+        assert_eq!(coin_balance, expected_balance);
+        assert!(token_balances.is_empty(),);
+    }
+
+    {
+        let (coin_balance, token_balances) = get_currency_balances(&wallet2);
+        assert_eq!(coin_balance, Amount::from_atoms(NETWORK_FEE));
+        assert_eq!(
+            token_balances.first(),
+            Some(&(issued_token_id, token_amount_to_mint))
+        );
+    }
+
+    // Create an order selling coins for tokens
+    let ask_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
+    let sell_amount = Amount::from_atoms(1000);
+    let give_value = OutputValue::Coin(sell_amount);
+    let (order_id, create_order_tx) = wallet1
+        .create_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            ask_value.clone(),
+            give_value.clone(),
+            address1.clone(),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+    let order_info = RpcOrderInfo {
+        conclude_key: address1.clone().into_object(),
+        initially_asked: RpcOutputValue::Token {
+            id: issued_token_id,
+            amount: token_amount_to_mint,
+        },
+        initially_given: RpcOutputValue::Coin {
+            amount: sell_amount,
+        },
+        give_balance: sell_amount,
+        ask_balance: token_amount_to_mint,
+        nonce: None,
+    };
+
+    let (_, block4) = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![create_order_tx],
+        Amount::ZERO,
+        3,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(3), vec![block4]);
+
+    {
+        let expected_balance =
+            ((block1_amount - chain_config.fungible_token_issuance_fee()).unwrap() - sell_amount)
+                .unwrap();
+        let (coin_balance, token_balances) = get_currency_balances(&wallet1);
+        assert_eq!(coin_balance, expected_balance);
+        assert!(token_balances.is_empty());
+    }
+
+    {
+        let (coin_balance, token_balances) = get_currency_balances(&wallet2);
+        assert_eq!(coin_balance, Amount::from_atoms(NETWORK_FEE));
+        assert_eq!(
+            token_balances.first(),
+            Some(&(issued_token_id, token_amount_to_mint))
+        );
+    }
+
+    // Fill order partially
+    let fill_order_tx_1 = wallet2
+        .create_fill_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            order_id,
+            order_info,
+            Amount::from_atoms(10),
+            None,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let (_, block5) = create_block(
+        &chain_config,
+        &mut wallet2,
+        vec![fill_order_tx_1],
+        Amount::ZERO,
+        4,
+    );
+    scan_wallet(&mut wallet1, BlockHeight::new(4), vec![block5]);
+
+    {
+        let expected_balance =
+            ((block1_amount - chain_config.fungible_token_issuance_fee()).unwrap() - sell_amount)
+                .unwrap();
+        let (coin_balance, token_balances) = get_currency_balances(&wallet1);
+        assert_eq!(coin_balance, expected_balance);
+        assert!(token_balances.is_empty());
+    }
+    {
+        let (coin_balance, token_balances) = get_currency_balances(&wallet2);
+        assert_eq!(coin_balance, Amount::from_atoms(NETWORK_FEE + 100));
+        assert_eq!(
+            token_balances.first(),
+            Some(&(
+                issued_token_id,
+                (token_amount_to_mint - Amount::from_atoms(10)).unwrap()
+            ))
+        );
+    }
+
+    // Conclude the order
+    let order_info = RpcOrderInfo {
+        conclude_key: address1.clone().into_object(),
+        initially_asked: RpcOutputValue::Token {
+            id: issued_token_id,
+            amount: token_amount_to_mint,
+        },
+        initially_given: RpcOutputValue::Coin {
+            amount: sell_amount,
+        },
+        give_balance: (sell_amount - Amount::from_atoms(100)).unwrap(),
+        ask_balance: (token_amount_to_mint - Amount::from_atoms(10)).unwrap(),
+        nonce: Some(AccountNonce::new(0)),
+    };
+
+    let conclude_order_tx = wallet1
+        .create_conclude_order_tx(
+            DEFAULT_ACCOUNT_INDEX,
+            order_id,
+            order_info,
+            None,
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let (_, block6) = create_block(
+        &chain_config,
+        &mut wallet1,
+        vec![conclude_order_tx],
+        Amount::ZERO,
+        5,
+    );
+    scan_wallet(&mut wallet2, BlockHeight::new(5), vec![block6]);
+
+    {
+        let expected_balance = ((block1_amount - chain_config.fungible_token_issuance_fee())
+            .unwrap()
+            - Amount::from_atoms(100))
+        .unwrap();
+        let (coin_balance, token_balances) = get_currency_balances(&wallet1);
+        assert_eq!(coin_balance, expected_balance);
+        assert_eq!(
+            token_balances.first(),
+            Some(&(issued_token_id, Amount::from_atoms(10)))
+        );
+    }
+    {
+        let (coin_balance, token_balances) = get_currency_balances(&wallet2);
+        assert_eq!(coin_balance, Amount::from_atoms(NETWORK_FEE + 100));
+        assert_eq!(
+            token_balances.first(),
+            Some(&(
+                issued_token_id,
+                (token_amount_to_mint - Amount::from_atoms(10)).unwrap()
+            ))
+        );
+    }
+}
+// create order, fill partially, conclude

@@ -15,12 +15,13 @@
 
 use std::{collections::BTreeMap, num::NonZeroUsize};
 
+use chainstate::rpc::RpcOutputValueIn;
 use common::{
     address::RpcAddress,
     chain::{
         block::timestamp::BlockTimestamp, tokens::TokenId,
         transaction::partially_signed_transaction::PartiallySignedTransaction, Block, DelegationId,
-        Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
+        Destination, GenBlock, OrderId, PoolId, SignedTransaction, Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -37,7 +38,7 @@ use wallet_types::with_locked::WithLocked;
 use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
     CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
-    MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
+    MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewOrder, NewTransaction, NftMetadata,
     NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
     RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
     RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
@@ -675,6 +676,44 @@ trait WalletRpc {
         htlc: RpcHashedTimelockContract,
         options: TransactionOptions,
     ) -> rpc::RpcResult<HexEncoded<SignedTransaction>>;
+
+    /// Create an order for exchanging "given" amount of an arbitrary currency (coins or tokens) for
+    /// an arbitrary amount of "asked" currency.
+    /// Conclude key is the key that can authorize a conclude order command closing the order and withdrawing
+    /// all the remaining funds from it.
+    #[method(name = "create_order")]
+    async fn create_order(
+        &self,
+        account: AccountArg,
+        ask: RpcOutputValueIn,
+        give: RpcOutputValueIn,
+        conclude_address: RpcAddress<Destination>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewOrder>;
+
+    /// Conclude an order, given its id. This assumes that the conclude key is owned
+    /// by the selected account in this wallet.
+    /// Optionally output address can be provided where remaining funds from the order are transferred.
+    #[method(name = "conclude_order")]
+    async fn conclude_order(
+        &self,
+        account: AccountArg,
+        order_id: RpcAddress<OrderId>,
+        output_address: Option<RpcAddress<Destination>>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction>;
+
+    /// Fill order completely or partially given its id and an amount that satisfy what an order can offer.
+    /// Optionally output address can be provided where the exchanged funds from the order are transferred.
+    #[method(name = "fill_order")]
+    async fn fill_order(
+        &self,
+        account: AccountArg,
+        order_id: RpcAddress<OrderId>,
+        fill_amount_in_ask_currency: RpcAmountIn,
+        output_address: Option<RpcAddress<Destination>>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<NewTransaction>;
 
     /// Node version
     #[method(name = "node_version")]

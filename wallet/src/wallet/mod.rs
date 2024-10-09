@@ -18,11 +18,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::account::transaction_list::TransactionList;
-use crate::account::{
-    currency_grouper::Currency, CurrentFeeRate, DelegationData, PoolData, TransactionToSign,
-    UnconfirmedTokenInfo, UtxoSelectorError,
-};
 use crate::account::{CoinSelectionAlgo, TxInfo};
+use crate::account::{
+    CurrentFeeRate, DelegationData, PoolData, TransactionToSign, UnconfirmedTokenInfo,
+    UtxoSelectorError,
+};
 use crate::key_chain::{
     make_account_path, make_path_to_vrf_key, KeyChainError, MasterKeyChain, LOOKAHEAD_SIZE,
     VRF_INDEX,
@@ -50,8 +50,9 @@ use common::chain::tokens::{
     make_token_id, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
 use common::chain::{
-    AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
-    SignedTransaction, Transaction, TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
+    make_order_id, AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId,
+    OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction, Transaction,
+    TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::{hash_encoded, WithId};
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -81,7 +82,9 @@ use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::{TxData, TxState};
 use wallet_types::wallet_type::WalletType;
 use wallet_types::with_locked::WithLocked;
-use wallet_types::{AccountId, AccountKeyPurposeId, BlockInfo, KeyPurpose, KeychainUsageState};
+use wallet_types::{
+    AccountId, AccountKeyPurposeId, BlockInfo, Currency, KeyPurpose, KeychainUsageState,
+};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
@@ -142,12 +145,18 @@ pub enum WalletError {
     DelegationNonceOverflow(DelegationId),
     #[error("Token issuance nonce overflow for id: {0}")]
     TokenIssuanceNonceOverflow(TokenId),
+    #[error("Order nonce overflow for id: {0}")]
+    OrderNonceOverflow(OrderId),
     #[error("Token with id: {0} with duplicate AccountNonce: {1}")]
     InconsistentTokenIssuanceDuplicateNonce(TokenId, AccountNonce),
+    #[error("Order with id: {0} with duplicate AccountNonce: {1}")]
+    InconsistentOrderDuplicateNonce(OrderId, AccountNonce),
     #[error("Empty inputs in token issuance transaction")]
     MissingTokenId,
     #[error("Unknown token with Id {0}")]
     UnknownTokenId(TokenId),
+    #[error("Unknown order with Id {0}")]
+    UnknownOrderId(OrderId),
     #[error("Transaction creation error: {0}")]
     TransactionCreation(#[from] TransactionCreationError),
     #[error("Transaction signing error: {0}")]
@@ -162,6 +171,8 @@ pub enum WalletError {
     InvalidTransaction(#[from] CheckTransactionError),
     #[error("No UTXOs")]
     NoUtxos,
+    #[error("An input is not a UTXO")]
+    NotUtxoInput,
     #[error("Coin selection error: {0}")]
     CoinSelectionError(#[from] UtxoSelectorError),
     #[error("Cannot abandon a transaction in {0} state")]
@@ -180,6 +191,8 @@ pub enum WalletError {
     LockedUtxo(UtxoOutPoint),
     #[error("Selected UTXO {0:?} is a token v0 and cannot be used")]
     TokenV0Utxo(UtxoOutPoint),
+    #[error("Token v0 from {0:?} is deprecated and cannot be used")]
+    TokenV0(OutPointSourceId),
     #[error("Cannot change a Locked Token supply")]
     CannotChangeLockedTokenSupply,
     #[error("Cannot lock Token supply in state: {0}")]
@@ -234,6 +247,10 @@ pub enum WalletError {
     StandaloneAddressNotFound(RpcAddress<Destination>),
     #[error("Signer error: {0}")]
     SignerError(#[from] SignerError),
+    #[error("Info for the order {0} is missing")]
+    OrderInfoMissing(OrderId),
+    #[error("Calculating filled amount for order {0} failed")]
+    CalculateOrderFilledAmountFailed(OrderId),
 }
 
 /// Result type used for the wallet
@@ -1632,13 +1649,7 @@ impl<B: storage::Backend> Wallet<B> {
             current_fee_rate,
             consolidate_fee_rate,
         )?;
-        let input0_outpoint = tx
-            .transaction()
-            .inputs()
-            .first()
-            .ok_or(WalletError::NoUtxos)?
-            .utxo_outpoint()
-            .ok_or(WalletError::NoUtxos)?;
+        let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.transaction().inputs())?;
         let delegation_id = make_delegation_id(input0_outpoint);
         Ok((delegation_id, tx))
     }
@@ -1784,6 +1795,87 @@ impl<B: storage::Backend> Wallet<B> {
                 db_tx,
                 output_value,
                 htlc,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+
+    pub fn create_order_tx(
+        &mut self,
+        account_index: U31,
+        ask_value: OutputValue,
+        give_value: OutputValue,
+        conclude_key: Address<Destination>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<(OrderId, SignedTransaction)> {
+        let latest_median_time = self.latest_median_time;
+        let tx = self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
+            account.create_order_tx(
+                db_tx,
+                ask_value,
+                give_value,
+                conclude_key,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })?;
+        let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.transaction().inputs())?;
+        let order_id = make_order_id(input0_outpoint);
+        Ok((order_id, tx))
+    }
+
+    pub fn create_conclude_order_tx(
+        &mut self,
+        account_index: U31,
+        order_id: OrderId,
+        order_info: RpcOrderInfo,
+        output_address: Option<Destination>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
+            account.create_conclude_order_tx(
+                db_tx,
+                order_id,
+                order_info,
+                output_address,
+                latest_median_time,
+                CurrentFeeRate {
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                },
+            )
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_fill_order_tx(
+        &mut self,
+        account_index: U31,
+        order_id: OrderId,
+        order_info: RpcOrderInfo,
+        fill_amount_in_ask_currency: Amount,
+        output_address: Option<Destination>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<SignedTransaction> {
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
+            account.create_fill_order_tx(
+                db_tx,
+                order_id,
+                order_info,
+                fill_amount_in_ask_currency,
+                output_address,
                 latest_median_time,
                 CurrentFeeRate {
                     current_fee_rate,
