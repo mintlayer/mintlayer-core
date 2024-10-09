@@ -19,7 +19,7 @@ use common::{
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
-use variant_count::VariantCount;
+use strum::EnumCount;
 
 use crate::error::Result;
 
@@ -47,7 +47,7 @@ pub struct FillOrderUndo {
 }
 
 #[must_use]
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, VariantCount)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, EnumCount)]
 pub enum OrdersAccountingUndo {
     CreateOrder(CreateOrderUndo),
     ConcludeOrder(ConcludeOrderUndo),

@@ -34,9 +34,9 @@ futures.workspace = true
 iced = { workspace = true, features = ["canvas", "debug", "tokio", "lazy"] }
 iced_aw = { workspace = true, features = ["cupertino", "icons"] }
 rfd = { workspace = true, features = ["xdg-portal", "tokio"] }
+strum.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-variant_count.workspace = true
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"

@@ -15,7 +15,7 @@
 
 use iced::{Command, Element, Length};
 use iced_aw::{TabLabel, Tabs};
-use variant_count::VariantCount;
+use strum::EnumCount;
 use wallet_types::wallet_type::WalletType;
 
 use crate::{
@@ -52,7 +52,7 @@ pub enum TabsMessage {
     WalletMessage(WalletId, WalletMessage),
 }
 
-#[derive(VariantCount, Debug, Clone, Default)]
+#[derive(EnumCount, Debug, Clone, Default)]
 enum TabIndex {
     #[default]
     Summary = 0,
@@ -93,7 +93,7 @@ impl TabsWidget {
     }
 
     pub fn last_wallet_tab_index(&self) -> usize {
-        TabIndex::VARIANT_COUNT + self.wallets.len() - 1
+        TabIndex::COUNT + self.wallets.len() - 1
     }
 
     pub fn view(&self, node_state: &NodeState) -> Element<TabsMessage> {
@@ -127,7 +127,7 @@ impl TabsWidget {
 
         for (idx, wallet) in self.wallets.iter().enumerate() {
             tabs = tabs.push(
-                idx + TabIndex::VARIANT_COUNT,
+                idx + TabIndex::COUNT,
                 wallet.tab_label(),
                 wallet.view(node_state),
             )
