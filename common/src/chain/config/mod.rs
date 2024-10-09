@@ -53,8 +53,8 @@ use super::output_value::OutputValue;
 use super::{stakelock::StakePoolData, RequiredConsensus};
 use super::{
     ChainstateUpgrade, ChangeTokenMetadataUriActivated, ConsensusUpgrade, DataDepositFeeVersion,
-    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, RewardDistributionVersion,
-    TokenIssuanceVersion, TokensFeeVersion,
+    DestinationTag, FrozenTokensValidationVersion, HtlcActivated, OrdersActivated,
+    RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
 };
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1: Duration = Duration::from_secs(120);
@@ -220,35 +220,35 @@ impl ChainType {
     }
 }
 
-fn address_prefix(chain_type: ChainType, destination: &Destination) -> &'static str {
+fn address_prefix(chain_type: ChainType, destination_tag: DestinationTag) -> &'static str {
     match chain_type {
-        ChainType::Mainnet => match destination {
-            Destination::AnyoneCanSpend => "mxanyonecanspend",
-            Destination::PublicKeyHash(_) => "mtc",
-            Destination::PublicKey(_) => "mptc",
-            Destination::ScriptHash(_) => "mstc",
-            Destination::ClassicMultisig(_) => "mmtc",
+        ChainType::Mainnet => match destination_tag {
+            DestinationTag::AnyoneCanSpend => "mxanyonecanspend",
+            DestinationTag::PublicKeyHash => "mtc",
+            DestinationTag::PublicKey => "mptc",
+            DestinationTag::ScriptHash => "mstc",
+            DestinationTag::ClassicMultisig => "mmtc",
         },
-        ChainType::Testnet => match destination {
-            Destination::AnyoneCanSpend => "txanyonecanspend",
-            Destination::PublicKeyHash(_) => "tmt",
-            Destination::PublicKey(_) => "tpmt",
-            Destination::ScriptHash(_) => "tstc",
-            Destination::ClassicMultisig(_) => "tmtc",
+        ChainType::Testnet => match destination_tag {
+            DestinationTag::AnyoneCanSpend => "txanyonecanspend",
+            DestinationTag::PublicKeyHash => "tmt",
+            DestinationTag::PublicKey => "tpmt",
+            DestinationTag::ScriptHash => "tstc",
+            DestinationTag::ClassicMultisig => "tmtc",
         },
-        ChainType::Regtest => match destination {
-            Destination::AnyoneCanSpend => "rxanyonecanspend",
-            Destination::PublicKeyHash(_) => "rmt",
-            Destination::PublicKey(_) => "rpmt",
-            Destination::ScriptHash(_) => "rstc",
-            Destination::ClassicMultisig(_) => "rmtc",
+        ChainType::Regtest => match destination_tag {
+            DestinationTag::AnyoneCanSpend => "rxanyonecanspend",
+            DestinationTag::PublicKeyHash => "rmt",
+            DestinationTag::PublicKey => "rpmt",
+            DestinationTag::ScriptHash => "rstc",
+            DestinationTag::ClassicMultisig => "rmtc",
         },
-        ChainType::Signet => match destination {
-            Destination::AnyoneCanSpend => "sxanyonecanspend",
-            Destination::PublicKeyHash(_) => "smt",
-            Destination::PublicKey(_) => "spmt",
-            Destination::ScriptHash(_) => "sstc",
-            Destination::ClassicMultisig(_) => "smtc",
+        ChainType::Signet => match destination_tag {
+            DestinationTag::AnyoneCanSpend => "sxanyonecanspend",
+            DestinationTag::PublicKeyHash => "smt",
+            DestinationTag::PublicKey => "spmt",
+            DestinationTag::ScriptHash => "sstc",
+            DestinationTag::ClassicMultisig => "smtc",
         },
     }
 }
@@ -298,8 +298,8 @@ pub struct ChainConfig {
 impl ChainConfig {
     /// Bech32m addresses in this chain will use this prefix
     #[must_use]
-    pub fn destination_address_prefix(&self, destination: &Destination) -> &'static str {
-        address_prefix(self.chain_type, destination)
+    pub fn destination_address_prefix(&self, destination_tag: DestinationTag) -> &'static str {
+        address_prefix(self.chain_type, destination_tag)
     }
 
     #[must_use]

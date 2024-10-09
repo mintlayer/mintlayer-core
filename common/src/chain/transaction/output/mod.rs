@@ -33,7 +33,7 @@ use crate::{
 use crypto::vrf::VRFPublicKey;
 use script::Script;
 use serialization::{Decode, DecodeAll, Encode};
-use strum::EnumCount;
+use strum::{EnumCount, EnumDiscriminants, EnumIter};
 
 use self::{htlc::HashedTimelockContract, stakelock::StakePoolData, timelock::OutputTimeLock};
 
@@ -43,7 +43,10 @@ pub mod output_value;
 pub mod stakelock;
 pub mod timelock;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, EnumCount)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, EnumCount, EnumDiscriminants,
+)]
+#[strum_discriminants(name(DestinationTag), derive(EnumIter))]
 pub enum Destination {
     #[codec(index = 0)]
     AnyoneCanSpend, // zero verification; used primarily for testing. Never use this for real money
@@ -77,7 +80,7 @@ impl Addressable for Destination {
     type Error = AddressError;
 
     fn address_prefix(&self, chain_config: &ChainConfig) -> &str {
-        chain_config.destination_address_prefix(self)
+        chain_config.destination_address_prefix(self.into())
     }
 
     fn encode_to_bytes_for_address(&self) -> Vec<u8> {
