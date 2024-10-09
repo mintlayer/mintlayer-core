@@ -1286,12 +1286,12 @@ dependencies = [
  "serialization",
  "storage-failing",
  "storage-inmemory",
+ "strum",
  "test-utils",
  "tokens-accounting",
  "tx-verifier",
  "utils",
  "utxo",
- "variant_count",
 ]
 
 [[package]]
@@ -1573,11 +1573,11 @@ dependencies = [
  "serial_test",
  "serialization",
  "static_assertions",
+ "strum",
  "test-utils",
  "thiserror",
  "typename",
  "utils",
- "variant_count",
 ]
 
 [[package]]
@@ -4514,11 +4514,11 @@ dependencies = [
  "p2p",
  "rfd",
  "serialization",
+ "strum",
  "subsystem",
  "thiserror",
  "tokio",
  "utils",
- "variant_count",
  "wallet",
  "wallet-cli-commands",
  "wallet-controller",
@@ -4979,10 +4979,10 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
+ "strum",
  "test-utils",
  "thiserror",
  "utils",
- "variant_count",
 ]
 
 [[package]]
@@ -5441,11 +5441,11 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
+ "strum",
  "test-utils",
  "thiserror",
  "typename",
  "utils",
- "variant_count",
 ]
 
 [[package]]
@@ -7285,6 +7285,9 @@ name = "strum"
 version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
+dependencies = [
+ "strum_macros",
+]
 
 [[package]]
 name = "strum_macros"
@@ -7657,10 +7660,10 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
+ "strum",
  "test-utils",
  "thiserror",
  "utils",
- "variant_count",
 ]
 
 [[package]]
@@ -8353,16 +8356,6 @@ name = "valuable"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
-
-[[package]]
-name = "variant_count"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aae2faf80ac463422992abf4de234731279c058aaf33171ca70277c98406b124"
-dependencies = [
- "quote",
- "syn 1.0.109",
-]
 
 [[package]]
 name = "vcpkg"

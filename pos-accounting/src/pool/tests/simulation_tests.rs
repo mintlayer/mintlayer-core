@@ -19,6 +19,7 @@ use common::{
 };
 use randomness::{CryptoRng, Rng};
 use rstest::rstest;
+use strum::EnumCount as _;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use super::create_pool_data;
@@ -112,7 +113,7 @@ fn perform_random_operation(
 ) {
     // If it fires it means that number of actions in PoSAccountingOperations has changed
     // and the following match needs to be updated
-    assert_eq!(PoSAccountingUndo::VARIANT_COUNT, 7);
+    assert_eq!(PoSAccountingUndo::COUNT, 7);
 
     match rng.gen_range(0..11) {
         // create new pool

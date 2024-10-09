@@ -33,7 +33,7 @@ use crate::{
 use crypto::vrf::VRFPublicKey;
 use script::Script;
 use serialization::{Decode, DecodeAll, Encode};
-use variant_count::VariantCount;
+use strum::EnumCount;
 
 use self::{htlc::HashedTimelockContract, stakelock::StakePoolData, timelock::OutputTimeLock};
 
@@ -43,7 +43,7 @@ pub mod output_value;
 pub mod stakelock;
 pub mod timelock;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, VariantCount)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, EnumCount)]
 pub enum Destination {
     #[codec(index = 0)]
     AnyoneCanSpend, // zero verification; used primarily for testing. Never use this for real money

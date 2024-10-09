@@ -16,9 +16,9 @@ serialization = { path = "../serialization" }
 typename = { path = "../utils/typename" }
 utils = { path = "../utils" }
 
-thiserror.workspace = true
 parity-scale-codec.workspace = true
-variant_count.workspace = true
+strum.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }

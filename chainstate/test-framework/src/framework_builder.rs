@@ -30,11 +30,11 @@ use common::{
 };
 use crypto::{key::PrivateKey, vrf::VRFPrivateKey};
 use randomness::{CryptoRng, Rng};
+use strum::EnumCount;
 use test_utils::{mock_time_getter::mocked_time_getter_seconds, random::Seed};
 use utils::atomics::SeqCstAtomicU64;
-use variant_count::VariantCount;
 
-#[derive(VariantCount)]
+#[derive(EnumCount)]
 pub enum TxVerificationStrategy {
     Default,
     Disposable,
@@ -66,7 +66,7 @@ impl TestFrameworkBuilder {
         let initial_time_since_genesis = 0;
         let staking_pools = StakingPools::new();
 
-        assert_eq!(TxVerificationStrategy::VARIANT_COUNT, 3);
+        assert_eq!(TxVerificationStrategy::COUNT, 3);
         let tx_verification_strategy = match rng.gen_range(0..3) {
             0 => TxVerificationStrategy::Default,
             1 => TxVerificationStrategy::Disposable,
