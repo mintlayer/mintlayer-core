@@ -214,6 +214,7 @@ mod tests {
     use rstest::rstest;
     use serde::de::value::Error as SerdeErr;
     use serialization::{Decode, DecodeAll, Encode};
+    use strum::EnumCount as _;
     use test_utils::random::{make_seedable_rng, Rng, Seed};
 
     use crate::{
@@ -296,7 +297,7 @@ mod tests {
             .collect::<Vec<String>>();
 
         let keys = (0..strings.len())
-            .map(|_| match rng.gen::<usize>() % Destination::VARIANT_COUNT {
+            .map(|_| match rng.gen::<usize>() % Destination::COUNT {
                 0 => Destination::AnyoneCanSpend,
                 1 => {
                     let (_private_key, public_key) =

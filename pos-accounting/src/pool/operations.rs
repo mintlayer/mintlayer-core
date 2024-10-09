@@ -19,7 +19,7 @@ use common::{
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
-use variant_count::VariantCount;
+use strum::EnumCount;
 
 use crate::error::Error;
 
@@ -69,7 +69,7 @@ pub struct IncreaseStakerRewardsUndo {
 }
 
 #[must_use]
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, VariantCount)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, EnumCount)]
 pub enum PoSAccountingUndo {
     #[codec(index = 0)]
     CreatePool(CreatePoolUndo),
