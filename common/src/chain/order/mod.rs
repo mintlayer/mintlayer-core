@@ -21,7 +21,7 @@ mod order_id;
 pub use order_id::{make_order_id, OrderId};
 
 mod rpc;
-pub use rpc::{RpcOrderInfo, RpcOrderValue, RpcOrderValueIn};
+pub use rpc::RpcOrderInfo;
 
 /// Order data provides unified data structure to represent an order.
 /// There are no buy or sell types of orders per se but rather exchanges.

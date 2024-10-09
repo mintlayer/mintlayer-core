@@ -16,55 +16,16 @@
 use rpc_description::HasValueHint;
 
 use crate::{
-    address::RpcAddress,
-    chain::{output_value::OutputValue, tokens::TokenId, AccountNonce, Destination},
-    primitives::{amount::RpcAmountIn, Amount},
+    chain::{output_value::RpcOutputValue, AccountNonce, Destination},
+    primitives::Amount,
 };
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-#[serde(tag = "type", content = "content")]
-pub enum RpcOrderValueIn {
-    Coin {
-        amount: RpcAmountIn,
-    },
-    Token {
-        id: RpcAddress<TokenId>,
-        amount: RpcAmountIn,
-    },
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
-#[serde(tag = "type", content = "content")]
-pub enum RpcOrderValue {
-    Coin { amount: Amount },
-    Token { id: TokenId, amount: Amount },
-}
-
-impl RpcOrderValue {
-    pub fn from_output_value(value: &OutputValue) -> Option<Self> {
-        match value {
-            OutputValue::Coin(amount) => Some(RpcOrderValue::Coin { amount: *amount }),
-            OutputValue::TokenV0(_) => None,
-            OutputValue::TokenV1(id, amount) => Some(RpcOrderValue::Token {
-                id: *id,
-                amount: *amount,
-            }),
-        }
-    }
-
-    pub fn amount(&self) -> Amount {
-        match self {
-            RpcOrderValue::Coin { amount } | RpcOrderValue::Token { id: _, amount } => *amount,
-        }
-    }
-}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct RpcOrderInfo {
     pub conclude_key: Destination,
 
-    pub initially_asked: RpcOrderValue,
-    pub initially_given: RpcOrderValue,
+    pub initially_asked: RpcOutputValue,
+    pub initially_given: RpcOutputValue,
 
     // left to offer
     pub give_balance: Amount,

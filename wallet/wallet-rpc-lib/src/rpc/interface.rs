@@ -15,13 +15,13 @@
 
 use std::{collections::BTreeMap, num::NonZeroUsize};
 
+use chainstate::rpc::RpcOutputValueIn;
 use common::{
     address::RpcAddress,
     chain::{
         block::timestamp::BlockTimestamp, tokens::TokenId,
         transaction::partially_signed_transaction::PartiallySignedTransaction, Block, DelegationId,
-        Destination, GenBlock, OrderId, PoolId, RpcOrderValueIn, SignedTransaction, Transaction,
-        TxOutput,
+        Destination, GenBlock, OrderId, PoolId, SignedTransaction, Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -685,8 +685,8 @@ trait WalletRpc {
     async fn create_order(
         &self,
         account: AccountArg,
-        ask: RpcOrderValueIn,
-        give: RpcOrderValueIn,
+        ask: RpcOutputValueIn,
+        give: RpcOutputValueIn,
         conclude_address: RpcAddress<Destination>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewOrder>;

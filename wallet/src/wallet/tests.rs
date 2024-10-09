@@ -32,11 +32,11 @@ use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData},
         config::{create_mainnet, create_regtest, create_unit_test_config, Builder, ChainType},
-        output_value::OutputValue,
+        output_value::{OutputValue, RpcOutputValue},
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
         tokens::{RPCIsTokenFrozen, TokenData, TokenIssuanceV0, TokenIssuanceV1},
-        Destination, Genesis, OutPointSourceId, RpcOrderValue, TxInput,
+        Destination, Genesis, OutPointSourceId, TxInput,
     },
     primitives::{per_thousand::PerThousand, Idable, H256},
 };
@@ -5162,10 +5162,10 @@ fn create_order_and_conclude(#[case] seed: Seed) {
         .unwrap();
     let order_info = RpcOrderInfo {
         conclude_key: address2.clone().into_object(),
-        initially_asked: RpcOrderValue::Coin {
+        initially_asked: RpcOutputValue::Coin {
             amount: Amount::from_atoms(111),
         },
-        initially_given: RpcOrderValue::Token {
+        initially_given: RpcOutputValue::Token {
             id: issued_token_id,
             amount: token_amount_to_mint,
         },
@@ -5334,11 +5334,11 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         .unwrap();
     let order_info = RpcOrderInfo {
         conclude_key: address1.clone().into_object(),
-        initially_asked: RpcOrderValue::Token {
+        initially_asked: RpcOutputValue::Token {
             id: issued_token_id,
             amount: token_amount_to_mint,
         },
-        initially_given: RpcOrderValue::Coin {
+        initially_given: RpcOutputValue::Coin {
             amount: sell_amount,
         },
         give_balance: sell_amount,
@@ -5418,11 +5418,11 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
     // Fill order completely
     let order_info = RpcOrderInfo {
         conclude_key: address1.clone().into_object(),
-        initially_asked: RpcOrderValue::Token {
+        initially_asked: RpcOutputValue::Token {
             id: issued_token_id,
             amount: token_amount_to_mint,
         },
-        initially_given: RpcOrderValue::Coin {
+        initially_given: RpcOutputValue::Coin {
             amount: sell_amount,
         },
         give_balance: (sell_amount - Amount::from_atoms(100)).unwrap(),
@@ -5468,11 +5468,11 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
     // Conclude the order
     let order_info = RpcOrderInfo {
         conclude_key: address1.clone().into_object(),
-        initially_asked: RpcOrderValue::Token {
+        initially_asked: RpcOutputValue::Token {
             id: issued_token_id,
             amount: token_amount_to_mint,
         },
-        initially_given: RpcOrderValue::Coin {
+        initially_given: RpcOutputValue::Coin {
             amount: sell_amount,
         },
         give_balance: Amount::ZERO,
@@ -5638,11 +5638,11 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         .unwrap();
     let order_info = RpcOrderInfo {
         conclude_key: address1.clone().into_object(),
-        initially_asked: RpcOrderValue::Token {
+        initially_asked: RpcOutputValue::Token {
             id: issued_token_id,
             amount: token_amount_to_mint,
         },
-        initially_given: RpcOrderValue::Coin {
+        initially_given: RpcOutputValue::Coin {
             amount: sell_amount,
         },
         give_balance: sell_amount,
@@ -5722,11 +5722,11 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     // Conclude the order
     let order_info = RpcOrderInfo {
         conclude_key: address1.clone().into_object(),
-        initially_asked: RpcOrderValue::Token {
+        initially_asked: RpcOutputValue::Token {
             id: issued_token_id,
             amount: token_amount_to_mint,
         },
-        initially_given: RpcOrderValue::Coin {
+        initially_given: RpcOutputValue::Coin {
             amount: sell_amount,
         },
         give_balance: (sell_amount - Amount::from_atoms(100)).unwrap(),

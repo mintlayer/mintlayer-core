@@ -26,7 +26,9 @@ use std::{
     time::Duration,
 };
 
-use chainstate::{tx_verifier::check_transaction, ChainInfo, TokenIssuanceError};
+use chainstate::{
+    rpc::RpcOutputValueIn, tx_verifier::check_transaction, ChainInfo, TokenIssuanceError,
+};
 use crypto::key::{hdkd::u31::U31, PrivateKey, PublicKey};
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
@@ -46,14 +48,14 @@ use common::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
-        output_value::OutputValue,
+        output_value::{OutputValue, RpcOutputValue},
         partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
         tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenTotalSupply},
-        Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderValue,
-        RpcOrderValueIn, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, time::Time, Amount, BlockHeight, Id, Idable,
@@ -1487,8 +1489,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
     pub async fn create_order(
         &self,
         account_index: U31,
-        ask: RpcOrderValueIn,
-        give: RpcOrderValueIn,
+        ask: RpcOutputValueIn,
+        give: RpcOutputValueIn,
         conclude_address: RpcAddress<Destination>,
         config: ControllerConfig,
     ) -> WRpcResult<NewOrder, N> {
@@ -1496,8 +1498,8 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
 
         let convert_currency = |rpc_currency| -> Result<_, RpcError<N>> {
             match rpc_currency {
-                RpcOrderValueIn::Coin { amount } => Ok((Currency::Coin, amount)),
-                RpcOrderValueIn::Token { id, amount } => {
+                RpcOutputValueIn::Coin { amount } => Ok((Currency::Coin, amount)),
+                RpcOutputValueIn::Token { id, amount } => {
                     let token_id = id
                         .decode_object(&self.chain_config)
                         .map_err(|_| RpcError::InvalidTokenId)?;
@@ -1598,10 +1600,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                 Box::pin(async move {
                     let order_info = w.get_order_info(order_id).await?;
                     let fill_amount = match order_info.initially_asked {
-                        RpcOrderValue::Coin { .. } => fill_amount
+                        RpcOutputValue::Coin { .. } => fill_amount
                             .to_amount(coin_decimals)
                             .ok_or(RpcError::<N>::InvalidCoinAmount)?,
-                        RpcOrderValue::Token { id, amount: _ } => {
+                        RpcOutputValue::Token { id, amount: _ } => {
                             let token_info = w.get_token_info(id).await?;
                             fill_amount
                                 .to_amount(token_info.token_number_of_decimals())

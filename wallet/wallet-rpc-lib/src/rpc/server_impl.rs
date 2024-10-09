@@ -15,14 +15,15 @@
 
 use std::{collections::BTreeMap, fmt::Debug, num::NonZeroUsize, str::FromStr, time::Duration};
 
+use chainstate::rpc::RpcOutputValueIn;
 use common::{
     address::dehexify::dehexify_all_addresses,
     chain::{
         block::timestamp::BlockTimestamp,
         partially_signed_transaction::PartiallySignedTransaction,
         tokens::{IsTokenUnfreezable, TokenId},
-        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderValueIn,
-        SignedTransaction, Transaction, TxOutput,
+        Block, DelegationId, Destination, GenBlock, OrderId, PoolId, SignedTransaction,
+        Transaction, TxOutput,
     },
     primitives::{time::Time, BlockHeight, Id, Idable},
 };
@@ -1037,8 +1038,8 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
     async fn create_order(
         &self,
         account_arg: AccountArg,
-        ask: RpcOrderValueIn,
-        give: RpcOrderValueIn,
+        ask: RpcOutputValueIn,
+        give: RpcOutputValueIn,
         conclude_address: RpcAddress<Destination>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewOrder> {

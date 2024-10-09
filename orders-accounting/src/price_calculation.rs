@@ -35,10 +35,14 @@ pub fn calculate_fill_order(
         .ok_or(Error::OrderOverflow(order_id))
 }
 
-pub fn calculate_filled_amount(ask: Amount, give: Amount, fill: Amount) -> Option<Amount> {
-    let give = Uint256::from_u128(give.into_atoms());
-    let fill = Uint256::from_u128(fill.into_atoms());
-    let ask = Uint256::from_u128(ask.into_atoms());
+pub fn calculate_filled_amount(
+    ask_amount: Amount,
+    give_amount: Amount,
+    fill_amount: Amount,
+) -> Option<Amount> {
+    let give = Uint256::from_u128(give_amount.into_atoms());
+    let fill = Uint256::from_u128(fill_amount.into_atoms());
+    let ask = Uint256::from_u128(ask_amount.into_atoms());
 
     let result = ((give * fill).expect("cannot overflow") / ask)?;
     let result: u128 = result.try_into().ok()?;

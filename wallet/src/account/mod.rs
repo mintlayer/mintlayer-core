@@ -23,9 +23,7 @@ use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::htlc::HashedTimelockContract;
 use common::chain::partially_signed_transaction::PartiallySignedTransaction;
-use common::chain::{
-    AccountCommand, AccountOutPoint, AccountSpending, OrderId, RpcOrderInfo, RpcOrderValue,
-};
+use common::chain::{AccountCommand, AccountOutPoint, AccountSpending, OrderId, RpcOrderInfo};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
 use common::size_estimation::{
@@ -55,7 +53,7 @@ use crate::wallet::WalletPoolsFilter;
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
 use crate::{SendRequest, WalletError, WalletResult};
 use common::address::{Address, RpcAddress};
-use common::chain::output_value::OutputValue;
+use common::chain::output_value::{OutputValue, RpcOutputValue};
 use common::chain::tokens::{
     make_token_id, IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId,
 };
@@ -1051,8 +1049,8 @@ impl Account {
 
         if order_info.give_balance > Amount::ZERO {
             let output_value = match order_info.initially_given {
-                RpcOrderValue::Coin { .. } => OutputValue::Coin(order_info.give_balance),
-                RpcOrderValue::Token { id, .. } => {
+                RpcOutputValue::Coin { .. } => OutputValue::Coin(order_info.give_balance),
+                RpcOutputValue::Token { id, .. } => {
                     OutputValue::TokenV1(id, order_info.give_balance)
                 }
             };
@@ -1063,8 +1061,8 @@ impl Account {
             .ok_or(WalletError::OutputAmountOverflow)?;
         if filled_amount > Amount::ZERO {
             let output_value = match order_info.initially_asked {
-                RpcOrderValue::Coin { .. } => OutputValue::Coin(filled_amount),
-                RpcOrderValue::Token { id, .. } => OutputValue::TokenV1(id, filled_amount),
+                RpcOutputValue::Coin { .. } => OutputValue::Coin(filled_amount),
+                RpcOutputValue::Token { id, .. } => OutputValue::TokenV1(id, filled_amount),
             };
             outputs.push(TxOutput::Transfer(output_value, output_destination));
         }
@@ -1114,8 +1112,8 @@ impl Account {
         )
         .ok_or(WalletError::CalculateOrderFilledAmountFailed(order_id))?;
         let output_value = match order_info.initially_given {
-            RpcOrderValue::Coin { .. } => OutputValue::Coin(filled_amount),
-            RpcOrderValue::Token { id, .. } => OutputValue::TokenV1(id, filled_amount),
+            RpcOutputValue::Coin { .. } => OutputValue::Coin(filled_amount),
+            RpcOutputValue::Token { id, .. } => OutputValue::TokenV1(id, filled_amount),
         };
         let outputs = vec![TxOutput::Transfer(output_value, output_destination.clone())];
 
@@ -2444,7 +2442,7 @@ fn group_preselected_inputs(
                         order_info_provider.ok_or(WalletError::OrderInfoMissing(*order_id))?;
 
                     match order_info.initially_given {
-                        RpcOrderValue::Coin { .. } => {
+                        RpcOutputValue::Coin { .. } => {
                             update_preselected_inputs(
                                 Currency::Coin,
                                 order_info.give_balance,
@@ -2452,7 +2450,7 @@ fn group_preselected_inputs(
                                 Amount::ZERO,
                             )?;
                         }
-                        RpcOrderValue::Token { id, amount: _ } => {
+                        RpcOutputValue::Token { id, amount: _ } => {
                             update_preselected_inputs(
                                 Currency::Token(id),
                                 order_info.give_balance,
@@ -2463,7 +2461,7 @@ fn group_preselected_inputs(
                     };
 
                     match order_info.initially_asked {
-                        RpcOrderValue::Coin { .. } => {
+                        RpcOutputValue::Coin { .. } => {
                             let amount = (order_info.initially_asked.amount()
                                 - order_info.ask_balance)
                                 .ok_or(WalletError::OutputAmountOverflow)?;
@@ -2474,7 +2472,7 @@ fn group_preselected_inputs(
                                 Amount::ZERO,
                             )?;
                         }
-                        RpcOrderValue::Token { id, amount: _ } => {
+                        RpcOutputValue::Token { id, amount: _ } => {
                             let amount = (order_info.initially_asked.amount()
                                 - order_info.ask_balance)
                                 .ok_or(WalletError::OutputAmountOverflow)?;
@@ -2501,7 +2499,7 @@ fn group_preselected_inputs(
                     )
                     .ok_or(WalletError::CalculateOrderFilledAmountFailed(*order_id))?;
                     match order_info.initially_given {
-                        RpcOrderValue::Coin { .. } => {
+                        RpcOutputValue::Coin { .. } => {
                             update_preselected_inputs(
                                 Currency::Coin,
                                 filled_amount,
@@ -2509,7 +2507,7 @@ fn group_preselected_inputs(
                                 Amount::ZERO,
                             )?;
                         }
-                        RpcOrderValue::Token { id, amount: _ } => {
+                        RpcOutputValue::Token { id, amount: _ } => {
                             update_preselected_inputs(
                                 Currency::Token(id),
                                 filled_amount,
@@ -2519,7 +2517,7 @@ fn group_preselected_inputs(
                         }
                     };
                     match order_info.initially_asked {
-                        RpcOrderValue::Coin { .. } => {
+                        RpcOutputValue::Coin { .. } => {
                             update_preselected_inputs(
                                 Currency::Coin,
                                 Amount::ZERO,
@@ -2527,7 +2525,7 @@ fn group_preselected_inputs(
                                 *fill_amount,
                             )?;
                         }
-                        RpcOrderValue::Token { id, amount: _ } => {
+                        RpcOutputValue::Token { id, amount: _ } => {
                             update_preselected_inputs(
                                 Currency::Token(id),
                                 Amount::ZERO,

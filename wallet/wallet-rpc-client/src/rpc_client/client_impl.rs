@@ -19,11 +19,11 @@ use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, Wall
 
 use super::{ClientWalletRpc, WalletRpcError};
 
-use chainstate::ChainInfo;
+use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        Block, GenBlock, RpcOrderValueIn, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -947,19 +947,19 @@ impl WalletInterface for ClientWalletRpc {
             &self.http_client,
             account_index.into(),
             ask_token_id.map_or(
-                RpcOrderValueIn::Coin {
+                RpcOutputValueIn::Coin {
                     amount: ask_amount.into(),
                 },
-                |v| RpcOrderValueIn::Token {
+                |v| RpcOutputValueIn::Token {
                     id: v.into(),
                     amount: ask_amount.into(),
                 },
             ),
             give_token_id.map_or(
-                RpcOrderValueIn::Coin {
+                RpcOutputValueIn::Coin {
                     amount: give_amount.into(),
                 },
-                |v| RpcOrderValueIn::Token {
+                |v| RpcOutputValueIn::Token {
                     id: v.into(),
                     amount: give_amount.into(),
                 },

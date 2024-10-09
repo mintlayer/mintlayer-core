@@ -20,12 +20,12 @@ use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, BlockReward},
+        output_value::RpcOutputValue,
         tokens::{
             NftIssuance, RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo,
             RPCTokenInfo, TokenAuxiliaryData, TokenId,
         },
-        AccountType, Block, GenBlock, OrderData, OrderId, RpcOrderInfo, RpcOrderValue, Transaction,
-        TxOutput,
+        AccountType, Block, GenBlock, OrderData, OrderId, RpcOrderInfo, Transaction, TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
@@ -439,9 +439,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 let nonce =
                     self.chainstate_ref.get_account_nonce_count(AccountType::Order(order_id))?;
 
-                let initially_asked = RpcOrderValue::from_output_value(order_data.ask())
+                let initially_asked = RpcOutputValue::from_output_value(order_data.ask())
                     .ok_or(PropertyQueryError::UnsupportedTokenV0InOrder(order_id))?;
-                let initially_given = RpcOrderValue::from_output_value(order_data.give())
+                let initially_given = RpcOutputValue::from_output_value(order_data.give())
                     .ok_or(PropertyQueryError::UnsupportedTokenV0InOrder(order_id))?;
 
                 let info = RpcOrderInfo {

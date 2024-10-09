@@ -15,13 +15,13 @@
 
 use std::{collections::BTreeMap, fmt::Debug, num::NonZeroUsize, path::PathBuf, str::FromStr};
 
-use chainstate::ChainInfo;
+use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     address::{dehexify::dehexify_all_addresses, AddressError},
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        tokens::IsTokenUnfreezable, Block, GenBlock, RpcOrderValueIn, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -1070,19 +1070,19 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             .create_order(
                 account_index,
                 ask_token_id.map_or(
-                    RpcOrderValueIn::Coin {
+                    RpcOutputValueIn::Coin {
                         amount: ask_amount.into(),
                     },
-                    |v| RpcOrderValueIn::Token {
+                    |v| RpcOutputValueIn::Token {
                         id: v.into(),
                         amount: ask_amount.into(),
                     },
                 ),
                 give_token_id.map_or(
-                    RpcOrderValueIn::Coin {
+                    RpcOutputValueIn::Coin {
                         amount: give_amount.into(),
                     },
-                    |v| RpcOrderValueIn::Token {
+                    |v| RpcOutputValueIn::Token {
                         id: v.into(),
                         amount: give_amount.into(),
                     },
