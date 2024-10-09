@@ -15,7 +15,9 @@
 
 use std::{collections::BTreeMap, future::pending, num::NonZeroUsize, path::PathBuf, str::FromStr};
 
-use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, WalletInterface};
+use crate::wallet_rpc_traits::{
+    FromRpcInput, PartialOrSignedTx, SignRawTransactionResult, WalletInterface,
+};
 
 use super::{ClientWalletRpc, WalletRpcError};
 
@@ -946,24 +948,8 @@ impl WalletInterface for ClientWalletRpc {
         WalletRpcClient::create_order(
             &self.http_client,
             account_index.into(),
-            ask_token_id.map_or(
-                RpcOutputValueIn::Coin {
-                    amount: ask_amount.into(),
-                },
-                |v| RpcOutputValueIn::Token {
-                    id: v.into(),
-                    amount: ask_amount.into(),
-                },
-            ),
-            give_token_id.map_or(
-                RpcOutputValueIn::Coin {
-                    amount: give_amount.into(),
-                },
-                |v| RpcOutputValueIn::Token {
-                    id: v.into(),
-                    amount: give_amount.into(),
-                },
-            ),
+            RpcOutputValueIn::from_rpc_string_input(ask_token_id, ask_amount),
+            RpcOutputValueIn::from_rpc_string_input(give_token_id, give_amount),
             conclude_address.into(),
             options,
         )
@@ -994,7 +980,7 @@ impl WalletInterface for ClientWalletRpc {
         &self,
         account_index: U31,
         order_id: String,
-        fill_amount: DecimalAmount,
+        fill_amount_in_ask_currency: DecimalAmount,
         output_address: Option<String>,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
@@ -1003,7 +989,7 @@ impl WalletInterface for ClientWalletRpc {
             &self.http_client,
             account_index.into(),
             order_id.into(),
-            fill_amount.into(),
+            fill_amount_in_ask_currency.into(),
             output_address.map(|addr| addr.into()),
             options,
         )

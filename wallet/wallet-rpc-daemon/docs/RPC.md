@@ -1345,7 +1345,7 @@ Parameters:
 {
     "account": number,
     "order_id": bech32 string,
-    "fill_amount": EITHER OF
+    "fill_amount_in_ask_currency": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
     "output_address": EITHER OF

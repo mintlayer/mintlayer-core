@@ -1583,7 +1583,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         &self,
         account_index: U31,
         order_id: RpcAddress<OrderId>,
-        fill_amount: RpcAmountIn,
+        fill_amount_in_ask_currency: RpcAmountIn,
         output_address: Option<RpcAddress<Destination>>,
         config: ControllerConfig,
     ) -> WRpcResult<NewTransaction, N> {
@@ -1599,13 +1599,13 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .call_async(move |w| {
                 Box::pin(async move {
                     let order_info = w.get_order_info(order_id).await?;
-                    let fill_amount = match order_info.initially_asked {
-                        RpcOutputValue::Coin { .. } => fill_amount
+                    let fill_amount_in_ask_currency = match order_info.initially_asked {
+                        RpcOutputValue::Coin { .. } => fill_amount_in_ask_currency
                             .to_amount(coin_decimals)
                             .ok_or(RpcError::<N>::InvalidCoinAmount)?,
                         RpcOutputValue::Token { id, amount: _ } => {
                             let token_info = w.get_token_info(id).await?;
-                            fill_amount
+                            fill_amount_in_ask_currency
                                 .to_amount(token_info.token_number_of_decimals())
                                 .ok_or(RpcError::InvalidCoinAmount)?
                         }
@@ -1613,7 +1613,12 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
 
                     w.synced_controller(account_index, config)
                         .await?
-                        .fill_order(order_id, order_info, fill_amount, output_address)
+                        .fill_order(
+                            order_id,
+                            order_info,
+                            fill_amount_in_ask_currency,
+                            output_address,
+                        )
                         .await
                         .map_err(RpcError::Controller)
                         .map(NewTransaction::new)

@@ -53,7 +53,9 @@ use wallet_types::{
     with_locked::WithLocked,
 };
 
-use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, WalletInterface};
+use crate::wallet_rpc_traits::{
+    FromRpcInput, PartialOrSignedTx, SignRawTransactionResult, WalletInterface,
+};
 
 pub struct WalletRpcHandlesClient<N: Clone> {
     wallet_rpc: WalletRpc<N>,
@@ -1069,24 +1071,8 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         self.wallet_rpc
             .create_order(
                 account_index,
-                ask_token_id.map_or(
-                    RpcOutputValueIn::Coin {
-                        amount: ask_amount.into(),
-                    },
-                    |v| RpcOutputValueIn::Token {
-                        id: v.into(),
-                        amount: ask_amount.into(),
-                    },
-                ),
-                give_token_id.map_or(
-                    RpcOutputValueIn::Coin {
-                        amount: give_amount.into(),
-                    },
-                    |v| RpcOutputValueIn::Token {
-                        id: v.into(),
-                        amount: give_amount.into(),
-                    },
-                ),
+                RpcOutputValueIn::from_rpc_string_input(ask_token_id, ask_amount),
+                RpcOutputValueIn::from_rpc_string_input(give_token_id, give_amount),
                 conclude_address.into(),
                 config,
             )
@@ -1116,7 +1102,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         &self,
         account_index: U31,
         order_id: String,
-        fill_amount: DecimalAmount,
+        fill_amount_in_ask_currency: DecimalAmount,
         output_address: Option<String>,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error> {
@@ -1124,7 +1110,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             .fill_order(
                 account_index,
                 order_id.into(),
-                fill_amount.into(),
+                fill_amount_in_ask_currency.into(),
                 output_address.map(|addr| addr.into()),
                 config,
             )

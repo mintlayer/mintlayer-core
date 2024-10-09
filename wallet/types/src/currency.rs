@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use common::{
-    chain::{output_value::OutputValue, tokens::TokenId},
+    chain::{
+        output_value::{OutputValue, RpcOutputValue},
+        tokens::TokenId,
+    },
     primitives::Amount,
 };
 
@@ -32,6 +35,13 @@ impl Currency {
             OutputValue::Coin(_) => Some(Currency::Coin),
             OutputValue::TokenV0(_) => None,
             OutputValue::TokenV1(id, _) => Some(Currency::Token(*id)),
+        }
+    }
+
+    pub fn from_rpc_output_value(output_value: &RpcOutputValue) -> Self {
+        match output_value {
+            RpcOutputValue::Coin { .. } => Currency::Coin,
+            RpcOutputValue::Token { id, .. } => Currency::Token(*id),
         }
     }
 

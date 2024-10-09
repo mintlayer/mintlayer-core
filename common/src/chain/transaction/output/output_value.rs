@@ -93,6 +93,13 @@ impl RpcOutputValue {
         }
     }
 
+    //pub fn into_output_value(self) -> OutputValue {
+    //    match order_info.initially_given {
+    //        RpcOutputValue::Coin { .. } => OutputValue::Coin(self.),
+    //        RpcOutputValue::Token { id, .. } => OutputValue::TokenV1(id, order_info.give_balance),
+    //    }
+    //}
+
     pub fn amount(&self) -> Amount {
         match self {
             RpcOutputValue::Coin { amount } | RpcOutputValue::Token { id: _, amount } => *amount,

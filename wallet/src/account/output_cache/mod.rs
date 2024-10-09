@@ -849,12 +849,7 @@ impl OutputCache {
                     if block_info.is_none() {
                         continue;
                     }
-                    let input0_outpoint = tx
-                        .inputs()
-                        .first()
-                        .ok_or(WalletError::NoUtxos)?
-                        .utxo_outpoint()
-                        .ok_or(WalletError::NoUtxos)?;
+                    let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.inputs())?;
                     let delegation_id = make_delegation_id(input0_outpoint);
                     self.delegations.insert(
                         delegation_id,
@@ -870,8 +865,7 @@ impl OutputCache {
                     if already_present {
                         continue;
                     }
-                    let input0_outpoint = tx.inputs();
-                    let token_id = make_token_id(input0_outpoint).ok_or(WalletError::NoUtxos)?;
+                    let token_id = make_token_id(tx.inputs()).ok_or(WalletError::NoUtxos)?;
                     match issuance.as_ref() {
                         TokenIssuance::V1(data) => {
                             self.token_issuance
@@ -881,12 +875,7 @@ impl OutputCache {
                 }
                 TxOutput::IssueNft(_, _, _) => {}
                 TxOutput::AnyoneCanTake(order_data) => {
-                    let input0_outpoint = tx
-                        .inputs()
-                        .first()
-                        .ok_or(WalletError::NoUtxos)?
-                        .utxo_outpoint()
-                        .ok_or(WalletError::NoUtxos)?;
+                    let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.inputs())?;
                     let order_id = make_order_id(input0_outpoint);
                     let give_currency = Currency::from_output_value(order_data.give())
                         .ok_or(WalletError::TokenV0(tx.id()))?;

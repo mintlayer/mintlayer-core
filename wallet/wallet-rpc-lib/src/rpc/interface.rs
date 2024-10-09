@@ -710,7 +710,7 @@ trait WalletRpc {
         &self,
         account: AccountArg,
         order_id: RpcAddress<OrderId>,
-        fill_amount: RpcAmountIn,
+        fill_amount_in_ask_currency: RpcAmountIn,
         output_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;

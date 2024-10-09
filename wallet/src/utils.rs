@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2024 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,19 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod account;
-pub mod destination_getters;
-pub mod key_chain;
-pub mod send_request;
-pub mod signer;
-pub mod version;
-pub mod wallet;
-pub mod wallet_events;
+use common::chain::{TxInput, UtxoOutPoint};
 
-mod utils;
+use crate::{WalletError, WalletResult};
 
-pub use crate::account::Account;
-pub use crate::send_request::SendRequest;
-pub use crate::wallet::{Wallet, WalletError, WalletResult};
-
-pub type DefaultWallet = Wallet<wallet_storage::DefaultBackend>;
+pub fn get_first_utxo_outpoint(inputs: &[TxInput]) -> WalletResult<&UtxoOutPoint> {
+    inputs
+        .first()
+        .ok_or(WalletError::NoUtxos)?
+        .utxo_outpoint()
+        .ok_or(WalletError::NotUtxoInput)
+}

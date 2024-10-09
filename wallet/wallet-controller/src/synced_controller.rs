@@ -1103,7 +1103,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         &mut self,
         order_id: OrderId,
         order_info: RpcOrderInfo,
-        fill_amount: Amount,
+        fill_amount_in_ask_currency: Amount,
         output_address: Option<Destination>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         self.create_and_send_tx(
@@ -1115,7 +1115,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                     account_index,
                     order_id,
                     order_info,
-                    fill_amount,
+                    fill_amount_in_ask_currency,
                     output_address,
                     current_fee_rate,
                     consolidate_fee_rate,

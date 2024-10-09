@@ -1082,7 +1082,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         &self,
         account_arg: AccountArg,
         order_id: RpcAddress<OrderId>,
-        fill_amount: RpcAmountIn,
+        fill_amount_in_ask_currency: RpcAmountIn,
         output_address: Option<RpcAddress<Destination>>,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction> {
@@ -1095,7 +1095,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
             self.fill_order(
                 account_arg.index::<N>()?,
                 order_id,
-                fill_amount,
+                fill_amount_in_ask_currency,
                 output_address,
                 config,
             )

@@ -21,27 +21,27 @@ use crate::{error::Result, Error, OrdersAccountingView};
 pub fn calculate_fill_order(
     view: &impl OrdersAccountingView,
     order_id: OrderId,
-    fill_amount: Amount,
+    fill_amount_in_ask_currency: Amount,
 ) -> Result<Amount> {
     let ask_balance = view.get_ask_balance(&order_id).map_err(|_| crate::Error::ViewFail)?;
     let give_balance = view.get_give_balance(&order_id).map_err(|_| crate::Error::ViewFail)?;
 
     ensure!(
-        ask_balance >= fill_amount,
-        Error::OrderOverbid(order_id, ask_balance, fill_amount)
+        ask_balance >= fill_amount_in_ask_currency,
+        Error::OrderOverbid(order_id, ask_balance, fill_amount_in_ask_currency)
     );
 
-    calculate_filled_amount(ask_balance, give_balance, fill_amount)
+    calculate_filled_amount(ask_balance, give_balance, fill_amount_in_ask_currency)
         .ok_or(Error::OrderOverflow(order_id))
 }
 
 pub fn calculate_filled_amount(
     ask_amount: Amount,
     give_amount: Amount,
-    fill_amount: Amount,
+    fill_amount_in_ask_currency: Amount,
 ) -> Option<Amount> {
     let give = Uint256::from_u128(give_amount.into_atoms());
-    let fill = Uint256::from_u128(fill_amount.into_atoms());
+    let fill = Uint256::from_u128(fill_amount_in_ask_currency.into_atoms());
     let ask = Uint256::from_u128(ask_amount.into_atoms());
 
     let result = ((give * fill).expect("cannot overflow") / ask)?;

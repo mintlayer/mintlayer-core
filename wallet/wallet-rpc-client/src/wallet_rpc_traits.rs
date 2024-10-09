@@ -15,7 +15,7 @@
 
 use std::{collections::BTreeMap, num::NonZeroUsize, path::PathBuf};
 
-use chainstate::ChainInfo;
+use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
@@ -496,7 +496,7 @@ pub trait WalletInterface {
         &self,
         account_index: U31,
         order_id: String,
-        fill_amount: DecimalAmount,
+        fill_amount_in_ask_currency: DecimalAmount,
         output_address: Option<String>,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
@@ -622,4 +622,22 @@ pub trait WalletInterface {
         end_height: BlockHeight,
         step: NonZeroUsize,
     ) -> Result<Vec<(BlockHeight, Id<GenBlock>)>, Self::Error>;
+}
+
+pub(crate) trait FromRpcInput {
+    fn from_rpc_string_input(str: Option<String>, amount: DecimalAmount) -> Self;
+}
+
+impl FromRpcInput for RpcOutputValueIn {
+    fn from_rpc_string_input(str: Option<String>, amount: DecimalAmount) -> Self {
+        str.map_or(
+            RpcOutputValueIn::Coin {
+                amount: amount.into(),
+            },
+            |v| RpcOutputValueIn::Token {
+                id: v.into(),
+                amount: amount.into(),
+            },
+        )
+    }
 }

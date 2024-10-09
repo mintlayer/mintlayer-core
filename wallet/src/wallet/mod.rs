@@ -171,6 +171,8 @@ pub enum WalletError {
     InvalidTransaction(#[from] CheckTransactionError),
     #[error("No UTXOs")]
     NoUtxos,
+    #[error("An input is not a UTXO")]
+    NotUtxoInput,
     #[error("Coin selection error: {0}")]
     CoinSelectionError(#[from] UtxoSelectorError),
     #[error("Cannot abandon a transaction in {0} state")]
@@ -1647,13 +1649,7 @@ impl<B: storage::Backend> Wallet<B> {
             current_fee_rate,
             consolidate_fee_rate,
         )?;
-        let input0_outpoint = tx
-            .transaction()
-            .inputs()
-            .first()
-            .ok_or(WalletError::NoUtxos)?
-            .utxo_outpoint()
-            .ok_or(WalletError::NoUtxos)?;
+        let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.transaction().inputs())?;
         let delegation_id = make_delegation_id(input0_outpoint);
         Ok((delegation_id, tx))
     }
@@ -1831,13 +1827,7 @@ impl<B: storage::Backend> Wallet<B> {
                 },
             )
         })?;
-        let input0_outpoint = tx
-            .transaction()
-            .inputs()
-            .first()
-            .ok_or(WalletError::NoUtxos)?
-            .utxo_outpoint()
-            .ok_or(WalletError::NoUtxos)?;
+        let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.transaction().inputs())?;
         let order_id = make_order_id(input0_outpoint);
         Ok((order_id, tx))
     }
@@ -1873,7 +1863,7 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         order_id: OrderId,
         order_info: RpcOrderInfo,
-        fill_amount: Amount,
+        fill_amount_in_ask_currency: Amount,
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
@@ -1884,7 +1874,7 @@ impl<B: storage::Backend> Wallet<B> {
                 db_tx,
                 order_id,
                 order_info,
-                fill_amount,
+                fill_amount_in_ask_currency,
                 output_address,
                 latest_median_time,
                 CurrentFeeRate {
