@@ -17,6 +17,8 @@
 #exclude python env
 env/
 
+node_modules/
+
 #exclude env
 .env
 
