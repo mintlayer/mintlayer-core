@@ -1,8 +1,7 @@
 // import { useState } from "react";
-import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, } from "react-router-dom";
 import Home from "./pages/Home";
 
-import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 function App() {
