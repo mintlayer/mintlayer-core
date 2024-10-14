@@ -1,11 +1,25 @@
 import { useState } from "react";
-import MintlayerIcon from "../assets/mintlayer_icon.png";
 import { BsChevronDown, BsChevronUp } from "react-icons/bs";
+import { RiInformation2Line } from "react-icons/ri";
+import { PiShareNetworkBold } from "react-icons/pi";
+
+import MintlayerIcon from "../assets/mintlayer_icon.png";
+import TransactionIcon from "../assets/transaction_icon.png";
+import AddressIcon from "../assets/address_icon.png";
+import SendIcon from "../assets/send_icon.png";
+import StakingIcon from "../assets/staking_icon.png";
+import DelegationIcon from "../assets/delegation_icon.png";
+import ConsoleIcon from "../assets/console_icon.png";
+import SummaryTab from "../components/Summary";
+import NetworkingTab from "../components/Networking";
 
 function Home() {
   const [netMode, setNetMod] = useState("");
   const [walletMode, setWalletMode] = useState("");
   const [isWalletMenuVisible, setIsWalletMenuVisible] = useState(false);
+  const [currentWallet, setCurrentWallet] = useState("wallet1");
+  const [activeTab, setActiveTab] = useState("home");
+  const [currentTab, setCurrentTab] = useState("summary");
   const toggleWalletVisible = () => {
     setIsWalletMenuVisible((walletVisible) => !walletVisible);
   };
@@ -20,7 +34,7 @@ function Home() {
   return (
     <div className="home-page">
       {(!netMode || !walletMode) && (
-        <div className="banner">
+        <div className="banner py-6">
           <div className="container">
             <img
               src={MintlayerIcon}
@@ -41,13 +55,13 @@ function Home() {
           <div className="flex flex-col items-center space-y-2">
             <button
               onClick={() => setNetMod("Mainnet")}
-              className="py-2 px-4 bg-blue-500 text-white rounded w-24 bg-[#50d71e] hover:bg-black text-[#000000] font-bold hover:text-[#50d71e]"
+              className="py-2 px-4 rounded w-24 bg-[#50d71e] hover:bg-black text-[#000000] font-bold hover:text-[#50d71e]"
             >
               Mainnet
             </button>
             <button
               onClick={() => setNetMod("Testnet")}
-              className="py-2 px-4 bg-blue-500 text-white rounded w-24 bg-[#50d71e] hover:bg-black  text-[#000000] font-bold hover:text-[#50d71e]"
+              className="py-2 px-4 rounded w-24 bg-[#50d71e] hover:bg-black text-[#000000] font-bold hover:text-[#50d71e]"
             >
               Testnet
             </button>
@@ -58,13 +72,13 @@ function Home() {
             {/* This creates a vertical layout with space between buttons */}
             <button
               onClick={() => setWalletMode("Hot")}
-              className="py-2 px-4 bg-blue-500 text-white rounded w-24 bg-[#50d71e] hover:bg-black text-[#000000] font-bold hover:text-[#50d71e]"
+              className="py-2 px-4 rounded w-24 bg-[#50d71e] hover:bg-black text-[#000000] font-bold hover:text-[#50d71e]"
             >
               Hot
             </button>
             <button
               onClick={() => setWalletMode("Cold")}
-              className="py-2 px-4 bg-blue-500 text-white rounded w-24 bg-[#50d71e] hover:bg-black text-[#000000] font-bold hover:text-[#50d71e]"
+              className="py-2 px-4 rounded w-24 bg-[#50d71e] hover:bg-black text-[#000000] font-bold hover:text-[#50d71e]"
             >
               Cold
             </button>
@@ -79,12 +93,12 @@ function Home() {
                   </div>
                   <button
                     onClick={toggleWalletVisible}
-                    className="mb-4 py-2 px-2 bg-[#F3F4F6] text-[#000000] rounded hover:bg-gray-200  w-full text-left items-center flex justify-between translation shadow-none border-none w-full"
+                    className="mb-4 py-2 px-2 bg-[#F3F4F6] text-[#000000] rounded hover:bg-gray-200  w-full text-left items-center flex justify-between translation shadow-none border-none w-[12rem]"
                   >
                     <span>Menu</span>
-                    {isWalletMenuVisible ? <BsChevronDown /> : <BsChevronUp />}
+                    {isWalletMenuVisible ? <BsChevronUp /> : <BsChevronDown />}
                   </button>
-                  {isWalletMenuVisible && (
+                  {!currentWallet && isWalletMenuVisible && (
                     <>
                       <button
                         onClick={() => createNewWallet(walletMode)}
@@ -112,15 +126,82 @@ function Home() {
                       </button>
                     </>
                   )}
+                  {currentWallet && isWalletMenuVisible && (
+                    <>
+                      <button
+                        onClick={() => setActiveTab("transactions")}
+                        className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
+                      >
+                        <img src={TransactionIcon} className="pr-2" />
+                        Transactions
+                      </button>
+                      <button
+                        onClick={() => setActiveTab("addresses")}
+                        className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
+                      >
+                        <img src={AddressIcon} className="pr-2" />
+                        Addresses
+                      </button>
+                      <button
+                        onClick={() => setActiveTab("send")}
+                        className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
+                      >
+                        <img src={SendIcon} className="pr-2" />
+                        Send
+                      </button>
+                      <button
+                        onClick={() => setActiveTab("staking")}
+                        className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
+                      >
+                        <img src={StakingIcon} className="pr-2" />
+                        Staking
+                      </button>
+                      <button
+                        onClick={() => setActiveTab("delegation")}
+                        className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
+                      >
+                        <img src={DelegationIcon} className="pr-2" />
+                        Delegation
+                      </button>
+                      <button
+                        onClick={() => setActiveTab("console")}
+                        className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
+                      >
+                        <img src={ConsoleIcon} className="pr-2" />
+                        Console
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="col-span-9 h-full">
-                {" "}
-                {/* This will take 10/12 of the width */}
                 <div className="bg-[#F3F4F6] h-full">
-                  {" "}
-                  {/* Main content area */}
-                  {/* Main content goes here */}
+                  <div className="flex w-full">
+                    <button
+                      onClick={() => setCurrentTab("summary")}
+                      className={`flex items-center justify-center w-full pl-2  transition-colors duration-300 rounded-tr-[0] rounded-br-[0] ${
+                        currentTab === "summary"
+                          ? "bg-gray-200 text-gray-800"
+                          : "bg-white-500 text-black"
+                      }`}
+                    >
+                      <RiInformation2Line />
+                      <span className="pl-2">Summary</span>
+                    </button>
+                    <button
+                      onClick={() => setCurrentTab("network")}
+                      className={`flex items-center justify-center w-full p-2 transition-colors duration-300 rounded-tl-[0] rounded-bl-[0] ${
+                        currentTab === "network"
+                          ? "bg-gray-200 text-gray-800"
+                          : "bg-white-500 text-black"
+                      }`}
+                    >
+                      <PiShareNetworkBold />
+                      <span className="pl-2">Networking</span>
+                    </button>
+                  </div>
+                  {currentTab === "summary" && <SummaryTab />}
+                  {currentTab === "network" && <NetworkingTab />}
                 </div>
               </div>
             </div>
