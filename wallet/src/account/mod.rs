@@ -966,7 +966,7 @@ impl Account {
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
                 | TxOutput::Htlc(_, _)
-                | TxOutput::AnyoneCanTake(_) => None,
+                | TxOutput::CreateOrder(_) => None,
             })
             .expect("find output with dummy_pool_id");
         *old_pool_id = new_pool_id;
@@ -1008,7 +1008,7 @@ impl Account {
     ) -> WalletResult<SendRequest> {
         let order_data =
             common::chain::OrderData::new(conclude_address.into_object(), ask_value, give_value);
-        let output = TxOutput::AnyoneCanTake(Box::new(order_data));
+        let output = TxOutput::CreateOrder(Box::new(order_data));
         let request = SendRequest::new().with_outputs([output]);
 
         self.select_inputs_for_send_request(
@@ -1182,7 +1182,7 @@ impl Account {
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::DataDeposit(_)
                 | TxOutput::Htlc(_, _)
-                | TxOutput::AnyoneCanTake(_) => None,
+                | TxOutput::CreateOrder(_) => None,
                 TxOutput::IssueNft(token_id, _, _) => {
                     (*token_id == dummy_token_id).then_some(token_id)
                 }
@@ -1701,7 +1701,7 @@ impl Account {
             | TxOutput::Burn(_)
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::DataDeposit(_)
-            | TxOutput::AnyoneCanTake(_) => Vec::new(),
+            | TxOutput::CreateOrder(_) => Vec::new(),
         }
     }
 
@@ -2367,7 +2367,7 @@ fn group_preselected_inputs(
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::DataDeposit(_)
-                    | TxOutput::AnyoneCanTake(_) => {
+                    | TxOutput::CreateOrder(_) => {
                         return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                             output.clone(),
                         )))

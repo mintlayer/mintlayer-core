@@ -353,7 +353,7 @@ impl<'a> RandomTxMaker<'a> {
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::DataDeposit(_)
             | TxOutput::Htlc(_, _)
-            | TxOutput::AnyoneCanTake(_) => { /* do nothing */ }
+            | TxOutput::CreateOrder(_) => { /* do nothing */ }
             TxOutput::CreateStakePool(pool_id, _) => {
                 let (staker_sk, vrf_sk) = new_staking_pools.get(pool_id).unwrap();
                 staking_pools_observer.on_pool_created(
@@ -399,7 +399,7 @@ impl<'a> RandomTxMaker<'a> {
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::IssueNft(_, _, _)
                     | TxOutput::DataDeposit(_)
-                    | TxOutput::AnyoneCanTake(_) => true,
+                    | TxOutput::CreateOrder(_) => true,
                 }
                 .then_some((input, input_utxo))
             })
@@ -873,7 +873,7 @@ impl<'a> RandomTxMaker<'a> {
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::DataDeposit(_)
-                | TxOutput::AnyoneCanTake(_) => unreachable!(),
+                | TxOutput::CreateOrder(_) => unreachable!(),
             };
 
             result_inputs.extend(new_inputs);
@@ -990,7 +990,7 @@ impl<'a> RandomTxMaker<'a> {
                         // Transfer output is created intentionally besides order output to not waste utxo
                         // (e.g. single genesis output on issuance)
                         let outputs = vec![
-                            TxOutput::AnyoneCanTake(Box::new(order_data)),
+                            TxOutput::CreateOrder(Box::new(order_data)),
                             TxOutput::Transfer(
                                 OutputValue::Coin(change),
                                 key_manager
@@ -1327,7 +1327,7 @@ impl<'a> RandomTxMaker<'a> {
 
                 let give_value = OutputValue::TokenV1(token_id, Amount::from_atoms(atoms));
                 let order_data = OrderData::new(Destination::AnyoneCanSpend, ask_value, give_value);
-                result_outputs.push(TxOutput::AnyoneCanTake(Box::new(order_data)));
+                result_outputs.push(TxOutput::CreateOrder(Box::new(order_data)));
                 self.order_can_be_created = false;
             } else {
                 // burn
@@ -1415,7 +1415,7 @@ impl<'a> RandomTxMaker<'a> {
                     *dummy_token_id = make_token_id(inputs).unwrap();
                     Some(output)
                 }
-                TxOutput::AnyoneCanTake(data) => {
+                TxOutput::CreateOrder(data) => {
                     let order_id = make_order_id(inputs[0].utxo_outpoint().unwrap());
                     let _ = orders_cache.create_order(order_id, *data.clone()).unwrap();
                     Some(output)

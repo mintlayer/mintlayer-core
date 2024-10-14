@@ -220,8 +220,8 @@ fn order0() -> (OrderId, OrderData) {
     (fake_id(0x44), data)
 }
 
-fn anyonecantake(data: OrderData) -> TestInputInfo {
-    tii(TxOutput::AnyoneCanTake(Box::new(data)))
+fn create_order(data: OrderData) -> TestInputInfo {
+    tii(TxOutput::CreateOrder(Box::new(data)))
 }
 
 fn account_spend(deleg: DelegationId, amount: u128) -> TestInputInfo {
@@ -356,8 +356,8 @@ fn mode_name<'a, T: TranslationMode<'a>>(_: &T) -> &'static str {
 #[case("htlc_02", htlc(15, 16, tl_until_time(99)), htlc_stdsig(0x53))]
 #[case("htlc_03", htlc(17, 18, tl_for_secs(124)), htlc_multisig(0x54))]
 #[case("htlc_04", htlc(19, 20, tl_for_blocks(1000)), htlc_multisig(0x55))]
-#[case("anyonecantake_00", anyonecantake(order0().1), nosig())]
-#[case("anyonecantake_01", anyonecantake(order0().1), stdsig(0x57))]
+#[case("createorder_00", create_order(order0().1), nosig())]
+#[case("createorder_01", create_order(order0().1), stdsig(0x57))]
 #[case("concludeorder_00", conclude_order(order0().0), nosig())]
 #[case("concludeorder_01", conclude_order(fake_id(0x88)), nosig())]
 #[case("concludeorder_02", conclude_order(order0().0), stdsig(0x44))]

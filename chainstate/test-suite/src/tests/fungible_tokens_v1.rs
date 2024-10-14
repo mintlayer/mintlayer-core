@@ -4273,7 +4273,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
                         TxInput::from_utxo(mint_tx_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::AnyoneCanTake(Box::new(order_data)))
+                    .add_output(TxOutput::CreateOrder(Box::new(order_data)))
                     .build(),
             )
             .build_and_process(&mut rng);
@@ -4299,7 +4299,7 @@ fn check_freezable_supply(#[case] seed: Seed) {
                         TxInput::from_utxo(mint_tx_id.into(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::AnyoneCanTake(Box::new(order_data)))
+                    .add_output(TxOutput::CreateOrder(Box::new(order_data)))
                     .build(),
             )
             .build_and_process(&mut rng);

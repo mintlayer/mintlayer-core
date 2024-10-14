@@ -197,9 +197,9 @@ pub fn txoutput_to_json(
                 },
             })
         }
-        TxOutput::AnyoneCanTake(data) => {
+        TxOutput::CreateOrder(data) => {
             json!({
-                "type": "AnyoneCanTake",
+                "type": "CreateOrder",
                 "conclude_key": Address::new(chain_config, data.conclude_key().clone()).expect("no error").as_str(),
                 "ask_value": outputvalue_to_json(data.ask(), chain_config, token_decimals),
                 "give_value": outputvalue_to_json(data.give(), chain_config, token_decimals),

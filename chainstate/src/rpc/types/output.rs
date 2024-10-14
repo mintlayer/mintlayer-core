@@ -163,7 +163,7 @@ pub enum RpcTxOutput {
         value: RpcOutputValueOut,
         htlc: RpcHashedTimelockContract,
     },
-    AnyoneCanTake {
+    CreateOrder {
         authority: RpcAddress<Destination>,
         ask_value: RpcOutputValueOut,
         give_value: RpcOutputValueOut,
@@ -220,7 +220,7 @@ impl RpcTxOutput {
             TxOutput::DataDeposit(data) => RpcTxOutput::DataDeposit {
                 data: RpcHexString::from_bytes(data),
             },
-            TxOutput::AnyoneCanTake(data) => RpcTxOutput::AnyoneCanTake {
+            TxOutput::CreateOrder(data) => RpcTxOutput::CreateOrder {
                 authority: RpcAddress::new(chain_config, data.conclude_key().clone())?,
                 ask_value: RpcOutputValueOut::new(chain_config, data.ask().clone())?,
                 give_value: RpcOutputValueOut::new(chain_config, data.give().clone())?,

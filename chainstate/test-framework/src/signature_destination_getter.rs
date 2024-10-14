@@ -77,7 +77,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             TxOutput::CreateDelegationId(_, _)
                             | TxOutput::Burn(_)
                             | TxOutput::DataDeposit(_)
-                            | TxOutput::AnyoneCanTake(_) => {
+                            | TxOutput::CreateOrder(_) => {
                                 // This error is emitted in other places for attempting to make this spend,
                                 // but this is just a double-check.
                                 Err(SignatureDestinationGetterError::SigVerifyOfNotSpendableOutput)

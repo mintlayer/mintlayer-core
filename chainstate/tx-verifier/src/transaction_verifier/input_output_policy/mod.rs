@@ -77,7 +77,7 @@ pub fn calculate_tokens_burned_in_outputs(
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::DataDeposit(_)
             | TxOutput::Htlc(_, _)
-            | TxOutput::AnyoneCanTake(_) => None,
+            | TxOutput::CreateOrder(_) => None,
         })
         .sum::<Option<Amount>>()
         .ok_or(ConnectTransactionError::BurnAmountSumError(tx.get_id()))
@@ -234,7 +234,7 @@ fn check_issuance_fee_burn_v0(
                 | TxOutput::DataDeposit(_)
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::Htlc(_, _)
-                | TxOutput::AnyoneCanTake(_) => None,
+                | TxOutput::CreateOrder(_) => None,
             })
             .sum::<Option<Amount>>()
             .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;

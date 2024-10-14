@@ -1116,7 +1116,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                     | TxOutput::Burn(_)
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::DataDeposit(_)
-                    | TxOutput::AnyoneCanTake(_) => return false,
+                    | TxOutput::CreateOrder(_) => return false,
                 };
 
                 let src_token_id = match val {

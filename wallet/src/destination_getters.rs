@@ -44,7 +44,7 @@ where
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_)
-        | TxOutput::AnyoneCanTake(_) => None,
+        | TxOutput::CreateOrder(_) => None,
         TxOutput::Htlc(_, htlc) => match htlc_spending {
             HtlcSpendingCondition::WithSecret => Some(htlc.spend_key.clone()),
             HtlcSpendingCondition::WithMultisig => Some(htlc.refund_key.clone()),
@@ -72,7 +72,7 @@ where
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_)
-        | TxOutput::AnyoneCanTake(_) => None,
+        | TxOutput::CreateOrder(_) => None,
         TxOutput::Htlc(_, htlc) => Some(vec![htlc.spend_key.clone(), htlc.refund_key.clone()]),
     }
 }

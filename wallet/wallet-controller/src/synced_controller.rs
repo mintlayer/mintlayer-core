@@ -763,7 +763,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
                         | TxOutput::IssueFungibleToken(_)
                         | TxOutput::DelegateStaking(_, _)
                         | TxOutput::DataDeposit(_)
-                        | TxOutput::AnyoneCanTake(_) => return None,
+                        | TxOutput::CreateOrder(_) => return None,
                     };
 
                     match val {
