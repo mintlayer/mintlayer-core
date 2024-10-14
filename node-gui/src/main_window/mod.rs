@@ -44,7 +44,6 @@ use crate::{
     main_window::{main_menu::MenuMessage, main_widget::MainWidgetMessage},
     widgets::{
         confirm_broadcast::new_confirm_broadcast,
-        create_hw_wallet::hw_wallet_create_dialog,
         esc_handler::esc_handler,
         new_wallet_account::new_wallet_account,
         opaque::opaque,
@@ -809,6 +808,7 @@ impl MainWindow {
                                 Box::new(MainWindowMessage::CopyToClipboard),
                             )
                             .into(),
+                            #[cfg(feature = "trezor")]
                             WalletType::Trezor => hw_wallet_create_dialog(
                                 Box::new(move || MainWindowMessage::ImportWalletMnemonic {
                                     args: WalletArgs::Trezor,
@@ -816,6 +816,7 @@ impl MainWindow {
                                     wallet_type,
                                 }),
                                 Box::new(|| MainWindowMessage::CloseDialog),
+                                ImportOrCreate::Create,
                             )
                             .into(),
                         }
@@ -842,6 +843,7 @@ impl MainWindow {
                                     wallet_type,
                                 }),
                                 Box::new(|| MainWindowMessage::CloseDialog),
+                                ImportOrCreate::Import,
                             )
                             .into(),
                         }

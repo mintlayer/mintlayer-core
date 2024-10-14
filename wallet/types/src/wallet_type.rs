@@ -43,7 +43,7 @@ impl Display for WalletControllerMode {
 }
 
 impl WalletType {
-    /// Check if current Wallet type is compatible to be oppened as the other wallet type
+    /// Check if current Wallet type is compatible to be opened as the other wallet type
     pub fn is_compatible(&self, other: WalletControllerMode) -> bool {
         match (*self, other) {
             (Self::Hot, WalletControllerMode::Hot) | (Self::Cold, WalletControllerMode::Cold) => {

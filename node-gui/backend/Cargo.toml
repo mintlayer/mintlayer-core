@@ -41,3 +41,6 @@ tokio.workspace = true
 test-utils = { path = "../../test-utils" }
 
 rstest.workspace = true
+
+[features]
+trezor = ["wallet-controller/trezor", "wallet-types/trezor"]

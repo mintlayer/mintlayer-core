@@ -2707,7 +2707,9 @@ Parameters:
     "passphrase": EITHER OF
          1) string
          2) null,
-    "hardware_wallet": null,
+    "hardware_wallet": EITHER OF
+         1) "Trezor"
+         2) null,
 }
 ```
 
@@ -2742,7 +2744,9 @@ Parameters:
     "passphrase": EITHER OF
          1) string
          2) null,
-    "hardware_wallet": null,
+    "hardware_wallet": EITHER OF
+         1) "Trezor"
+         2) null,
 }
 ```
 
@@ -2776,7 +2780,9 @@ Parameters:
     "force_migrate_wallet_type": EITHER OF
          1) bool
          2) null,
-    "hardware_wallet": null,
+    "hardware_wallet": EITHER OF
+         1) "Trezor"
+         2) null,
 }
 ```
 
