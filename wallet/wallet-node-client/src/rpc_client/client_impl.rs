@@ -21,8 +21,8 @@ use common::{
     address::Address,
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        Block, DelegationId, GenBlock, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
 };
@@ -156,6 +156,13 @@ impl NodeInterface for NodeRpcClient {
     async fn get_token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, Self::Error> {
         let token_id = Address::new(&self.chain_config, token_id)?.into_string();
         ChainstateRpcClient::token_info(&self.http_client, token_id)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn get_order_info(&self, order_id: OrderId) -> Result<Option<RpcOrderInfo>, Self::Error> {
+        let order_id = Address::new(&self.chain_config, order_id)?.into_string();
+        ChainstateRpcClient::order_info(&self.http_client, order_id)
             .await
             .map_err(NodeRpcError::ResponseError)
     }

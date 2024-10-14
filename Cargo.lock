@@ -8426,6 +8426,7 @@ dependencies = [
  "itertools 0.13.0",
  "logging",
  "mempool",
+ "orders-accounting",
  "parity-scale-codec",
  "pos-accounting",
  "randomness",

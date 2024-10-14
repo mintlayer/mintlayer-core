@@ -59,8 +59,8 @@ use common::{
         partially_signed_transaction::PartiallySignedTransaction,
         signature::{inputsig::InputWitness, DestinationSigError, Transactable},
         tokens::{RPCTokenInfo, TokenId},
-        Block, ChainConfig, Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
+        Block, ChainConfig, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo,
+        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
         amount::RpcAmountOut,
@@ -80,7 +80,7 @@ pub use node_comm::{
 use randomness::{make_pseudo_rng, make_true_rng, Rng};
 use wallet::{
     account::{
-        currency_grouper::{self, Currency},
+        currency_grouper::{self},
         TransactionToSign,
     },
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
@@ -94,7 +94,7 @@ pub use wallet_types::{
 };
 use wallet_types::{
     seed_phrase::StoreSeedPhrase, signature_status::SignatureStatus, wallet_type::WalletType,
-    with_locked::WithLocked,
+    with_locked::WithLocked, Currency,
 };
 
 #[derive(thiserror::Error, Debug)]
@@ -432,6 +432,19 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static, W: WalletEvents> Controll
         token_id: TokenId,
     ) -> Result<RPCTokenInfo, ControllerError<T>> {
         fetch_token_info(&self.rpc_client, token_id).await
+    }
+
+    pub async fn get_order_info(
+        &self,
+        order_id: OrderId,
+    ) -> Result<RpcOrderInfo, ControllerError<T>> {
+        self.rpc_client
+            .get_order_info(order_id)
+            .await
+            .map_err(ControllerError::NodeCallError)?
+            .ok_or(ControllerError::WalletError(WalletError::UnknownOrderId(
+                order_id,
+            )))
     }
 
     pub async fn generate_block_by_pool(

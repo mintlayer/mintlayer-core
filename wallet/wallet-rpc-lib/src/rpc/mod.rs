@@ -26,20 +26,19 @@ use std::{
     time::Duration,
 };
 
-use chainstate::{tx_verifier::check_transaction, ChainInfo, TokenIssuanceError};
+use chainstate::{
+    rpc::RpcOutputValueIn, tx_verifier::check_transaction, ChainInfo, TokenIssuanceError,
+};
 use crypto::key::{hdkd::u31::U31, PrivateKey, PublicKey};
 use mempool::tx_accumulator::PackingStrategy;
 use mempool_types::tx_options::TxOptionsOverrides;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex_encoded::HexEncoded, Decode, DecodeAll};
-use types::RpcHashedTimelockContract;
+use types::{NewOrder, RpcHashedTimelockContract};
 use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
-    account::{
-        currency_grouper::Currency, transaction_list::TransactionList, PoolData, TransactionToSign,
-        TxInfo,
-    },
+    account::{transaction_list::TransactionList, PoolData, TransactionToSign, TxInfo},
     WalletError,
 };
 
@@ -49,14 +48,14 @@ use common::{
         block::timestamp::BlockTimestamp,
         classic_multisig::ClassicMultisigChallenge,
         htlc::{HashedTimelockContract, HtlcSecret, HtlcSecretHash},
-        output_value::OutputValue,
+        output_value::{OutputValue, RpcOutputValue},
         partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
         tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenTotalSupply},
-        Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, time::Time, Amount, BlockHeight, Id, Idable,
@@ -77,10 +76,13 @@ use wallet_controller::{
 };
 use wallet_types::{
     account_info::StandaloneAddressDetails, seed_phrase::StoreSeedPhrase,
-    signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked,
+    signature_status::SignatureStatus, wallet_tx::TxData, with_locked::WithLocked, Currency,
 };
 
-use crate::{service::CreatedWallet, WalletHandle, WalletRpcConfig};
+use crate::{
+    service::{CreatedWallet, WalletController},
+    WalletHandle, WalletRpcConfig,
+};
 
 pub use self::types::RpcError;
 use self::types::{
@@ -1457,6 +1459,169 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                         .create_htlc_tx(value, htlc)
                         .await
                         .map_err(RpcError::Controller)
+                })
+            })
+            .await?
+    }
+
+    async fn convert_currency_to_output_value(
+        controller: &WalletController<N>,
+        currency: Currency,
+        amount: RpcAmountIn,
+        coin_decimals: u8,
+    ) -> Result<OutputValue, RpcError<N>> {
+        match currency {
+            Currency::Coin => {
+                let amount =
+                    amount.to_amount(coin_decimals).ok_or(RpcError::<N>::InvalidCoinAmount)?;
+                Ok::<_, RpcError<N>>(OutputValue::Coin(amount))
+            }
+            Currency::Token(token_id) => {
+                let token_info = controller.get_token_info(token_id).await?;
+                let amount = amount
+                    .to_amount(token_info.token_number_of_decimals())
+                    .ok_or(RpcError::InvalidCoinAmount)?;
+                Ok(OutputValue::TokenV1(token_id, amount))
+            }
+        }
+    }
+
+    pub async fn create_order(
+        &self,
+        account_index: U31,
+        ask: RpcOutputValueIn,
+        give: RpcOutputValueIn,
+        conclude_address: RpcAddress<Destination>,
+        config: ControllerConfig,
+    ) -> WRpcResult<NewOrder, N> {
+        let coin_decimals = self.chain_config.coin_decimals();
+
+        let convert_currency = |rpc_currency| -> Result<_, RpcError<N>> {
+            match rpc_currency {
+                RpcOutputValueIn::Coin { amount } => Ok((Currency::Coin, amount)),
+                RpcOutputValueIn::Token { id, amount } => {
+                    let token_id = id
+                        .decode_object(&self.chain_config)
+                        .map_err(|_| RpcError::InvalidTokenId)?;
+                    Ok((Currency::Token(token_id), amount))
+                }
+            }
+        };
+
+        let (ask_currency, ask_amount) = convert_currency(ask)?;
+        let (give_currency, give_amount) = convert_currency(give)?;
+
+        let conclude_dest = conclude_address
+            .into_address(&self.chain_config)
+            .map_err(|_| RpcError::InvalidAddress)?;
+
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    let ask_value = Self::convert_currency_to_output_value(
+                        controller,
+                        ask_currency,
+                        ask_amount,
+                        coin_decimals,
+                    )
+                    .await?;
+                    let give_value = Self::convert_currency_to_output_value(
+                        controller,
+                        give_currency,
+                        give_amount,
+                        coin_decimals,
+                    )
+                    .await?;
+
+                    controller
+                        .synced_controller(account_index, config)
+                        .await?
+                        .create_order(ask_value, give_value, conclude_dest)
+                        .await
+                        .map_err(RpcError::Controller)
+                })
+            })
+            .await?
+            .map(|(tx, order_id)| NewOrder {
+                tx_id: tx.transaction().get_id(),
+                order_id: RpcAddress::new(&self.chain_config, order_id)
+                    .expect("addressable delegation id"),
+            })
+    }
+
+    pub async fn conclude_order(
+        &self,
+        account_index: U31,
+        order_id: RpcAddress<OrderId>,
+        output_address: Option<RpcAddress<Destination>>,
+        config: ControllerConfig,
+    ) -> WRpcResult<NewTransaction, N> {
+        let order_id = order_id
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidTokenId)?;
+        let output_address = output_address
+            .map(|a| a.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidAddress))
+            .transpose()?;
+
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    let order_info = w.get_order_info(order_id).await?;
+
+                    w.synced_controller(account_index, config)
+                        .await?
+                        .conclude_order(order_id, order_info, output_address)
+                        .await
+                        .map_err(RpcError::Controller)
+                        .map(NewTransaction::new)
+                })
+            })
+            .await?
+    }
+
+    pub async fn fill_order(
+        &self,
+        account_index: U31,
+        order_id: RpcAddress<OrderId>,
+        fill_amount_in_ask_currency: RpcAmountIn,
+        output_address: Option<RpcAddress<Destination>>,
+        config: ControllerConfig,
+    ) -> WRpcResult<NewTransaction, N> {
+        let coin_decimals = self.chain_config.coin_decimals();
+        let order_id = order_id
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidTokenId)?;
+        let output_address = output_address
+            .map(|a| a.decode_object(&self.chain_config).map_err(|_| RpcError::InvalidAddress))
+            .transpose()?;
+
+        self.wallet
+            .call_async(move |w| {
+                Box::pin(async move {
+                    let order_info = w.get_order_info(order_id).await?;
+                    let fill_amount_in_ask_currency = match order_info.initially_asked {
+                        RpcOutputValue::Coin { .. } => fill_amount_in_ask_currency
+                            .to_amount(coin_decimals)
+                            .ok_or(RpcError::<N>::InvalidCoinAmount)?,
+                        RpcOutputValue::Token { id, amount: _ } => {
+                            let token_info = w.get_token_info(id).await?;
+                            fill_amount_in_ask_currency
+                                .to_amount(token_info.token_number_of_decimals())
+                                .ok_or(RpcError::InvalidCoinAmount)?
+                        }
+                    };
+
+                    w.synced_controller(account_index, config)
+                        .await?
+                        .fill_order(
+                            order_id,
+                            order_info,
+                            fill_amount_in_ask_currency,
+                            output_address,
+                        )
+                        .await
+                        .map_err(RpcError::Controller)
+                        .map(NewTransaction::new)
                 })
             })
             .await?

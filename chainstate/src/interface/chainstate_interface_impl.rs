@@ -35,8 +35,8 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountNonce, AccountType, DelegationId, OrderData, OrderId, PoolId, Transaction, TxInput,
-        TxOutput, UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, OrderData, OrderId, PoolId, RpcOrderInfo,
+        Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable},
 };
@@ -788,6 +788,15 @@ where
             .query()
             .map_err(ChainstateError::from)?
             .get_order_give_balance(id)
+            .map_err(ChainstateError::from)
+    }
+
+    #[tracing::instrument(skip_all, fields(id = %id))]
+    fn get_order_info_for_rpc(&self, id: OrderId) -> Result<Option<RpcOrderInfo>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_order_info_for_rpc(id)
             .map_err(ChainstateError::from)
     }
 }

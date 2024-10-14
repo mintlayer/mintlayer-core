@@ -57,7 +57,11 @@ pub enum OrdersAccountingUndo {
 pub trait OrdersAccountingOperations {
     fn create_order(&mut self, id: OrderId, data: OrderData) -> Result<OrdersAccountingUndo>;
     fn conclude_order(&mut self, id: OrderId) -> Result<OrdersAccountingUndo>;
-    fn fill_order(&mut self, id: OrderId, fill_amount: Amount) -> Result<OrdersAccountingUndo>;
+    fn fill_order(
+        &mut self,
+        id: OrderId,
+        fill_amount_in_ask_currency: Amount,
+    ) -> Result<OrdersAccountingUndo>;
 
     fn undo(&mut self, undo_data: OrdersAccountingUndo) -> Result<()>;
 }

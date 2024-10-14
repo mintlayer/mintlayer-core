@@ -15,11 +15,13 @@
 
 use std::{collections::BTreeMap, future::pending, num::NonZeroUsize, path::PathBuf, str::FromStr};
 
-use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, WalletInterface};
+use crate::wallet_rpc_traits::{
+    FromRpcInput, PartialOrSignedTx, SignRawTransactionResult, WalletInterface,
+};
 
 use super::{ClientWalletRpc, WalletRpcError};
 
-use chainstate::ChainInfo;
+use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
@@ -41,9 +43,9 @@ use wallet_controller::{
 use wallet_rpc_lib::{
     types::{
         AddressInfo, AddressWithUsageInfo, BlockInfo, ComposedTransaction, CreatedWallet,
-        DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewTransaction,
-        NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
-        RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
+        DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewOrder,
+        NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
+        RpcHashedTimelockContract, RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
         VrfPublicKeyInfo,
@@ -926,6 +928,69 @@ impl WalletInterface for ClientWalletRpc {
             amount.into(),
             token_id.map(|id| id.into()),
             htlc,
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn create_order(
+        &self,
+        account_index: U31,
+        ask_token_id: Option<String>,
+        ask_amount: DecimalAmount,
+        give_token_id: Option<String>,
+        give_amount: DecimalAmount,
+        conclude_address: String,
+        config: ControllerConfig,
+    ) -> Result<NewOrder, Self::Error> {
+        let options = TransactionOptions::from_controller_config(&config);
+        WalletRpcClient::create_order(
+            &self.http_client,
+            account_index.into(),
+            RpcOutputValueIn::from_rpc_string_input(ask_token_id, ask_amount),
+            RpcOutputValueIn::from_rpc_string_input(give_token_id, give_amount),
+            conclude_address.into(),
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn conclude_order(
+        &self,
+        account_index: U31,
+        order_id: String,
+        output_address: Option<String>,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        let options = TransactionOptions::from_controller_config(&config);
+        WalletRpcClient::conclude_order(
+            &self.http_client,
+            account_index.into(),
+            order_id.into(),
+            output_address.map(|addr| addr.into()),
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn fill_order(
+        &self,
+        account_index: U31,
+        order_id: String,
+        fill_amount_in_ask_currency: DecimalAmount,
+        output_address: Option<String>,
+        config: ControllerConfig,
+    ) -> Result<NewTransaction, Self::Error> {
+        let options = TransactionOptions::from_controller_config(&config);
+        WalletRpcClient::fill_order(
+            &self.http_client,
+            account_index.into(),
+            order_id.into(),
+            fill_amount_in_ask_currency.into(),
+            output_address.map(|addr| addr.into()),
             options,
         )
         .await

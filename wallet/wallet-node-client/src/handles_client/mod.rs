@@ -20,7 +20,8 @@ use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        Block, DelegationId, GenBlock, PoolId, SignedTransaction, Transaction,
+        Block, DelegationId, GenBlock, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
+        Transaction,
     },
     primitives::{time::Time, Amount, BlockHeight, Id},
 };
@@ -211,6 +212,14 @@ impl NodeInterface for WalletHandlesClient {
         let result = self
             .chainstate
             .call(move |this| this.get_token_info_for_rpc(token_id))
+            .await??;
+        Ok(result)
+    }
+
+    async fn get_order_info(&self, order_id: OrderId) -> Result<Option<RpcOrderInfo>, Self::Error> {
+        let result = self
+            .chainstate
+            .call(move |this| this.get_order_info_for_rpc(order_id))
             .await??;
         Ok(result)
     }

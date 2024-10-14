@@ -24,8 +24,8 @@ use common::{
         signature::DestinationSigError,
         timelock::OutputTimeLock,
         tokens::{self, IsTokenFreezable, Metadata, TokenCreator, TokenId},
-        ChainConfig, DelegationId, Destination, PoolId, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        ChainConfig, DelegationId, Destination, OrderId, PoolId, SignedTransaction, Transaction,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable},
 };
@@ -769,6 +769,19 @@ pub struct RpcHashedTimelockContract {
     pub spend_address: RpcAddress<Destination>,
     pub refund_address: RpcAddress<Destination>,
     pub refund_timelock: OutputTimeLock,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+pub struct NewOrder {
+    pub tx_id: Id<Transaction>,
+    pub order_id: RpcAddress<OrderId>,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
+#[serde(tag = "type", content = "content")]
+pub enum RpcCurrency {
+    Coin,
+    Token { token_id: RpcAddress<TokenId> },
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-// Copyright (c) 2023 RBB S.r.l
+// Copyright (c) 2024 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,23 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod account_id;
-pub mod account_info;
-pub mod chain_info;
-pub mod currency;
-pub mod keys;
-pub mod seed_phrase;
-pub mod signature_status;
-pub mod utxo_types;
-pub mod wallet_tx;
-pub mod wallet_type;
-pub mod with_locked;
+use common::chain::{TxInput, UtxoOutPoint};
 
-pub use account_id::{
-    AccountDerivationPathId, AccountId, AccountKeyPurposeId, AccountWalletCreatedTxId,
-    AccountWalletTxId,
-};
-pub use account_info::AccountInfo;
-pub use currency::Currency;
-pub use keys::{KeyPurpose, KeychainUsageState, RootKeys};
-pub use wallet_tx::{BlockInfo, WalletTx};
+use crate::{WalletError, WalletResult};
+
+pub fn get_first_utxo_outpoint(inputs: &[TxInput]) -> WalletResult<&UtxoOutPoint> {
+    inputs
+        .first()
+        .ok_or(WalletError::NoUtxos)?
+        .utxo_outpoint()
+        .ok_or(WalletError::NotUtxoInput)
+}

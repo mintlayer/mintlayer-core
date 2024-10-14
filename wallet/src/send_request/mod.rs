@@ -29,8 +29,8 @@ use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight};
 use crypto::vrf::VRFPublicKey;
 use utils::ensure;
+use wallet_types::currency::Currency;
 
-use crate::account::currency_grouper::Currency;
 use crate::account::PoolData;
 use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
 use crate::{WalletError, WalletResult};
