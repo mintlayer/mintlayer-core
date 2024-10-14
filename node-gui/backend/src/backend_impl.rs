@@ -43,8 +43,7 @@ use wallet_controller::{
 use wallet_rpc_client::handles_client::WalletRpcHandlesClient;
 use wallet_rpc_lib::{types::HardwareWalletType, EventStream, WalletRpc, WalletService};
 use wallet_types::{
-    scan_blockchain::ScanBlockchain, seed_phrase::StoreSeedPhrase, wallet_type::WalletType,
-    with_locked::WithLocked,
+    scan_blockchain::ScanBlockchain, wallet_type::WalletType, with_locked::WithLocked,
 };
 
 use super::{

@@ -5600,6 +5600,13 @@ fn create_order(#[case] seed: Seed) {
     // Create an order selling tokens for coins
     let ask_value = OutputValue::Coin(Amount::from_atoms(111));
     let give_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
+    let additional_info = BTreeMap::from_iter([(
+        PoolOrTokenId::TokenId(issued_token_id),
+        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+            num_decimals: unconfirmed_token_info.num_decimals(),
+            ticker: unconfirmed_token_info.token_ticker().to_vec(),
+        }),
+    )]);
     let (_, create_order_tx) = wallet
         .create_order_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -5608,6 +5615,7 @@ fn create_order(#[case] seed: Seed) {
             address2.clone(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &additional_info,
         )
         .unwrap();
 
@@ -5718,6 +5726,13 @@ fn create_order_and_conclude(#[case] seed: Seed) {
     // Create an order selling tokens for coins
     let ask_value = OutputValue::Coin(Amount::from_atoms(111));
     let give_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
+    let additional_info = BTreeMap::from_iter([(
+        PoolOrTokenId::TokenId(issued_token_id),
+        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+            num_decimals: unconfirmed_token_info.num_decimals(),
+            ticker: unconfirmed_token_info.token_ticker().to_vec(),
+        }),
+    )]);
     let (order_id, create_order_tx) = wallet
         .create_order_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -5726,6 +5741,7 @@ fn create_order_and_conclude(#[case] seed: Seed) {
             address2.clone(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &additional_info,
         )
         .unwrap();
     let order_info = RpcOrderInfo {
@@ -5754,6 +5770,13 @@ fn create_order_and_conclude(#[case] seed: Seed) {
     assert_eq!(coin_balance, expected_balance);
     assert!(token_balances.is_empty());
 
+    let additional_info = BTreeMap::from_iter([(
+        PoolOrTokenId::TokenId(issued_token_id),
+        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+            num_decimals: unconfirmed_token_info.num_decimals(),
+            ticker: unconfirmed_token_info.token_ticker().to_vec(),
+        }),
+    )]);
     let conclude_order_tx = wallet
         .create_conclude_order_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -5762,6 +5785,7 @@ fn create_order_and_conclude(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &additional_info,
         )
         .unwrap();
 
@@ -5891,6 +5915,13 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
     let ask_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
     let sell_amount = Amount::from_atoms(1000);
     let give_value = OutputValue::Coin(sell_amount);
+    let additional_info = BTreeMap::from_iter([(
+        PoolOrTokenId::TokenId(issued_token_id),
+        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+            num_decimals: unconfirmed_token_info.num_decimals(),
+            ticker: unconfirmed_token_info.token_ticker().to_vec(),
+        }),
+    )]);
     let (order_id, create_order_tx) = wallet1
         .create_order_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -5899,6 +5930,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             address1.clone(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &additional_info,
         )
         .unwrap();
     let order_info = RpcOrderInfo {
@@ -5941,6 +5973,13 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             Some(&(issued_token_id, token_amount_to_mint))
         );
     }
+    let additional_info = BTreeMap::from_iter([(
+        PoolOrTokenId::TokenId(issued_token_id),
+        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+            num_decimals: unconfirmed_token_info.num_decimals(),
+            ticker: unconfirmed_token_info.token_ticker().to_vec(),
+        }),
+    )]);
 
     // Fill order partially
     let fill_order_tx_1 = wallet2
@@ -5952,6 +5991,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &additional_info,
         )
         .unwrap();
 
@@ -5999,6 +6039,13 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         nonce: Some(AccountNonce::new(0)),
     };
 
+    let additional_info = BTreeMap::from_iter([(
+        PoolOrTokenId::TokenId(issued_token_id),
+        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+            num_decimals: unconfirmed_token_info.num_decimals(),
+            ticker: unconfirmed_token_info.token_ticker().to_vec(),
+        }),
+    )]);
     let fill_order_tx_2 = wallet2
         .create_fill_order_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -6008,6 +6055,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &additional_info,
         )
         .unwrap();
 
@@ -6048,6 +6096,13 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
         ask_balance: Amount::ZERO,
         nonce: Some(AccountNonce::new(1)),
     };
+    let additional_info = BTreeMap::from_iter([(
+        PoolOrTokenId::TokenId(issued_token_id),
+        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+            num_decimals: unconfirmed_token_info.num_decimals(),
+            ticker: unconfirmed_token_info.token_ticker().to_vec(),
+        }),
+    )]);
     let conclude_order_tx = wallet1
         .create_conclude_order_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -6056,6 +6111,7 @@ fn create_order_fill_completely_conclude(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &additional_info,
         )
         .unwrap();
 
@@ -6196,6 +6252,13 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
     let ask_value = OutputValue::TokenV1(issued_token_id, token_amount_to_mint);
     let sell_amount = Amount::from_atoms(1000);
     let give_value = OutputValue::Coin(sell_amount);
+    let additional_info = BTreeMap::from_iter([(
+        PoolOrTokenId::TokenId(issued_token_id),
+        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+            num_decimals: unconfirmed_token_info.num_decimals(),
+            ticker: unconfirmed_token_info.token_ticker().to_vec(),
+        }),
+    )]);
     let (order_id, create_order_tx) = wallet1
         .create_order_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -6204,6 +6267,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             address1.clone(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &additional_info,
         )
         .unwrap();
     let order_info = RpcOrderInfo {
@@ -6247,6 +6311,13 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         );
     }
 
+    let additional_info = BTreeMap::from_iter([(
+        PoolOrTokenId::TokenId(issued_token_id),
+        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+            num_decimals: unconfirmed_token_info.num_decimals(),
+            ticker: unconfirmed_token_info.token_ticker().to_vec(),
+        }),
+    )]);
     // Fill order partially
     let fill_order_tx_1 = wallet2
         .create_fill_order_tx(
@@ -6257,6 +6328,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &additional_info,
         )
         .unwrap();
 
@@ -6304,6 +6376,13 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
         nonce: Some(AccountNonce::new(0)),
     };
 
+    let additional_info = BTreeMap::from_iter([(
+        PoolOrTokenId::TokenId(issued_token_id),
+        UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+            num_decimals: unconfirmed_token_info.num_decimals(),
+            ticker: unconfirmed_token_info.token_ticker().to_vec(),
+        }),
+    )]);
     let conclude_order_tx = wallet1
         .create_conclude_order_tx(
             DEFAULT_ACCOUNT_INDEX,
@@ -6312,6 +6391,7 @@ fn create_order_fill_partially_conclude(#[case] seed: Seed) {
             None,
             FeeRate::from_amount_per_kb(Amount::ZERO),
             FeeRate::from_amount_per_kb(Amount::ZERO),
+            &additional_info,
         )
         .unwrap();
 

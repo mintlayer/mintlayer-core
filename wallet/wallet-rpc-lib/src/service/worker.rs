@@ -154,7 +154,6 @@ where
         password: Option<String>,
         force_migrate_wallet_type: bool,
         scan_blockchain: ScanBlockchain,
-        signer_provider: P,
         open_as_wallet_type: WalletType,
     ) -> Result<(), ControllerError<N>> {
         utils::ensure!(
@@ -202,30 +201,28 @@ where
             self.controller.is_none(),
             ControllerError::WalletFileAlreadyOpen
         );
-        let newly_generated_mnemonic = !args.user_supplied_menmonic();
         let wallet_type = args.wallet_type(self.node_rpc.is_cold_wallet_node());
         let (computed_args, wallet_created) =
             args.parse_mnemonic().map_err(RpcError::InvalidMnemonic)?;
 
-        let wallet =
-            if newly_generated_mnemonic || scan_blockchain.skip_scanning_the_blockchain() {
-                let info = self.node_rpc.chainstate_info().await.map_err(RpcError::RpcError)?;
-                WalletController::create_wallet(
-                    self.chain_config.clone(),
-                    wallet_path,
-                    computed_args,
-                    (info.best_block_height, info.best_block_id),
-                    self.node_rpc.is_cold_wallet_node(),
-                )
-            } else {
-                WalletController::recover_wallet(
-                    self.chain_config.clone(),
-                    wallet_path,
-                    computed_args,
-                    self.node_rpc.is_cold_wallet_node(),
-                )
-            }
-            .map_err(RpcError::Controller)?;
+        let wallet = if scan_blockchain.skip_scanning_the_blockchain() {
+            let info = self.node_rpc.chainstate_info().await.map_err(RpcError::RpcError)?;
+            WalletController::create_wallet(
+                self.chain_config.clone(),
+                wallet_path,
+                computed_args,
+                (info.best_block_height, info.best_block_id),
+                wallet_type,
+            )
+        } else {
+            WalletController::recover_wallet(
+                self.chain_config.clone(),
+                wallet_path,
+                computed_args,
+                wallet_type,
+            )
+        }
+        .map_err(RpcError::Controller)?;
 
         let controller = if scan_blockchain.should_wait_for_blockchain_scanning() {
             WalletController::new(

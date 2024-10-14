@@ -99,4 +99,11 @@ impl RpcOutputValue {
             RpcOutputValue::Coin { amount } | RpcOutputValue::Token { id: _, amount } => *amount,
         }
     }
+
+    pub fn token_id(&self) -> Option<TokenId> {
+        match self {
+            RpcOutputValue::Coin { amount: _ } => None,
+            RpcOutputValue::Token { id, amount: _ } => Some(*id),
+        }
+    }
 }

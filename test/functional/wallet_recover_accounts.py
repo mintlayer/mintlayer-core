@@ -137,7 +137,7 @@ class WalletRecoverAccounts(BitcoinTestFramework):
             mnemonic = await wallet.show_seed_phrase()
             assert mnemonic is not None
             assert_in("Successfully closed the wallet", await wallet.close_wallet())
-            assert_in("New wallet created successfully", await wallet.recover_wallet(mnemonic))
+            assert_in("Wallet recovered successfully", await wallet.recover_wallet(mnemonic))
 
             # sync and check that accounts are now present and with correct balances
             assert_in("Success", await wallet.sync())

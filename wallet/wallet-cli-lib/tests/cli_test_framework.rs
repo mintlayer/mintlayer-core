@@ -203,7 +203,7 @@ impl CliTestFramework {
             "wallet-recover \"{}\" store-seed-phrase \"{}\"",
             file_name, MNEMONIC
         );
-        assert_eq!(self.exec(&cmd), "New wallet created successfully");
+        assert_eq!(self.exec(&cmd), "Wallet recovered successfully");
     }
 
     #[allow(dead_code)]

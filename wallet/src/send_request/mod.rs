@@ -358,7 +358,7 @@ fn find_additional_info(
             let ask = find_token_additional_info(data.ask(), additional_info)?;
             let give = find_token_additional_info(data.give(), additional_info)?;
 
-            Some(UtxoAdditionalInfo::AnyoneCanTake { ask, give })
+            Some(UtxoAdditionalInfo::CreateOrder { ask, give })
         }
         TxOutput::IssueNft(_, data, _) => {
             Some(UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
@@ -397,7 +397,7 @@ fn find_token_additional_info(
             .map(|data| match data {
                 UtxoAdditionalInfo::TokenInfo(data) => Ok(Some(data.clone())),
                 UtxoAdditionalInfo::PoolInfo { staker_balance: _ }
-                | UtxoAdditionalInfo::AnyoneCanTake { ask: _, give: _ } => {
+                | UtxoAdditionalInfo::CreateOrder { ask: _, give: _ } => {
                     Err(WalletError::MissmatchedTokenAdditionalData(*token_id))
                 }
             })?,

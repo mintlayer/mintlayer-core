@@ -54,7 +54,8 @@ pub enum WalletManagementCommand {
         /// Not storing the seed-phrase can be seen as a security measure
         /// to ensure sufficient secrecy in case that seed-phrase is reused
         /// elsewhere if this wallet is compromised.
-        whether_to_store_seed_phrase: CliStoreSeedPhrase,
+        #[arg(required_unless_present("hardware_wallet"))]
+        whether_to_store_seed_phrase: Option<CliStoreSeedPhrase>,
 
         /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
         mnemonic: Option<String>,
@@ -79,7 +80,8 @@ pub enum WalletManagementCommand {
         /// Not storing the seed-phrase can be seen as a security measure
         /// to ensure sufficient secrecy in case that seed-phrase is reused
         /// elsewhere if this wallet is compromised.
-        whether_to_store_seed_phrase: CliStoreSeedPhrase,
+        #[arg(required_unless_present("hardware_wallet"))]
+        whether_to_store_seed_phrase: Option<CliStoreSeedPhrase>,
 
         /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
         mnemonic: Option<String>,

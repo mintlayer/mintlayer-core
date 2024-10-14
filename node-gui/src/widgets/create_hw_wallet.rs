@@ -13,13 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::main_window::ImportOrCreate;
+#[allow(deprecated)]
+use iced::widget::Component;
 use iced::{
     alignment::Horizontal,
-    widget::{self, container, text, Button, Component, Text},
+    widget::{self, container, text, Button, Text},
     Element, Length, Theme,
 };
 use iced_aw::Card;
+use node_gui_backend::ImportOrCreate;
 
 pub struct CreateHwWalletDialog<Message> {
     on_import: Box<dyn Fn() -> Message>,
@@ -50,6 +52,7 @@ pub enum ImportEvent {
     Cancel,
 }
 
+#[allow(deprecated)]
 impl<Message> Component<Message, Theme, iced::Renderer> for CreateHwWalletDialog<Message> {
     type State = ImportState;
     type Event = ImportEvent;
@@ -65,7 +68,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for CreateHwWalletDialog
     }
 
     fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
-        let button = Button::new(Text::new("Select file").horizontal_alignment(Horizontal::Center))
+        let button = Button::new(Text::new("Select file").align_x(Horizontal::Center))
             .width(100.0)
             .on_press(ImportEvent::Ok);
 
@@ -80,9 +83,9 @@ impl<Message> Component<Message, Theme, iced::Renderer> for CreateHwWalletDialog
             ),
         };
         if state.importing {
-            card.foot(container(text("Loading...")).width(Length::Fill).center_x())
+            card.foot(container(text("Loading...")).center_x(Length::Fill))
         } else {
-            card.foot(container(button).width(Length::Fill).center_x())
+            card.foot(container(button).center_x(Length::Fill))
         }
         .max_width(600.0)
         .on_close(ImportEvent::Cancel)
@@ -96,6 +99,7 @@ where
     Message: 'a,
 {
     fn from(component: CreateHwWalletDialog<Message>) -> Self {
+        #[allow(deprecated)]
         widget::component(component)
     }
 }

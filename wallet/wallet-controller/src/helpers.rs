@@ -32,12 +32,14 @@ use futures::{
 };
 use node_comm::node_traits::NodeInterface;
 use wallet::{
-    account::currency_grouper::Currency,
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     WalletError,
 };
-use wallet_types::partially_signed_transaction::{
-    PartiallySignedTransaction, TokenAdditionalInfo, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
+use wallet_types::{
+    partially_signed_transaction::{
+        PartiallySignedTransaction, TokenAdditionalInfo, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
+    },
+    Currency,
 };
 
 use crate::{runtime_wallet::RuntimeWallet, types::Balances, ControllerError};
@@ -127,7 +129,7 @@ fn pool_id_from_txo(utxo: &TxOutput) -> Option<PoolId> {
         | TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::Htlc(_, _)
-        | TxOutput::AnyoneCanTake(_)
+        | TxOutput::CreateOrder(_)
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::DelegateStaking(_, _)
@@ -172,10 +174,10 @@ where
                 .map(UtxoAdditionalInfo::TokenInfo);
             Ok(UtxoWithAdditionalInfo::new(utxo, additional_info))
         }
-        TxOutput::AnyoneCanTake(order) => {
+        TxOutput::CreateOrder(order) => {
             let ask = fetch_token_extra_info(rpc_client, order.ask()).await?;
             let give = fetch_token_extra_info(rpc_client, order.ask()).await?;
-            let additional_info = Some(UtxoAdditionalInfo::AnyoneCanTake { ask, give });
+            let additional_info = Some(UtxoAdditionalInfo::CreateOrder { ask, give });
             Ok(UtxoWithAdditionalInfo::new(utxo, additional_info))
         }
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
