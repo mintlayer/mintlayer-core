@@ -81,10 +81,10 @@ function Home() {
             </button>
           </div>
         ) : (
-          <div className="fixed top-0 left-0">
+          <div className="fixed top-0 left-0 ">
             <div className="grid grid-cols-12 ">
               <div className="col-span-3 w-full">
-                <div className="flex flex-col items-center space-y-4 p-4  rounded h-full w-full">
+                <div className="flex flex-col items-center space-y-4 p-4  rounded h-[100vh] w-full overflow-y-auto">
                   <div className="flex justify-center items-center w-[9rem] px-4">
                     <img src={MintlayerIcon} alt="sidebar_icon" />
                   </div>
@@ -163,8 +163,8 @@ function Home() {
                   )}
                 </div>
               </div>
-              <div className="col-span-9 h-full">
-                <div className="bg-[#F3F4F6] h-full w-full">
+              <div className="col-span-9 h-full pr-4">
+                <div className="bg-[#F3F4F6] h-full w-[74vw]">
                   <div className="flex w-full">
                     <button
                       onClick={() => setCurrentTab("summary")}
