@@ -428,7 +428,7 @@ impl Backend {
         let wallet_rpc = WalletRpc::new(wallet_handle, node_rpc.clone(), chain_config.clone());
 
         wallet_rpc
-            .create_wallet(file_path, wallet_args, true, import.scan_blokchain())
+            .create_wallet(file_path, wallet_args, true, !import.skip_syncing())
             .await
             .map_err(|err| BackendError::WalletError(err.to_string()))?;
         tokio::spawn(forward_events(

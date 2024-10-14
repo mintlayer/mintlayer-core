@@ -19,9 +19,8 @@ use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     address::{dehexify::dehexify_all_addresses, AddressError},
     chain::{
-        block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, SignedTransactionIntent,
-        Transaction, TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, tokens::IsTokenUnfreezable, Block, GenBlock,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };

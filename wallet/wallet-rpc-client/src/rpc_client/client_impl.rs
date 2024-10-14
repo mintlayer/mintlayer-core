@@ -24,9 +24,8 @@ use super::{ClientWalletRpc, WalletRpcError};
 use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        Block, GenBlock, SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
-        UtxoOutPoint,
+        block::timestamp::BlockTimestamp, Block, GenBlock, SignedTransaction,
+        SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };

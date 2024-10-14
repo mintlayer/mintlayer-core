@@ -42,12 +42,14 @@ use wallet_rpc_lib::types::{
 };
 
 #[cfg(feature = "trezor")]
+use crate::helper_types::CliHardwareWalletType;
+#[cfg(feature = "trezor")]
 use wallet_rpc_lib::types::HardwareWalletType;
 use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
 
 use crate::{
     errors::WalletCliCommandError, helper_types::parse_generic_token_transfer,
-    helper_types::CliHardwareWalletType, ManageableWalletCommand, WalletManagementCommand,
+    ManageableWalletCommand, WalletManagementCommand,
 };
 
 use self::local_state::WalletWithState;
@@ -150,10 +152,9 @@ where
                 passphrase,
                 hardware_wallet,
             } => {
-                let hardware_wallet = hardware_wallet.and_then(|t| match t {
+                let hardware_wallet = hardware_wallet.map(|t| match t {
                     #[cfg(feature = "trezor")]
-                    CliHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
-                    CliHardwareWalletType::None => None,
+                    CliHardwareWalletType::Trezor => HardwareWalletType::Trezor,
                 });
 
                 let newly_generated_mnemonic = self
@@ -161,7 +162,7 @@ where
                     .await?
                     .create_wallet(
                         wallet_path,
-                        whether_to_store_seed_phrase.to_bool(),
+                        whether_to_store_seed_phrase.map_or(false, |x| x.to_bool()),
                         mnemonic,
                         passphrase,
                         hardware_wallet,
@@ -206,18 +207,16 @@ where
                 passphrase,
                 hardware_wallet,
             } => {
-                let hardware_wallet = hardware_wallet.and_then(|t| match t {
+                let hardware_wallet = hardware_wallet.map(|t| match t {
                     #[cfg(feature = "trezor")]
-                    CliHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
-                    CliHardwareWalletType::None => None,
+                    CliHardwareWalletType::Trezor => HardwareWalletType::Trezor,
                 });
 
-                let newly_generated_mnemonic = self
-                    .wallet()
+                self.wallet()
                     .await?
                     .recover_wallet(
                         wallet_path,
-                        whether_to_store_seed_phrase.to_bool(),
+                        whether_to_store_seed_phrase.map_or(false, |x| x.to_bool()),
                         mnemonic,
                         passphrase,
                         hardware_wallet,
@@ -226,32 +225,11 @@ where
 
                 self.wallet.update_wallet::<N>().await;
 
-                let msg = match newly_generated_mnemonic.mnemonic {
-                    MnemonicInfo::NewlyGenerated {
-                        mnemonic,
-                        passphrase,
-                    } => {
-                        let passphrase = if let Some(passphrase) = passphrase {
-                            format!("passphrase: {passphrase}\n")
-                        } else {
-                            String::new()
-                        };
-                        format!(
-                            "New wallet created successfully\nYour mnemonic: {}\n{passphrase}\
-                        Please write it somewhere safe to be able to restore your wallet. \
-                        It's recommended that you attempt to recover the wallet now as practice\
-                        to check that you arrive at the same addresses, \
-                        to ensure that you have done everything correctly.
-                        ",
-                            mnemonic
-                        )
-                    }
-                    MnemonicInfo::UserProvided => "New wallet created successfully".to_owned(),
-                };
+                let msg = "Wallet recovered successfully";
 
                 Ok(ConsoleCommand::SetStatus {
                     status: self.repl_status().await?,
-                    print_message: msg,
+                    print_message: msg.to_owned(),
                 })
             }
 
@@ -261,10 +239,9 @@ where
                 force_change_wallet_type,
                 hardware_wallet,
             } => {
-                let hardware_wallet = hardware_wallet.and_then(|t| match t {
+                let hardware_wallet = hardware_wallet.map(|t| match t {
                     #[cfg(feature = "trezor")]
-                    CliHardwareWalletType::Trezor => Some(HardwareWalletType::Trezor),
-                    CliHardwareWalletType::None => None,
+                    CliHardwareWalletType::Trezor => HardwareWalletType::Trezor,
                 });
                 self.wallet()
                     .await?

@@ -39,6 +39,7 @@ use crypto::{
     vrf::VRFPublicKey,
 };
 use futures::{stream::FuturesUnordered, TryStreamExt};
+use itertools::Itertools;
 use logging::log;
 use mempool::FeeRate;
 use node_comm::node_traits::NodeInterface;
@@ -990,10 +991,10 @@ where
     ) -> Result<(SignedTransaction, SignedTransactionIntent), ControllerError<T>> {
         let output = make_address_output_token(address, amount, token_info.token_id());
         self.create_token_tx(
-            &token_info,
+            token_info,
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
@@ -1125,11 +1126,14 @@ where
         ask_value: OutputValue,
         give_value: OutputValue,
         conclude_key: Address<Destination>,
+        token_infos: Vec<RPCTokenInfo>,
     ) -> Result<(SignedTransaction, OrderId), ControllerError<T>> {
+        let additional_info = self.additional_token_infos(token_infos)?;
+
         self.create_and_send_tx_with_id(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.create_order_tx(
                     account_index,
@@ -1138,6 +1142,7 @@ where
                     conclude_key,
                     current_fee_rate,
                     consolidate_fee_rate,
+                    &additional_info,
                 )
             },
         )
@@ -1149,11 +1154,13 @@ where
         order_id: OrderId,
         order_info: RpcOrderInfo,
         output_address: Option<Destination>,
+        token_infos: Vec<RPCTokenInfo>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
+        let additional_info = self.additional_token_infos(token_infos)?;
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.create_conclude_order_tx(
                     account_index,
@@ -1162,6 +1169,7 @@ where
                     output_address,
                     current_fee_rate,
                     consolidate_fee_rate,
+                    &additional_info,
                 )
             },
         )
@@ -1174,11 +1182,13 @@ where
         order_info: RpcOrderInfo,
         fill_amount_in_ask_currency: Amount,
         output_address: Option<Destination>,
+        token_infos: Vec<RPCTokenInfo>,
     ) -> Result<SignedTransaction, ControllerError<T>> {
+        let additional_info = self.additional_token_infos(token_infos)?;
         self.create_and_send_tx(
             move |current_fee_rate: FeeRate,
                   consolidate_fee_rate: FeeRate,
-                  wallet: &mut DefaultWallet,
+                  wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
                 wallet.create_fill_order_tx(
                     account_index,
@@ -1188,10 +1198,31 @@ where
                     output_address,
                     current_fee_rate,
                     consolidate_fee_rate,
+                    &additional_info,
                 )
             },
         )
         .await
+    }
+
+    fn additional_token_infos(
+        &mut self,
+        token_infos: Vec<RPCTokenInfo>,
+    ) -> Result<BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>, ControllerError<T>> {
+        token_infos
+            .into_iter()
+            .map(|token_info| {
+                let token_info = self.unconfiremd_token_info(token_info)?;
+
+                Ok((
+                    PoolOrTokenId::TokenId(token_info.token_id()),
+                    UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                        num_decimals: token_info.num_decimals(),
+                        ticker: token_info.token_ticker().to_vec(),
+                    }),
+                ))
+            })
+            .try_collect()
     }
 
     /// Checks if the wallet has stake pools and marks this account for staking.
@@ -1314,7 +1345,7 @@ where
     /// Create a transaction that uses a token, check if that token can be used i.e. not frozen.
     async fn create_token_tx<F, R>(
         &mut self,
-        token_info: &RPCTokenInfo,
+        token_info: RPCTokenInfo,
         tx_maker: F,
     ) -> Result<R, ControllerError<T>>
     where
@@ -1326,15 +1357,7 @@ where
             &UnconfirmedTokenInfo,
         ) -> WalletResult<R>,
     {
-        // make sure we can use the token before create an tx using it
-        let token_freezable_info = match token_info {
-            RPCTokenInfo::FungibleToken(token_info) => {
-                self.wallet.get_token_unconfirmed_info(self.account_index, token_info)?
-            }
-            RPCTokenInfo::NonFungibleToken(info) => {
-                UnconfirmedTokenInfo::NonFungibleToken(info.token_id, info.as_ref().into())
-            }
-        };
+        let token_freezable_info = self.unconfiremd_token_info(token_info)?;
 
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
@@ -1357,17 +1380,32 @@ where
         F: FnOnce(
             FeeRate,
             FeeRate,
-            &mut DefaultWallet,
+            &mut RuntimeWallet<B>,
             U31,
             &UnconfirmedTokenInfo,
         ) -> WalletResult<SignedTransaction>,
     >(
         &mut self,
-        token_info: &RPCTokenInfo,
+        token_info: RPCTokenInfo,
         tx_maker: F,
     ) -> Result<SignedTransaction, ControllerError<T>> {
         let tx = self.create_token_tx(token_info, tx_maker).await?;
         self.broadcast_to_mempool_if_needed(tx).await
+    }
+
+    fn unconfiremd_token_info(
+        &mut self,
+        token_info: RPCTokenInfo,
+    ) -> Result<UnconfirmedTokenInfo, ControllerError<T>> {
+        let token_freezable_info = match token_info {
+            RPCTokenInfo::FungibleToken(token_info) => {
+                self.wallet.get_token_unconfirmed_info(self.account_index, token_info)?
+            }
+            RPCTokenInfo::NonFungibleToken(info) => {
+                UnconfirmedTokenInfo::NonFungibleToken(info.token_id, info.as_ref().into())
+            }
+        };
+        Ok(token_freezable_info)
     }
 
     /// Similar to create_and_send_tx but some transactions also create an ID

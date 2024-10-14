@@ -53,7 +53,9 @@ use common::{
         signature::inputsig::arbitrary_message::{
             produce_message_challenge, ArbitraryMessageSignature,
         },
-        tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenTotalSupply},
+        tokens::{
+            IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCTokenInfo, TokenId, TokenTotalSupply,
+        },
         Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
         SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
@@ -79,7 +81,6 @@ use wallet_types::{
     partially_signed_transaction::{
         PartiallySignedTransaction, TokenAdditionalInfo, UtxoAdditionalInfo,
     },
-    seed_phrase::StoreSeedPhrase,
     signature_status::SignatureStatus,
     wallet_tx::TxData,
     with_locked::WithLocked,
@@ -1540,19 +1541,19 @@ where
         currency: Currency,
         amount: RpcAmountIn,
         coin_decimals: u8,
-    ) -> Result<OutputValue, RpcError<N>> {
+    ) -> Result<(OutputValue, Option<RPCTokenInfo>), RpcError<N>> {
         match currency {
             Currency::Coin => {
                 let amount =
                     amount.to_amount(coin_decimals).ok_or(RpcError::<N>::InvalidCoinAmount)?;
-                Ok::<_, RpcError<N>>(OutputValue::Coin(amount))
+                Ok::<_, RpcError<N>>((OutputValue::Coin(amount), None))
             }
             Currency::Token(token_id) => {
                 let token_info = controller.get_token_info(token_id).await?;
                 let amount = amount
                     .to_amount(token_info.token_number_of_decimals())
                     .ok_or(RpcError::InvalidCoinAmount)?;
-                Ok(OutputValue::TokenV1(token_id, amount))
+                Ok((OutputValue::TokenV1(token_id, amount), Some(token_info)))
             }
         }
     }
@@ -1589,14 +1590,14 @@ where
         self.wallet
             .call_async(move |controller| {
                 Box::pin(async move {
-                    let ask_value = Self::convert_currency_to_output_value(
+                    let (ask_value, ask_token_info) = Self::convert_currency_to_output_value(
                         controller,
                         ask_currency,
                         ask_amount,
                         coin_decimals,
                     )
                     .await?;
-                    let give_value = Self::convert_currency_to_output_value(
+                    let (give_value, give_token_info) = Self::convert_currency_to_output_value(
                         controller,
                         give_currency,
                         give_amount,
@@ -1604,10 +1605,12 @@ where
                     )
                     .await?;
 
+                    let token_infos = ask_token_info.into_iter().chain(give_token_info).collect();
+
                     controller
                         .synced_controller(account_index, config)
                         .await?
-                        .create_order(ask_value, give_value, conclude_dest)
+                        .create_order(ask_value, give_value, conclude_dest, token_infos)
                         .await
                         .map_err(RpcError::Controller)
                 })
@@ -1639,9 +1642,23 @@ where
                 Box::pin(async move {
                     let order_info = w.get_order_info(order_id).await?;
 
+                    let ask_token_info =
+                        if let Some(token_id) = order_info.initially_asked.token_id() {
+                            Some(w.get_token_info(token_id).await?)
+                        } else {
+                            None
+                        };
+                    let give_token_info =
+                        if let Some(token_id) = order_info.initially_given.token_id() {
+                            Some(w.get_token_info(token_id).await?)
+                        } else {
+                            None
+                        };
+                    let token_infos = ask_token_info.into_iter().chain(give_token_info).collect();
+
                     w.synced_controller(account_index, config)
                         .await?
-                        .conclude_order(order_id, order_info, output_address)
+                        .conclude_order(order_id, order_info, output_address, token_infos)
                         .await
                         .map_err(RpcError::Controller)
                         .map(NewTransaction::new)
@@ -1670,17 +1687,32 @@ where
             .call_async(move |w| {
                 Box::pin(async move {
                     let order_info = w.get_order_info(order_id).await?;
-                    let fill_amount_in_ask_currency = match order_info.initially_asked {
-                        RpcOutputValue::Coin { .. } => fill_amount_in_ask_currency
-                            .to_amount(coin_decimals)
-                            .ok_or(RpcError::<N>::InvalidCoinAmount)?,
-                        RpcOutputValue::Token { id, amount: _ } => {
-                            let token_info = w.get_token_info(id).await?;
-                            fill_amount_in_ask_currency
-                                .to_amount(token_info.token_number_of_decimals())
-                                .ok_or(RpcError::InvalidCoinAmount)?
-                        }
-                    };
+                    let (fill_amount_in_ask_currency, ask_token_info) =
+                        match order_info.initially_asked {
+                            RpcOutputValue::Coin { .. } => (
+                                fill_amount_in_ask_currency
+                                    .to_amount(coin_decimals)
+                                    .ok_or(RpcError::<N>::InvalidCoinAmount)?,
+                                None,
+                            ),
+                            RpcOutputValue::Token { id, amount: _ } => {
+                                let token_info = w.get_token_info(id).await?;
+                                (
+                                    fill_amount_in_ask_currency
+                                        .to_amount(token_info.token_number_of_decimals())
+                                        .ok_or(RpcError::InvalidCoinAmount)?,
+                                    Some(token_info),
+                                )
+                            }
+                        };
+                    let give_token_info =
+                        if let Some(token_id) = order_info.initially_given.token_id() {
+                            Some(w.get_token_info(token_id).await?)
+                        } else {
+                            None
+                        };
+
+                    let token_infos = ask_token_info.into_iter().chain(give_token_info).collect();
 
                     w.synced_controller(account_index, config)
                         .await?
@@ -1689,6 +1721,7 @@ where
                             order_info,
                             fill_amount_in_ask_currency,
                             output_address,
+                            token_infos,
                         )
                         .await
                         .map_err(RpcError::Controller)
