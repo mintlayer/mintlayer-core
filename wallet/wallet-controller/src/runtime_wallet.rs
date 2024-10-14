@@ -25,8 +25,8 @@ use common::chain::tokens::{
     IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, TokenId, TokenIssuance,
 };
 use common::chain::{
-    DelegationId, Destination, GenBlock, PoolId, SignedTransaction, Transaction, TxOutput,
-    UtxoOutPoint,
+    DelegationId, Destination, GenBlock, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
+    Transaction, TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::WithId;
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -35,7 +35,6 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::{PrivateKey, PublicKey};
 use crypto::vrf::VRFPublicKey;
 use mempool::FeeRate;
-use wallet::account::currency_grouper::Currency;
 use wallet::account::transaction_list::TransactionList;
 use wallet::account::{CoinSelectionAlgo, DelegationData, PoolData, TxInfo, UnconfirmedTokenInfo};
 use wallet::send_request::{PoolOrTokenId, SelectedInputs, StakePoolDataArguments};
@@ -51,7 +50,7 @@ use wallet_types::signature_status::SignatureStatus;
 use wallet_types::utxo_types::{UtxoStates, UtxoTypes};
 use wallet_types::wallet_tx::TxData;
 use wallet_types::with_locked::WithLocked;
-use wallet_types::KeychainUsageState;
+use wallet_types::{Currency, KeychainUsageState};
 
 #[cfg(feature = "trezor")]
 use wallet::signer::trezor_signer::TrezorSignerProvider;
@@ -1065,6 +1064,111 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 account_index,
                 output_value,
                 htlc,
+                current_fee_rate,
+                consolidate_fee_rate,
+                additional_utxo_infos,
+            ),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_order_tx(
+        &mut self,
+        account_index: U31,
+        ask_value: OutputValue,
+        give_value: OutputValue,
+        conclude_key: Address<Destination>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+    ) -> WalletResult<(OrderId, SignedTransaction)> {
+        match self {
+            RuntimeWallet::Software(w) => w.create_order_tx(
+                account_index,
+                ask_value,
+                give_value,
+                conclude_key,
+                current_fee_rate,
+                consolidate_fee_rate,
+                additional_utxo_infos,
+            ),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.create_order_tx(
+                account_index,
+                ask_value,
+                give_value,
+                conclude_key,
+                current_fee_rate,
+                consolidate_fee_rate,
+                additional_utxo_infos,
+            ),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_conclude_order_tx(
+        &mut self,
+        account_index: U31,
+        order_id: OrderId,
+        order_info: RpcOrderInfo,
+        output_address: Option<Destination>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+    ) -> WalletResult<SignedTransaction> {
+        match self {
+            RuntimeWallet::Software(w) => w.create_conclude_order_tx(
+                account_index,
+                order_id,
+                order_info,
+                output_address,
+                current_fee_rate,
+                consolidate_fee_rate,
+                additional_utxo_infos,
+            ),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.create_conclude_order_tx(
+                account_index,
+                order_id,
+                order_info,
+                output_address,
+                current_fee_rate,
+                consolidate_fee_rate,
+                additional_utxo_infos,
+            ),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_fill_order_tx(
+        &mut self,
+        account_index: U31,
+        order_id: OrderId,
+        order_info: RpcOrderInfo,
+        fill_amount_in_ask_currency: Amount,
+        output_address: Option<Destination>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
+    ) -> WalletResult<SignedTransaction> {
+        match self {
+            RuntimeWallet::Software(w) => w.create_fill_order_tx(
+                account_index,
+                order_id,
+                order_info,
+                fill_amount_in_ask_currency,
+                output_address,
+                current_fee_rate,
+                consolidate_fee_rate,
+                additional_utxo_infos,
+            ),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w.create_fill_order_tx(
+                account_index,
+                order_id,
+                order_info,
+                fill_amount_in_ask_currency,
+                output_address,
                 current_fee_rate,
                 consolidate_fee_rate,
                 additional_utxo_infos,

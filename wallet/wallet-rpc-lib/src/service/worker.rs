@@ -191,7 +191,6 @@ where
             self.controller.is_none(),
             ControllerError::WalletFileAlreadyOpen
         );
-        // let newly_generated_mnemonic = !args.user_supplied_menmonic();
         let wallet_type = args.wallet_type(self.node_rpc.is_cold_wallet_node());
         let (computed_args, wallet_created) =
             args.parse_mnemonic().map_err(RpcError::InvalidMnemonic)?;

@@ -75,7 +75,7 @@ class WalletGetAddressUsage(BitcoinTestFramework):
         # new wallet
         async with WalletCliController(node, self.config, self.log) as wallet:
             mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-            assert_in("New wallet created successfully", await wallet.recover_wallet(mnemonic, "wallet"))
+            assert_in("Wallet recovered successfully", await wallet.recover_wallet(mnemonic, "wallet"))
 
             # check it is on genesis
             best_block_height = await wallet.get_best_block_height()

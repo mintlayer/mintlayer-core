@@ -101,7 +101,6 @@ pub use wallet_types::{
 };
 use wallet_types::{
     partially_signed_transaction::{PartiallySignedTransaction, UtxoWithAdditionalInfo},
-    seed_phrase::StoreSeedPhrase,
     signature_status::SignatureStatus,
     wallet_type::{WalletControllerMode, WalletType},
     with_locked::WithLocked,

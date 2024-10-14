@@ -25,7 +25,7 @@ use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        DelegationId, OrderId, PoolId, RpcOrderInfo, SignedTransaction, Transaction,
+        DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction, Transaction,
     },
     primitives::{time::Time, Amount},
 };

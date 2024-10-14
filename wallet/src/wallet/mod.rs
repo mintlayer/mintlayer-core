@@ -1908,6 +1908,7 @@ where
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_order_tx(
         &mut self,
         account_index: U31,
@@ -1916,12 +1917,12 @@ where
         conclude_key: Address<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> WalletResult<(OrderId, SignedTransaction)> {
         let latest_median_time = self.latest_median_time;
         let tx = self.for_account_rw_unlocked_and_check_tx(
             account_index,
-            //FIXME
-            &BTreeMap::new(),
+            additional_utxo_infos,
             |account, db_tx| {
                 account.create_order_tx(
                     db_tx,
@@ -1941,6 +1942,7 @@ where
         Ok((order_id, tx))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_conclude_order_tx(
         &mut self,
         account_index: U31,
@@ -1949,11 +1951,12 @@ where
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked_and_check_tx(
             account_index,
-            &BTreeMap::new(),
+            additional_utxo_infos,
             |account, db_tx| {
                 account.create_conclude_order_tx(
                     db_tx,
@@ -1980,11 +1983,12 @@ where
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> WalletResult<SignedTransaction> {
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked_and_check_tx(
             account_index,
-            &BTreeMap::new(),
+            additional_utxo_infos,
             |account, db_tx| {
                 account.create_fill_order_tx(
                     db_tx,
