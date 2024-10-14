@@ -16,13 +16,10 @@ import NetworkingTab from "../components/Networking";
 function Home() {
   const [netMode, setNetMod] = useState("");
   const [walletMode, setWalletMode] = useState("");
-  const [isWalletMenuVisible, setIsWalletMenuVisible] = useState(false);
   const [currentWallet, setCurrentWallet] = useState("wallet1");
   const [activeTab, setActiveTab] = useState("home");
   const [currentTab, setCurrentTab] = useState("summary");
-  const toggleWalletVisible = () => {
-    setIsWalletMenuVisible((walletVisible) => !walletVisible);
-  };
+
   const createNewWallet = (mode: string) => {};
 
   const recoverWallet = (mode: string) => {};
@@ -91,42 +88,34 @@ function Home() {
                   <div className="flex justify-center items-center w-[9rem] px-4">
                     <img src={MintlayerIcon} alt="sidebar_icon" />
                   </div>
-                  <button
-                    onClick={toggleWalletVisible}
-                    className="mb-4 py-2 px-2 bg-[#F3F4F6] text-[#000000] rounded hover:bg-gray-200  w-full text-left items-center flex justify-between translation shadow-none border-none w-[12rem]"
-                  >
-                    <span>Menu</span>
-                    {isWalletMenuVisible ? <BsChevronUp /> : <BsChevronDown />}
-                  </button>
-                  {!currentWallet && isWalletMenuVisible && (
-                    <>
-                      <button
-                        onClick={() => createNewWallet(walletMode)}
-                        className="w-full text-[#000000] rounded  transition border-none shadow-none text-left py-2 px-1"
-                      >
-                        Create New {walletMode} Wallet
-                      </button>
-                      <button
-                        onClick={() => recoverWallet(walletMode)}
-                        className="w-full text-[#000000] rounded  transition border-none shadow-none text-left py-2 px-1"
-                      >
-                        Recover {walletMode} Wallet
-                      </button>
-                      <button
-                        onClick={() => openWallet(walletMode)}
-                        className="w-full text-[#000000] rounded  transition border-none shadow-none text-left py-2 px-1"
-                      >
-                        Open {walletMode} Wallet
-                      </button>
-                      <button
-                        onClick={() => exit()}
-                        className="w-full text-[#ff0000] rounded transition border-none py-2 px-1 shadow-none text-left"
-                      >
-                        Exit
-                      </button>
-                    </>
-                  )}
-                  {currentWallet && isWalletMenuVisible && (
+
+                  <>
+                    <button
+                      onClick={() => createNewWallet(walletMode)}
+                      className="w-full text-[#000000] rounded  transition border-none shadow-none text-left py-2 px-1"
+                    >
+                      Create New {walletMode} Wallet
+                    </button>
+                    <button
+                      onClick={() => recoverWallet(walletMode)}
+                      className="w-full text-[#000000] rounded  transition border-none shadow-none text-left py-2 px-1"
+                    >
+                      Recover {walletMode} Wallet
+                    </button>
+                    <button
+                      onClick={() => openWallet(walletMode)}
+                      className="w-full text-[#000000] rounded  transition border-none shadow-none text-left py-2 px-1"
+                    >
+                      Open {walletMode} Wallet
+                    </button>
+                    <button
+                      onClick={() => exit()}
+                      className="w-full text-[#ff0000] rounded transition border-none py-2 px-1 shadow-none text-left"
+                    >
+                      Exit
+                    </button>
+                  </>
+                  {currentWallet && (
                     <>
                       <button
                         onClick={() => setActiveTab("transactions")}
@@ -175,7 +164,7 @@ function Home() {
                 </div>
               </div>
               <div className="col-span-9 h-full">
-                <div className="bg-[#F3F4F6] h-full">
+                <div className="bg-[#F3F4F6] h-full w-full">
                   <div className="flex w-full">
                     <button
                       onClick={() => setCurrentTab("summary")}
@@ -200,7 +189,7 @@ function Home() {
                       <span className="pl-2">Networking</span>
                     </button>
                   </div>
-                  {currentTab === "summary" && <SummaryTab />}
+                  {currentTab === "summary" && <SummaryTab network={netMode} />}
                   {currentTab === "network" && <NetworkingTab />}
                 </div>
               </div>
