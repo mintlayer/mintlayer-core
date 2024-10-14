@@ -207,7 +207,7 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteLocked,
         median_time: BlockTimestamp,
         fee_rates: CurrentFeeRate,
-        order_info: Option<&RpcOrderInfo>,
+        order_info: Option<BTreeMap<OrderId, &RpcOrderInfo>>,
     ) -> WalletResult<SendRequest> {
         // TODO: allow to pay fees with different currency?
         let pay_fee_with_currency = Currency::Coin;
@@ -1071,7 +1071,7 @@ impl Account {
             db_tx,
             median_time,
             fee_rate,
-            Some(&order_info),
+            Some(BTreeMap::from_iter([(order_id, &order_info)])),
         )
     }
 
@@ -1128,7 +1128,7 @@ impl Account {
             db_tx,
             median_time,
             fee_rate,
-            Some(&order_info),
+            Some(BTreeMap::from_iter([(order_id, &order_info)])),
         )
     }
 
@@ -2308,7 +2308,7 @@ fn group_preselected_inputs(
     chain_config: &ChainConfig,
     block_height: BlockHeight,
     dest_info_provider: Option<&dyn DestinationInfoProvider>,
-    order_info: Option<&RpcOrderInfo>,
+    order_info: Option<BTreeMap<OrderId, &RpcOrderInfo>>,
 ) -> Result<BTreeMap<Currency, PreselectedInputAmounts>, WalletError> {
     let mut preselected_inputs = BTreeMap::new();
     for (input, destination, utxo) in
@@ -2429,7 +2429,10 @@ fn group_preselected_inputs(
                     )?;
                 }
                 AccountCommand::ConcludeOrder(order_id) => {
-                    let order_info = order_info.ok_or(WalletError::OrderInfoMissing(*order_id))?;
+                    let order_info = order_info
+                        .as_ref()
+                        .and_then(|info| info.get(order_id))
+                        .ok_or(WalletError::OrderInfoMissing(*order_id))?;
 
                     let given_currency =
                         Currency::from_rpc_output_value(&order_info.initially_given);
@@ -2456,7 +2459,10 @@ fn group_preselected_inputs(
                     update_preselected_inputs(Currency::Coin, Amount::ZERO, *fee, Amount::ZERO)?;
                 }
                 AccountCommand::FillOrder(order_id, fill_amount_in_ask_currency, _) => {
-                    let order_info = order_info.ok_or(WalletError::OrderInfoMissing(*order_id))?;
+                    let order_info = order_info
+                        .as_ref()
+                        .and_then(|info| info.get(order_id))
+                        .ok_or(WalletError::OrderInfoMissing(*order_id))?;
 
                     let filled_amount = orders_accounting::calculate_filled_amount(
                         order_info.ask_balance,
