@@ -93,7 +93,7 @@ pub enum RpcError<N: NodeInterface> {
     #[error("Invalid mnemonic: {0}")]
     InvalidMnemonic(wallet_controller::mnemonic::Error),
 
-    #[error("Cannont recover a software wallet without providing a mnemonic")]
+    #[error("Cannot recover a software wallet without providing a mnemonic")]
     EmptyMnemonic,
 
     #[error("Cannot specify a mnemonic or passphrase when using a hardware wallet")]

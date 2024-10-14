@@ -19,10 +19,9 @@ use chainstate::rpc::RpcOutputValueIn;
 use common::{
     address::RpcAddress,
     chain::{
-        block::timestamp::BlockTimestamp, tokens::TokenId,
-        transaction::partially_signed_transaction::PartiallySignedTransaction, Block, DelegationId,
-        Destination, GenBlock, OrderId, PoolId, SignedTransaction, SignedTransactionIntent,
-        Transaction, TxOutput,
+        block::timestamp::BlockTimestamp, tokens::TokenId, Block, DelegationId, Destination,
+        GenBlock, OrderId, PoolId, SignedTransaction, SignedTransactionIntent, Transaction,
+        TxOutput,
     },
     primitives::{BlockHeight, Id},
 };

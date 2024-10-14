@@ -498,7 +498,7 @@ fn utxo_output_value(out: &UtxoWithAdditionalInfo) -> SignerResult<OutputValue> 
                 Ok(OutputValue::Coin(staker_balance))
             }
             Some(
-                UtxoAdditionalInfo::AnyoneCanTake { ask: _, give: _ }
+                UtxoAdditionalInfo::CreateOrder { ask: _, give: _ }
                 | UtxoAdditionalInfo::TokenInfo(_),
             )
             | None => Err(SignerError::MissingUtxoExtraInfo),
@@ -551,24 +551,7 @@ fn to_trezor_account_command_input(
     let mut inp_req = MintlayerAccountCommandTxInput::new();
     inp_req
         .set_address(Address::new(chain_config, dest.clone()).expect("addressable").into_string());
-    match key_chain.find_public_key(dest) {
-        Some(FoundPubKey::Hierarchy(xpub)) => {
-            let address_n = xpub
-                .get_derivation_path()
-                .as_slice()
-                .iter()
-                .map(|c| c.into_encoded_index())
-                .collect();
-            inp_req.address_n = vec![MintlayerAddressPath {
-                address_n,
-                ..Default::default()
-            }];
-        }
-        Some(FoundPubKey::Standalone(_)) => {
-            unimplemented!("standalone keys with trezor")
-        }
-        None => {}
-    };
+    inp_req.address_n = destination_to_address_paths(key_chain, dest);
     inp_req.set_nonce(nonce.value());
     match command {
         AccountCommand::MintTokens(token_id, amount) => {
@@ -625,26 +608,16 @@ fn to_trezor_account_command_input(
 
             inp_req.conclude_order = Some(req).into();
         }
-        AccountCommand::FillOrder(order_id, value, dest) => {
+        AccountCommand::FillOrder(order_id, amount, dest) => {
             let mut req = MintlayerFillOrder::new();
             req.set_order_id(order_id.to_hash().as_bytes().to_vec());
-            match value {
-                OutputValue::Coin(amount) => {
-                    req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-                }
-                OutputValue::TokenV1(token_id, amount) => {
-                    req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-                    req.set_token_id(token_id.to_hash().as_bytes().to_vec());
-                }
-                OutputValue::TokenV0(_) => return Err(SignerError::UnsupportedTokensV0),
-            }
+            req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
             req.set_destination(
                 Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
             );
 
             inp_req.fill_order = Some(req).into();
         }
-        AccountCommand::ChangeTokenMetadataUri(_, _) => unimplemented!("FIXME"),
     }
     let mut inp = MintlayerTxInput::new();
     inp.account_command = Some(inp_req).into();
@@ -660,24 +633,7 @@ fn to_trezor_account_input(
     let mut inp_req = MintlayerAccountTxInput::new();
     inp_req
         .set_address(Address::new(chain_config, dest.clone()).expect("addressable").into_string());
-    match key_chain.find_public_key(dest) {
-        Some(FoundPubKey::Hierarchy(xpub)) => {
-            let address_n = xpub
-                .get_derivation_path()
-                .as_slice()
-                .iter()
-                .map(|c| c.into_encoded_index())
-                .collect();
-            inp_req.address_n = vec![MintlayerAddressPath {
-                address_n,
-                ..Default::default()
-            }];
-        }
-        Some(FoundPubKey::Standalone(_)) => {
-            unimplemented!("standalone keys with trezor")
-        }
-        None => {}
-    };
+    inp_req.address_n = destination_to_address_paths(key_chain, dest);
     inp_req.set_nonce(outpoint.nonce().value());
     match outpoint.account() {
         AccountSpending::DelegationBalance(delegation_id, amount) => {
@@ -722,6 +678,18 @@ fn to_trezor_utxo_input(
 
     inp_req
         .set_address(Address::new(chain_config, dest.clone()).expect("addressable").into_string());
+    inp_req.address_n = destination_to_address_paths(key_chain, dest);
+
+    let mut inp = MintlayerTxInput::new();
+    inp.utxo = Some(inp_req).into();
+    Ok(inp)
+}
+
+/// Find the derivation paths to the key in the destination, or multiple in the case of a multisig
+fn destination_to_address_paths(
+    key_chain: &impl AccountKeyChains,
+    dest: &Destination,
+) -> Vec<MintlayerAddressPath> {
     match key_chain.find_public_key(dest) {
         Some(FoundPubKey::Hierarchy(xpub)) => {
             let address_n = xpub
@@ -730,17 +698,17 @@ fn to_trezor_utxo_input(
                 .iter()
                 .map(|c| c.into_encoded_index())
                 .collect();
-            inp_req.address_n = vec![MintlayerAddressPath {
+            vec![MintlayerAddressPath {
                 address_n,
                 ..Default::default()
-            }];
+            }]
         }
         Some(FoundPubKey::Standalone(_)) => {
             unimplemented!("standalone keys with trezor")
         }
         None => {
             if let Some(challenge) = key_chain.find_multisig_challenge(dest) {
-                inp_req.address_n = challenge
+                challenge
                     .public_keys()
                     .iter()
                     .enumerate()
@@ -763,14 +731,12 @@ fn to_trezor_utxo_input(
                             None => None,
                         }
                     })
-                    .collect();
+                    .collect()
+            } else {
+                vec![]
             }
         }
-    };
-
-    let mut inp = MintlayerTxInput::new();
-    inp.utxo = Some(inp_req).into();
-    Ok(inp)
+    }
 }
 
 fn to_trezor_output_value(
@@ -780,7 +746,7 @@ fn to_trezor_output_value(
     let token_info = additional_info.as_ref().and_then(|info| match info {
         UtxoAdditionalInfo::TokenInfo(token_info) => Some(token_info),
         UtxoAdditionalInfo::PoolInfo { staker_balance: _ }
-        | UtxoAdditionalInfo::AnyoneCanTake { ask: _, give: _ } => None,
+        | UtxoAdditionalInfo::CreateOrder { ask: _, give: _ } => None,
     });
 
     to_trezor_output_value_with_token_info(output_value, &token_info)
@@ -1025,7 +991,7 @@ fn to_trezor_output_msg(
             );
 
             match additional_info {
-                Some(UtxoAdditionalInfo::AnyoneCanTake { ask, give }) => {
+                Some(UtxoAdditionalInfo::CreateOrder { ask, give }) => {
                     out_req.ask = Some(to_trezor_output_value_with_token_info(
                         data.ask(),
                         &ask.as_ref(),

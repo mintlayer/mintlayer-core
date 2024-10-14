@@ -55,7 +55,7 @@ pub enum UtxoAdditionalInfo {
     PoolInfo {
         staker_balance: Amount,
     },
-    AnyoneCanTake {
+    CreateOrder {
         ask: Option<TokenAdditionalInfo>,
         give: Option<TokenAdditionalInfo>,
     },

@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::panic;
 use std::ops::{Add, Div, Mul, Sub};
 
 use super::*;
@@ -26,7 +27,8 @@ use common::chain::stakelock::StakePoolData;
 use common::chain::timelock::OutputTimeLock;
 use common::chain::tokens::{NftIssuanceV0, TokenId};
 use common::chain::{
-    AccountNonce, AccountOutPoint, DelegationId, GenBlock, OrderData, PoolId, Transaction, TxInput,
+    AccountNonce, AccountOutPoint, DelegationId, Destination, GenBlock, OrderData, PoolId,
+    Transaction, TxInput,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -86,9 +88,15 @@ fn sign_message(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn sign_transaction(#[case] seed: Seed) {
-    use common::chain::{
-        tokens::{IsTokenUnfreezable, Metadata, TokenIssuanceV1},
-        OrderId,
+    use std::num::NonZeroU8;
+
+    use common::{
+        chain::{
+            classic_multisig::ClassicMultisigChallenge,
+            tokens::{IsTokenUnfreezable, Metadata, TokenIssuanceV1},
+            OrderId,
+        },
+        primitives::amount::UnsignedIntType,
     };
     use crypto::vrf::VRFPrivateKey;
     use serialization::extras::non_empty_vec::DataOrNoVec;
@@ -113,9 +121,8 @@ fn sign_transaction(#[case] seed: Seed) {
         .unwrap();
     let mut account = Account::new(chain_config.clone(), &mut db_tx, key_chain, None).unwrap();
 
-    let amounts: Vec<Amount> = (0..3) //(0..(2 + rng.next_u32() % 5))
-        // .map(|_| Amount::from_atoms(rng.next_u32() as UnsignedIntType))
-        .map(|_| Amount::from_atoms(1))
+    let amounts: Vec<Amount> = (0..(2 + rng.next_u32() % 5))
+        .map(|_| Amount::from_atoms(rng.gen_range(1..10) as UnsignedIntType))
         .collect();
 
     let total_amount = amounts.iter().fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
@@ -146,6 +153,40 @@ fn sign_transaction(#[case] seed: Seed) {
             TxInput::from_utxo(source_id, rng.next_u32())
         })
         .collect();
+
+    let (_dest_prv, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let pub_key2 = if let Destination::PublicKeyHash(pkh) =
+        account.get_new_address(&mut db_tx, Change).unwrap().1.into_object()
+    {
+        account.find_corresponding_pub_key(&pkh).unwrap()
+    } else {
+        panic!("not a public key hash")
+    };
+    let pub_key3 = if let Destination::PublicKeyHash(pkh) =
+        account.get_new_address(&mut db_tx, Change).unwrap().1.into_object()
+    {
+        account.find_corresponding_pub_key(&pkh).unwrap()
+    } else {
+        panic!("not a public key hash")
+    };
+    let min_required_signatures = 2;
+    let challenge = ClassicMultisigChallenge::new(
+        &chain_config,
+        NonZeroU8::new(min_required_signatures).unwrap(),
+        vec![pub_key1, pub_key2, pub_key3],
+    )
+    .unwrap();
+    let multisig_hash = account.add_standalone_multisig(&mut db_tx, challenge, None).unwrap();
+
+    let multisig_dest = Destination::ClassicMultisig(multisig_hash);
+
+    let source_id = if rng.gen_bool(0.5) {
+        Id::<Transaction>::new(H256::random_using(&mut rng)).into()
+    } else {
+        Id::<GenBlock>::new(H256::random_using(&mut rng)).into()
+    };
+    let multisig_input = TxInput::from_utxo(source_id, rng.next_u32());
+    let multisig_utxo = TxOutput::Transfer(OutputValue::Coin(Amount::from_atoms(1)), multisig_dest);
 
     let acc_inputs = vec![
         TxInput::Account(AccountOutPoint::new(
@@ -196,7 +237,7 @@ fn sign_transaction(#[case] seed: Seed) {
             AccountNonce::new(rng.next_u64()),
             AccountCommand::FillOrder(
                 OrderId::new(H256::random_using(&mut rng)),
-                OutputValue::Coin(Amount::from_atoms(123)),
+                Amount::from_atoms(123),
                 Destination::AnyoneCanSpend,
             ),
         ),
@@ -304,18 +345,20 @@ fn sign_transaction(#[case] seed: Seed) {
         ),
         TxOutput::DataDeposit(vec![1, 2, 3]),
         TxOutput::Htlc(OutputValue::Coin(burn_amount), Box::new(hash_lock)),
-        TxOutput::AnyoneCanTake(Box::new(order_data)),
+        TxOutput::CreateOrder(Box::new(order_data)),
         TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(100_000_000_000)),
             account.get_new_address(&mut db_tx, Change).unwrap().1.into_object(),
         ),
     ];
 
-    let nft = TxOutput::IssueNft(nft_id, Box::new(nft_issuance), Destination::AnyoneCanSpend);
-    eprintln!("encoded nft: {:?}", nft.encode());
-
     let req = SendRequest::new()
         .with_inputs(inputs.clone().into_iter().zip(utxos.clone()), &|_| None)
+        .unwrap()
+        .with_inputs(
+            [multisig_input.clone()].into_iter().zip([multisig_utxo.clone()]),
+            &|_| None,
+        )
         .unwrap()
         .with_inputs_and_destinations(acc_inputs.into_iter().zip(acc_dests.clone()))
         .with_outputs(outputs);
@@ -333,16 +376,18 @@ fn sign_transaction(#[case] seed: Seed) {
     eprintln!("num inputs in tx: {} {:?}", inputs.len(), ptx.witnesses());
     assert!(ptx.all_signatures_available());
 
-    let sig_tx = ptx.into_signed_tx().unwrap();
-
-    let utxos_ref =
-        utxos.iter().map(Some).chain(acc_dests.iter().map(|_| None)).collect::<Vec<_>>();
+    let utxos_ref = utxos
+        .iter()
+        .map(Some)
+        .chain([Some(&multisig_utxo)])
+        .chain(acc_dests.iter().map(|_| None))
+        .collect::<Vec<_>>();
 
     for (i, dest) in destinations.iter().enumerate() {
         tx_verifier::input_check::signature_only_check::verify_tx_signature(
             &chain_config,
             dest,
-            &sig_tx,
+            &ptx,
             &utxos_ref,
             i,
         )
