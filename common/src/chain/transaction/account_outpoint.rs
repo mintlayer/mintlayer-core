@@ -22,7 +22,7 @@ use crate::{
 };
 use serialization::{Decode, Encode};
 
-use super::{output_value::OutputValue, Destination};
+use super::Destination;
 
 /// Type of an account that can be used to identify series of spending from an account
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
@@ -116,10 +116,14 @@ pub enum AccountCommand {
     // Change the authority who can authorize operations for a token
     #[codec(index = 5)]
     ChangeTokenAuthority(TokenId, Destination),
+    // Close an order and withdraw all remaining funds from both give and ask balances.
+    // Only the address specified as `conclude_key` can authorize this command.
     #[codec(index = 6)]
     ConcludeOrder(OrderId),
+    // Satisfy an order completely or partially.
+    // Second parameter is an amount provided to fill an order which corresponds to order's ask currency.
     #[codec(index = 7)]
-    FillOrder(OrderId, OutputValue, Destination),
+    FillOrder(OrderId, Amount, Destination),
     // Change token metadata uri
     #[codec(index = 8)]
     ChangeTokenMetadataUri(TokenId, Vec<u8>),
