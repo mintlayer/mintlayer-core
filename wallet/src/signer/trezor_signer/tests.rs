@@ -304,7 +304,7 @@ fn sign_transaction(#[case] seed: Seed) {
         ),
         TxOutput::DataDeposit(vec![1, 2, 3]),
         TxOutput::Htlc(OutputValue::Coin(burn_amount), Box::new(hash_lock)),
-        TxOutput::AnyoneCanTake(Box::new(order_data)),
+        TxOutput::CreateOrder(Box::new(order_data)),
         TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(100_000_000_000)),
             account.get_new_address(&mut db_tx, Change).unwrap().1.into_object(),
