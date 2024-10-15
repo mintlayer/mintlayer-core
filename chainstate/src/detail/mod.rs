@@ -724,7 +724,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
                 | TxOutput::Htlc(_, _)
-                | TxOutput::AnyoneCanTake(_) => { /* do nothing */ }
+                | TxOutput::CreateOrder(_) => { /* do nothing */ }
                 | TxOutput::CreateStakePool(pool_id, data) => {
                     let _ = db
                         .create_pool(*pool_id, data.as_ref().clone().into())

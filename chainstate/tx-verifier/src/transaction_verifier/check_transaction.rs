@@ -163,7 +163,7 @@ fn check_tokens_tx(
                     OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
                     OutputValue::TokenV0(_) => true,
                 },
-                TxOutput::AnyoneCanTake(data) => {
+                TxOutput::CreateOrder(data) => {
                     let ask_token_v0 = match data.ask() {
                         OutputValue::Coin(_) | OutputValue::TokenV1(_, _) => false,
                         OutputValue::TokenV0(_) => true,
@@ -257,7 +257,7 @@ fn check_tokens_tx(
             | TxOutput::DelegateStaking(_, _)
             | TxOutput::DataDeposit(_)
             | TxOutput::Htlc(_, _)
-            | TxOutput::AnyoneCanTake(_) => Ok(()),
+            | TxOutput::CreateOrder(_) => Ok(()),
         })
         .map_err(CheckTransactionError::TokensError)?;
 
@@ -312,7 +312,7 @@ fn check_data_deposit_outputs(
             | TxOutput::IssueFungibleToken(..)
             | TxOutput::IssueNft(..)
             | TxOutput::Htlc(_, _)
-            | TxOutput::AnyoneCanTake(..) => { /* Do nothing */ }
+            | TxOutput::CreateOrder(..) => { /* Do nothing */ }
             TxOutput::DataDeposit(v) => {
                 // Ensure the size of the data doesn't exceed the max allowed
                 if v.len() > chain_config.data_deposit_max_size(block_height) {
@@ -354,7 +354,7 @@ fn check_htlc_outputs(
                 | TxOutput::IssueFungibleToken(_)
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
-                | TxOutput::AnyoneCanTake(_) => false,
+                | TxOutput::CreateOrder(_) => false,
                 TxOutput::Htlc(_, _) => true,
             });
 
@@ -382,7 +382,7 @@ fn check_order_outputs(
             | TxOutput::IssueNft(..)
             | TxOutput::DataDeposit(..)
             | TxOutput::Htlc(..) => { /* Do nothing */ }
-            TxOutput::AnyoneCanTake(data) => {
+            TxOutput::CreateOrder(data) => {
                 let orders_activated = chain_config
                     .chainstate_upgrades()
                     .version_at_height(block_height)

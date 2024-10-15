@@ -52,7 +52,7 @@ fn get_staking_kernel_destination(
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::DataDeposit(_)
         | TxOutput::Htlc(_, _)
-        | TxOutput::AnyoneCanTake(_) => {
+        | TxOutput::CreateOrder(_) => {
             return Err(BlockSignatureError::WrongOutputType(header.get_id()))
         }
         TxOutput::CreateStakePool(_, stake_pool) => stake_pool.staker(),

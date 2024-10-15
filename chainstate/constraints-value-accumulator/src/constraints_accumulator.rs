@@ -157,7 +157,7 @@ impl ConstrainedValueAccumulator {
             | TxOutput::IssueFungibleToken(..)
             | TxOutput::Burn(..)
             | TxOutput::DataDeposit(..)
-            | TxOutput::AnyoneCanTake(..) => {
+            | TxOutput::CreateOrder(..) => {
                 return Err(Error::SpendingNonSpendableOutput(outpoint.clone()));
             }
             TxOutput::IssueNft(token_id, _, _) => {
@@ -421,7 +421,7 @@ impl ConstrainedValueAccumulator {
                     CoinOrTokenId::Coin,
                     chain_config.nft_issuance_fee(block_height),
                 )?,
-                TxOutput::AnyoneCanTake(order_data) => {
+                TxOutput::CreateOrder(order_data) => {
                     let id = CoinOrTokenId::from_output_value(order_data.give())
                         .ok_or(Error::UnsupportedTokenVersion)?;
                     insert_or_increase(

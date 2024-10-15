@@ -357,7 +357,7 @@ async fn simulation(
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::IssueNft(_, _, _)
                     | TxOutput::Htlc(_, _)
-                    | TxOutput::AnyoneCanTake(_) => None,
+                    | TxOutput::CreateOrder(_) => None,
                 });
                 staking_pools.extend(new_pools);
 
@@ -377,7 +377,7 @@ async fn simulation(
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::IssueNft(_, _, _)
                     | TxOutput::Htlc(_, _)
-                    | TxOutput::AnyoneCanTake(_) => None,
+                    | TxOutput::CreateOrder(_) => None,
                 });
                 delegations.extend(new_delegations);
 
@@ -394,7 +394,7 @@ async fn simulation(
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::Htlc(_, _)
-                    | TxOutput::AnyoneCanTake(_) => None,
+                    | TxOutput::CreateOrder(_) => None,
                 });
                 token_ids.extend(new_tokens);
 
@@ -439,7 +439,7 @@ async fn simulation(
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::Htlc(_, _) => {}
-                    TxOutput::AnyoneCanTake(_) => unimplemented!(), // TODO(orders)
+                    TxOutput::CreateOrder(_) => unimplemented!(), // TODO(orders)
                 });
 
                 tx.inputs().iter().for_each(|inp| match inp {

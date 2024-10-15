@@ -149,7 +149,7 @@ pub enum TxOutput {
     /// At the same time only the destination specified in OrderData::conclude_key can conclude the order
     /// and transfer remaining balances out closing the account.
     #[codec(index = 11)]
-    AnyoneCanTake(Box<OrderData>),
+    CreateOrder(Box<OrderData>),
 }
 
 impl TxOutput {
@@ -165,7 +165,7 @@ impl TxOutput {
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::DataDeposit(_)
             | TxOutput::Htlc(_, _)
-            | TxOutput::AnyoneCanTake(_) => None,
+            | TxOutput::CreateOrder(_) => None,
             TxOutput::LockThenTransfer(_, _, tl) => Some(tl),
         }
     }
@@ -337,8 +337,8 @@ impl TextSummary for TxOutput {
                     fmt_dest(&htlc.refund_key)
                 )
             }
-            TxOutput::AnyoneCanTake(order) => format!(
-                "AnyoneCanTake(ConcludeKey({}), AskValue({}), GiveValue({}))",
+            TxOutput::CreateOrder(order) => format!(
+                "CreateOrder(ConcludeKey({}), AskValue({}), GiveValue({}))",
                 fmt_dest(order.conclude_key()),
                 fmt_val(order.ask()),
                 fmt_val(order.give()),

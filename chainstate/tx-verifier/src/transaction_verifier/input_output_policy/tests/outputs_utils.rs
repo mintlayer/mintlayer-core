@@ -47,7 +47,7 @@ fn update_functions_below_if_new_outputs_were_added(output: TxOutput) {
         TxOutput::IssueNft(_, _, _) => unimplemented!(),
         TxOutput::DataDeposit(_) => unimplemented!(),
         TxOutput::Htlc(_, _) => unimplemented!(),
-        TxOutput::AnyoneCanTake(_) => unimplemented!(),
+        TxOutput::CreateOrder(_) => unimplemented!(),
     }
 }
 
@@ -234,7 +234,7 @@ pub fn data_deposit() -> TxOutput {
 }
 
 pub fn create_order() -> TxOutput {
-    TxOutput::AnyoneCanTake(Box::new(OrderData::new(
+    TxOutput::CreateOrder(Box::new(OrderData::new(
         Destination::AnyoneCanSpend,
         OutputValue::Coin(Amount::ZERO),
         OutputValue::Coin(Amount::ZERO),
@@ -272,7 +272,7 @@ pub fn is_stake_pool(output: &TxOutput) -> bool {
         | TxOutput::IssueNft(..)
         | TxOutput::DataDeposit(..)
         | TxOutput::Htlc(..)
-        | TxOutput::AnyoneCanTake(..) => false,
+        | TxOutput::CreateOrder(..) => false,
         TxOutput::CreateStakePool(..) => true,
     }
 }
@@ -289,7 +289,7 @@ pub fn is_produce_block(output: &TxOutput) -> bool {
         | TxOutput::IssueNft(..)
         | TxOutput::DataDeposit(..)
         | TxOutput::Htlc(..)
-        | TxOutput::AnyoneCanTake(..) => false,
+        | TxOutput::CreateOrder(..) => false,
         TxOutput::ProduceBlockFromStake(..) => true,
     }
 }

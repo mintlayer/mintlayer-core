@@ -68,7 +68,7 @@ fn create_order_constraints(#[case] seed: Seed) {
             Destination::AnyoneCanSpend,
         ))];
 
-        let outputs = vec![TxOutput::AnyoneCanTake(order_data.clone())];
+        let outputs = vec![TxOutput::CreateOrder(order_data.clone())];
 
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
@@ -104,7 +104,7 @@ fn create_order_constraints(#[case] seed: Seed) {
             Destination::AnyoneCanSpend,
         ))];
 
-        let outputs = vec![TxOutput::AnyoneCanTake(order_data.clone())];
+        let outputs = vec![TxOutput::CreateOrder(order_data.clone())];
 
         let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
             &chain_config,
@@ -141,7 +141,7 @@ fn create_order_constraints(#[case] seed: Seed) {
         ))];
 
         let outputs = vec![
-            TxOutput::AnyoneCanTake(order_data.clone()),
+            TxOutput::CreateOrder(order_data.clone()),
             TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(1)),
                 Destination::AnyoneCanSpend,
@@ -183,7 +183,7 @@ fn create_order_constraints(#[case] seed: Seed) {
         ))];
 
         let outputs = vec![
-            TxOutput::AnyoneCanTake(order_data.clone()),
+            TxOutput::CreateOrder(order_data.clone()),
             TxOutput::Transfer(
                 OutputValue::TokenV1(token_id, Amount::from_atoms(1)),
                 Destination::AnyoneCanSpend,
@@ -225,7 +225,7 @@ fn create_order_constraints(#[case] seed: Seed) {
         Destination::AnyoneCanSpend,
     ))];
 
-    let outputs = vec![TxOutput::AnyoneCanTake(order_data)];
+    let outputs = vec![TxOutput::CreateOrder(order_data)];
 
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,

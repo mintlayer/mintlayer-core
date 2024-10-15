@@ -210,7 +210,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignedTransaction {
                 TxOutput::IssueFungibleToken(_issuance) => Err(TranslationError::Unspendable),
                 TxOutput::Burn(_val) => Err(TranslationError::Unspendable),
                 TxOutput::DataDeposit(_data) => Err(TranslationError::Unspendable),
-                TxOutput::AnyoneCanTake(_) => Err(TranslationError::Unspendable),
+                TxOutput::CreateOrder(_) => Err(TranslationError::Unspendable),
             },
             InputInfo::Account { outpoint } => match outpoint.account() {
                 AccountSpending::DelegationBalance(delegation_id, _amount) => {
@@ -263,7 +263,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for BlockRewardTransactable<'_>
                     | TxOutput::DataDeposit(_)
                     | TxOutput::DelegateStaking(_, _)
                     | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::AnyoneCanTake(_) => Err(TranslationError::Unspendable),
+                    | TxOutput::CreateOrder(_) => Err(TranslationError::Unspendable),
 
                     TxOutput::ProduceBlockFromStake(d, _) => {
                         // Spending an output of a block creation output is only allowed to
@@ -325,7 +325,7 @@ impl<C: InputInfoProvider> TranslateInput<C> for TimelockOnly {
                 | TxOutput::DelegateStaking(_, _)
                 | TxOutput::Burn(_)
                 | TxOutput::DataDeposit(_)
-                | TxOutput::AnyoneCanTake(_) => Err(TranslationError::Unspendable),
+                | TxOutput::CreateOrder(_) => Err(TranslationError::Unspendable),
             },
             InputInfo::Account { outpoint } => match outpoint.account() {
                 AccountSpending::DelegationBalance(_deleg_id, _amt) => Ok(WitnessScript::TRUE),
@@ -416,7 +416,7 @@ impl<C: SignatureInfoProvider> TranslateInput<C> for SignatureOnlyTx {
                 TxOutput::IssueFungibleToken(_issuance) => Err(TranslationError::Unspendable),
                 TxOutput::Burn(_val) => Err(TranslationError::Unspendable),
                 TxOutput::DataDeposit(_data) => Err(TranslationError::Unspendable),
-                TxOutput::AnyoneCanTake(_) => Err(TranslationError::Unspendable),
+                TxOutput::CreateOrder(_) => Err(TranslationError::Unspendable),
             },
             InputInfo::Account { outpoint } => match outpoint.account() {
                 AccountSpending::DelegationBalance(delegation_id, _amount) => {

@@ -337,7 +337,7 @@ where
             | TxOutput::IssueNft(_, _, _)
             | TxOutput::DataDeposit(_)
             | TxOutput::Htlc(_, _)
-            | TxOutput::AnyoneCanTake(_) => Ok(None),
+            | TxOutput::CreateOrder(_) => Ok(None),
         }
     }
 
@@ -458,7 +458,7 @@ where
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
                 | TxOutput::Htlc(_, _)
-                | TxOutput::AnyoneCanTake(_) => None,
+                | TxOutput::CreateOrder(_) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -649,7 +649,7 @@ where
                 | TxOutput::IssueNft(_, _, _)
                 | TxOutput::DataDeposit(_)
                 | TxOutput::Htlc(_, _)
-                | TxOutput::AnyoneCanTake(_) => None,
+                | TxOutput::CreateOrder(_) => None,
                 TxOutput::IssueFungibleToken(issuance_data) => {
                     let result = make_token_id(tx.inputs())
                         .ok_or(ConnectTransactionError::TokensError(
@@ -711,7 +711,7 @@ where
                 OutputValue::Coin(_) | OutputValue::TokenV0(_) => Ok(()),
                 OutputValue::TokenV1(ref token_id, _) => check_not_frozen(*token_id),
             },
-            TxOutput::AnyoneCanTake(data) => {
+            TxOutput::CreateOrder(data) => {
                 [data.ask(), data.give()].iter().try_for_each(|v| match v {
                     OutputValue::TokenV0(_) | OutputValue::Coin(_) => Ok(()),
                     OutputValue::TokenV1(token_id, _) => check_not_frozen(*token_id),
@@ -869,7 +869,7 @@ where
                 | TxOutput::DataDeposit(..)
                 | TxOutput::IssueFungibleToken(..)
                 | TxOutput::Htlc(_, _) => None,
-                TxOutput::AnyoneCanTake(order_data) => match input_utxo_outpoint {
+                TxOutput::CreateOrder(order_data) => match input_utxo_outpoint {
                     Some(input_utxo_outpoint) => {
                         let order_id = make_order_id(input_utxo_outpoint);
                         let result = self

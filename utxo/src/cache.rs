@@ -505,7 +505,7 @@ fn should_include_in_utxo_set(output: &TxOutput) -> bool {
         | TxOutput::Burn(..)
         | TxOutput::IssueFungibleToken(..)
         | TxOutput::DataDeposit(..)
-        | TxOutput::AnyoneCanTake(..) => false,
+        | TxOutput::CreateOrder(..) => false,
     }
 }
 

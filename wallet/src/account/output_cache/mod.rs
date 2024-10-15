@@ -586,7 +586,7 @@ impl OutputCache {
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::IssueFungibleToken(_)
             | TxOutput::Htlc(_, _)
-            | TxOutput::AnyoneCanTake(_) => false,
+            | TxOutput::CreateOrder(_) => false,
         }
     }
 
@@ -746,7 +746,7 @@ impl OutputCache {
                         OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
                         OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
                     },
-                    TxOutput::AnyoneCanTake(data) => {
+                    TxOutput::CreateOrder(data) => {
                         [data.ask(), data.give()].iter().any(|v| match v {
                             OutputValue::TokenV1(token_id, _) => frozen_token_id == token_id,
                             OutputValue::TokenV0(_) | OutputValue::Coin(_) => false,
@@ -874,7 +874,7 @@ impl OutputCache {
                     }
                 }
                 TxOutput::IssueNft(_, _, _) => {}
-                TxOutput::AnyoneCanTake(order_data) => {
+                TxOutput::CreateOrder(order_data) => {
                     let input0_outpoint = crate::utils::get_first_utxo_outpoint(tx.inputs())?;
                     let order_id = make_order_id(input0_outpoint);
                     let give_currency = Currency::from_output_value(order_data.give())
@@ -1158,7 +1158,7 @@ impl OutputCache {
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::Htlc(_, _)
-                    | TxOutput::AnyoneCanTake(_) => {}
+                    | TxOutput::CreateOrder(_) => {}
                 }
             }
         }
@@ -1495,7 +1495,7 @@ impl OutputCache {
                     | TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::Htlc(_, _)
-                    | TxOutput::AnyoneCanTake(_) => None,
+                    | TxOutput::CreateOrder(_) => None,
                     TxOutput::ProduceBlockFromStake(_, pool_id)
                     | TxOutput::CreateStakePool(pool_id, _) => {
                         self.pools.get(pool_id).and_then(|pool_data| {
@@ -1539,7 +1539,7 @@ fn is_v0_token_output(output: &TxOutput) -> bool {
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::DataDeposit(_)
         | TxOutput::ProduceBlockFromStake(_, _)
-        | TxOutput::AnyoneCanTake(_) => false,
+        | TxOutput::CreateOrder(_) => false,
     }
 }
 
