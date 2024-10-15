@@ -3,6 +3,8 @@ import * as bip39 from "bip39";
 import { Modal, initTWE } from "tw-elements";
 import { RiInformation2Line } from "react-icons/ri";
 import { PiShareNetworkBold } from "react-icons/pi";
+import { IoCloseSharp } from "react-icons/io5";
+import { Tooltip, Button } from "flowbite-react";
 
 import MintlayerIcon from "../assets/mintlayer_icon.png";
 import TransactionIcon from "../assets/transaction_icon.png";
@@ -16,6 +18,7 @@ import AccountIcom from "../assets/account_icon.png";
 import SummaryTab from "../components/Summary";
 import NetworkingTab from "../components/Networking";
 import { WalletType } from "../types/Types";
+import Transactions from "../components/Transactions";
 
 function Home() {
   const wallets = [
@@ -36,12 +39,12 @@ function Home() {
   const [currentWallet, setCurrentWallet] = useState<WalletType | undefined>(
     wallets?.[0]
   );
-  const [activeTab, setActiveTab] = useState("home");
   const [currentTab, setCurrentTab] = useState("summary");
   const [showToolTip, setShowToolTip] = useState(0);
   const [currentAccount, setCurrentAccount] = useState("");
   const [mnemonic, setMnemonic] = useState("");
   const [showNemonicModal, setShowNemonicModal] = useState(false);
+  const [showRecoverWalletModal, setShowRecoverWalletModal] = useState(false);
 
   useEffect(() => {
     initTWE({ Modal });
@@ -49,16 +52,18 @@ function Home() {
 
   const createNewWallet = () => {
     try {
-      const newMnemonic = bip39.generateMnemonic();
-      console.log(newMnemonic);
-      setMnemonic(newMnemonic);
+      // const newMnemonic = bip39.generateMnemonic();
+      // console.log(newMnemonic);
+      // setMnemonic(newMnemonic);
       setShowNemonicModal(true);
     } catch (error) {
       console.error(error);
     }
   };
 
-  const recoverWallet = (mode: string) => {};
+  const recoverWallet = (mode: string) => {
+    setShowRecoverWalletModal(true);
+  };
 
   const openWallet = (mode: string) => {};
 
@@ -67,72 +72,62 @@ function Home() {
   return (
     <div className="home-page ">
       {showNemonicModal && (
-        <div
-          id="default-modal"
-          aria-hidden="true"
-          className="hidden overflow-y-auto tabIndex-{-1} overflow-x-hidden fixed top-0 right-0 left-0 z-50 justify-center items-center w-full md:inset-0 h-[calc(100%-1rem)] max-h-full"
-        >
-          <div className="relative p-4 w-full max-w-2xl max-h-full">
-            <div className="relative bg-white rounded-lg shadow dark:bg-gray-700">
-              <div className="flex items-center justify-between p-4 md:p-5 border-b rounded-t dark:border-gray-600">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Terms of Service
-                </h3>
-                <button
-                  type="button"
-                  className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 ms-auto inline-flex justify-center items-center dark:hover:bg-gray-600 dark:hover:text-white"
-                  data-modal-hide="default-modal"
-                >
-                  <svg
-                    className="w-3 h-3"
-                    aria-hidden="true"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 14 14"
-                  >
-                    <path
-                      stroke="currentColor"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"
-                    />
-                  </svg>
-                  <span className="sr-only">Close modal</span>
-                </button>
-              </div>
-              <div className="p-4 md:p-5 space-y-4">
-                <p className="text-base leading-relaxed text-gray-500 dark:text-gray-400">
-                  With less than a month to go before the European Union enacts
-                  new consumer privacy laws for its citizens, companies around
-                  the world are updating their terms of service agreements to
-                  comply.
-                </p>
-                <p className="text-base leading-relaxed text-gray-500 dark:text-gray-400">
-                  The European Union’s General Data Protection Regulation
-                  (G.D.P.R.) goes into effect on May 25 and is meant to ensure a
-                  common set of data rights in the European Union. It requires
-                  organizations to notify users as soon as possible of high-risk
-                  data breaches that could personally affect them.
-                </p>
-              </div>
-              <div className="flex items-center p-4 md:p-5 border-t border-gray-200 rounded-b dark:border-gray-600">
-                <button
-                  data-modal-hide="default-modal"
-                  type="button"
-                  className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800"
-                >
-                  I accept
-                </button>
-                <button
-                  data-modal-hide="default-modal"
-                  type="button"
-                  className="py-2.5 px-5 ms-3 text-sm font-medium text-gray-900 focus:outline-none bg-white rounded-lg border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-4 focus:ring-gray-100 dark:focus:ring-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700"
-                >
-                  Decline
-                </button>
-              </div>
-            </div>
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black opacity-50"></div>
+          <div className="bg-white rounded-lg shadow-lg z-10 p-6 max-w-lg mx-auto relative space-y-4">
+            {/* Close Button */}
+            <button
+              className="absolute top-2 right-2 text-gray-600 "
+              onClick={() => setShowNemonicModal(false)}
+            >
+              <IoCloseSharp />
+            </button>
+            <h2 className="text-lg font-bold mb-4">
+              Create New {walletMode} Wallet
+            </h2>
+            <p className="mb-4">Your Wallet Mnemonic</p>
+            <textarea
+              value={mnemonic}
+              rows={3}
+              contentEditable={false}
+              className="w-full shadow-[1px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 rounded-lg"
+            />
+            <button
+              className="bg-green-400 text-black w-full px-4 py-2 rounded-2 hover:bg-[#000000] hover:text-green-400 transition duration-200"
+              onClick={() => setShowNemonicModal(false)}
+            >
+              Create
+            </button>
+          </div>
+        </div>
+      )}
+      {showRecoverWalletModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black opacity-50"></div>
+          <div className="bg-white rounded-lg shadow-lg z-10 p-6 max-w-lg mx-auto relative space-y-4">
+            {/* Close Button */}
+            <button
+              className="absolute top-2 right-2 text-gray-600 "
+              onClick={() => setShowRecoverWalletModal(false)}
+            >
+              <IoCloseSharp />
+            </button>
+            <h2 className="text-lg font-bold mb-4">
+              Recover {walletMode} Wallet
+            </h2>
+            <p className="mb-4">Enter Mnemonic</p>
+            <textarea
+              value={mnemonic}
+              onChange={(e) => setMnemonic(e.target.value)}
+              rows={3}
+              className="w-full shadow-[1px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 rounded-lg"
+            />
+            <button
+              className="bg-green-400 text-black w-full px-4 py-2 rounded-2 hover:bg-[#000000] hover:text-green-400 transition duration-200"
+              onClick={() => setShowRecoverWalletModal(false)}
+            >
+              Recover
+            </button>
           </div>
         </div>
       )}
@@ -171,41 +166,29 @@ function Home() {
           </div>
         ) : !walletMode ? (
           <div className="flex flex-col space-y-2 items-center">
-            <button
-              onClick={() => setWalletMode("Hot")}
-              onMouseEnter={() => setShowToolTip(1)}
-              onMouseLeave={() => setShowToolTip(0)}
-              className="py-2 px-4 rounded w-24 bg-[#50d71e] hover:bg-black text-[#000000] font-bold hover:text-[#50d71e]"
+            <Tooltip
+              content='This is the normal operating mode where all wallet functions are enabled. The wallet will be connected to the internet, allowing you to stake and perform all operations. If you are unsure which option to choose, select "Hot"'
+              placement="left"
             >
-              Hot
-            </button>
-            {showToolTip === 1 && (
-              <div className="absolute left-1/2 top-1/2 transform -translate-y-1/2 ml-2 w-72 bg-gray-700 text-white text-center text-sm rounded py-1">
-                This is the standard operating mode, where all wallet functions
-                are available to you. The wallet will be connected to the
-                internet, enabling you to stake and carry out all operations
-                smoothly. If you're unsure which option to select, we recommend
-                choosing 'Hot' for the best experience.
-              </div>
-            )}
-            <button
-              onClick={() => setWalletMode("Cold")}
-              onMouseEnter={() => setShowToolTip(2)}
-              onMouseLeave={() => setShowToolTip(0)}
-              className="py-2 px-4 rounded w-24 bg-[#50d71e] hover:bg-black text-[#000000] font-bold hover:text-[#50d71e]"
+              <Button
+                onClick={() => setWalletMode("Hot")}
+                className="py-1 px-4 rounded w-24 bg-[#50d71e] text-[#000000] font-bold text-xl hover:text-[#50d71e] hover:bg-black text-xl"
+              >
+                Hot
+              </Button>
+            </Tooltip>
+
+            <Tooltip
+              content="This mode runs a limited version of the node. It allows the wallet to operate without an internet connection for added security. In this mode, the wallet cannot sync, check balances, or create transactions (though it can sign imported transactions). Staking is also disabled."
+              placement="right"
             >
-              Cold
-            </button>
-            {showToolTip === 2 && (
-              <div className="absolute left-1/2 top-1/2 transform -translate-y-1/2 ml-2 w-72 bg-gray-700 text-white text-center text-sm rounded py-1">
-                This mode operates a limited version of the node, providing an
-                added layer of security by allowing the wallet to function
-                without an internet connection. Please note that while in this
-                mode, the wallet will not be able to sync, check balances, or
-                create transactions (though it can sign transactions that have
-                been imported). Additionally, staking features will be disabled.
-              </div>
-            )}
+              <Button
+                onClick={() => setWalletMode("Cold")}
+                className="py-1 px-4 rounded w-24 bg-[#50d71e] text-[#000000] font-bold text-xl hover:text-[#50d71e] hover:bg-black text-xl"
+              >
+                Cold
+              </Button>
+            </Tooltip>
           </div>
         ) : (
           <div className="fixed top-0 left-0 ">
@@ -292,42 +275,42 @@ function Home() {
                         </select>
                       </div>
                       <button
-                        onClick={() => setActiveTab("transactions")}
+                        onClick={() => setCurrentTab("transactions")}
                         className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
                       >
                         <img src={TransactionIcon} className="pr-2" />
                         Transactions
                       </button>
                       <button
-                        onClick={() => setActiveTab("addresses")}
+                        onClick={() => setCurrentTab("addresses")}
                         className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
                       >
                         <img src={AddressIcon} className="pr-2" />
                         Addresses
                       </button>
                       <button
-                        onClick={() => setActiveTab("send")}
+                        onClick={() => setCurrentTab("send")}
                         className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
                       >
                         <img src={SendIcon} className="pr-2" />
                         Send
                       </button>
                       <button
-                        onClick={() => setActiveTab("staking")}
+                        onClick={() => setCurrentTab("staking")}
                         className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
                       >
                         <img src={StakingIcon} className="pr-2" />
                         Staking
                       </button>
                       <button
-                        onClick={() => setActiveTab("delegation")}
+                        onClick={() => setCurrentTab("delegation")}
                         className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
                       >
                         <img src={DelegationIcon} className="pr-2" />
                         Delegation
                       </button>
                       <button
-                        onClick={() => setActiveTab("console")}
+                        onClick={() => setCurrentTab("console")}
                         className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
                       >
                         <img src={ConsoleIcon} className="pr-2" />
@@ -365,6 +348,7 @@ function Home() {
                   </div>
                   {currentTab === "summary" && <SummaryTab network={netMode} />}
                   {currentTab === "network" && <NetworkingTab />}
+                  {currentTab === "transactions" && <Transactions />}
                 </div>
               </div>
             </div>

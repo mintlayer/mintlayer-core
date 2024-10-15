@@ -14,6 +14,7 @@ function App() {
         </Routes>
       </main>
       <footer></footer>
+      
     </Router>
   );
 }

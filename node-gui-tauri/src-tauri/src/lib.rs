@@ -99,16 +99,16 @@ fn parse_address(
 // #[tauri::command]
 // #[tauri::command]
 
-#[tauri::command]
-pub fn generate_mnemonic() -> String {
-    let generated =
-        wallet_controller::mnemonic::generate_new_mnemonic(wallet::wallet::Language::English);
-    let mnemonic = match generated {
-        Some(generated) => generated.to_string(),
-        None => "Mnemonic Generation Failed".to_string(),
-    };
-    mnemonic
-}
+// #[tauri::command]
+// pub fn generate_mnemonic() -> String {
+//     let generated =
+//         wallet_controller::mnemonic::generate_new_mnemonic(wallet::wallet::Language::English);
+//     let mnemonic = match generated {
+//         generated => generated.to_string(),
+//         None => "Mnemonic Generation Failed".to_string(),
+//     };
+//     mnemonic
+// }
 
 #[tauri::command]
 async fn initialize_node(
@@ -245,7 +245,7 @@ pub async fn node_initialize(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![initialize_node, generate_mnemonic])
+        .invoke_handler(tauri::generate_handler![initialize_node])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
