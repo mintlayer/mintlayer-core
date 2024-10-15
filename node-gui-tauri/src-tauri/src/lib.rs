@@ -30,17 +30,16 @@ use common::chain::{ChainConfig, Destination};
 use common::primitives::{Amount, BlockHeight};
 use node_lib::{Command, RunOptions};
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::Mutex;
 
 use self::error::BackendError;
 use self::messages::{BackendEvent, BackendRequest};
 
-
-struct AppState{
-    initialized_node:Mutex<Option<InitializedNode>>,
+struct AppState {
+    initialized_node: Mutex<Option<InitializedNode>>,
 }
 #[derive(Debug)]
 pub struct BackendControls {
@@ -99,13 +98,25 @@ fn parse_address(
 
 // #[tauri::command]
 // #[tauri::command]
+
+#[tauri::command]
+pub fn generate_mnemonic() -> String {
+    let generated =
+        wallet_controller::mnemonic::generate_new_mnemonic(wallet::wallet::Language::English);
+    let mnemonic = match generated {
+        Some(generated) => generated.to_string(),
+        None => "Mnemonic Generation Failed".to_string(),
+    };
+    mnemonic
+}
+
 #[tauri::command]
 async fn initialize_node(
     state: tauri::State<'_, AppState>,
     network: InitNetwork,
     mode: WalletMode,
 ) -> Result<String, String> {
-    let backend_controls = node_initialize( network, mode).await.map_err(|e| e.to_string())?;
+    let backend_controls = node_initialize(network, mode).await.map_err(|e| e.to_string())?;
     let mut guard = state.initialized_node.lock().await;
     *guard = Some(backend_controls.initialized_node);
     Ok("Node Initialized".to_string())
@@ -234,7 +245,7 @@ pub async fn node_initialize(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![initialize_node])
+        .invoke_handler(tauri::generate_handler![initialize_node, generate_mnemonic])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

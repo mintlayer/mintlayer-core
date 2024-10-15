@@ -12,9 +12,11 @@
   "dependencies": {
     "@tauri-apps/api": ">=2.0.0",
     "@tauri-apps/plugin-shell": ">=2.0.0",
+    "bip39": "^3.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.26.2"
+    "react-router-dom": "^6.26.2",
+    "tw-elements": "^2.0.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": ">=2.0.0",
