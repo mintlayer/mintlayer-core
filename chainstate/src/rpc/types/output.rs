@@ -39,7 +39,7 @@ pub enum RpcOutputValueIn {
     },
 }
 
-#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RpcOutputValueOut {
     Coin {
@@ -67,7 +67,7 @@ impl RpcOutputValueOut {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 pub struct RpcStakePoolData {
     pledge: RpcAmountOut,
     staker: RpcAddress<Destination>,
@@ -94,7 +94,7 @@ impl RpcStakePoolData {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 pub struct RpcHashedTimelockContract {
     secret_hash: RpcHexString,
     spend_key: RpcAddress<Destination>,
@@ -117,7 +117,7 @@ impl RpcHashedTimelockContract {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, rpc_description::HasValueHint)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rpc_description::HasValueHint)]
 #[serde(tag = "type", content = "content")]
 pub enum RpcTxOutput {
     Transfer {
