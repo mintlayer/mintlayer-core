@@ -18,7 +18,7 @@ import AccountIcom from "../assets/account_icon.png";
 import SummaryTab from "../components/Summary";
 import NetworkingTab from "../components/Networking";
 import { WalletType } from "../types/Types";
-import Transactions from "../components/Transactions";
+import WalletActions from "../components/WalletActions";
 
 function Home() {
   const wallets = [
@@ -40,7 +40,7 @@ function Home() {
     wallets?.[0]
   );
   const [currentTab, setCurrentTab] = useState("summary");
-  const [showToolTip, setShowToolTip] = useState(0);
+  const [activeTab, setActiveTab] = useState("transactions");
   const [currentAccount, setCurrentAccount] = useState("");
   const [mnemonic, setMnemonic] = useState("");
   const [showNemonicModal, setShowNemonicModal] = useState(false);
@@ -275,42 +275,60 @@ function Home() {
                         </select>
                       </div>
                       <button
-                        onClick={() => setCurrentTab("transactions")}
+                        onClick={() => {
+                          setCurrentTab("transactions");
+                          setActiveTab("transactions");
+                        }}
                         className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
                       >
                         <img src={TransactionIcon} className="pr-2" />
                         Transactions
                       </button>
                       <button
-                        onClick={() => setCurrentTab("addresses")}
+                        onClick={() => {
+                          setCurrentTab("transactions");
+                          setActiveTab("addresses");
+                        }}
                         className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
                       >
                         <img src={AddressIcon} className="pr-2" />
                         Addresses
                       </button>
                       <button
-                        onClick={() => setCurrentTab("send")}
+                        onClick={() => {
+                          setCurrentTab("transactions");
+                          setActiveTab("send");
+                        }}
                         className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
                       >
                         <img src={SendIcon} className="pr-2" />
                         Send
                       </button>
                       <button
-                        onClick={() => setCurrentTab("staking")}
+                        onClick={() => {
+                          setCurrentTab("transactions");
+                          setActiveTab("staking");
+                        }}
                         className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
                       >
                         <img src={StakingIcon} className="pr-2" />
                         Staking
                       </button>
                       <button
-                        onClick={() => setCurrentTab("delegation")}
+                        onClick={() => {
+                          setCurrentTab("transactions");
+                          setActiveTab("delegation");
+                        }}
                         className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
                       >
                         <img src={DelegationIcon} className="pr-2" />
                         Delegation
                       </button>
                       <button
-                        onClick={() => setCurrentTab("console")}
+                        onClick={() => {
+                          setCurrentTab("transactions");
+                          setActiveTab("console");
+                        }}
                         className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
                       >
                         <img src={ConsoleIcon} className="pr-2" />
@@ -348,7 +366,9 @@ function Home() {
                   </div>
                   {currentTab === "summary" && <SummaryTab network={netMode} />}
                   {currentTab === "network" && <NetworkingTab />}
-                  {currentTab === "transactions" && <Transactions />}
+                  {currentTab === "transactions" && (
+                    <WalletActions activeTab={activeTab} />
+                  )}
                 </div>
               </div>
             </div>
