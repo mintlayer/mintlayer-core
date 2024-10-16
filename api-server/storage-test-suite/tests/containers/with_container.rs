@@ -13,11 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use api_server_backend_test_suite::podman::Podman;
 use api_server_common::storage::storage_api::{
     ApiServerStorage, ApiServerStorageError, Transactional,
 };
-
-use super::podman::Podman;
 
 pub struct ApiServerStorageWithContainer<S: ApiServerStorage> {
     storage: S,

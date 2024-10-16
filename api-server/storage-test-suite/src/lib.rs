@@ -17,6 +17,7 @@
 #![allow(clippy::unwrap_used)]
 
 mod basic;
+pub mod podman;
 
 #[macro_use]
 pub mod helpers;
