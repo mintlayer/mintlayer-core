@@ -17,6 +17,7 @@ mod containers;
 
 use std::sync::Arc;
 
+use api_server_backend_test_suite::podman::{Container, Podman};
 use api_server_common::storage::{
     impls::postgres::TransactionalApiServerPostgresStorage, storage_api::ApiServerStorage,
 };
@@ -26,9 +27,9 @@ use utils::rust_backtrace;
 
 #[must_use]
 async fn make_postgres_storage(chain_config: Arc<ChainConfig>) -> impl ApiServerStorage {
-    let container = containers::podman::Container::PostgresFromDockerHub;
+    let container = Container::PostgresFromDockerHub;
 
-    let mut podman = containers::podman::Podman::new("MintlayerPostgresTest", container)
+    let mut podman = Podman::new("MintlayerPostgresTest", container)
         .with_env("POSTGRES_HOST_AUTH_METHOD", "trust")
         .with_env(
             "POSTGRES_DB",
