@@ -1,4 +1,5 @@
 import Addresses from "./Addresses";
+import Send from "./Send";
 import Transactions from "./Transactions";
 const WalletActions = (props: any) => {
   return (
@@ -21,6 +22,7 @@ const WalletActions = (props: any) => {
       </div>
       {props.activeTab === "transactions" && <Transactions />}
       {props.activeTab === "addresses" && <Addresses />}
+      {props.activeTab === "send" && <Send />}
     </div>
   );
 };
