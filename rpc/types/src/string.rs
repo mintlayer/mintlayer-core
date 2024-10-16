@@ -112,6 +112,10 @@ impl RpcString {
         self.0
     }
 
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+
     pub fn try_into_string(self) -> Result<String, (Self, std::str::Utf8Error)> {
         String::from_utf8(self.0).map_err(|e| {
             let err = e.utf8_error();

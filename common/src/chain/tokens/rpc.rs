@@ -51,6 +51,13 @@ impl RPCTokenInfo {
             Self::NonFungibleToken(_) => 0,
         }
     }
+
+    pub fn token_ticker(&self) -> &[u8] {
+        match self {
+            Self::FungibleToken(info) => info.token_ticker.as_bytes(),
+            Self::NonFungibleToken(info) => info.metadata.ticker.as_bytes(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, HasValueHint)]

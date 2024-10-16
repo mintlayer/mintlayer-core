@@ -22,7 +22,6 @@ use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::classic_multisig::ClassicMultisigChallenge;
 use common::chain::htlc::HashedTimelockContract;
-use common::chain::partially_signed_transaction::PartiallySignedTransaction;
 use common::chain::{AccountCommand, AccountOutPoint, AccountSpending, OrderId, RpcOrderInfo};
 use common::primitives::id::WithId;
 use common::primitives::{Idable, H256};
@@ -39,15 +38,17 @@ use utils::ensure;
 pub use utxo_selector::UtxoSelectorError;
 use wallet_types::account_id::AccountPrefixedId;
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
+use wallet_types::partially_signed_transaction::{PartiallySignedTransaction, UtxoAdditionalInfo};
 use wallet_types::with_locked::WithLocked;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::destination_getters::{get_tx_output_destination, HtlcSpendingCondition};
-use crate::key_chain::{AccountKeyChainImpl, KeyChainError};
+use crate::key_chain::{AccountKeyChains, KeyChainError, VRFAccountKeyChains};
 use crate::send_request::{
     make_address_output, make_address_output_from_delegation, make_address_output_token,
     make_decommission_stake_pool_output, make_mint_token_outputs, make_stake_output,
-    make_unmint_token_outputs, IssueNftArguments, SelectedInputs, StakePoolDataArguments,
+    make_unmint_token_outputs, IssueNftArguments, PoolOrTokenId, SelectedInputs,
+    StakePoolDataArguments,
 };
 use crate::wallet::WalletPoolsFilter;
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
@@ -84,7 +85,7 @@ use wallet_types::{
 };
 
 pub use self::output_cache::{
-    DelegationData, FungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
+    DelegationData, OwnFungibleTokenInfo, PoolData, TxInfo, UnconfirmedTokenInfo, UtxoWithTxOutput,
 };
 use self::output_cache::{OutputCache, TokenIssuanceData};
 use self::transaction_list::{get_transaction_list, TransactionList};
@@ -111,48 +112,21 @@ impl TransactionToSign {
     }
 }
 
-pub struct Account {
+pub struct Account<K> {
     chain_config: Arc<ChainConfig>,
-    key_chain: AccountKeyChainImpl,
+    key_chain: K,
     output_cache: OutputCache,
     account_info: AccountInfo,
 }
 
-impl Account {
-    pub fn load_from_database(
-        chain_config: Arc<ChainConfig>,
-        db_tx: &impl WalletStorageReadLocked,
-        id: &AccountId,
-    ) -> WalletResult<Account> {
-        let mut account_infos = db_tx.get_accounts_info()?;
-        let account_info =
-            account_infos.remove(id).ok_or(KeyChainError::NoAccountFound(id.clone()))?;
-
-        let key_chain = AccountKeyChainImpl::load_from_database(
-            chain_config.clone(),
-            db_tx,
-            id,
-            &account_info,
-        )?;
-
-        let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
-        let output_cache = OutputCache::new(txs)?;
-
-        Ok(Account {
-            chain_config,
-            key_chain,
-            output_cache,
-            account_info,
-        })
-    }
-
+impl<K: AccountKeyChains> Account<K> {
     /// Create a new account by providing a key chain
     pub fn new(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut impl WalletStorageWriteLocked,
-        key_chain: AccountKeyChainImpl,
+        key_chain: K,
         name: Option<String>,
-    ) -> WalletResult<Account> {
+    ) -> WalletResult<Self> {
         let account_id = key_chain.get_account_id();
 
         let account_info = AccountInfo::new(
@@ -180,7 +154,29 @@ impl Account {
         Ok(account)
     }
 
-    pub fn key_chain(&self) -> &AccountKeyChainImpl {
+    pub fn load_from_database(
+        chain_config: Arc<ChainConfig>,
+        db_tx: &impl WalletStorageReadLocked,
+        id: &AccountId,
+    ) -> WalletResult<Self> {
+        let mut account_infos = db_tx.get_accounts_info()?;
+        let account_info =
+            account_infos.remove(id).ok_or(KeyChainError::NoAccountFound(id.clone()))?;
+
+        let key_chain = K::load_from_database(chain_config.clone(), db_tx, id, &account_info)?;
+
+        let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
+        let output_cache = OutputCache::new(txs)?;
+
+        Ok(Account {
+            chain_config,
+            key_chain,
+            output_cache,
+            account_info,
+        })
+    }
+
+    pub fn key_chain(&self) -> &K {
         &self.key_chain
     }
 
@@ -275,10 +271,7 @@ impl Account {
                     )
                 }
                 SelectedInputs::Inputs(ref inputs) => (
-                    inputs
-                        .iter()
-                        .map(|(outpoint, utxo)| (outpoint.clone(), (utxo, None)))
-                        .collect(),
+                    inputs.iter().map(|(outpoint, utxo)| (outpoint.clone(), utxo)).collect(),
                     selection_algo,
                 ),
             }
@@ -449,7 +442,7 @@ impl Account {
         &self,
         fee_rates: CurrentFeeRate,
         pay_fee_with_currency: &Currency,
-        utxos: Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))>,
+        utxos: Vec<(UtxoOutPoint, &TxOutput)>,
     ) -> Result<BTreeMap<Currency, Vec<OutputGroup>>, WalletError> {
         let utxo_to_output_group =
             |(outpoint, txo): (UtxoOutPoint, TxOutput)| -> WalletResult<OutputGroup> {
@@ -477,9 +470,9 @@ impl Account {
 
         currency_grouper::group_utxos_for_input(
             utxos.into_iter(),
-            |(_, (tx_output, _))| tx_output,
+            |(_, tx_output)| tx_output,
             |grouped: &mut Vec<(UtxoOutPoint, TxOutput)>, element, _| -> WalletResult<()> {
-                grouped.push((element.0.clone(), element.1 .0.clone()));
+                grouped.push((element.0.clone(), element.1.clone()));
                 Ok(())
             },
             vec![],
@@ -639,6 +632,7 @@ impl Account {
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> WalletResult<(PartiallySignedTransaction, BTreeMap<Currency, Amount>)> {
         let mut request = self.select_inputs_for_send_request(
             request,
@@ -652,7 +646,7 @@ impl Account {
         )?;
 
         let fees = request.get_fees();
-        let ptx = request.into_partially_signed_tx()?;
+        let ptx = request.into_partially_signed_tx(additional_utxo_infos)?;
 
         Ok((ptx, fees))
     }
@@ -850,31 +844,18 @@ impl Account {
         Ok(req)
     }
 
-    fn get_vrf_public_key(
-        &mut self,
-        db_tx: &mut impl WalletStorageWriteLocked,
-    ) -> WalletResult<VRFPublicKey> {
-        Ok(self.key_chain.issue_vrf_key(db_tx)?.1.into_public_key())
-    }
-
-    pub fn get_pool_ids(
-        &self,
-        filter: WalletPoolsFilter,
-        db_tx: &impl WalletStorageReadUnlocked,
-    ) -> Vec<(PoolId, PoolData)> {
+    pub fn get_pool_ids(&self, filter: WalletPoolsFilter) -> Vec<(PoolId, PoolData)> {
         self.output_cache
             .pool_ids()
             .into_iter()
             .filter(|(_, pool_data)| match filter {
                 WalletPoolsFilter::All => true,
-                WalletPoolsFilter::Decommission => self
-                    .key_chain
-                    .get_private_key_for_destination(&pool_data.decommission_key, db_tx)
-                    .map_or(false, |res| res.is_some()),
-                WalletPoolsFilter::Stake => self
-                    .key_chain
-                    .get_private_key_for_destination(&pool_data.stake_destination, db_tx)
-                    .map_or(false, |res| res.is_some()),
+                WalletPoolsFilter::Decommission => {
+                    self.key_chain.is_destination_mine(&pool_data.decommission_key)
+                }
+                WalletPoolsFilter::Stake => {
+                    self.key_chain.is_destination_mine(&pool_data.stake_destination)
+                }
             })
             .collect()
     }
@@ -908,70 +889,12 @@ impl Account {
 
     pub fn get_token_unconfirmed_info(
         &self,
-        token_info: &RPCFungibleTokenInfo,
+        token_info: RPCFungibleTokenInfo,
     ) -> WalletResult<UnconfirmedTokenInfo> {
         self.output_cache
             .get_token_unconfirmed_info(token_info, |destination: &Destination| {
                 self.is_destination_mine(destination)
             })
-    }
-
-    pub fn create_stake_pool_tx(
-        &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
-        stake_pool_arguments: StakePoolDataArguments,
-        median_time: BlockTimestamp,
-        fee_rate: CurrentFeeRate,
-    ) -> WalletResult<SendRequest> {
-        // TODO: Use other accounts here
-        let staker = Destination::PublicKey(
-            self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?.into_public_key(),
-        );
-        let vrf_public_key = self.get_vrf_public_key(db_tx)?;
-
-        // the first UTXO is needed in advance to calculate pool_id, so just make a dummy one
-        // and then replace it with when we can calculate the pool_id
-        let dummy_pool_id = PoolId::new(Uint256::from_u64(0).into());
-        let dummy_stake_output =
-            make_stake_output(dummy_pool_id, stake_pool_arguments, staker, vrf_public_key);
-        let request = SendRequest::new().with_outputs([dummy_stake_output]);
-        let mut request = self.select_inputs_for_send_request(
-            request,
-            SelectedInputs::Utxos(vec![]),
-            None,
-            BTreeMap::new(),
-            db_tx,
-            median_time,
-            fee_rate,
-            None,
-        )?;
-
-        let input0_outpoint = crate::utils::get_first_utxo_outpoint(request.inputs())?;
-        let new_pool_id = pos_accounting::make_pool_id(input0_outpoint);
-
-        // update the dummy_pool_id with the new pool_id
-        let old_pool_id = request
-            .get_outputs_mut()
-            .iter_mut()
-            .find_map(|out| match out {
-                TxOutput::CreateStakePool(pool_id, _) if *pool_id == dummy_pool_id => Some(pool_id),
-                TxOutput::CreateStakePool(_, _)
-                | TxOutput::Burn(_)
-                | TxOutput::Transfer(_, _)
-                | TxOutput::DelegateStaking(_, _)
-                | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::IssueFungibleToken(_)
-                | TxOutput::IssueNft(_, _, _)
-                | TxOutput::DataDeposit(_)
-                | TxOutput::Htlc(_, _)
-                | TxOutput::CreateOrder(_) => None,
-            })
-            .expect("find output with dummy_pool_id");
-        *old_pool_id = new_pool_id;
-
-        Ok(request)
     }
 
     pub fn create_htlc_tx(
@@ -1202,7 +1125,7 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SendRequest> {
-        let token_id = *token_info.token_id();
+        let token_id = token_info.token_id();
         let outputs = make_mint_token_outputs(token_id, amount, address);
 
         token_info.check_can_mint(amount)?;
@@ -1229,7 +1152,7 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SendRequest> {
-        let token_id = *token_info.token_id();
+        let token_id = token_info.token_id();
         let outputs = make_unmint_token_outputs(token_id, amount);
 
         token_info.check_can_unmint(amount)?;
@@ -1255,7 +1178,7 @@ impl Account {
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> WalletResult<SendRequest> {
-        let token_id = *token_info.token_id();
+        let token_id = token_info.token_id();
         token_info.check_can_lock()?;
 
         let nonce = token_info.get_next_nonce()?;
@@ -1285,7 +1208,7 @@ impl Account {
         let nonce = token_info.get_next_nonce()?;
         let tx_input = TxInput::AccountCommand(
             nonce,
-            AccountCommand::FreezeToken(*token_info.token_id(), is_token_unfreezable),
+            AccountCommand::FreezeToken(token_info.token_id(), is_token_unfreezable),
         );
         let authority = token_info.authority()?.clone();
 
@@ -1310,7 +1233,7 @@ impl Account {
 
         let nonce = token_info.get_next_nonce()?;
         let tx_input =
-            TxInput::AccountCommand(nonce, AccountCommand::UnfreezeToken(*token_info.token_id()));
+            TxInput::AccountCommand(nonce, AccountCommand::UnfreezeToken(token_info.token_id()));
         let authority = token_info.authority()?.clone();
 
         self.change_token_supply_transaction(
@@ -1336,7 +1259,7 @@ impl Account {
         let nonce = token_info.get_next_nonce()?;
         let tx_input = TxInput::AccountCommand(
             nonce,
-            AccountCommand::ChangeTokenAuthority(*token_info.token_id(), new_authority),
+            AccountCommand::ChangeTokenAuthority(token_info.token_id(), new_authority),
         );
         let authority = token_info.authority()?.clone();
 
@@ -1361,7 +1284,7 @@ impl Account {
         let nonce = token_info.get_next_nonce()?;
         let tx_input = TxInput::AccountCommand(
             nonce,
-            AccountCommand::ChangeTokenMetadataUri(*token_info.token_id(), metadata_uri),
+            AccountCommand::ChangeTokenMetadataUri(token_info.token_id(), metadata_uri),
         );
         let authority = token_info.authority()?.clone();
 
@@ -1404,107 +1327,42 @@ impl Account {
         self.output_cache.pool_data(pool_id).is_ok()
     }
 
-    pub fn get_pos_gen_block_data(
+    pub fn find_account_destination(
         &self,
-        db_tx: &impl WalletStorageReadUnlocked,
-        pool_id: PoolId,
-    ) -> WalletResult<PoSGenerateBlockInputData> {
-        let pool_data = self.output_cache.pool_data(pool_id)?;
-        let kernel_input: TxInput = pool_data.utxo_outpoint.clone().into();
-        let stake_destination = &pool_data.stake_destination;
-        let kernel_input_utxo =
-            self.output_cache.get_txo(&pool_data.utxo_outpoint).expect("must exist");
-
-        let stake_private_key = self
-            .key_chain
-            .get_private_key_for_destination(stake_destination, db_tx)?
-            .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?;
-
-        let vrf_private_key = self
-            .key_chain
-            .get_vrf_private_key_for_public_key(&pool_data.vrf_public_key, db_tx)?
-            .ok_or(WalletError::KeyChainError(
-                KeyChainError::NoVRFPrivateKeyFound,
-            ))?
-            .private_key();
-
-        let data = PoSGenerateBlockInputData::new(
-            stake_private_key,
-            vrf_private_key,
-            pool_id,
-            vec![kernel_input],
-            vec![kernel_input_utxo.clone()],
-        );
-
-        Ok(data)
+        acc_outpoint: &AccountOutPoint,
+    ) -> WalletResult<Destination> {
+        match acc_outpoint.account() {
+            AccountSpending::DelegationBalance(delegation_id, _) => self
+                .output_cache
+                .delegation_data(delegation_id)
+                .map(|data| data.destination.clone())
+                .ok_or(WalletError::DelegationNotFound(*delegation_id)),
+        }
     }
 
-    pub fn tx_to_partially_signed_tx(
+    pub fn find_account_command_destination(
         &self,
-        tx: Transaction,
-        median_time: BlockTimestamp,
-    ) -> WalletResult<PartiallySignedTransaction> {
-        let current_block_info = BlockInfo {
-            height: self.account_info.best_block_height(),
-            timestamp: median_time,
-        };
-
-        let (input_utxos, destinations) = tx
-            .inputs()
-            .iter()
-            .map(|tx_inp| match tx_inp {
-                TxInput::Utxo(outpoint) => {
-                    // find utxo from cache
-                    self.find_unspent_utxo_with_destination(outpoint, current_block_info)
-                        .map(|(out, dest)| (Some(out), Some(dest)))
-                }
-                TxInput::Account(acc_outpoint) => {
-                    // find delegation destination
-                    match acc_outpoint.account() {
-                        AccountSpending::DelegationBalance(delegation_id, _) => self
-                            .output_cache
-                            .delegation_data(delegation_id)
-                            .map(|data| (None, Some(data.destination.clone())))
-                            .ok_or(WalletError::DelegationNotFound(*delegation_id)),
-                    }
-                }
-                TxInput::AccountCommand(_, cmd) => {
-                    match cmd {
-                        // find authority of the token
-                        AccountCommand::MintTokens(token_id, _)
-                        | AccountCommand::UnmintTokens(token_id)
-                        | AccountCommand::LockTokenSupply(token_id)
-                        | AccountCommand::ChangeTokenAuthority(token_id, _)
-                        | AccountCommand::ChangeTokenMetadataUri(token_id, _)
-                        | AccountCommand::FreezeToken(token_id, _)
-                        | AccountCommand::UnfreezeToken(token_id) => self
-                            .output_cache
-                            .token_data(token_id)
-                            .map(|data| (None, Some(data.authority.clone())))
-                            .ok_or(WalletError::UnknownTokenId(*token_id)),
-                        // find authority of the order
-                        AccountCommand::ConcludeOrder(order_id) => self
-                            .output_cache
-                            .order_data(order_id)
-                            .map(|data| (None, Some(data.conclude_key.clone())))
-                            .ok_or(WalletError::UnknownOrderId(*order_id)),
-                        AccountCommand::FillOrder(_, _, dest) => Ok((None, Some(dest.clone()))),
-                    }
-                }
-            })
-            .collect::<WalletResult<Vec<_>>>()?
-            .into_iter()
-            .unzip();
-
-        let num_inputs = tx.inputs().len();
-        let ptx = PartiallySignedTransaction::new(
-            tx,
-            vec![None; num_inputs],
-            input_utxos,
-            destinations,
-            None,
-        )?;
-        Ok(ptx)
+        cmd: &AccountCommand,
+    ) -> WalletResult<Destination> {
+        match cmd {
+            AccountCommand::MintTokens(token_id, _)
+            | AccountCommand::UnmintTokens(token_id)
+            | AccountCommand::LockTokenSupply(token_id)
+            | AccountCommand::ChangeTokenAuthority(token_id, _)
+            | AccountCommand::ChangeTokenMetadataUri(token_id, _)
+            | AccountCommand::FreezeToken(token_id, _)
+            | AccountCommand::UnfreezeToken(token_id) => self
+                .output_cache
+                .token_data(token_id)
+                .map(|data| data.authority.clone())
+                .ok_or(WalletError::UnknownTokenId(*token_id)),
+            AccountCommand::ConcludeOrder(order_id) => self
+                .output_cache
+                .order_data(order_id)
+                .map(|data| data.conclude_key.clone())
+                .ok_or(WalletError::UnknownOrderId(*order_id)),
+            AccountCommand::FillOrder(_, _, dest) => Ok(dest.clone()),
+        }
     }
 
     pub fn find_unspent_utxo_with_destination(
@@ -1512,8 +1370,7 @@ impl Account {
         outpoint: &UtxoOutPoint,
         current_block_info: BlockInfo,
     ) -> WalletResult<(TxOutput, Destination)> {
-        let (txo, _) =
-            self.output_cache.find_unspent_unlocked_utxo(outpoint, current_block_info)?;
+        let txo = self.output_cache.find_unspent_unlocked_utxo(outpoint, current_block_info)?;
 
         Ok((
             txo.clone(),
@@ -1591,22 +1448,6 @@ impl Account {
         Ok(self.key_chain.issue_address(db_tx, purpose)?)
     }
 
-    /// Get a new vrf key that hasn't been used before
-    pub fn get_new_vrf_key(
-        &mut self,
-        db_tx: &mut impl WalletStorageWriteLocked,
-    ) -> WalletResult<(ChildNumber, Address<VRFPublicKey>)> {
-        Ok(
-            self.key_chain.issue_vrf_key(db_tx).map(|(child_number, vrf_key)| {
-                (
-                    child_number,
-                    Address::new(&self.chain_config, vrf_key.public_key().clone())
-                        .expect("addressable"),
-                )
-            })?,
-        )
-    }
-
     /// Get the corresponding public key for a given public key hash
     pub fn find_corresponding_pub_key(
         &self,
@@ -1648,14 +1489,14 @@ impl Account {
         };
         let amounts_by_currency = currency_grouper::group_utxos_for_input(
             self.output_cache
-                .utxos_with_token_ids(
+                .utxos(
                     current_block_info,
                     UtxoState::Confirmed.into(),
                     WithLocked::Unlocked,
                     |txo| get_utxo_type(txo).is_some() && self.is_watched_by(txo, &address),
                 )
                 .into_iter(),
-            |(_, (tx_output, _))| tx_output,
+            |(_, tx_output)| tx_output,
             |total: &mut Amount, _, amount| -> WalletResult<()> {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
                 Ok(())
@@ -1664,16 +1505,6 @@ impl Account {
         )?;
 
         Ok((address, amounts_by_currency, standalone_key))
-    }
-
-    pub fn get_all_issued_vrf_public_keys(
-        &self,
-    ) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)> {
-        self.key_chain.get_all_issued_vrf_public_keys()
-    }
-
-    pub fn get_legacy_vrf_public_key(&self) -> Address<VRFPublicKey> {
-        self.key_chain.get_legacy_vrf_public_key()
     }
 
     pub fn get_addresses_usage(&self) -> &KeychainUsageState {
@@ -1850,7 +1681,7 @@ impl Account {
                 with_locked,
             )
             .into_iter(),
-            |(_, (tx_output, _))| tx_output,
+            |(_, tx_output)| tx_output,
             |total: &mut Amount, _, amount| -> WalletResult<()> {
                 *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
                 Ok(())
@@ -1866,20 +1697,15 @@ impl Account {
         median_time: BlockTimestamp,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
-    ) -> Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))> {
+    ) -> Vec<(UtxoOutPoint, &TxOutput)> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
-        self.output_cache.utxos_with_token_ids(
-            current_block_info,
-            utxo_states,
-            with_locked,
-            |txo| {
-                self.is_watched_multisig_output(txo)
-                    && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
-            },
-        )
+        self.output_cache.utxos(current_block_info, utxo_states, with_locked, |txo| {
+            self.is_watched_multisig_output(txo)
+                && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
+        })
     }
 
     pub fn get_utxos(
@@ -1888,17 +1714,14 @@ impl Account {
         median_time: BlockTimestamp,
         utxo_states: UtxoStates,
         with_locked: WithLocked,
-    ) -> Vec<(UtxoOutPoint, (&TxOutput, Option<TokenId>))> {
+    ) -> Vec<(UtxoOutPoint, &TxOutput)> {
         let current_block_info = BlockInfo {
             height: self.account_info.best_block_height(),
             timestamp: median_time,
         };
-        self.output_cache.utxos_with_token_ids(
-            current_block_info,
-            utxo_states,
-            with_locked,
-            |txo| self.is_mine(txo) && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v)),
-        )
+        self.output_cache.utxos(current_block_info, utxo_states, with_locked, |txo| {
+            self.is_mine(txo) && get_utxo_type(txo).is_some_and(|v| utxo_types.contains(v))
+        })
     }
 
     pub fn get_transaction_list(&self, skip: usize, count: usize) -> WalletResult<TransactionList> {
@@ -2277,7 +2100,7 @@ impl Account {
     }
 }
 
-impl common::size_estimation::DestinationInfoProvider for Account {
+impl<K: AccountKeyChains> common::size_estimation::DestinationInfoProvider for Account<K> {
     fn get_multisig_info(
         &self,
         destination: &Destination,
@@ -2296,6 +2119,134 @@ struct PreselectedInputAmounts {
     pub fee: Amount,
     // Burn requirement introduced by an input
     pub burn: Amount,
+}
+
+impl<K: AccountKeyChains + VRFAccountKeyChains> Account<K> {
+    fn get_vrf_public_key(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> WalletResult<VRFPublicKey> {
+        Ok(self.key_chain.issue_vrf_key(db_tx)?.1.into_public_key())
+    }
+
+    pub fn get_all_issued_vrf_public_keys(
+        &self,
+    ) -> BTreeMap<ChildNumber, (Address<VRFPublicKey>, bool)> {
+        self.key_chain.get_all_issued_vrf_public_keys()
+    }
+
+    pub fn get_legacy_vrf_public_key(&self) -> Address<VRFPublicKey> {
+        self.key_chain.get_legacy_vrf_public_key()
+    }
+
+    /// Get a new vrf key that hasn't been used before
+    pub fn get_new_vrf_key(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteLocked,
+    ) -> WalletResult<(ChildNumber, Address<VRFPublicKey>)> {
+        Ok(
+            self.key_chain.issue_vrf_key(db_tx).map(|(child_number, vrf_key)| {
+                (
+                    child_number,
+                    Address::new(&self.chain_config, vrf_key.public_key().clone())
+                        .expect("addressable"),
+                )
+            })?,
+        )
+    }
+
+    pub fn get_pos_gen_block_data(
+        &self,
+        db_tx: &impl WalletStorageReadUnlocked,
+        pool_id: PoolId,
+    ) -> WalletResult<PoSGenerateBlockInputData> {
+        let pool_data = self.output_cache.pool_data(pool_id)?;
+        let kernel_input: TxInput = pool_data.utxo_outpoint.clone().into();
+        let stake_destination = &pool_data.stake_destination;
+        let kernel_input_utxo =
+            self.output_cache.get_txo(&pool_data.utxo_outpoint).expect("must exist");
+
+        let stake_private_key = self
+            .key_chain
+            .get_private_key_for_destination(stake_destination, db_tx)?
+            .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?;
+
+        let vrf_private_key = self
+            .key_chain
+            .get_vrf_private_key_for_public_key(&pool_data.vrf_public_key, db_tx)?
+            .ok_or(WalletError::KeyChainError(
+                KeyChainError::NoVRFPrivateKeyFound,
+            ))?
+            .private_key();
+
+        let data = PoSGenerateBlockInputData::new(
+            stake_private_key,
+            vrf_private_key,
+            pool_id,
+            vec![kernel_input],
+            vec![kernel_input_utxo.clone()],
+        );
+
+        Ok(data)
+    }
+
+    pub fn create_stake_pool_tx(
+        &mut self,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
+        stake_pool_arguments: StakePoolDataArguments,
+        median_time: BlockTimestamp,
+        fee_rate: CurrentFeeRate,
+    ) -> WalletResult<SendRequest> {
+        // TODO: Use other accounts here
+        let staker = Destination::PublicKey(
+            self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?.into_public_key(),
+        );
+        let vrf_public_key = self.get_vrf_public_key(db_tx)?;
+
+        // the first UTXO is needed in advance to calculate pool_id, so just make a dummy one
+        // and then replace it with when we can calculate the pool_id
+        let dummy_pool_id = PoolId::new(Uint256::from_u64(0).into());
+        let dummy_stake_output =
+            make_stake_output(dummy_pool_id, stake_pool_arguments, staker, vrf_public_key);
+        let request = SendRequest::new().with_outputs([dummy_stake_output]);
+        let mut request = self.select_inputs_for_send_request(
+            request,
+            SelectedInputs::Utxos(vec![]),
+            None,
+            BTreeMap::new(),
+            db_tx,
+            median_time,
+            fee_rate,
+            None,
+        )?;
+
+        let input0_outpoint = crate::utils::get_first_utxo_outpoint(request.inputs())?;
+        let new_pool_id = pos_accounting::make_pool_id(input0_outpoint);
+
+        // update the dummy_pool_id with the new pool_id
+        let old_pool_id = request
+            .get_outputs_mut()
+            .iter_mut()
+            .find_map(|out| match out {
+                TxOutput::CreateStakePool(pool_id, _) if *pool_id == dummy_pool_id => Some(pool_id),
+                TxOutput::CreateStakePool(_, _)
+                | TxOutput::Burn(_)
+                | TxOutput::Transfer(_, _)
+                | TxOutput::DelegateStaking(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::IssueFungibleToken(_)
+                | TxOutput::IssueNft(_, _, _)
+                | TxOutput::DataDeposit(_)
+                | TxOutput::Htlc(_, _)
+                | TxOutput::CreateOrder(_) => None,
+            })
+            .expect("find output with dummy_pool_id");
+        *old_pool_id = new_pool_id;
+
+        Ok(request)
+    }
 }
 
 /// There are some preselected inputs like the Token account inputs with a nonce
