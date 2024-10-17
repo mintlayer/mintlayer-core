@@ -1675,7 +1675,8 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -1683,16 +1684,82 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
     // Generate a new block which sends reward to the wallet
     let delegation_amount = Amount::from_atoms(rng.gen_range(2..100));
     let block1_amount = delegation_amount;
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let block_height = 0;
+    let (_, block) = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![],
+        block1_amount,
+        block_height,
+    );
+
+    scan_wallet(
+        &mut wallet2,
+        BlockHeight::new(block_height),
+        vec![block.clone()],
+    );
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, delegation_amount);
+    let coin_balance = get_coin_balance(&wallet2);
+    assert_eq!(coin_balance, Amount::ZERO);
 
-    let unknown_delegation_id = DelegationId::new(H256::zero());
+    let block_height = 1;
+    let (_, block) = create_block(
+        &chain_config,
+        &mut wallet2,
+        vec![],
+        block1_amount,
+        block_height,
+    );
+
+    scan_wallet(
+        &mut wallet,
+        BlockHeight::new(block_height),
+        vec![block.clone()],
+    );
+
+    let coin_balance = get_coin_balance(&wallet);
+    assert_eq!(coin_balance, delegation_amount);
+    let coin_balance = get_coin_balance(&wallet2);
+    assert_eq!(coin_balance, delegation_amount);
+
+    let unknown_pool_id = PoolId::new(H256::zero());
+    let address2 = wallet2.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
+    let (wallet2_delegation_id, delegation_tx) = wallet2
+        .create_delegation(
+            DEFAULT_ACCOUNT_INDEX,
+            vec![make_create_delegation_output(address2.clone(), unknown_pool_id)],
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+            FeeRate::from_amount_per_kb(Amount::ZERO),
+        )
+        .unwrap();
+
+    let block_height = 2;
+    let (_, block) = create_block(
+        &chain_config,
+        &mut wallet,
+        vec![delegation_tx],
+        Amount::ZERO,
+        block_height,
+    );
+    scan_wallet(
+        &mut wallet2,
+        BlockHeight::new(block_height),
+        vec![block.clone()],
+    );
+
+    let delegation_data =
+        wallet2.get_delegation(DEFAULT_ACCOUNT_INDEX, wallet2_delegation_id).unwrap();
+    assert_eq!(delegation_data.pool_id, unknown_pool_id);
+    assert_eq!(&delegation_data.destination, address2.as_object());
+    assert!(delegation_data.not_staked_yet);
+
+    // Stake from wallet1 to wallet2's delegation
     let delegation_stake_tx = wallet
         .create_transaction_to_addresses(
             DEFAULT_ACCOUNT_INDEX,
-            [TxOutput::DelegateStaking(delegation_amount, unknown_delegation_id)],
+            [TxOutput::DelegateStaking(delegation_amount, wallet2_delegation_id)],
             SelectedInputs::Utxos(vec![]),
             BTreeMap::new(),
             FeeRate::from_amount_per_kb(Amount::ZERO),
@@ -1700,13 +1767,26 @@ fn send_to_unknown_delegation(#[case] seed: Seed) {
         )
         .unwrap();
 
-    let _ = create_block(
+    let block_height = 3;
+    let (_, block) = create_block(
         &chain_config,
         &mut wallet,
         vec![delegation_stake_tx],
         block1_amount,
-        1,
+        block_height,
     );
+    scan_wallet(
+        &mut wallet2,
+        BlockHeight::new(block_height),
+        vec![block.clone()],
+    );
+
+    // Wallet2 should see the transaction and know that someone has staked to the delegation
+    let delegation_data =
+        wallet2.get_delegation(DEFAULT_ACCOUNT_INDEX, wallet2_delegation_id).unwrap();
+    assert_eq!(delegation_data.pool_id, unknown_pool_id);
+    assert_eq!(&delegation_data.destination, address2.as_object());
+    assert!(!delegation_data.not_staked_yet);
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, block1_amount);
@@ -1984,7 +2064,8 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let chain_config = Arc::new(create_mainnet());
 
-    let mut wallet = create_wallet(chain_config.clone());
+    let mut wallet = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC);
+    let mut wallet2 = create_wallet_with_mnemonic(chain_config.clone(), MNEMONIC2);
 
     let coin_balance = get_coin_balance(&wallet);
     assert_eq!(coin_balance, Amount::ZERO);
@@ -1998,36 +2079,53 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
         chain_config.nft_issuance_fee(BlockHeight::zero())
     };
 
-    // Generate a new block which sends reward to the wallet
-    let mut block1_amount =
-        (Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000)) + issuance_fee)
-            .unwrap();
+    let some_coins = 100;
+    // Generate a new block which sends reward to the wallet2
+    let mut block1_amount = (Amount::from_atoms(
+        rng.gen_range(NETWORK_FEE + some_coins..NETWORK_FEE + some_coins * 100),
+    ) + issuance_fee)
+        .unwrap();
 
     if issue_fungible_token {
         block1_amount =
             (block1_amount + chain_config.token_supply_change_fee(BlockHeight::zero())).unwrap();
     }
 
-    let _ = create_block(&chain_config, &mut wallet, vec![], block1_amount, 0);
+    let token_authority_and_destination = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
-    let coin_balance = get_coin_balance(&wallet);
+    // Issue token randomly from wallet2 to wallet1 or wallet1 to wallet1
+    let (random_issuing_wallet, other_wallet) = if rng.gen::<bool>() {
+        (&mut wallet, &mut wallet2)
+    } else {
+        (&mut wallet2, &mut wallet)
+    };
+
+    let (_, block) = create_block(
+        &chain_config,
+        random_issuing_wallet,
+        vec![],
+        block1_amount,
+        0,
+    );
+    scan_wallet(other_wallet, BlockHeight::new(0), vec![block.clone()]);
+
+    let coin_balance = get_coin_balance(random_issuing_wallet);
     assert_eq!(coin_balance, block1_amount);
-
-    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap().1;
 
     let amount_fraction = (block1_amount.into_atoms() - NETWORK_FEE) / 10;
     let mut token_amount_to_issue = Amount::from_atoms(rng.gen_range(1..amount_fraction));
 
-    let (issued_token_id, token_issuance_transaction) = if issue_fungible_token {
+    let (issued_token_id, token_issuance_transactions) = if issue_fungible_token {
         let token_issuance = TokenIssuanceV1 {
             token_ticker: "XXXX".as_bytes().to_vec(),
             number_of_decimals: rng.gen_range(1..18),
             metadata_uri: "http://uri".as_bytes().to_vec(),
             total_supply: common::chain::tokens::TokenTotalSupply::Unlimited,
-            authority: address2.as_object().clone(),
+            authority: token_authority_and_destination.as_object().clone(),
             is_freezable: common::chain::tokens::IsTokenFreezable::No,
         };
-        let (issued_token_id, token_issuance_transaction) = wallet
+        // issue a new token from a random wallet 1 or 2 to a destination from wallet1
+        let (issued_token_id, token_issuance_transaction) = random_issuing_wallet
             .issue_new_token(
                 DEFAULT_ACCOUNT_INDEX,
                 TokenIssuance::V1(token_issuance.clone()),
@@ -2049,7 +2147,14 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             token_issuance.authority,
         );
 
-        wallet
+        random_issuing_wallet
+            .add_account_unconfirmed_tx(
+                DEFAULT_ACCOUNT_INDEX,
+                token_issuance_transaction.clone(),
+                &WalletEventsNoOp,
+            )
+            .unwrap();
+        other_wallet
             .add_account_unconfirmed_tx(
                 DEFAULT_ACCOUNT_INDEX,
                 token_issuance_transaction.clone(),
@@ -2057,6 +2162,30 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
             )
             .unwrap();
 
+        // transfer the remaining coins from the random wallet to wallet1 so it can continue with
+        // other transactions
+        let transfer_tx = random_issuing_wallet
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                [TxOutput::Transfer(
+                    OutputValue::Coin((block1_amount - issuance_fee).unwrap()),
+                    token_authority_and_destination.as_object().clone(),
+                )],
+                SelectedInputs::Utxos(vec![]),
+                BTreeMap::new(),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+            )
+            .unwrap();
+        wallet
+            .add_account_unconfirmed_tx(
+                DEFAULT_ACCOUNT_INDEX,
+                transfer_tx.clone(),
+                &WalletEventsNoOp,
+            )
+            .unwrap();
+
+        // wallet1 should know about the issued token from the random wallet
         let unconfirmed_token_info =
             wallet.get_token_unconfirmed_info(DEFAULT_ACCOUNT_INDEX, &token_info).unwrap();
         let mint_transaction = wallet
@@ -2064,7 +2193,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 DEFAULT_ACCOUNT_INDEX,
                 &unconfirmed_token_info,
                 token_amount_to_issue,
-                address2,
+                token_authority_and_destination,
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
             )
@@ -2072,14 +2201,14 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
 
         (
             issued_token_id,
-            vec![token_issuance_transaction, mint_transaction],
+            vec![token_issuance_transaction, transfer_tx, mint_transaction],
         )
     } else {
         token_amount_to_issue = Amount::from_atoms(1);
-        let (issued_token_id, token_issuance_transaction) = wallet
+        let (issued_token_id, nft_issuance_transaction) = random_issuing_wallet
             .issue_new_nft(
                 DEFAULT_ACCOUNT_INDEX,
-                address2,
+                token_authority_and_destination.clone(),
                 Metadata {
                     creator: None,
                     name: "Name".as_bytes().to_vec(),
@@ -2094,13 +2223,30 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 FeeRate::from_amount_per_kb(Amount::ZERO),
             )
             .unwrap();
-        (issued_token_id, vec![token_issuance_transaction])
+        random_issuing_wallet
+            .add_unconfirmed_tx(nft_issuance_transaction.clone(), &WalletEventsNoOp)
+            .unwrap();
+
+        let transfer_tx = random_issuing_wallet
+            .create_transaction_to_addresses(
+                DEFAULT_ACCOUNT_INDEX,
+                [TxOutput::Transfer(
+                    OutputValue::Coin((block1_amount - issuance_fee).unwrap()),
+                    token_authority_and_destination.as_object().clone(),
+                )],
+                SelectedInputs::Utxos(vec![]),
+                BTreeMap::new(),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+                FeeRate::from_amount_per_kb(Amount::ZERO),
+            )
+            .unwrap();
+        (issued_token_id, vec![nft_issuance_transaction, transfer_tx])
     };
 
     let _ = create_block(
         &chain_config,
         &mut wallet,
-        token_issuance_transaction,
+        token_issuance_transactions,
         block1_amount,
         1,
     );
