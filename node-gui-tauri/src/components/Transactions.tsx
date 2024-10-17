@@ -1,4 +1,4 @@
-import { FaCopy } from "react-icons/fa";
+import { AiOutlineCopy } from "react-icons/ai";
 
 const Transactions = () => {
   const transactions = [
@@ -70,8 +70,9 @@ const Transactions = () => {
                         tranasctionInfo.transaction_id
                       )
                     }
+                    className="flex items-center justify-center p-0 bg-transparent border-none shadow-none focus:outline-none"
                   >
-                    <FaCopy />
+                    <AiOutlineCopy />
                   </button>
                 </div>
               </td>

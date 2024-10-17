@@ -13,9 +13,8 @@
     "windows": [
       {
         "title": "mintlayer",
-        "width": 800,
-        "height": 600
-        
+        "width": 1044,
+        "height": 712
       }
     ],
     "security": {

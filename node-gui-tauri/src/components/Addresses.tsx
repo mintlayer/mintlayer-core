@@ -1,4 +1,4 @@
-import { FaCopy } from "react-icons/fa";
+import { AiOutlineCopy } from "react-icons/ai";
 import AddressIcon from "../assets/account_icon.png";
 
 const Addresses = () => {
@@ -21,8 +21,11 @@ const Addresses = () => {
                 {address}
               </td>
               <td className="text-black font-bold py-1 px-2 whitespace-nowrap">
-                <button onClick={() => navigator.clipboard.writeText(address)}>
-                  <FaCopy />
+                <button
+                  onClick={() => navigator.clipboard.writeText(address)}
+                  className="flex items-center justify-center p-0 bg-transparent border-none shadow-none focus:outline-none"
+                >
+                  <AiOutlineCopy />
                 </button>
               </td>
             </tr>
@@ -31,7 +34,7 @@ const Addresses = () => {
       </table>
       <button
         onClick={() => {}}
-        className="absolute bottom-8 mb-4 py-1 px-2 w-40 text-[#000000] rounded-2 bg-[#69EE96] text-center items-center flex justify-center translation shadow-none border-none "
+        className="absolute bottom-8 mb-4 py-1 px-2 w-40 text-[#000000] rounded-lg bg-[#69EE96] text-center items-center flex justify-center translation shadow-none border-none "
       >
         <img src={AddressIcon} alt="address_icon" className="pr-2" />
         New Address

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FaCopy } from "react-icons/fa";
+import { AiOutlineCopy } from "react-icons/ai";
 
 const Staking = () => {
   const stakingPoolInfo = [
@@ -44,7 +44,7 @@ const Staking = () => {
         <input
           type="number"
           placeholder="Enter amount"
-          className="rounded rounded-2"
+          className="rounded rounded-lg"
           value={pledgeAmount}
           onChange={(e) => setPledgeAmount(parseInt(e.target.value))}
         />
@@ -54,7 +54,7 @@ const Staking = () => {
         <input
           type="number"
           placeholder="Enter amount"
-          className="rounded rounded-2"
+          className="rounded rounded-lg"
           value={costPerBlock}
           onChange={(e) => setCostPerBlock(parseInt(e.target.value))}
         />
@@ -67,7 +67,7 @@ const Staking = () => {
         <input
           type="number"
           placeholder="Enter amount"
-          className="rounded rounded-2"
+          className="rounded rounded-lg"
           value={marginRatio}
           onChange={(e) => setMarginRatio(parseInt(e.target.value))}
         />
@@ -77,13 +77,13 @@ const Staking = () => {
         <input
           type="number"
           placeholder="Enter address"
-          className="rounded rounded-2"
+          className="rounded rounded-lg"
           value={decommissionAddress}
           onChange={(e) => setDecommissionAddress(e.target.value)}
         />
       </div>
       <div>
-        <button className="w-60 bg-[#69EE96] text-black rounded-lg py-1 hover:bg-blue-600 transition duration-200 justify-center items-center mt-8 mb-8">
+        <button className="w-60 py-1 px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black mt-8 mb-8">
           Create Staking Pool
         </button>
       </div>
@@ -126,8 +126,9 @@ const Staking = () => {
                       onClick={() =>
                         navigator.clipboard.writeText(stakeInfo.pool_address)
                       }
+                      className="flex items-center justify-center p-0 bg-transparent border-none shadow-none focus:outline-none"
                     >
-                      <FaCopy />
+                      <AiOutlineCopy />
                     </button>
                   </div>
                 </td>
@@ -141,7 +142,7 @@ const Staking = () => {
                   {stakeInfo.pool_balance}
                 </td>
                 <td className="py-2 px-4 border-b border-gray-200">
-                  <button className="w-full bg-[#69EE96] text-black rounded-lg px-2 hover:bg-blue-600 transition duration-200 ">
+                  <button className="w-full px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black ">
                     DECOMMISSION
                   </button>
                 </td>
@@ -155,7 +156,7 @@ const Staking = () => {
         <input
           type="text"
           placeholder="Enter address"
-          className="rounded rounded-2"
+          className="rounded rounded-lg"
           value={poolAddress}
           onChange={(e) => setPoolAddress(e.target.value)}
         />
@@ -165,13 +166,13 @@ const Staking = () => {
         <input
           type="text"
           placeholder="Enter address"
-          className="rounded rounded-2"
+          className="rounded rounded-lg"
           value={receiveAddress}
           onChange={(e) => setReceiveAddress(e.target.value)}
         />
       </div>
       <div>
-        <button className="py-1 px-4 mt-8 mb-8 border border-red-500 text-red-500 bg-white rounded-2 transition-all duration-200 hover:outline-none hover:bg-red-500 hover:text-white hover:border-red-500">
+        <button className="py-1 px-4 mt-8 mb-8 border border-[#E02424] text-[#E02424] bg-white rounded-lg transition-all duration-200 hover:outline-none hover:bg-[#E02424] hover:text-white hover:border-[#E02424]">
           Decommission Staking Pool
         </button>
       </div>

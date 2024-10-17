@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FaCopy } from "react-icons/fa";
+import { AiOutlineCopy } from "react-icons/ai";
 
 const Delegation = () => {
   const delegations = [
@@ -59,8 +59,9 @@ const Delegation = () => {
                           delegationInfo.delegation_address
                         )
                       }
+                      className="flex items-center justify-center p-0 bg-transparent border-none shadow-none focus:outline-none"
                     >
-                      <FaCopy />
+                      <AiOutlineCopy />
                     </button>
                   </div>
                 </td>
@@ -73,10 +74,10 @@ const Delegation = () => {
                 </td>
 
                 <td className="py-2 px-4 border-b border-gray-200 flex justify-between space-x-2">
-                  <button className="px-2 rounded-2 bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black ">
+                  <button className="px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black ">
                     DEPOSIT
                   </button>
-                  <button className="px-2 rounded-2 bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black ">
+                  <button className="px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black ">
                     WITHRAW
                   </button>
                 </td>
@@ -95,7 +96,7 @@ const Delegation = () => {
         <input
           type="text"
           placeholder="Enter address"
-          className="rounded rounded-2"
+          className="rounded rounded-lg"
           value={poolAddress}
           onChange={(e) => setPoolAddress(e.target.value)}
         />
@@ -105,13 +106,13 @@ const Delegation = () => {
         <input
           type="text"
           placeholder="Enter address"
-          className="rounded rounded-2"
+          className="rounded rounded-lg"
           value={delegationAddress}
           onChange={(e) => setDelegationAddress(e.target.value)}
         />
       </div>
       <div>
-        <button className="w-60 py-1 px-2 bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black mt-8 mb-8">
+        <button className="w-60 py-1 px-2 bg-[#69EE96] text-[#000000] rounded rounded-lg hover:text-[#69EE96] hover:bg-black mt-8 mb-8">
           Create Delegation
         </button>
       </div>

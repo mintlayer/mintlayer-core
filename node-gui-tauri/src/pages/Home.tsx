@@ -94,7 +94,7 @@ function Home() {
               className="w-full shadow-[1px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 rounded-lg"
             />
             <button
-              className="bg-green-400 text-black w-full px-4 py-2 rounded-2 hover:bg-[#000000] hover:text-green-400 transition duration-200"
+              className="bg-green-400 text-black w-full px-4 py-2 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
               onClick={() => setShowNemonicModal(false)}
             >
               Create
@@ -124,7 +124,7 @@ function Home() {
               className="w-full shadow-[1px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 rounded-lg"
             />
             <button
-              className="bg-green-400 text-black w-full px-4 py-2 rounded-2 hover:bg-[#000000] hover:text-green-400 transition duration-200"
+              className="bg-green-400 text-black w-full px-4 py-2 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
               onClick={() => setShowRecoverWalletModal(false)}
             >
               Recover
@@ -225,7 +225,7 @@ function Home() {
                     >
                       Exit
                     </button>
-                    <hr className="my-12 h-[2px] bg-gradient-to-r from-transparent via-neutral-500 to-transparent opacity-25 dark:via-neutral-800" />{" "}
+                    <hr className="my-12 h-[2px] bg-gradient-to-r from-transparent via-neutral-500 to-transparent opacity-25 dark:via-neutral-800" />
                   </>
                   {wallets.length !== 0 && (
                     <>
