@@ -56,6 +56,7 @@ use common::address::{Address, RpcAddress};
 use common::chain::output_value::{OutputValue, RpcOutputValue};
 use common::chain::tokens::{
     make_token_id, IsTokenUnfreezable, NftIssuance, NftIssuanceV0, RPCFungibleTokenInfo, TokenId,
+    TokenIssuance,
 };
 use common::chain::{
     AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId,
@@ -1697,11 +1698,17 @@ impl Account {
                 vec![data.decommission_key().clone(), data.staker().clone()]
             }
             TxOutput::Htlc(_, htlc) => vec![htlc.spend_key.clone(), htlc.refund_key.clone()],
-            TxOutput::IssueFungibleToken(_)
-            | TxOutput::Burn(_)
-            | TxOutput::DelegateStaking(_, _)
-            | TxOutput::DataDeposit(_)
-            | TxOutput::CreateOrder(_) => Vec::new(),
+            TxOutput::IssueFungibleToken(data) => match data.as_ref() {
+                TokenIssuance::V1(data) => vec![data.authority.clone()],
+            },
+            TxOutput::DelegateStaking(_, delegation_id) => self
+                .output_cache
+                .delegation_data(delegation_id)
+                .map_or(vec![], |data| vec![data.destination.clone()]),
+            TxOutput::CreateOrder(data) => {
+                vec![data.conclude_key().clone()]
+            }
+            TxOutput::Burn(_) | TxOutput::DataDeposit(_) => Vec::new(),
         }
     }
 
