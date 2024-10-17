@@ -47,7 +47,7 @@ const Send = () => {
 
         <button
           type="submit"
-          className="w-20 bg-[#50d71e] text-white rounded-lg py-1 hover:bg-blue-600 transition duration-200"
+          className="w-20 bg-[#69EE96] text-white rounded-lg py-1 hover:bg-blue-600 transition duration-200"
         >
           Send
         </button>

@@ -83,7 +83,7 @@ const Staking = () => {
         />
       </div>
       <div>
-        <button className="w-60 bg-[#50d71e] text-black rounded-lg py-1 hover:bg-blue-600 transition duration-200 justify-center items-center mt-8 mb-8">
+        <button className="w-60 bg-[#69EE96] text-black rounded-lg py-1 hover:bg-blue-600 transition duration-200 justify-center items-center mt-8 mb-8">
           Create Staking Pool
         </button>
       </div>
@@ -141,7 +141,7 @@ const Staking = () => {
                   {stakeInfo.pool_balance}
                 </td>
                 <td className="py-2 px-4 border-b border-gray-200">
-                  <button className="w-full bg-[#50d71e] text-black rounded-lg px-2 hover:bg-blue-600 transition duration-200 ">
+                  <button className="w-full bg-[#69EE96] text-black rounded-lg px-2 hover:bg-blue-600 transition duration-200 ">
                     DECOMMISSION
                   </button>
                 </td>

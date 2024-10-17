@@ -154,13 +154,13 @@ function Home() {
           <div className="flex flex-col items-center space-y-2">
             <button
               onClick={() => setNetMod("Mainnet")}
-              className="py-2 px-4 rounded w-24 bg-[#50d71e] hover:bg-black text-[#000000] font-bold hover:text-[#50d71e]"
+              className="py-2 px-4 rounded w-24 bg-[#69EE96] hover:bg-black text-[#000000] font-bold hover:text-[#69EE96]"
             >
               Mainnet
             </button>
             <button
               onClick={() => setNetMod("Testnet")}
-              className="py-2 px-4 rounded w-24 bg-[#50d71e] hover:bg-black text-[#000000] font-bold hover:text-[#50d71e]"
+              className="py-2 px-4 rounded w-24 bg-[#69EE96] hover:bg-black text-[#000000] font-bold hover:text-[#69EE96]"
             >
               Testnet
             </button>
@@ -173,7 +173,7 @@ function Home() {
             >
               <Button
                 onClick={() => setWalletMode("Hot")}
-                className="py-1 px-4 rounded w-24 bg-[#50d71e] text-[#000000] font-bold text-xl hover:text-[#50d71e] hover:bg-black text-xl"
+                className="py-1 px-4 rounded w-24 bg-[#69EE96] text-[#000000] font-bold text-xl hover:text-[#69EE96] hover:bg-black text-xl"
               >
                 Hot
               </Button>
@@ -185,7 +185,7 @@ function Home() {
             >
               <Button
                 onClick={() => setWalletMode("Cold")}
-                className="py-1 px-4 rounded w-24 bg-[#50d71e] text-[#000000] font-bold text-xl hover:text-[#50d71e] hover:bg-black text-xl"
+                className="py-1 px-4 rounded w-24 bg-[#69EE96] text-[#000000] font-bold text-xl hover:text-[#69EE96] hover:bg-black text-xl"
               >
                 Cold
               </Button>
@@ -370,7 +370,7 @@ function Home() {
                   {currentTab === "transactions" && (
                     <WalletActions activeTab={activeTab} />
                   )}
-                  {currentTab === "staking" && <Staking/>}
+                  {currentTab === "staking" && <Staking />}
                 </div>
               </div>
             </div>
