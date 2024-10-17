@@ -19,6 +19,7 @@ import SummaryTab from "../components/Summary";
 import NetworkingTab from "../components/Networking";
 import { WalletType } from "../types/Types";
 import WalletActions from "../components/WalletActions";
+import Staking from "../components/Staking";
 
 function Home() {
   const wallets = [
@@ -70,7 +71,7 @@ function Home() {
   const exit = () => {};
 
   return (
-    <div className="home-page ">
+    <div className="home-page">
       {showNemonicModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="absolute inset-0 bg-black opacity-50"></div>
@@ -148,7 +149,7 @@ function Home() {
           </div>
         </div>
       )}
-      <div className="container page">
+      <div className="container page mt-1 pt-1">
         {!netMode ? (
           <div className="flex flex-col items-center space-y-2">
             <button
@@ -191,8 +192,8 @@ function Home() {
             </Tooltip>
           </div>
         ) : (
-          <div className="fixed top-0 left-0 ">
-            <div className="grid grid-cols-12 ">
+          <div className="w-full pt-1">
+            <div className="grid grid-cols-12">
               <div className="col-span-3">
                 <div className="flex flex-col  space-y-4 p-4  rounded h-[100vh] w-full overflow-y-auto">
                   <div className="flex justify-center items-center w-[20vw] ">
@@ -338,8 +339,8 @@ function Home() {
                   )}
                 </div>
               </div>
-              <div className="col-span-9 h-full pr-4">
-                <div className="bg-[#F3F4F6] h-full w-[74vw]">
+              <div className="col-span-9 pr-4">
+                <div className="bg-[#F3F4F6] w-[74vw]">
                   <div className="flex w-full">
                     <button
                       onClick={() => setCurrentTab("summary")}
@@ -369,6 +370,7 @@ function Home() {
                   {currentTab === "transactions" && (
                     <WalletActions activeTab={activeTab} />
                   )}
+                  {currentTab === "staking" && <Staking/>}
                 </div>
               </div>
             </div>

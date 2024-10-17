@@ -1,10 +1,11 @@
 import Addresses from "./Addresses";
 import Send from "./Send";
+import Staking from "./Staking";
 import Transactions from "./Transactions";
 const WalletActions = (props: any) => {
   return (
-    <div className="container space-y-4">
-      <div className="row flex justify-between">
+    <div className="container space-y-2 overflow-y-auto">
+      <div className="row flex justify-between pb-4">
         <div className="col-md-8">
           <span className="flex inline-block space-x-2">
             <div className="font-thin">My balance: </div>
@@ -23,6 +24,7 @@ const WalletActions = (props: any) => {
       {props.activeTab === "transactions" && <Transactions />}
       {props.activeTab === "addresses" && <Addresses />}
       {props.activeTab === "send" && <Send />}
+      {props.activeTab === "staking" && <Staking />}
     </div>
   );
 };
