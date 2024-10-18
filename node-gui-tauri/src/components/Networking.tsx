@@ -21,7 +21,7 @@ const NetworkingTab = () => {
     // Add more peers as needed...
   ];
   return (
-    <div className="container">
+    <div className="container pt-0 mt-8 m-8 rounded rounded-lg bg-white p-8">
       <p className="py-10">
         The following is a list of peers connected to your node
       </p>

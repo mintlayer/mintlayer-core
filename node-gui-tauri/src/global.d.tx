@@ -1,0 +1,7 @@
+declare global {
+  interface Window {
+    Buffer: any; // You can specify a more precise type if you know it
+  }
+}
+
+export {};

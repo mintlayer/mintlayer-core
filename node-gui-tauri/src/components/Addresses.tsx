@@ -8,19 +8,28 @@ const Addresses = () => {
     "asudfoiuae8u9a8eu9f8ase98fuas9",
   ];
   return (
-    <div className="container">
+    <div className="container pt-0">
       <p>ADDRESS</p>
-      <table className="table-auto border border-gray-200">
+      <table className="w-[50vw] border border-gray-200 rounded rounded-lg overflow-hidden shadow">
+        <thead className="bg-gray-100 ">
+          <tr>
+            <th className="py-3 px-4 text-center text-gray-600 font-semibold "></th>
+            <th className="py-3 px-4 text-center text-gray-600 font-semibold">
+              ADDRESS
+            </th>
+
+            <th className="py-3 px-4 text-center text-gray-600 font-semibold"></th>
+          </tr>
+        </thead>
         <tbody>
           {addresses.map((address, index) => (
-            <tr key={index}>
-              <td className="text-black font-bold py-1 px-2 whitespace-nowrap">
-                {index}
-              </td>
-              <td className="text-black font-bold py-1 px-2 whitespace-nowrap">
-                {address}
-              </td>
-              <td className="text-black font-bold py-1 px-2 whitespace-nowrap">
+            <tr
+              key={index}
+              className="hover:bg-gray-50 transition duration-200"
+            >
+              <td className="py-2 px-4 border-b border-gray-200">{index}</td>
+              <td className="py-2 px-4 border-b border-gray-200">{address}</td>
+              <td className="py-2 px-4 border-b border-gray-200">
                 <button
                   onClick={() => navigator.clipboard.writeText(address)}
                   className="flex items-center justify-center p-0 bg-transparent border-none shadow-none focus:outline-none"

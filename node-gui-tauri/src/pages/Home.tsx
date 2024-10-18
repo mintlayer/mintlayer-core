@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import * as bip39 from "bip39";
+import * as bip39 from '@scure/bip39';
+import {wordlist} from '@scure/bip39/wordlists/english';
 import { Modal, initTWE } from "tw-elements";
 import { RiInformation2Line } from "react-icons/ri";
 import { PiShareNetworkBold } from "react-icons/pi";
 import { IoCloseSharp } from "react-icons/io5";
-import { Tooltip, Button } from "flowbite-react";
 
 import MintlayerIcon from "../assets/mintlayer_icon.png";
 import TransactionIcon from "../assets/transaction_icon.png";
@@ -46,6 +46,7 @@ function Home() {
   const [mnemonic, setMnemonic] = useState("");
   const [showNemonicModal, setShowNemonicModal] = useState(false);
   const [showRecoverWalletModal, setShowRecoverWalletModal] = useState(false);
+  const [showNewAccountModal, setShowNewAccountModal] = useState(false);
 
   useEffect(() => {
     initTWE({ Modal });
@@ -53,12 +54,13 @@ function Home() {
 
   const createNewWallet = () => {
     try {
-      // const newMnemonic = bip39.generateMnemonic();
-      // console.log(newMnemonic);
-      // setMnemonic(newMnemonic);
+      const newMnemonic = bip39.generateMnemonic(wordlist);
+      console.log(newMnemonic);
+      setMnemonic(newMnemonic);
       setShowNemonicModal(true);
     } catch (error) {
-      console.error(error);
+      console.error(error)
+     setMnemonic("Error generating mnemoic. Please try again");
     }
   };
 
@@ -149,7 +151,7 @@ function Home() {
           </div>
         </div>
       )}
-      <div className="container page mt-1 pt-1">
+      <div className="container page mt-1 pt-1 w-full">
         {!netMode ? (
           <div className="flex flex-col items-center space-y-2">
             <button
@@ -166,33 +168,38 @@ function Home() {
             </button>
           </div>
         ) : !walletMode ? (
-          <div className="flex flex-col space-y-2 items-center">
-            <Tooltip
-              content='This is the normal operating mode where all wallet functions are enabled. The wallet will be connected to the internet, allowing you to stake and perform all operations. If you are unsure which option to choose, select "Hot"'
-              placement="left"
-            >
-              <Button
+          <div className="flex justify-center space-x-16 items-center">
+            <div className="bg-white space-y-4 w-[40vw] py-16 px-8 shadow rounded rounded-2 justify-center items-center">
+              <button
+                className="py-1 px-4 rounded w-48 bg-[#69EE96] text-[#000000] font-bold text-xl hover:text-[#69EE96] hover:bg-black text-xl"
                 onClick={() => setWalletMode("Hot")}
-                className="py-1 px-4 rounded w-24 bg-[#69EE96] text-[#000000] font-bold text-xl hover:text-[#69EE96] hover:bg-black text-xl"
               >
                 Hot
-              </Button>
-            </Tooltip>
-
-            <Tooltip
-              content="This mode runs a limited version of the node. It allows the wallet to operate without an internet connection for added security. In this mode, the wallet cannot sync, check balances, or create transactions (though it can sign imported transactions). Staking is also disabled."
-              placement="right"
-            >
-              <Button
+              </button>
+              <p className="text-start">
+                Hot mode is the standard operating mode with all wallet
+                functions enabled. The wallet will be connected to the internet,
+                allowing you to stake and perform all operations. If you are
+                unsure which options to choose, select 'Hot'.
+              </p>
+            </div>
+            <div className="bg-white w-[40vw] space-y-2 py-16 px-8 shadow rounded rounded-2 justify-center items-center">
+              <button
+                className="py-1 px-4 rounded w-48 bg-[#C4FCCA] text-[#0D372F] font-bold text-xl hover:text-[#69EE96] hover:bg-black text-xl"
                 onClick={() => setWalletMode("Cold")}
-                className="py-1 px-4 rounded w-24 bg-[#69EE96] text-[#000000] font-bold text-xl hover:text-[#69EE96] hover:bg-black text-xl"
               >
                 Cold
-              </Button>
-            </Tooltip>
+              </button>
+              <p className="text-start">
+                Cold mode runs a limited version of the node, allowing the
+                wallet to function offline for enhanced security. In this mode,
+                the wallet cannot sync, check balances, or create transactions,
+                but it can sign imported transactions. Staking is also disabled.
+              </p>
+            </div>
           </div>
         ) : (
-          <div className="w-full pt-1">
+          <div className=" w-full pt-1">
             <div className="grid grid-cols-12">
               <div className="col-span-3">
                 <div className="flex flex-col  space-y-4 p-4  rounded h-[100vh] w-full overflow-y-auto">
@@ -229,7 +236,7 @@ function Home() {
                   </>
                   {wallets.length !== 0 && (
                     <>
-                      <div className="relative inline-block flex items-center justify-center">
+                      <div className="relative inline-block flex items-center justify-center space-x-2">
                         <img src={WalletIcon} alt="wallet_ico" />
                         <select
                           defaultValue={
@@ -255,8 +262,10 @@ function Home() {
                           ))}
                         </select>
                       </div>
-                      <div className="relative inline-block pl-4 flex items-center justify-center">
-                        <img src={AccountIcom} alt="wallet_ico" />
+                      <div className="relative inline-block pl-4 flex items-center justify-center space-x-2">
+                        <button className="bg-transparent border-noe shadow-none outine-none hover: outline-none hover:border-none focused: border-none" onClick={()=>setShowNewAccountModal(true)}>
+                          <img src={AccountIcom} alt="wallet_ico" />
+                        </button>
                         <select
                           defaultValue={
                             wallets.length > 0 ? wallets[0].wallet_id : ""
@@ -275,16 +284,18 @@ function Home() {
                           ))}
                         </select>
                       </div>
-                      <button
-                        onClick={() => {
-                          setCurrentTab("transactions");
-                          setActiveTab("transactions");
-                        }}
-                        className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
-                      >
-                        <img src={TransactionIcon} className="pr-2" />
-                        Transactions
-                      </button>
+                      {walletMode === "Hot" && (
+                        <button
+                          onClick={() => {
+                            setCurrentTab("transactions");
+                            setActiveTab("transactions");
+                          }}
+                          className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
+                        >
+                          <img src={TransactionIcon} className="pr-2" />
+                          Transactions
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           setCurrentTab("transactions");
@@ -295,36 +306,42 @@ function Home() {
                         <img src={AddressIcon} className="pr-2" />
                         Addresses
                       </button>
-                      <button
-                        onClick={() => {
-                          setCurrentTab("transactions");
-                          setActiveTab("send");
-                        }}
-                        className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
-                      >
-                        <img src={SendIcon} className="pr-2" />
-                        Send
-                      </button>
-                      <button
-                        onClick={() => {
-                          setCurrentTab("transactions");
-                          setActiveTab("staking");
-                        }}
-                        className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
-                      >
-                        <img src={StakingIcon} className="pr-2" />
-                        Staking
-                      </button>
-                      <button
-                        onClick={() => {
-                          setCurrentTab("transactions");
-                          setActiveTab("delegation");
-                        }}
-                        className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
-                      >
-                        <img src={DelegationIcon} className="pr-2" />
-                        Delegation
-                      </button>
+                      {walletMode === "Hot" && (
+                        <button
+                          onClick={() => {
+                            setCurrentTab("transactions");
+                            setActiveTab("send");
+                          }}
+                          className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
+                        >
+                          <img src={SendIcon} className="pr-2" />
+                          Send
+                        </button>
+                      )}
+                      {walletMode === "Hot" && (
+                        <button
+                          onClick={() => {
+                            setCurrentTab("transactions");
+                            setActiveTab("staking");
+                          }}
+                          className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
+                        >
+                          <img src={StakingIcon} className="pr-2" />
+                          Staking
+                        </button>
+                      )}
+                      {walletMode === "Hot" && (
+                        <button
+                          onClick={() => {
+                            setCurrentTab("transactions");
+                            setActiveTab("delegation");
+                          }}
+                          className="mb-4 py-2 px-2 text-[#000000] rounded  w-full text-left items-center flex justify-left translation shadow-none border-none w-full"
+                        >
+                          <img src={DelegationIcon} className="pr-2" />
+                          Delegation
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           setCurrentTab("transactions");
@@ -340,8 +357,8 @@ function Home() {
                 </div>
               </div>
               <div className="col-span-9 pr-4">
-                <div className="bg-[#F3F4F6] w-[74vw]">
-                  <div className="flex w-full">
+                <div className="bg-[#F3F4F6] w-[74vw] h-full">
+                  <div className="flex w-full p-8 ml-8">
                     <button
                       onClick={() => setCurrentTab("summary")}
                       className={`flex items-center justify-center w-full pl-2  transition-colors duration-300 rounded-tr-[0] rounded-br-[0] ${
@@ -368,7 +385,7 @@ function Home() {
                   {currentTab === "summary" && <SummaryTab network={netMode} />}
                   {currentTab === "network" && <NetworkingTab />}
                   {currentTab === "transactions" && (
-                    <WalletActions activeTab={activeTab} />
+                    <WalletActions showNewAccountModal = {showNewAccountModal} activeTab={activeTab} />
                   )}
                   {currentTab === "staking" && <Staking />}
                 </div>
