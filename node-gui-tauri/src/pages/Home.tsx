@@ -64,6 +64,10 @@ function Home() {
     }
   };
 
+  const handleCreateNewWallet = ()=>{
+    
+  }
+
   const recoverWallet = (mode: string) => {
     setShowRecoverWalletModal(true);
   };

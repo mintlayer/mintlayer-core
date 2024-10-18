@@ -29,6 +29,7 @@ use common::address::{Address, AddressError};
 use common::chain::{ChainConfig, Destination};
 use common::primitives::{Amount, BlockHeight};
 use node_lib::{Command, RunOptions};
+use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -241,11 +242,24 @@ pub async fn node_initialize(
     Ok(backend_controls)
 }
 
+#[tauri::command]
+async fn open_file_dialog() -> Result<Option<String>, String> {
+    // Open a file dialog to select a file path
+    let file_opt = FileDialog::new()
+        .set_title("Select a file")
+        .pick_file(); // Use pick_file() for selecting a file
+
+    match file_opt {
+        Some(file) => Ok(Some(file.as_path().to_string_lossy().to_string())),
+        None => Ok(None), // User canceled the dialog
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![initialize_node])
+        .invoke_handler(tauri::generate_handler![initialize_node, open_file_dialog])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
