@@ -267,7 +267,6 @@ impl Backend {
             },
         ))
     }
-
     async fn add_create_wallet(
         &mut self,
         file_path: PathBuf,

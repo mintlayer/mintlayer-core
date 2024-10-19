@@ -542,10 +542,15 @@
     "@noble/hashes" "~1.5.0"
     "@scure/base" "~1.1.8"
 
-"@tauri-apps/api@>=2.0.0", "@tauri-apps/api@^2.0.0":
+"@tauri-apps/api@^2.0.0":
   version "2.0.1"
   resolved "https://registry.npmjs.org/@tauri-apps/api/-/api-2.0.1.tgz"
   integrity sha512-eoQWT+Tq1qSwQpHV+nw1eNYe5B/nm1PoRjQCRiEOS12I1b+X4PUcREfXVX8dPcBT6GrzWGDtaecY0+1p0Rfqlw==
+
+"@tauri-apps/api@^2.0.2":
+  version "2.0.2"
+  resolved "https://registry.yarnpkg.com/@tauri-apps/api/-/api-2.0.2.tgz#266767f4a4641014e86a000e7e02e1a344ced45a"
+  integrity sha512-3wSwmG+1kr6WrgAFKK5ijkNFPp8TT3FLj3YHUb5EwMO+3FxX4uWlfSWkeeBy+Kc1RsKzugtYLuuya+98Flj+3w==
 
 "@tauri-apps/cli-darwin-arm64@2.0.1":
   version "2.0.1"

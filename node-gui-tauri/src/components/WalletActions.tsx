@@ -42,7 +42,7 @@ const WalletActions = (props: any) => {
   }
 
   const handleUnlock = ()=>{
-    setShowUnLockModal(false);
+    setShowUnlockModal(false);
   }
   return (
     <div className="min-w-full bg-white border border-gray-200 shadowoverflow-y-auto mt-8 p-8 m-8 rounded rounded-lg shadow">

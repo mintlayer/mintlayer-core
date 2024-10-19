@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import * as bip39 from '@scure/bip39';
-import {wordlist} from '@scure/bip39/wordlists/english';
-import { Modal, initTWE } from "tw-elements";
+import { core } from "@tauri-apps/api";
+import * as bip39 from "@scure/bip39";
+import { wordlist } from "@scure/bip39/wordlists/english";
 import { RiInformation2Line } from "react-icons/ri";
 import { PiShareNetworkBold } from "react-icons/pi";
 import { IoCloseSharp } from "react-icons/io5";
@@ -22,6 +22,16 @@ import WalletActions from "../components/WalletActions";
 import Staking from "../components/Staking";
 
 function Home() {
+  const InitNetwork = {
+    Mainnet: "Mainnet",
+    Testnet: "Testnet",
+  };
+
+  const WalletMode = {
+    Hot: "Hot",
+    Cold: "Cold",
+  };
+
   const wallets = [
     {
       wallet_id: "mintlayer_wallet",
@@ -44,29 +54,59 @@ function Home() {
   const [activeTab, setActiveTab] = useState("transactions");
   const [currentAccount, setCurrentAccount] = useState("");
   const [mnemonic, setMnemonic] = useState("");
-  const [showNemonicModal, setShowNemonicModal] = useState(false);
+  const [filePath, setFilePath] = useState("");
+
+  const [showMnemonicModal, setShowMnemonicModal] = useState(false);
   const [showRecoverWalletModal, setShowRecoverWalletModal] = useState(false);
   const [showNewAccountModal, setShowNewAccountModal] = useState(false);
 
   useEffect(() => {
-    initTWE({ Modal });
-  }, []);
+    const init_node = async () => {
+      try {
+        if (netMode !== "" && walletMode !== "") {
+          const result = await core.invoke("initialize_node", {
+            netMode,
+            walletMode,
+          });
+          console.log(result);
+        }
+      } catch (err) {
+        console.error("Error initializing node: ", err);
+      }
+    };
+    init_node();
+  }, [netMode, walletMode]);
 
   const createNewWallet = () => {
     try {
-      const newMnemonic = bip39.generateMnemonic(wordlist);
+      const newMnemonic = bip39.generateMnemonic(wordlist, 256);
       console.log(newMnemonic);
       setMnemonic(newMnemonic);
-      setShowNemonicModal(true);
+      setShowMnemonicModal(true);
     } catch (error) {
-      console.error(error)
-     setMnemonic("Error generating mnemoic. Please try again");
+      console.error(error);
+      setMnemonic("Error generating mnemoic. Please try again");
     }
   };
 
-  const handleCreateNewWallet = ()=>{
-    
-  }
+  const handleCreateNewWallet = async (e: Event) => {
+    e.stopPropagation();
+    try {
+      // Correct the command name
+      const selectedFilePath = await core.invoke("open_file_dialog");
+
+      console.log("selected file path is: ", selectedFilePath);
+      if (selectedFilePath) {
+        setFilePath(selectedFilePath.toString()); // Ensure setFilePath is defined
+        setShowMnemonicModal(false);
+      } else {
+        console.error("No file selected");
+      }
+    } catch (err) {
+      // Provide more context in the error message
+      console.error("Error while selecting file:", err);
+    }
+  };
 
   const recoverWallet = (mode: string) => {
     setShowRecoverWalletModal(true);
@@ -78,14 +118,14 @@ function Home() {
 
   return (
     <div className="home-page">
-      {showNemonicModal && (
+      {showMnemonicModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="absolute inset-0 bg-black opacity-50"></div>
           <div className="bg-white rounded-lg shadow-lg z-10 p-6 max-w-lg mx-auto relative space-y-4">
             {/* Close Button */}
             <button
               className="absolute top-2 right-2 text-gray-600 "
-              onClick={() => setShowNemonicModal(false)}
+              onClick={() => setShowMnemonicModal(false)}
             >
               <IoCloseSharp />
             </button>
@@ -101,7 +141,7 @@ function Home() {
             />
             <button
               className="bg-green-400 text-black w-full px-4 py-2 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
-              onClick={() => setShowNemonicModal(false)}
+              onClick={(e) => handleCreateNewWallet(e)}
             >
               Create
             </button>
@@ -159,13 +199,13 @@ function Home() {
         {!netMode ? (
           <div className="flex flex-col items-center space-y-2">
             <button
-              onClick={() => setNetMod("Mainnet")}
+              onClick={() => setNetMod(InitNetwork.Mainnet)}
               className="py-2 px-4 rounded w-24 bg-[#69EE96] hover:bg-black text-[#000000] font-bold hover:text-[#69EE96]"
             >
               Mainnet
             </button>
             <button
-              onClick={() => setNetMod("Testnet")}
+              onClick={() => setNetMod(InitNetwork.Testnet)}
               className="py-2 px-4 rounded w-24 bg-[#69EE96] hover:bg-black text-[#000000] font-bold hover:text-[#69EE96]"
             >
               Testnet
@@ -176,7 +216,7 @@ function Home() {
             <div className="bg-white space-y-4 w-[40vw] py-16 px-8 shadow rounded rounded-2 justify-center items-center">
               <button
                 className="py-1 px-4 rounded w-48 bg-[#69EE96] text-[#000000] font-bold text-xl hover:text-[#69EE96] hover:bg-black text-xl"
-                onClick={() => setWalletMode("Hot")}
+                onClick={() => setWalletMode(WalletMode.Hot)}
               >
                 Hot
               </button>
@@ -190,7 +230,7 @@ function Home() {
             <div className="bg-white w-[40vw] space-y-2 py-16 px-8 shadow rounded rounded-2 justify-center items-center">
               <button
                 className="py-1 px-4 rounded w-48 bg-[#C4FCCA] text-[#0D372F] font-bold text-xl hover:text-[#69EE96] hover:bg-black text-xl"
-                onClick={() => setWalletMode("Cold")}
+                onClick={() => setWalletMode(WalletMode.Cold)}
               >
                 Cold
               </button>
@@ -267,7 +307,10 @@ function Home() {
                         </select>
                       </div>
                       <div className="relative inline-block pl-4 flex items-center justify-center space-x-2">
-                        <button className="bg-transparent border-noe shadow-none outine-none hover: outline-none hover:border-none focused: border-none" onClick={()=>setShowNewAccountModal(true)}>
+                        <button
+                          className="bg-transparent border-noe shadow-none outine-none hover: outline-none hover:border-none focused: border-none"
+                          onClick={() => setShowNewAccountModal(true)}
+                        >
                           <img src={AccountIcom} alt="wallet_ico" />
                         </button>
                         <select
@@ -389,7 +432,10 @@ function Home() {
                   {currentTab === "summary" && <SummaryTab network={netMode} />}
                   {currentTab === "network" && <NetworkingTab />}
                   {currentTab === "transactions" && (
-                    <WalletActions showNewAccountModal = {showNewAccountModal} activeTab={activeTab} />
+                    <WalletActions
+                      showNewAccountModal={showNewAccountModal}
+                      activeTab={activeTab}
+                    />
                   )}
                   {currentTab === "staking" && <Staking />}
                 </div>

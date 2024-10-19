@@ -33,15 +33,15 @@ use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::sync::Arc;
+use tauri::async_runtime::RwLock;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use tokio::sync::Mutex;
-
 use self::error::BackendError;
 use self::messages::{BackendEvent, BackendRequest};
 
 struct AppState {
-    initialized_node: Mutex<Option<InitializedNode>>,
+    initialized_node: RwLock<Option<InitializedNode>>,
 }
+
 #[derive(Debug)]
 pub struct BackendControls {
     pub initialized_node: InitializedNode,
@@ -68,6 +68,14 @@ pub struct BackendSender {
     request_tx: UnboundedSender<BackendRequest>,
 }
 
+impl Default for AppState {
+    fn default() -> Self {
+        AppState {
+            initialized_node: RwLock::new(None),
+        }
+    }
+}
+
 impl BackendSender {
     fn new(request_tx: UnboundedSender<BackendRequest>) -> Self {
         Self { request_tx }
@@ -84,7 +92,7 @@ pub struct InitializedNode {
     pub chain_info: ChainInfo,
 }
 
-/// `UnboundedSender` wrapper, used to make sure there is only one instance and it doesn't get cloned
+/// `UnboundedSender` wrapper, used to make sure there is o nly one instance and it doesn't get cloned
 
 fn parse_coin_amount(chain_config: &ChainConfig, value: &str) -> Option<Amount> {
     Amount::from_fixedpoint_str(value, chain_config.coin_decimals())
@@ -97,20 +105,6 @@ fn parse_address(
     Address::from_string(chain_config, address)
 }
 
-// #[tauri::command]
-// #[tauri::command]
-
-// #[tauri::command]
-// pub fn generate_mnemonic() -> String {
-//     let generated =
-//         wallet_controller::mnemonic::generate_new_mnemonic(wallet::wallet::Language::English);
-//     let mnemonic = match generated {
-//         generated => generated.to_string(),
-//         None => "Mnemonic Generation Failed".to_string(),
-//     };
-//     mnemonic
-// }
-
 #[tauri::command]
 async fn initialize_node(
     state: tauri::State<'_, AppState>,
@@ -118,8 +112,9 @@ async fn initialize_node(
     mode: WalletMode,
 ) -> Result<String, String> {
     let backend_controls = node_initialize(network, mode).await.map_err(|e| e.to_string())?;
-    let mut guard = state.initialized_node.lock().await;
+    let mut guard = state.initialized_node.write().await;
     *guard = Some(backend_controls.initialized_node);
+
     Ok("Node Initialized".to_string())
 }
 pub async fn node_initialize(
@@ -245,9 +240,7 @@ pub async fn node_initialize(
 #[tauri::command]
 async fn open_file_dialog() -> Result<Option<String>, String> {
     // Open a file dialog to select a file path
-    let file_opt = FileDialog::new()
-        .set_title("Select a file")
-        .pick_file(); // Use pick_file() for selecting a file
+    let file_opt = FileDialog::new().set_title("Select a file").pick_file(); // Use pick_file() for selecting a file
 
     match file_opt {
         Some(file) => Ok(Some(file.as_path().to_string_lossy().to_string())),
@@ -258,7 +251,8 @@ async fn open_file_dialog() -> Result<Option<String>, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
+        // .plugin(tauri_plugin_shell::init())
+        .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![initialize_node, open_file_dialog])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
