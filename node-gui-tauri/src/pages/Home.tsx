@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { core } from "@tauri-apps/api";
 import * as bip39 from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
+import { MouseEvent } from "react";
 import { RiInformation2Line } from "react-icons/ri";
 import { PiShareNetworkBold } from "react-icons/pi";
 import { IoCloseSharp } from "react-icons/io5";
@@ -89,7 +90,7 @@ function Home() {
     }
   };
 
-  const handleCreateNewWallet = async (e: Event) => {
+  const handleCreateNewWallet = async (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     try {
       // Correct the command name
@@ -287,7 +288,7 @@ function Home() {
                             wallets.length > 0 ? wallets[0].wallet_id : ""
                           }
                           value={currentWallet?.wallet_id}
-                          onClick={(e) =>
+                          onChange={(e) =>
                             setCurrentWallet(
                               wallets.find(
                                 (wallet) => wallet.wallet_id === e?.target.value
@@ -317,7 +318,7 @@ function Home() {
                           defaultValue={
                             wallets.length > 0 ? wallets[0].wallet_id : ""
                           }
-                          onClick={(e) => setCurrentAccount(e?.target.value)}
+                          onChange={(e) => setCurrentAccount(e?.target.value)}
                           value={currentAccount}
                           className="block w-[16vw] bg-white px-2 w-[14vw] border-gray-300 text-gray-700 py-2  rounded-lg shadow-sm focus:outline-none  "
                         >
