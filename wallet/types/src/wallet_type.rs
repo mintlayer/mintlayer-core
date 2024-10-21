@@ -13,10 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use serde::{Deserialize, Serialize};
 use serialization::{Decode, Encode};
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, Serialize, Deserialize,
+)]
 pub enum WalletType {
     #[codec(index = 0)]
     Cold,
@@ -29,6 +32,16 @@ impl Display for WalletType {
         match self {
             Self::Hot => write!(f, "Hot"),
             Self::Cold => write!(f, "Cold"),
+        }
+    }
+}
+
+impl WalletType {
+    pub fn from_str(input: &str) -> Result<Self, String> {
+        match input.to_lowercase().as_str() {
+            "cold" => Ok(WalletType::Cold),
+            "hot" => Ok(WalletType::Hot),
+            _ => Err(format!("Invalid wallet type: {}", input)),
         }
     }
 }

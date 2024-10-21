@@ -21,22 +21,27 @@ mod error;
 mod p2p_event_handler;
 mod wallet_events;
 
+use self::error::BackendError;
+use self::messages::{BackendEvent, BackendRequest};
 use crate::chainstate_event_handler::ChainstateEventHandler;
 use crate::p2p_event_handler::P2pEventHandler;
 use anyhow::{Error, Result};
+use backend_impl::{Backend, ImportOrCreate};
 use chainstate::ChainInfo;
 use common::address::{Address, AddressError};
 use common::chain::{ChainConfig, Destination};
 use common::primitives::{Amount, BlockHeight};
+use messages::WalletInfo;
 use node_lib::{Command, RunOptions};
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::async_runtime::RwLock;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use self::error::BackendError;
-use self::messages::{BackendEvent, BackendRequest};
+use tokio::sync::Mutex;
+use wallet_types::wallet_type::WalletType;
 
 struct AppState {
     initialized_node: RwLock<Option<InitializedNode>>,
@@ -66,6 +71,14 @@ pub enum WalletMode {
 #[derive(Debug)]
 pub struct BackendSender {
     request_tx: UnboundedSender<BackendRequest>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OpenCreateWalletRequest {
+    mnemonic: String,
+    file_path: String,
+    import: Boolean,
+    wallet_type: String,
 }
 
 impl Default for AppState {
@@ -248,12 +261,29 @@ async fn open_file_dialog() -> Result<Option<String>, String> {
     }
 }
 
+#[tauri::command]
+async fn add_open_wallet_wrapper(
+    state: tauri::State<'_, Arc<Mutex<Backend>>>,
+    request: OpenCreateWalletRequest,
+) -> Result<WalletInfo, String> {
+    let mut backend = state.lock().await;
+    let mut mnemonic = wallet_controller::mnemonic::Mnemonic::from_str(request.mnemonic);
+    let mut file_path = PathBuf::from(request.file_path);
+    let mut wallet_type = WalletType::from_str(&request.wallet_type);
+    let mut import = ImportOrCreate::from_bool(requst.import);
+    backend.add_create_wallet(file_path, mnemonic, wallet_type, import).await.map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         // .plugin(tauri_plugin_shell::init())
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![initialize_node, open_file_dialog])
+        .invoke_handler(tauri::generate_handler![
+            initialize_node,
+            open_file_dialog,
+            add_open_wallet_wrapper
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

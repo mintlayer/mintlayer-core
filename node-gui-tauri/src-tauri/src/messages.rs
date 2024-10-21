@@ -13,13 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::BTreeMap,
-    path::PathBuf,
-    str::FromStr,
-    sync::atomic::{AtomicU64, Ordering},
-};
-
 use super::BackendError;
 use crate::backend_impl::ImportOrCreate;
 use chainstate::ChainInfo;
@@ -27,15 +20,22 @@ use common::{
     chain::{DelegationId, GenBlock, PoolId, SignedTransaction},
     primitives::{Amount, BlockHeight, Id},
 };
+use serde::{Serialize, Deserialize};
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use p2p::P2pEvent;
+use std::{
+    collections::BTreeMap,
+    path::PathBuf,
+    str::FromStr,
+    sync::atomic::{AtomicU64, Ordering},
+};
 use wallet::account::transaction_list::TransactionList;
 use wallet_cli_commands::ConsoleCommand;
 use wallet_controller::types::Balances;
 use wallet_rpc_lib::types::PoolInfo;
 use wallet_types::wallet_type::WalletType;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct WalletId(u64);
 
 static NEXT_WALLET_ID: AtomicU64 = AtomicU64::new(0);
@@ -46,7 +46,7 @@ impl WalletId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct AccountId(U31);
 
 impl AccountId {
@@ -59,7 +59,7 @@ impl AccountId {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletInfo {
     pub wallet_id: WalletId,
     pub path: PathBuf,
@@ -69,7 +69,7 @@ pub struct WalletInfo {
     pub wallet_type: WalletType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountInfo {
     pub name: Option<String>,
     pub addresses: BTreeMap<u32, String>,
@@ -173,7 +173,7 @@ pub enum EncryptionAction {
     Lock,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EncryptionState {
     EnabledLocked,
     EnabledUnlocked,

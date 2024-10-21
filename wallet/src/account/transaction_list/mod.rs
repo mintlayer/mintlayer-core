@@ -19,6 +19,7 @@ use common::{
     chain::{block::timestamp::BlockTimestamp, Transaction, TxInput, TxOutput},
     primitives::{Amount, BlockHeight, Id, Idable},
 };
+use serde::{Serialize, Deserialize};
 use wallet_types::{
     wallet_tx::{TxData, TxState},
     KeyPurpose, WalletTx,
@@ -31,7 +32,7 @@ use super::{currency_grouper::group_outputs, output_cache::OutputCache};
 // TODO: Show send/recv addresses and amounts
 // TODO: Show token amounts
 // TODO: Show network fee for Sent and Redeposit
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TxType {
     /// All inputs are own, all outputs are own
     Redeposit {},
@@ -70,7 +71,7 @@ impl TxType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionInfo {
     pub txid: Id<Transaction>,
     pub tx_type: TxType,
@@ -78,7 +79,7 @@ pub struct TransactionInfo {
     pub state: TxState,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionList {
     /// How many transactions are in the single page (currently it's always 10)
     pub count: usize,

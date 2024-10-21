@@ -17,15 +17,17 @@ use std::fmt::Display;
 
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::ConsensusData;
-use serialization::{Decode, Encode};
-
 use common::chain::{
     Block, GenBlock, Genesis, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
 };
 use common::primitives::id::WithId;
 use common::primitives::{BlockHeight, Id, Idable};
+use serde::{Deserialize, Serialize};
+use serialization::{Decode, Encode};
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Decode, Encode, serde::Serialize)]
+#[derive(
+    Debug, PartialEq, Eq, Clone, Copy, Decode, Encode, Serialize, Deserialize,
+)]
 pub enum TxState {
     /// Confirmed transaction in a block
     #[codec(index = 0)]

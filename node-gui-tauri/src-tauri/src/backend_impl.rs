@@ -30,6 +30,7 @@ use tokio::{
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
     task::JoinHandle,
 };
+use serde::{Serialize, Deserialize};
 use wallet::{account::transaction_list::TransactionList, wallet::Error, WalletError};
 use wallet_cli_commands::{
     get_repl_command, parse_input, CommandHandler, ConsoleCommand, ManageableWalletCommand,
@@ -59,7 +60,7 @@ use super::{
     wallet_events::GuiWalletEvents,
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum ImportOrCreate {
     Import,
     Create,
@@ -72,6 +73,15 @@ impl ImportOrCreate {
             Self::Import => false,
         }
     }
+    
+    pub fn from_bool(value: bool) -> Self {
+        if value {
+            ImportOrCreate::Create
+        } else {
+            ImportOrCreate::Import
+        }
+    }
+
 }
 
 const TRANSACTION_LIST_PAGE_COUNT: usize = 10;
@@ -267,7 +277,7 @@ impl Backend {
             },
         ))
     }
-    async fn add_create_wallet(
+    pub async fn add_create_wallet(
         &mut self,
         file_path: PathBuf,
         mnemonic: wallet_controller::mnemonic::Mnemonic,

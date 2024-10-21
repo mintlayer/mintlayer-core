@@ -15,13 +15,14 @@
 
 use std::{fmt::Display, str::FromStr};
 
+use serde::{Deserialize, Serialize};
 use serialization::{Decode, Encode};
 
 use super::derivable::DerivationError;
 
 pub const MSB_BIT: u32 = 0x80000000;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Serialize, Deserialize)]
 pub struct U31(u32);
 
 impl U31 {
