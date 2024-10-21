@@ -65,9 +65,10 @@ function Home() {
     const init_node = async () => {
       try {
         if (netMode !== "" && walletMode !== "") {
+          console.log("netMode: ", netMode, "walletMode: ", walletMode);
           const result = await core.invoke("initialize_node", {
-            netMode,
-            walletMode,
+            network: netMode,
+            mode: walletMode,
           });
           console.log(result);
         }
@@ -99,6 +100,13 @@ function Home() {
       console.log("selected file path is: ", selectedFilePath);
       if (selectedFilePath) {
         setFilePath(selectedFilePath.toString()); // Ensure setFilePath is defined
+        const walletInfo = await core.invoke("add_create_wallet_wrapper", {
+          file_path: selectedFilePath,
+          mnemonic: mnemonic,
+          import: true,
+          wallet_type: walletMode,
+        });
+        console.log("walletInfo is ", walletInfo);
         setShowMnemonicModal(false);
       } else {
         console.error("No file selected");
@@ -109,11 +117,11 @@ function Home() {
     }
   };
 
-  const recoverWallet = (mode: string) => {
+  const recoverWallet = () => {
     setShowRecoverWalletModal(true);
   };
 
-  const openWallet = (mode: string) => {};
+  const openWallet = () => {};
 
   const exit = () => {};
 
@@ -260,13 +268,13 @@ function Home() {
                       Create New {walletMode} Wallet
                     </button>
                     <button
-                      onClick={() => recoverWallet(walletMode)}
+                      onClick={() => recoverWallet()}
                       className="w-full text-[#000000] rounded  transition border-none shadow-none text-left py-2 px-1"
                     >
                       Recover {walletMode} Wallet
                     </button>
                     <button
-                      onClick={() => openWallet(walletMode)}
+                      onClick={() => openWallet()}
                       className="w-full text-[#000000] rounded  transition border-none shadow-none text-left py-2 px-1"
                     >
                       Open {walletMode} Wallet

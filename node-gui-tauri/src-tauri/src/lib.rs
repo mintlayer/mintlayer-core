@@ -33,7 +33,7 @@ use common::chain::{ChainConfig, Destination};
 use common::primitives::{Amount, BlockHeight};
 use messages::WalletInfo;
 use node_lib::{Command, RunOptions};
-use rfd::FileDialog;
+use rfd::AsyncFileDialog;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::path::PathBuf;
@@ -77,7 +77,7 @@ pub struct BackendSender {
 pub struct OpenCreateWalletRequest {
     mnemonic: String,
     file_path: String,
-    import: Boolean,
+    import: bool,
     wallet_type: String,
 }
 
@@ -121,10 +121,21 @@ fn parse_address(
 #[tauri::command]
 async fn initialize_node(
     state: tauri::State<'_, AppState>,
-    network: InitNetwork,
-    mode: WalletMode,
+    network: &str,
+    mode: &str,
 ) -> Result<String, String> {
-    let backend_controls = node_initialize(network, mode).await.map_err(|e| e.to_string())?;
+    let net_type = match network {
+        "Mainnet" => InitNetwork::Mainnet,
+        "Testnet" => InitNetwork::Testnet,
+        _ => return Err("Invalid network selection".into()),
+    };
+    let wallet_type = match mode {
+        "Hot" => WalletMode::Hot,
+        "Cold" => WalletMode::Cold,
+        _ => return Err("Invalid wallet mode selection".into()),
+    };
+    let backend_controls =
+        node_initialize(net_type, wallet_type).await.map_err(|e| e.to_string())?;
     let mut guard = state.initialized_node.write().await;
     *guard = Some(backend_controls.initialized_node);
 
@@ -253,25 +264,39 @@ pub async fn node_initialize(
 #[tauri::command]
 async fn open_file_dialog() -> Result<Option<String>, String> {
     // Open a file dialog to select a file path
-    let file_opt = FileDialog::new().set_title("Select a file").pick_file(); // Use pick_file() for selecting a file
+    let file_opt = AsyncFileDialog::new()
+        .set_title("Save file as")
+        .add_filter("Text Files", &["dat"])
+        .add_filter("All Files", &["*"])
+        .save_file()
+        .await;
 
     match file_opt {
-        Some(file) => Ok(Some(file.as_path().to_string_lossy().to_string())),
-        None => Ok(None), // User canceled the dialog
+        Some(file) => {
+            match file.path().to_str() {
+                Some(path_str) => Ok(Some(path_str.to_string())),
+                None => Err("Failed to convert path to string.".to_string()), // Handle invalid UTF-8 path
+            }
+        }
+        None => Ok(None),
     }
 }
 
 #[tauri::command]
-async fn add_open_wallet_wrapper(
+async fn add_create_wallet_wrapper(
     state: tauri::State<'_, Arc<Mutex<Backend>>>,
     request: OpenCreateWalletRequest,
 ) -> Result<WalletInfo, String> {
     let mut backend = state.lock().await;
-    let mut mnemonic = wallet_controller::mnemonic::Mnemonic::from_str(request.mnemonic);
-    let mut file_path = PathBuf::from(request.file_path);
-    let mut wallet_type = WalletType::from_str(&request.wallet_type);
-    let mut import = ImportOrCreate::from_bool(requst.import);
-    backend.add_create_wallet(file_path, mnemonic, wallet_type, import).await.map_err(|e| e.to_string())
+    let mnemonic = wallet_controller::mnemonic::Mnemonic::parse(request.mnemonic)
+        .map_err(|e| e.to_string())?;
+    let file_path = PathBuf::from(request.file_path);
+    let wallet_type = WalletType::from_str(&request.wallet_type).map_err(|e| e.to_string())?;
+    let import = ImportOrCreate::from_bool(request.import);
+    backend
+        .add_create_wallet(file_path, mnemonic, wallet_type, import)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -282,7 +307,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             initialize_node,
             open_file_dialog,
-            add_open_wallet_wrapper
+            add_create_wallet_wrapper
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
