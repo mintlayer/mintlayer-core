@@ -51,6 +51,7 @@ use wallet::{
         make_address_output, make_address_output_token, make_create_delegation_output,
         make_data_deposit_output, SelectedInputs, StakePoolDataArguments,
     },
+    signed_tx_intent::SignedTransactionWithIntent,
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
     DefaultWallet, WalletError, WalletResult,
@@ -944,6 +945,37 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         .await
     }
 
+    /// Creates a transaction that transfers tokens to the address destination.
+    pub async fn make_tx_for_sending_tokens_to_address(
+        &mut self,
+        token_info: RPCTokenInfo,
+        address: Address<Destination>,
+        amount: Amount,
+        intent: Option<String>,
+    ) -> Result<SignedTransactionWithIntent, ControllerError<T>> {
+        let output = make_address_output_token(address, amount, token_info.token_id());
+        self.create_token_tx(
+            &token_info,
+            move |current_fee_rate: FeeRate,
+                  consolidate_fee_rate: FeeRate,
+                  wallet: &mut DefaultWallet,
+                  account_index: U31,
+                  token_info: &UnconfirmedTokenInfo| {
+                token_info.check_can_be_used()?;
+                wallet.create_transaction_to_addresses_with_intent(
+                    account_index,
+                    [output],
+                    SelectedInputs::Utxos(vec![]),
+                    BTreeMap::new(),
+                    intent,
+                    current_fee_rate,
+                    consolidate_fee_rate,
+                )
+            },
+        )
+        .await
+    }
+
     /// Creates a transaction that creates a new stake pool and broadcasts it to the mempool.
     pub async fn create_stake_pool_tx(
         &mut self,
@@ -1159,8 +1191,8 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
 
     pub fn sign_challenge(
         &mut self,
-        challenge: Vec<u8>,
-        destination: Destination,
+        challenge: &[u8],
+        destination: &Destination,
     ) -> Result<ArbitraryMessageSignature, ControllerError<T>> {
         self.wallet
             .sign_challenge(self.account_index, challenge, destination)
@@ -1237,21 +1269,22 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.broadcast_to_mempool_if_needed(tx).await
     }
 
-    /// Create and broadcast a transaction that uses token,
-    /// check if that token can be used i.e. not frozen
-    async fn create_and_send_token_tx<
+    /// Create and broadcast a transaction that uses a token,
+    /// check if that token can be used i.e. not frozen.
+    async fn create_token_tx<F, R>(
+        &mut self,
+        token_info: &RPCTokenInfo,
+        tx_maker: F,
+    ) -> Result<R, ControllerError<T>>
+    where
         F: FnOnce(
             FeeRate,
             FeeRate,
             &mut DefaultWallet,
             U31,
             &UnconfirmedTokenInfo,
-        ) -> WalletResult<SignedTransaction>,
-    >(
-        &mut self,
-        token_info: &RPCTokenInfo,
-        tx_maker: F,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
+        ) -> WalletResult<R>,
+    {
         // make sure we can use the token before create an tx using it
         let token_freezable_info = match token_info {
             RPCTokenInfo::FungibleToken(token_info) => self
@@ -1275,6 +1308,25 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         )
         .map_err(ControllerError::WalletError)?;
 
+        Ok(tx)
+    }
+
+    /// Create and broadcast a transaction that uses token,
+    /// check if that token can be used i.e. not frozen.
+    async fn create_and_send_token_tx<
+        F: FnOnce(
+            FeeRate,
+            FeeRate,
+            &mut DefaultWallet,
+            U31,
+            &UnconfirmedTokenInfo,
+        ) -> WalletResult<SignedTransaction>,
+    >(
+        &mut self,
+        token_info: &RPCTokenInfo,
+        tx_maker: F,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        let tx = self.create_token_tx(token_info, tx_maker).await?;
         self.broadcast_to_mempool_if_needed(tx).await
     }
 

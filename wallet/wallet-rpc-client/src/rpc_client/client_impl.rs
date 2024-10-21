@@ -35,7 +35,7 @@ use rpc::types::RpcHexString;
 use serialization::hex_encoded::HexEncoded;
 use serialization::DecodeAll;
 use utils_networking::IpOrSocketAddress;
-use wallet::account::TxInfo;
+use wallet::{account::TxInfo, signed_tx_intent::SignedTransactionWithIntent};
 use wallet_controller::{
     types::{Balances, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
@@ -869,6 +869,29 @@ impl WalletInterface for ClientWalletRpc {
             token_id.into(),
             address.into(),
             amount.into(),
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn make_tx_for_sending_tokens(
+        &self,
+        account_index: U31,
+        token_id: String,
+        address: String,
+        amount: DecimalAmount,
+        intent: Option<String>,
+        config: ControllerConfig,
+    ) -> Result<HexEncoded<SignedTransactionWithIntent>, Self::Error> {
+        let options = TransactionOptions::from_controller_config(&config);
+        WalletRpcClient::make_tx_for_sending_tokens(
+            &self.http_client,
+            account_index.into(),
+            token_id.into(),
+            address.into(),
+            amount.into(),
+            intent,
             options,
         )
         .await

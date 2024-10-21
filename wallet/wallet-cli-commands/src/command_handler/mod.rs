@@ -1400,6 +1400,41 @@ where
                 Ok(Self::new_tx_submitted_command(new_tx))
             }
 
+            WalletCommand::MakeTxToSendTokensToAddress {
+                token_id,
+                address,
+                amount,
+                intent,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                let tx_with_intent = wallet
+                    .make_tx_for_sending_tokens(
+                        selected_account,
+                        token_id,
+                        address,
+                        amount,
+                        intent,
+                        self.config,
+                    )
+                    .await?
+                    .take();
+
+                let mut output = format!(
+                    "The hex encoded transaction is:\n{}\n",
+                    HexEncoded::new(tx_with_intent.transaction)
+                );
+                if let Some(signed_intent) = tx_with_intent.intent {
+                    writeln!(
+                        &mut output,
+                        "\nThe hex encoded signed transaction intent is:\n{}\n",
+                        HexEncoded::new(signed_intent)
+                    )
+                    .expect("Writing to a memory buffer should not fail");
+                }
+
+                Ok(ConsoleCommand::Print(output))
+            }
+
             WalletCommand::MakeTxToSendTokensFromMultisigAddress {
                 from_address,
                 fee_change_address,

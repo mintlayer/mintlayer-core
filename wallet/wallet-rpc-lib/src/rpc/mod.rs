@@ -39,6 +39,7 @@ use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
     account::{transaction_list::TransactionList, PoolData, TransactionToSign, TxInfo},
+    signed_tx_intent::SignedTransactionWithIntent,
     WalletError,
 };
 
@@ -853,7 +854,7 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                     controller
                         .synced_controller(account_index, config)
                         .await?
-                        .sign_challenge(challenge, destination)
+                        .sign_challenge(&challenge, &destination)
                         .map_err(RpcError::Controller)
                 })
             })
@@ -1060,6 +1061,40 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
     }
 
+    pub async fn make_tx_for_sending_tokens(
+        &self,
+        account_index: U31,
+        token_id: RpcAddress<TokenId>,
+        address: RpcAddress<Destination>,
+        amount: RpcAmountIn,
+        intent: Option<String>,
+        config: ControllerConfig,
+    ) -> WRpcResult<SignedTransactionWithIntent, N> {
+        let token_id = token_id
+            .decode_object(&self.chain_config)
+            .map_err(|_| RpcError::InvalidTokenId)?;
+        let address =
+            address.into_address(&self.chain_config).map_err(|_| RpcError::InvalidAddress)?;
+
+        self.wallet
+            .call_async(move |controller| {
+                Box::pin(async move {
+                    let token_info = controller.get_token_info(token_id).await?;
+                    let amount = amount
+                        .to_amount(token_info.token_number_of_decimals())
+                        .ok_or(RpcError::InvalidCoinAmount)?;
+
+                    controller
+                        .synced_controller(account_index, config)
+                        .await?
+                        .make_tx_for_sending_tokens_to_address(token_info, address, amount, intent)
+                        .await
+                        .map_err(RpcError::Controller)
+                })
+            })
+            .await?
+    }
+
     pub async fn make_tx_to_send_tokens_from_multisig_address(
         &self,
         account_index: U31,
@@ -1067,7 +1102,14 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         fee_change_rpc_address: Option<RpcAddress<Destination>>,
         outputs: Vec<GenericTokenTransfer>,
         config: ControllerConfig,
-    ) -> WRpcResult<(PartiallySignedTransaction, Vec<SignatureStatus>, Balances), N> {
+    ) -> WRpcResult<
+        (
+            PartiallySignedTransaction,
+            Vec<SignatureStatus>,
+            /*fees:*/ Balances,
+        ),
+        N,
+    > {
         let from_address = from_rpc_address
             .clone()
             .into_address(&self.chain_config)

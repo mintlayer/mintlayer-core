@@ -27,7 +27,7 @@ use crypto::key::{hdkd::u31::U31, PrivateKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
-use wallet::account::TxInfo;
+use wallet::{account::TxInfo, signed_tx_intent::SignedTransactionWithIntent};
 use wallet_controller::{
     types::{CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
@@ -446,6 +446,16 @@ pub trait WalletInterface {
         amount: DecimalAmount,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
+
+    async fn make_tx_for_sending_tokens(
+        &self,
+        account_index: U31,
+        token_id: String,
+        address: String,
+        amount: DecimalAmount,
+        intent: Option<String>,
+        config: ControllerConfig,
+    ) -> Result<HexEncoded<SignedTransactionWithIntent>, Self::Error>;
 
     async fn make_tx_to_send_tokens_from_multisig_address(
         &self,

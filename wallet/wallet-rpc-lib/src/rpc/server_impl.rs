@@ -31,7 +31,9 @@ use crypto::key::PrivateKey;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use utils_networking::IpOrSocketAddress;
-use wallet::{account::TxInfo, version::get_version};
+use wallet::{
+    account::TxInfo, signed_tx_intent::SignedTransactionWithIntent, version::get_version,
+};
 use wallet_controller::{
     types::{BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
@@ -965,6 +967,34 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         rpc::handle_result(
             self.send_tokens(account_arg.index::<N>()?, token_id, address, amount, config)
                 .await,
+        )
+    }
+
+    async fn make_tx_for_sending_tokens(
+        &self,
+        account_arg: AccountArg,
+        token_id: RpcAddress<TokenId>,
+        address: RpcAddress<Destination>,
+        amount: RpcAmountIn,
+        intent: Option<String>,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<HexEncoded<SignedTransactionWithIntent>> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb(),
+            broadcast_to_mempool: true,
+        };
+
+        rpc::handle_result(
+            self.make_tx_for_sending_tokens(
+                account_arg.index::<N>()?,
+                token_id,
+                address,
+                amount,
+                intent,
+                config,
+            )
+            .await
+            .map(|tx_with_intent| HexEncoded::new(tx_with_intent)),
         )
     }
 

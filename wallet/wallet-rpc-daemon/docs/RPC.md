@@ -1031,7 +1031,8 @@ Returns:
 ### Method `token_lock_supply`
 
 Lock the circulating supply for the token. THIS IS IRREVERSIBLE.
-Tokens that can be locked will lose the ability to mint/unmint them
+
+Once locked, tokens lose the ability to be minted/unminted.
 
 
 Parameters:
@@ -1101,7 +1102,7 @@ Returns:
 
 ### Method `token_send`
 
-Send a given token amount to a given address. The wallet will automatically calculate the required information
+Send a given token amount to the given address. The wallet will automatically calculate the required information.
 
 
 Parameters:
@@ -1122,6 +1123,43 @@ Parameters:
 Returns:
 ```
 { "tx_id": hex string }
+```
+
+### Method `token_make_tx_for_sending`
+
+Create a transaction for sending tokens to the given address, without submitting it.
+The wallet will automatically calculate the required information.
+
+The optional "intent" is an arbitrary string that will concatenated with the id of the created transaction
+and signed by one of the keys that were used to sign the transaction itself; this can be used to declare
+the intent of the transaction.
+E.g. when bridging Mintlayer tokens to another chain, you need to send tokens to an address provided
+by the bridge and provide the bridge with the destination address on the foreign chain where you want
+to receive them. In this case you will set "intent" to this foreign destination address; the signed intent
+will then serve as a proof to the bridge that the provided destination address is what it's meant to be.
+
+
+Parameters:
+```
+{
+    "account": number,
+    "token_id": bech32 string,
+    "address": bech32 string,
+    "amount": EITHER OF
+         1) { "atoms": number string }
+         2) { "decimal": decimal string },
+    "intent": EITHER OF
+         1) string
+         2) null,
+    "options": { "in_top_x_mb": EITHER OF
+         1) number
+         2) null },
+}
+```
+
+Returns:
+```
+{ "tx": hex string }
 ```
 
 ### Method `make_tx_to_send_tokens_from_multisig_address`
