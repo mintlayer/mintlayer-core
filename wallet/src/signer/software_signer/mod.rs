@@ -341,8 +341,8 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
 
     fn sign_challenge(
         &self,
-        message: Vec<u8>,
-        destination: Destination,
+        message: &[u8],
+        destination: &Destination,
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<ArbitraryMessageSignature> {
         let private_key = self
@@ -351,8 +351,8 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
 
         let sig = ArbitraryMessageSignature::produce_uniparty_signature(
             &private_key,
-            &destination,
-            &message,
+            destination,
+            message,
             make_true_rng(),
         )?;
 

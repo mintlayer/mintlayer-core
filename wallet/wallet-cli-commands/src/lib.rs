@@ -430,6 +430,20 @@ pub enum WalletCommand {
         amount: DecimalAmount,
     },
 
+    #[clap(name = "token-make-tx-for-sending")]
+    MakeTxToSendTokensToAddress {
+        /// The token id of the tokens to be sent
+        token_id: String,
+        /// The destination address receiving the tokens
+        address: String,
+        /// The amount of tokens to be sent
+        amount: DecimalAmount,
+        /// The optional message declaring the intent of the transaction.
+        ///
+        /// The signed intent will be printed separately, it's not a part of the transaction itself.
+        intent: Option<String>,
+    },
+
     /// Create a transaction for sending tokens from a multisig address to other addresses, returning the change to
     /// the original multisig address.
     ///

@@ -66,8 +66,8 @@ pub trait Signer {
     /// sign an arbitrary message for a destination known to this key chain
     fn sign_challenge(
         &self,
-        message: Vec<u8>,
-        destination: Destination,
+        message: &[u8],
+        destination: &Destination,
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<ArbitraryMessageSignature>;
 }
