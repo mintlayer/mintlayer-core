@@ -3,6 +3,7 @@ import { core } from "@tauri-apps/api";
 import * as bip39 from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { MouseEvent } from "react";
+import { save } from '@tauri-apps/plugin-dialog';
 import { RiInformation2Line } from "react-icons/ri";
 import { PiShareNetworkBold } from "react-icons/pi";
 import { IoCloseSharp } from "react-icons/io5";
@@ -95,7 +96,14 @@ function Home() {
     e.stopPropagation();
     try {
       // Correct the command name
-      const selectedFilePath = await core.invoke("open_file_dialog");
+      const selectedFilePath = await save({
+        filters: [
+          {
+            name: "Select File type",
+            extensions: ["dat", "*"],
+          },
+        ],
+      });
 
       console.log("selected file path is: ", selectedFilePath);
       if (selectedFilePath) {

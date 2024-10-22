@@ -33,18 +33,19 @@ use common::chain::{ChainConfig, Destination};
 use common::primitives::{Amount, BlockHeight};
 use messages::WalletInfo;
 use node_lib::{Command, RunOptions};
-use rfd::AsyncFileDialog;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::async_runtime::RwLock;
+// use tauri_plugin_dialog::DialogExt;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
 use wallet_types::wallet_type::WalletType;
 
 struct AppState {
     initialized_node: RwLock<Option<InitializedNode>>,
+    backend: RwLock<Option<Backend>>,
 }
 
 #[derive(Debug)]
@@ -85,6 +86,7 @@ impl Default for AppState {
     fn default() -> Self {
         AppState {
             initialized_node: RwLock::new(None),
+            backend: RwLock::new(None),
         }
     }
 }
@@ -261,26 +263,16 @@ pub async fn node_initialize(
     Ok(backend_controls)
 }
 
-#[tauri::command]
-async fn open_file_dialog() -> Result<Option<String>, String> {
-    // Open a file dialog to select a file path
-    let file_opt = AsyncFileDialog::new()
-        .set_title("Save file as")
-        .add_filter("Text Files", &["dat"])
-        .add_filter("All Files", &["*"])
-        .save_file()
-        .await;
-
-    match file_opt {
-        Some(file) => {
-            match file.path().to_str() {
-                Some(path_str) => Ok(Some(path_str.to_string())),
-                None => Err("Failed to convert path to string.".to_string()), // Handle invalid UTF-8 path
-            }
-        }
-        None => Ok(None),
-    }
-}
+// #[tauri::command]
+// async fn open_file_dialog() -> Result<Option<String>, String> {
+//     // Open a file dialog to select a file path
+//     let file_path = app
+//         .dialog()
+//         .file()
+//         .add_filter("My Filter", &["dat"])
+//         .blocking_save_file();
+//     Ok(file_path)
+// }
 
 #[tauri::command]
 async fn add_create_wallet_wrapper(
@@ -302,11 +294,13 @@ async fn add_create_wallet_wrapper(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         // .plugin(tauri_plugin_shell::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             initialize_node,
-            open_file_dialog,
+            // open_file_dialog,
             add_create_wallet_wrapper
         ])
         .run(tauri::generate_context!())

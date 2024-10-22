@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "@scure/bip39": "^1.4.0",
-    "@tauri-apps/api": "^2.0.2",
+    "@tauri-apps/api": "^2.0.3",
+    "@tauri-apps/plugin-dialog": "~2",
+    "@tauri-apps/plugin-fs": "~2",
     "@tauri-apps/plugin-shell": ">=2.0.0",
     "Buffer": "^0.0.0",
     "bip39": "^3.1.0",

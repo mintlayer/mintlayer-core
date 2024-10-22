@@ -20,9 +20,9 @@ use common::{
     chain::{DelegationId, GenBlock, PoolId, SignedTransaction},
     primitives::{Amount, BlockHeight, Id},
 };
-use serde::{Serialize, Deserialize};
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use p2p::P2pEvent;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     path::PathBuf,

@@ -25,12 +25,12 @@ use futures::{stream::FuturesOrdered, TryStreamExt};
 use logging::log;
 use node_comm::rpc_client::ColdWalletClient;
 use node_lib::node_controller::NodeController;
+use serde::{Deserialize, Serialize};
 use serialization::hex_encoded::HexEncoded;
 use tokio::{
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
     task::JoinHandle,
 };
-use serde::{Serialize, Deserialize};
 use wallet::{account::transaction_list::TransactionList, wallet::Error, WalletError};
 use wallet_cli_commands::{
     get_repl_command, parse_input, CommandHandler, ConsoleCommand, ManageableWalletCommand,
@@ -81,7 +81,6 @@ impl ImportOrCreate {
             ImportOrCreate::Import
         }
     }
-
 }
 
 const TRANSACTION_LIST_PAGE_COUNT: usize = 10;

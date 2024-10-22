@@ -48,6 +48,8 @@ rfd = { workspace = true, features = ["xdg-portal", "tokio"] }
 thiserror.workspace = true
 tokio.workspace = true
 variant_count.workspace = true
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
