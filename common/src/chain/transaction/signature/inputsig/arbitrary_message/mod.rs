@@ -19,7 +19,7 @@ const MESSAGE_MAGIC_SUFFIX: &str = "\n===MINTLAYER MESSAGE END===";
 use randomness::{CryptoRng, Rng};
 use thiserror::Error;
 
-use serialization::Encode;
+use serialization::{Decode, Encode};
 
 use crate::{
     chain::{signature::DestinationSigError, ChainConfig, Destination},
@@ -50,7 +50,7 @@ pub enum SignArbitraryMessageError {
     Unsupported,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, Encode, Decode, PartialEq)]
 pub struct ArbitraryMessageSignature {
     raw_signature: Vec<u8>,
 }

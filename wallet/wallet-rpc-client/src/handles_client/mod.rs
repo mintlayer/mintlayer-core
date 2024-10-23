@@ -1018,7 +1018,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
-            .map(|tx_with_intent| HexEncoded::new(tx_with_intent))
+            .map(HexEncoded::new)
     }
 
     async fn make_tx_to_send_tokens_from_multisig_address(
