@@ -27,8 +27,8 @@ use crate::{WalletError, WalletResult};
 
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct SignedTransactionIntent {
-    actual_message: String,
-    signatures: Vec<Vec<u8>>,
+    signed_message: String,
+    signatures: Vec<ArbitraryMessageSignature>,
 }
 
 impl SignedTransactionIntent {
@@ -36,7 +36,7 @@ impl SignedTransactionIntent {
         transaction: &Transaction,
         input_destinations: &[Destination],
         intent_str: &str,
-        mut signer: Signer,
+        signer: Signer,
     ) -> WalletResult<Self>
     where
         Signer: FnMut(
@@ -52,17 +52,45 @@ impl SignedTransactionIntent {
             }
         );
 
-        let message_to_sign = Self::get_message_to_sign(&intent_str, &transaction.get_id());
+        Self::new_from_tx_id(
+            &transaction.get_id(),
+            input_destinations,
+            intent_str,
+            signer,
+        )
+    }
+
+    pub fn new_from_tx_id<Signer>(
+        tx_id: &Id<Transaction>,
+        input_destinations: &[Destination],
+        intent_str: &str,
+        mut signer: Signer,
+    ) -> WalletResult<Self>
+    where
+        Signer: FnMut(
+            /*message_to_sign:*/ &[u8],
+            &Destination,
+        ) -> WalletResult<ArbitraryMessageSignature>,
+    {
+        let message_to_sign = Self::get_message_to_sign(intent_str, tx_id);
 
         let signatures = input_destinations
             .iter()
-            .map(|dest| Ok(signer(message_to_sign.as_bytes(), dest)?.into_raw()))
+            .map(|dest| signer(message_to_sign.as_bytes(), dest))
             .collect::<WalletResult<Vec<_>>>()?;
 
         Ok(SignedTransactionIntent {
-            actual_message: message_to_sign,
+            signed_message: message_to_sign,
             signatures,
         })
+    }
+
+    pub fn signed_message(&self) -> &str {
+        &self.signed_message
+    }
+
+    pub fn signatures(&self) -> &[ArbitraryMessageSignature] {
+        &self.signatures
     }
 
     pub fn get_message_to_sign(intent: &str, tx_id: &Id<Transaction>) -> String {

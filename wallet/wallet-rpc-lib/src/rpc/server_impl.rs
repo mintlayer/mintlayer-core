@@ -994,7 +994,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
                 config,
             )
             .await
-            .map(|tx_with_intent| HexEncoded::new(tx_with_intent)),
+            .map(HexEncoded::new),
         )
     }
 

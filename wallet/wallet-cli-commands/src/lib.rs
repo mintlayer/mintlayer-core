@@ -431,6 +431,7 @@ pub enum WalletCommand {
     },
 
     #[clap(name = "token-make-tx-for-sending")]
+    #[clap(hide = true)]
     MakeTxToSendTokensToAddress {
         /// The token id of the tokens to be sent
         token_id: String,

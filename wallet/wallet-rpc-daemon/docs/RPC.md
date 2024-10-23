@@ -1159,7 +1159,7 @@ Parameters:
 
 Returns:
 ```
-{ "tx": hex string }
+hex string
 ```
 
 ### Method `make_tx_to_send_tokens_from_multisig_address`
