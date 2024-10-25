@@ -1314,7 +1314,16 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                             )
                             .await;
                         }
-                        TxOutput::Htlc(_, _) => {} // TODO(HTLC)
+                        TxOutput::Htlc(_, htlc) => {
+                            let address =
+                                Address::<Destination>::new(&chain_config, htlc.spend_key)
+                                    .expect("Unable to encode destination");
+
+                            address_transactions
+                                .entry(address.clone())
+                                .or_default()
+                                .insert(tx.get_id());
+                        }
                         TxOutput::LockThenTransfer(output_value, destination, _)
                         | TxOutput::Transfer(output_value, destination) => {
                             let address = Address::<Destination>::new(&chain_config, destination)
@@ -1729,7 +1738,27 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                         .expect("Unable to set locked utxo");
                 }
             }
-            TxOutput::Htlc(_, _) => {} // TODO(HTLC)
+            TxOutput::Htlc(output_value, htlc) => {
+                let address = Address::<Destination>::new(&chain_config, htlc.spend_key.clone())
+                    .expect("Unable to encode destination");
+
+                address_transactions.entry(address.clone()).or_default().insert(transaction_id);
+
+                let token_decimals = match output_value {
+                    OutputValue::Coin(_) | OutputValue::TokenV0(_) => None,
+                    OutputValue::TokenV1(token_id, _) => {
+                        Some(token_decimals(*token_id, &BTreeMap::new(), db_tx).await?.1)
+                    }
+                };
+
+                let outpoint =
+                    UtxoOutPoint::new(OutPointSourceId::Transaction(transaction_id), idx as u32);
+                let utxo = Utxo::new(output.clone(), token_decimals, false);
+                db_tx
+                    .set_utxo_at_height(outpoint, utxo, address.as_str(), block_height)
+                    .await
+                    .expect("Unable to set utxo");
+            }
             TxOutput::CreateOrder(_) => {
                 // TODO(orders)
             }
@@ -1932,7 +1961,7 @@ fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         | TxOutput::Burn(_)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_)
+        | TxOutput::Htlc(_, _)
         | TxOutput::CreateOrder(_) => None,
-        TxOutput::Htlc(_, _) => None, // TODO(HTLC)
     }
 }
