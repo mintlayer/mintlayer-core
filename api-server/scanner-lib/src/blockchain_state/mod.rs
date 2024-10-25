@@ -1957,11 +1957,11 @@ fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         | TxOutput::IssueNft(_, _, d)
         | TxOutput::ProduceBlockFromStake(d, _) => Some(d),
         TxOutput::CreateStakePool(_, data) => Some(data.decommission_key()),
+        TxOutput::Htlc(_, htlc) => Some(&htlc.spend_key),
         TxOutput::IssueFungibleToken(_)
         | TxOutput::Burn(_)
         | TxOutput::DelegateStaking(_, _)
         | TxOutput::DataDeposit(_)
-        | TxOutput::Htlc(_, _)
         | TxOutput::CreateOrder(_) => None,
     }
 }
