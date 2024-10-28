@@ -19,7 +19,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        Block, DelegationId, Destination, PoolId, Transaction, UtxoOutPoint,
+        Block, DelegationId, Destination, OrderId, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -27,8 +27,8 @@ use pos_accounting::PoolData;
 
 use crate::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
-    CoinOrTokenStatistic, Delegation, FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
-    UtxoWithExtraInfo,
+    CoinOrTokenStatistic, Delegation, FungibleTokenData, Order, PoolBlockStats, TransactionInfo,
+    Utxo, UtxoWithExtraInfo,
 };
 
 use super::ApiServerInMemoryStorageTransactionalRo;
@@ -258,5 +258,9 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError> {
         self.transaction.get_all_statistic(coin_or_token_id)
+    }
+
+    async fn get_order(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError> {
+        todo!()
     }
 }

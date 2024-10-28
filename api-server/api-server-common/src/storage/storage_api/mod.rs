@@ -27,8 +27,8 @@ use common::{
             IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, RPCFungibleTokenInfo,
             TokenId, TokenTotalSupply,
         },
-        AccountNonce, Block, ChainConfig, DelegationId, Destination, PoolId, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        AccountNonce, Block, ChainConfig, DelegationId, Destination, OrderId, PoolId,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -174,6 +174,20 @@ impl Delegation {
             creation_block_height: self.creation_block_height,
         }
     }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+pub struct Order {
+    pub creation_block_height: BlockHeight,
+    pub conclude_destination: Destination,
+
+    pub give_balance: Amount,
+    pub give_currency: CoinOrTokenId,
+
+    pub ask_balance: Amount,
+    pub ask_currency: CoinOrTokenId,
+
+    pub next_nonce: AccountNonce,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -547,6 +561,8 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError>;
+
+    async fn get_order(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]
@@ -702,6 +718,18 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     ) -> Result<(), ApiServerStorageError>;
 
     async fn del_statistics_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_order_at_height(
+        &mut self,
+        order_id: OrderId,
+        order: &Order,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_orders_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;

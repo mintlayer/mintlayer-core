@@ -27,8 +27,8 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, PoolId, Transaction,
-        UtxoOutPoint,
+        AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
+        Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -39,7 +39,7 @@ use crate::storage::{
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        LockedUtxo, PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
+        LockedUtxo, Order, PoolBlockStats, TransactionInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 
@@ -653,6 +653,22 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
+        self.just_execute(
+            "CREATE TABLE ml.orders (
+                    order_id TEXT NOT NULL,
+                    block_height bigint NOT NULL,
+                    creation_block_height bigint NOT NULL,
+                    ask_balance TEXT NOT NULL,
+                    ask_currency bytea NOT NULL,
+                    give_balance TEXT NOT NULL,
+                    give_currency bytea NOT NULL,
+                    next_nonce bytea NOT NULL,
+                    conclude_destination bytea NOT NULL,
+                    PRIMARY KEY (order_id, block_height)
+                );",
+        )
+        .await?;
+
         logging::log::info!("Done creating database tables");
 
         Ok(())
@@ -678,6 +694,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.just_execute("DROP TABLE IF EXISTS ml_nft_issuance CASCADE;").await?;
         self.just_execute("DROP TABLE IF EXISTS ml_genesis CASCADE;").await?;
         self.just_execute("DROP TABLE IF EXISTS ml_blocks CASCADE;").await?;
+        self.just_execute("DROP TABLE IF EXISTS ml_orders CASCADE;").await?;
 
         // drop the new ml schema since version 8
         self.just_execute("DROP SCHEMA IF EXISTS ml CASCADE;").await?;
@@ -2138,6 +2155,147 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     SET aux_data = $2;",
                 &[&block_id.encode(), &block_aux_data.encode()],
             )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn get_order(
+        &mut self,
+        order_id: OrderId,
+        chain_config: &ChainConfig,
+    ) -> Result<Option<Order>, ApiServerStorageError> {
+        let order_id = Address::new(chain_config, order_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
+        let row = self
+            .tx
+            .query_opt(
+                r#"SELECT ask_balance, ask_currency, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
+                FROM ml.orders
+                WHERE order_id = $1
+                AND block_height = (SELECT MAX(block_height) FROM ml.orders WHERE order_id = $1);
+                "#,
+                &[&order_id.as_str()],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        let data = match row {
+            Some(d) => d,
+            None => return Ok(None),
+        };
+
+        let ask_balance: String = data.get(0);
+        let ask_currency: String = data.get(1);
+        let give_balance: String = data.get(2);
+        let give_currency: String = data.get(3);
+        let conclude_destination: Vec<u8> = data.get(4);
+        let next_nonce: Vec<u8> = data.get(5);
+        let creation_block_height: i64 = data.get(6);
+
+        let ask_balance = Amount::from_fixedpoint_str(&ask_balance, 0).ok_or_else(|| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Order {order_id} Deserialization failed invalid ask balance {ask_balance}"
+            ))
+        })?;
+
+        let ask_currency =
+            CoinOrTokenId::decode_all(&mut ask_currency.as_bytes()).map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Order {} deserialization failed: {}",
+                    order_id, e
+                ))
+            })?;
+
+        let give_balance = Amount::from_fixedpoint_str(&give_balance, 0).ok_or_else(|| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Order {order_id} Deserialization failed invalid give balance {give_balance}"
+            ))
+        })?;
+
+        let give_currency =
+            CoinOrTokenId::decode_all(&mut give_currency.as_bytes()).map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Order {} deserialization failed: {}",
+                    order_id, e
+                ))
+            })?;
+
+        let conclude_destination = Destination::decode_all(&mut conclude_destination.as_slice())
+            .map_err(|e| {
+                ApiServerStorageError::DeserializationError(format!(
+                    "Order {} deserialization failed: {}",
+                    order_id, e
+                ))
+            })?;
+
+        let next_nonce = AccountNonce::decode_all(&mut next_nonce.as_slice()).map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Order {} deserialization failed: {}",
+                order_id, e
+            ))
+        })?;
+
+        let order = Order {
+            creation_block_height: BlockHeight::new(creation_block_height as u64),
+            conclude_destination,
+            ask_balance,
+            ask_currency,
+            give_balance,
+            give_currency,
+            next_nonce,
+        };
+        Ok(Some(order))
+    }
+
+    pub async fn set_order_at_height(
+        &mut self,
+        order_id: OrderId,
+        order: &Order,
+        block_height: BlockHeight,
+        chain_config: &ChainConfig,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+        let creation_block_height =
+            Self::block_height_to_postgres_friendly(order.creation_block_height);
+        let order_id = Address::new(chain_config, order_id)
+            .map_err(|_| ApiServerStorageError::AddressableError)?;
+
+        self.tx
+            .execute(
+                r#"
+                    INSERT INTO ml.orders (order_id, block_height, ask_balance, ask_currency, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height)
+                    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    ON CONFLICT (order_id, block_height) DO UPDATE
+                    SET ask_balance = $3, ask_currency = $4, give_balance = $5, give_currency = $6, conclude_destination = $7, next_nonce = $8, creation_block_height = $9;
+                "#,
+                &[
+                    &order_id.as_str(),
+                    &height,
+                    &amount_to_str(order.ask_balance),
+                    &order.ask_currency.encode(),
+                    &amount_to_str(order.give_balance),
+                    &order.give_currency.encode(),
+                    &order.conclude_destination.encode(),
+                    &order.next_nonce.encode(),
+                    &creation_block_height,
+                ],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn del_orders_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let height = Self::block_height_to_postgres_friendly(block_height);
+
+        self.tx
+            .execute("DELETE FROM ml.orders WHERE block_height > $1;", &[&height])
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
