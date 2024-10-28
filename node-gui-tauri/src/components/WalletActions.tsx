@@ -45,7 +45,7 @@ const WalletActions = (props: any) => {
     setShowUnlockModal(false);
   }
   return (
-    <div className="min-w-full bg-white border border-gray-200 shadowoverflow-y-auto mt-8 p-8 m-8 rounded rounded-lg shadow">
+    <div className="bg-white border border-gray-200 shadowoverflow-y-auto mt-8 p-8 m-8 rounded rounded-lg shadow">
       {showEncryptWalletModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="absolute inset-0 bg-black opacity-50"></div>

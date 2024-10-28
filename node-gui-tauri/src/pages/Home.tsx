@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, MouseEvent } from "react";
 import { core } from "@tauri-apps/api";
+// import { save } from '@tauri-apps/api/dialog';
 import * as bip39 from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
-import { MouseEvent } from "react";
-import { save } from '@tauri-apps/plugin-dialog';
 import { RiInformation2Line } from "react-icons/ri";
 import { PiShareNetworkBold } from "react-icons/pi";
 import { IoCloseSharp } from "react-icons/io5";
@@ -96,23 +95,18 @@ function Home() {
     e.stopPropagation();
     try {
       // Correct the command name
-      const selectedFilePath = await save({
-        filters: [
-          {
-            name: "Select File type",
-            extensions: ["dat", "*"],
-          },
-        ],
-      });
+      const selectedFilePath = await core.invoke("open_file_dialog");
 
       console.log("selected file path is: ", selectedFilePath);
       if (selectedFilePath) {
         setFilePath(selectedFilePath.toString()); // Ensure setFilePath is defined
         const walletInfo = await core.invoke("add_create_wallet_wrapper", {
-          file_path: selectedFilePath,
-          mnemonic: mnemonic,
-          import: true,
-          wallet_type: walletMode,
+          request: {
+            file_path: selectedFilePath,
+            mnemonic: mnemonic,
+            import: true,
+            wallet_type: walletMode,
+          },
         });
         console.log("walletInfo is ", walletInfo);
         setShowMnemonicModal(false);
@@ -260,10 +254,10 @@ function Home() {
             </div>
           </div>
         ) : (
-          <div className=" w-full pt-1">
+          <div className="w-full pt-1">
             <div className="grid grid-cols-12">
               <div className="col-span-3">
-                <div className="flex flex-col  space-y-4 p-4  rounded h-[100vh] w-full overflow-y-auto">
+                <div className="flex flex-col  space-y-4 p-4  rounded w-full overflow-y-auto">
                   <div className="flex justify-center items-center w-[20vw] ">
                     <img src={MintlayerIcon} alt="sidebar_icon" />
                   </div>
@@ -420,9 +414,9 @@ function Home() {
                   )}
                 </div>
               </div>
-              <div className="col-span-9 pr-4">
-                <div className="bg-[#F3F4F6] w-[74vw] h-full">
-                  <div className="flex w-full p-8 ml-8">
+              <div className="col-span-9 ">
+                <div className="bg-[#F3F4F6] h-full">
+                  <div className="flex p-8">
                     <button
                       onClick={() => setCurrentTab("summary")}
                       className={`flex items-center justify-center w-full pl-2  transition-colors duration-300 rounded-tr-[0] rounded-br-[0] ${

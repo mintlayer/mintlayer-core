@@ -38,22 +38,23 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::async_runtime::RwLock;
-// use tauri_plugin_dialog::DialogExt;
+use tauri::Manager;
+use tauri_plugin_dialog::DialogExt;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
 use wallet_types::wallet_type::WalletType;
 
 struct AppState {
     initialized_node: RwLock<Option<InitializedNode>>,
-    backend: RwLock<Option<Backend>>,
+    backend: RwLock<Option<Arc<Backend>>>,
 }
 
-#[derive(Debug)]
 pub struct BackendControls {
     pub initialized_node: InitializedNode,
     pub backend_sender: BackendSender,
     pub backend_receiver: UnboundedReceiver<BackendEvent>,
     pub low_priority_backend_receiver: UnboundedReceiver<BackendEvent>,
+    pub backend: Arc<Backend>,
 }
 
 /// `UnboundedSender` wrapper, used to make sure there is only one instance and it doesn't get cloned
@@ -141,6 +142,9 @@ async fn initialize_node(
     let mut guard = state.initialized_node.write().await;
     *guard = Some(backend_controls.initialized_node);
 
+    let mut guard_backend = state.backend.write().await;
+    *guard_backend = Some(backend_controls.backend);
+
     Ok("Node Initialized".to_string())
 }
 pub async fn node_initialize(
@@ -173,7 +177,7 @@ pub async fn node_initialize(
     let (wallet_updated_tx, wallet_updated_rx) = unbounded_channel();
 
     // Match the wallet mode to determine hot or cold configuration.
-    let (chain_config, chain_info) = match mode {
+    let (chain_config, chain_info, backend) = match mode {
         WalletMode::Hot => {
             let setup_result = node_lib::setup(opts, true).await?;
             let node = match setup_result {
@@ -196,26 +200,36 @@ pub async fn node_initialize(
                 controller.chainstate.call(|this| Arc::clone(this.get_chain_config())).await?;
             let chain_info = controller.chainstate.call(|this| this.info()).await??;
 
-            let backend = backend_impl::Backend::new_hot(
+            let backend = Arc::new(backend_impl::Backend::new_hot(
                 Arc::clone(&chain_config),
                 event_tx,
                 low_priority_event_tx,
                 wallet_updated_tx,
                 controller,
                 manager_join_handle,
-            );
+            ));
 
-            tokio::spawn(async move {
-                backend_impl::run(
-                    backend,
-                    request_rx,
-                    wallet_updated_rx,
-                    _chainstate_event_handler,
-                    _p2p_event_handler,
-                )
-                .await;
-            });
-            (chain_config, chain_info)
+            let backend_clone = Arc::clone(&backend);
+
+            match Arc::try_unwrap(backend) {
+                Ok(backend) => {
+                    // Now you can call the run function that requires a Backend
+                    backend_impl::run(
+                        backend, // This is now a Backend instance
+                        request_rx,
+                        wallet_updated_rx,
+                        _chainstate_event_handler,
+                        _p2p_event_handler,
+                    )
+                    .await;
+                }
+                Err(arc) => {
+                    // Handle the case where there are other references
+                    eprintln!("Failed to unwrap Arc<Backend>: still has other references");
+                    // You can still use `arc` here, which is still an Arc<Backend>
+                }
+            }
+            (chain_config, chain_info, backend_clone)
         }
         WalletMode::Cold => {
             let chain_config = Arc::new(match network {
@@ -232,19 +246,28 @@ pub async fn node_initialize(
 
             let manager_join_handle = tokio::spawn(async move {});
 
-            let backend = backend_impl::Backend::new_cold(
+            let backend = Arc::new(backend_impl::Backend::new_cold(
                 Arc::clone(&chain_config),
                 event_tx,
                 low_priority_event_tx,
                 wallet_updated_tx,
                 manager_join_handle,
-            );
+            ));
+
+            let backend_clone = Arc::clone(&backend);
 
             tokio::spawn(async move {
-                backend_impl::run_cold(backend, request_rx, wallet_updated_rx).await;
+                match Arc::try_unwrap(backend) {
+                    Ok(backend) => {
+                        backend_impl::run_cold(backend, request_rx, wallet_updated_rx).await;
+                    }
+                    Err(arc) => {
+                        eprintln!("Failed to unwrap Arc<Backend> still has other references");
+                    }
+                }
             });
 
-            (chain_config, chain_info)
+            (chain_config, chain_info, backend_clone)
         }
     };
 
@@ -258,33 +281,57 @@ pub async fn node_initialize(
         backend_sender: BackendSender::new(request_tx),
         backend_receiver: event_rx,
         low_priority_backend_receiver: low_priority_event_rx,
+        backend: backend,
     };
 
     Ok(backend_controls)
 }
 
-// #[tauri::command]
-// async fn open_file_dialog() -> Result<Option<String>, String> {
-//     // Open a file dialog to select a file path
-//     let file_path = app
-//         .dialog()
-//         .file()
-//         .add_filter("My Filter", &["dat"])
-//         .blocking_save_file();
-//     Ok(file_path)
-// }
+#[tauri::command]
+async fn open_file_dialog() -> Result<String, String> {
+    // Create a channel to communicate between the dialog closure and the async function
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    let _ = tauri::Builder::default().setup(|app| {
+        app.dialog().file().save_file(move |file_path_option| {
+            let result = match file_path_option {
+                Some(path) => path.to_string(),
+                None => "No file was selected.".to_string(),
+            };
+
+            // Send the result through the channel
+            tx.send(result).expect("Failed to send file path");
+        });
+        Ok(())
+    });
+
+    // Receive the result from the channel and return it
+    match rx.recv() {
+        Ok(file_path) => Ok(file_path),
+        Err(_) => Err("Failed to receive file path.".to_string()),
+    }
+}
 
 #[tauri::command]
 async fn add_create_wallet_wrapper(
-    state: tauri::State<'_, Arc<Mutex<Backend>>>,
+    state: tauri::State<'_, AppState>,
     request: OpenCreateWalletRequest,
 ) -> Result<WalletInfo, String> {
-    let mut backend = state.lock().await;
+    let mut backend_guard = state.backend.write().await; // Correctly use write lock
+
+    // Check if backend is initialized
+    let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
+
+    // Get a mutable reference to the underlying Backend
+    let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
+
+    // Now you can modify the backend
     let mnemonic = wallet_controller::mnemonic::Mnemonic::parse(request.mnemonic)
         .map_err(|e| e.to_string())?;
     let file_path = PathBuf::from(request.file_path);
-    let wallet_type = WalletType::from_str(&request.wallet_type).map_err(|e| e.to_string())?;
+    let wallet_type: WalletType = WalletType::from_str(&request.wallet_type).map_err(|e| e.to_string())?;
     let import = ImportOrCreate::from_bool(request.import);
+
     backend
         .add_create_wallet(file_path, mnemonic, wallet_type, import)
         .await
@@ -300,7 +347,7 @@ pub fn run() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             initialize_node,
-            // open_file_dialog,
+            open_file_dialog,
             add_create_wallet_wrapper
         ])
         .run(tauri::generate_context!())

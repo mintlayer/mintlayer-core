@@ -74,10 +74,10 @@ const Delegation = () => {
                 </td>
 
                 <td className="py-2 px-4 border-b border-gray-200 flex justify-between space-x-2">
-                  <button className="px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black ">
+                  <button className="px-2 py-1 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black ">
                     DEPOSIT
                   </button>
-                  <button className="px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black ">
+                  <button className="px-2 py-1 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black ">
                     WITHRAW
                   </button>
                 </td>

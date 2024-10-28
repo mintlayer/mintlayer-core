@@ -8,7 +8,7 @@ const Addresses = () => {
     "asudfoiuae8u9a8eu9f8ase98fuas9",
   ];
   return (
-    <div className="container pt-0">
+    <div className="pt-0">
       <p>ADDRESS</p>
       <table className="w-[50vw] border border-gray-200 rounded rounded-lg overflow-hidden shadow">
         <thead className="bg-gray-100 ">
