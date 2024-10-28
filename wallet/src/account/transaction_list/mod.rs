@@ -114,7 +114,6 @@ fn own_output(key_chain: &AccountKeyChainImpl, output: &TxOutput) -> bool {
         TxOutput::Transfer(_, dest) | TxOutput::LockThenTransfer(_, dest, _) => KeyPurpose::ALL
             .iter()
             .any(|purpose| key_chain.get_leaf_key_chain(*purpose).is_destination_mine(dest)),
-        TxOutput::Htlc(_, _) => false, // TODO(HTLC)
         TxOutput::Burn(_)
         | TxOutput::CreateStakePool(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
@@ -123,6 +122,7 @@ fn own_output(key_chain: &AccountKeyChainImpl, output: &TxOutput) -> bool {
         | TxOutput::IssueFungibleToken(_)
         | TxOutput::IssueNft(_, _, _)
         | TxOutput::DataDeposit(_)
+        | TxOutput::Htlc(_, _)
         | TxOutput::CreateOrder(_) => false,
     }
 }

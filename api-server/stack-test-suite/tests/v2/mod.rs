@@ -25,6 +25,7 @@ mod chain_at_height;
 mod chain_tip;
 mod feerate;
 mod helpers;
+mod htlc;
 mod nft;
 mod pool;
 mod pool_block_stats;

@@ -378,7 +378,6 @@ impl<'f> PoSBlockBuilder<'f> {
     pub fn add_test_transaction(
         mut self,
         rng: &mut (impl Rng + CryptoRng),
-        support_htlc: bool,
         support_orders: bool,
     ) -> Self {
         let utxo_set = self
@@ -409,7 +408,6 @@ impl<'f> PoSBlockBuilder<'f> {
                 &self.orders_accounting_store,
                 self.staking_pool,
                 account_nonce_getter,
-                support_htlc,
                 support_orders,
             )
             .make(
