@@ -15,6 +15,9 @@
 
 use chainstate_test_framework::empty_witness;
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
+use common::chain::tokens::{make_token_id, TokenId, TokenIssuance};
+use common::chain::{AccountCommand, AccountNonce, TxInput};
+use common::primitives::BlockHeight;
 use common::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
@@ -136,4 +139,92 @@ pub fn stake_delegation(
     tf.process_block(block.clone(), chainstate::BlockSource::Local).unwrap();
 
     (amount_to_delegate, transfer_outpoint, block)
+}
+
+#[allow(dead_code)]
+pub struct IssueAndMintTokensResult {
+    pub token_id: TokenId,
+
+    pub issue_block: Block,
+    pub mint_block: Block,
+
+    pub change_outpoint: UtxoOutPoint,
+    pub tokens_outpoint: UtxoOutPoint,
+}
+
+pub fn issue_and_mint_tokens_from_genesis(
+    rng: &mut (impl Rng + CryptoRng),
+    tf: &mut TestFramework,
+) -> IssueAndMintTokensResult {
+    let token_issuance_fee = tf.chainstate.get_chain_config().fungible_token_issuance_fee();
+
+    let issuance = test_utils::nft_utils::random_token_issuance_v1(
+        tf.chain_config(),
+        Destination::AnyoneCanSpend,
+        rng,
+    );
+
+    let genesis_outpoint = UtxoOutPoint::new(tf.best_block_id().into(), 0);
+    let genesis_coins = chainstate_test_framework::get_output_value(
+        tf.chainstate.utxo(&genesis_outpoint).unwrap().unwrap().output(),
+    )
+    .unwrap()
+    .coin_amount()
+    .unwrap();
+    let coins_after_issue = (genesis_coins - token_issuance_fee).unwrap();
+
+    // Issue token
+    let tx1 = TransactionBuilder::new()
+        .add_input(genesis_outpoint.into(), empty_witness(rng))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(coins_after_issue),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::IssueFungibleToken(Box::new(TokenIssuance::V1(
+            issuance,
+        ))))
+        .build();
+    let token_id = make_token_id(tx1.transaction().inputs()).unwrap();
+    let tx1_id = tx1.transaction().get_id();
+    let block1 = tf.make_block_builder().add_transaction(tx1).build(rng);
+
+    tf.process_block(block1.clone(), chainstate::BlockSource::Local).unwrap();
+
+    // Mint tokens
+    let token_supply_change_fee =
+        tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
+    let coins_after_mint = (coins_after_issue - token_supply_change_fee).unwrap();
+    let amount_to_mint = Amount::from_atoms(1000);
+
+    let tx2 = TransactionBuilder::new()
+        .add_input(
+            TxInput::from_command(
+                AccountNonce::new(0),
+                AccountCommand::MintTokens(token_id, amount_to_mint),
+            ),
+            empty_witness(rng),
+        )
+        .add_input(TxInput::from_utxo(tx1_id.into(), 0), empty_witness(rng))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(coins_after_mint),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::Transfer(
+            OutputValue::TokenV1(token_id, amount_to_mint),
+            Destination::AnyoneCanSpend,
+        ))
+        .build();
+
+    let tx2_id = tx2.transaction().get_id();
+    let block2 = tf.make_block_builder().add_transaction(tx2).build(rng);
+
+    tf.process_block(block2.clone(), chainstate::BlockSource::Local).unwrap();
+
+    IssueAndMintTokensResult {
+        token_id,
+        issue_block: block1,
+        mint_block: block2,
+        change_outpoint: UtxoOutPoint::new(tx2_id.into(), 0),
+        tokens_outpoint: UtxoOutPoint::new(tx2_id.into(), 1),
+    }
 }

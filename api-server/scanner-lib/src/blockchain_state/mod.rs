@@ -595,7 +595,9 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
             .zip(input_utxos.iter())
             .filter_map(|(inp, utxo)| match inp {
                 TxInput::Utxo(_) => match utxo.as_ref().expect("must be present") {
-                    TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => match v {
+                    TxOutput::Transfer(v, _)
+                    | TxOutput::LockThenTransfer(v, _, _)
+                    | TxOutput::Htlc(v, _) => match v {
                         OutputValue::TokenV1(token_id, _) => Some(*token_id),
                         OutputValue::Coin(_) | OutputValue::TokenV0(_) => None,
                     },
@@ -607,8 +609,7 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::Htlc(_, _)
-                    | TxOutput::CreateOrder(_) => None,
+                    | TxOutput::CreateOrder(_) => None, // TODO(orders)
                 },
                 TxInput::Account(_) => None,
                 TxInput::AccountCommand(_, cmd) => match cmd {

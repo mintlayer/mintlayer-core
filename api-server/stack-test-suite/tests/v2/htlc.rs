@@ -83,15 +83,22 @@ async fn spend(#[case] seed: Seed) {
                     .with_chain_config(chain_config.clone())
                     .build();
 
+                // Issue and mint some tokens to lock in htlc
+                let issue_and_mint_result =
+                    helpers::issue_and_mint_tokens_from_genesis(&mut rng, &mut tf);
+
                 // Create htlc
                 let (htlc, _) = create_htlc(&chain_config, &alice_pk, &bob_pk, secret.hash());
                 let tx_1 = TransactionBuilder::new()
                     .add_input(
-                        TxInput::from_utxo(chain_config.genesis_block_id().into(), 0),
+                        TxInput::Utxo(issue_and_mint_result.tokens_outpoint),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Htlc(
-                        OutputValue::Coin(Amount::from_atoms(100)),
+                        OutputValue::TokenV1(
+                            issue_and_mint_result.token_id,
+                            Amount::from_atoms(100),
+                        ),
                         Box::new(htlc),
                     ))
                     .build();
@@ -107,11 +114,15 @@ async fn spend(#[case] seed: Seed) {
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
-                        OutputValue::Coin(Amount::from_atoms(100)),
+                        OutputValue::TokenV1(
+                            issue_and_mint_result.token_id,
+                            Amount::from_atoms(100),
+                        ),
                         Destination::AnyoneCanSpend,
                     ))
                     .build()
                     .take_transaction();
+                let tx_2_id = tx2.get_id();
 
                 let input_sign = produce_uniparty_signature_for_htlc_input(
                     &bob_sk,
@@ -136,10 +147,17 @@ async fn spend(#[case] seed: Seed) {
 
                 _ = tx.send((
                     block1.get_id().to_hash().encode_hex::<String>(),
+                    tx_1_id.to_hash().encode_hex::<String>(),
                     block2.get_id().to_hash().encode_hex::<String>(),
+                    tx_2_id.to_hash().encode_hex::<String>(),
                 ));
 
-                vec![block1, block2]
+                vec![
+                    issue_and_mint_result.issue_block,
+                    issue_and_mint_result.mint_block,
+                    block1,
+                    block2,
+                ]
             };
 
             let storage = {
@@ -171,23 +189,30 @@ async fn spend(#[case] seed: Seed) {
         web_server(listener, web_server_state, true).await
     });
 
-    let (block1_id, block2_id) = rx.await.unwrap();
-    let url = format!("/api/v2/block/{block1_id}");
+    let (block1_id, tx_1_id, block2_id, tx_2_id) = rx.await.unwrap();
 
-    // Given that the listener port is open, this will block until a
-    // response is made (by the web server, which takes the listener
-    // over)
+    let url = format!("/api/v2/block/{block1_id}");
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();
-
     assert_eq!(response.status(), 200);
 
     let url = format!("/api/v2/block/{block2_id}");
     let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
         .await
         .unwrap();
+    assert_eq!(response.status(), 200);
 
+    let url = format!("/api/v2/transaction/{tx_1_id}");
+    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+
+    let url = format!("/api/v2/transaction/{tx_2_id}");
+    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+        .await
+        .unwrap();
     assert_eq!(response.status(), 200);
 
     task.abort();
