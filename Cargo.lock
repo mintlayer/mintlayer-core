@@ -328,6 +328,7 @@ dependencies = [
  "futures",
  "logging",
  "mempool",
+ "orders-accounting",
  "parity-scale-codec",
  "pos-accounting",
  "rstest",

@@ -17,7 +17,7 @@ use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
-    ApiServerTransactionRw, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo,
+    ApiServerTransactionRw, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, Order,
     TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock,
 };
 use chainstate::{
@@ -29,6 +29,7 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, ConsensusData},
         config::ChainConfig,
+        make_order_id,
         output_value::OutputValue,
         tokens::{make_token_id, IsTokenFrozen, TokenId, TokenIssuance},
         transaction::OutPointSourceId,
@@ -345,6 +346,11 @@ async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
 
     db_tx
         .del_statistics_above_height(block_height)
+        .await
+        .expect("Unable to disconnect block");
+
+    db_tx
+        .del_orders_above_height(block_height)
         .await
         .expect("Unable to disconnect block");
 
@@ -1164,8 +1170,17 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     )
                     .await;
                 }
-                AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
-                    // TODO(orders)
+                AccountCommand::FillOrder(order_id, fill_amount_in_ask_currency, _) => {
+                    let order = db_tx.get_order(*order_id).await?.expect("must exist");
+                    let order = order.fill(*fill_amount_in_ask_currency);
+
+                    db_tx.set_order_at_height(*order_id, &order, block_height).await?;
+                }
+                AccountCommand::ConcludeOrder(order_id) => {
+                    let order = db_tx.get_order(*order_id).await?.expect("must exist");
+                    let order = order.conclude();
+
+                    db_tx.set_order_at_height(*order_id, &order, block_height).await?;
                 }
             },
             TxInput::Account(outpoint) => {
@@ -1760,8 +1775,33 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .await
                     .expect("Unable to set utxo");
             }
-            TxOutput::CreateOrder(_) => {
-                // TODO(orders)
+            TxOutput::CreateOrder(order_data) => {
+                if let Some(input0_outpoint) = inputs.iter().find_map(|input| input.utxo_outpoint())
+                {
+                    let amount_and_currency = |v: &OutputValue| match v {
+                        OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
+                        OutputValue::TokenV1(id, amount) => (CoinOrTokenId::TokenId(*id), *amount),
+                        OutputValue::TokenV0(_) => panic!("unsupported token"),
+                    };
+
+                    let (ask_currency, ask_balance) = amount_and_currency(order_data.ask());
+                    let (give_currency, give_balance) = amount_and_currency(order_data.give());
+
+                    let order = Order {
+                        creation_block_height: block_height,
+                        conclude_destination: order_data.conclude_key().clone(),
+                        ask_balance,
+                        ask_currency,
+                        give_balance,
+                        give_currency,
+                        next_nonce: AccountNonce::new(0),
+                    };
+
+                    db_tx
+                        .set_order_at_height(make_order_id(input0_outpoint), &order, block_height)
+                        .await
+                        .expect("Unable to set delegation data");
+                }
             }
         }
     }

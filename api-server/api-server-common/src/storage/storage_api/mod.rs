@@ -190,6 +190,39 @@ pub struct Order {
     pub next_nonce: AccountNonce,
 }
 
+impl Order {
+    pub fn fill(self, fill_amount_in_ask_currency: Amount) -> Self {
+        let filled_amount = orders_accounting::calculate_filled_amount(
+            self.ask_balance,
+            self.give_balance,
+            fill_amount_in_ask_currency,
+        )
+        .expect("must succeed");
+
+        Self {
+            creation_block_height: self.creation_block_height,
+            conclude_destination: self.conclude_destination,
+            give_balance: (self.give_balance - filled_amount).expect("no overflow"),
+            give_currency: self.give_currency,
+            ask_balance: (self.ask_balance - fill_amount_in_ask_currency).expect("no overflow"),
+            ask_currency: self.ask_currency,
+            next_nonce: self.next_nonce.increment().expect("no overflow"),
+        }
+    }
+
+    pub fn conclude(self) -> Self {
+        Self {
+            creation_block_height: self.creation_block_height,
+            conclude_destination: self.conclude_destination,
+            give_balance: Amount::ZERO,
+            give_currency: self.give_currency,
+            ask_balance: Amount::ZERO,
+            ask_currency: self.ask_currency,
+            next_nonce: self.next_nonce.increment().expect("no overflow"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum UtxoLock {
     UntilHeight(BlockHeight),
