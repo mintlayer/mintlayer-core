@@ -658,8 +658,10 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     order_id TEXT NOT NULL,
                     block_height bigint NOT NULL,
                     creation_block_height bigint NOT NULL,
+                    initially_asked TEXT NOT NULL,
                     ask_balance TEXT NOT NULL,
                     ask_currency bytea NOT NULL,
+                    initially_given TEXT NOT NULL,
                     give_balance TEXT NOT NULL,
                     give_currency bytea NOT NULL,
                     next_nonce bytea NOT NULL,
@@ -2171,7 +2173,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         let row = self
             .tx
             .query_opt(
-                r#"SELECT ask_balance, ask_currency, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
+                r#"SELECT initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
                 FROM ml.orders
                 WHERE order_id = $1
                 AND block_height = (SELECT MAX(block_height) FROM ml.orders WHERE order_id = $1);
@@ -2186,13 +2188,21 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             None => return Ok(None),
         };
 
-        let ask_balance: String = data.get(0);
-        let ask_currency: String = data.get(1);
-        let give_balance: String = data.get(2);
-        let give_currency: String = data.get(3);
-        let conclude_destination: Vec<u8> = data.get(4);
-        let next_nonce: Vec<u8> = data.get(5);
-        let creation_block_height: i64 = data.get(6);
+        let initially_asked: String = data.get(0);
+        let ask_balance: String = data.get(1);
+        let ask_currency: String = data.get(2);
+        let initially_given: String = data.get(3);
+        let give_balance: String = data.get(4);
+        let give_currency: String = data.get(5);
+        let conclude_destination: Vec<u8> = data.get(6);
+        let next_nonce: Vec<u8> = data.get(7);
+        let creation_block_height: i64 = data.get(8);
+
+        let initially_asked = Amount::from_fixedpoint_str(&initially_asked, 0).ok_or_else(|| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Order {order_id} Deserialization failed invalid initial ask balance {initially_asked}"
+            ))
+        })?;
 
         let ask_balance = Amount::from_fixedpoint_str(&ask_balance, 0).ok_or_else(|| {
             ApiServerStorageError::DeserializationError(format!(
@@ -2207,6 +2217,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                     order_id, e
                 ))
             })?;
+
+        let initially_given= Amount::from_fixedpoint_str(&initially_given, 0).ok_or_else(|| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Order {order_id} Deserialization failed invalid initial give balance {initially_given}"
+            ))
+        })?;
 
         let give_balance = Amount::from_fixedpoint_str(&give_balance, 0).ok_or_else(|| {
             ApiServerStorageError::DeserializationError(format!(
@@ -2241,9 +2257,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             creation_block_height: BlockHeight::new(creation_block_height as u64),
             conclude_destination,
             ask_balance,
+            initially_asked,
             ask_currency,
             give_balance,
             give_currency,
+            initially_given,
             next_nonce,
         };
         Ok(Some(order))
@@ -2265,16 +2283,18 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .execute(
                 r#"
-                    INSERT INTO ml.orders (order_id, block_height, ask_balance, ask_currency, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height)
-                    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    INSERT INTO ml.orders (order_id, block_height, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height)
+                    VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                     ON CONFLICT (order_id, block_height) DO UPDATE
-                    SET ask_balance = $3, ask_currency = $4, give_balance = $5, give_currency = $6, conclude_destination = $7, next_nonce = $8, creation_block_height = $9;
+                    SET initially_asked = $3, ask_balance = $4, ask_currency = $5, initially_given = $6, give_balance = $7, give_currency = $8, conclude_destination = $9, next_nonce = $10, creation_block_height = $11;
                 "#,
                 &[
                     &order_id.as_str(),
                     &height,
+                    &amount_to_str(order.initially_asked),
                     &amount_to_str(order.ask_balance),
                     &order.ask_currency.encode(),
+                    &amount_to_str(order.initially_given),
                     &amount_to_str(order.give_balance),
                     &order.give_currency.encode(),
                     &order.conclude_destination.encode(),

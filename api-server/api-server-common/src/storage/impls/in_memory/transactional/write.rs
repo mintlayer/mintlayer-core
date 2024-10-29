@@ -261,14 +261,14 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         order: &Order,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        todo!()
+        self.transaction.set_order_at_height(order_id, order, block_height)
     }
 
     async fn del_orders_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        todo!()
+        self.transaction.del_orders_above_height(block_height)
     }
 }
 
@@ -500,6 +500,6 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
     }
 
     async fn get_order(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError> {
-        todo!()
+        self.transaction.get_order(order_id)
     }
 }

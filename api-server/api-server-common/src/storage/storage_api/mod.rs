@@ -181,11 +181,13 @@ pub struct Order {
     pub creation_block_height: BlockHeight,
     pub conclude_destination: Destination,
 
-    pub give_balance: Amount,
     pub give_currency: CoinOrTokenId,
+    pub initially_given: Amount,
+    pub give_balance: Amount,
 
-    pub ask_balance: Amount,
     pub ask_currency: CoinOrTokenId,
+    pub initially_asked: Amount,
+    pub ask_balance: Amount,
 
     pub next_nonce: AccountNonce,
 }
@@ -202,10 +204,12 @@ impl Order {
         Self {
             creation_block_height: self.creation_block_height,
             conclude_destination: self.conclude_destination,
-            give_balance: (self.give_balance - filled_amount).expect("no overflow"),
             give_currency: self.give_currency,
-            ask_balance: (self.ask_balance - fill_amount_in_ask_currency).expect("no overflow"),
+            initially_given: self.initially_given,
+            give_balance: (self.give_balance - filled_amount).expect("no overflow"),
             ask_currency: self.ask_currency,
+            initially_asked: self.initially_asked,
+            ask_balance: (self.ask_balance - fill_amount_in_ask_currency).expect("no overflow"),
             next_nonce: self.next_nonce.increment().expect("no overflow"),
         }
     }
@@ -214,10 +218,12 @@ impl Order {
         Self {
             creation_block_height: self.creation_block_height,
             conclude_destination: self.conclude_destination,
-            give_balance: Amount::ZERO,
             give_currency: self.give_currency,
-            ask_balance: Amount::ZERO,
+            initially_given: self.initially_given,
+            give_balance: Amount::ZERO,
             ask_currency: self.ask_currency,
+            initially_asked: self.initially_asked,
+            ask_balance: Amount::ZERO,
             next_nonce: self.next_nonce.increment().expect("no overflow"),
         }
     }

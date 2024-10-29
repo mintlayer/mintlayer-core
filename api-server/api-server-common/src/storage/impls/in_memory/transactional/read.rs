@@ -261,6 +261,6 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRo<'t> {
     }
 
     async fn get_order(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError> {
-        todo!()
+        self.transaction.get_order(order_id)
     }
 }
