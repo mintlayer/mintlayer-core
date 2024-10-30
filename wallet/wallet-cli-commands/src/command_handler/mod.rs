@@ -1417,7 +1417,7 @@ where
                         self.config,
                     )
                     .await?;
-                    
+
                 let mut output = format!("The hex encoded transaction is:\n{signed_tx}\n");
 
                 writeln!(

@@ -790,7 +790,8 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
                 idx,
             )
             .unwrap();
-            let signature = sign_public_key_spending(&priv_key, &pub_key, &sighash, &mut rng).unwrap();
+            let signature =
+                sign_public_key_spending(&priv_key, &pub_key, &sighash, &mut rng).unwrap();
             InputWitness::Standard(StandardInputSignature::new(
                 SigHashType::default(),
                 signature.encode(),
@@ -867,7 +868,8 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
                 idx,
             )
             .unwrap();
-            let signature = sign_public_key_spending(&priv_key, &pub_key, &sighash, &mut rng).unwrap();
+            let signature =
+                sign_public_key_spending(&priv_key, &pub_key, &sighash, &mut rng).unwrap();
             InputWitness::Standard(StandardInputSignature::new(
                 SigHashType::default(),
                 signature.encode(),

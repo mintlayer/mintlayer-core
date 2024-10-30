@@ -54,9 +54,9 @@ pub enum DestinationSigError {
     SignatureVerificationWithoutSigs,
     #[error("Input corresponding to output number {0} does not exist (number of inputs is {1})")]
     InvalidOutputIndexForModeSingle(usize, usize),
-    #[error("Decoding witness failed ")]
+    #[error("Decoding witness failed")]
     DecodingWitnessFailed,
-    #[error("Signature verification failed ")]
+    #[error("Signature verification failed")]
     SignatureVerificationFailed,
     #[error("Public key to address mismatch")]
     PublicKeyToAddressMismatch,

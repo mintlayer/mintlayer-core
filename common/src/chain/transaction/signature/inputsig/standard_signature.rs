@@ -34,7 +34,8 @@ use super::{
         sign_public_key_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
     },
     authorize_pubkeyhash_spend::{
-        sign_public_key_hash_spending, verify_public_key_hash_spending, AuthorizedPublicKeyHashSpend,
+        sign_public_key_hash_spending, verify_public_key_hash_spending,
+        AuthorizedPublicKeyHashSpend,
     },
     classical_multisig::{
         authorize_classical_multisig::{
@@ -143,6 +144,8 @@ impl StandardInputSignature {
         inputs_utxos: &[Option<&TxOutput>],
         input_num: usize,
     ) -> Result<Self, DestinationSigError> {
+        use super::classical_multisig::multisig_partial_signature::SigsVerifyResult;
+
         let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num)?;
         let message = sighash.encode();
 
@@ -152,9 +155,13 @@ impl StandardInputSignature {
         let verification_result = verifier.verify_signatures(chain_config)?;
 
         match verification_result {
-            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => (),
-            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::Incomplete => return Err(DestinationSigError::IncompleteClassicalMultisigAuthorization),
-            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::Invalid => return Err(DestinationSigError::InvalidClassicalMultisigAuthorization),
+            SigsVerifyResult::CompleteAndValid => (),
+            SigsVerifyResult::Incomplete => {
+                return Err(DestinationSigError::IncompleteClassicalMultisigAuthorization)
+            }
+            SigsVerifyResult::Invalid => {
+                return Err(DestinationSigError::InvalidClassicalMultisigAuthorization)
+            }
         }
 
         let serialized_sig = authorization.encode();

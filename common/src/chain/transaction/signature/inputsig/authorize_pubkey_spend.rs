@@ -233,7 +233,7 @@ mod test {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn test_sign_pubkey_spending(#[case] seed: Seed) {
+    fn test_sign_public_key_spending(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, public_key) =

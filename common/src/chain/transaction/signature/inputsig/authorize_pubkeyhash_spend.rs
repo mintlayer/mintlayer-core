@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::key::{PublicKey, Signature};
+use crypto::key::{PrivateKey, PublicKey, Signature};
 use randomness::{CryptoRng, Rng};
 use serialization::{Decode, DecodeAll, Encode};
 
@@ -69,6 +69,26 @@ pub fn sign_public_key_hash_spending<R: Rng + CryptoRng>(
     if calculated_addr != *spendee_addr {
         return Err(DestinationSigError::PublicKeyToAddressMismatch);
     }
+    sign_public_key_hash_spending_impl(&private_key, public_key, sighash, rng)
+}
+
+pub fn sign_public_key_hash_spending_unchecked<R: Rng + CryptoRng>(
+    private_key: &crypto::key::PrivateKey,
+    sighash: &H256,
+    rng: R,
+) -> Result<AuthorizedPublicKeyHashSpend, DestinationSigError> {
+    let public_key = PublicKey::from_private_key(private_key);
+    sign_public_key_hash_spending_impl(&private_key, public_key, sighash, rng)
+}
+
+fn sign_public_key_hash_spending_impl<R: Rng + CryptoRng>(
+    private_key: &PrivateKey,
+    public_key: PublicKey,
+    sighash: &H256,
+    rng: R,
+) -> Result<AuthorizedPublicKeyHashSpend, DestinationSigError> {
+    debug_assert_eq!(public_key, PublicKey::from_private_key(private_key));
+
     let msg = sighash.encode();
     let signature = private_key
         .sign_message(&msg, rng)

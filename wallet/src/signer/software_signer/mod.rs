@@ -16,7 +16,9 @@
 use std::sync::Arc;
 
 use common::chain::{
-    htlc::HtlcSecret, partially_signed_transaction::PartiallySignedTransaction, signature::{
+    htlc::HtlcSecret,
+    partially_signed_transaction::PartiallySignedTransaction,
+    signature::{
         inputsig::{
             arbitrary_message::ArbitraryMessageSignature,
             classical_multisig::{
@@ -32,7 +34,8 @@ use common::chain::{
         },
         sighash::{sighashtype::SigHashType, signature_hash},
         DestinationSigError,
-    }, ChainConfig, Destination, SignedTransactionIntent, Transaction, TxOutput
+    },
+    ChainConfig, Destination, SignedTransactionIntent, Transaction, TxOutput,
 };
 use crypto::key::{
     extended::{ExtendedPrivateKey, ExtendedPublicKey},
@@ -363,7 +366,7 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
         intent: &str,
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<SignedTransactionIntent> {
-        SignedTransactionIntent::from_transaction(
+        SignedTransactionIntent::produce_from_transaction(
             transaction,
             input_destinations,
             intent,

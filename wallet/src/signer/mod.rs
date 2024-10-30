@@ -14,10 +14,12 @@
 // limitations under the License.
 
 use common::chain::{
-    partially_signed_transaction::PartiallySignedTransaction, signature::{
+    partially_signed_transaction::PartiallySignedTransaction,
+    signature::{
         inputsig::arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
         DestinationSigError,
-    }, Destination, SignedTransactionIntent, SignedTransactionIntentError, Transaction
+    },
+    Destination, SignedTransactionIntent, SignedTransactionIntentError, Transaction,
 };
 use crypto::key::hdkd::derivable::DerivationError;
 use wallet_types::signature_status::SignatureStatus;

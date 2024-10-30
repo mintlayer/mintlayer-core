@@ -19,7 +19,7 @@ const MESSAGE_MAGIC_SUFFIX: &str = "\n===MINTLAYER MESSAGE END===";
 use randomness::{CryptoRng, Rng};
 use thiserror::Error;
 
-use serialization::{Decode, Encode};
+use serialization::Encode;
 
 use crate::{
     chain::{signature::DestinationSigError, ChainConfig, Destination},
@@ -31,7 +31,8 @@ use super::{
         sign_public_key_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
     },
     authorize_pubkeyhash_spend::{
-        sign_public_key_hash_spending, verify_public_key_hash_spending, AuthorizedPublicKeyHashSpend,
+        sign_public_key_hash_spending, sign_public_key_hash_spending_unchecked,
+        verify_public_key_hash_spending, AuthorizedPublicKeyHashSpend,
     },
     classical_multisig::authorize_classical_multisig::{
         verify_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
@@ -50,7 +51,7 @@ pub enum SignArbitraryMessageError {
     Unsupported,
 }
 
-#[derive(Debug, Clone, Eq, Encode, Decode, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ArbitraryMessageSignature {
     raw_signature: Vec<u8>,
 }
@@ -144,6 +145,20 @@ impl ArbitraryMessageSignature {
                     SignArbitraryMessageError::AttemptedToProduceClassicalMultisigSignatureInUnipartySignatureCode,
                 ),
             };
+        Ok(Self {
+            raw_signature: signature,
+        })
+    }
+
+    pub fn produce_uniparty_signature_as_pub_key_hash_spending<R: Rng + CryptoRng>(
+        private_key: &crypto::key::PrivateKey,
+        message: &[u8],
+        rng: R,
+    ) -> Result<Self, SignArbitraryMessageError> {
+        let challenge = produce_message_challenge(message);
+        let signature = sign_public_key_hash_spending_unchecked(private_key, &challenge, rng)?;
+        let signature = signature.encode();
+
         Ok(Self {
             raw_signature: signature,
         })

@@ -2835,6 +2835,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
+name = "gloo-utils"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b5555354113b18c547c1d3a98fbf7fb32a9ff4f6fa112ce823a21641a0ba3aa"
+dependencies = [
+ "js-sys",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "glow"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8884,6 +8897,7 @@ dependencies = [
  "consensus",
  "crypto",
  "getrandom 0.2.15",
+ "gloo-utils",
  "hex",
  "randomness",
  "rstest",
@@ -8892,6 +8906,7 @@ dependencies = [
  "thiserror",
  "tx-verifier",
  "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
