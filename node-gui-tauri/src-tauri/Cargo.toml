@@ -15,11 +15,20 @@ name = "mintlayer_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.0.0", features = [] }
+tauri-build = { version = "2.0.0-rc.11", features = [] }
 
 [dependencies]
-tauri = { version = "2.0.0", features = [] }
-tauri-plugin-shell = "2.0.0"
+tauri = { version = "2.0.0-rc.14", features = [] }
+tauri-plugin-fs = "2"
+tauri-plugin-cli = "2.0.0-rc.1"
+tauri-plugin-clipboard-manager = "2.1.0-beta.7"
+tauri-plugin-dialog = "2"
+tauri-plugin-http = "2.0.0-rc.5"
+tauri-plugin-updater = "2.0.0-rc.3"
+tauri-plugin-os = "2.0.0-rc"
+tauri-plugin-single-instance = "2.0.0-rc"
+tauri-plugin-notification = "2.0.0-rc"
+tauri-plugin-shell = "2.0.0-rc"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chainstate = {path = "../../chainstate"}
@@ -48,8 +57,11 @@ rfd = { workspace = true, features = ["xdg-portal", "tokio"] }
 thiserror.workspace = true
 tokio.workspace = true
 variant_count.workspace = true
-tauri-plugin-fs = "2"
-tauri-plugin-dialog = "2"
+
+[features]
+# this feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"

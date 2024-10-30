@@ -1,0 +1,46 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "core:path:default",
+    "core:event:default",
+    "core:window:default",
+    "core:app:default",
+    "core:menu:default",
+    "core:resources:default",
+    "core:tray:default",
+    "core:tray:allow-new",
+    "core:tray:allow-set-icon",
+    "core:tray:allow-set-menu",
+    "core:tray:allow-set-visible",
+    "core:window:allow-set-title",
+    "core:window:allow-set-position",
+    "core:webview:allow-internal-toggle-devtools",
+    "core:webview:allow-create-webview",
+    "core:webview:allow-create-webview-window",
+    "core:webview:default",
+    "fs:read-files",
+    "fs:read-dirs",
+    "fs:read-all",
+    "fs:write-all",
+    "fs:allow-mkdir",
+    "fs:default",
+    "dialog:allow-save",
+    "dialog:default",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        {
+          "path": "**"
+        }
+      ]
+    },
+    "dialog:default",
+    "fs:default"
+  ]
+}

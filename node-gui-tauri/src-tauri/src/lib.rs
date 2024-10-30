@@ -287,30 +287,6 @@ pub async fn node_initialize(
     Ok(backend_controls)
 }
 
-#[tauri::command]
-async fn open_file_dialog() -> Result<String, String> {
-    // Create a channel to communicate between the dialog closure and the async function
-    let (tx, rx) = std::sync::mpsc::channel();
-
-    let _ = tauri::Builder::default().setup(|app| {
-        app.dialog().file().save_file(move |file_path_option| {
-            let result = match file_path_option {
-                Some(path) => path.to_string(),
-                None => "No file was selected.".to_string(),
-            };
-
-            // Send the result through the channel
-            tx.send(result).expect("Failed to send file path");
-        });
-        Ok(())
-    });
-
-    // Receive the result from the channel and return it
-    match rx.recv() {
-        Ok(file_path) => Ok(file_path),
-        Err(_) => Err("Failed to receive file path.".to_string()),
-    }
-}
 
 #[tauri::command]
 async fn add_create_wallet_wrapper(
@@ -343,11 +319,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        // .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_shell::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             initialize_node,
-            open_file_dialog,
             add_create_wallet_wrapper
         ])
         .run(tauri::generate_context!())

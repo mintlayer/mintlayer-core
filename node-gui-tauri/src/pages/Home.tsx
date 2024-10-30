@@ -1,6 +1,6 @@
 import { useEffect, useState, MouseEvent } from "react";
-import { core } from "@tauri-apps/api";
-// import { save } from '@tauri-apps/api/dialog';
+import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
 import * as bip39 from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { RiInformation2Line } from "react-icons/ri";
@@ -66,7 +66,7 @@ function Home() {
       try {
         if (netMode !== "" && walletMode !== "") {
           console.log("netMode: ", netMode, "walletMode: ", walletMode);
-          const result = await core.invoke("initialize_node", {
+          const result = await invoke("initialize_node", {
             network: netMode,
             mode: walletMode,
           });
@@ -94,28 +94,40 @@ function Home() {
   const handleCreateNewWallet = async (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     try {
-      // Correct the command name
-      const selectedFilePath = await core.invoke("open_file_dialog");
+      const path = await save({
+        defaultPath: "key.dat",
+        filters: [{ name: "Key files", extensions: ["dat"] }],
+      });
 
-      console.log("selected file path is: ", selectedFilePath);
-      if (selectedFilePath) {
-        setFilePath(selectedFilePath.toString()); // Ensure setFilePath is defined
-        const walletInfo = await core.invoke("add_create_wallet_wrapper", {
+      if (path) {
+        console.log("Selected file path is: ", path);
+        setFilePath(path); // Ensure setFilePath is defined
+
+        // Await the invoke call
+        const walletInfo = await invoke("add_create_wallet_wrapper", {
           request: {
-            file_path: selectedFilePath,
+            file_path: path,
             mnemonic: mnemonic,
             import: true,
             wallet_type: walletMode,
           },
         });
-        console.log("walletInfo is ", walletInfo);
-        setShowMnemonicModal(false);
+
+        // Check if walletInfo is defined before logging
+        if (walletInfo) {
+          console.log("Wallet info is: ", walletInfo);
+          setShowMnemonicModal(false); // Ensure setShowMnemonicModal is defined
+        } else {
+          console.error("No wallet info returned");
+        }
       } else {
         console.error("No file selected");
       }
     } catch (err) {
-      // Provide more context in the error message
-      console.error("Error while selecting file:", err);
+      console.error(
+        "Error while selecting file:",
+        err instanceof Error ? err.message : err
+      );
     }
   };
 
