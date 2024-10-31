@@ -18,8 +18,7 @@ use std::{collections::BTreeMap, num::NonZeroUsize, path::PathBuf};
 use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction, Block, GenBlock, SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -27,7 +26,7 @@ use crypto::key::{hdkd::u31::U31, PrivateKey};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
-use wallet::{account::TxInfo, signed_tx_intent::SignedTransactionWithIntent};
+use wallet::account::TxInfo;
 use wallet_controller::{
     types::{CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
@@ -447,15 +446,21 @@ pub trait WalletInterface {
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
 
-    async fn make_tx_for_sending_tokens(
+    async fn make_tx_for_sending_tokens_with_intent(
         &self,
         account_index: U31,
         token_id: String,
         address: String,
         amount: DecimalAmount,
-        intent: Option<String>,
+        intent: String,
         config: ControllerConfig,
-    ) -> Result<HexEncoded<SignedTransactionWithIntent>, Self::Error>;
+    ) -> Result<
+        (
+            HexEncoded<SignedTransaction>,
+            HexEncoded<SignedTransactionIntent>,
+        ),
+        Self::Error,
+    >;
 
     async fn make_tx_to_send_tokens_from_multisig_address(
         &self,

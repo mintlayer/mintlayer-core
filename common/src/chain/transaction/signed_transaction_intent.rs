@@ -13,17 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{
-    chain::{
-        signature::inputsig::arbitrary_message::ArbitraryMessageSignature, Destination,
-        SignedTransaction, Transaction,
-    },
-    primitives::{Id, Idable as _},
-};
+use crypto::key::PrivateKey;
+use randomness::{CryptoRng, Rng};
 use serialization::{Decode, Encode};
 use utils::ensure;
 
-use crate::{WalletError, WalletResult};
+use crate::{
+    chain::{
+        signature::inputsig::arbitrary_message::ArbitraryMessageSignature, Destination, Transaction,
+    },
+    primitives::{Id, Idable as _},
+};
+
+use super::signature::inputsig::arbitrary_message::SignArbitraryMessageError;
 
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct SignedTransactionIntent {
@@ -32,21 +34,21 @@ pub struct SignedTransactionIntent {
 }
 
 impl SignedTransactionIntent {
-    pub fn new<Signer>(
+    pub fn new<KeyGetter, Error, R>(
         transaction: &Transaction,
         input_destinations: &[Destination],
         intent_str: &str,
-        signer: Signer,
-    ) -> WalletResult<Self>
+        prv_key_getter: KeyGetter,
+        rng: R,
+    ) -> Result<Self, Error>
     where
-        Signer: FnMut(
-            /*message_to_sign:*/ &[u8],
-            &Destination,
-        ) -> WalletResult<ArbitraryMessageSignature>,
+        KeyGetter: FnMut(&Destination) -> Result<PrivateKey, Error>,
+        Error: From<SignedTransactionIntentError>,
+        R: Rng + CryptoRng,
     {
         ensure!(
             transaction.inputs().len() == input_destinations.len(),
-            WalletError::InvalidDestinationsCount {
+            SignedTransactionIntentError::InvalidDestinationsCount {
                 expected: transaction.inputs().len(),
                 actual: input_destinations.len()
             }
@@ -56,28 +58,40 @@ impl SignedTransactionIntent {
             &transaction.get_id(),
             input_destinations,
             intent_str,
-            signer,
+            prv_key_getter,
+            rng,
         )
     }
 
-    pub fn new_from_tx_id<Signer>(
+    pub fn new_from_tx_id<KeyGetter, Error, R>(
         tx_id: &Id<Transaction>,
         input_destinations: &[Destination],
         intent_str: &str,
-        mut signer: Signer,
-    ) -> WalletResult<Self>
+        mut prv_key_getter: KeyGetter,
+        mut rng: R,
+    ) -> Result<Self, Error>
     where
-        Signer: FnMut(
-            /*message_to_sign:*/ &[u8],
-            &Destination,
-        ) -> WalletResult<ArbitraryMessageSignature>,
+        KeyGetter: FnMut(&Destination) -> Result<PrivateKey, Error>,
+        Error: From<SignedTransactionIntentError>,
+        R: Rng + CryptoRng,
     {
         let message_to_sign = Self::get_message_to_sign(intent_str, tx_id);
 
         let signatures = input_destinations
             .iter()
-            .map(|dest| signer(message_to_sign.as_bytes(), dest))
-            .collect::<WalletResult<Vec<_>>>()?;
+            .map(|dest| {
+                let prv_key = prv_key_getter(dest)?;
+                let sig = ArbitraryMessageSignature::produce_uniparty_signature(
+                    &prv_key,
+                    dest,
+                    message_to_sign.as_bytes(),
+                    &mut rng,
+                )
+                .map_err(SignedTransactionIntentError::MessageSigningError)?;
+
+                Ok(sig)
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
 
         Ok(SignedTransactionIntent {
             signed_message: message_to_sign,
@@ -98,8 +112,11 @@ impl SignedTransactionIntent {
     }
 }
 
-#[derive(Debug, Clone, Encode, Decode)]
-pub struct SignedTransactionWithIntent {
-    pub transaction: SignedTransaction,
-    pub intent: Option<SignedTransactionIntent>,
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+pub enum SignedTransactionIntentError {
+    #[error("Invalid destinations count: expected {expected}, got {actual}")]
+    InvalidDestinationsCount { expected: usize, actual: usize },
+
+    #[error("Message signing error: {0}")]
+    MessageSigningError(SignArbitraryMessageError),
 }

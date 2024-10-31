@@ -20,8 +20,8 @@ use common::{
     address::{dehexify::dehexify_all_addresses, AddressError},
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, SignedTransactionIntent,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -31,9 +31,7 @@ use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress
 use rpc::types::RpcHexString;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded, json_encoded::JsonEncoded};
 use utils_networking::IpOrSocketAddress;
-use wallet::{
-    account::TxInfo, signed_tx_intent::SignedTransactionWithIntent, version::get_version,
-};
+use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
     types::{CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
@@ -998,17 +996,23 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
-    async fn make_tx_for_sending_tokens(
+    async fn make_tx_for_sending_tokens_with_intent(
         &self,
         account_index: U31,
         token_id: String,
         address: String,
         amount: DecimalAmount,
-        intent: Option<String>,
+        intent: String,
         config: ControllerConfig,
-    ) -> Result<HexEncoded<SignedTransactionWithIntent>, Self::Error> {
+    ) -> Result<
+        (
+            HexEncoded<SignedTransaction>,
+            HexEncoded<SignedTransactionIntent>,
+        ),
+        Self::Error,
+    > {
         self.wallet_rpc
-            .make_tx_for_sending_tokens(
+            .create_transaction_for_sending_tokens_with_intent(
                 account_index,
                 token_id.into(),
                 address.into(),
@@ -1018,7 +1022,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
-            .map(HexEncoded::new)
+            .map(|(tx, intent)| (HexEncoded::new(tx), HexEncoded::new(intent)))
     }
 
     async fn make_tx_to_send_tokens_from_multisig_address(

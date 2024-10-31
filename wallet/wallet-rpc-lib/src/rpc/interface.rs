@@ -21,14 +21,15 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp, tokens::TokenId,
         transaction::partially_signed_transaction::PartiallySignedTransaction, Block, DelegationId,
-        Destination, GenBlock, OrderId, PoolId, SignedTransaction, Transaction, TxOutput,
+        Destination, GenBlock, OrderId, PoolId, SignedTransaction, SignedTransactionIntent,
+        Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
 use crypto::key::PrivateKey;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
 use rpc::types::RpcHexString;
-use wallet::{account::TxInfo, signed_tx_intent::SignedTransactionWithIntent};
+use wallet::account::TxInfo;
 use wallet_controller::{
     types::{BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer,
@@ -643,23 +644,26 @@ trait WalletRpc {
     /// Create a transaction for sending tokens to the given address, without submitting it.
     /// The wallet will automatically calculate the required information.
     ///
-    /// The optional "intent" is an arbitrary string that will concatenated with the id of the created transaction
-    /// and signed by one of the keys that were used to sign the transaction itself; this can be used to declare
+    /// The "intent" is an arbitrary string that will be concatenated with the id of the created transaction
+    /// and signed by all the keys that were used to sign the transaction itself; this can be used to declare
     /// the intent of the transaction.
     /// E.g. when bridging Mintlayer tokens to another chain, you need to send tokens to an address provided
     /// by the bridge and provide the bridge with the destination address on the foreign chain where you want
     /// to receive them. In this case you will set "intent" to this foreign destination address; the signed intent
     /// will then serve as a proof to the bridge that the provided destination address is what it's meant to be.
     #[method(name = "token_make_tx_for_sending")]
-    async fn make_tx_for_sending_tokens(
+    async fn make_tx_for_sending_tokens_with_intent(
         &self,
         account: AccountArg,
         token_id: RpcAddress<TokenId>,
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
-        intent: Option<String>,
+        intent: String,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<HexEncoded<SignedTransactionWithIntent>>;
+    ) -> rpc::RpcResult<(
+        HexEncoded<SignedTransaction>,
+        HexEncoded<SignedTransactionIntent>,
+    )>;
 
     /// Create a transaction for sending tokens from a multisig address to other addresses, returning the change to
     /// the original multisig address.

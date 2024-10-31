@@ -39,7 +39,6 @@ use utils::{ensure, shallow_clone::ShallowClone};
 use utils_networking::IpOrSocketAddress;
 use wallet::{
     account::{transaction_list::TransactionList, PoolData, TransactionToSign, TxInfo},
-    signed_tx_intent::SignedTransactionWithIntent,
     WalletError,
 };
 
@@ -56,7 +55,7 @@ use common::{
         },
         tokens::{IsTokenFreezable, IsTokenUnfreezable, Metadata, TokenId, TokenTotalSupply},
         Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId, PoolId,
-        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        SignedTransaction, SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{
         id::WithId, per_thousand::PerThousand, time::Time, Amount, BlockHeight, Id, Idable,
@@ -1061,15 +1060,15 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
             .await?
     }
 
-    pub async fn make_tx_for_sending_tokens(
+    pub async fn create_transaction_for_sending_tokens_with_intent(
         &self,
         account_index: U31,
         token_id: RpcAddress<TokenId>,
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
-        intent: Option<String>,
+        intent: String,
         config: ControllerConfig,
-    ) -> WRpcResult<SignedTransactionWithIntent, N> {
+    ) -> WRpcResult<(SignedTransaction, SignedTransactionIntent), N> {
         let token_id = token_id
             .decode_object(&self.chain_config)
             .map_err(|_| RpcError::InvalidTokenId)?;
@@ -1087,7 +1086,9 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
                     controller
                         .synced_controller(account_index, config)
                         .await?
-                        .make_tx_for_sending_tokens_to_address(token_info, address, amount, intent)
+                        .create_transaction_for_sending_tokens_to_address_with_intent(
+                            token_info, address, amount, intent,
+                        )
                         .await
                         .map_err(RpcError::Controller)
                 })

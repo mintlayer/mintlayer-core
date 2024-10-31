@@ -28,7 +28,7 @@ use common::{
             TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
         ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, Id},
 };
@@ -51,7 +51,6 @@ use wallet::{
         make_address_output, make_address_output_token, make_create_delegation_output,
         make_data_deposit_output, SelectedInputs, StakePoolDataArguments,
     },
-    signed_tx_intent::SignedTransactionWithIntent,
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,
     DefaultWallet, WalletError, WalletResult,
@@ -946,13 +945,13 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
     }
 
     /// Creates a transaction that transfers tokens to the address destination.
-    pub async fn make_tx_for_sending_tokens_to_address(
+    pub async fn create_transaction_for_sending_tokens_to_address_with_intent(
         &mut self,
         token_info: RPCTokenInfo,
         address: Address<Destination>,
         amount: Amount,
-        intent: Option<String>,
-    ) -> Result<SignedTransactionWithIntent, ControllerError<T>> {
+        intent: String,
+    ) -> Result<(SignedTransaction, SignedTransactionIntent), ControllerError<T>> {
         let output = make_address_output_token(address, amount, token_info.token_id());
         self.create_token_tx(
             &token_info,

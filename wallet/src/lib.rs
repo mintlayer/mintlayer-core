@@ -17,7 +17,6 @@ pub mod account;
 pub mod destination_getters;
 pub mod key_chain;
 pub mod send_request;
-pub mod signed_tx_intent;
 pub mod signer;
 pub mod version;
 pub mod wallet;

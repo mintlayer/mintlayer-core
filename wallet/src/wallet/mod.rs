@@ -30,7 +30,6 @@ use crate::key_chain::{
 use crate::send_request::{
     make_issue_token_outputs, IssueNftArguments, SelectedInputs, StakePoolDataArguments,
 };
-use crate::signed_tx_intent::{SignedTransactionIntent, SignedTransactionWithIntent};
 use crate::signer::software_signer::SoftwareSigner;
 use crate::signer::{Signer, SignerError};
 use crate::wallet_events::{WalletEvents, WalletEventsNoOp};
@@ -52,8 +51,8 @@ use common::chain::tokens::{
 };
 use common::chain::{
     make_order_id, AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId,
-    OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction, Transaction,
-    TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
+    OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction, SignedTransactionIntent,
+    Transaction, TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::{hash_encoded, WithId};
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -252,8 +251,6 @@ pub enum WalletError {
     OrderInfoMissing(OrderId),
     #[error("Calculating filled amount for order {0} failed")]
     CalculateOrderFilledAmountFailed(OrderId),
-    #[error("Invalid destinations count: expected {expected}, got {actual}")]
-    InvalidDestinationsCount { expected: usize, actual: usize },
 }
 
 /// Result type used for the wallet
@@ -1374,21 +1371,19 @@ impl<B: storage::Backend> Wallet<B> {
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
         Ok(self
-            .create_transaction_to_addresses_with_intent(
+            .create_transaction_to_addresses_impl(
                 account_index,
                 outputs,
                 inputs,
                 change_addresses,
-                None,
                 current_fee_rate,
                 consolidate_fee_rate,
             )?
-            .transaction)
+            .0)
     }
 
-    /// A more generic version of `create_transaction_to_addresses` that allows to specify the optional "intent"
-    /// for the transaction, which will be concatenated with the transaction id and signed with all keys used
-    /// for sign the transaction's inputs.
+    /// Same as `create_transaction_to_addresses`, but also allows to specify the "intent" for the transaction,
+    /// which will be concatenated with the transaction id and signed with all keys used for sign the transaction's inputs.
     #[allow(clippy::too_many_arguments)]
     pub fn create_transaction_to_addresses_with_intent(
         &mut self,
@@ -1396,13 +1391,51 @@ impl<B: storage::Backend> Wallet<B> {
         outputs: impl IntoIterator<Item = TxOutput>,
         inputs: SelectedInputs,
         change_addresses: BTreeMap<Currency, Address<Destination>>,
-        intent: Option<String>,
+        intent: String,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<SignedTransactionWithIntent> {
+    ) -> WalletResult<(SignedTransaction, SignedTransactionIntent)> {
+        let (signed_tx, input_destinations) = self.create_transaction_to_addresses_impl(
+            account_index,
+            outputs,
+            inputs,
+            change_addresses,
+            current_fee_rate,
+            consolidate_fee_rate,
+        )?;
+
+        let signed_intent =
+            self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
+                let signer =
+                    SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
+
+                Ok(signer.sign_transaction_intent(
+                    signed_tx.transaction(),
+                    &input_destinations,
+                    &intent,
+                    account.key_chain(),
+                )?)
+            })?;
+
+        Ok((signed_tx, signed_intent))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn create_transaction_to_addresses_impl(
+        &mut self,
+        account_index: U31,
+        outputs: impl IntoIterator<Item = TxOutput>,
+        inputs: SelectedInputs,
+        change_addresses: BTreeMap<Currency, Address<Destination>>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<(
+        SignedTransaction,
+        /*input_destinations:*/ Vec<Destination>,
+    )> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
-        let (signed_tx, input_destinations) = self.for_account_rw_unlocked_and_check_tx_generic(
+        self.for_account_rw_unlocked_and_check_tx_generic(
             account_index,
             |account, db_tx| {
                 let send_request = account.process_send_request_and_sign(
@@ -1421,36 +1454,7 @@ impl<B: storage::Backend> Wallet<B> {
                 Ok((send_request, input_destinations))
             },
             |err| err,
-        )?;
-
-        let signed_intent = intent
-            .map(|intent| {
-                self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
-                    let signer =
-                        SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
-
-                    SignedTransactionIntent::new(
-                        signed_tx.transaction(),
-                        &input_destinations,
-                        &intent,
-                        |message_to_sign, dest| {
-                            Ok(
-                                signer.sign_challenge(
-                                    message_to_sign,
-                                    dest,
-                                    account.key_chain(),
-                                )?,
-                            )
-                        },
-                    )
-                })
-            })
-            .transpose()?;
-
-        Ok(SignedTransactionWithIntent {
-            transaction: signed_tx,
-            intent: signed_intent,
-        })
+        )
     }
 
     #[allow(clippy::too_many_arguments)]

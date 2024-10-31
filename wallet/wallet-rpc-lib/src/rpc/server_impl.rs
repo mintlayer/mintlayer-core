@@ -23,7 +23,7 @@ use common::{
         partially_signed_transaction::PartiallySignedTransaction,
         tokens::{IsTokenUnfreezable, TokenId},
         Block, DelegationId, Destination, GenBlock, OrderId, PoolId, SignedTransaction,
-        Transaction, TxOutput,
+        SignedTransactionIntent, Transaction, TxOutput,
     },
     primitives::{time::Time, BlockHeight, Id, Idable},
 };
@@ -31,9 +31,7 @@ use crypto::key::PrivateKey;
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress, PeerId};
 use serialization::{hex::HexEncode, json_encoded::JsonEncoded};
 use utils_networking::IpOrSocketAddress;
-use wallet::{
-    account::TxInfo, signed_tx_intent::SignedTransactionWithIntent, version::get_version,
-};
+use wallet::{account::TxInfo, version::get_version};
 use wallet_controller::{
     types::{BlockInfo, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
     ConnectedPeer, ControllerConfig, NodeInterface, UtxoState, UtxoStates, UtxoType, UtxoTypes,
@@ -970,22 +968,25 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         )
     }
 
-    async fn make_tx_for_sending_tokens(
+    async fn make_tx_for_sending_tokens_with_intent(
         &self,
         account_arg: AccountArg,
         token_id: RpcAddress<TokenId>,
         address: RpcAddress<Destination>,
         amount: RpcAmountIn,
-        intent: Option<String>,
+        intent: String,
         options: TransactionOptions,
-    ) -> rpc::RpcResult<HexEncoded<SignedTransactionWithIntent>> {
+    ) -> rpc::RpcResult<(
+        HexEncoded<SignedTransaction>,
+        HexEncoded<SignedTransactionIntent>,
+    )> {
         let config = ControllerConfig {
             in_top_x_mb: options.in_top_x_mb(),
             broadcast_to_mempool: true,
         };
 
         rpc::handle_result(
-            self.make_tx_for_sending_tokens(
+            self.create_transaction_for_sending_tokens_with_intent(
                 account_arg.index::<N>()?,
                 token_id,
                 address,
@@ -994,7 +995,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
                 config,
             )
             .await
-            .map(HexEncoded::new),
+            .map(|(tx, intent)| (HexEncoded::new(tx), HexEncoded::new(intent))),
         )
     }
 
