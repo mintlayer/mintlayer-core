@@ -31,7 +31,7 @@ use common::{
         config::ChainConfig,
         make_order_id,
         output_value::OutputValue,
-        tokens::{make_token_id, IsTokenFrozen, TokenId, TokenIssuance},
+        tokens::{get_referenced_token_ids, make_token_id, IsTokenFrozen, TokenId, TokenIssuance},
         transaction::OutPointSourceId,
         AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
         Genesis, OrderData, OrderId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
@@ -594,63 +594,33 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
     let input_tasks: FuturesOrdered<_> =
         tx.inputs().iter().map(|input| fetch_utxo(input, db_tx)).collect();
     let input_utxos: Vec<Option<TxOutput>> = input_tasks.try_collect().await?;
-    let token_ids = {
-        let mut token_ids = BTreeSet::new();
-        for (inp, utxo) in tx.inputs().iter().zip(input_utxos.iter()) {
-            match inp {
-                TxInput::Utxo(_) => match utxo.as_ref().expect("must be present") {
-                    TxOutput::Transfer(v, _)
-                    | TxOutput::LockThenTransfer(v, _, _)
-                    | TxOutput::Htlc(v, _) => match v {
-                        OutputValue::TokenV1(token_id, _) => {
-                            token_ids.insert(*token_id);
-                        }
-                        OutputValue::Coin(_) | OutputValue::TokenV0(_) => {}
-                    },
-                    TxOutput::IssueNft(token_id, _, _) => {
-                        token_ids.insert(*token_id);
-                    }
-                    TxOutput::CreateStakePool(_, _)
-                    | TxOutput::Burn(_)
-                    | TxOutput::DataDeposit(_)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::CreateOrder(_) => {}
-                },
-                TxInput::Account(_) => {}
-                TxInput::AccountCommand(_, cmd) => match cmd {
-                    AccountCommand::MintTokens(token_id, _)
-                    | AccountCommand::FreezeToken(token_id, _)
-                    | AccountCommand::UnmintTokens(token_id)
-                    | AccountCommand::UnfreezeToken(token_id)
-                    | AccountCommand::LockTokenSupply(token_id)
-                    | AccountCommand::ChangeTokenMetadataUri(token_id, _)
-                    | AccountCommand::ChangeTokenAuthority(token_id, _) => {
-                        token_ids.insert(*token_id);
-                    }
-                    AccountCommand::ConcludeOrder(order_id)
-                    | AccountCommand::FillOrder(order_id, _, _) => {
-                        let order = db_tx.get_order(*order_id).await?.expect("must exist");
-                        match order.ask_currency {
-                            CoinOrTokenId::Coin => {}
-                            CoinOrTokenId::TokenId(id) => {
-                                token_ids.insert(id);
-                            }
-                        };
-                        match order.give_currency {
-                            CoinOrTokenId::Coin => {}
-                            CoinOrTokenId::TokenId(id) => {
-                                token_ids.insert(id);
-                            }
-                        };
-                    }
-                },
-            };
-        }
-        token_ids
-    };
+
+    let token_ids: BTreeSet<_> = tx
+        .inputs()
+        .iter()
+        .zip(input_utxos.iter())
+        .filter_map(|(inp, utxo)| match inp {
+            TxInput::Utxo(_) => Some(get_referenced_token_ids(
+                utxo.as_ref().expect("must be present"),
+            )),
+            TxInput::Account(_) => None,
+            TxInput::AccountCommand(_, cmd) => match cmd {
+                AccountCommand::MintTokens(token_id, _)
+                | AccountCommand::FreezeToken(token_id, _)
+                | AccountCommand::UnmintTokens(token_id)
+                | AccountCommand::UnfreezeToken(token_id)
+                | AccountCommand::LockTokenSupply(token_id)
+                | AccountCommand::ChangeTokenMetadataUri(token_id, _)
+                | AccountCommand::ChangeTokenAuthority(token_id, _) => {
+                    Some(BTreeSet::from_iter([*token_id]))
+                }
+                AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
+            },
+        })
+        .fold(BTreeSet::new(), |mut x, mut y| {
+            x.append(&mut y);
+            x
+        });
 
     let token_tasks: FuturesOrdered<_> = token_ids
         .iter()

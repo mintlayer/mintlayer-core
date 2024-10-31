@@ -26,9 +26,9 @@ use common::{
         output_value::OutputValue,
         stakelock::StakePoolData,
         tokens::{
-            make_token_id, IsTokenFreezable, IsTokenUnfreezable, RPCFungibleTokenInfo,
-            RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply, TokenId, TokenIssuance,
-            TokenTotalSupply,
+            get_referenced_token_ids, make_token_id, IsTokenFreezable, IsTokenUnfreezable,
+            RPCFungibleTokenInfo, RPCIsTokenFrozen, RPCNonFungibleTokenInfo, RPCTokenTotalSupply,
+            TokenId, TokenIssuance, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountSpending, DelegationId, Destination, GenBlock,
         OrderId, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
@@ -49,10 +49,7 @@ use wallet_types::{
     AccountWalletTxId, BlockInfo, WalletTx,
 };
 
-use crate::{
-    destination_getters::get_all_tx_output_destinations, send_request::get_referenced_token_ids,
-    WalletError, WalletResult,
-};
+use crate::{destination_getters::get_all_tx_output_destinations, WalletError, WalletResult};
 
 pub type UtxoWithTxOutput<'a> = (UtxoOutPoint, &'a TxOutput);
 
