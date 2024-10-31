@@ -23,8 +23,9 @@ use common::{
         output_value::OutputValue,
         signature::inputsig::arbitrary_message::ArbitraryMessageSignature,
         tokens::{
-            IsTokenFreezable, IsTokenUnfreezable, Metadata, RPCFungibleTokenInfo, RPCTokenInfo,
-            TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
+            get_referenced_token_ids, IsTokenFreezable, IsTokenUnfreezable, Metadata,
+            RPCFungibleTokenInfo, RPCTokenInfo, TokenId, TokenIssuance, TokenIssuanceV1,
+            TokenTotalSupply,
         },
         ChainConfig, DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction,
         SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
@@ -48,9 +49,8 @@ use wallet::{
     account::{CoinSelectionAlgo, TransactionToSign, UnconfirmedTokenInfo},
     destination_getters::{get_tx_output_destination, HtlcSpendingCondition},
     send_request::{
-        get_referenced_token_ids, make_address_output, make_address_output_token,
-        make_create_delegation_output, make_data_deposit_output, PoolOrTokenId, SelectedInputs,
-        StakePoolCreationArguments,
+        make_address_output, make_address_output_token, make_create_delegation_output,
+        make_data_deposit_output, PoolOrTokenId, SelectedInputs, StakePoolCreationArguments,
     },
     wallet::WalletPoolsFilter,
     wallet_events::WalletEvents,

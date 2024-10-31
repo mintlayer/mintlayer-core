@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::mem::take;
 
 use common::address::Address;
@@ -401,36 +401,6 @@ fn find_token_additional_info(
                     Err(WalletError::MissmatchedTokenAdditionalData(*token_id))
                 }
             })?,
-    }
-}
-
-/// Get any referenced token by this output
-/// ignore tokens V0
-pub fn get_referenced_token_ids(output: &TxOutput) -> BTreeSet<TokenId> {
-    match output {
-        TxOutput::Transfer(v, _)
-        | TxOutput::LockThenTransfer(v, _, _)
-        | TxOutput::Burn(v)
-        | TxOutput::Htlc(v, _) => referenced_token_id(v),
-        | TxOutput::CreateOrder(data) => {
-            let mut tokens = referenced_token_id(data.ask());
-            tokens.extend(referenced_token_id(data.give()));
-            tokens
-        }
-        TxOutput::CreateStakePool(_, _)
-        | TxOutput::ProduceBlockFromStake(_, _)
-        | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _)
-        | TxOutput::DataDeposit(_)
-        | TxOutput::IssueFungibleToken(_) => BTreeSet::new(),
-        TxOutput::IssueNft(token_id, _, _) => BTreeSet::from_iter([*token_id]),
-    }
-}
-
-fn referenced_token_id(v: &OutputValue) -> BTreeSet<TokenId> {
-    match v {
-        OutputValue::Coin(_) | OutputValue::TokenV0(_) => BTreeSet::new(),
-        OutputValue::TokenV1(token_id, _) => BTreeSet::from_iter([*token_id]),
     }
 }
 
