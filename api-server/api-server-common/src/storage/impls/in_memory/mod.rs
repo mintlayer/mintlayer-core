@@ -178,7 +178,7 @@ impl ApiServerInMemoryStorage {
                             *block_aux,
                             TransactionInfo {
                                 tx: tx.clone(),
-                                additinal_info: additinal_data.clone(),
+                                additional_info: additinal_data.clone(),
                             },
                         )
                     },

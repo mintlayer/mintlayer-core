@@ -29,6 +29,7 @@ tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
+chainstate-storage = { path = "../../chainstate/storage", features = ["expensive-reads"] }
 crypto = { path = "../../crypto" }
 test-utils = { path = "../../test-utils" }
 serialization = { path = "../../serialization" }

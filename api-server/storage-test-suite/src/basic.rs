@@ -314,7 +314,7 @@ where
         {
             let tx_info = TransactionInfo {
                 tx: tx1.clone(),
-                additinal_info: TxAdditionalInfo {
+                additional_info: TxAdditionalInfo {
                     fee: Amount::from_atoms(rng.gen_range(0..100)),
                     input_utxos: tx1_input_utxos.clone(),
                     token_decimals: BTreeMap::new(),
@@ -334,7 +334,7 @@ where
         {
             let tx_info = TransactionInfo {
                 tx: tx1.clone(),
-                additinal_info: TxAdditionalInfo {
+                additional_info: TxAdditionalInfo {
                     fee: Amount::from_atoms(rng.gen_range(0..100)),
                     input_utxos: tx1_input_utxos.clone(),
                     token_decimals: BTreeMap::new(),

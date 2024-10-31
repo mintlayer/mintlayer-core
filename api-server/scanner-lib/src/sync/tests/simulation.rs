@@ -37,13 +37,15 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         config::create_unit_test_config,
+        make_order_id,
+        output_value::RpcOutputValue,
         tokens::{
             make_token_id, IsTokenFrozen, NftIssuance, RPCNonFungibleTokenMetadata, RPCTokenInfo,
             TokenId,
         },
         AccountCommand, AccountNonce, AccountSpending, AccountType, ConsensusUpgrade, DelegationId,
-        GenBlockId, NetUpgrades, OutPointSourceId, PoSChainConfigBuilder, PoolId, TxOutput,
-        UtxoOutPoint,
+        GenBlockId, NetUpgrades, OrderId, OutPointSourceId, PoSChainConfigBuilder, PoolId,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockCount, Idable},
 };
@@ -52,6 +54,7 @@ use crypto::{
     key::{KeyKind, PrivateKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
+use orders_accounting::{OrdersAccountingOperations, OrdersAccountingView};
 use pos_accounting::{make_delegation_id, PoSAccountingView};
 use randomness::Rng;
 use rstest::rstest;
@@ -146,6 +149,35 @@ impl TokensAccountingView for StubTokensAccounting {
     }
 }
 
+struct OrderAccountingAdapterToCheckFees<'a> {
+    chainstate: &'a dyn ChainstateInterface,
+}
+
+impl<'a> OrderAccountingAdapterToCheckFees<'a> {
+    pub fn new(chainstate: &'a dyn ChainstateInterface) -> Self {
+        Self { chainstate }
+    }
+}
+
+impl<'a> OrdersAccountingView for OrderAccountingAdapterToCheckFees<'a> {
+    type Error = orders_accounting::Error;
+
+    fn get_order_data(
+        &self,
+        id: &OrderId,
+    ) -> Result<Option<common::chain::OrderData>, Self::Error> {
+        Ok(self.chainstate.get_order_data(id).unwrap())
+    }
+
+    fn get_ask_balance(&self, id: &OrderId) -> Result<Amount, Self::Error> {
+        Ok(self.chainstate.get_order_ask_balance(id).unwrap().unwrap_or(Amount::ZERO))
+    }
+
+    fn get_give_balance(&self, id: &OrderId) -> Result<Amount, Self::Error> {
+        Ok(self.chainstate.get_order_give_balance(id).unwrap().unwrap_or(Amount::ZERO))
+    }
+}
+
 #[rstest]
 #[trace]
 #[case(test_utils::random::Seed::from_entropy(), 20, 50)]
@@ -190,8 +222,10 @@ async fn simulation(
     let genesis_pool_outpoint = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 1);
 
     // Initialize original TestFramework
+    let tf_storage = chainstate_test_framework::TestStore::new_empty().unwrap();
     let mut tf = TestFramework::builder(&mut rng)
         .with_chain_config(chain_config.clone())
+        .with_storage(tf_storage.clone())
         .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
         .with_initial_time_since_genesis(target_time.as_secs())
         .with_staking_pools(BTreeMap::from_iter([(
@@ -243,10 +277,6 @@ async fn simulation(
 
     let mut delegations = BTreeSet::new();
     let mut token_ids = BTreeSet::new();
-
-    // Provide empty stores for orders as they are irrelevant for fee calculation
-    let orders_store = orders_accounting::InMemoryOrdersAccounting::new();
-    let orders_db = orders_accounting::OrdersAccountingDB::new(&orders_store);
 
     let mut data_per_block_height = BTreeMap::new();
     data_per_block_height.insert(
@@ -332,10 +362,14 @@ async fn simulation(
             let mut block_builder = tf.make_pos_block_builder().with_random_staking_pool(&mut rng);
 
             for _ in 0..rng.gen_range(10..max_tx_per_block) {
-                block_builder = block_builder.add_test_transaction(&mut rng, false);
+                block_builder = block_builder.add_test_transaction(&mut rng);
             }
 
             let block = block_builder.build(&mut rng);
+
+            let orders_store = OrderAccountingAdapterToCheckFees::new(tf.chainstate.as_ref());
+            let mut new_orders_cache = orders_accounting::OrdersAccountingCache::new(&orders_store);
+
             for tx in block.transactions() {
                 let new_utxos = (0..tx.inputs().len()).map(|output_index| {
                     UtxoOutPoint::new(
@@ -399,6 +433,28 @@ async fn simulation(
                 token_ids.extend(new_tokens);
 
                 tx.outputs().iter().for_each(|out| match out {
+                    TxOutput::IssueNft(_, _, _)
+                    | TxOutput::IssueFungibleToken(_)
+                    | TxOutput::CreateStakePool(_, _)
+                    | TxOutput::Burn(_)
+                    | TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::DataDeposit(_)
+                    | TxOutput::DelegateStaking(_, _)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::Htlc(_, _) => {}
+                    TxOutput::CreateOrder(order_data) => {
+                        let input0_outpoint =
+                            tx.inputs().iter().find_map(|input| input.utxo_outpoint()).unwrap();
+                        let order_id = make_order_id(input0_outpoint);
+                        let _ = new_orders_cache
+                            .create_order(order_id, order_data.as_ref().clone())
+                            .unwrap();
+                    }
+                });
+
+                tx.outputs().iter().for_each(|out| match out {
                     TxOutput::IssueNft(token_id, _, _) => {
                         statistics
                             .entry(CoinOrTokenStatistic::CirculatingSupply)
@@ -438,8 +494,8 @@ async fn simulation(
                     | TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::Htlc(_, _) => {}
-                    TxOutput::CreateOrder(_) => unimplemented!(), // TODO(orders)
+                    | TxOutput::Htlc(_, _)
+                    | TxOutput::CreateOrder(_) => {}
                 });
 
                 tx.inputs().iter().for_each(|inp| match inp {
@@ -491,9 +547,7 @@ async fn simulation(
                                 chain_config.token_change_metadata_uri_fee();
                             burn_coins(&mut statistics, token_change_metadata_fee);
                         }
-                        AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
-                            unimplemented!() // TODO(orders)
-                        }
+                        AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {}
                     },
                 });
             }
@@ -531,7 +585,7 @@ async fn simulation(
                 let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
                     &chain_config,
                     block_height,
-                    &orders_db,
+                    &new_orders_cache,
                     &pos_store,
                     &tokens_store,
                     tx.inputs(),
@@ -594,6 +648,11 @@ async fn simulation(
         check_staking_pools(&tf, &local_state, &staking_pools).await;
         check_delegations(&tf, &local_state, &delegations).await;
         check_tokens(&tf, &local_state, &token_ids).await;
+        let all_orders = chainstate_storage::Transactional::transaction_ro(&tf_storage)
+            .unwrap()
+            .read_orders_accounting_data()
+            .unwrap();
+        check_orders(&tf, &local_state, all_orders.order_data.keys().copied()).await;
 
         check_all_statistics(&local_state, &statistics, CoinOrTokenId::Coin).await;
         for token_id in &token_ids {
@@ -943,6 +1002,47 @@ async fn check_token(
                     assert_eq!(node_data.metadata, scanner_metadata);
                 }
             }
+        }
+    }
+}
+
+async fn check_orders(
+    tf: &TestFramework,
+    local_state: &BlockchainState<TransactionalApiServerInMemoryStorage>,
+    order_ids: impl Iterator<Item = OrderId>,
+) {
+    for order_id in order_ids {
+        let tx = local_state.storage().transaction_ro().await.unwrap();
+        let scanner_data = tx.get_order(order_id).await.unwrap().unwrap();
+
+        if let Some(node_data) = tf.chainstate.get_order_info_for_rpc(order_id).unwrap() {
+            assert_eq!(scanner_data.conclude_destination, node_data.conclude_key);
+            assert_eq!(
+                scanner_data.next_nonce,
+                node_data.nonce.map_or(AccountNonce::new(0), |nonce| nonce.increment().unwrap())
+            );
+
+            assert_eq!(scanner_data.ask_balance, node_data.ask_balance);
+            assert_eq!(scanner_data.give_balance, node_data.give_balance);
+
+            let to_rpc_output_value = |currency: CoinOrTokenId, amount| match currency {
+                CoinOrTokenId::Coin => RpcOutputValue::Coin { amount },
+                CoinOrTokenId::TokenId(id) => RpcOutputValue::Token { id, amount },
+            };
+
+            assert_eq!(
+                to_rpc_output_value(scanner_data.ask_currency, scanner_data.initially_asked),
+                node_data.initially_asked
+            );
+
+            assert_eq!(
+                to_rpc_output_value(scanner_data.give_currency, scanner_data.initially_given),
+                node_data.initially_given
+            );
+        } else {
+            // order has been concluded
+            assert_eq!(scanner_data.ask_balance, Amount::ZERO);
+            assert_eq!(scanner_data.give_balance, Amount::ZERO);
         }
     }
 }

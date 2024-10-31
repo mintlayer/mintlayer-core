@@ -353,7 +353,6 @@ pub fn tx_input_to_json(inp: &TxInput, chain_config: &ChainConfig) -> serde_json
                     "input_type": "AccountCommand",
                     "command": "FillOrder",
                     "order_id": Address::new(chain_config, *order_id).expect("addressable").to_string(),
-                    // TODO(orders)
                     "fill_atoms": json!({"atoms": fill.into_atoms().to_string()}),
                     "destination": Address::new(chain_config, dest.clone()).expect("no error").as_str(),
                 })
@@ -398,7 +397,7 @@ pub fn to_tx_json_with_block_info(
     tip_height: BlockHeight,
     block: BlockAuxData,
 ) -> serde_json::Value {
-    let mut json = tx_to_json(tx.tx.transaction(), &tx.additinal_info, chain_config);
+    let mut json = tx_to_json(tx.tx.transaction(), &tx.additional_info, chain_config);
     let obj = json.as_object_mut().expect("object");
 
     let confirmations = tip_height.sub(block.block_height());

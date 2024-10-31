@@ -270,6 +270,7 @@ dependencies = [
  "api-server-common",
  "async-trait",
  "chainstate",
+ "chainstate-storage",
  "chainstate-test-framework",
  "common",
  "constraints-value-accumulator",

@@ -425,7 +425,7 @@ pub struct TxAdditionalInfo {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct TransactionInfo {
     pub tx: SignedTransaction,
-    pub additinal_info: TxAdditionalInfo,
+    pub additional_info: TxAdditionalInfo,
 }
 
 pub struct PoolBlockStats {

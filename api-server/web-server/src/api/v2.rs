@@ -481,8 +481,13 @@ pub async fn transaction<T: ApiServerStorage>(
     Path(transaction_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let (block, TransactionInfo { tx, additinal_info }) =
-        get_transaction(&transaction_id, &state).await?;
+    let (
+        block,
+        TransactionInfo {
+            tx,
+            additional_info,
+        },
+    ) = get_transaction(&transaction_id, &state).await?;
 
     let confirmations = if let Some(block) = &block {
         let tip_height = best_block(&state).await?.block_height();
@@ -490,7 +495,7 @@ pub async fn transaction<T: ApiServerStorage>(
     } else {
         None
     };
-    let mut json = tx_to_json(tx.transaction(), &additinal_info, &state.chain_config);
+    let mut json = tx_to_json(tx.transaction(), &additional_info, &state.chain_config);
     let obj = json.as_object_mut().expect("object");
 
     obj.insert(
