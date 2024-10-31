@@ -74,8 +74,8 @@ impl ArbitraryMessageSignature {
         Self { raw_signature }
     }
 
-    pub fn to_hex(self) -> String {
-        hex::encode(self.raw_signature)
+    pub fn to_hex(&self) -> String {
+        self.as_ref().to_hex()
     }
 
     pub fn as_raw(&self) -> &[u8] {
@@ -86,35 +86,17 @@ impl ArbitraryMessageSignature {
         self.raw_signature
     }
 
+    pub fn as_ref(&self) -> ArbitraryMessageSignatureRef<'_> {
+        ArbitraryMessageSignatureRef::from_data(&self.raw_signature)
+    }
+
     pub fn verify_signature(
         &self,
         chain_config: &ChainConfig,
         destination: &Destination,
         challenge: &H256,
     ) -> Result<(), DestinationSigError> {
-        match destination {
-            Destination::PublicKeyHash(addr) => {
-                let sig_components = AuthorizedPublicKeyHashSpend::from_data(&self.raw_signature)?;
-                verify_public_key_hash_spending(addr, &sig_components, challenge)?
-            }
-            Destination::PublicKey(pubkey) => {
-                let sig_components = AuthorizedPublicKeySpend::from_data(&self.raw_signature)?;
-                verify_public_key_spending(pubkey, &sig_components, challenge)?
-            }
-            Destination::ScriptHash(_) => return Err(DestinationSigError::Unsupported),
-            Destination::AnyoneCanSpend => {
-                // AnyoneCanSpend makes no sense for signing and verification.
-                return Err(
-                    DestinationSigError::AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
-                );
-            }
-            Destination::ClassicMultisig(h) => {
-                let sig_components =
-                    AuthorizedClassicalMultisigSpend::from_data(&self.raw_signature)?;
-                verify_classical_multisig_spending(chain_config, h, &sig_components, challenge)?
-            }
-        }
-        Ok(())
+        self.as_ref().verify_signature(chain_config, destination, challenge)
     }
 
     pub fn produce_uniparty_signature<R: Rng + CryptoRng>(
@@ -162,6 +144,56 @@ impl ArbitraryMessageSignature {
         Ok(Self {
             raw_signature: signature,
         })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ArbitraryMessageSignatureRef<'a> {
+    raw_signature: &'a [u8],
+}
+
+impl<'a> ArbitraryMessageSignatureRef<'a> {
+    pub fn from_data(raw_signature: &'a [u8]) -> Self {
+        Self { raw_signature }
+    }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.raw_signature)
+    }
+
+    pub fn as_raw(&self) -> &[u8] {
+        self.raw_signature
+    }
+
+    pub fn verify_signature(
+        &self,
+        chain_config: &ChainConfig,
+        destination: &Destination,
+        challenge: &H256,
+    ) -> Result<(), DestinationSigError> {
+        match destination {
+            Destination::PublicKeyHash(addr) => {
+                let sig_components = AuthorizedPublicKeyHashSpend::from_data(self.raw_signature)?;
+                verify_public_key_hash_spending(addr, &sig_components, challenge)?
+            }
+            Destination::PublicKey(pubkey) => {
+                let sig_components = AuthorizedPublicKeySpend::from_data(self.raw_signature)?;
+                verify_public_key_spending(pubkey, &sig_components, challenge)?
+            }
+            Destination::ScriptHash(_) => return Err(DestinationSigError::Unsupported),
+            Destination::AnyoneCanSpend => {
+                // AnyoneCanSpend makes no sense for signing and verification.
+                return Err(
+                    DestinationSigError::AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
+                );
+            }
+            Destination::ClassicMultisig(h) => {
+                let sig_components =
+                    AuthorizedClassicalMultisigSpend::from_data(self.raw_signature)?;
+                verify_classical_multisig_spending(chain_config, h, &sig_components, challenge)?
+            }
+        }
+        Ok(())
     }
 }
 

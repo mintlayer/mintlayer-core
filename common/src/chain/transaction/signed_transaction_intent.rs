@@ -20,7 +20,9 @@ use utils::ensure;
 
 use crate::{
     chain::{
-        signature::inputsig::arbitrary_message::{self, ArbitraryMessageSignature},
+        signature::inputsig::arbitrary_message::{
+            self, ArbitraryMessageSignature, ArbitraryMessageSignatureRef,
+        },
         ChainConfig, Destination, Transaction,
     },
     primitives::{Id, Idable as _},
@@ -192,8 +194,7 @@ impl SignedTransactionIntent {
                 | Destination::ClassicMultisig(_)) => dest.clone(),
             };
 
-            // FIXME avoid extra copy by introducing ArbitraryMessageSignatureRef and moving `verify_signature` there.
-            let signature = ArbitraryMessageSignature::from_data(signature.clone());
+            let signature = ArbitraryMessageSignatureRef::from_data(signature);
 
             signature
                 .verify_signature(chain_config, &destination, &signed_challenge)

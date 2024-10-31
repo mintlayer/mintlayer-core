@@ -1130,8 +1130,8 @@ Returns:
 Create a transaction for sending tokens to the given address, without submitting it.
 The wallet will automatically calculate the required information.
 
-The optional "intent" is an arbitrary string that will concatenated with the id of the created transaction
-and signed by one of the keys that were used to sign the transaction itself; this can be used to declare
+The "intent" is an arbitrary string that will be concatenated with the id of the created transaction
+and signed by all the keys that were used to sign the transaction itself; this can be used to declare
 the intent of the transaction.
 E.g. when bridging Mintlayer tokens to another chain, you need to send tokens to an address provided
 by the bridge and provide the bridge with the destination address on the foreign chain where you want
@@ -1148,9 +1148,7 @@ Parameters:
     "amount": EITHER OF
          1) { "atoms": number string }
          2) { "decimal": decimal string },
-    "intent": EITHER OF
-         1) string
-         2) null,
+    "intent": string,
     "options": { "in_top_x_mb": EITHER OF
          1) number
          2) null },
@@ -1159,7 +1157,10 @@ Parameters:
 
 Returns:
 ```
-hex string
+[
+    hex string,
+    hex string,
+]
 ```
 
 ### Method `make_tx_to_send_tokens_from_multisig_address`

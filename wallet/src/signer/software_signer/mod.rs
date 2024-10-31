@@ -371,9 +371,8 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
             input_destinations,
             intent,
             |dest| {
-                Ok(self
-                    .get_private_key_for_destination(dest, key_chain)?
-                    .ok_or(SignerError::DestinationNotFromThisWallet)?)
+                self.get_private_key_for_destination(dest, key_chain)?
+                    .ok_or(SignerError::DestinationNotFromThisWallet)
             },
             make_true_rng(),
         )

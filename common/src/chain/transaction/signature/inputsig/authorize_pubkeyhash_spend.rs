@@ -59,7 +59,7 @@ pub fn verify_public_key_hash_spending(
 }
 
 pub fn sign_public_key_hash_spending<R: Rng + CryptoRng>(
-    private_key: &crypto::key::PrivateKey,
+    private_key: &PrivateKey,
     spendee_addr: &PublicKeyHash,
     sighash: &H256,
     rng: R,
@@ -69,16 +69,16 @@ pub fn sign_public_key_hash_spending<R: Rng + CryptoRng>(
     if calculated_addr != *spendee_addr {
         return Err(DestinationSigError::PublicKeyToAddressMismatch);
     }
-    sign_public_key_hash_spending_impl(&private_key, public_key, sighash, rng)
+    sign_public_key_hash_spending_impl(private_key, public_key, sighash, rng)
 }
 
 pub fn sign_public_key_hash_spending_unchecked<R: Rng + CryptoRng>(
-    private_key: &crypto::key::PrivateKey,
+    private_key: &PrivateKey,
     sighash: &H256,
     rng: R,
 ) -> Result<AuthorizedPublicKeyHashSpend, DestinationSigError> {
     let public_key = PublicKey::from_private_key(private_key);
-    sign_public_key_hash_spending_impl(&private_key, public_key, sighash, rng)
+    sign_public_key_hash_spending_impl(private_key, public_key, sighash, rng)
 }
 
 fn sign_public_key_hash_spending_impl<R: Rng + CryptoRng>(
