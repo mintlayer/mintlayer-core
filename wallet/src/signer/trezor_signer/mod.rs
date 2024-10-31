@@ -44,7 +44,7 @@ use common::{
         AccountCommand, AccountSpending, ChainConfig, Destination, OutPointSourceId,
         SignedTransactionIntent, Transaction, TxInput, TxOutput,
     },
-    primitives::{Amount, H256},
+    primitives::H256,
 };
 use crypto::key::{
     extended::ExtendedPublicKey,
@@ -59,16 +59,15 @@ use trezor_client::{
     find_devices,
     protos::{
         MintlayerAccountCommandTxInput, MintlayerAccountTxInput, MintlayerAddressPath,
-        MintlayerAnyoneCanTakeTxOutput, MintlayerBurnTxOutput, MintlayerChangeTokenAuhtority,
-        MintlayerChangeTokenMetadataUri, MintlayerConcludeOrder,
-        MintlayerCreateDelegationIdTxOutput, MintlayerCreateStakePoolTxOutput,
-        MintlayerDataDepositTxOutput, MintlayerDelegateStakingTxOutput, MintlayerFillOrder,
-        MintlayerFreezeToken, MintlayerHtlcTxOutput, MintlayerIssueFungibleTokenTxOutput,
-        MintlayerIssueNftTxOutput, MintlayerLockThenTransferTxOutput, MintlayerLockTokenSupply,
-        MintlayerMintTokens, MintlayerOutputValue, MintlayerProduceBlockFromStakeTxOutput,
-        MintlayerTokenOutputValue, MintlayerTokenTotalSupply, MintlayerTokenTotalSupplyType,
-        MintlayerTxInput, MintlayerTxOutput, MintlayerUnfreezeToken, MintlayerUnmintTokens,
-        MintlayerUtxoType,
+        MintlayerBurnTxOutput, MintlayerChangeTokenAuhtority, MintlayerChangeTokenMetadataUri,
+        MintlayerConcludeOrder, MintlayerCreateDelegationIdTxOutput, MintlayerCreateOrderTxOutput,
+        MintlayerCreateStakePoolTxOutput, MintlayerDataDepositTxOutput,
+        MintlayerDelegateStakingTxOutput, MintlayerFillOrder, MintlayerFreezeToken,
+        MintlayerHtlcTxOutput, MintlayerIssueFungibleTokenTxOutput, MintlayerIssueNftTxOutput,
+        MintlayerLockThenTransferTxOutput, MintlayerLockTokenSupply, MintlayerMintTokens,
+        MintlayerOutputValue, MintlayerProduceBlockFromStakeTxOutput, MintlayerTokenOutputValue,
+        MintlayerTokenTotalSupply, MintlayerTokenTotalSupplyType, MintlayerTxInput,
+        MintlayerTxOutput, MintlayerUnfreezeToken, MintlayerUnmintTokens, MintlayerUtxoType,
     },
     Model,
 };
@@ -83,7 +82,7 @@ use wallet_storage::{
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     partially_signed_transaction::{
-        PartiallySignedTransaction, TokenAdditionalInfo, UtxoAdditionalInfo, UtxoWithAdditionalInfo,
+        PartiallySignedTransaction, TokenAdditionalInfo, UtxoAdditionalInfo,
     },
     signature_status::SignatureStatus,
     AccountId,
@@ -484,34 +483,6 @@ impl Signer for TrezorSigner {
     }
 }
 
-fn utxo_output_value(out: &UtxoWithAdditionalInfo) -> SignerResult<OutputValue> {
-    match &out.utxo {
-        TxOutput::Transfer(value, _)
-        | TxOutput::Htlc(value, _)
-        | TxOutput::LockThenTransfer(value, _, _) => Ok(value.clone()),
-        TxOutput::IssueNft(token_id, _, _) => {
-            Ok(OutputValue::TokenV1(*token_id, Amount::from_atoms(1)))
-        }
-        TxOutput::CreateStakePool(_, data) => Ok(OutputValue::Coin(data.pledge())),
-        TxOutput::ProduceBlockFromStake(_, _) => match out.additional_info {
-            Some(UtxoAdditionalInfo::PoolInfo { staker_balance }) => {
-                Ok(OutputValue::Coin(staker_balance))
-            }
-            Some(
-                UtxoAdditionalInfo::CreateOrder { ask: _, give: _ }
-                | UtxoAdditionalInfo::TokenInfo(_),
-            )
-            | None => Err(SignerError::MissingUtxoExtraInfo),
-        },
-        TxOutput::CreateDelegationId(_, _)
-        | TxOutput::IssueFungibleToken(_)
-        | TxOutput::Burn(_)
-        | TxOutput::CreateOrder(_)
-        | TxOutput::DelegateStaking(_, _)
-        | TxOutput::DataDeposit(_) => Err(SignerError::InvalidUtxo),
-    }
-}
-
 fn to_trezor_input_msgs(
     ptx: &PartiallySignedTransaction,
     key_chain: &impl AccountKeyChains,
@@ -523,8 +494,8 @@ fn to_trezor_input_msgs(
         .zip(ptx.input_utxos())
         .zip(ptx.destinations())
         .map(|((inp, utxo), dest)| match (inp, utxo, dest) {
-            (TxInput::Utxo(outpoint), Some(utxo), Some(dest)) => {
-                to_trezor_utxo_input(outpoint, utxo, chain_config, dest, key_chain)
+            (TxInput::Utxo(outpoint), Some(_), Some(dest)) => {
+                to_trezor_utxo_input(outpoint, chain_config, dest, key_chain)
             }
             (TxInput::Account(outpoint), _, Some(dest)) => Ok(to_trezor_account_input(
                 chain_config,
@@ -556,39 +527,51 @@ fn to_trezor_account_command_input(
     match command {
         AccountCommand::MintTokens(token_id, amount) => {
             let mut req = MintlayerMintTokens::new();
-            req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            req.set_token_id(
+                Address::new(chain_config, *token_id).expect("addressable").into_string(),
+            );
             req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
 
             inp_req.mint = Some(req).into();
         }
         AccountCommand::UnmintTokens(token_id) => {
             let mut req = MintlayerUnmintTokens::new();
-            req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            req.set_token_id(
+                Address::new(chain_config, *token_id).expect("addressable").into_string(),
+            );
 
             inp_req.unmint = Some(req).into();
         }
         AccountCommand::FreezeToken(token_id, unfreezable) => {
             let mut req = MintlayerFreezeToken::new();
-            req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            req.set_token_id(
+                Address::new(chain_config, *token_id).expect("addressable").into_string(),
+            );
             req.set_is_token_unfreezabe(unfreezable.as_bool());
 
             inp_req.freeze_token = Some(req).into();
         }
         AccountCommand::UnfreezeToken(token_id) => {
             let mut req = MintlayerUnfreezeToken::new();
-            req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            req.set_token_id(
+                Address::new(chain_config, *token_id).expect("addressable").into_string(),
+            );
 
             inp_req.unfreeze_token = Some(req).into();
         }
         AccountCommand::LockTokenSupply(token_id) => {
             let mut req = MintlayerLockTokenSupply::new();
-            req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            req.set_token_id(
+                Address::new(chain_config, *token_id).expect("addressable").into_string(),
+            );
 
             inp_req.lock_token_supply = Some(req).into();
         }
         AccountCommand::ChangeTokenAuthority(token_id, dest) => {
             let mut req = MintlayerChangeTokenAuhtority::new();
-            req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            req.set_token_id(
+                Address::new(chain_config, *token_id).expect("addressable").into_string(),
+            );
             req.set_destination(
                 Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
             );
@@ -597,20 +580,26 @@ fn to_trezor_account_command_input(
         }
         AccountCommand::ChangeTokenMetadataUri(token_id, uri) => {
             let mut req = MintlayerChangeTokenMetadataUri::new();
-            req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            req.set_token_id(
+                Address::new(chain_config, *token_id).expect("addressable").into_string(),
+            );
             req.set_metadata_uri(uri.clone());
 
             inp_req.change_token_metadata_uri = Some(req).into();
         }
         AccountCommand::ConcludeOrder(order_id) => {
             let mut req = MintlayerConcludeOrder::new();
-            req.set_order_id(order_id.to_hash().as_bytes().to_vec());
+            req.set_order_id(
+                Address::new(chain_config, *order_id).expect("addressable").into_string(),
+            );
 
             inp_req.conclude_order = Some(req).into();
         }
         AccountCommand::FillOrder(order_id, amount, dest) => {
             let mut req = MintlayerFillOrder::new();
-            req.set_order_id(order_id.to_hash().as_bytes().to_vec());
+            req.set_order_id(
+                Address::new(chain_config, *order_id).expect("addressable").into_string(),
+            );
             req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
             req.set_destination(
                 Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
@@ -637,7 +626,9 @@ fn to_trezor_account_input(
     inp_req.set_nonce(outpoint.nonce().value());
     match outpoint.account() {
         AccountSpending::DelegationBalance(delegation_id, amount) => {
-            inp_req.set_delegation_id(delegation_id.to_hash().as_bytes().to_vec());
+            inp_req.set_delegation_id(
+                Address::new(chain_config, *delegation_id).expect("addressable").into_string(),
+            );
             let mut value = MintlayerOutputValue::new();
             value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
             inp_req.value = Some(value).into();
@@ -650,7 +641,6 @@ fn to_trezor_account_input(
 
 fn to_trezor_utxo_input(
     outpoint: &common::chain::UtxoOutPoint,
-    utxo: &UtxoWithAdditionalInfo,
     chain_config: &ChainConfig,
     dest: &Destination,
     key_chain: &impl AccountKeyChains,
@@ -668,13 +658,6 @@ fn to_trezor_utxo_input(
     };
     inp_req.set_prev_hash(id.to_vec());
     inp_req.set_prev_index(outpoint.output_index());
-
-    let output_value = utxo_output_value(utxo)?;
-    inp_req.value = Some(to_trezor_output_value(
-        &output_value,
-        &utxo.additional_info,
-    )?)
-    .into();
 
     inp_req
         .set_address(Address::new(chain_config, dest.clone()).expect("addressable").into_string());
@@ -742,6 +725,7 @@ fn destination_to_address_paths(
 fn to_trezor_output_value(
     output_value: &OutputValue,
     additional_info: &Option<UtxoAdditionalInfo>,
+    chain_config: &ChainConfig,
 ) -> SignerResult<MintlayerOutputValue> {
     let token_info = additional_info.as_ref().and_then(|info| match info {
         UtxoAdditionalInfo::TokenInfo(token_info) => Some(token_info),
@@ -749,7 +733,7 @@ fn to_trezor_output_value(
         | UtxoAdditionalInfo::CreateOrder { ask: _, give: _ } => None,
     });
 
-    to_trezor_output_value_with_token_info(output_value, &token_info)
+    to_trezor_output_value_with_token_info(output_value, &token_info, chain_config)
 }
 
 fn to_trezor_utxo_msgs(
@@ -786,7 +770,12 @@ fn to_trezor_output_msg(
     let res = match out {
         TxOutput::Transfer(value, dest) => {
             let mut out_req = MintlayerTransferTxOutput::new();
-            out_req.value = Some(to_trezor_output_value(value, additional_info)?).into();
+            out_req.value = Some(to_trezor_output_value(
+                value,
+                additional_info,
+                chain_config,
+            )?)
+            .into();
             out_req.set_address(
                 Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
             );
@@ -797,7 +786,12 @@ fn to_trezor_output_msg(
         }
         TxOutput::LockThenTransfer(value, dest, lock) => {
             let mut out_req = MintlayerLockThenTransferTxOutput::new();
-            out_req.value = Some(to_trezor_output_value(value, additional_info)?).into();
+            out_req.value = Some(to_trezor_output_value(
+                value,
+                additional_info,
+                chain_config,
+            )?)
+            .into();
             out_req.set_address(
                 Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
             );
@@ -810,7 +804,12 @@ fn to_trezor_output_msg(
         }
         TxOutput::Burn(value) => {
             let mut out_req = MintlayerBurnTxOutput::new();
-            out_req.value = Some(to_trezor_output_value(value, additional_info)?).into();
+            out_req.value = Some(to_trezor_output_value(
+                value,
+                additional_info,
+                chain_config,
+            )?)
+            .into();
 
             let mut out = MintlayerTxOutput::new();
             out.burn = Some(out_req).into();
@@ -818,7 +817,9 @@ fn to_trezor_output_msg(
         }
         TxOutput::CreateDelegationId(dest, pool_id) => {
             let mut out_req = MintlayerCreateDelegationIdTxOutput::new();
-            out_req.set_pool_id(pool_id.to_hash().as_bytes().to_vec());
+            out_req.set_pool_id(
+                Address::new(chain_config, *pool_id).expect("addressable").into_string(),
+            );
             out_req.set_destination(
                 Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
             );
@@ -828,7 +829,9 @@ fn to_trezor_output_msg(
         }
         TxOutput::DelegateStaking(amount, delegation_id) => {
             let mut out_req = MintlayerDelegateStakingTxOutput::new();
-            out_req.set_delegation_id(delegation_id.to_hash().as_bytes().to_vec());
+            out_req.set_delegation_id(
+                Address::new(chain_config, *delegation_id).expect("addressable").into_string(),
+            );
             out_req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
             let mut out = MintlayerTxOutput::new();
             out.delegate_staking = Some(out_req).into();
@@ -836,7 +839,9 @@ fn to_trezor_output_msg(
         }
         TxOutput::CreateStakePool(pool_id, pool_data) => {
             let mut out_req = MintlayerCreateStakePoolTxOutput::new();
-            out_req.set_pool_id(pool_id.to_hash().as_bytes().to_vec());
+            out_req.set_pool_id(
+                Address::new(chain_config, *pool_id).expect("addressable").into_string(),
+            );
 
             out_req.set_pledge(pool_data.pledge().into_atoms().to_be_bytes().to_vec());
             out_req.set_staker(
@@ -866,7 +871,9 @@ fn to_trezor_output_msg(
         }
         TxOutput::ProduceBlockFromStake(dest, pool_id) => {
             let mut out_req = MintlayerProduceBlockFromStakeTxOutput::new();
-            out_req.set_pool_id(pool_id.to_hash().as_bytes().to_vec());
+            out_req.set_pool_id(
+                Address::new(chain_config, *pool_id).expect("addressable").into_string(),
+            );
             out_req.set_destination(
                 Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
             );
@@ -912,7 +919,9 @@ fn to_trezor_output_msg(
         }
         TxOutput::IssueNft(token_id, nft_data, dest) => {
             let mut out_req = MintlayerIssueNftTxOutput::new();
-            out_req.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            out_req.set_token_id(
+                Address::new(chain_config, *token_id).expect("addressable").into_string(),
+            );
             out_req.set_destination(
                 Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
             );
@@ -961,7 +970,12 @@ fn to_trezor_output_msg(
         }
         TxOutput::Htlc(value, lock) => {
             let mut out_req = MintlayerHtlcTxOutput::new();
-            out_req.value = Some(to_trezor_output_value(value, additional_info)?).into();
+            out_req.value = Some(to_trezor_output_value(
+                value,
+                additional_info,
+                chain_config,
+            )?)
+            .into();
             out_req.secret_hash = Some(lock.secret_hash.as_bytes().to_vec());
 
             out_req.set_spend_key(
@@ -982,7 +996,7 @@ fn to_trezor_output_msg(
             out
         }
         TxOutput::CreateOrder(data) => {
-            let mut out_req = MintlayerAnyoneCanTakeTxOutput::new();
+            let mut out_req = MintlayerCreateOrderTxOutput::new();
 
             out_req.set_conclude_key(
                 Address::new(chain_config, data.conclude_key().clone())
@@ -995,11 +1009,13 @@ fn to_trezor_output_msg(
                     out_req.ask = Some(to_trezor_output_value_with_token_info(
                         data.ask(),
                         &ask.as_ref(),
+                        chain_config,
                     )?)
                     .into();
                     out_req.give = Some(to_trezor_output_value_with_token_info(
                         data.give(),
                         &give.as_ref(),
+                        chain_config,
                     )?)
                     .into();
                 }
@@ -1011,7 +1027,7 @@ fn to_trezor_output_msg(
             }
 
             let mut out = MintlayerTxOutput::new();
-            out.anyone_can_take = Some(out_req).into();
+            out.create_order = Some(out_req).into();
             out
         }
     };
@@ -1021,6 +1037,7 @@ fn to_trezor_output_msg(
 fn to_trezor_output_value_with_token_info(
     value: &OutputValue,
     token_info: &Option<&TokenAdditionalInfo>,
+    chain_config: &ChainConfig,
 ) -> Result<MintlayerOutputValue, SignerError> {
     match value {
         OutputValue::Coin(amount) => {
@@ -1032,7 +1049,9 @@ fn to_trezor_output_value_with_token_info(
             let mut value = MintlayerOutputValue::new();
             value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
             let mut token_value = MintlayerTokenOutputValue::new();
-            token_value.set_token_id(token_id.to_hash().as_bytes().to_vec());
+            token_value.set_token_id(
+                Address::new(chain_config, *token_id).expect("addressable").into_string(),
+            );
             match &token_info {
                 Some(info) => {
                     token_value.set_number_of_decimals(info.num_decimals as u32);

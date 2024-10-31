@@ -8528,7 +8528,7 @@ dependencies = [
 [[package]]
 name = "trezor-client"
 version = "0.1.4"
-source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?branch=feature%2Fmintlayer-pk#a3bda3f11444dd8008e4e5d7a70c2a16c731d8d5"
+source = "git+https://github.com/mintlayer/mintlayer-trezor-firmware?branch=feature%2Fmintlayer-pk#4bcd130f1203a1f0d372c7bb7cb5ee656032dafc"
 dependencies = [
  "bitcoin",
  "byteorder",
