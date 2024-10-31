@@ -2266,6 +2266,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
+                &BTreeMap::new(),
             )
             .unwrap();
         wallet
@@ -2330,6 +2331,7 @@ fn issue_and_transfer_tokens(#[case] seed: Seed) {
                 BTreeMap::new(),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
                 FeeRate::from_amount_per_kb(Amount::ZERO),
+                &BTreeMap::new(),
             )
             .unwrap();
         (issued_token_id, vec![nft_issuance_transaction, transfer_tx])
