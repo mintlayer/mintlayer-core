@@ -357,7 +357,7 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
         let expected_hash = signature_hash(sighash_type, &tx, &[Some(&input_utxo)], 0).unwrap();
         assert_eq!(tx_data_hash, expected_hash);
 
-        let raw_sig = sign_pubkey_spending(&private_key, &public_key, &tx_data_hash, &mut rng)
+        let raw_sig = sign_public_key_spending(&private_key, &public_key, &tx_data_hash, &mut rng)
             .unwrap()
             .encode();
 

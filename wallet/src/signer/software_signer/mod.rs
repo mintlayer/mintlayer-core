@@ -363,7 +363,7 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
         intent: &str,
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<SignedTransactionIntent> {
-        SignedTransactionIntent::new(
+        SignedTransactionIntent::from_transaction(
             transaction,
             input_destinations,
             intent,

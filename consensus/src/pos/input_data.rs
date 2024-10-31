@@ -29,7 +29,7 @@ use common::{
         config::EpochIndex,
         signature::{
             inputsig::{
-                authorize_pubkey_spend::sign_pubkey_spending,
+                authorize_pubkey_spend::sign_public_key_spending,
                 standard_signature::StandardInputSignature, InputWitness,
             },
             sighash::{sighashtype::SigHashType, signature_hash},
@@ -249,7 +249,7 @@ where
     )
     .map_err(|_| ConsensusPoSError::FailedToSignKernel)?;
 
-    let signature = sign_pubkey_spending(
+    let signature = sign_public_key_spending(
         pos_input_data.stake_private_key(),
         &pos_input_data.stake_public_key(),
         &sighash,

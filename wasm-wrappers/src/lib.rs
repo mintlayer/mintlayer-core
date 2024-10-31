@@ -46,11 +46,11 @@ use common::{
             TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination,
-        OrderData, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
+        OrderData, OutPointSourceId, SignedTransaction, SignedTransactionIntent, Transaction, TxInput, TxOutput,
         UtxoOutPoint,
     },
     primitives::{
-        self, amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, Idable, H256,
+        self, amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, Id, Idable, H256,
     },
     size_estimation::{input_signature_size_from_destination, tx_size_with_outputs},
 };
@@ -343,13 +343,17 @@ pub fn verify_signature_for_spending(
     Ok(verifcation_result)
 }
 
-/// Given a message and a private key, create and sign a challenge with the given private key
+/// Given a message and a private key, create and sign a challenge with the given private key.
 /// This kind of signature is to be used when signing challenges.
+/// 
+/// Note: this is equivalent to calling `sign_challenge_for_address` with the pubkeyhash address.
 #[wasm_bindgen]
 pub fn sign_challenge(private_key: &[u8], message: &[u8]) -> Result<Vec<u8>, Error> {
     let private_key = PrivateKey::decode_all(&mut &private_key[..])
         .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
 
+    // Note: this is basically what `ArbitraryMessageSignature::produce_uniparty_signature` does when it's called
+    // with a PubKeyHash destination.
     let challenge = produce_message_challenge(message);
     let public_key = PublicKey::from_private_key(&private_key);
 
@@ -358,10 +362,43 @@ pub fn sign_challenge(private_key: &[u8], message: &[u8]) -> Result<Vec<u8>, Err
     Ok(signature.encode())
 }
 
-/// Given a signed challenge, an address and a message. Verify that
+/// Given a message and a private key, create and sign a challenge with the given private key.
+/// The given address must be either the pubkey or pubkeyhash address corresponding to the provided
+/// private key.
+/// 
+/// Note: the kind of the address determines the type of object that will be encoded in the result.
+/// And the same address must be passed to `verify_challenge` for it to be able to decode the data
+/// properly.
+#[wasm_bindgen]
+pub fn sign_challenge_for_address(
+    private_key: &[u8],
+    address: &str,
+    network: Network,
+    message: &[u8],
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let destination = parse_addressable::<Destination>(&chain_config, address)?;
+
+    let private_key = PrivateKey::decode_all(&mut &private_key[..])
+        .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
+
+    let signature = ArbitraryMessageSignature::produce_uniparty_signature(
+        &private_key,
+        &destination,
+        message,
+        randomness::make_true_rng(),
+    )?;
+
+    Ok(signature.encode())
+}
+
+/// Given a signed challenge, an address and a message, verify that
 /// the signature is produced by signing the message with the private key
 /// that derived the given public key.
-/// Note that this function is used for verifying messages related challenges.
+/// This function is used for verifying messages-related challenges.
+/// 
+/// Note: the provided address must be the same as the one passed to `sign_challenge_for_address`
+/// (or if you used `sign_challenge`, it must be the pubkeyhash address).
 #[wasm_bindgen]
 pub fn verify_challenge(
     address: &str,
@@ -385,6 +422,46 @@ fn parse_addressable<T: Addressable>(
         .map_err(|_| Error::InvalidAddressable)?
         .into_object();
     Ok(addressable)
+}
+
+/// Return the message that has to be signed to produce a signed transaction intent.
+#[wasm_bindgen]
+pub fn make_transaction_intent_message_to_sign(
+    intent: &str,
+    transaction_id: &str,
+) -> Result<String, Error> {
+    let transaction_id =
+        Id::new(H256::from_str(transaction_id).map_err(|_| Error::InvalidTransactionId)?);
+    let message_to_sign = SignedTransactionIntent::get_message_to_sign(intent, &transaction_id);
+    Ok(message_to_sign)
+}
+
+/// Return a SignedTransactionIntent object as bytes given the message and encoded signatures.
+///
+/// Note: to produce a valid signed intent one is expected to sign the corresponding message by private keys
+/// corresponding to each input of the transaction.
+/// 
+/// Here the provided `message` must be produced by `make_transaction_intent_message_to_sign` and the signatures
+/// by `sign_challenge_for_address`, where the kind of the provided address must match the type of the corresponding
+/// input destination. The number of signatures must be equal to the number of inputs in the corresponding transaction.
+#[wasm_bindgen]
+pub fn encode_signed_transaction_intent(
+    message: &str,
+    mut signatures: &[u8],
+) -> Result<Vec<u8>, Error> {
+    let mut decoded_signatures = vec![];
+    while !signatures.is_empty() {
+        let signature = ArbitraryMessageSignature::decode(&mut signatures)
+            .map_err(|_| Error::InvalidMessageSignature)?;
+        decoded_signatures.push(signature);
+    }
+
+    let signed_intent = SignedTransactionIntent::from_components_unchecked(
+        message.to_owned(),
+        decoded_signatures,
+    );
+
+    Ok(signed_intent.encode())
 }
 
 /// Given a destination address, an amount and a network type (mainnet, testnet, etc), this function

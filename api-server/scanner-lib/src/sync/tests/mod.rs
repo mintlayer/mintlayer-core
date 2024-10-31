@@ -43,7 +43,7 @@ use common::{
         output_value::OutputValue,
         signature::{
             inputsig::{
-                authorize_pubkey_spend::sign_pubkey_spending,
+                authorize_pubkey_spend::sign_public_key_spending,
                 standard_signature::StandardInputSignature, InputWitness,
             },
             sighash::{sighashtype::SigHashType, signature_hash},
@@ -569,7 +569,7 @@ async fn compare_pool_rewards_with_chainstate_real_state(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let signature = sign_pubkey_spending(&staking_sk, &pk, &sighash, &mut rng).unwrap();
+    let signature = sign_public_key_spending(&staking_sk, &pk, &sighash, &mut rng).unwrap();
 
     let input_witness = InputWitness::Standard(StandardInputSignature::new(
         SigHashType::default(),
@@ -790,7 +790,7 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
                 idx,
             )
             .unwrap();
-            let signature = sign_pubkey_spending(&priv_key, &pub_key, &sighash, &mut rng).unwrap();
+            let signature = sign_public_key_spending(&priv_key, &pub_key, &sighash, &mut rng).unwrap();
             InputWitness::Standard(StandardInputSignature::new(
                 SigHashType::default(),
                 signature.encode(),
@@ -867,7 +867,7 @@ async fn reorg_locked_balance(#[case] seed: Seed) {
                 idx,
             )
             .unwrap();
-            let signature = sign_pubkey_spending(&priv_key, &pub_key, &sighash, &mut rng).unwrap();
+            let signature = sign_public_key_spending(&priv_key, &pub_key, &sighash, &mut rng).unwrap();
             InputWitness::Standard(StandardInputSignature::new(
                 SigHashType::default(),
                 signature.encode(),

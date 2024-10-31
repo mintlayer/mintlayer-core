@@ -42,7 +42,7 @@ impl AuthorizedPublicKeyHashSpend {
     }
 }
 
-pub fn verify_address_spending(
+pub fn verify_public_key_hash_spending(
     spendee_addr: &PublicKeyHash,
     sig_components: &AuthorizedPublicKeyHashSpend,
     sighash: &H256,
@@ -58,7 +58,7 @@ pub fn verify_address_spending(
     Ok(())
 }
 
-pub fn sign_address_spending<R: Rng + CryptoRng>(
+pub fn sign_public_key_hash_spending<R: Rng + CryptoRng>(
     private_key: &crypto::key::PrivateKey,
     spendee_addr: &PublicKeyHash,
     sighash: &H256,
@@ -239,7 +239,7 @@ mod test {
             let sighash =
                 signature_hash(witness.sighash_type(), &tx, &inputs_utxos_refs, input).unwrap();
 
-            verify_address_spending(&pubkey_hash, &spender_signature, &sighash)
+            verify_public_key_hash_spending(&pubkey_hash, &spender_signature, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }
     }
@@ -275,7 +275,7 @@ mod test {
             let sighash =
                 signature_hash(witness.sighash_type(), &tx, &inputs_utxos_refs, input).unwrap();
 
-            sign_address_spending(&private_key, &pubkey_hash, &sighash, &mut rng)
+            sign_public_key_hash_spending(&private_key, &pubkey_hash, &sighash, &mut rng)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }
     }

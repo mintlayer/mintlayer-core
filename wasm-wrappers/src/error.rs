@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{signature::DestinationSigError, TransactionCreationError};
+use common::chain::{signature::{inputsig::arbitrary_message::SignArbitraryMessageError, DestinationSigError}, TransactionCreationError};
 use wasm_bindgen::JsValue;
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -52,6 +52,8 @@ pub enum Error {
     InvalidWitness,
     #[error("Invalid transaction encoding")]
     InvalidTransaction,
+    #[error("Invalid transaction id encoding")]
+    InvalidTransactionId,
     #[error("The number of signatures does not match the number of inputs")]
     InvalidWitnessCount,
     #[error("Invalid htlc secret encoding")]
@@ -78,6 +80,10 @@ pub enum Error {
     ProduceSignatureError(#[from] DestinationSigError),
     #[error("No UTXO input found in the provided inputs")]
     NoUtxoInInputs,
+    #[error("Invalid message signature encoding")]
+    InvalidMessageSignature,
+    #[error("Arbitrary message signing error: {0}")]
+    SignArbitraryMessageError(#[from] SignArbitraryMessageError),
 }
 
 // This is required to make an error readable in JavaScript

@@ -31,10 +31,10 @@ use crate::{
 
 use super::{
     authorize_pubkey_spend::{
-        sign_pubkey_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
+        sign_public_key_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
     },
     authorize_pubkeyhash_spend::{
-        sign_address_spending, verify_address_spending, AuthorizedPublicKeyHashSpend,
+        sign_public_key_hash_spending, verify_public_key_hash_spending, AuthorizedPublicKeyHashSpend,
     },
     classical_multisig::{
         authorize_classical_multisig::{
@@ -77,7 +77,7 @@ impl StandardInputSignature {
         match outpoint_destination {
             Destination::PublicKeyHash(addr) => {
                 let sig_components = AuthorizedPublicKeyHashSpend::from_data(&self.raw_signature)?;
-                verify_address_spending(addr, &sig_components, sighash)?
+                verify_public_key_hash_spending(addr, &sig_components, sighash)?
             }
             Destination::PublicKey(pubkey) => {
                 let sig_components = AuthorizedPublicKeySpend::from_data(&self.raw_signature)?;
@@ -111,11 +111,11 @@ impl StandardInputSignature {
         let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num)?;
         let serialized_sig = match outpoint_destination {
             Destination::PublicKeyHash(ref addr) => {
-                let sig = sign_address_spending(private_key, addr, &sighash, rng)?;
+                let sig = sign_public_key_hash_spending(private_key, addr, &sighash, rng)?;
                 sig.encode()
             }
             Destination::PublicKey(ref pubkey) => {
-                let sig = sign_pubkey_spending(private_key, pubkey, &sighash, rng)?;
+                let sig = sign_public_key_spending(private_key, pubkey, &sighash, rng)?;
                 sig.encode()
             }
             Destination::ScriptHash(_) => return Err(DestinationSigError::Unsupported),

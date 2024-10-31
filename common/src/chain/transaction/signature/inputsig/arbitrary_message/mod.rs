@@ -28,17 +28,17 @@ use crate::{
 
 use super::{
     authorize_pubkey_spend::{
-        sign_pubkey_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
+        sign_public_key_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
     },
     authorize_pubkeyhash_spend::{
-        sign_address_spending, verify_address_spending, AuthorizedPublicKeyHashSpend,
+        sign_public_key_hash_spending, verify_public_key_hash_spending, AuthorizedPublicKeyHashSpend,
     },
     classical_multisig::authorize_classical_multisig::{
         verify_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
     },
 };
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum SignArbitraryMessageError {
     #[error("Destination signature error: {0}")]
     DestinationSigError(#[from] DestinationSigError),
@@ -94,7 +94,7 @@ impl ArbitraryMessageSignature {
         match destination {
             Destination::PublicKeyHash(addr) => {
                 let sig_components = AuthorizedPublicKeyHashSpend::from_data(&self.raw_signature)?;
-                verify_address_spending(addr, &sig_components, challenge)?
+                verify_public_key_hash_spending(addr, &sig_components, challenge)?
             }
             Destination::PublicKey(pubkey) => {
                 let sig_components = AuthorizedPublicKeySpend::from_data(&self.raw_signature)?;
@@ -125,12 +125,12 @@ impl ArbitraryMessageSignature {
         let challenge = produce_message_challenge(message);
         let signature =
             match destination {
-                Destination::PublicKeyHash(addr) => {
-                    let sig = sign_address_spending(private_key, addr, &challenge, rng)?;
+                Destination::PublicKeyHash(pubkeyhash) => {
+                    let sig = sign_public_key_hash_spending(private_key, pubkeyhash, &challenge, rng)?;
                     sig.encode()
                 }
                 Destination::PublicKey(pubkey) => {
-                    let sig = sign_pubkey_spending(private_key, pubkey, &challenge, rng)?;
+                    let sig = sign_public_key_spending(private_key, pubkey, &challenge, rng)?;
                     sig.encode()
                 }
                 Destination::ScriptHash(_) => return Err(SignArbitraryMessageError::Unsupported),
