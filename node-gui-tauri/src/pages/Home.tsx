@@ -5,8 +5,9 @@ import * as bip39 from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { RiInformation2Line } from "react-icons/ri";
 import { PiShareNetworkBold } from "react-icons/pi";
-import { IoCloseSharp } from "react-icons/io5";
+import { ToastContainer, toast } from "react-toastify";
 
+import { IoCloseSharp } from "react-icons/io5";
 import MintlayerIcon from "../assets/mintlayer_icon.png";
 import TransactionIcon from "../assets/transaction_icon.png";
 import AddressIcon from "../assets/address_icon.png";
@@ -55,11 +56,11 @@ function Home() {
   const [activeTab, setActiveTab] = useState("transactions");
   const [currentAccount, setCurrentAccount] = useState("");
   const [mnemonic, setMnemonic] = useState("");
-  const [filePath, setFilePath] = useState("");
 
   const [showMnemonicModal, setShowMnemonicModal] = useState(false);
   const [showRecoverWalletModal, setShowRecoverWalletModal] = useState(false);
   const [showNewAccountModal, setShowNewAccountModal] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const init_node = async () => {
@@ -78,6 +79,23 @@ function Home() {
     };
     init_node();
   }, [netMode, walletMode]);
+
+  const notify = (message: string, type: string) => {
+    console.log("notification is displayed");
+    switch (type) {
+      case "error":
+        toast.error(message);
+        break;
+      case "info":
+        toast.info(message);
+        break;
+      case "success":
+        toast.success(message);
+        break;
+      default:
+        toast.info(message);
+    }
+  };
 
   const createNewWallet = () => {
     try {
@@ -101,25 +119,36 @@ function Home() {
 
       if (path) {
         console.log("Selected file path is: ", path);
-        setFilePath(path); // Ensure setFilePath is defined
+        setLoading(true);
 
-        // Await the invoke call
-        const walletInfo = await invoke("add_create_wallet_wrapper", {
-          request: {
-            file_path: path,
-            mnemonic: mnemonic,
-            import: true,
-            wallet_type: walletMode,
-          },
-        });
+        try {
+          // Await the invoke call
+          const walletInfo = await invoke("add_create_wallet_wrapper", {
+            request: {
+              file_path: path,
+              mnemonic: mnemonic,
+              import: true,
+              wallet_type: walletMode,
+            },
+          });
 
-        // Check if walletInfo is defined before logging
-        if (walletInfo) {
-          console.log("Wallet info is: ", walletInfo);
-          setShowMnemonicModal(false); // Ensure setShowMnemonicModal is defined
-        } else {
-          console.error("No wallet info returned");
+          // Check if walletInfo is defined before logging
+          if (walletInfo) {
+            console.log("Wallet info is: ", walletInfo);
+            notify("Wallet created successfully!", "success");
+          } else {
+            notify("Error occured while creating wallet!", "error");
+            console.error("No wallet info returned");
+          }
+        } catch (invokeError) {
+          notify("Error occured while creating wallet!", "error");
+          console.error(
+            "Error during invoke:",
+            invokeError instanceof Error ? invokeError.message : invokeError
+          );
         }
+        setLoading(false);
+        setShowMnemonicModal(false); // Ensure setShowMnemonicModal is defined
       } else {
         console.error("No file selected");
       }
@@ -144,31 +173,38 @@ function Home() {
       {showMnemonicModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="absolute inset-0 bg-black opacity-50"></div>
-          <div className="bg-white rounded-lg shadow-lg z-10 p-6 max-w-lg mx-auto relative space-y-4">
-            {/* Close Button */}
-            <button
-              className="absolute top-2 right-2 text-gray-600 "
-              onClick={() => setShowMnemonicModal(false)}
-            >
-              <IoCloseSharp />
-            </button>
-            <h2 className="text-lg font-bold mb-4">
-              Create New {walletMode} Wallet
-            </h2>
-            <p className="mb-4">Your Wallet Mnemonic</p>
-            <textarea
-              value={mnemonic}
-              rows={3}
-              contentEditable={false}
-              className="w-full shadow-[1px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 rounded-lg"
-            />
-            <button
-              className="bg-green-400 text-black w-full px-4 py-2 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
-              onClick={(e) => handleCreateNewWallet(e)}
-            >
-              Create
-            </button>
-          </div>
+          {loading ? (
+            <div className="bg-opacity-50 z-10 p-6 max-w-lg mx-auto relative space-y-4">
+              <div className="loader px-10">Creating wallet. Please wait</div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg shadow-lg z-10 p-6 max-w-lg mx-auto relative space-y-4">
+              <>
+                <button
+                  className="absolute top-2 right-2 text-gray-600 "
+                  onClick={() => setShowMnemonicModal(false)}
+                >
+                  <IoCloseSharp />
+                </button>
+                <h2 className="text-lg font-bold mb-4">
+                  Create New {walletMode} Wallet
+                </h2>
+                <p className="mb-4">Your Wallet Mnemonic</p>
+                <textarea
+                  defaultValue={mnemonic}
+                  rows={3}
+                  contentEditable={false}
+                  className="w-full shadow-[1px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 rounded-lg"
+                />
+                <button
+                  className="bg-green-400 text-black w-full px-4 py-2 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
+                  onClick={(e) => handleCreateNewWallet(e)}
+                >
+                  Create
+                </button>
+              </>
+            </div>
+          )}
         </div>
       )}
       {showRecoverWalletModal && (
@@ -306,9 +342,6 @@ function Home() {
                       <div className="relative inline-block flex items-center justify-center space-x-2">
                         <img src={WalletIcon} alt="wallet_ico" />
                         <select
-                          defaultValue={
-                            wallets.length > 0 ? wallets[0].wallet_id : ""
-                          }
                           value={currentWallet?.wallet_id}
                           onChange={(e) =>
                             setCurrentWallet(
@@ -337,9 +370,6 @@ function Home() {
                           <img src={AccountIcom} alt="wallet_ico" />
                         </button>
                         <select
-                          defaultValue={
-                            wallets.length > 0 ? wallets[0].wallet_id : ""
-                          }
                           onChange={(e) => setCurrentAccount(e?.target.value)}
                           value={currentAccount}
                           className="block w-[16vw] bg-white px-2 w-[14vw] border-gray-300 text-gray-700 py-2  rounded-lg shadow-sm focus:outline-none  "

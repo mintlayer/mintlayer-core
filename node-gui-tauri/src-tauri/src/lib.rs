@@ -14,7 +14,6 @@
 // limitations under the License.
 
 pub mod messages;
-
 mod backend_impl;
 mod chainstate_event_handler;
 mod error;
@@ -38,10 +37,7 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::async_runtime::RwLock;
-use tauri::Manager;
-use tauri_plugin_dialog::DialogExt;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use tokio::sync::Mutex;
 use wallet_types::wallet_type::WalletType;
 
 struct AppState {
@@ -288,30 +284,68 @@ pub async fn node_initialize(
 }
 
 
+// #[tauri::command]
+// async fn add_create_wallet_wrapper(
+//     state: tauri::State<'_, AppState>,
+//     request: OpenCreateWalletRequest,
+// ) -> Result<WalletInfo, String> {
+//     let mut backend_guard = state.backend.write().await; // Correctly use write lock
+
+//     // Check if backend is initialized
+//     let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
+
+//     // Get a mutable reference to the underlying Backend
+//     let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
+
+//     // Now you can modify the backend
+//     let mnemonic = wallet_controller::mnemonic::Mnemonic::parse(request.mnemonic)
+//         .map_err(|e| e.to_string())?;
+//     let file_path = PathBuf::from(request.file_path);
+//     let wallet_type: WalletType = WalletType::from_str(&request.wallet_type).map_err(|e| e.to_string())?;
+//     let import = ImportOrCreate::from_bool(request.import);
+
+//     backend
+//         .add_create_wallet(file_path, mnemonic, wallet_type, import)
+//         .await
+//         .map_err(|e| e.to_string())
+// }
+
 #[tauri::command]
 async fn add_create_wallet_wrapper(
     state: tauri::State<'_, AppState>,
     request: OpenCreateWalletRequest,
 ) -> Result<WalletInfo, String> {
-    let mut backend_guard = state.backend.write().await; // Correctly use write lock
-
-    // Check if backend is initialized
+    let mut backend_guard = state.backend.write().await; 
     let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
-
-    // Get a mutable reference to the underlying Backend
     let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
-
-    // Now you can modify the backend
+    println!("Received request to create wallet with parameters: {:?}", request);
     let mnemonic = wallet_controller::mnemonic::Mnemonic::parse(request.mnemonic)
-        .map_err(|e| e.to_string())?;
-    let file_path = PathBuf::from(request.file_path);
-    let wallet_type: WalletType = WalletType::from_str(&request.wallet_type).map_err(|e| e.to_string())?;
-    let import = ImportOrCreate::from_bool(request.import);
+        .map_err(|e| {
+            let error_message = e.to_string();
+            println!("Error parsing mnemonic: {}", error_message);
+            error_message
+        })?;
 
-    backend
-        .add_create_wallet(file_path, mnemonic, wallet_type, import)
-        .await
-        .map_err(|e| e.to_string())
+    let file_path = PathBuf::from(request.file_path);
+    let wallet_type: WalletType = WalletType::from_str(&request.wallet_type)
+        .map_err(|e| {
+            let error_message = e.to_string();
+            println!("Error parsing wallet type: {}", error_message);
+            error_message
+        })?;
+        
+    let import = ImportOrCreate::from_bool(request.import);
+    match backend.add_create_wallet(file_path, mnemonic, wallet_type, import).await {
+        Ok(wallet_info) => {
+            println!("Wallet created successfully: {:?}", wallet_info);
+            Ok(wallet_info)
+        }
+        Err(e) => {
+            let error_message = e.to_string();
+            println!("Error creating wallet: {}", error_message);
+            Err(error_message)
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
