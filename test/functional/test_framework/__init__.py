@@ -225,6 +225,22 @@ def init_mintlayer_types():
                 ]
             },
 
+            "SignedTransactionIntent": {
+                "type": "struct",
+                "type_mapping": [
+                    ["signed_message", "String"],
+                    ["signatures", "Vec<Vec<u8>>"],
+                ]
+            },
+
+            "AuthorizedPublicKeyHashSpend" : {
+                "type": "struct",
+                "type_mapping": [
+                    ["public_key", "PublicKey"],
+                    ["signature", "Signature"],
+                ]
+            },
+
             "SemVer": {
                 "type": "struct",
                 "type_mapping": [

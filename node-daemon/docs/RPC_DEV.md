@@ -100,6 +100,48 @@ Returns:
 string
 ```
 
+### Method `test_functions_public_key_to_public_key_address`
+
+Parameters:
+```
+{ "public_key_hex": string }
+```
+
+Returns:
+```
+string
+```
+
+### Method `test_functions_public_key_to_public_key_hash_address`
+
+Parameters:
+```
+{ "public_key_hex": string }
+```
+
+Returns:
+```
+string
+```
+
+### Method `test_functions_produce_message_challenge_for_arbitrary_message_signature`
+
+Return the actual message that is signed when producing an arbitrary message signature.
+
+Note that the result is returned as a hex-encoded `Vec<u8>`, which is suitable for passing
+to `sign_message_with_private_key` and `verify_message_with_public_key`.
+
+
+Parameters:
+```
+{ "message_hex": string }
+```
+
+Returns:
+```
+string
+```
+
 ### Method `test_functions_sign_message_with_private_key`
 
 Parameters:

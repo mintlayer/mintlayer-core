@@ -120,7 +120,7 @@ export async function run_test() {
     if (!e.includes("Invalid mnemonic string")) {
       throw e;
     }
-    console.log("Tested invalid menemonic successfully");
+    console.log("Tested invalid mnemonic successfully");
   }
 
   {

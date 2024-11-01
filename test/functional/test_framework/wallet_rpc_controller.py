@@ -28,7 +28,7 @@ from operator import itemgetter
 from typing import Optional, List, Union
 
 from test_framework.util import assert_in, rpc_port
-from test_framework.wallet_controller_common import PartialSigInfo, TokenTxOutput, UtxoOutpoint
+from test_framework.wallet_controller_common import PartialSigInfo, TokenTxOutput, UtxoOutpoint, WalletCliControllerBase
 
 ONE_MB = 2**20
 READ_TIMEOUT_SEC = 30
@@ -69,7 +69,7 @@ class AccountInfo:
     index: int
     name: Optional[str]
 
-class WalletRpcController:
+class WalletRpcController(WalletCliControllerBase):
     def __init__(self, node, config, log, wallet_args: List[str] = [], chain_config_args: List[str] = []):
         self.log = log
         self.node = node

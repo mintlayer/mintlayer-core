@@ -30,6 +30,7 @@ use common::{
         output_value::OutputValue,
         partially_signed_transaction::PartiallySignedTransaction,
         signature::inputsig::{
+            arbitrary_message,
             authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
             InputWitness,
         },
@@ -43,6 +44,7 @@ use crypto::key::Signature;
 use serialization::{
     hex::{HexDecode, HexEncode},
     hex_encoded::HexEncoded,
+    Encode as _,
 };
 
 use crate::{RpcTestFunctionsError, RpcTestFunctionsHandle};
@@ -70,6 +72,28 @@ trait RpcTestFunctionsRpc {
 
     #[method(name = "public_key_from_private_key")]
     async fn public_key_from_private_key(&self, private_key_hex: String) -> rpc::RpcResult<String>;
+
+    #[method(name = "public_key_to_public_key_address")]
+    async fn public_key_to_public_key_address(
+        &self,
+        public_key_hex: String,
+    ) -> rpc::RpcResult<String>;
+
+    #[method(name = "public_key_to_public_key_hash_address")]
+    async fn public_key_to_public_key_hash_address(
+        &self,
+        public_key_hex: String,
+    ) -> rpc::RpcResult<String>;
+
+    /// Return the actual message that is signed when producing an arbitrary message signature.
+    ///
+    /// Note that the result is returned as a hex-encoded `Vec<u8>`, which is suitable for passing
+    /// to `sign_message_with_private_key` and `verify_message_with_public_key`.
+    #[method(name = "produce_message_challenge_for_arbitrary_message_signature")]
+    async fn produce_message_challenge_for_arbitrary_message_signature(
+        &self,
+        message_hex: String,
+    ) -> rpc::RpcResult<String>;
 
     #[method(name = "sign_message_with_private_key")]
     async fn sign_message_with_private_key(
@@ -221,6 +245,56 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         let public_key = crypto::key::PublicKey::from_private_key(&private_key);
 
         Ok(public_key.hex_encode())
+    }
+
+    async fn public_key_to_public_key_address(
+        &self,
+        public_key_hex: String,
+    ) -> rpc::RpcResult<String> {
+        let public_key =
+            rpc::handle_result(crypto::key::PublicKey::hex_decode_all(public_key_hex))?;
+        let destination = Destination::PublicKey(public_key);
+
+        let address = self
+            .call(|this| {
+                let chain_config = this.get_chain_config().expect("chain config must be present");
+                Address::new(&chain_config, destination)
+                    .expect("destination must be encodable")
+                    .into_string()
+            })
+            .await
+            .expect("Subsystem call ok");
+        Ok(address)
+    }
+
+    async fn public_key_to_public_key_hash_address(
+        &self,
+        public_key_hex: String,
+    ) -> rpc::RpcResult<String> {
+        let public_key: crypto::key::PublicKey =
+            rpc::handle_result(crypto::key::PublicKey::hex_decode_all(public_key_hex))?;
+        let destination = Destination::PublicKeyHash((&public_key).into());
+
+        let address = self
+            .call(|this| {
+                let chain_config = this.get_chain_config().expect("chain config must be present");
+                Address::new(&chain_config, destination)
+                    .expect("destination must be encodable")
+                    .into_string()
+            })
+            .await
+            .expect("Subsystem call ok");
+        Ok(address)
+    }
+
+    async fn produce_message_challenge_for_arbitrary_message_signature(
+        &self,
+        message_hex: String,
+    ) -> rpc::RpcResult<String> {
+        let message: Vec<u8> = rpc::handle_result(Vec::<u8>::hex_decode_all(message_hex))?;
+        let challenge = arbitrary_message::produce_message_challenge(&message);
+        let resulting_message = challenge.encode();
+        Ok(resulting_message.hex_encode())
     }
 
     async fn sign_message_with_private_key(

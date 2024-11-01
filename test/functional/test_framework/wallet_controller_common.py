@@ -16,6 +16,8 @@
 #  limitations under the License.
 
 from dataclasses import dataclass
+import re
+
 
 @dataclass
 class UtxoOutpoint:
@@ -42,3 +44,12 @@ class PartialSigInfo:
     input_index: int
     num_signatures: int
     required_signatures: int
+
+
+class WalletCliControllerBase:
+    async def submit_transaction_return_id(self, transaction: str, do_not_store: bool = False) -> str:
+        output = await self.submit_transaction(transaction, do_not_store)
+        pattern = r'The transaction was submitted successfully with ID:\n([0-9a-fA-F]+)'
+        match = re.search(pattern, output)
+        assert match is not None
+        return match.group(1)
