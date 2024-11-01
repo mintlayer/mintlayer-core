@@ -306,7 +306,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
-        let mut transaction_ids = vec![];
+        let mut transaction_ids = Vec::with_capacity(rows.len());
 
         for row in &rows {
             let transaction_id: Vec<u8> = row.get(0);

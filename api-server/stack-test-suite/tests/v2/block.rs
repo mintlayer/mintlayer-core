@@ -271,9 +271,9 @@ async fn get_tx_additional_data(
     block: &common::chain::Block,
 ) -> Vec<TxAdditionalInfo> {
     let db_tx = local_node.storage().transaction_ro().await.unwrap();
-    let mut tx_additional_data = vec![];
+    let mut tx_additional_data = Vec::with_capacity(block.transactions().len());
     for tx in block.transactions() {
-        let mut input_utxos = vec![];
+        let mut input_utxos = Vec::with_capacity(tx.inputs().len());
         for input in tx.inputs() {
             let utxo = match input {
                 TxInput::Utxo(outpoint) => {
