@@ -580,7 +580,7 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
         .collect();
 
     let mut total_fees = AccumulatedFee::new();
-    let mut tx_aditional_infos = vec![];
+    let mut tx_aditional_infos = Vec::with_capacity(block.transactions().len());
     for tx in block.transactions().iter() {
         let fee = tx_fees(chain_config, block_height, tx, db_tx, &new_outputs).await?;
         total_fees = total_fees.combine(fee.clone()).expect("no overflow");
