@@ -107,12 +107,13 @@ async fn ok(#[case] seed: Seed) {
                     + (chain_config.nft_issuance_fee(BlockHeight::new(1)) * 10).unwrap())
                 .unwrap();
 
-                let mut token_ids = Vec::with_capacity(10);
+                const ID_NUMS: usize = 10;
+                let mut token_ids = Vec::with_capacity(ID_NUMS);
                 let mut input = TxInput::from_utxo(
                     OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
                     0,
                 );
-                for _ in 0..10 {
+                for _ in 0..ID_NUMS {
                     let transaction = TransactionBuilder::new()
                         .add_input(input, InputWitness::NoSignature(None))
                         .add_output(TxOutput::Transfer(
@@ -139,8 +140,9 @@ async fn ok(#[case] seed: Seed) {
                         .unwrap();
                 }
 
-                let mut nft_ids = Vec::with_capacity(10);
-                for _ in 0..10 {
+                const ID_NUMS: usize = 10;
+                let mut nft_ids = Vec::with_capacity(ID_NUMS);
+                for _ in 0..ID_NUMS {
                     let nft = test_utils::nft_utils::random_nft_issuance(&chain_config, &mut rng);
                     let token_id = make_token_id(&[input.clone()]).unwrap();
 
