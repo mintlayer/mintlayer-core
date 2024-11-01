@@ -122,6 +122,7 @@ button {
   font-size: 24px;
   font-family: Arial, Helvetica, sans-serif;
   box-sizing: border-box;
+  white-space: nowrap;
 }
 .loader::after {
   content: '';

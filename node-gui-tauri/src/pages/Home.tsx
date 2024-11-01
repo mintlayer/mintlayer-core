@@ -6,6 +6,7 @@ import { wordlist } from "@scure/bip39/wordlists/english";
 import { RiInformation2Line } from "react-icons/ri";
 import { PiShareNetworkBold } from "react-icons/pi";
 import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 import { IoCloseSharp } from "react-icons/io5";
 import MintlayerIcon from "../assets/mintlayer_icon.png";
@@ -122,7 +123,6 @@ function Home() {
         setLoading(true);
 
         try {
-          // Await the invoke call
           const walletInfo = await invoke("add_create_wallet_wrapper", {
             request: {
               file_path: path,
@@ -132,13 +132,10 @@ function Home() {
             },
           });
 
-          // Check if walletInfo is defined before logging
           if (walletInfo) {
-            console.log("Wallet info is: ", walletInfo);
             notify("Wallet created successfully!", "success");
           } else {
             notify("Error occured while creating wallet!", "error");
-            console.error("No wallet info returned");
           }
         } catch (invokeError) {
           notify("Error occured while creating wallet!", "error");
@@ -147,8 +144,56 @@ function Home() {
             invokeError instanceof Error ? invokeError.message : invokeError
           );
         }
+        setMnemonic("");
         setLoading(false);
         setShowMnemonicModal(false); // Ensure setShowMnemonicModal is defined
+      } else {
+        console.error("No file selected");
+      }
+    } catch (err) {
+      console.error(
+        "Error while selecting file:",
+        err instanceof Error ? err.message : err
+      );
+    }
+  };
+
+  const handleRecoverWallet = async () => {
+    try {
+      const path = await save({
+        defaultPath: "key.dat",
+        filters: [{ name: "Key files", extensions: ["dat"] }],
+      });
+
+      if (path) {
+        console.log("Selected file path is: ", path);
+        setLoading(true);
+
+        try {
+          const walletInfo = await invoke("add_create_wallet_wrapper", {
+            request: {
+              file_path: path,
+              mnemonic: mnemonic,
+              import: false,
+              wallet_type: walletMode,
+            },
+          });
+
+          if (walletInfo) {
+            notify("Wallet recovered successfully!", "success");
+          } else {
+            notify("Error occured while recovering wallet!", "error");
+          }
+        } catch (invokeError) {
+          notify("Error occured while recovering wallet!", "error");
+          console.error(
+            "Error during invoke:",
+            invokeError instanceof Error ? invokeError.message : invokeError
+          );
+        }
+        setMnemonic("");
+        setLoading(false);
+        setShowRecoverWalletModal(false);
       } else {
         console.error("No file selected");
       }
@@ -175,7 +220,7 @@ function Home() {
           <div className="absolute inset-0 bg-black opacity-50"></div>
           {loading ? (
             <div className="bg-opacity-50 z-10 p-6 max-w-lg mx-auto relative space-y-4">
-              <div className="loader px-10">Creating wallet. Please wait</div>
+              <div className="loader px-10">Creating wallet. Please wait.</div>
             </div>
           ) : (
             <div className="bg-white rounded-lg shadow-lg z-10 p-6 max-w-lg mx-auto relative space-y-4">
@@ -205,36 +250,47 @@ function Home() {
               </>
             </div>
           )}
+          <ToastContainer />
         </div>
       )}
       {showRecoverWalletModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="absolute inset-0 bg-black opacity-50"></div>
-          <div className="bg-white rounded-lg shadow-lg z-10 p-6 max-w-lg mx-auto relative space-y-4">
-            {/* Close Button */}
-            <button
-              className="absolute top-2 right-2 text-gray-600 "
-              onClick={() => setShowRecoverWalletModal(false)}
-            >
-              <IoCloseSharp />
-            </button>
-            <h2 className="text-lg font-bold mb-4">
-              Recover {walletMode} Wallet
-            </h2>
-            <p className="mb-4">Enter Mnemonic</p>
-            <textarea
-              value={mnemonic}
-              onChange={(e) => setMnemonic(e.target.value)}
-              rows={3}
-              className="w-full shadow-[1px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 rounded-lg"
-            />
-            <button
-              className="bg-green-400 text-black w-full px-4 py-2 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
-              onClick={() => setShowRecoverWalletModal(false)}
-            >
-              Recover
-            </button>
-          </div>
+          {loading ? (
+            <div className="bg-opacity-50 z-10 p-6 max-w-lg mx-auto relative space-y-4">
+              <div className="loader px-10">
+                Recovering wallet. Please wait.
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg shadow-lg z-10 p-6 max-w-lg mx-auto relative space-y-4">
+              <>
+                <button
+                  className="absolute top-2 right-2 text-gray-600 "
+                  onClick={() => setShowRecoverWalletModal(false)}
+                >
+                  <IoCloseSharp />
+                </button>
+                <h2 className="text-lg font-bold mb-4">
+                  Recover New {walletMode} Wallet
+                </h2>
+                <p className="mb-4">Your Wallet Mnemonic</p>
+                <textarea
+                  defaultValue={mnemonic}
+                  rows={3}
+                  onChange={(e) => setMnemonic(e.target.value)}
+                  className="w-full shadow-[1px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 rounded-lg"
+                />
+                <button
+                  className="bg-green-400 text-black w-full px-4 py-2 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
+                  onClick={handleRecoverWallet}
+                >
+                  Recover
+                </button>
+              </>
+            </div>
+          )}
+          <ToastContainer />
         </div>
       )}
       {(!netMode || !walletMode) && (
