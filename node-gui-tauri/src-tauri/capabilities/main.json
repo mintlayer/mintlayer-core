@@ -39,6 +39,7 @@
           "path": "**"
         }
       ]
-    }
+    },
+    "process:default"
   ]
 }

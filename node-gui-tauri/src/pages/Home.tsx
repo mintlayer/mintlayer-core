@@ -1,6 +1,7 @@
 import { useEffect, useState, MouseEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
+import { exit } from "@tauri-apps/plugin-process";
+import { save, open } from "@tauri-apps/plugin-dialog";
 import * as bip39 from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { RiInformation2Line } from "react-icons/ri";
@@ -209,12 +210,51 @@ function Home() {
     setShowRecoverWalletModal(true);
   };
 
-  const openWallet = () => {};
+  const openWallet = async () => {
+    try {
+      const filePath = await open({
+        filters: [
+          {
+            name: "Key file",
+            extensions: ["dat"],
+          },
+        ],
+      });
+      if (filePath) {
+        setLoading(true);
+        const walletInfo = await invoke("open_wallet_wrapper", {
+          request: {
+            file_path: filePath,
+            wallet_type: walletMode,
+          },
+        });
+        if (walletInfo) {
+          notify("Wallet opened successfully", "success");
+        } else {
+          notify("Wallet open failed.", "error");
+        }
+        setLoading(false);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
-  const exit = () => {};
+  const exit = async () => {
+    await exit();
+  };
 
   return (
     <div className="home-page">
+      <ToastContainer />
+      {loading && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black opacity-50"></div>
+          <div className="bg-opacity-50 z-10 p-6 max-w-lg mx-auto relative space-y-4">
+            <div className="loader px-10">Opening wallet. Please wait.</div>
+          </div>
+        </div>
+      )}
       {showMnemonicModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="absolute inset-0 bg-black opacity-50"></div>
@@ -250,7 +290,6 @@ function Home() {
               </>
             </div>
           )}
-          <ToastContainer />
         </div>
       )}
       {showRecoverWalletModal && (
@@ -290,7 +329,6 @@ function Home() {
               </>
             </div>
           )}
-          <ToastContainer />
         </div>
       )}
       {(!netMode || !walletMode) && (

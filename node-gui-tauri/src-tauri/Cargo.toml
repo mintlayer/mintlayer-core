@@ -57,6 +57,7 @@ rfd = { workspace = true, features = ["xdg-portal", "tokio"] }
 thiserror.workspace = true
 tokio.workspace = true
 variant_count.workspace = true
+tauri-plugin-process = "2"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

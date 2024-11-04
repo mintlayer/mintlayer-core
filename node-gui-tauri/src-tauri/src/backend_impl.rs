@@ -440,7 +440,7 @@ impl Backend {
         ))
     }
 
-    async fn add_open_wallet(
+    pub async fn add_open_wallet(
         &mut self,
         file_path: PathBuf,
         wallet_type: WalletType,

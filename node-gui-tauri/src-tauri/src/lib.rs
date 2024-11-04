@@ -79,6 +79,12 @@ pub struct OpenCreateWalletRequest {
     wallet_type: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OpenWalletRequest {
+    file_path: String,
+    wallet_type: String,
+}
+
 impl Default for AppState {
     fn default() -> Self {
         AppState {
@@ -98,7 +104,7 @@ impl BackendSender {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InitializedNode {
     pub chain_config: Arc<ChainConfig>,
     pub chain_info: ChainInfo,
@@ -116,6 +122,18 @@ fn parse_address(
 ) -> Result<Address<Destination>, AddressError> {
     Address::from_string(chain_config, address)
 }
+
+// #[tauri::command]
+// async fn get_initialized_node(
+//     state: tauri::State<'_, AppState>,
+// ) -> Result<InitializedNode, String> {
+//     // Read the RwLock to get the value inside
+//     let guard = state.initialized_node.read().await; // Use .read() to get a read lock
+//     match &*guard {
+//         Some(control) => Ok(control.clone()), // Clone the control if necessary
+//         None => Err("Node not initialized".into()),
+//     }
+// }
 
 #[tauri::command]
 async fn initialize_node(
@@ -294,7 +312,7 @@ async fn add_create_wallet_wrapper(
         println!("Error parsing mnemonic: {}", error_message);
         error_message
     })?;
-    
+
     let file_path = PathBuf::from(request.file_path);
 
     let wallet_type = WalletType::from_str(&request.wallet_type).map_err(|e| {
@@ -310,7 +328,7 @@ async fn add_create_wallet_wrapper(
         let mut backend_guard = state.backend.write().await;
         let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
         let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
-        
+
         // Perform the operation while holding the lock
         backend.add_create_wallet(file_path, mnemonic, wallet_type, import).await
     };
@@ -329,17 +347,54 @@ async fn add_create_wallet_wrapper(
     }
 }
 
+#[tauri::command]
+async fn add_open_wallet_wrapper(
+    state: tauri::State<'_, AppState>,
+    request: OpenWalletRequest,
+) -> Result<WalletInfo, String> {
+    let file_path = PathBuf::from(request.file_path);
+
+    let wallet_type = WalletType::from_str(&request.wallet_type).map_err(|e| {
+        let error_message = e.to_string();
+        println!("Error parsing wallet type: {}", error_message);
+        error_message
+    })?;
+    let result = {
+        let mut backend_guard = state.backend.write().await;
+        let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
+        let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
+
+        // Perform the operation while holding the lock
+        backend.add_open_wallet(file_path, wallet_type).await
+    };
+
+    // Handle the result after releasing the lock
+    match result {
+        Ok(wallet_info) => {
+            println!("Wallet created successfully: {:?}", wallet_info);
+            Ok(wallet_info)
+        }
+        Err(e) => {
+            let error_message = e.to_string();
+            println!("Error creating wallet: {}", error_message);
+            Err(error_message)
+        }
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
+            // get_initialized_node,
             initialize_node,
-            add_create_wallet_wrapper
+            add_create_wallet_wrapper,
+            add_open_wallet_wrapper
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
