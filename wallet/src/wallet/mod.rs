@@ -976,19 +976,15 @@ impl<B: storage::Backend> Wallet<B> {
         }
     }
 
-    fn for_account_rw_unlocked_and_check_tx_generic<F, A, E>(
+    fn for_account_rw_unlocked_and_check_tx_generic<AddlData>(
         &mut self,
         account_index: U31,
-        f: F,
-        error_mapper: E,
-    ) -> WalletResult<(SignedTransaction, A)>
-    where
-        F: FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<(SendRequest, A)>,
-        E: FnOnce(WalletError) -> WalletError,
-    {
+        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<(SendRequest, AddlData)>,
+        error_mapper: impl FnOnce(WalletError) -> WalletError,
+    ) -> WalletResult<(SignedTransaction, AddlData)> {
         let (_, block_height) = self.get_best_block_for_account(account_index)?;
         self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
-            let (request, additional_result) = f(account, db_tx)?;
+            let (request, additional_data) = f(account, db_tx)?;
 
             let ptx = request.into_partially_signed_tx()?;
 
@@ -1023,7 +1019,7 @@ impl<B: storage::Backend> Wallet<B> {
                 .map_err(|e| error_mapper(WalletError::TransactionCreation(e)))?;
 
             check_transaction(chain_config, block_height.next_height(), &tx)?;
-            Ok((tx, additional_result))
+            Ok((tx, additional_data))
         })
     }
 
@@ -1378,12 +1374,13 @@ impl<B: storage::Backend> Wallet<B> {
                 change_addresses,
                 current_fee_rate,
                 consolidate_fee_rate,
+                |_s| (),
             )?
             .0)
     }
 
-    /// Same as `create_transaction_to_addresses`, but also allows to specify the "intent" for the transaction,
-    /// which will be concatenated with the transaction id and signed with all keys used for sign the transaction's inputs.
+    /// Same as `create_transaction_to_addresses`, but it also allows to specify the "intent" for the transaction,
+    /// which will be concatenated with the transaction id and signed with all the keys used to sign the transaction's inputs.
     #[allow(clippy::too_many_arguments)]
     pub fn create_transaction_to_addresses_with_intent(
         &mut self,
@@ -1402,6 +1399,7 @@ impl<B: storage::Backend> Wallet<B> {
             change_addresses,
             current_fee_rate,
             consolidate_fee_rate,
+            |send_request| send_request.destinations().to_owned(),
         )?;
 
         let signed_intent =
@@ -1421,7 +1419,7 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn create_transaction_to_addresses_impl(
+    fn create_transaction_to_addresses_impl<AddlData>(
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
@@ -1429,10 +1427,8 @@ impl<B: storage::Backend> Wallet<B> {
         change_addresses: BTreeMap<Currency, Address<Destination>>,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
-    ) -> WalletResult<(
-        SignedTransaction,
-        /*input_destinations:*/ Vec<Destination>,
-    )> {
+        additional_data_getter: impl Fn(&SendRequest) -> AddlData,
+    ) -> WalletResult<(SignedTransaction, AddlData)> {
         let request = SendRequest::new().with_outputs(outputs);
         let latest_median_time = self.latest_median_time;
         self.for_account_rw_unlocked_and_check_tx_generic(
@@ -1450,8 +1446,8 @@ impl<B: storage::Backend> Wallet<B> {
                     },
                 )?;
 
-                let input_destinations = send_request.destinations().to_owned();
-                Ok((send_request, input_destinations))
+                let additional_data = additional_data_getter(&send_request);
+                Ok((send_request, additional_data))
             },
             |err| err,
         )

@@ -630,7 +630,7 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
-    /// Send a given token amount to the given address. The wallet will automatically calculate the required information.
+    /// Send the given token amount to the given address. The wallet will automatically calculate the required information.
     #[method(name = "token_send")]
     async fn send_tokens(
         &self,
@@ -651,7 +651,7 @@ trait WalletRpc {
     /// by the bridge and provide the bridge with the destination address on the foreign chain where you want
     /// to receive them. In this case you will set "intent" to this foreign destination address; the signed intent
     /// will then serve as a proof to the bridge that the provided destination address is what it's meant to be.
-    #[method(name = "token_make_tx_for_sending")]
+    #[method(name = "token_make_tx_for_sending_with_intent")]
     async fn make_tx_for_sending_tokens_with_intent(
         &self,
         account: AccountArg,

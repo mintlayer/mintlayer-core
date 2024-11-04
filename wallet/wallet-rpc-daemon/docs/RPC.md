@@ -1102,7 +1102,7 @@ Returns:
 
 ### Method `token_send`
 
-Send a given token amount to the given address. The wallet will automatically calculate the required information.
+Send the given token amount to the given address. The wallet will automatically calculate the required information.
 
 
 Parameters:
@@ -1125,7 +1125,7 @@ Returns:
 { "tx_id": hex string }
 ```
 
-### Method `token_make_tx_for_sending`
+### Method `token_make_tx_for_sending_with_intent`
 
 Create a transaction for sending tokens to the given address, without submitting it.
 The wallet will automatically calculate the required information.
