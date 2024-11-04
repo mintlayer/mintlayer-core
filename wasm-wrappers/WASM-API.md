@@ -49,15 +49,50 @@ such as transaction input witness.
 
 ### Function: `sign_challenge`
 
-Given a message and a private key, create and sign a challenge with the given private key
+Given a message and a private key, create and sign a challenge with the given private key.
 This kind of signature is to be used when signing challenges.
 
 ### Function: `verify_challenge`
 
-Given a signed challenge, an address and a message. Verify that
+Given a signed challenge, an address and a message, verify that
 the signature is produced by signing the message with the private key
 that derived the given public key.
-Note that this function is used for verifying messages related challenges.
+This function is used for verifying messages-related challenges.
+
+Note: for signatures that were created by `sign_challenge`, the provided address must be
+a 'pubkeyhash' address.
+
+Note: currently this function never returns `false` - it either returns `true` or fails with an error.
+
+### Function: `make_transaction_intent_message_to_sign`
+
+Return the message that has to be signed to produce a signed transaction intent.
+
+### Function: `encode_signed_transaction_intent`
+
+Return a `SignedTransactionIntent` object as bytes given the message and encoded signatures.
+
+Note: to produce a valid signed intent one is expected to sign the corresponding message by private keys
+corresponding to each input of the transaction.
+
+Parameters:
+`signed_message` - this must have been produced by `make_transaction_intent_message_to_sign`.
+`signatures` - this should be an array of arrays of bytes, each of them representing an individual signature
+of `signed_message` produced by `sign_challenge` using the private key for the corresponding input destination
+of the transaction. The number of signatures must be equal to the number of inputs in the transaction.
+
+### Function: `verify_transaction_intent`
+
+Verify a signed transaction intent.
+
+Parameters:
+`expected_signed_message` - the message that is supposed to be signed; this must have been
+produced by `make_transaction_intent_message_to_sign`.
+`encoded_signed_intent` - the signed transaction intent produced by `encode_signed_transaction_intent`.
+`input_destinations` - an array of addresses (strings), corresponding to the transaction's input destinations
+(note that this function treats "pub key" and "pub key hash" addresses interchangeably, so it's ok to pass
+one instead of the other).
+`network` - the network being used (needed to decode the addresses).
 
 ### Function: `encode_output_transfer`
 
