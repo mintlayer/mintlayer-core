@@ -17,7 +17,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        DelegationId, Destination, PoolId,
+        DelegationId, Destination, OrderId, PoolId,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -26,8 +26,8 @@ use crate::storage::{
     impls::postgres::queries::QueryFromConnection,
     storage_api::{
         block_aux_data::BlockAuxData, ApiServerStorageError, ApiServerStorageRead, BlockInfo,
-        CoinOrTokenStatistic, Delegation, FungibleTokenData, PoolBlockStats, TransactionInfo, Utxo,
-        UtxoWithExtraInfo,
+        CoinOrTokenStatistic, Delegation, FungibleTokenData, Order, PoolBlockStats,
+        TransactionInfo, Utxo, UtxoWithExtraInfo,
     },
 };
 use std::collections::BTreeMap;
@@ -362,6 +362,13 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_all_statistic(coin_or_token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_order(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_order(order_id, &self.chain_config).await?;
 
         Ok(res)
     }

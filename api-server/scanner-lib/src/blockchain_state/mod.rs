@@ -17,7 +17,7 @@ use crate::sync::local_state::LocalBlockchainState;
 use api_server_common::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
-    ApiServerTransactionRw, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo,
+    ApiServerTransactionRw, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, Order,
     TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock,
 };
 use chainstate::{
@@ -29,11 +29,13 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, ConsensusData},
         config::ChainConfig,
+        make_order_id,
         output_value::OutputValue,
         tokens::{make_token_id, IsTokenFrozen, TokenId, TokenIssuance},
         transaction::OutPointSourceId,
         AccountCommand, AccountNonce, AccountSpending, Block, DelegationId, Destination, GenBlock,
-        Genesis, PoolId, SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        Genesis, OrderData, OrderId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Fee, Id, Idable, H256},
 };
@@ -49,9 +51,7 @@ use tx_verifier::transaction_verifier::{
     calculate_tokens_burned_in_outputs, distribute_pos_reward,
 };
 
-use self::adapter::PoSAdapter;
-
-mod adapter;
+mod pos_adapter;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BlockchainStateError {
@@ -136,13 +136,44 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
 
             logging::log::info!("Connected block: ({}, {:x})", block_height, block.get_id());
 
-            let (total_fees, tx_additional_infos) =
-                calculate_fees(&self.chain_config, &mut db_tx, &block, block_height).await?;
+            let mut total_fees = AccumulatedFee::new();
+            let mut tx_additional_infos = Vec::with_capacity(block.transactions().len());
+
+            for tx in block.transactions().iter() {
+                let (tx_fee, tx_additional_info) = calculate_tx_fee_and_collect_token_info(
+                    &self.chain_config,
+                    &mut db_tx,
+                    tx.transaction(),
+                    block_height,
+                )
+                .await?;
+
+                total_fees = total_fees.combine(tx_fee).expect("no overflow");
+                tx_additional_infos.push(tx_additional_info.clone());
+
+                update_tables_from_transaction(
+                    Arc::clone(&self.chain_config),
+                    &mut db_tx,
+                    (block_height, block_timestamp),
+                    new_median_time,
+                    tx,
+                )
+                .await
+                .expect("Unable to update tables from transaction");
+
+                let tx_info = TransactionInfo {
+                    tx: tx.clone(),
+                    additional_info: tx_additional_info,
+                };
+                db_tx
+                    .set_transaction(tx.transaction().get_id(), Some(block.get_id()), &tx_info)
+                    .await
+                    .expect("Unable to set transaction");
+            }
 
             let block_id = block.get_id();
-
             let block_with_extras = BlockWithExtraData {
-                block: WithId::take(block),
+                block: WithId::take(block.clone()),
                 tx_additional_infos,
             };
             db_tx
@@ -158,39 +189,16 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 .await
                 .expect("Unable to set block aux data");
 
-            let BlockWithExtraData {
-                block,
-                tx_additional_infos,
-            } = block_with_extras;
-
-            for (tx, additinal_info) in block.transactions().iter().zip(tx_additional_infos.iter())
-            {
-                update_tables_from_transaction(
-                    Arc::clone(&self.chain_config),
-                    &mut db_tx,
-                    (block_height, block_timestamp),
-                    new_median_time,
-                    tx,
-                )
-                .await
-                .expect("Unable to update tables from transaction");
-
-                let tx_info = TransactionInfo {
-                    tx: tx.clone(),
-                    additinal_info: additinal_info.clone(),
-                };
-                db_tx
-                    .set_transaction(tx.transaction().get_id(), Some(block.get_id()), &tx_info)
-                    .await
-                    .expect("Unable to set transaction");
-            }
+            let block_fees = total_fees
+                .map_into_block_fees(&self.chain_config, block_height)
+                .expect("no overflow");
 
             update_tables_from_block(
                 Arc::clone(&self.chain_config),
                 &mut db_tx,
                 block_height,
                 &block,
-                total_fees,
+                block_fees,
             )
             .await
             .expect("Unable to update tables from block");
@@ -345,6 +353,11 @@ async fn disconnect_tables_above_height<T: ApiServerStorageWrite>(
 
     db_tx
         .del_statistics_above_height(block_height)
+        .await
+        .expect("Unable to disconnect block");
+
+    db_tx
+        .del_orders_above_height(block_height)
         .await
         .expect("Unable to disconnect block");
 
@@ -531,77 +544,57 @@ async fn update_tables_from_block_reward<T: ApiServerStorageWrite>(
     Ok(())
 }
 
-async fn calculate_fees<T: ApiServerStorageWrite>(
+async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
     chain_config: &ChainConfig,
     db_tx: &mut T,
-    block: &Block,
+    tx: &Transaction,
     block_height: BlockHeight,
-) -> Result<(Fee, Vec<TxAdditionalInfo>), ApiServerStorageError> {
-    let new_outputs: BTreeMap<_, _> = block
-        .transactions()
+) -> Result<(AccumulatedFee, TxAdditionalInfo), ApiServerStorageError> {
+    let new_tokens: BTreeMap<_, _> = tx
+        .outputs()
         .iter()
-        .flat_map(|tx| {
-            tx.outputs().iter().enumerate().map(|(idx, out)| {
-                (
-                    UtxoOutPoint::new(
-                        OutPointSourceId::Transaction(tx.transaction().get_id()),
-                        idx as u32,
-                    ),
-                    out,
-                )
-            })
-        })
-        .collect();
-
-    let new_tokens: BTreeMap<_, _> = block
-        .transactions()
-        .iter()
-        .flat_map(|tx| {
-            tx.outputs().iter().filter_map(|out| match out {
-                TxOutput::IssueNft(token_id, _, _) => Some((*token_id, 0)),
-                TxOutput::IssueFungibleToken(data) => {
-                    let token_id = make_token_id(tx.transaction().inputs()).expect("must exist");
-                    match data.as_ref() {
-                        TokenIssuance::V1(data) => Some((token_id, data.number_of_decimals)),
-                    }
+        .filter_map(|out| match out {
+            TxOutput::IssueNft(token_id, _, _) => Some((*token_id, 0)),
+            TxOutput::IssueFungibleToken(data) => {
+                let token_id = make_token_id(tx.inputs()).expect("must exist");
+                match data.as_ref() {
+                    TokenIssuance::V1(data) => Some((token_id, data.number_of_decimals)),
                 }
-                TxOutput::CreateStakePool(_, _)
-                | TxOutput::Transfer(_, _)
-                | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::Burn(_)
-                | TxOutput::DataDeposit(_)
-                | TxOutput::DelegateStaking(_, _)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::Htlc(_, _)
-                | TxOutput::CreateOrder(_) => None,
-            })
+            }
+            TxOutput::CreateStakePool(_, _)
+            | TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::DataDeposit(_)
+            | TxOutput::DelegateStaking(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::Htlc(_, _)
+            | TxOutput::CreateOrder(_) => None,
         })
         .collect();
 
-    let mut total_fees = AccumulatedFee::new();
-    let mut tx_aditional_infos = vec![];
-    for tx in block.transactions().iter() {
-        let fee = tx_fees(chain_config, block_height, tx, db_tx, &new_outputs).await?;
-        total_fees = total_fees.combine(fee.clone()).expect("no overflow");
+    let fee = tx_fees(chain_config, block_height, tx, db_tx).await?;
 
-        let input_tasks: FuturesOrdered<_> =
-            tx.inputs().iter().map(|input| fetch_utxo(input, &new_outputs, db_tx)).collect();
-        let input_utxos: Vec<Option<TxOutput>> = input_tasks.try_collect().await?;
-
-        let token_ids: BTreeSet<_> = tx
-            .inputs()
-            .iter()
-            .zip(input_utxos.iter())
-            .filter_map(|(inp, utxo)| match inp {
+    let input_tasks: FuturesOrdered<_> =
+        tx.inputs().iter().map(|input| fetch_utxo(input, db_tx)).collect();
+    let input_utxos: Vec<Option<TxOutput>> = input_tasks.try_collect().await?;
+    let token_ids = {
+        let mut token_ids = BTreeSet::new();
+        for (inp, utxo) in tx.inputs().iter().zip(input_utxos.iter()) {
+            match inp {
                 TxInput::Utxo(_) => match utxo.as_ref().expect("must be present") {
                     TxOutput::Transfer(v, _)
                     | TxOutput::LockThenTransfer(v, _, _)
                     | TxOutput::Htlc(v, _) => match v {
-                        OutputValue::TokenV1(token_id, _) => Some(*token_id),
-                        OutputValue::Coin(_) | OutputValue::TokenV0(_) => None,
+                        OutputValue::TokenV1(token_id, _) => {
+                            token_ids.insert(*token_id);
+                        }
+                        OutputValue::Coin(_) | OutputValue::TokenV0(_) => {}
                     },
-                    TxOutput::IssueNft(token_id, _, _) => Some(*token_id),
+                    TxOutput::IssueNft(token_id, _, _) => {
+                        token_ids.insert(*token_id);
+                    }
                     TxOutput::CreateStakePool(_, _)
                     | TxOutput::Burn(_)
                     | TxOutput::DataDeposit(_)
@@ -609,9 +602,9 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::IssueFungibleToken(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::CreateOrder(_) => None, // TODO(orders)
+                    | TxOutput::CreateOrder(_) => {}
                 },
-                TxInput::Account(_) => None,
+                TxInput::Account(_) => {}
                 TxInput::AccountCommand(_, cmd) => match cmd {
                     AccountCommand::MintTokens(token_id, _)
                     | AccountCommand::FreezeToken(token_id, _)
@@ -619,47 +612,61 @@ async fn calculate_fees<T: ApiServerStorageWrite>(
                     | AccountCommand::UnfreezeToken(token_id)
                     | AccountCommand::LockTokenSupply(token_id)
                     | AccountCommand::ChangeTokenMetadataUri(token_id, _)
-                    | AccountCommand::ChangeTokenAuthority(token_id, _) => Some(*token_id),
-                    AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
+                    | AccountCommand::ChangeTokenAuthority(token_id, _) => {
+                        token_ids.insert(*token_id);
+                    }
+                    AccountCommand::ConcludeOrder(order_id)
+                    | AccountCommand::FillOrder(order_id, _, _) => {
+                        let order = db_tx.get_order(*order_id).await?.expect("must exist");
+                        match order.ask_currency {
+                            CoinOrTokenId::Coin => {}
+                            CoinOrTokenId::TokenId(id) => {
+                                token_ids.insert(id);
+                            }
+                        };
+                        match order.give_currency {
+                            CoinOrTokenId::Coin => {}
+                            CoinOrTokenId::TokenId(id) => {
+                                token_ids.insert(id);
+                            }
+                        };
+                    }
                 },
-            })
-            .collect();
+            };
+        }
+        token_ids
+    };
 
-        let token_tasks: FuturesOrdered<_> = token_ids
-            .iter()
-            .map(|token_id| token_decimals(*token_id, &new_tokens, db_tx))
-            .collect();
-        let token_decimals: BTreeMap<TokenId, u8> = token_tasks.try_collect().await?;
+    let token_tasks: FuturesOrdered<_> = token_ids
+        .iter()
+        .map(|token_id| token_decimals(*token_id, &new_tokens, db_tx))
+        .collect();
+    let token_decimals: BTreeMap<TokenId, u8> = token_tasks.try_collect().await?;
 
-        let tx_info = TxAdditionalInfo {
-            fee: fee.map_into_block_fees(chain_config, block_height).expect("no overflow").0,
-            input_utxos,
-            token_decimals,
-        };
-        tx_aditional_infos.push(tx_info);
-    }
-    let total_fees =
-        total_fees.map_into_block_fees(chain_config, block_height).expect("no overflow");
+    let tx_aditional_infos = TxAdditionalInfo {
+        fee: fee
+            .clone()
+            .map_into_block_fees(chain_config, block_height)
+            .expect("no overflow")
+            .0,
+        input_utxos,
+        token_decimals,
+    };
 
-    Ok((total_fees, tx_aditional_infos))
+    Ok((fee, tx_aditional_infos))
 }
 
 async fn fetch_utxo<T: ApiServerStorageRead>(
     input: &TxInput,
-    new_outputs: &BTreeMap<UtxoOutPoint, &TxOutput>,
     db_tx: &T,
 ) -> Result<Option<TxOutput>, ApiServerStorageError> {
     match input {
         TxInput::Utxo(outpoint) => {
-            let utxo = if let Some(utxo) = new_outputs.get(outpoint) {
-                (*utxo).clone()
-            } else {
-                db_tx
-                    .get_utxo(outpoint.clone())
-                    .await?
-                    .map(|utxo| utxo.into_output())
-                    .expect("must be present")
-            };
+            let utxo = db_tx
+                .get_utxo(outpoint.clone())
+                .await?
+                .map(|utxo| utxo.into_output())
+                .expect("must be present");
             Ok(Some(utxo))
         }
         TxInput::Account(_) | TxInput::AccountCommand(_, _) => Ok(None),
@@ -761,17 +768,15 @@ impl TokensAccountingView for StubTokensAccounting {
 async fn tx_fees<T: ApiServerStorageRead>(
     chain_config: &ChainConfig,
     block_height: BlockHeight,
-    tx: &SignedTransaction,
+    tx: &Transaction,
     db_tx: &T,
-    new_outputs: &BTreeMap<UtxoOutPoint, &TxOutput>,
 ) -> Result<AccumulatedFee, ApiServerStorageError> {
-    let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs(), new_outputs).await?;
+    let inputs_utxos = collect_inputs_utxos(db_tx, tx.inputs()).await?;
     let pools = prefetch_pool_data(&inputs_utxos, db_tx).await?;
     let pos_accounting_adapter = PoSAccountingAdapterToCheckFees { pools };
     let tokens_view = StubTokensAccounting;
 
-    // Provide empty stores for orders as they are irrelevant for fee calculation
-    let orders_store = orders_accounting::InMemoryOrdersAccounting::new();
+    let orders_store = prefetch_orders(tx.inputs(), db_tx).await?;
     let orders_db = orders_accounting::OrdersAccountingDB::new(&orders_store);
 
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
@@ -823,24 +828,62 @@ async fn prefetch_pool_data<T: ApiServerStorageRead>(
     Ok(pools)
 }
 
+async fn prefetch_orders<T: ApiServerStorageRead>(
+    inputs: &[TxInput],
+    db_tx: &T,
+) -> Result<orders_accounting::InMemoryOrdersAccounting, ApiServerStorageError> {
+    let mut orders_data = BTreeMap::<OrderId, OrderData>::new();
+    let mut ask_balances = BTreeMap::<OrderId, Amount>::new();
+    let mut give_balances = BTreeMap::<OrderId, Amount>::new();
+
+    for input in inputs {
+        match input {
+            TxInput::Utxo(_) | TxInput::Account(_) => {}
+            TxInput::AccountCommand(_, account_command) => match account_command {
+                AccountCommand::MintTokens(_, _)
+                | AccountCommand::UnmintTokens(_)
+                | AccountCommand::LockTokenSupply(_)
+                | AccountCommand::FreezeToken(_, _)
+                | AccountCommand::UnfreezeToken(_)
+                | AccountCommand::ChangeTokenAuthority(_, _)
+                | AccountCommand::ChangeTokenMetadataUri(_, _) => {}
+                AccountCommand::FillOrder(order_id, _, _)
+                | AccountCommand::ConcludeOrder(order_id) => {
+                    let order = db_tx.get_order(*order_id).await?.expect("must be present ");
+                    ask_balances.insert(*order_id, order.ask_balance);
+                    give_balances.insert(*order_id, order.give_balance);
+                    let ask = match order.ask_currency {
+                        CoinOrTokenId::Coin => OutputValue::Coin(order.initially_asked),
+                        CoinOrTokenId::TokenId(token_id) => {
+                            OutputValue::TokenV1(token_id, order.initially_asked)
+                        }
+                    };
+                    let give = match order.give_currency {
+                        CoinOrTokenId::Coin => OutputValue::Coin(order.initially_given),
+                        CoinOrTokenId::TokenId(token_id) => {
+                            OutputValue::TokenV1(token_id, order.initially_given)
+                        }
+                    };
+                    let order_data = OrderData::new(order.conclude_destination.clone(), ask, give);
+                    orders_data.insert(*order_id, order_data);
+                }
+            },
+        }
+    }
+    Ok(orders_accounting::InMemoryOrdersAccounting::from_values(
+        orders_data,
+        ask_balances,
+        give_balances,
+    ))
+}
+
 async fn collect_inputs_utxos<T: ApiServerStorageRead>(
     db_tx: &T,
     inputs: &[TxInput],
-    new_outputs: &BTreeMap<UtxoOutPoint, &TxOutput>,
 ) -> Result<Vec<Option<TxOutput>>, ApiServerStorageError> {
     let mut outputs = Vec::with_capacity(inputs.len());
     for input in inputs {
-        let output = match input {
-            TxInput::Utxo(outpoint) => {
-                if let Some(output) = new_outputs.get(outpoint) {
-                    Some((*output).clone())
-                } else {
-                    db_tx.get_utxo(outpoint.clone()).await?.map(|utxo| utxo.into_output())
-                }
-            }
-            TxInput::Account(_) | TxInput::AccountCommand(_, _) => None,
-        };
-
+        let output = fetch_utxo(input, db_tx).await?;
         outputs.push(output);
     }
 
@@ -890,7 +933,7 @@ async fn update_tables_from_consensus_data<T: ApiServerStorageWrite>(
                 .expect("Pool should exist");
 
             let delegation_shares = db_tx.get_pool_delegations(pool_id).await?;
-            let mut adapter = PoSAdapter::new(pool_id, pool_data, &delegation_shares);
+            let mut adapter = pos_adapter::PoSAdapter::new(pool_id, pool_data, &delegation_shares);
 
             let reward_distribution_version = chain_config
                 .as_ref()
@@ -1164,8 +1207,17 @@ async fn update_tables_from_transaction_inputs<T: ApiServerStorageWrite>(
                     )
                     .await;
                 }
-                AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {
-                    // TODO(orders)
+                AccountCommand::FillOrder(order_id, fill_amount_in_ask_currency, _) => {
+                    let order = db_tx.get_order(*order_id).await?.expect("must exist");
+                    let order = order.fill(*fill_amount_in_ask_currency);
+
+                    db_tx.set_order_at_height(*order_id, &order, block_height).await?;
+                }
+                AccountCommand::ConcludeOrder(order_id) => {
+                    let order = db_tx.get_order(*order_id).await?.expect("must exist");
+                    let order = order.conclude();
+
+                    db_tx.set_order_at_height(*order_id, &order, block_height).await?;
                 }
             },
             TxInput::Account(outpoint) => {
@@ -1760,8 +1812,35 @@ async fn update_tables_from_transaction_outputs<T: ApiServerStorageWrite>(
                     .await
                     .expect("Unable to set utxo");
             }
-            TxOutput::CreateOrder(_) => {
-                // TODO(orders)
+            TxOutput::CreateOrder(order_data) => {
+                if let Some(input0_outpoint) = inputs.iter().find_map(|input| input.utxo_outpoint())
+                {
+                    let amount_and_currency = |v: &OutputValue| match v {
+                        OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
+                        OutputValue::TokenV1(id, amount) => (CoinOrTokenId::TokenId(*id), *amount),
+                        OutputValue::TokenV0(_) => panic!("unsupported token"),
+                    };
+
+                    let (ask_currency, ask_balance) = amount_and_currency(order_data.ask());
+                    let (give_currency, give_balance) = amount_and_currency(order_data.give());
+
+                    let order = Order {
+                        creation_block_height: block_height,
+                        conclude_destination: order_data.conclude_key().clone(),
+                        initially_asked: ask_balance,
+                        initially_given: give_balance,
+                        ask_balance,
+                        ask_currency,
+                        give_balance,
+                        give_currency,
+                        next_nonce: AccountNonce::new(0),
+                    };
+
+                    db_tx
+                        .set_order_at_height(make_order_id(input0_outpoint), &order, block_height)
+                        .await
+                        .expect("Unable to set delegation data");
+                }
             }
         }
     }

@@ -123,7 +123,7 @@ async fn ok(#[case] seed: Seed) {
                         to_tx_json_with_block_info(
                             &TransactionInfo {
                                 tx: signed_transaction.clone(),
-                                additinal_info: TxAdditionalInfo {
+                                additional_info: TxAdditionalInfo {
                                     input_utxos: utxos,
                                     fee: Amount::ZERO,
                                     token_decimals: BTreeMap::new(),

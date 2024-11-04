@@ -27,8 +27,8 @@ use common::{
             IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, NftIssuance, RPCFungibleTokenInfo,
             TokenId, TokenTotalSupply,
         },
-        AccountNonce, Block, ChainConfig, DelegationId, Destination, PoolId, SignedTransaction,
-        Transaction, TxOutput, UtxoOutPoint,
+        AccountNonce, Block, ChainConfig, DelegationId, Destination, OrderId, PoolId,
+        SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -172,6 +172,59 @@ impl Delegation {
             balance: (self.balance - amount).expect("not underflow"),
             next_nonce: nonce.increment().expect("no overflow"),
             creation_block_height: self.creation_block_height,
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
+pub struct Order {
+    pub creation_block_height: BlockHeight,
+    pub conclude_destination: Destination,
+
+    pub give_currency: CoinOrTokenId,
+    pub initially_given: Amount,
+    pub give_balance: Amount,
+
+    pub ask_currency: CoinOrTokenId,
+    pub initially_asked: Amount,
+    pub ask_balance: Amount,
+
+    pub next_nonce: AccountNonce,
+}
+
+impl Order {
+    pub fn fill(self, fill_amount_in_ask_currency: Amount) -> Self {
+        let filled_amount = orders_accounting::calculate_filled_amount(
+            self.ask_balance,
+            self.give_balance,
+            fill_amount_in_ask_currency,
+        )
+        .expect("must succeed");
+
+        Self {
+            creation_block_height: self.creation_block_height,
+            conclude_destination: self.conclude_destination,
+            give_currency: self.give_currency,
+            initially_given: self.initially_given,
+            give_balance: (self.give_balance - filled_amount).expect("no overflow"),
+            ask_currency: self.ask_currency,
+            initially_asked: self.initially_asked,
+            ask_balance: (self.ask_balance - fill_amount_in_ask_currency).expect("no overflow"),
+            next_nonce: self.next_nonce.increment().expect("no overflow"),
+        }
+    }
+
+    pub fn conclude(self) -> Self {
+        Self {
+            creation_block_height: self.creation_block_height,
+            conclude_destination: self.conclude_destination,
+            give_currency: self.give_currency,
+            initially_given: self.initially_given,
+            give_balance: Amount::ZERO,
+            ask_currency: self.ask_currency,
+            initially_asked: self.initially_asked,
+            ask_balance: Amount::ZERO,
+            next_nonce: self.next_nonce.increment().expect("no overflow"),
         }
     }
 }
@@ -372,7 +425,7 @@ pub struct TxAdditionalInfo {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct TransactionInfo {
     pub tx: SignedTransaction,
-    pub additinal_info: TxAdditionalInfo,
+    pub additional_info: TxAdditionalInfo,
 }
 
 pub struct PoolBlockStats {
@@ -547,6 +600,8 @@ pub trait ApiServerStorageRead: Sync {
         &self,
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError>;
+
+    async fn get_order(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]
@@ -702,6 +757,18 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     ) -> Result<(), ApiServerStorageError>;
 
     async fn del_statistics_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn set_order_at_height(
+        &mut self,
+        order_id: OrderId,
+        order: &Order,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError>;
+
+    async fn del_orders_above_height(
         &mut self,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError>;

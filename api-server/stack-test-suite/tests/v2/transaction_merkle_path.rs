@@ -114,7 +114,7 @@ async fn get_block_failed(#[case] seed: Seed) {
 
                 let tx_info = TransactionInfo {
                     tx: signed_transaction,
-                    additinal_info: TxAdditionalInfo {
+                    additional_info: TxAdditionalInfo {
                         fee: Amount::from_atoms(rng.gen_range(0..100)),
                         input_utxos: vec![],
                         token_decimals: BTreeMap::new(),
@@ -243,7 +243,7 @@ async fn transaction_not_part_of_block(#[case] seed: Seed) {
 
                 let tx_info = TransactionInfo {
                     tx: signed_transaction,
-                    additinal_info: TxAdditionalInfo {
+                    additional_info: TxAdditionalInfo {
                         fee: Amount::from_atoms(rng.gen_range(0..100)),
                         input_utxos: vec![],
                         token_decimals: BTreeMap::new(),

@@ -217,7 +217,6 @@ impl<'a> RandomTxMaker<'a> {
         orders_store: &'a InMemoryOrdersAccounting,
         staking_pool: Option<PoolId>,
         account_nonce_getter: Box<dyn Fn(AccountType) -> Option<AccountNonce> + 'a>,
-        support_orders: bool, // TODO: remove this when api-server supports orders
     ) -> Self {
         Self {
             chainstate,
@@ -229,7 +228,7 @@ impl<'a> RandomTxMaker<'a> {
             account_nonce_getter,
             account_nonce_tracker: BTreeMap::new(),
             token_can_be_issued: true,
-            order_can_be_created: support_orders,
+            order_can_be_created: true,
             stake_pool_can_be_created: true,
             delegation_can_be_created: true,
             account_command_used: false,

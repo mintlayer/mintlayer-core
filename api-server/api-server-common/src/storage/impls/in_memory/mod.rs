@@ -18,13 +18,14 @@ pub mod transactional;
 use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorageError, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-    LockedUtxo, PoolBlockStats, TransactionInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+    LockedUtxo, Order, PoolBlockStats, TransactionInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
 };
 use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        Block, ChainConfig, DelegationId, Destination, Genesis, PoolId, Transaction, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, Genesis, OrderId, PoolId, Transaction,
+        UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -57,6 +58,7 @@ struct ApiServerInMemoryStorage {
     nft_token_issuances: BTreeMap<TokenId, BTreeMap<BlockHeight, NftIssuance>>,
     statistics:
         BTreeMap<CoinOrTokenStatistic, BTreeMap<CoinOrTokenId, BTreeMap<BlockHeight, Amount>>>,
+    orders_table: BTreeMap<OrderId, BTreeMap<BlockHeight, Order>>,
     best_block: BlockAuxData,
     genesis_block: Arc<WithId<Genesis>>,
     storage_version: u32,
@@ -81,6 +83,7 @@ impl ApiServerInMemoryStorage {
             fungible_token_issuances: BTreeMap::new(),
             nft_token_issuances: BTreeMap::new(),
             statistics: BTreeMap::new(),
+            orders_table: BTreeMap::new(),
             genesis_block: chain_config.genesis_block().clone(),
             best_block: BlockAuxData::new(
                 chain_config.genesis_block_id(),
@@ -175,7 +178,7 @@ impl ApiServerInMemoryStorage {
                             *block_aux,
                             TransactionInfo {
                                 tx: tx.clone(),
-                                additinal_info: additinal_data.clone(),
+                                additional_info: additinal_data.clone(),
                             },
                         )
                     },
@@ -332,6 +335,12 @@ impl ApiServerInMemoryStorage {
                     .then_some((delegation_id.to_owned(), delegation.clone()))
             })
             .collect())
+    }
+
+    fn get_order(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError> {
+        let order_result = self.orders_table.get(&order_id);
+        let order = order_result.and_then(|order| order.last_key_value().map(|(_, v)| v.clone()));
+        Ok(order)
     }
 
     fn get_latest_pool_ids(
@@ -658,6 +667,7 @@ impl ApiServerInMemoryStorage {
         self.address_utxos.clear();
         self.fungible_token_issuances.clear();
         self.nft_token_issuances.clear();
+        self.orders_table.clear();
 
         self.initialize_storage(chain_config)
     }
@@ -801,6 +811,16 @@ impl ApiServerInMemoryStorage {
         Ok(())
     }
 
+    fn set_order_at_height(
+        &mut self,
+        order_id: OrderId,
+        order: Order,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.orders_table.entry(order_id).or_default().insert(block_height, order);
+        Ok(())
+    }
+
     fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
@@ -866,6 +886,18 @@ impl ApiServerInMemoryStorage {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.pool_data_table.retain(|_, v| {
+            v.retain(|k, _| k <= &block_height);
+            !v.is_empty()
+        });
+
+        Ok(())
+    }
+
+    fn del_orders_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.orders_table.retain(|_, v| {
             v.retain(|k, _| k <= &block_height);
             !v.is_empty()
         });

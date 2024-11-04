@@ -19,7 +19,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        Block, ChainConfig, DelegationId, Destination, PoolId, Transaction, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, OrderId, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -30,7 +30,7 @@ use crate::storage::{
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo,
-        CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, PoolBlockStats,
+        CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, Order, PoolBlockStats,
         TransactionInfo, Utxo, UtxoWithExtraInfo,
     },
 };
@@ -320,6 +320,29 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         conn.del_statistics_above_height(block_height).await?;
+
+        Ok(())
+    }
+
+    async fn set_order_at_height(
+        &mut self,
+        order_id: OrderId,
+        order: &Order,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.set_order_at_height(order_id, order, block_height, &self.chain_config)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn del_orders_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        conn.del_orders_above_height(block_height).await?;
 
         Ok(())
     }
@@ -646,6 +669,13 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError> {
         let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_all_statistic(coin_or_token_id).await?;
+
+        Ok(res)
+    }
+
+    async fn get_order(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError> {
+        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_order(order_id, &self.chain_config).await?;
 
         Ok(res)
     }

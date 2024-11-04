@@ -19,7 +19,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{NftIssuance, TokenId},
-        Block, ChainConfig, DelegationId, Destination, PoolId, Transaction, UtxoOutPoint,
+        Block, ChainConfig, DelegationId, Destination, OrderId, PoolId, Transaction, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id},
 };
@@ -28,7 +28,7 @@ use pos_accounting::PoolData;
 use crate::storage::storage_api::{
     block_aux_data::{BlockAuxData, BlockWithExtraData},
     ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite, BlockInfo,
-    CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, PoolBlockStats,
+    CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, Order, PoolBlockStats,
     TransactionInfo, Utxo, UtxoWithExtraInfo,
 };
 
@@ -253,6 +253,22 @@ impl<'t> ApiServerStorageWrite for ApiServerInMemoryStorageTransactionalRw<'t> {
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
         self.transaction.del_statistics_above_height(block_height)
+    }
+
+    async fn set_order_at_height(
+        &mut self,
+        order_id: OrderId,
+        order: &Order,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.set_order_at_height(order_id, order.clone(), block_height)
+    }
+
+    async fn del_orders_above_height(
+        &mut self,
+        block_height: BlockHeight,
+    ) -> Result<(), ApiServerStorageError> {
+        self.transaction.del_orders_above_height(block_height)
     }
 }
 
@@ -481,5 +497,9 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
         coin_or_token_id: CoinOrTokenId,
     ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError> {
         self.transaction.get_all_statistic(coin_or_token_id)
+    }
+
+    async fn get_order(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError> {
+        self.transaction.get_order(order_id)
     }
 }

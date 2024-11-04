@@ -28,9 +28,10 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
+chainstate-storage = { path = "../../chainstate/storage", features = ["expensive-reads"] }
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
 crypto = { path = "../../crypto" }
-test-utils = { path = "../../test-utils" }
 serialization = { path = "../../serialization" }
+test-utils = { path = "../../test-utils" }
 
 rstest.workspace = true

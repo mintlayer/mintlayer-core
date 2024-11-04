@@ -27,6 +27,7 @@ mod feerate;
 mod helpers;
 mod htlc;
 mod nft;
+mod orders;
 mod pool;
 mod pool_block_stats;
 mod pools;

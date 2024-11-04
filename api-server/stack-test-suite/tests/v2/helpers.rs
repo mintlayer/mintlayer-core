@@ -141,7 +141,6 @@ pub fn stake_delegation(
     (amount_to_delegate, transfer_outpoint, block)
 }
 
-#[allow(dead_code)]
 pub struct IssueAndMintTokensResult {
     pub token_id: TokenId,
 
