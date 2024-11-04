@@ -25,7 +25,7 @@ use api_server_common::storage::{
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorage, ApiServerStorageRead, ApiServerStorageWrite, ApiServerTransactionRw,
-        BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo,
+        BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, Order,
         TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
     },
 };
@@ -45,7 +45,7 @@ use common::{
         tokens::{
             IsTokenFreezable, IsTokenFrozen, NftIssuance, NftIssuanceV0, TokenId, TokenTotalSupply,
         },
-        AccountNonce, Block, DelegationId, Destination, OutPointSourceId, PoolId,
+        AccountNonce, Block, DelegationId, Destination, OrderId, OutPointSourceId, PoolId,
         SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
@@ -1361,6 +1361,44 @@ where
         assert!(returned_amount.is_none());
 
         db_tx.commit().await.unwrap();
+    }
+
+    // test orders
+    {
+        let db_tx = storage.transaction_ro().await.unwrap();
+
+        let random_token_id = TokenId::new(H256::random_using(&mut rng));
+
+        let random_order_id = OrderId::new(H256::random_using(&mut rng));
+        let order = db_tx.get_order(random_order_id).await.unwrap();
+        assert!(order.is_none());
+
+        drop(db_tx);
+
+        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let conclude_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
+        let block_height = BlockHeight::new(rng.gen_range(1..100));
+        let mut random_amount = || Amount::from_atoms(rng.gen_range(1000..10000));
+
+        let order = Order {
+            creation_block_height: block_height,
+            conclude_destination,
+            give_currency: CoinOrTokenId::TokenId(random_token_id),
+            initially_given: random_amount(),
+            give_balance: random_amount(),
+            ask_currency: CoinOrTokenId::Coin,
+            initially_asked: random_amount(),
+            ask_balance: random_amount(),
+            next_nonce: AccountNonce::new(rng.gen::<u64>()),
+        };
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
+
+        db_tx.set_order_at_height(random_order_id, &order, block_height).await.unwrap();
+
+        let returned_order = db_tx.get_order(random_order_id).await.unwrap().unwrap();
+
+        assert_eq!(returned_order, order);
     }
 
     Ok(())

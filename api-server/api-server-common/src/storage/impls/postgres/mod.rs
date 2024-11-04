@@ -54,12 +54,12 @@ impl TransactionalApiServerPostgresStorage {
         host: &str,
         port: u16,
         user: &str,
-        passsword: Option<&str>,
+        password: Option<&str>,
         database: Option<&str>,
         max_connections: u32,
         chain_config: Arc<ChainConfig>,
     ) -> Result<Self, ApiServerStorageError> {
-        let password_part = match passsword {
+        let password_part = match password {
             Some(p) => format!("password={}", p),
             None => "".to_string(),
         };

@@ -38,7 +38,7 @@ async fn create_fill_conclude_order(#[case] seed: Seed) {
                     .with_chain_config(chain_config.clone())
                     .build();
 
-                // Issue and mint some tokens to lock in htlc
+                // Issue and mint some tokens to create an order with different currencies
                 let issue_and_mint_result =
                     helpers::issue_and_mint_tokens_from_genesis(&mut rng, &mut tf);
 

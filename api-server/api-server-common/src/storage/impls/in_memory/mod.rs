@@ -339,11 +339,8 @@ impl ApiServerInMemoryStorage {
 
     fn get_order(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError> {
         let order_result = self.orders_table.get(&order_id);
-        let order = match order_result {
-            Some(data) => data,
-            None => return Ok(None),
-        };
-        Ok(order.last_key_value().map(|(_, v)| v.clone()))
+        let order = order_result.and_then(|order| order.last_key_value().map(|(_, v)| v.clone()));
+        Ok(order)
     }
 
     fn get_latest_pool_ids(
@@ -817,13 +814,10 @@ impl ApiServerInMemoryStorage {
     fn set_order_at_height(
         &mut self,
         order_id: OrderId,
-        order: &Order,
+        order: Order,
         block_height: BlockHeight,
     ) -> Result<(), ApiServerStorageError> {
-        self.orders_table
-            .entry(order_id)
-            .or_default()
-            .insert(block_height, order.clone());
+        self.orders_table.entry(order_id).or_default().insert(block_height, order);
         Ok(())
     }
 

@@ -137,7 +137,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             logging::log::info!("Connected block: ({}, {:x})", block_height, block.get_id());
 
             let mut total_fees = AccumulatedFee::new();
-            let mut tx_additional_infos = vec![];
+            let mut tx_additional_infos = Vec::with_capacity(block.transactions().len());
 
             for tx in block.transactions().iter() {
                 let (tx_fee, tx_additional_info) = calculate_tx_fee_and_collect_token_info(
