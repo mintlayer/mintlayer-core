@@ -67,7 +67,7 @@ where
     try_all_single_bit_mutations(obj).filter_map(Result::ok)
 }
 
-pub fn get_random_non_ascii_alphanumeric_byte(rng: &mut (impl Rng + ?Sized)) -> u8 {
+pub fn get_random_non_ascii_alphanumeric_byte(rng: &mut impl Rng) -> u8 {
     for _ in 0..1000 {
         let random_byte = rng.gen::<u8>();
         if !random_byte.is_ascii_alphanumeric() {
@@ -79,7 +79,7 @@ pub fn get_random_non_ascii_alphanumeric_byte(rng: &mut (impl Rng + ?Sized)) -> 
 }
 
 pub fn random_ascii_alphanumeric_string<R: SampleRange<usize>>(
-    rng: &mut (impl Rng + ?Sized),
+    rng: &mut impl Rng,
     range_len: R,
 ) -> String {
     use randomness::distributions::{Alphanumeric, DistString};
@@ -90,7 +90,7 @@ pub fn random_ascii_alphanumeric_string<R: SampleRange<usize>>(
     Alphanumeric.sample_string(rng, len)
 }
 
-pub fn gen_text_with_non_ascii(c: u8, rng: &mut (impl Rng + ?Sized), max_len: usize) -> Vec<u8> {
+pub fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec<u8> {
     assert!(!c.is_ascii_alphanumeric());
     let text_len = 1 + rng.gen::<usize>() % max_len;
     let random_index_to_replace = rng.gen::<usize>() % text_len;
@@ -107,7 +107,7 @@ pub fn gen_text_with_non_ascii(c: u8, rng: &mut (impl Rng + ?Sized), max_len: us
     token_ticker
 }
 
-pub fn split_value(rng: &mut (impl Rng + ?Sized), value: u128) -> Vec<u128> {
+pub fn split_value(rng: &mut impl Rng, value: u128) -> Vec<u128> {
     let mut numbers = vec![0, value];
     let n = rng.gen_range(0..10);
 
