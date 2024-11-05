@@ -1,0 +1,24 @@
+[package]
+name = "trezor-common"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+num-derive.workspace = true
+num-traits = { version = "0.2.18", default-features = false, features = ["libm"] }
+parity-scale-codec = { version = "3.1", default-features = false, features = ["derive", "chain-error"] }
+
+[dev-dependencies]
+test-utils = { path = "../test-utils" }
+
+bitcoin-bech32.workspace = true
+expect-test.workspace = true
+indoc.workspace = true
+proptest.workspace = true
+rstest.workspace = true
+serde_test.workspace = true
+serial_test.workspace = true
