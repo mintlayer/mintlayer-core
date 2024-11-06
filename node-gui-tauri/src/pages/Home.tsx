@@ -21,7 +21,7 @@ import WalletIcon from "../assets/wallet_icon.png";
 import AccountIcom from "../assets/account_icon.png";
 import SummaryTab from "../components/Summary";
 import NetworkingTab from "../components/Networking";
-import { WalletType } from "../types/Types";
+import { WalletInfo, WalletType } from "../types/Types";
 import WalletActions from "../components/WalletActions";
 import Staking from "../components/Staking";
 
@@ -49,6 +49,7 @@ function Home() {
     },
   ];
 
+  const [walletsInfo, setWalletsInfo] = useState<WalletInfo[]>([]);
   const [netMode, setNetMod] = useState("");
   const [walletMode, setWalletMode] = useState("");
   const [currentWallet, setCurrentWallet] = useState<WalletType | undefined>(
@@ -124,16 +125,21 @@ function Home() {
         setLoading(true);
 
         try {
-          const walletInfo = await invoke("add_create_wallet_wrapper", {
-            request: {
-              file_path: path,
-              mnemonic: mnemonic,
-              import: true,
-              wallet_type: walletMode,
-            },
-          });
+          const walletInfo: WalletInfo = await invoke(
+            "add_create_wallet_wrapper",
+            {
+              request: {
+                file_path: path,
+                mnemonic: mnemonic,
+                import: true,
+                wallet_type: walletMode,
+              },
+            }
+          );
 
           if (walletInfo) {
+            console.log("wallet info is: ", walletInfo);
+            setWalletsInfo([...walletsInfo, walletInfo]);
             notify("Wallet created successfully!", "success");
           } else {
             notify("Error occured while creating wallet!", "error");
@@ -171,16 +177,20 @@ function Home() {
         setLoading(true);
 
         try {
-          const walletInfo = await invoke("add_create_wallet_wrapper", {
-            request: {
-              file_path: path,
-              mnemonic: mnemonic,
-              import: false,
-              wallet_type: walletMode,
-            },
-          });
+          const walletInfo: WalletInfo = await invoke(
+            "add_create_wallet_wrapper",
+            {
+              request: {
+                file_path: path,
+                mnemonic: mnemonic,
+                import: false,
+                wallet_type: walletMode,
+              },
+            }
+          );
 
           if (walletInfo) {
+            setWalletsInfo([...walletsInfo, walletInfo]);
             notify("Wallet recovered successfully!", "success");
           } else {
             notify("Error occured while recovering wallet!", "error");
@@ -222,13 +232,15 @@ function Home() {
       });
       if (filePath) {
         setLoading(true);
-        const walletInfo = await invoke("open_wallet_wrapper", {
+        const walletInfo: WalletInfo = await invoke("add_open_wallet_wrapper", {
           request: {
             file_path: filePath,
             wallet_type: walletMode,
           },
         });
         if (walletInfo) {
+          console.log(walletInfo);
+          setWalletsInfo([...walletsInfo, walletInfo]);
           notify("Wallet opened successfully", "success");
         } else {
           notify("Wallet open failed.", "error");
@@ -240,7 +252,7 @@ function Home() {
     }
   };
 
-  const exit = async () => {
+  const handleExit = async () => {
     await exit();
   };
 
@@ -424,7 +436,7 @@ function Home() {
                       Open {walletMode} Wallet
                     </button>
                     <button
-                      onClick={() => exit()}
+                      onClick={() => handleExit()}
                       className="w-full text-[#ff0000] rounded transition border-none py-2 px-1 shadow-none text-left"
                     >
                       Exit
