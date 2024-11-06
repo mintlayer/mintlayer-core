@@ -21,7 +21,7 @@ import WalletIcon from "../assets/wallet_icon.png";
 import AccountIcom from "../assets/account_icon.png";
 import SummaryTab from "../components/Summary";
 import NetworkingTab from "../components/Networking";
-import { WalletInfo, WalletType } from "../types/Types";
+import { AccountType, WalletInfo, WalletType } from "../types/Types";
 import WalletActions from "../components/WalletActions";
 import Staking from "../components/Staking";
 
@@ -52,12 +52,12 @@ function Home() {
   const [walletsInfo, setWalletsInfo] = useState<WalletInfo[]>([]);
   const [netMode, setNetMod] = useState("");
   const [walletMode, setWalletMode] = useState("");
-  const [currentWallet, setCurrentWallet] = useState<WalletType | undefined>(
-    wallets?.[0]
+  const [currentWallet, setCurrentWallet] = useState<WalletInfo | undefined>(
+    walletsInfo?.[0]
   );
   const [currentTab, setCurrentTab] = useState("summary");
   const [activeTab, setActiveTab] = useState("transactions");
-  const [currentAccount, setCurrentAccount] = useState("");
+  const [currentAccount, setCurrentAccount] = useState<AccountType>();
   const [mnemonic, setMnemonic] = useState("");
 
   const [showMnemonicModal, setShowMnemonicModal] = useState(false);
@@ -82,6 +82,20 @@ function Home() {
     };
     init_node();
   }, [netMode, walletMode]);
+
+  useEffect(() => {
+    if (!currentWallet) {
+      setCurrentWallet(walletsInfo[0]);
+    }
+  }, [walletsInfo]);
+
+  useEffect(() => {
+    if (!currentAccount) {
+      setCurrentAccount(
+        Object.values(currentWallet?.accounts ? currentWallet.accounts : {})[0]
+      );
+    }
+  }, [currentWallet]);
 
   const notify = (message: string, type: string) => {
     console.log("notification is displayed");
@@ -259,7 +273,7 @@ function Home() {
   return (
     <div className="home-page">
       <ToastContainer />
-      {loading && (
+      {!showMnemonicModal && !showRecoverWalletModal && loading && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="absolute inset-0 bg-black opacity-50"></div>
           <div className="bg-opacity-50 z-10 p-6 max-w-lg mx-auto relative space-y-4">
@@ -443,27 +457,37 @@ function Home() {
                     </button>
                     <hr className="my-12 h-[2px] bg-gradient-to-r from-transparent via-neutral-500 to-transparent opacity-25 dark:via-neutral-800" />
                   </>
-                  {wallets.length !== 0 && (
+                  {walletsInfo.length !== 0 && (
                     <>
                       <div className="relative inline-block flex items-center justify-center space-x-2">
                         <img src={WalletIcon} alt="wallet_ico" />
                         <select
-                          value={currentWallet?.wallet_id}
-                          onChange={(e) =>
-                            setCurrentWallet(
-                              wallets.find(
-                                (wallet) => wallet.wallet_id === e?.target.value
-                              )
-                            )
+                          value={
+                            currentWallet?.wallet_id
+                              ? currentWallet.wallet_id
+                              : ""
                           }
+                          onChange={(e) => {
+                            setCurrentWallet(
+                              walletsInfo.find(
+                                (wallet) => wallet.wallet_id == e?.target.value
+                              )
+                            );
+                            console.log(
+                              "current wallet id is ====>",
+                              e.target.value
+                            );
+                          }}
                           className="block w-[16vw] bg-white px-2 border-gray-300 text-gray-700 py-2  rounded-lg shadow-sm focus:outline-none  "
                         >
-                          {wallets.map((wallet) => (
+                          {walletsInfo.map((wallet) => (
                             <option
                               key={wallet.wallet_id}
                               value={wallet.wallet_id}
                             >
-                              {wallet.wallet_id}
+                              {wallet.path.substring(
+                                wallet.path.lastIndexOf("\\") + 1
+                              )}
                             </option>
                           ))}
                         </select>
@@ -476,16 +500,29 @@ function Home() {
                           <img src={AccountIcom} alt="wallet_ico" />
                         </button>
                         <select
-                          onChange={(e) => setCurrentAccount(e?.target.value)}
-                          value={currentAccount}
+                          onChange={(e) =>
+                            setCurrentAccount(
+                              Object.values(
+                                currentWallet?.accounts
+                                  ? currentWallet.accounts
+                                  : {}
+                              )[parseInt(e.target.value)]
+                            )
+                          }
+                          value={
+                            currentAccount?.name ? currentAccount.name : ""
+                          }
                           className="block w-[16vw] bg-white px-2 w-[14vw] border-gray-300 text-gray-700 py-2  rounded-lg shadow-sm focus:outline-none  "
                         >
-                          {currentWallet?.accounts.map((account) => (
-                            <option
-                              key={account.account_id}
-                              value={account.account_id}
-                            >
-                              {account.account_id}
+                          {Object.entries(
+                            (currentWallet ? currentWallet : walletsInfo[0])
+                              ?.accounts
+                              ? (currentWallet ? currentWallet : walletsInfo[0])
+                                  .accounts
+                              : {}
+                          ).map(([index, account]) => (
+                            <option key={index} value={account.name}>
+                              Account {index}
                             </option>
                           ))}
                         </select>
@@ -594,6 +631,7 @@ function Home() {
                     <WalletActions
                       showNewAccountModal={showNewAccountModal}
                       activeTab={activeTab}
+                      transactions={currentAccount?.transaction_list}
                     />
                   )}
                   {currentTab === "staking" && <Staking />}

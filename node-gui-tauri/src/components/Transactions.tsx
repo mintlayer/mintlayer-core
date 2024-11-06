@@ -1,81 +1,12 @@
 import { AiOutlineCopy } from "react-icons/ai";
 import { Pagination } from "flowbite-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { TransactionType } from "../types/Types";
 
-const Transactions = () => {
-  const transactions = [
-    {
-      transaction_id: "9f4werwef323f4sd",
-      timestamp: "2024-10-07 00:00:00",
-      type: "Received",
-      amount: "23423423",
-      state: "Confirmed",
-    },
-    {
-      transaction_id: "9f4werwef223f4sd",
-      timestamp: "2024-10-07 00:00:00",
-      type: "Sent",
-      amount: "23423423",
-      state: "Confirmed",
-    },
-    {
-      transaction_id: "9f4werwef343f4sd",
-      timestamp: "2024-10-07 00:00:00",
-      type: " received",
-      amount: "23423423",
-      state: "Confirmed",
-    },
-    {
-      transaction_id: "9f4werwef323f4sd",
-      timestamp: "2024-10-07 00:00:00",
-      type: "Received",
-      amount: "23423423",
-      state: "Confirmed",
-    },
-    {
-      transaction_id: "9f4werwef223f4sd",
-      timestamp: "2024-10-07 00:00:00",
-      type: "Sent",
-      amount: "23423423",
-      state: "Confirmed",
-    },
-    {
-      transaction_id: "9f4werwef343f4sd",
-      timestamp: "2024-10-07 00:00:00",
-      type: " received",
-      amount: "23423423",
-      state: "Confirmed",
-    },
-    {
-      transaction_id: "9f4werwef323f4sd",
-      timestamp: "2024-10-07 00:00:00",
-      type: "Received",
-      amount: "23423423",
-      state: "Confirmed",
-    },
-    {
-      transaction_id: "9f4werwef223f4sd",
-      timestamp: "2024-10-07 00:00:00",
-      type: "Sent",
-      amount: "23423423",
-      state: "Confirmed",
-    },
-    {
-      transaction_id: "9f4werwef343f4sd",
-      timestamp: "2024-10-07 00:00:00",
-      type: " received",
-      amount: "23423423",
-      state: "Confirmed",
-    },
-    {
-      transaction_id: "9f4werwef343f4sd",
-      timestamp: "2024-10-07 00:00:00",
-      type: " received",
-      amount: "23423423",
-      state: "Confirmed",
-    },
-  ];
-
+const Transactions = (props: { transactions: TransactionType }) => {
+  useEffect(() => {
+    console.log("transaction list is ==========>", props.transactions);
+  });
   const [currentPage, setCurretPage] = useState(1);
   const onPageChange = (page: number) => {
     setCurretPage(page);
@@ -106,28 +37,23 @@ const Transactions = () => {
           </tr>
         </thead>
         <tbody>
-          {transactions
-            .slice((currentPage - 1) * 10, currentPage * 10)
-            .map((tranasctionInfo, index) => {
+          {props.transactions?.txs
+            ?.slice((currentPage - 1) * 10, currentPage * 10)
+            .map((transactionInfo, index) => {
               return (
-                <tr
-                  key={tranasctionInfo.timestamp.toString()}
-                  className="hover:bg-gray-50 transition duration-200"
-                >
+                <tr className="hover:bg-gray-50 transition duration-200">
                   <td className="py-2 px-4 border-b border-gray-200">
                     {index + 1}
                   </td>
                   <td className="py-2 px-4 border-b border-gray-200">
                     <div className="flex justify-between">
                       <p>
-                        {tranasctionInfo.transaction_id.slice(0, 4)}...
-                        {tranasctionInfo.transaction_id.slice(-4)}
+                        {transactionInfo.txid.slice(0, 4)}...
+                        {transactionInfo.txid.slice(-4)}
                       </p>
                       <button
                         onClick={() =>
-                          navigator.clipboard.writeText(
-                            tranasctionInfo.transaction_id
-                          )
+                          navigator.clipboard.writeText(transactionInfo.txid)
                         }
                         className="flex items-center justify-center p-0 bg-transparent border-none shadow-none focus:outline-none"
                       >
@@ -136,17 +62,111 @@ const Transactions = () => {
                     </div>
                   </td>
                   <td className="py-2 px-4 border-b border-gray-200">
-                    {tranasctionInfo.timestamp}
+                    {transactionInfo.timestamp.timestamp}
                   </td>
-                  <td className="py-2 px-4 border-b border-gray-200">
-                    {tranasctionInfo.type}
-                  </td>
-                  <td className="py-2 px-4 border-b border-gray-200">
-                    {tranasctionInfo.amount}
-                  </td>
-                  <td className="border-b mt-2 border-gray-200 flex items-center justify-center bg-green-200 text-black text-xs font-bold py-1 px-2 rounded-full h-full">
-                    {tranasctionInfo.state}
-                  </td>
+                  {(() => {
+                    if ("Redeposit" in transactionInfo.tx_type) {
+                      return (
+                        <td className="py-2 px-4 border-b border-gray-200">
+                          Redeposit
+                        </td>
+                      );
+                    }
+                    if ("Received" in transactionInfo.tx_type) {
+                      return (
+                        <td className="py-2 px-4 border-b border-gray-200">
+                          Received
+                        </td>
+                      );
+                    }
+                    if ("Sent" in transactionInfo.tx_type) {
+                      return (
+                        <td className="py-2 px-4 border-b border-gray-200">
+                          Sent
+                        </td>
+                      );
+                    }
+                    if ("Other" in transactionInfo.tx_type) {
+                      return (
+                        <td className="py-2 px-4 border-b border-gray-200">
+                          Other
+                        </td>
+                      );
+                    }
+                  })()}
+
+                  {(() => {
+                    if ("Redeposit" in transactionInfo.tx_type) {
+                      return (
+                        <td className="py-2 px-4 border-b border-gray-200"></td>
+                      );
+                    }
+
+                    if ("Received" in transactionInfo.tx_type) {
+                      const { amount } = transactionInfo.tx_type.Received;
+                      return (
+                        <td className="py-2 px-4 border-b border-gray-200">
+                          {amount.atoms}
+                        </td>
+                      );
+                    }
+
+                    if ("Sent" in transactionInfo.tx_type) {
+                      const { amount } = transactionInfo.tx_type.Sent;
+                      return (
+                        <td className="py-2 px-4 border-b border-gray-200">
+                          {amount.atoms}
+                        </td>
+                      );
+                    }
+
+                    if ("Other" in transactionInfo.tx_type) {
+                      return (
+                        <td className="py-2 px-4 border-b border-gray-200"></td>
+                      );
+                    }
+                  })()}
+                  {(() => {
+                    if ("Confirmed" in transactionInfo.state) {
+                      return (
+                        <td className="border-b mt-2 border-gray-200 flex items-center justify-center bg-green-200 text-black text-xs font-bold py-1 px-2 rounded-full h-full">
+                          Confirmed
+                        </td>
+                      );
+                    }
+
+                    if ("InMempool" in transactionInfo.state) {
+                      return (
+                        <td className="border-b mt-2 border-gray-200 flex items-center justify-center bg-green-200 text-black text-xs font-bold py-1 px-2 rounded-full h-full">
+                          InMempool
+                        </td>
+                      );
+                    }
+
+                    if ("Conflicted" in transactionInfo.state) {
+                      return (
+                        <td className="border-b mt-2 border-gray-200 flex items-center justify-center bg-green-200 text-black text-xs font-bold py-1 px-2 rounded-full h-full">
+                          Conflicted
+                        </td>
+                      );
+                    }
+
+                    if ("Inactive" in transactionInfo.tx_type) {
+                      return (
+                        <td className="border-b mt-2 border-gray-200 flex items-center justify-center bg-green-200 text-black text-xs font-bold py-1 px-2 rounded-full h-full">
+                          Inactive
+                        </td>
+                      );
+                    }
+
+                    if ("Abandoned" in transactionInfo.tx_type) {
+                      return (
+                        <td className="border-b mt-2 border-gray-200 flex items-center justify-center bg-green-200 text-black text-xs font-bold py-1 px-2 rounded-full h-full">
+                          Abandoned
+                        </td>
+                      );
+                    }
+                  })()}
                 </tr>
               );
             })}
@@ -156,7 +176,9 @@ const Transactions = () => {
         <Pagination
           layout="pagination"
           currentPage={currentPage}
-          totalPages={transactions.length}
+          totalPages={
+            props.transactions?.txs?.length ? props.transactions.txs.length : 0
+          }
           onPageChange={onPageChange}
           previousLabel=""
           nextLabel=""

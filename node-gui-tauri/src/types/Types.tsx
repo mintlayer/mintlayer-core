@@ -41,31 +41,32 @@ export type AccountType = {
 };
 
 export type AmountType = {
-  amount: { atoms: string };
+  atoms: string;
 };
 
 export type TxType =
-  | { type: "Redeposit" }
-  | { type: "Received"; amount: AmountType }
-  | { type: "Sent"; amount: AmountType }
-  | { type: "Other" };
+  | { Received: { amount: AmountType } }
+  | { Redeposit: {} }
+  | { Sent: { amount: AmountType } }
+  | { Other: {} };
 
 export type TxState =
   | {
-      type: "Confirmed";
-      height: number;
-      timestamp: { timestamp: number };
-      someValue: number;
+      Confirmed: {
+        height: number;
+        timestamp: { timestamp: number };
+        someValue: number;
+      };
     }
-  | { type: "InMempool"; someValue: number }
-  | { type: "Conflicted"; id: string }
-  | { type: "Inactive"; someValue: number }
-  | { type: "Abandoned" };
+  | { InMempool: { someValue: number } }
+  | { Conflicted: { id: string } }
+  | { Inactive: { someValue: number } }
+  | { Abandoned: {} };
 
 export type TransactionInfoType = {
   txid: string;
   tx_type: TxType;
-  timestamp: number;
+  timestamp: { timestamp: number };
   state: TxState;
 };
 

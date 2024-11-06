@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Addresses from "./Addresses";
 import Console from "./Console";
 import Delegation from "./Delegation";
@@ -7,8 +7,13 @@ import Staking from "./Staking";
 import Transactions from "./Transactions";
 import { IoCloseSharp } from "react-icons/io5";
 const WalletActions = (props: any) => {
+  useEffect(() => {
+    console.log("transaction list is ======>", props.transactions);
+  });
   const [showEncryptWalletModal, setShowEncryptWalletModal] = useState(false);
-  const [showNewAccountModal, setShowNewAccountModal] = useState(props.showNewAccountModal);
+  const [showNewAccountModal, setShowNewAccountModal] = useState(
+    props.showNewAccountModal
+  );
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [showLock, setShowLock] = useState(false);
   const [accountName, setAccountName] = useState("");
@@ -35,15 +40,15 @@ const WalletActions = (props: any) => {
     setShowLock(true);
   };
 
-  const handleCreateWallet  = ()=>{
+  const handleCreateWallet = () => {
     // Create wallet logic
     setShowNewAccountModal(false);
     // props.onAccountCreated(accountName);
-  }
+  };
 
-  const handleUnlock = ()=>{
+  const handleUnlock = () => {
     setShowUnlockModal(false);
-  }
+  };
   return (
     <div className="bg-white border border-gray-200 shadowoverflow-y-auto mt-8 p-8 m-8 rounded rounded-lg shadow">
       {showEncryptWalletModal && (
@@ -164,7 +169,9 @@ const WalletActions = (props: any) => {
           </button>
         </div>
       </div>
-      {props.activeTab === "transactions" && <Transactions />}
+      {props.activeTab === "transactions" && (
+        <Transactions transactions={props.transactions} />
+      )}
       {props.activeTab === "addresses" && <Addresses />}
       {props.activeTab === "send" && <Send />}
       {props.activeTab === "staking" && <Staking />}
