@@ -173,7 +173,11 @@ const WalletActions = (props: any) => {
         <Transactions transactions={props.transactions} />
       )}
       {props.activeTab === "addresses" && (
-        <Addresses addresses={props.addresses} />
+        <Addresses
+          addresses={props.addresses}
+          walletId={props.walletId}
+          accountId={props.accountId}
+        />
       )}
       {props.activeTab === "send" && (
         <Send walletId={props.walletId} accountId={props.accountId} />

@@ -31,7 +31,7 @@ use common::address::{Address, AddressError};
 use common::chain::{ChainConfig, Destination};
 use common::primitives::{Amount, BlockHeight};
 use crypto::key::hdkd::u31::U31;
-use messages::{AccountId, SendRequest, TransactionInfo, WalletId, WalletInfo};
+use messages::{AccountId, AddressInfo, SendRequest, TransactionInfo, WalletId, WalletInfo};
 use node_lib::{Command, RunOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::Number;
@@ -95,6 +95,11 @@ pub struct SendAmountRequest {
     address: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NewAddressRequest {
+    wallet_id: u64,
+    account_id: U31,
+}
 impl Default for AppState {
     fn default() -> Self {
         AppState {
@@ -429,6 +434,36 @@ async fn send_amount_wrapper(
     }
 }
 
+#[tauri::command]
+async fn new_address_wrapper(
+    state: tauri::State<'_, AppState>,
+    request: NewAddressRequest,
+) -> Result<AddressInfo, String> {
+    let wallet_id = WalletId::from_u64(request.wallet_id);
+    let account_id = AccountId::new(request.account_id);
+
+    let result = {
+        let mut backend_guard = state.backend.write().await;
+        let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
+        let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
+
+        // Perform the operation while holding the lock
+        backend.new_address(wallet_id, account_id).await
+    };
+
+    match result {
+        Ok(address_info) => {
+            println!("Transaction sent successfully: {:?}", address_info);
+            Ok(address_info)
+        }
+        Err(e) => {
+            let error_message = e.to_string();
+            println!("Error sending amount: {}", error_message);
+            Err(error_message)
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -442,7 +477,8 @@ pub fn run() {
             initialize_node,
             add_create_wallet_wrapper,
             add_open_wallet_wrapper,
-            send_amount_wrapper
+            send_amount_wrapper,
+            new_address_wrapper
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

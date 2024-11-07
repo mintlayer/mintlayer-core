@@ -1,9 +1,3 @@
-export type WalletType = {
-  wallet_id: string;
-  address: string;
-  accounts: { account_id: string }[];
-};
-
 export type RpcAmountOutType = {
   atoms: number;
   decimal: number;

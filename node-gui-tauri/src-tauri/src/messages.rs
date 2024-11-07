@@ -84,7 +84,7 @@ pub struct AccountInfo {
     pub transaction_list: TransactionList,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddressInfo {
     pub wallet_id: WalletId,
     pub account_id: AccountId,

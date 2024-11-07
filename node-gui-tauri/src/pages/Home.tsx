@@ -6,7 +6,7 @@ import * as bip39 from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { RiInformation2Line } from "react-icons/ri";
 import { PiShareNetworkBold } from "react-icons/pi";
-import { ToastContainer, toast } from "react-toastify";
+import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import { IoCloseSharp } from "react-icons/io5";
@@ -19,9 +19,10 @@ import DelegationIcon from "../assets/delegation_icon.png";
 import ConsoleIcon from "../assets/console_icon.png";
 import WalletIcon from "../assets/wallet_icon.png";
 import AccountIcom from "../assets/account_icon.png";
+import { notify } from "../utils/util";
 import SummaryTab from "../components/Summary";
 import NetworkingTab from "../components/Networking";
-import { AccountType, WalletInfo, WalletType } from "../types/Types";
+import { AccountType, WalletInfo } from "../types/Types";
 import WalletActions from "../components/WalletActions";
 import Staking from "../components/Staking";
 
@@ -85,22 +86,7 @@ function Home() {
     }
   }, [currentWallet]);
 
-  const notify = (message: string, type: string) => {
-    console.log("notification is displayed");
-    switch (type) {
-      case "error":
-        toast.error(message);
-        break;
-      case "info":
-        toast.info(message);
-        break;
-      case "success":
-        toast.success(message);
-        break;
-      default:
-        toast.info(message);
-    }
-  };
+
 
   const createNewWallet = () => {
     try {

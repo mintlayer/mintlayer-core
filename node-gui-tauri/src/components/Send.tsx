@@ -1,13 +1,49 @@
 import { useState } from "react";
 import { IoCloseSharp } from "react-icons/io5";
+import { invoke } from "@tauri-apps/api/core";
 const Send = (props: { walletId: number; accountId: number }) => {
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState("");
-  const handleSend = () => {
-    
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const handleSend = async () => {
+    try {
+      const transactionInfo = await invoke("send_amount_wrapper", {
+        request: {
+          wallet_id: props.walletId,
+          account_id: props.accountId,
+          amount: amount,
+          address: address,
+        },
+      });
+      if (transactionInfo) {
+        console.log("trasaction info is =========>", transactionInfo);
+        setShowConfirmModal(true);
+      }
+    } catch (error) {}
   };
   return (
     <div className="container mx-auto p-2">
+      {showConfirmModal && (
+        <div className="bg-white rounded-lg shadow-lg z-10 p-6 max-w-lg mx-auto relative space-y-4">
+          <>
+            <button
+              className="absolute top-2 right-2 text-gray-600 "
+              onClick={() => setShowConfirmModal(false)}
+            >
+              <IoCloseSharp />
+            </button>
+            <h2 className="text-lg font-bold mb-4">Transaction Info</h2>
+            <p className="mb-4">Your Wallet Mnemonic</p>
+
+            <button
+              className="bg-green-400 text-black w-full px-4 py-2 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
+              onClick={() => setShowConfirmModal(false)}
+            >
+              Confirm
+            </button>
+          </>
+        </div>
+      )}
       <form
         onSubmit={handleSend}
         className="flex flex-col items-center space-y-2"

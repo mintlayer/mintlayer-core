@@ -652,7 +652,7 @@ impl Backend {
         Ok((wallet_id, account_id, account_info))
     }
 
-    async fn new_address(
+    pub async fn new_address(
         &mut self,
         wallet_id: WalletId,
         account_id: AccountId,
