@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 use common::{
     chain::{
         config::ChainType,
+        htlc::{HashedTimelockContract, HtlcSecret},
         output_value::OutputValue,
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
@@ -1338,6 +1339,192 @@ fn calculate_token_fee_change_metadata_uri(#[case] seed: Seed) {
 
     let outputs =
         vec![TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)];
+
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        &chain_config,
+        block_height,
+        &orders_db,
+        &pos_db,
+        &tokens_db,
+        &inputs,
+        &input_utxos,
+    )
+    .unwrap();
+
+    let outputs_accumulator =
+        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
+
+    let accumulated_fee = inputs_accumulator
+        .satisfy_with(outputs_accumulator)
+        .unwrap()
+        .map_into_block_fees(&chain_config, block_height)
+        .unwrap();
+
+    assert_eq!(accumulated_fee, Fee(Amount::ZERO));
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn htlc_output(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
+        .consensus_upgrades(NetUpgrades::regtest_with_pos())
+        .build();
+    let block_height = BlockHeight::new(1);
+    let balance = Amount::from_atoms(rng.gen_range(1..1000));
+
+    let pos_store = InMemoryPoSAccounting::new();
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
+
+    let inputs = vec![TxInput::Utxo(UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+        0,
+    ))];
+    let input_utxos = vec![Some(TxOutput::Transfer(
+        OutputValue::Coin(balance),
+        Destination::AnyoneCanSpend,
+    ))];
+
+    let secret = HtlcSecret::new_from_rng(&mut rng);
+    let htlc = HashedTimelockContract {
+        secret_hash: secret.hash(),
+        spend_key: Destination::AnyoneCanSpend,
+        refund_timelock: OutputTimeLock::ForSeconds(1),
+        refund_key: Destination::AnyoneCanSpend,
+    };
+
+    // Try overspend with htlc output
+    {
+        let outputs = vec![TxOutput::Htlc(
+            OutputValue::Coin((balance + Amount::from_atoms(1)).unwrap()),
+            Box::new(htlc.clone()),
+        )];
+
+        let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+            &chain_config,
+            block_height,
+            &orders_db,
+            &pos_db,
+            &tokens_db,
+            &inputs,
+            &input_utxos,
+        )
+        .unwrap();
+
+        let outputs_accumulator =
+            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
+                .unwrap();
+
+        let result = inputs_accumulator.satisfy_with(outputs_accumulator);
+
+        assert_eq!(
+            result.unwrap_err(),
+            Error::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
+        );
+    }
+
+    // Ok case
+    let outputs = vec![TxOutput::Htlc(OutputValue::Coin(balance), Box::new(htlc))];
+
+    let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+        &chain_config,
+        block_height,
+        &orders_db,
+        &pos_db,
+        &tokens_db,
+        &inputs,
+        &input_utxos,
+    )
+    .unwrap();
+
+    let outputs_accumulator =
+        ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs).unwrap();
+
+    let accumulated_fee = inputs_accumulator
+        .satisfy_with(outputs_accumulator)
+        .unwrap()
+        .map_into_block_fees(&chain_config, block_height)
+        .unwrap();
+
+    assert_eq!(accumulated_fee, Fee(Amount::ZERO));
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn htlc_input(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let chain_config = common::chain::config::Builder::new(ChainType::Mainnet)
+        .consensus_upgrades(NetUpgrades::regtest_with_pos())
+        .build();
+    let block_height = BlockHeight::new(1);
+    let balance = Amount::from_atoms(rng.gen_range(1..1000));
+
+    let pos_store = InMemoryPoSAccounting::new();
+    let pos_db = PoSAccountingDB::new(&pos_store);
+
+    let orders_store = InMemoryOrdersAccounting::new();
+    let orders_db = OrdersAccountingDB::new(&orders_store);
+
+    let tokens_store = tokens_accounting::InMemoryTokensAccounting::new();
+    let tokens_db = tokens_accounting::TokensAccountingDB::new(&tokens_store);
+
+    let inputs = vec![TxInput::Utxo(UtxoOutPoint::new(
+        OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
+        0,
+    ))];
+
+    let secret = HtlcSecret::new_from_rng(&mut rng);
+    let htlc = HashedTimelockContract {
+        secret_hash: secret.hash(),
+        spend_key: Destination::AnyoneCanSpend,
+        refund_timelock: OutputTimeLock::ForSeconds(1),
+        refund_key: Destination::AnyoneCanSpend,
+    };
+
+    let input_utxos = vec![Some(TxOutput::Htlc(OutputValue::Coin(balance), Box::new(htlc)))];
+
+    // Try overspend with htlc input
+    {
+        let outputs = vec![TxOutput::Transfer(
+            OutputValue::Coin((balance + Amount::from_atoms(1)).unwrap()),
+            Destination::AnyoneCanSpend,
+        )];
+
+        let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
+            &chain_config,
+            block_height,
+            &orders_db,
+            &pos_db,
+            &tokens_db,
+            &inputs,
+            &input_utxos,
+        )
+        .unwrap();
+
+        let outputs_accumulator =
+            ConstrainedValueAccumulator::from_outputs(&chain_config, block_height, &outputs)
+                .unwrap();
+
+        let result = inputs_accumulator.satisfy_with(outputs_accumulator);
+
+        assert_eq!(
+            result.unwrap_err(),
+            Error::AttemptToPrintMoneyOrViolateTimelockConstraints(CoinOrTokenId::Coin)
+        );
+    }
+
+    // Ok case
+    let outputs = vec![TxOutput::Transfer(OutputValue::Coin(balance), Destination::AnyoneCanSpend)];
 
     let inputs_accumulator = ConstrainedValueAccumulator::from_inputs(
         &chain_config,
