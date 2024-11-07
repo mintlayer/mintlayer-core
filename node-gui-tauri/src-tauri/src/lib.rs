@@ -30,9 +30,11 @@ use chainstate::ChainInfo;
 use common::address::{Address, AddressError};
 use common::chain::{ChainConfig, Destination};
 use common::primitives::{Amount, BlockHeight};
-use messages::WalletInfo;
+use crypto::key::hdkd::u31::U31;
+use messages::{AccountId, SendRequest, TransactionInfo, WalletId, WalletInfo};
 use node_lib::{Command, RunOptions};
 use serde::{Deserialize, Serialize};
+use serde_json::Number;
 use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -83,6 +85,14 @@ pub struct OpenCreateWalletRequest {
 pub struct OpenWalletRequest {
     file_path: String,
     wallet_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SendAmountRequest {
+    wallet_id: u64,
+    account_id: U31,
+    amount: String,
+    address: String,
 }
 
 impl Default for AppState {
@@ -382,6 +392,43 @@ async fn add_open_wallet_wrapper(
     }
 }
 
+#[tauri::command]
+async fn send_amount_wrapper(
+    state: tauri::State<'_, AppState>,
+    request: SendAmountRequest,
+) -> Result<TransactionInfo, String> {
+    let wallet_id = WalletId::from_u64(request.wallet_id);
+    let account_id = AccountId::new(request.account_id);
+
+    let result = {
+        let mut backend_guard = state.backend.write().await;
+        let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
+        let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
+
+        let request = SendRequest {
+            wallet_id: wallet_id,
+            account_id: account_id,
+            amount: request.amount,
+            address: request.address,
+        };
+
+        // Perform the operation while holding the lock
+        backend.send_amount(request).await
+    };
+
+    match result {
+        Ok(transaction_info) => {
+            println!("Transaction sent successfully: {:?}", transaction_info);
+            Ok(transaction_info)
+        }
+        Err(e) => {
+            let error_message = e.to_string();
+            println!("Error sending amount: {}", error_message);
+            Err(error_message)
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -394,7 +441,8 @@ pub fn run() {
             // get_initialized_node,
             initialize_node,
             add_create_wallet_wrapper,
-            add_open_wallet_wrapper
+            add_open_wallet_wrapper,
+            send_amount_wrapper
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

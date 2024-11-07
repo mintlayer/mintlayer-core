@@ -20,14 +20,14 @@ pub mod authorize_pubkeyhash_spend;
 pub mod classical_multisig;
 pub mod htlc;
 pub mod standard_signature;
-
+use serde::{Deserialize, Serialize};
 use serialization::{Decode, Encode};
 
 use standard_signature::StandardInputSignature;
 
 use super::{DestinationSigError, Signable};
 
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum InputWitness {
     #[codec(index = 0)]
     NoSignature(Option<Vec<u8>>),

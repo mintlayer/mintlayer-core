@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { IoCloseSharp } from "react-icons/io5";
-const Send = () => {
+const Send = (props: { walletId: number; accountId: number }) => {
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState("");
-  const handleSend = () => {};
+  const handleSend = () => {
+    
+  };
   return (
     <div className="container mx-auto p-2">
       <form

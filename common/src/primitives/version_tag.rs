@@ -13,10 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use serde::{Deserialize, Serialize};
 use serialization::{Decode, Encode, Tagged};
-
 /// Version tag for SCALE-encoded values
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Encode, Decode, Copy, Clone, Tagged)]
+#[derive(
+    Debug,
+    Ord,
+    PartialOrd,
+    PartialEq,
+    Eq,
+    Encode,
+    Decode,
+    Copy,
+    Clone,
+    Tagged,
+    Serialize,
+    Deserialize,
+)]
 pub struct VersionTag<const V: u8>(serialization::Tag<V>);
 
 impl<const V: u8> Default for VersionTag<V> {
@@ -25,11 +38,11 @@ impl<const V: u8> Default for VersionTag<V> {
     }
 }
 
-impl<const V: u8> serde::Serialize for VersionTag<V> {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_u8(V)
-    }
-}
+// impl<const V: u8> serde::Serialize for VersionTag<V> {
+//     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+//         serializer.serialize_u8(V)
+//     }
+// }
 
 #[cfg(test)]
 mod test {

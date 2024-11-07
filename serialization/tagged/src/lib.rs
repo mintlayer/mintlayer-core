@@ -171,7 +171,18 @@ impl_tagged_for_tuple!(T0, T1, T2, T3, T4, T5, T6);
 impl_tagged_for_tuple!(T0, T1, T2, T3, T4, T5, T6, T7);
 
 /// Generic tag type where the encoding is always single byte specified in the generic parameter.
-#[derive(Eq, PartialEq, PartialOrd, Ord, Clone, Copy, Debug, Default)]
+#[derive(
+    Eq,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct Tag<const N: u8>;
 
 impl<const N: u8> Tagged for Tag<N> {

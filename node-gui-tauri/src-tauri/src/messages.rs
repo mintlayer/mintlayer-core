@@ -44,6 +44,10 @@ impl WalletId {
     pub fn new() -> Self {
         Self(NEXT_WALLET_ID.fetch_add(1, Ordering::Relaxed))
     }
+
+    pub fn from_u64(value: u64) -> Self {
+        Self(value)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -159,7 +163,7 @@ pub struct SendDelegateToAddressRequest {
     pub delegation_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransactionInfo {
     pub wallet_id: WalletId,
     pub tx: SignedTransaction,

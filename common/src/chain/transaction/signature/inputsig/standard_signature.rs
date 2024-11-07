@@ -16,6 +16,7 @@
 use std::io::BufWriter;
 
 use randomness::{CryptoRng, Rng};
+use serde::{Deserialize, Serialize};
 use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
@@ -44,7 +45,7 @@ use super::{
     },
 };
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct StandardInputSignature {
     sighash_type: SigHashType,
     raw_signature: Vec<u8>,

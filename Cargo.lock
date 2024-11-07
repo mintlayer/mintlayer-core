@@ -8630,6 +8630,7 @@ version = "0.6.2"
 dependencies = [
  "parity-scale-codec",
  "proptest",
+ "serde",
  "serialization",
  "serialization-core",
  "serialization-tagged-derive",

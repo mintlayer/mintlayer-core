@@ -36,19 +36,6 @@ function Home() {
     Cold: "Cold",
   };
 
-  const wallets = [
-    {
-      wallet_id: "mintlayer_wallet",
-      address: "19832798ser98qw3r98wer7w3r",
-      accounts: [{ account_id: "account0" }, { account_id: "account1" }],
-    },
-    {
-      wallet_id: "testnet_wallet",
-      address: "swerweferwe879we87f9we8",
-      accounts: [{ account_id: "account0" }, { account_id: "account1" }],
-    },
-  ];
-
   const [walletsInfo, setWalletsInfo] = useState<WalletInfo[]>([]);
   const [netMode, setNetMod] = useState("");
   const [walletMode, setWalletMode] = useState("");
@@ -59,6 +46,7 @@ function Home() {
   const [activeTab, setActiveTab] = useState("transactions");
   const [currentAccount, setCurrentAccount] = useState<AccountType>();
   const [mnemonic, setMnemonic] = useState("");
+  const [currentAccountId, setCurrentAccountId] = useState(0);
 
   const [showMnemonicModal, setShowMnemonicModal] = useState(false);
   const [showRecoverWalletModal, setShowRecoverWalletModal] = useState(false);
@@ -500,15 +488,16 @@ function Home() {
                           <img src={AccountIcom} alt="wallet_ico" />
                         </button>
                         <select
-                          onChange={(e) =>
+                          onChange={(e) => {
                             setCurrentAccount(
                               Object.values(
                                 currentWallet?.accounts
                                   ? currentWallet.accounts
                                   : {}
                               )[parseInt(e.target.value)]
-                            )
-                          }
+                            );
+                            setCurrentAccountId(parseInt(e.target.value));
+                          }}
                           value={
                             currentAccount?.name ? currentAccount.name : ""
                           }
@@ -629,8 +618,11 @@ function Home() {
                   {currentTab === "network" && <NetworkingTab />}
                   {currentTab === "transactions" && (
                     <WalletActions
+                      walletId={currentWallet?.wallet_id}
+                      accountId={currentAccountId}
                       showNewAccountModal={showNewAccountModal}
                       activeTab={activeTab}
+                      addresses={currentAccount?.addresses}
                       transactions={currentAccount?.transaction_list}
                     />
                   )}

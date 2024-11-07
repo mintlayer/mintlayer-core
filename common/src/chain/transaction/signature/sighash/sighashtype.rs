@@ -20,7 +20,7 @@ use super::DestinationSigError;
 /// Specifies which parts of the transaction a signature commits to.
 ///
 /// The values of the flags are the same as in Bitcoin.
-#[derive(Eq, PartialEq, Clone, Copy, Encode, Debug, Ord, PartialOrd, serde::Serialize)]
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Debug, Ord, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub struct SigHashType(u8);
 
 impl SigHashType {

@@ -21,10 +21,11 @@ use crate::{
     chain::{TransactionCreationError, TxInput},
     primitives::id::{self, H256},
 };
+use serde::{Deserialize, Serialize};
 use serialization::{Decode, Encode};
 use utils::ensure;
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Serialize, Deserialize)]
 pub struct SignedTransaction {
     transaction: Transaction,
     signatures: Vec<InputWitness>,

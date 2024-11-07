@@ -1,16 +1,10 @@
 import { AiOutlineCopy } from "react-icons/ai";
 import AddressIcon from "../assets/account_icon.png";
 
-const Addresses = () => {
-  const addresses = [
-    "asudfoiuae8u9a8eu9f8ase98fuas9",
-    "8euf98weufaosdufjwe8uf0asd9fud",
-    "asudfoiuae8u9a8eu9f8ase98fuas9",
-  ];
+const Addresses = (props: { addresses: Record<string, string> }) => {
   return (
     <div className="pt-0">
-      <p>ADDRESS</p>
-      <table className="w-[50vw] border border-gray-200 rounded rounded-lg overflow-hidden shadow">
+      <table className="w-full border border-gray-200 rounded rounded-lg overflow-hidden shadow">
         <thead className="bg-gray-100 ">
           <tr>
             <th className="py-3 px-4 text-center text-gray-600 font-semibold "></th>
@@ -22,7 +16,7 @@ const Addresses = () => {
           </tr>
         </thead>
         <tbody>
-          {addresses.map((address, index) => (
+          {Object.values(props.addresses).map((address, index) => (
             <tr
               key={index}
               className="hover:bg-gray-50 transition duration-200"

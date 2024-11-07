@@ -709,7 +709,7 @@ impl Backend {
             .ok_or(BackendError::ColdWallet)
     }
 
-    async fn send_amount(
+    pub async fn send_amount(
         &mut self,
         send_request: SendRequest,
     ) -> Result<TransactionInfo, BackendError> {
