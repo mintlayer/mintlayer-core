@@ -177,6 +177,30 @@ pub enum EncryptionAction {
     Lock,
 }
 
+impl EncryptionAction {
+    pub fn from_str(action: &str, password: Option<&str>) -> Option<Self> {
+        match action.to_lowercase().as_str() {
+            "set_password" => {
+                if let Some(pass) = password {
+                    Some(EncryptionAction::SetPassword(pass.to_string()))
+                } else {
+                    None // Password is required for SetPassword
+                }
+            }
+            "remove_password" => Some(EncryptionAction::RemovePassword),
+            "unlock" => {
+                if let Some(pass) = password {
+                    Some(EncryptionAction::Unlock(pass.to_string()))
+                } else {
+                    None // Password is required for Unlock
+                }
+            }
+            "lock" => Some(EncryptionAction::Lock),
+            _ => None, // Invalid action
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EncryptionState {
     EnabledLocked,

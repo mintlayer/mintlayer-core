@@ -31,7 +31,10 @@ use common::address::{Address, AddressError};
 use common::chain::{ChainConfig, Destination};
 use common::primitives::{Amount, BlockHeight};
 use crypto::key::hdkd::u31::U31;
-use messages::{AccountId, AddressInfo, SendRequest, TransactionInfo, WalletId, WalletInfo};
+use messages::{
+    AccountId, AddressInfo, EncryptionAction, EncryptionState, SendRequest, TransactionInfo,
+    WalletId, WalletInfo,
+};
 use node_lib::{Command, RunOptions};
 use serde::{Deserialize, Serialize};
 use serde_json::Number;
@@ -464,6 +467,40 @@ async fn new_address_wrapper(
     }
 }
 
+#[tauri::command]
+async fn update_encryption_wrapper(
+    state: tauri::State<'_, AppState>,
+    wallet_id: u64,
+    action: &str,
+    password: Option<&str>,
+) -> Result<(WalletId, EncryptionState), String> {
+    let wallet_id = WalletId::from_u64(wallet_id);
+    let update_encryption_action = match EncryptionAction::from_str(action, password) {
+        Some(action) => action,
+        None => return Err("Invalid action or missing password".into()), // Handle invalid action
+    };
+    let result = {
+        let mut backend_guard = state.backend.write().await;
+        let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
+        let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
+
+        // Perform the operation while holding the lock
+        backend.update_encryption(wallet_id, update_encryption_action).await
+    };
+
+    match result {
+        Ok(address_info) => {
+            println!("Transaction sent successfully: {:?}", address_info);
+            Ok(address_info)
+        }
+        Err(e) => {
+            let error_message = e.to_string();
+            println!("Error sending amount: {}", error_message);
+            Err(error_message)
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -478,7 +515,8 @@ pub fn run() {
             add_create_wallet_wrapper,
             add_open_wallet_wrapper,
             send_amount_wrapper,
-            new_address_wrapper
+            new_address_wrapper,
+            update_encryption_wrapper
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

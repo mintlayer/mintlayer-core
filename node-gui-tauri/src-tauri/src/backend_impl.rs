@@ -608,7 +608,7 @@ impl Backend {
         ))
     }
 
-    async fn update_encryption(
+    pub async fn update_encryption(
         &mut self,
         wallet_id: WalletId,
         action: EncryptionAction,
