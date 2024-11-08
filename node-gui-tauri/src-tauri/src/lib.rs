@@ -32,8 +32,8 @@ use common::chain::{ChainConfig, Destination};
 use common::primitives::{Amount, BlockHeight};
 use crypto::key::hdkd::u31::U31;
 use messages::{
-    AccountId, AddressInfo, EncryptionAction, EncryptionState, SendRequest, StakeRequest,
-    TransactionInfo, WalletId, WalletInfo,
+    AccountId, AddressInfo, CreateDelegationRequest, DecommissionPoolRequest, EncryptionAction,
+    EncryptionState, SendRequest, StakeRequest, TransactionInfo, WalletId, WalletInfo,
 };
 use node_lib::{Command, RunOptions};
 use serde::{Deserialize, Serialize};
@@ -107,6 +107,22 @@ pub struct StakeAmountRequest {
     cost_per_block: String,
     decommission_address: String,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DecommissionStakingPoolRequest {
+    pub wallet_id: u64,
+    pub account_id: U31,
+    pub pool_id: String,
+    pub output_address: String,
+}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DelegationCreateRequest {
+    pub wallet_id: u64,
+    pub account_id: U31,
+    pub pool_id: String,
+    pub delegation_address: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NewAddressRequest {
     wallet_id: u64,
@@ -576,6 +592,74 @@ async fn stake_amount_wrapper(
         }
     }
 }
+
+#[tauri::command]
+async fn decommission_pool_wrapper(
+    state: tauri::State<'_, AppState>,
+    decommission_request: DecommissionStakingPoolRequest,
+) -> Result<TransactionInfo, String> {
+    let wallet_id = WalletId::from_u64(decommission_request.wallet_id);
+    let account_id = AccountId::new(decommission_request.account_id);
+    let decommission_request = DecommissionPoolRequest {
+        wallet_id: wallet_id,
+        account_id: account_id,
+        pool_id: decommission_request.pool_id,
+        output_address: decommission_request.output_address,
+    };
+
+    let result = {
+        let mut backend_guard = state.backend.write().await;
+        let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
+        let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
+        backend.decommission_pool(decommission_request).await
+    };
+
+    match result {
+        Ok(transaction_info) => {
+            println!("Pool decommissioned successfully: {:?}", transaction_info);
+            Ok(transaction_info)
+        }
+        Err(e) => {
+            let error_message = e.to_string();
+            println!("Error decommissioning pool: {}", error_message);
+            Err(error_message)
+        }
+    }
+}
+
+#[tauri::command]
+async fn create_delegation_wrapper(
+    state: tauri::State<'_, AppState>,
+    delegation_request: DelegationCreateRequest,
+) -> Result<TransactionInfo, String> {
+    let wallet_id = WalletId::from_u64(delegation_request.wallet_id);
+    let account_id = AccountId::new(delegation_request.account_id);
+    let delegation_request = CreateDelegationRequest {
+        wallet_id: wallet_id,
+        account_id: account_id,
+        pool_id: delegation_request.pool_id,
+        delegation_address: delegation_request.delegation_address,
+    };
+
+    let result = {
+        let mut backend_guard = state.backend.write().await;
+        let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
+        let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
+        backend.create_delegation(delegation_request).await
+    };
+
+    match result {
+        Ok(transaction_info) => {
+            println!("Delegation created successfully: {:?}", transaction_info);
+            Ok(transaction_info)
+        }
+        Err(e) => {
+            let error_message = e.to_string();
+            println!("Error creating delegation: {}", error_message);
+            Err(error_message)
+        }
+    }
+}
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -593,7 +677,9 @@ pub fn run() {
             new_address_wrapper,
             update_encryption_wrapper,
             close_wallet_wrapper,
-            stake_amount_wrapper
+            stake_amount_wrapper,
+            decommission_pool_wrapper,
+            create_delegation_wrapper
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
