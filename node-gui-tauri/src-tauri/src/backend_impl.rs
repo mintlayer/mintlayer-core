@@ -100,7 +100,7 @@ enum GuiHotColdController {
     ),
 }
 
-struct WalletData {
+pub struct WalletData {
     controller: GuiHotColdController,
     best_block: (Id<GenBlock>, BlockHeight),
     accounts: BTreeMap<AccountId, AccountData>,
@@ -115,7 +115,7 @@ impl WalletData {
         }
     }
 
-    async fn shutdown(mut self) {
+    pub async fn shutdown(mut self) {
         match &mut self.controller {
             GuiHotColdController::Hot(w, _) => {
                 w.close_wallet().await.expect("should close the wallet");
@@ -179,7 +179,7 @@ pub struct Backend {
 
     manager_join_handle: JoinHandle<()>,
 
-    wallets: BTreeMap<WalletId, WalletData>,
+    pub wallets: BTreeMap<WalletId, WalletData>,
 }
 
 impl Backend {
@@ -745,7 +745,7 @@ impl Backend {
         Ok(TransactionInfo { wallet_id, tx })
     }
 
-    async fn stake_amount(
+    pub async fn stake_amount(
         &mut self,
         stake_request: StakeRequest,
     ) -> Result<TransactionInfo, BackendError> {
@@ -793,7 +793,7 @@ impl Backend {
         Ok(TransactionInfo { wallet_id, tx })
     }
 
-    async fn decommission_pool(
+    pub async fn decommission_pool(
         &mut self,
         request: DecommissionPoolRequest,
     ) -> Result<TransactionInfo, BackendError> {
@@ -822,7 +822,7 @@ impl Backend {
         Ok(TransactionInfo { wallet_id, tx })
     }
 
-    async fn create_delegation(
+    pub async fn create_delegation(
         &mut self,
         request: CreateDelegationRequest,
     ) -> Result<TransactionInfo, BackendError> {
@@ -851,7 +851,7 @@ impl Backend {
         Ok(TransactionInfo { wallet_id, tx })
     }
 
-    async fn delegate_staking(
+    pub async fn delegate_staking(
         &mut self,
         request: DelegateStakingRequest,
     ) -> Result<TransactionInfo, BackendError> {
@@ -887,7 +887,7 @@ impl Backend {
         Ok(TransactionInfo { wallet_id, tx })
     }
 
-    async fn send_delegation_to_address(
+    pub async fn send_delegation_to_address(
         &mut self,
         request: SendDelegateToAddressRequest,
     ) -> Result<TransactionInfo, BackendError> {

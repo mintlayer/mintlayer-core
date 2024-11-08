@@ -32,8 +32,8 @@ use common::chain::{ChainConfig, Destination};
 use common::primitives::{Amount, BlockHeight};
 use crypto::key::hdkd::u31::U31;
 use messages::{
-    AccountId, AddressInfo, EncryptionAction, EncryptionState, SendRequest, TransactionInfo,
-    WalletId, WalletInfo,
+    AccountId, AddressInfo, EncryptionAction, EncryptionState, SendRequest, StakeRequest,
+    TransactionInfo, WalletId, WalletInfo,
 };
 use node_lib::{Command, RunOptions};
 use serde::{Deserialize, Serialize};
@@ -98,6 +98,15 @@ pub struct SendAmountRequest {
     address: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StakeAmountRequest {
+    wallet_id: u64,
+    account_id: U31,
+    pledge_amount: String,
+    mpt: String,
+    cost_per_block: String,
+    decommission_address: String,
+}
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NewAddressRequest {
     wallet_id: u64,
@@ -501,6 +510,72 @@ async fn update_encryption_wrapper(
     }
 }
 
+#[tauri::command]
+async fn close_wallet_wrapper(
+    state: tauri::State<'_, AppState>,
+    wallet_id: u64,
+) -> Result<WalletId, String> {
+    let wallet_id = WalletId::from_u64(wallet_id);
+
+    let result = {
+        let mut backend_guard = state.backend.write().await;
+        let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
+        let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
+
+        // Perform the operation while holding the lock
+        if let Some(wallet) = backend.wallets.remove(&wallet_id) {
+            // Await the shutdown and return its result
+            wallet.shutdown().await; // Handle shutdown result
+            Ok(()) // Return Ok if shutdown is successful
+        } else {
+            Err("Wallet not found".into()) // Handle case where wallet is not found
+        }
+    };
+
+    match result {
+        Ok(()) => Ok(wallet_id),
+        Err(e) => {
+            println!("Error closing wallet: {}", e);
+            Err(e)
+        }
+    }
+}
+
+#[tauri::command]
+async fn stake_amount_wrapper(
+    state: tauri::State<'_, AppState>,
+    stake_request: StakeAmountRequest,
+) -> Result<TransactionInfo, String> {
+    let wallet_id = WalletId::from_u64(stake_request.wallet_id);
+    let account_id = AccountId::new(stake_request.account_id);
+    let stake_request = StakeRequest {
+        wallet_id: wallet_id,
+        account_id: account_id,
+        pledge_amount: stake_request.pledge_amount,
+        mpt: stake_request.mpt,
+        cost_per_block: stake_request.cost_per_block,
+        decommission_address: stake_request.decommission_address,
+    };
+
+    let result = {
+        let mut backend_guard = state.backend.write().await;
+        let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
+        let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
+        backend.stake_amount(stake_request).await
+    };
+
+    match result {
+        Ok(transaction_info) => {
+            println!("Staked successfully: {:?}", transaction_info);
+            Ok(transaction_info)
+        }
+        Err(e) => {
+            let error_message = e.to_string();
+            println!("Error staking amount: {}", error_message);
+            Err(error_message)
+        }
+    }
+}
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -516,7 +591,9 @@ pub fn run() {
             add_open_wallet_wrapper,
             send_amount_wrapper,
             new_address_wrapper,
-            update_encryption_wrapper
+            update_encryption_wrapper,
+            close_wallet_wrapper,
+            stake_amount_wrapper
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
