@@ -148,7 +148,7 @@ impl<'a> ApiServerStorageWrite for ApiServerPostgresTransactionalRw<'a> {
     async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
-        owning_block: Option<Id<Block>>,
+        owning_block: Id<Block>,
         transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
@@ -541,7 +541,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
     async fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<Id<Block>>, TransactionInfo)>, ApiServerStorageError> {
+    ) -> Result<Option<(Id<Block>, TransactionInfo)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transaction(transaction_id).await?;
 

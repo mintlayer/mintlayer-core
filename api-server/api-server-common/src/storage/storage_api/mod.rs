@@ -40,7 +40,7 @@ use self::block_aux_data::{BlockAuxData, BlockWithExtraData};
 pub mod block_aux_data;
 
 #[allow(dead_code)]
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ApiServerStorageError {
     #[error("Low level storage error: {0}")]
     LowLevelStorageError(String),
@@ -530,7 +530,7 @@ pub trait ApiServerStorageRead: Sync {
     async fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<Id<Block>>, TransactionInfo)>, ApiServerStorageError>;
+    ) -> Result<Option<(Id<Block>, TransactionInfo)>, ApiServerStorageError>;
 
     async fn get_transactions_with_block(
         &self,
@@ -666,7 +666,7 @@ pub trait ApiServerStorageWrite: ApiServerStorageRead {
     async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
-        owning_block: Option<Id<Block>>,
+        owning_block: Id<Block>,
         transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError>;
 

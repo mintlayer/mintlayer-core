@@ -13,9 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::blockchain_state::BlockchainState;
-
-use super::*;
+use crate::{blockchain_state::BlockchainState, sync::local_state::LocalBlockchainState};
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -38,16 +36,16 @@ use common::{
         block::timestamp::BlockTimestamp,
         config::create_unit_test_config,
         make_order_id,
-        output_value::RpcOutputValue,
+        output_value::{OutputValue, RpcOutputValue},
         tokens::{
             make_token_id, IsTokenFrozen, NftIssuance, RPCNonFungibleTokenMetadata, RPCTokenInfo,
             TokenId,
         },
-        AccountCommand, AccountNonce, AccountSpending, AccountType, ConsensusUpgrade, DelegationId,
-        GenBlockId, NetUpgrades, OrderId, OutPointSourceId, PoSChainConfigBuilder, PoolId,
-        TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountSpending, AccountType, ChainConfig, ConsensusUpgrade,
+        DelegationId, Destination, GenBlockId, NetUpgrades, OrderId, OutPointSourceId,
+        PoSChainConfigBuilder, PoolId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockCount, Idable},
+    primitives::{Amount, BlockCount, BlockHeight, CoinOrTokenId, Idable, H256},
 };
 use constraints_value_accumulator::{AccumulatedFee, ConstrainedValueAccumulator};
 use crypto::{
@@ -222,10 +220,8 @@ async fn simulation(
     let genesis_pool_outpoint = UtxoOutPoint::new(chain_config.genesis_block_id().into(), 1);
 
     // Initialize original TestFramework
-    let tf_storage = chainstate_test_framework::TestStore::new_empty().unwrap();
     let mut tf = TestFramework::builder(&mut rng)
         .with_chain_config(chain_config.clone())
-        .with_storage(tf_storage.clone())
         .with_chainstate_config(ChainstateConfig::new().with_heavy_checks_enabled(false))
         .with_initial_time_since_genesis(target_time.as_secs())
         .with_staking_pools(BTreeMap::from_iter([(
@@ -277,6 +273,7 @@ async fn simulation(
 
     let mut delegations = BTreeSet::new();
     let mut token_ids = BTreeSet::new();
+    let mut order_ids = BTreeSet::new();
 
     let mut data_per_block_height = BTreeMap::new();
     data_per_block_height.insert(
@@ -286,6 +283,7 @@ async fn simulation(
             staking_pools.clone(),
             delegations.clone(),
             token_ids.clone(),
+            order_ids.clone(),
             statistics.clone(),
         ),
     );
@@ -337,6 +335,7 @@ async fn simulation(
                 staking_pools,
                 delegations,
                 token_ids,
+                order_ids,
                 statistics,
             ) = data_per_block_height
                 .get(&BlockHeight::new(height_to_continue_from as u64))
@@ -379,177 +378,40 @@ async fn simulation(
                 });
                 utxo_outpoints.extend(new_utxos);
 
-                let new_pools = tx.outputs().iter().filter_map(|out| match out {
-                    TxOutput::CreateStakePool(pool_id, _) => Some(pool_id),
-                    TxOutput::Burn(_)
-                    | TxOutput::Transfer(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::DataDeposit(_)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::Htlc(_, _)
-                    | TxOutput::CreateOrder(_) => None,
-                });
-                staking_pools.extend(new_pools);
-
-                let new_delegations = tx.outputs().iter().filter_map(|out| match out {
-                    TxOutput::CreateDelegationId(_, _) => {
-                        let input0_outpoint =
-                            tx.inputs().iter().find_map(|input| input.utxo_outpoint()).unwrap();
-                        Some(make_delegation_id(input0_outpoint))
-                    }
-                    TxOutput::CreateStakePool(_, _)
-                    | TxOutput::Burn(_)
-                    | TxOutput::Transfer(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::DataDeposit(_)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::IssueNft(_, _, _)
-                    | TxOutput::Htlc(_, _)
-                    | TxOutput::CreateOrder(_) => None,
-                });
-                delegations.extend(new_delegations);
-
-                let new_tokens = tx.outputs().iter().filter_map(|out| match out {
-                    TxOutput::IssueNft(_, _, _) | TxOutput::IssueFungibleToken(_) => {
-                        Some(make_token_id(tx.inputs()).unwrap())
-                    }
-                    TxOutput::CreateStakePool(_, _)
-                    | TxOutput::Burn(_)
-                    | TxOutput::Transfer(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::DataDeposit(_)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::Htlc(_, _)
-                    | TxOutput::CreateOrder(_) => None,
-                });
-                token_ids.extend(new_tokens);
-
+                // store new ids
+                let input0_outpoint = tx.inputs().iter().find_map(|input| input.utxo_outpoint());
                 tx.outputs().iter().for_each(|out| match out {
-                    TxOutput::IssueNft(_, _, _)
-                    | TxOutput::IssueFungibleToken(_)
-                    | TxOutput::CreateStakePool(_, _)
+                    TxOutput::CreateStakePool(pool_id, _) => {
+                        staking_pools.insert(*pool_id);
+                    }
+                    TxOutput::IssueNft(_, _, _) | TxOutput::IssueFungibleToken(_) => {
+                        token_ids.insert(make_token_id(tx.inputs()).unwrap());
+                    }
+                    TxOutput::CreateDelegationId(_, _) => {
+                        delegations.insert(make_delegation_id(input0_outpoint.unwrap()));
+                    }
                     | TxOutput::Burn(_)
                     | TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::DataDeposit(_)
                     | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::Htlc(_, _) => {}
                     TxOutput::CreateOrder(order_data) => {
-                        let input0_outpoint =
-                            tx.inputs().iter().find_map(|input| input.utxo_outpoint()).unwrap();
-                        let order_id = make_order_id(input0_outpoint);
+                        let order_id = make_order_id(input0_outpoint.unwrap());
                         let _ = new_orders_cache
                             .create_order(order_id, order_data.as_ref().clone())
                             .unwrap();
+                        order_ids.insert(order_id);
                     }
                 });
 
-                tx.outputs().iter().for_each(|out| match out {
-                    TxOutput::IssueNft(token_id, _, _) => {
-                        statistics
-                            .entry(CoinOrTokenStatistic::CirculatingSupply)
-                            .or_default()
-                            .insert(CoinOrTokenId::TokenId(*token_id), Amount::from_atoms(1));
-                        let nft_issuance_fee = chain_config.nft_issuance_fee(block_height);
-                        burn_coins(&mut statistics, nft_issuance_fee);
-                    }
-                    TxOutput::IssueFungibleToken(_) => {
-                        let token_issuance_fee = chain_config.fungible_token_issuance_fee();
-                        burn_coins(&mut statistics, token_issuance_fee);
-                    }
-                    TxOutput::CreateStakePool(_, data) => {
-                        statistics
-                            .entry(CoinOrTokenStatistic::Staked)
-                            .or_default()
-                            .entry(CoinOrTokenId::Coin)
-                            .and_modify(|amount| *amount = (*amount + data.pledge()).unwrap())
-                            .or_insert(data.pledge());
-                    }
-                    TxOutput::Burn(value) => {
-                        burn_value(&mut statistics, value);
-                    }
-                    TxOutput::DataDeposit(_) => {
-                        let data_deposit_fee = chain_config.data_deposit_fee(BlockHeight::zero());
-                        burn_coins(&mut statistics, data_deposit_fee);
-                    }
-                    TxOutput::DelegateStaking(to_stake, _) => {
-                        statistics
-                            .entry(CoinOrTokenStatistic::Staked)
-                            .or_default()
-                            .entry(CoinOrTokenId::Coin)
-                            .and_modify(|amount| *amount = (*amount + *to_stake).unwrap())
-                            .or_insert(*to_stake);
-                    }
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::Transfer(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::Htlc(_, _)
-                    | TxOutput::CreateOrder(_) => {}
-                });
-
-                tx.inputs().iter().for_each(|inp| match inp {
-                    TxInput::Utxo(_) => {}
-                    TxInput::Account(acc) => match acc.account() {
-                        AccountSpending::DelegationBalance(_, to_spend) => {
-                            let staked = statistics
-                                .entry(CoinOrTokenStatistic::Staked)
-                                .or_default()
-                                .get_mut(&CoinOrTokenId::Coin)
-                                .unwrap();
-
-                            *staked = (*staked - *to_spend).unwrap();
-                        }
-                    },
-                    TxInput::AccountCommand(_, cmd) => match cmd {
-                        AccountCommand::MintTokens(token_id, to_mint) => {
-                            statistics
-                                .entry(CoinOrTokenStatistic::CirculatingSupply)
-                                .or_default()
-                                .entry(CoinOrTokenId::TokenId(*token_id))
-                                .and_modify(|amount| *amount = (*amount + *to_mint).unwrap())
-                                .or_insert(*to_mint);
-                            let token_supply_change_fee =
-                                chain_config.token_supply_change_fee(block_height);
-                            burn_coins(&mut statistics, token_supply_change_fee);
-                        }
-                        AccountCommand::UnmintTokens(_) => {
-                            let token_supply_change_fee =
-                                chain_config.token_supply_change_fee(block_height);
-                            burn_coins(&mut statistics, token_supply_change_fee);
-                        }
-                        AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => {
-                            let token_freeze_fee = chain_config.token_freeze_fee(block_height);
-                            burn_coins(&mut statistics, token_freeze_fee);
-                        }
-                        AccountCommand::LockTokenSupply(_) => {
-                            let token_supply_change_fee =
-                                chain_config.token_supply_change_fee(block_height);
-                            burn_coins(&mut statistics, token_supply_change_fee);
-                        }
-                        AccountCommand::ChangeTokenAuthority(_, _) => {
-                            let token_change_authority_fee =
-                                chain_config.token_change_authority_fee(block_height);
-                            burn_coins(&mut statistics, token_change_authority_fee);
-                        }
-                        AccountCommand::ChangeTokenMetadataUri(_token_id, _) => {
-                            let token_change_metadata_fee =
-                                chain_config.token_change_metadata_uri_fee();
-                            burn_coins(&mut statistics, token_change_metadata_fee);
-                        }
-                        AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {}
-                    },
-                });
+                update_statistics(
+                    &mut statistics,
+                    tx.transaction(),
+                    &chain_config,
+                    block_height,
+                );
             }
 
             let block_subsidy = chain_config.block_subsidy_at_height(&block_height.next_height());
@@ -626,6 +488,7 @@ async fn simulation(
                     staking_pools.clone(),
                     delegations.clone(),
                     token_ids.clone(),
+                    order_ids.clone(),
                     statistics.clone(),
                 ),
             );
@@ -648,11 +511,7 @@ async fn simulation(
         check_staking_pools(&tf, &local_state, &staking_pools).await;
         check_delegations(&tf, &local_state, &delegations).await;
         check_tokens(&tf, &local_state, &token_ids).await;
-        let all_orders = chainstate_storage::Transactional::transaction_ro(&tf_storage)
-            .unwrap()
-            .read_orders_accounting_data()
-            .unwrap();
-        check_orders(&tf, &local_state, all_orders.order_data.keys().copied()).await;
+        check_orders(&tf, &local_state, order_ids.iter().copied()).await;
 
         check_all_statistics(&local_state, &statistics, CoinOrTokenId::Coin).await;
         for token_id in &token_ids {
@@ -688,6 +547,106 @@ fn burn_value(
         .unwrap();
 
     *circulating_supply = (*circulating_supply - burn_amount).unwrap();
+}
+
+fn update_statistics(
+    statistics: &mut BTreeMap<CoinOrTokenStatistic, BTreeMap<CoinOrTokenId, Amount>>,
+    tx: &Transaction,
+    chain_config: &ChainConfig,
+    block_height: BlockHeight,
+) {
+    tx.outputs().iter().for_each(|out| match out {
+        TxOutput::IssueNft(token_id, _, _) => {
+            statistics
+                .entry(CoinOrTokenStatistic::CirculatingSupply)
+                .or_default()
+                .insert(CoinOrTokenId::TokenId(*token_id), Amount::from_atoms(1));
+            let nft_issuance_fee = chain_config.nft_issuance_fee(block_height);
+            burn_coins(statistics, nft_issuance_fee);
+        }
+        TxOutput::IssueFungibleToken(_) => {
+            let token_issuance_fee = chain_config.fungible_token_issuance_fee();
+            burn_coins(statistics, token_issuance_fee);
+        }
+        TxOutput::CreateStakePool(_, data) => {
+            statistics
+                .entry(CoinOrTokenStatistic::Staked)
+                .or_default()
+                .entry(CoinOrTokenId::Coin)
+                .and_modify(|amount| *amount = (*amount + data.pledge()).unwrap())
+                .or_insert(data.pledge());
+        }
+        TxOutput::Burn(value) => {
+            burn_value(statistics, value);
+        }
+        TxOutput::DataDeposit(_) => {
+            let data_deposit_fee = chain_config.data_deposit_fee(BlockHeight::zero());
+            burn_coins(statistics, data_deposit_fee);
+        }
+        TxOutput::DelegateStaking(to_stake, _) => {
+            statistics
+                .entry(CoinOrTokenStatistic::Staked)
+                .or_default()
+                .entry(CoinOrTokenId::Coin)
+                .and_modify(|amount| *amount = (*amount + *to_stake).unwrap())
+                .or_insert(*to_stake);
+        }
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::Htlc(_, _)
+        | TxOutput::CreateOrder(_) => {}
+    });
+
+    tx.inputs().iter().for_each(|inp| match inp {
+        TxInput::Utxo(_) => {}
+        TxInput::Account(acc) => match acc.account() {
+            AccountSpending::DelegationBalance(_, to_spend) => {
+                let staked = statistics
+                    .entry(CoinOrTokenStatistic::Staked)
+                    .or_default()
+                    .get_mut(&CoinOrTokenId::Coin)
+                    .unwrap();
+
+                *staked = (*staked - *to_spend).unwrap();
+            }
+        },
+        TxInput::AccountCommand(_, cmd) => match cmd {
+            AccountCommand::MintTokens(token_id, to_mint) => {
+                statistics
+                    .entry(CoinOrTokenStatistic::CirculatingSupply)
+                    .or_default()
+                    .entry(CoinOrTokenId::TokenId(*token_id))
+                    .and_modify(|amount| *amount = (*amount + *to_mint).unwrap())
+                    .or_insert(*to_mint);
+                let token_supply_change_fee = chain_config.token_supply_change_fee(block_height);
+                burn_coins(statistics, token_supply_change_fee);
+            }
+            AccountCommand::UnmintTokens(_) => {
+                let token_supply_change_fee = chain_config.token_supply_change_fee(block_height);
+                burn_coins(statistics, token_supply_change_fee);
+            }
+            AccountCommand::FreezeToken(_, _) | AccountCommand::UnfreezeToken(_) => {
+                let token_freeze_fee = chain_config.token_freeze_fee(block_height);
+                burn_coins(statistics, token_freeze_fee);
+            }
+            AccountCommand::LockTokenSupply(_) => {
+                let token_supply_change_fee = chain_config.token_supply_change_fee(block_height);
+                burn_coins(statistics, token_supply_change_fee);
+            }
+            AccountCommand::ChangeTokenAuthority(_, _) => {
+                let token_change_authority_fee =
+                    chain_config.token_change_authority_fee(block_height);
+                burn_coins(statistics, token_change_authority_fee);
+            }
+            AccountCommand::ChangeTokenMetadataUri(_token_id, _) => {
+                let token_change_metadata_fee = chain_config.token_change_metadata_uri_fee();
+                burn_coins(statistics, token_change_metadata_fee);
+            }
+            AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => {}
+        },
+    });
 }
 
 fn burn_coins(

@@ -24,9 +24,9 @@ use api_server_common::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
-        ApiServerStorage, ApiServerStorageRead, ApiServerStorageWrite, ApiServerTransactionRw,
-        BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, Order,
-        TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+        ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
+        ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
+        LockedUtxo, Order, TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
     },
 };
 use crypto::{
@@ -52,7 +52,10 @@ use common::{
 };
 use futures::Future;
 use libtest_mimic::Failed;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    assert_matches,
+    random::{make_seedable_rng, Seed},
+};
 
 pub async fn initialization<S, Fut, F: Fn() -> Fut>(
     storage_maker: Arc<F>,
@@ -308,10 +311,10 @@ where
 
         drop(db_tx);
 
-        let mut db_tx = storage.transaction_rw().await.unwrap();
-
-        // Set without owning block
+        // Set with not existing owning block
         {
+            let mut db_tx = storage.transaction_rw().await.unwrap();
+
             let tx_info = TransactionInfo {
                 tx: tx1.clone(),
                 additional_info: TxAdditionalInfo {
@@ -320,15 +323,16 @@ where
                     token_decimals: BTreeMap::new(),
                 },
             };
-            db_tx.set_transaction(tx1.transaction().get_id(), None, &tx_info).await.unwrap();
+            let random_owning_block = Id::<Block>::new(H256::random_using(&mut rng));
+            let result = db_tx
+                .set_transaction(tx1.transaction().get_id(), random_owning_block, &tx_info)
+                .await
+                .unwrap_err();
 
-            let tx_and_block_id = db_tx.get_transaction(tx1.transaction().get_id()).await.unwrap();
-            assert!(tx_and_block_id.is_some());
-
-            let (owning_block, tx_retrieved) = tx_and_block_id.unwrap();
-            assert!(owning_block.is_none());
-            assert_eq!(tx_retrieved, tx_info);
+            assert_matches!(result, ApiServerStorageError::LowLevelStorageError(..));
         }
+
+        let mut db_tx = storage.transaction_rw().await.unwrap();
 
         // Set with owning block
         {
@@ -341,7 +345,7 @@ where
                 },
             };
             db_tx
-                .set_transaction(tx1.transaction().get_id(), Some(owning_block1), &tx_info)
+                .set_transaction(tx1.transaction().get_id(), owning_block1, &tx_info)
                 .await
                 .unwrap();
 
@@ -349,7 +353,7 @@ where
             assert!(tx_and_block_id.is_some());
 
             let (owning_block, tx_retrieved) = tx_and_block_id.unwrap();
-            assert_eq!(owning_block, Some(owning_block1));
+            assert_eq!(owning_block, owning_block1);
             assert_eq!(tx_retrieved, tx_info);
         }
 

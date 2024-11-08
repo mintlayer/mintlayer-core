@@ -49,7 +49,7 @@ struct ApiServerInMemoryStorage {
     delegation_table: BTreeMap<DelegationId, BTreeMap<BlockHeight, Delegation>>,
     main_chain_blocks_table: BTreeMap<BlockHeight, Id<Block>>,
     pool_data_table: BTreeMap<PoolId, BTreeMap<BlockHeight, PoolData>>,
-    transaction_table: BTreeMap<Id<Transaction>, (Option<Id<Block>>, TransactionInfo)>,
+    transaction_table: BTreeMap<Id<Transaction>, (Id<Block>, TransactionInfo)>,
     utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, Utxo>>,
     address_utxos: BTreeMap<String, BTreeSet<UtxoOutPoint>>,
     locked_utxo_table: BTreeMap<UtxoOutPoint, BTreeMap<BlockHeight, LockedUtxo>>,
@@ -201,7 +201,7 @@ impl ApiServerInMemoryStorage {
         };
 
         Ok(Some((
-            block_id.and_then(|block_id| self.block_aux_data_table.get(&block_id)).cloned(),
+            self.block_aux_data_table.get(block_id).cloned(),
             tx.clone(),
         )))
     }
@@ -210,7 +210,7 @@ impl ApiServerInMemoryStorage {
     fn get_transaction(
         &self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<Id<Block>>, TransactionInfo)>, ApiServerStorageError> {
+    ) -> Result<Option<(Id<Block>, TransactionInfo)>, ApiServerStorageError> {
         let transaction_result = self.transaction_table.get(&transaction_id);
         let tx = match transaction_result {
             Some(tx) => tx,
@@ -824,9 +824,16 @@ impl ApiServerInMemoryStorage {
     fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
-        owning_block: Option<Id<Block>>,
+        owning_block: Id<Block>,
         transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError> {
+        // Emulate the behavior of real db where foreign key must be present
+        if !self.block_table.contains_key(&owning_block) {
+            return Err(ApiServerStorageError::LowLevelStorageError(
+                "Owning block must exist in block table".to_string(),
+            ));
+        }
+
         self.transaction_table
             .insert(transaction_id, (owning_block, transaction.clone()));
         Ok(())
