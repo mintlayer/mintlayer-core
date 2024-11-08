@@ -1345,15 +1345,15 @@ pub async fn run(
             // Make event loop more efficient
             biased;
 
-            // request_opt = request_rx.recv() => {
-            //     let request = request_opt.expect("UI channel closed unexpectedly");
-            //     if matches!(request, BackendRequest::Shutdown) {
-            //         backend.shutdown().await;
-            //         return;
-            //     } else {
-            //         backend.process_request(request).await;
-            //     }
-            // }
+            request_opt = request_rx.recv() => {
+                let request = request_opt.expect("UI channel closed unexpectedly");
+                if matches!(request, BackendRequest::Shutdown) {
+                    backend.shutdown().await;
+                    return;
+                } else {
+                    backend.process_request(request).await;
+                }
+            }
 
             // Start this before starting the remaining background tasks
             // to reduce the chance of tasks being canceled (for efficiency)
@@ -1393,15 +1393,15 @@ pub async fn run_cold(
             // Make event loop more efficient
             biased;
 
-            // request_opt = request_rx.recv() => {
-            //     let request = request_opt.expect("UI channel closed unexpectedly");
-            //     if matches!(request, BackendRequest::Shutdown) {
-            //         backend.shutdown().await;
-            //         return;
-            //     } else {
-            //         backend.process_request(request).await;
-            //     }
-            // }
+            request_opt = request_rx.recv() => {
+                let request = request_opt.expect("UI channel closed unexpectedly");
+                if matches!(request, BackendRequest::Shutdown) {
+                    backend.shutdown().await;
+                    return;
+                } else {
+                    backend.process_request(request).await;
+                }
+            }
 
             // Start this before starting the remaining background tasks
             // to reduce the chance of tasks being canceled (for efficiency)

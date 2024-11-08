@@ -79,3 +79,10 @@ export type WalletInfo = {
   best_block: [string, number];
   wallet_type: string;
 };
+
+export type AddressInfo = {
+  wallet_id: number;
+  account_id: string;
+  index: number;
+  address: string;
+};

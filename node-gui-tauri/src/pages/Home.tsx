@@ -48,6 +48,7 @@ function Home() {
   const [currentAccount, setCurrentAccount] = useState<AccountType>();
   const [mnemonic, setMnemonic] = useState("");
   const [currentAccountId, setCurrentAccountId] = useState(0);
+  const [currentWalletId, setCurrentWalletId] = useState(0);
 
   const [showMnemonicModal, setShowMnemonicModal] = useState(false);
   const [showRecoverWalletModal, setShowRecoverWalletModal] = useState(false);
@@ -79,14 +80,36 @@ function Home() {
   }, [walletsInfo]);
 
   useEffect(() => {
-    if (!currentAccount) {
-      setCurrentAccount(
-        Object.values(currentWallet?.accounts ? currentWallet.accounts : {})[0]
-      );
+    setCurrentAccount(
+      Object.values(currentWallet?.accounts ? currentWallet.accounts : {})[0]
+    );
+    if (currentWallet) {
+      setWalletsInfo((prevWallets) => {
+        return prevWallets.map((walletItem, index) => {
+          if (index === currentWalletId) {
+            return currentWallet; // Ensure a valid WalletInfo is returned
+          } else {
+            return walletItem;
+          }
+        });
+      });
     }
   }, [currentWallet]);
 
-
+  useEffect(() => {
+    if (currentAccount) {
+      setCurrentWallet(
+        (prevWallet) =>
+          ({
+            ...prevWallet,
+            accounts: {
+              ...prevWallet?.accounts,
+              [currentAccountId]: currentAccount,
+            },
+          } as WalletInfo)
+      );
+    }
+  }, [currentAccount]);
 
   const createNewWallet = () => {
     try {
@@ -242,6 +265,26 @@ function Home() {
 
   const handleExit = async () => {
     await exit();
+  };
+
+  const handleUpdateCurrentAccountAddresses = (
+    index: string,
+    address: string
+  ) => {
+    const updatedAccount: AccountType = {
+      // Spread the previous account
+      addresses: {
+        ...currentAccount?.addresses, // Spread the existing addresses
+        [index]: address, // Update the specific address
+      },
+      name: currentAccount?.name,
+      staking_enabled: currentAccount?.staking_enabled,
+      balance: currentAccount?.balance,
+      staking_balance: currentAccount?.staking_balance,
+      delegations_balance: currentAccount?.delegations_balance,
+      transaction_list: currentAccount?.transaction_list,
+    } as AccountType;
+    setCurrentAccount(updatedAccount);
   };
 
   return (
@@ -447,10 +490,7 @@ function Home() {
                                 (wallet) => wallet.wallet_id == e?.target.value
                               )
                             );
-                            console.log(
-                              "current wallet id is ====>",
-                              e.target.value
-                            );
+                            setCurrentWalletId(parseInt(e.target.value));
                           }}
                           className="block w-[16vw] bg-white px-2 border-gray-300 text-gray-700 py-2  rounded-lg shadow-sm focus:outline-none  "
                         >
@@ -496,7 +536,7 @@ function Home() {
                                   .accounts
                               : {}
                           ).map(([index, account]) => (
-                            <option key={index} value={account.name}>
+                            <option key={index} value={account?.name}>
                               Account {index}
                             </option>
                           ))}
@@ -610,6 +650,9 @@ function Home() {
                       activeTab={activeTab}
                       addresses={currentAccount?.addresses}
                       transactions={currentAccount?.transaction_list}
+                      handleUpdateCurrentAccount={
+                        handleUpdateCurrentAccountAddresses
+                      }
                     />
                   )}
                   {currentTab === "staking" && <Staking />}
