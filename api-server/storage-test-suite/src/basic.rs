@@ -24,9 +24,9 @@ use api_server_common::storage::{
     impls::CURRENT_STORAGE_VERSION,
     storage_api::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
-        ApiServerStorage, ApiServerStorageRead, ApiServerStorageWrite, ApiServerTransactionRw,
-        BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData, LockedUtxo, Order,
-        TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+        ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
+        ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
+        LockedUtxo, Order, TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
     },
 };
 use crypto::{
@@ -52,7 +52,10 @@ use common::{
 };
 use futures::Future;
 use libtest_mimic::Failed;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    assert_matches,
+    random::{make_seedable_rng, Seed},
+};
 
 pub async fn initialization<S, Fut, F: Fn() -> Fut>(
     storage_maker: Arc<F>,
@@ -307,6 +310,31 @@ where
         assert!(tx_and_block_id.is_none());
 
         drop(db_tx);
+
+        // Set with not existing owning block
+        {
+            let mut db_tx = storage.transaction_rw().await.unwrap();
+
+            let tx_info = TransactionInfo {
+                tx: tx1.clone(),
+                additional_info: TxAdditionalInfo {
+                    fee: Amount::from_atoms(rng.gen_range(0..100)),
+                    input_utxos: tx1_input_utxos.clone(),
+                    token_decimals: BTreeMap::new(),
+                },
+            };
+            let random_owning_block = Id::<Block>::new(H256::random_using(&mut rng));
+            let result = db_tx
+                .set_transaction(
+                    tx1.transaction().get_id(),
+                    Some(random_owning_block),
+                    &tx_info,
+                )
+                .await
+                .unwrap_err();
+
+            assert_matches!(result, ApiServerStorageError::LowLevelStorageError(..));
+        }
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
 

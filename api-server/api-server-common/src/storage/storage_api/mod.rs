@@ -40,7 +40,7 @@ use self::block_aux_data::{BlockAuxData, BlockWithExtraData};
 pub mod block_aux_data;
 
 #[allow(dead_code)]
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ApiServerStorageError {
     #[error("Low level storage error: {0}")]
     LowLevelStorageError(String),

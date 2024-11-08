@@ -827,6 +827,15 @@ impl ApiServerInMemoryStorage {
         owning_block: Option<Id<Block>>,
         transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError> {
+        if let Some(owning_block) = owning_block {
+            // Emulate the behavior of real db where foreign key must be present
+            if !self.block_table.contains_key(&owning_block) {
+                return Err(ApiServerStorageError::LowLevelStorageError(
+                    "Owning block must exist in block table".to_string(),
+                ));
+            }
+        }
+
         self.transaction_table
             .insert(transaction_id, (owning_block, transaction.clone()));
         Ok(())

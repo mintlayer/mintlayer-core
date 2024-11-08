@@ -137,7 +137,18 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
             logging::log::info!("Connected block: ({}, {:x})", block_height, block.get_id());
 
             let mut total_fees = AccumulatedFee::new();
+            let mut transactions = Vec::with_capacity(block.transactions().len());
             let mut tx_additional_infos = Vec::with_capacity(block.transactions().len());
+
+            // The order in which data is processed and flushed to the storage is very specific.
+            //
+            // First, the tx fee is calculated and the tables dependant on tx info are updated. This is done
+            // per tx because calculating fee requires up to date utxo and orders info.
+            //
+            // Second, total fee is accumulated and block is flushed to the db.
+            //
+            // Third, txs are flushed to the db AFTER the block.
+            // This is done because transaction table has FOREIGN key `owning_block_id` referring block table.
 
             for tx in block.transactions().iter() {
                 let (tx_fee, tx_additional_info) = calculate_tx_fee_and_collect_token_info(
@@ -165,10 +176,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                     tx: tx.clone(),
                     additional_info: tx_additional_info,
                 };
-                db_tx
-                    .set_transaction(tx.transaction().get_id(), Some(block.get_id()), &tx_info)
-                    .await
-                    .expect("Unable to set transaction");
+                transactions.push(tx_info);
             }
 
             let block_id = block.get_id();
@@ -180,6 +188,13 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
                 .set_mainchain_block(block_id, block_height, &block_with_extras)
                 .await
                 .expect("Unable to set block");
+
+            for tx_info in transactions {
+                db_tx
+                    .set_transaction(tx_info.tx.transaction().get_id(), Some(block_id), &tx_info)
+                    .await
+                    .expect("Unable to set transaction");
+            }
 
             db_tx
                 .set_block_aux_data(
