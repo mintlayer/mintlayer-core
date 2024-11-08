@@ -233,8 +233,7 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     async fn get_transaction(
         &self,
         transaction_id: Id<common::chain::Transaction>,
-    ) -> Result<Option<(Option<Id<common::chain::Block>>, TransactionInfo)>, ApiServerStorageError>
-    {
+    ) -> Result<Option<(Id<common::chain::Block>, TransactionInfo)>, ApiServerStorageError> {
         let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_transaction(transaction_id).await?;
 

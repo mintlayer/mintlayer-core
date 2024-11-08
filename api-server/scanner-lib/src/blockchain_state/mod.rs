@@ -191,7 +191,7 @@ impl<S: ApiServerStorage + Send + Sync> LocalBlockchainState for BlockchainState
 
             for tx_info in transactions {
                 db_tx
-                    .set_transaction(tx_info.tx.transaction().get_id(), Some(block_id), &tx_info)
+                    .set_transaction(tx_info.tx.transaction().get_id(), block_id, &tx_info)
                     .await
                     .expect("Unable to set transaction");
             }

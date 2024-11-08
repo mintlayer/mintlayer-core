@@ -506,7 +506,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.just_execute(
             "CREATE TABLE ml.transactions (
                     transaction_id bytea PRIMARY KEY,
-                    owning_block_id bytea REFERENCES ml.blocks(block_id),
+                    owning_block_id bytea NOT NULL REFERENCES ml.blocks(block_id),
                     transaction_data bytea NOT NULL
                 );", // block_id can be null if the transaction is not in the main chain
         )
@@ -1342,7 +1342,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn get_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
-    ) -> Result<Option<(Option<Id<Block>>, TransactionInfo)>, ApiServerStorageError> {
+    ) -> Result<Option<(Id<Block>, TransactionInfo)>, ApiServerStorageError> {
         let row = self
             .tx
             .query_opt(
@@ -1360,12 +1360,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             None => return Ok(None),
         };
 
-        let block_id_data: Option<Vec<u8>> = data.get(0);
+        let block_id_data: Vec<u8> = data.get(0);
         let transaction_data: Vec<u8> = data.get(1);
 
         let block_id = {
-            let deserialized_block_id =
-                block_id_data.map(|d| Id::<Block>::decode_all(&mut d.as_slice())).transpose();
+            let deserialized_block_id = Id::<Block>::decode_all(&mut block_id_data.as_slice());
             deserialized_block_id.map_err(|e| {
                 ApiServerStorageError::DeserializationError(format!(
                     "Block deserialization failed: {}",
@@ -1497,7 +1496,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     pub async fn set_transaction(
         &mut self,
         transaction_id: Id<Transaction>,
-        owning_block: Option<Id<Block>>,
+        owning_block: Id<Block>,
         transaction: &TransactionInfo,
     ) -> Result<(), ApiServerStorageError> {
         logging::log::debug!(
@@ -1509,7 +1508,7 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx.execute(
                 "INSERT INTO ml.transactions (transaction_id, owning_block_id, transaction_data) VALUES ($1, $2, $3)
                     ON CONFLICT (transaction_id) DO UPDATE
-                    SET owning_block_id = $2, transaction_data = $3;", &[&transaction_id.encode(), &owning_block.map(|v|v.encode()), &transaction.encode()]
+                    SET owning_block_id = $2, transaction_data = $3;", &[&transaction_id.encode(), &owning_block.encode(), &transaction.encode()]
             ).await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
 
