@@ -15,7 +15,7 @@
 
 use chainstate_test_framework::empty_witness;
 use chainstate_test_framework::{TestFramework, TransactionBuilder};
-use common::chain::tokens::{make_token_id, TokenId, TokenIssuance};
+use common::chain::tokens::{make_token_id, TokenId, TokenIssuance, TokenTotalSupply};
 use common::chain::{AccountCommand, AccountNonce, TxInput};
 use common::primitives::BlockHeight;
 use common::{
@@ -162,6 +162,12 @@ pub fn issue_and_mint_tokens_from_genesis(
         Destination::AnyoneCanSpend,
         rng,
     );
+    let amount_to_mint = match issuance.total_supply {
+        TokenTotalSupply::Fixed(limit) => Amount::from_atoms(rng.gen_range(1..=limit.into_atoms())),
+        TokenTotalSupply::Lockable | TokenTotalSupply::Unlimited => {
+            Amount::from_atoms(rng.gen_range(100..1000))
+        }
+    };
 
     let genesis_outpoint = UtxoOutPoint::new(tf.best_block_id().into(), 0);
     let genesis_coins = chainstate_test_framework::get_output_value(
@@ -193,7 +199,6 @@ pub fn issue_and_mint_tokens_from_genesis(
     let token_supply_change_fee =
         tf.chainstate.get_chain_config().token_supply_change_fee(BlockHeight::zero());
     let coins_after_mint = (coins_after_issue - token_supply_change_fee).unwrap();
-    let amount_to_mint = Amount::from_atoms(1000);
 
     let tx2 = TransactionBuilder::new()
         .add_input(
