@@ -277,6 +277,22 @@ It is recommended to use a strict `Transaction` size and set the second paramete
 Calculate the "effective balance" of a pool, given the total pool balance and pledge by the pool owner/staker.
 The effective balance is how the influence of a pool is calculated due to its balance.
 
+### Function: `encode_create_order_output`
+
+Given ask and give amounts and a conclude key create output that creates an order.
+
+'ask_token_id' parameter represents a Token is it's Some and a Coin otherwise.
+'give_token_id' parameter represents a Token is it's Some and a Coin otherwise.
+
+### Function: `encode_input_for_fill_order`
+
+Given amount to fill order (which is described in terms of ask currency) and a destination
+for for result outputs create an input that fills and order.
+
+### Function: `encode_input_for_conclude_order`
+
+Given and order id create an input that concludes an order.
+
 ### Enum: `Network`
 
 The network, for which an operation to be done. Mainnet, testnet, etc.

@@ -33,6 +33,9 @@ import {
   encode_multisig_challenge,
   encode_witness_htlc_multisig,
   extract_htlc_secret,
+  encode_create_order_output,
+  encode_input_for_fill_order,
+  encode_input_for_conclude_order,
   SignatureHashType,
   encode_input_for_withdraw_from_delegation,
   estimate_transaction_size,
@@ -775,6 +778,43 @@ export async function run_test() {
       Network.Testnet
     );
     console.log("htlc with tokens encoding ok");
+
+    encode_create_order_output(
+      Amount.from_atoms("40000"),
+      undefined,
+      Amount.from_atoms("10000"),
+      token_id,
+      address,
+      Network.Testnet
+    );
+    console.log("create order coins for tokens encoding ok");
+
+    encode_create_order_output(
+      Amount.from_atoms("10000"),
+      token_id,
+      Amount.from_atoms("40000"),
+      undefined,
+      address,
+      Network.Testnet
+    );
+    console.log("create order tokens for coins encoding ok");
+
+    const order_id = "tordr1xxt0avjtt4flkq0tnlyphmdm4aaj9vmkx5r2m4g863nw3lgf7nzs7mlkqc";
+    encode_input_for_fill_order(
+      order_id,
+      Amount.from_atoms("40000"),
+      address,
+      BigInt(1),
+      Network.Testnet
+    );
+    console.log("fill order encoding ok");
+
+    encode_input_for_conclude_order(
+      order_id,
+      BigInt(1),
+      Network.Testnet
+    );
+    console.log("conclude order encoding ok");
 
     try {
       const invalid_inputs = "invalid inputs";

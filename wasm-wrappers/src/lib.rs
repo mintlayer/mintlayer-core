@@ -45,8 +45,9 @@ use common::{
             make_token_id, IsTokenFreezable, Metadata, NftIssuance, NftIssuanceV0, TokenCreator,
             TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
-        AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination, OutPointSourceId,
-        SignedTransaction, Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination,
+        OrderData, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{
         self, amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, Idable, H256,
@@ -793,6 +794,21 @@ pub fn data_deposit_fee(current_block_height: u64, network: Network) -> Amount {
     )
 }
 
+fn parse_output_value(
+    chain_config: &ChainConfig,
+    amount: &Amount,
+    token_id: Option<String>,
+) -> Result<OutputValue, Error> {
+    let amount = amount.as_internal_amount()?;
+    match token_id {
+        Some(token_id) => {
+            let token_id = parse_addressable(chain_config, &token_id)?;
+            Ok(OutputValue::TokenV1(token_id, amount))
+        }
+        None => Ok(OutputValue::Coin(amount)),
+    }
+}
+
 /// Given the parameters needed to create hash timelock contract, and a network type (mainnet, testnet, etc),
 /// this function creates an output.
 #[wasm_bindgen]
@@ -806,14 +822,7 @@ pub fn encode_output_htlc(
     network: Network,
 ) -> Result<Vec<u8>, Error> {
     let chain_config = Builder::new(network.into()).build();
-    let amount = amount.as_internal_amount()?;
-    let output_value = match token_id {
-        Some(token_id) => {
-            let token_id = parse_addressable(&chain_config, &token_id)?;
-            OutputValue::TokenV1(token_id, amount)
-        }
-        None => OutputValue::Coin(amount),
-    };
+    let output_value = parse_output_value(&chain_config, &amount, token_id)?;
     let refund_timelock = OutputTimeLock::decode_all(&mut &refund_timelock[..])
         .map_err(|_| Error::InvalidTimeLock)?;
     let secret_hash =
@@ -1246,6 +1255,66 @@ pub fn effective_pool_balance(
             .map_err(|e| Error::EffectiveBalanceCalculationFailed(e.to_string()))?;
 
     Ok(Amount::from_internal_amount(effective_balance))
+}
+
+/// Given ask and give amounts and a conclude key create output that creates an order.
+///
+/// 'ask_token_id' parameter represents a Token is it's Some and a Coin otherwise.
+/// 'give_token_id' parameter represents a Token is it's Some and a Coin otherwise.
+#[wasm_bindgen]
+pub fn encode_create_order_output(
+    ask_amount: Amount,
+    ask_token_id: Option<String>,
+    give_amount: Amount,
+    give_token_id: Option<String>,
+    conclude_address: &str,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let ask = parse_output_value(&chain_config, &ask_amount, ask_token_id)?;
+    let give = parse_output_value(&chain_config, &give_amount, give_token_id)?;
+    let conclude_key = parse_addressable::<Destination>(&chain_config, conclude_address)?;
+
+    let order = OrderData::new(conclude_key, ask, give);
+    let output = TxOutput::CreateOrder(Box::new(order));
+    Ok(output.encode())
+}
+
+/// Given amount to fill order (which is described in terms of ask currency) and a destination
+/// for for result outputs create an input that fills and order.
+#[wasm_bindgen]
+pub fn encode_input_for_fill_order(
+    order_id: &str,
+    fill_amount: Amount,
+    destination: &str,
+    nonce: u64,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let order_id = parse_addressable(&chain_config, order_id)?;
+    let fill_amount = fill_amount.as_internal_amount()?;
+    let destination = parse_addressable::<Destination>(&chain_config, destination)?;
+    let input = TxInput::AccountCommand(
+        AccountNonce::new(nonce),
+        AccountCommand::FillOrder(order_id, fill_amount, destination),
+    );
+    Ok(input.encode())
+}
+
+/// Given and order id create an input that concludes an order.
+#[wasm_bindgen]
+pub fn encode_input_for_conclude_order(
+    order_id: &str,
+    nonce: u64,
+    network: Network,
+) -> Result<Vec<u8>, Error> {
+    let chain_config = Builder::new(network.into()).build();
+    let order_id = parse_addressable(&chain_config, order_id)?;
+    let input = TxInput::AccountCommand(
+        AccountNonce::new(nonce),
+        AccountCommand::ConcludeOrder(order_id),
+    );
+    Ok(input.encode())
 }
 
 #[cfg(test)]
