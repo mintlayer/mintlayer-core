@@ -20,6 +20,7 @@ use common::{
     Uint256, Uint512,
 };
 use crypto::vrf::{VRFPublicKey, VRFReturn};
+use logging::log;
 use utils::ensure;
 
 use crate::pos::error::ConsensusPoSError;
@@ -56,9 +57,13 @@ fn check_pos_hash_v1(
     let effective_balance = effective_pool_balance(pledge_amount, pool_balance, final_supply)?;
     let effective_balance: Uint512 = effective_balance.into();
 
+    let effective_target = (effective_balance * (*target).into())
+        .expect("Cannot fail because both were converted from smaller type");
+
+    log::debug!("hash:\n{hash:x}\ntarget:\n{effective_target:x}");
+
     ensure!(
-        hash <= (effective_balance * (*target).into())
-            .expect("Cannot fail because both were converted from smaller type"),
+        hash <= effective_target,
         ConsensusPoSError::StakeKernelHashTooHigh
     );
 

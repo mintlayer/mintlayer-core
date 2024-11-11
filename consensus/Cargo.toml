@@ -20,6 +20,7 @@ itertools.workspace = true
 num.workspace = true
 parity-scale-codec.workspace = true
 thiserror.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }

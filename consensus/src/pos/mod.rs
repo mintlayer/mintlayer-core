@@ -37,7 +37,7 @@ use common::{
         config::EpochIndex,
         ChainConfig, CoinUnit, PoSChainConfig, PoSStatus, TxOutput,
     },
-    primitives::{Amount, BlockHeight, Compact, Idable},
+    primitives::{Amount, BlockHeight, Compact, DecimalAmount, Idable},
     Uint256,
 };
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey, VRFReturn};
@@ -222,13 +222,32 @@ pub fn stake(
 
     let first_timestamp = *block_timestamp;
 
-    log::debug!(
-        "Search for a valid block ({}..{}), pool_id: {}",
-        first_timestamp,
-        max_block_timestamp,
-        Address::new(chain_config, *pos_data.stake_pool_id())
+    // log::debug!(
+    //     "Search for a valid block ({}..{}), pool_id: {}, pool balance: {}, pool pledge: {}",
+    //     first_timestamp,
+    //     max_block_timestamp,
+    //     Address::new(chain_config, *pos_data.stake_pool_id())
+    //         .expect("Pool id to address cannot fail"),
+    //     DecimalAmount::from_amount_no_padding(
+    //         finalize_pos_data.pool_balance(),
+    //         chain_config.coin_decimals()
+    //     ),
+    //     DecimalAmount::from_amount_no_padding(
+    //         finalize_pos_data.pledge_amount(),
+    //         chain_config.coin_decimals()
+    //     ),
+    // );
+
+    let tracing_span = tracing::span!(
+        tracing::Level::DEBUG,
+        "stake",
+        pool_id = Address::new(chain_config, *pos_data.stake_pool_id())
             .expect("Pool id to address cannot fail")
+            .to_string(),
+        min_ts = first_timestamp.as_int_seconds(),
+        max_ts = max_block_timestamp.as_int_seconds()
     );
+    let _enter = tracing_span.enter();
 
     if let Some((found_timestamp, vrf_data)) = find_timestamp_for_staking(
         final_supply,

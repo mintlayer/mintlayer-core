@@ -1604,6 +1604,7 @@ dependencies = [
  "serialization",
  "test-utils",
  "thiserror",
+ "tracing",
  "utils",
  "utxo",
 ]
