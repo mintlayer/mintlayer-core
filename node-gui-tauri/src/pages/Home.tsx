@@ -289,12 +289,12 @@ function Home() {
   };
 
   const handleUpdateCurrentWalletEncryptionState = (
-    wallet_id: number,
+    wallet_id: string,
     encrypted: string
   ) => {
     const updatedWallet: WalletInfo = {
       accounts: currentWallet?.accounts ? currentWallet.accounts : {},
-      wallet_id: wallet_id.toString(),
+      wallet_id: wallet_id,
       path: currentWallet?.path ? currentWallet.path : "",
       encryption: encrypted,
       best_block: currentWallet?.best_block
@@ -303,6 +303,16 @@ function Home() {
       wallet_type: currentWallet?.wallet_type ? currentWallet.wallet_type : "",
     };
     setCurrentWallet(updatedWallet);
+  };
+
+  const handleRemoveWallet = (wallet_id: string) => {
+    setWalletsInfo((wallets) =>
+      wallets.filter((wallet) => wallet.wallet_id !== wallet_id)
+    );
+    setCurrentWallet(undefined);
+    setCurrentWalletId(0);
+    setCurrentAccount(undefined);
+    setCurrentAccountId(0);
   };
 
   return (
@@ -670,9 +680,10 @@ function Home() {
                       handleUpdateCurrentAccount={
                         handleUpdateCurrentAccountAddresses
                       }
-                      handleUpdateCurrentWalletEncryptionState = {
+                      handleUpdateCurrentWalletEncryptionState={
                         handleUpdateCurrentWalletEncryptionState
                       }
+                      handleRemoveWallet={handleRemoveWallet}
                     />
                   )}
                   {currentTab === "staking" && <Staking />}

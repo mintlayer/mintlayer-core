@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Addresses from "./Addresses";
 import Console from "./Console";
 import Delegation from "./Delegation";
@@ -17,9 +17,10 @@ const WalletActions = (props: {
   currentAccountId: number;
   handleUpdateCurrentAccount: (index: string, address: string) => void;
   handleUpdateCurrentWalletEncryptionState: (
-    wallet_id: number,
+    wallet_id: string,
     encrypted: string
   ) => void;
+  handleRemoveWallet: (wallet_id: string) => void;
 }) => {
   const [showEncryptWalletModal, setShowEncryptWalletModal] = useState(false);
   const [showNewAccountModal, setShowNewAccountModal] = useState(
@@ -52,13 +53,19 @@ const WalletActions = (props: {
     try {
       const result = await invoke("update_encryption_wrapper", {
         request: {
-          wallet_id: props.currentWallet?.wallet_id,
+          wallet_id: parseInt(
+            props.currentWallet?.wallet_id ? props.currentWallet.wallet_id : "0"
+          ),
           action: "set_password",
           password: password,
         },
       });
       if (result) {
         setWalletState("EnabledUnLocked");
+        props.handleUpdateCurrentWalletEncryptionState(
+          props.currentWallet?.wallet_id ? props.currentWallet.wallet_id : "",
+          "EnabledUnlocked"
+        );
         setShowEncryptWalletModal(false);
         notify("Wallet encrypted successfully.", "info");
       }
@@ -75,12 +82,20 @@ const WalletActions = (props: {
       try {
         const result = await invoke("update_encryption_wrapper", {
           request: {
-            wallet_id: props.currentWallet?.wallet_id,
+            wallet_id: parseInt(
+              props.currentWallet?.wallet_id
+                ? props.currentWallet.wallet_id
+                : "0"
+            ),
             action: "remove_password",
           },
         });
         if (result) {
           setWalletState("Disabled");
+          props.handleUpdateCurrentWalletEncryptionState(
+            props.currentWallet?.wallet_id ? props.currentWallet.wallet_id : "",
+            "Disabled"
+          );
           notify("Wallet encryption disabled successfully.", "info");
         }
       } catch (error) {
@@ -95,12 +110,18 @@ const WalletActions = (props: {
     try {
       const result = await invoke("update_encryption_wrapper", {
         request: {
-          wallet_id: props.currentWallet?.wallet_id,
+          wallet_id: parseInt(
+            props.currentWallet?.wallet_id ? props.currentWallet.wallet_id : "0"
+          ),
           action: "lock",
         },
       });
       if (result) {
         setWalletState("EnabledLocked");
+        props.handleUpdateCurrentWalletEncryptionState(
+          props.currentWallet?.wallet_id ? props.currentWallet.wallet_id : "",
+          "EnabledLocked"
+        );
         notify("Wallet locked successfully.", "info");
       }
     } catch (err) {
@@ -116,13 +137,19 @@ const WalletActions = (props: {
     try {
       const result = await invoke("update_encryption_wrapper", {
         request: {
-          wallet_id: props.currentWallet?.wallet_id,
+          wallet_id: parseInt(
+            props.currentWallet?.wallet_id ? props.currentWallet.wallet_id : "0"
+          ),
           action: "unlock",
           password: unLockPassword,
         },
       });
       if (result) {
         setWalletState("EnabledUnLocked");
+        props.handleUpdateCurrentWalletEncryptionState(
+          props.currentWallet?.wallet_id ? props.currentWallet.wallet_id : "",
+          "EnabledUnlocked"
+        );
         notify("Wallet unlocked successfully.", "info");
       }
     } catch (err) {
@@ -130,6 +157,24 @@ const WalletActions = (props: {
     }
     setShowUnlockModal(false);
     setUnLockPassword("");
+  };
+
+  const handleCloseWallet = async (wallet_id: number) => {
+    try {
+      const result: { wallet_id: string } = await invoke(
+        "close_wallet_wrapper",
+        {
+          wallet_id: wallet_id,
+        }
+      );
+      if (result) {
+        console.log(result);
+        props.handleRemoveWallet(result?.wallet_id);
+        notify("Wallet closed successfully.", "info");
+      }
+    } catch (error) {
+      notify(new String(error).toString(), "error");
+    }
   };
 
   return (
@@ -256,7 +301,11 @@ const WalletActions = (props: {
           )}
           {walletState !== "EnabledLocked" && (
             <button
-              className="py-1 px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black"
+              className={`py-1 px-2 ${
+                !props.currentWallet
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-[#69EE96] hover:text-[#69EE96] hover:bg-black"
+              } rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black`}
               onClick={handleUpdateWalletEncryption}
             >
               {walletState === "EnabledUnLocked"
@@ -264,7 +313,22 @@ const WalletActions = (props: {
                 : "Encrypt Wallet"}
             </button>
           )}
-          <button className="py-1 px-4 mt-8 mb-8 border text-[#E02424] border-[#E02424] bg-white rounded-lg transition-all duration-200 hover:outline-none hover:bg-[#E02424] hover:text-white hover:border-[#E02424]">
+          <button
+            className={`py-1 px-4 ${
+              !props.currentWallet
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-white hover:outline-none hover:bg-[#E02424] hover:text-white hover:border-[#E02424]"
+            } mt-8 mb-8 border text-[#E02424] border-[#E02424]  rounded-lg transition-all duration-200 `}
+            onClick={() =>
+              handleCloseWallet(
+                parseInt(
+                  props.currentWallet?.wallet_id
+                    ? props.currentWallet.wallet_id
+                    : "0"
+                )
+              )
+            }
+          >
             Close Wallet
           </button>
         </div>
