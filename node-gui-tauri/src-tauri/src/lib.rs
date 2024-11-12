@@ -38,7 +38,6 @@ use messages::{
 };
 use node_lib::{Command, RunOptions};
 use serde::{Deserialize, Serialize};
-use serde_json::Number;
 use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -138,6 +137,12 @@ pub struct NewAddressRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateEncryptionRequest {
+    wallet_id: u64,
+    action: String,
+    password: Option<String>,
+}
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SendDelegateRequest {
     pub wallet_id: u64,
     pub account_id: U31,
@@ -183,18 +188,6 @@ fn parse_address(
 ) -> Result<Address<Destination>, AddressError> {
     Address::from_string(chain_config, address)
 }
-
-// #[tauri::command]
-// async fn get_initialized_node(
-//     state: tauri::State<'_, AppState>,
-// ) -> Result<InitializedNode, String> {
-//     // Read the RwLock to get the value inside
-//     let guard = state.initialized_node.read().await; // Use .read() to get a read lock
-//     match &*guard {
-//         Some(control) => Ok(control.clone()), // Clone the control if necessary
-//         None => Err("Node not initialized".into()),
-//     }
-// }
 
 #[tauri::command]
 async fn initialize_node(
@@ -513,15 +506,14 @@ async fn new_address_wrapper(
 #[tauri::command]
 async fn update_encryption_wrapper(
     state: tauri::State<'_, AppState>,
-    wallet_id: u64,
-    action: &str,
-    password: Option<&str>,
+    request: UpdateEncryptionRequest,
 ) -> Result<(WalletId, EncryptionState), String> {
-    let wallet_id = WalletId::from_u64(wallet_id);
-    let update_encryption_action = match EncryptionAction::from_str(action, password) {
-        Some(action) => action,
-        None => return Err("Invalid action or missing password".into()), // Handle invalid action
-    };
+    let wallet_id = WalletId::from_u64(request.wallet_id);
+    let update_encryption_action =
+        match EncryptionAction::from_str(&request.action, request.password.as_deref()) {
+            Some(action) => action,
+            None => return Err("Invalid action or missing password".into()), // Handle invalid action
+        };
     let result = {
         let mut backend_guard = state.backend.write().await;
         let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;

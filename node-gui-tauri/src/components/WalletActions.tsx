@@ -6,6 +6,8 @@ import Send from "./Send";
 import Staking from "./Staking";
 import Transactions from "./Transactions";
 import { IoCloseSharp } from "react-icons/io5";
+import { invoke } from "@tauri-apps/api/core";
+import { notify } from "../utils/util";
 const WalletActions = (props: any) => {
   useEffect(() => {
     console.log("transaction list is ======>", props.transactions);
@@ -16,6 +18,7 @@ const WalletActions = (props: any) => {
   );
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [showLock, setShowLock] = useState(false);
+  const [walletState, setWalletState] = useState();
   const [accountName, setAccountName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -34,21 +37,37 @@ const WalletActions = (props: any) => {
       setError("");
     }
   };
-  const handleEncryptWallet = () => {
-    // Encrypt wallet logic
+
+  const handleEncryptWallet = async () => {
+    try {
+      console.log("wallet id is------------>", props.walletId);
+      const result = await invoke("update_encryption_wrapper", {
+        request: {
+          wallet_id: props.walletId,
+          action: "set_password",
+          password: password,
+        },
+      });
+      console.log(result);
+      if (result) {
+        setShowEncryptWalletModal(false);
+        notify("Wallet encrypted successfully.", "info");
+        setShowLock(true);
+      }
+    } catch (error) {
+      notify(new String(error).toString(), "error");
+    }
     setShowEncryptWalletModal(false);
-    setShowLock(true);
   };
 
   const handleCreateWallet = () => {
-    // Create wallet logic
     setShowNewAccountModal(false);
-    // props.onAccountCreated(accountName);
   };
 
   const handleUnlock = () => {
     setShowUnlockModal(false);
   };
+
   return (
     <div className="bg-white border border-gray-200 shadowoverflow-y-auto mt-8 p-8 m-8 rounded rounded-lg shadow">
       {showEncryptWalletModal && (

@@ -84,6 +84,7 @@ function Home() {
       Object.values(currentWallet?.accounts ? currentWallet.accounts : {})[0]
     );
     if (currentWallet) {
+      console.log(currentWallet);
       setWalletsInfo((prevWallets) => {
         return prevWallets.map((walletItem, index) => {
           if (index === currentWalletId) {
