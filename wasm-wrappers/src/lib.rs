@@ -1259,8 +1259,8 @@ pub fn effective_pool_balance(
 
 /// Given ask and give amounts and a conclude key create output that creates an order.
 ///
-/// 'ask_token_id' parameter represents a Token is it's Some and a Coin otherwise.
-/// 'give_token_id' parameter represents a Token is it's Some and a Coin otherwise.
+/// 'ask_token_id': the parameter represents a Token if it's Some and coins otherwise.
+/// 'give_token_id': the parameter represents a Token if it's Some and coins otherwise.
 #[wasm_bindgen]
 pub fn encode_create_order_output(
     ask_amount: Amount,
@@ -1280,8 +1280,8 @@ pub fn encode_create_order_output(
     Ok(output.encode())
 }
 
-/// Given amount to fill order (which is described in terms of ask currency) and a destination
-/// for for result outputs create an input that fills and order.
+/// Given an amount to fill an order (which is described in terms of ask currency) and a destination
+/// for result outputs create an input that fills the order.
 #[wasm_bindgen]
 pub fn encode_input_for_fill_order(
     order_id: &str,
@@ -1301,7 +1301,7 @@ pub fn encode_input_for_fill_order(
     Ok(input.encode())
 }
 
-/// Given and order id create an input that concludes an order.
+/// Given an order id create an input that concludes the order.
 #[wasm_bindgen]
 pub fn encode_input_for_conclude_order(
     order_id: &str,

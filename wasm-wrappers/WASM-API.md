@@ -281,17 +281,17 @@ The effective balance is how the influence of a pool is calculated due to its ba
 
 Given ask and give amounts and a conclude key create output that creates an order.
 
-'ask_token_id' parameter represents a Token is it's Some and a Coin otherwise.
-'give_token_id' parameter represents a Token is it's Some and a Coin otherwise.
+'ask_token_id': the parameter represents a Token if it's Some and coins otherwise.
+'give_token_id': the parameter represents a Token if it's Some and coins otherwise.
 
 ### Function: `encode_input_for_fill_order`
 
-Given amount to fill order (which is described in terms of ask currency) and a destination
-for for result outputs create an input that fills and order.
+Given an amount to fill an order (which is described in terms of ask currency) and a destination
+for result outputs create an input that fills the order.
 
 ### Function: `encode_input_for_conclude_order`
 
-Given and order id create an input that concludes an order.
+Given an order id create an input that concludes the order.
 
 ### Enum: `Network`
 
