@@ -32,7 +32,7 @@ use common::chain::{ChainConfig, DelegationId, Destination};
 use common::primitives::{Amount, BlockHeight};
 use crypto::key::hdkd::u31::U31;
 use messages::{
-    AccountId, AddressInfo, CreateDelegationRequest, DecommissionPoolRequest,
+    AccountId, AccountInfo, AddressInfo, CreateDelegationRequest, DecommissionPoolRequest,
     DelegateStakingRequest, EncryptionAction, EncryptionState, SendDelegateToAddressRequest,
     SendRequest, StakeRequest, TransactionInfo, WalletId, WalletInfo,
 };
@@ -149,6 +149,12 @@ pub struct SendDelegateRequest {
     pub address: String,
     pub amount: String,
     pub delegation_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NewAccountRequest {
+    wallet_id: u64,
+    name: String,
 }
 
 impl Default for AppState {
@@ -479,7 +485,7 @@ async fn new_address_wrapper(
     request: NewAddressRequest,
 ) -> Result<AddressInfo, String> {
     let wallet_id = WalletId::from_u64(request.wallet_id);
-    let account_id = AccountId::new(request.account_id);
+    let account_id: AccountId = AccountId::new(request.account_id);
 
     let result = {
         let mut backend_guard = state.backend.write().await;
@@ -742,6 +748,33 @@ async fn send_delegation_to_address_wrapper(
         }
     }
 }
+
+#[tauri::command]
+async fn new_account_wrapper(
+    state: tauri::State<'_, AppState>,
+    request: NewAccountRequest,
+) -> Result<(WalletId, AccountId, AccountInfo), String> {
+    let wallet_id = WalletId::from_u64(request.wallet_id);
+    let result = {
+        let mut backend_guard = state.backend.write().await;
+        let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
+        let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
+        backend.new_account(wallet_id, request.name).await
+    };
+
+    match result {
+        Ok(account_info) => {
+            println!("Account created successfully: {:?}", account_info);
+            Ok(account_info)
+        }
+        Err(e) => {
+            let error_message = e.to_string();
+            println!("Error sending delegation: {}", error_message);
+            Err(error_message)
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -763,7 +796,8 @@ pub fn run() {
             decommission_pool_wrapper,
             create_delegation_wrapper,
             delegate_staking_wrapper,
-            send_delegation_to_address_wrapper
+            send_delegation_to_address_wrapper,
+            new_account_wrapper
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

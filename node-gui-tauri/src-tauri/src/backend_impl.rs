@@ -624,7 +624,7 @@ impl Backend {
         }
     }
 
-    async fn new_account(
+    pub async fn new_account(
         &mut self,
         wallet_id: WalletId,
         name: String,
