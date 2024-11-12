@@ -288,6 +288,23 @@ function Home() {
     setCurrentAccount(updatedAccount);
   };
 
+  const handleUpdateCurrentWalletEncryptionState = (
+    wallet_id: number,
+    encrypted: string
+  ) => {
+    const updatedWallet: WalletInfo = {
+      accounts: currentWallet?.accounts ? currentWallet.accounts : {},
+      wallet_id: wallet_id.toString(),
+      path: currentWallet?.path ? currentWallet.path : "",
+      encryption: encrypted,
+      best_block: currentWallet?.best_block
+        ? currentWallet.best_block
+        : ["", 0],
+      wallet_type: currentWallet?.wallet_type ? currentWallet.wallet_type : "",
+    };
+    setCurrentWallet(updatedWallet);
+  };
+
   return (
     <div className="home-page">
       <ToastContainer />
@@ -645,14 +662,16 @@ function Home() {
                   {currentTab === "network" && <NetworkingTab />}
                   {currentTab === "transactions" && (
                     <WalletActions
-                      walletId={currentWallet?.wallet_id}
-                      accountId={currentAccountId}
+                      currentWallet={currentWallet}
+                      currentAccount={currentAccount}
+                      currentAccountId={currentAccountId}
                       showNewAccountModal={showNewAccountModal}
                       activeTab={activeTab}
-                      addresses={currentAccount?.addresses}
-                      transactions={currentAccount?.transaction_list}
                       handleUpdateCurrentAccount={
                         handleUpdateCurrentAccountAddresses
+                      }
+                      handleUpdateCurrentWalletEncryptionState = {
+                        handleUpdateCurrentWalletEncryptionState
                       }
                     />
                   )}

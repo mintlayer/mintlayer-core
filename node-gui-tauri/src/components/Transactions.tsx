@@ -1,12 +1,9 @@
 import { AiOutlineCopy } from "react-icons/ai";
 import { Pagination } from "flowbite-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { TransactionType } from "../types/Types";
 
-const Transactions = (props: { transactions: TransactionType }) => {
-  useEffect(() => {
-    console.log("transaction list is ==========>", props.transactions);
-  });
+const Transactions = (props: { transactions: TransactionType | undefined }) => {
   const [currentPage, setCurretPage] = useState(1);
   const onPageChange = (page: number) => {
     setCurretPage(page);

@@ -8,17 +8,27 @@ import Transactions from "./Transactions";
 import { IoCloseSharp } from "react-icons/io5";
 import { invoke } from "@tauri-apps/api/core";
 import { notify } from "../utils/util";
-const WalletActions = (props: any) => {
-  useEffect(() => {
-    console.log("transaction list is ======>", props.transactions);
-  });
+import { AccountType, WalletInfo } from "../types/Types";
+const WalletActions = (props: {
+  currentWallet: WalletInfo | undefined;
+  currentAccount: AccountType | undefined;
+  showNewAccountModal: boolean;
+  activeTab: string;
+  currentAccountId: number;
+  handleUpdateCurrentAccount: (index: string, address: string) => void;
+  handleUpdateCurrentWalletEncryptionState: (
+    wallet_id: number,
+    encrypted: string
+  ) => void;
+}) => {
   const [showEncryptWalletModal, setShowEncryptWalletModal] = useState(false);
   const [showNewAccountModal, setShowNewAccountModal] = useState(
     props.showNewAccountModal
   );
   const [showUnlockModal, setShowUnlockModal] = useState(false);
-  const [showLock, setShowLock] = useState(false);
-  const [walletState, setWalletState] = useState();
+  const [walletState, setWalletState] = useState(
+    props.currentWallet?.encryption
+  );
   const [accountName, setAccountName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -40,32 +50,86 @@ const WalletActions = (props: any) => {
 
   const handleEncryptWallet = async () => {
     try {
-      console.log("wallet id is------------>", props.walletId);
       const result = await invoke("update_encryption_wrapper", {
         request: {
-          wallet_id: props.walletId,
+          wallet_id: props.currentWallet?.wallet_id,
           action: "set_password",
           password: password,
         },
       });
-      console.log(result);
       if (result) {
+        setWalletState("EnabledUnLocked");
         setShowEncryptWalletModal(false);
         notify("Wallet encrypted successfully.", "info");
-        setShowLock(true);
       }
     } catch (error) {
       notify(new String(error).toString(), "error");
     }
     setShowEncryptWalletModal(false);
+    setPassword("");
+    setConfirmPassword("");
+  };
+
+  const handleUpdateWalletEncryption = async () => {
+    if (walletState === "EnabledUnLocked") {
+      try {
+        const result = await invoke("update_encryption_wrapper", {
+          request: {
+            wallet_id: props.currentWallet?.wallet_id,
+            action: "remove_password",
+          },
+        });
+        if (result) {
+          setWalletState("Disabled");
+          notify("Wallet encryption disabled successfully.", "info");
+        }
+      } catch (error) {
+        notify(new String(error).toString(), "error");
+      }
+    } else {
+      setShowEncryptWalletModal(true);
+    }
+  };
+
+  const handleLockWallet = async () => {
+    try {
+      const result = await invoke("update_encryption_wrapper", {
+        request: {
+          wallet_id: props.currentWallet?.wallet_id,
+          action: "lock",
+        },
+      });
+      if (result) {
+        setWalletState("EnabledLocked");
+        notify("Wallet locked successfully.", "info");
+      }
+    } catch (err) {
+      notify(new String(err).toString(), "error");
+    }
   };
 
   const handleCreateWallet = () => {
     setShowNewAccountModal(false);
   };
 
-  const handleUnlock = () => {
+  const handleUnlock = async () => {
+    try {
+      const result = await invoke("update_encryption_wrapper", {
+        request: {
+          wallet_id: props.currentWallet?.wallet_id,
+          action: "unlock",
+          password: unLockPassword,
+        },
+      });
+      if (result) {
+        setWalletState("EnabledUnLocked");
+        notify("Wallet unlocked successfully.", "info");
+      }
+    } catch (err) {
+      notify(new String(err).toString(), "error");
+    }
     setShowUnlockModal(false);
+    setUnLockPassword("");
   };
 
   return (
@@ -172,35 +236,63 @@ const WalletActions = (props: any) => {
           </span>
         </div>
         <div className="space-x-2">
-          {showLock && (
-            <button className="py-1 px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black ">
+          {walletState === "EnabledLocked" && (
+            <button
+              className="py-1 px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black "
+              onClick={() => {
+                setShowUnlockModal(true);
+              }}
+            >
+              UnLock
+            </button>
+          )}
+          {walletState === "EnabledUnLocked" && (
+            <button
+              className="py-1 px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black "
+              onClick={handleLockWallet}
+            >
               Lock
             </button>
           )}
-          <button
-            className="py-1 px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black"
-            onClick={() => setShowEncryptWalletModal(true)}
-          >
-            {showLock ? "Disable Wallet Encryption" : "Encrypt Wallet"}
-          </button>
+          {walletState !== "EnabledLocked" && (
+            <button
+              className="py-1 px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black"
+              onClick={handleUpdateWalletEncryption}
+            >
+              {walletState === "EnabledUnLocked"
+                ? "Disable Wallet Encryption"
+                : "Encrypt Wallet"}
+            </button>
+          )}
           <button className="py-1 px-4 mt-8 mb-8 border text-[#E02424] border-[#E02424] bg-white rounded-lg transition-all duration-200 hover:outline-none hover:bg-[#E02424] hover:text-white hover:border-[#E02424]">
             Close Wallet
           </button>
         </div>
       </div>
       {props.activeTab === "transactions" && (
-        <Transactions transactions={props.transactions} />
+        <Transactions transactions={props.currentAccount?.transaction_list} />
       )}
       {props.activeTab === "addresses" && (
         <Addresses
-          addresses={props.addresses}
-          walletId={props.walletId}
-          accountId={props.accountId}
+          addresses={
+            props.currentAccount?.addresses
+              ? props.currentAccount.addresses
+              : {}
+          }
+          walletId={parseInt(
+            props.currentWallet?.wallet_id ? props.currentWallet.wallet_id : "0"
+          )}
+          accountId={props.currentAccountId}
           handleUpdateCurrentAccount={props.handleUpdateCurrentAccount}
         />
       )}
       {props.activeTab === "send" && (
-        <Send walletId={props.walletId} accountId={props.accountId} />
+        <Send
+          walletId={parseInt(
+            props.currentWallet?.wallet_id ? props.currentWallet.wallet_id : "0"
+          )}
+          accountId={props.currentAccountId}
+        />
       )}
       {props.activeTab === "staking" && <Staking />}
       {props.activeTab === "delegation" && <Delegation />}
