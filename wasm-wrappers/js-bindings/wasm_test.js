@@ -33,6 +33,9 @@ import {
   encode_multisig_challenge,
   encode_witness_htlc_multisig,
   extract_htlc_secret,
+  encode_create_order_output,
+  encode_input_for_fill_order,
+  encode_input_for_conclude_order,
   SignatureHashType,
   encode_input_for_withdraw_from_delegation,
   estimate_transaction_size,
@@ -775,6 +778,82 @@ export async function run_test() {
       Network.Testnet
     );
     console.log("htlc with tokens encoding ok");
+
+    const order_output = encode_create_order_output(
+      Amount.from_atoms("40000"),
+      undefined,
+      Amount.from_atoms("10000"),
+      token_id,
+      address,
+      Network.Testnet
+    );
+    const expected_order_output = [
+      11, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41,
+      193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178,
+      0, 2, 113, 2, 0, 2, 162, 208, 145, 194, 165,
+      27, 14, 118, 31, 139, 199, 254, 11, 190, 108, 15,
+      64, 180, 50, 106, 211, 26, 107, 242, 121, 29, 55,
+      172, 185, 5, 196, 119, 65, 156
+    ];
+
+    assert_eq_arrays(order_output, expected_order_output);
+    console.log("create order coins for tokens encoding ok");
+
+    const create_order_output_2 = encode_create_order_output(
+      Amount.from_atoms("10000"),
+      token_id,
+      Amount.from_atoms("40000"),
+      undefined,
+      address,
+      Network.Testnet
+    );
+    const expected_create_order_output_2 = [
+      11, 1, 91, 58, 110, 176, 100, 207, 6, 194, 41,
+      193, 30, 91, 4, 195, 202, 103, 207, 80, 217, 178,
+      2, 162, 208, 145, 194, 165, 27, 14, 118, 31, 139,
+      199, 254, 11, 190, 108, 15, 64, 180, 50, 106, 211,
+      26, 107, 242, 121, 29, 55, 172, 185, 5, 196, 119,
+      65, 156, 0, 2, 113, 2, 0
+    ];
+
+    assert_eq_arrays(create_order_output_2, expected_create_order_output_2);
+    console.log("create order tokens for coins encoding ok");
+
+    const order_id = "tordr1xxt0avjtt4flkq0tnlyphmdm4aaj9vmkx5r2m4g863nw3lgf7nzs7mlkqc";
+    const fill_order_input = encode_input_for_fill_order(
+      order_id,
+      Amount.from_atoms("40000"),
+      address,
+      BigInt(1),
+      Network.Testnet
+    );
+    const expected_fill_order_input = [
+      2, 4, 7, 49, 150, 254, 178, 75, 93, 83, 251,
+      1, 235, 159, 200, 27, 237, 187, 175, 123, 34, 179,
+      118, 53, 6, 173, 213, 7, 212, 102, 232, 253, 9,
+      244, 197, 2, 113, 2, 0, 1, 91, 58, 110, 176,
+      100, 207, 6, 194, 41, 193, 30, 91, 4, 195, 202,
+      103, 207, 80, 217, 178
+    ];
+
+    assert_eq_arrays(fill_order_input, expected_fill_order_input);
+    console.log("fill order encoding ok");
+
+    const conclude_order_input = encode_input_for_conclude_order(
+      order_id,
+      BigInt(1),
+      Network.Testnet
+    );
+    const expected_conclude_order_input = [
+      2, 4, 6, 49, 150, 254, 178, 75,
+      93, 83, 251, 1, 235, 159, 200, 27,
+      237, 187, 175, 123, 34, 179, 118, 53,
+      6, 173, 213, 7, 212, 102, 232, 253,
+      9, 244, 197
+    ];
+
+    assert_eq_arrays(conclude_order_input, expected_conclude_order_input);
+    console.log("conclude order encoding ok");
 
     try {
       const invalid_inputs = "invalid inputs";
