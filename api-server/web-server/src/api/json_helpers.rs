@@ -27,7 +27,7 @@ use common::{
         AccountCommand, AccountSpending, Block, ChainConfig, Destination, OutPointSourceId,
         Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
-    primitives::{Amount, BlockHeight, Idable},
+    primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
     Uint256,
 };
 use hex::ToHex;
@@ -82,6 +82,22 @@ pub fn outputvalue_to_json(
                 "type": "TokenV1",
                 "token_id": Address::new(chain_config, *token_id).expect("no error").as_str(),
                 "amount": amount_to_json(*amount, token_decimals.get(token_id)),
+            })
+        }
+    }
+}
+
+pub fn coins_or_token_to_json(v: &CoinOrTokenId, chain_config: &ChainConfig) -> serde_json::Value {
+    match v {
+        CoinOrTokenId::Coin => {
+            json!({
+                "type": "Coin",
+            })
+        }
+        CoinOrTokenId::TokenId(token_id) => {
+            json!({
+                "type": "Token",
+                "token_id": Address::new(chain_config, *token_id).expect("no error").as_str(),
             })
         }
     }

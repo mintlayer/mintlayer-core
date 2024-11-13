@@ -1371,38 +1371,73 @@ where
     {
         let db_tx = storage.transaction_ro().await.unwrap();
 
-        let random_token_id = TokenId::new(H256::random_using(&mut rng));
-
-        let random_order_id = OrderId::new(H256::random_using(&mut rng));
-        let order = db_tx.get_order(random_order_id).await.unwrap();
+        let order1_id = OrderId::new(H256::random_using(&mut rng));
+        let order = db_tx.get_order(order1_id).await.unwrap();
         assert!(order.is_none());
+
+        let orders = db_tx.get_all_orders(10, 0).await.unwrap();
+        assert!(orders.is_empty());
 
         drop(db_tx);
 
+        let random_token_id = TokenId::new(H256::random_using(&mut rng));
         let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let conclude_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
         let block_height = BlockHeight::new(rng.gen_range(1..100));
-        let mut random_amount = || Amount::from_atoms(rng.gen_range(1000..10000));
+        let give_amount = Amount::from_atoms(rng.gen_range(1000..10000));
+        let ask_amount = Amount::from_atoms(rng.gen_range(1000..10000));
 
-        let order = Order {
+        let order1 = Order {
             creation_block_height: block_height,
             conclude_destination,
             give_currency: CoinOrTokenId::TokenId(random_token_id),
-            initially_given: random_amount(),
-            give_balance: random_amount(),
+            initially_given: give_amount,
+            give_balance: give_amount,
             ask_currency: CoinOrTokenId::Coin,
-            initially_asked: random_amount(),
-            ask_balance: random_amount(),
+            initially_asked: ask_amount,
+            ask_balance: ask_amount,
             next_nonce: AccountNonce::new(rng.gen::<u64>()),
         };
 
         let mut db_tx = storage.transaction_rw().await.unwrap();
 
-        db_tx.set_order_at_height(random_order_id, &order, block_height).await.unwrap();
+        db_tx.set_order_at_height(order1_id, &order1, block_height).await.unwrap();
 
-        let returned_order = db_tx.get_order(random_order_id).await.unwrap().unwrap();
+        let returned_order = db_tx.get_order(order1_id).await.unwrap().unwrap();
+        assert_eq!(returned_order, order1);
 
-        assert_eq!(returned_order, order);
+        let order2_id = OrderId::new(H256::random_using(&mut rng));
+        let random_token_id = TokenId::new(H256::random_using(&mut rng));
+        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let conclude_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
+        let block_height = BlockHeight::new(rng.gen_range(100..1000));
+        let give_amount = Amount::from_atoms(rng.gen_range(1000..10000));
+        let ask_amount = Amount::from_atoms(rng.gen_range(1000..10000));
+        let order2 = Order {
+            creation_block_height: block_height,
+            conclude_destination,
+            give_currency: CoinOrTokenId::Coin,
+            initially_given: give_amount,
+            give_balance: give_amount,
+            ask_currency: CoinOrTokenId::TokenId(random_token_id),
+            initially_asked: ask_amount,
+            ask_balance: ask_amount,
+            next_nonce: AccountNonce::new(rng.gen::<u64>()),
+        };
+
+        db_tx.set_order_at_height(order2_id, &order2, block_height).await.unwrap();
+
+        let order2_filled = order2.fill(Amount::from_atoms(1));
+        db_tx
+            .set_order_at_height(order2_id, &order2_filled, block_height.next_height())
+            .await
+            .unwrap();
+
+        let all_orders = db_tx.get_all_orders(10, 0).await.unwrap();
+        assert_eq!(
+            all_orders,
+            vec![(order2_id, order2_filled), (order1_id, order1)]
+        );
     }
 
     Ok(())

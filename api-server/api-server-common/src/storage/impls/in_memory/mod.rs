@@ -343,6 +343,37 @@ impl ApiServerInMemoryStorage {
         Ok(order)
     }
 
+    fn get_orders_by_height(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
+        let len = len as usize;
+        let offset = offset as usize;
+
+        let mut order_data: Vec<_> = self
+            .orders_table
+            .iter()
+            .map(|(order_id, by_height)| {
+                let created_height = by_height.keys().next().expect("not empty");
+                let latest_data = by_height.values().last().expect("not empty");
+                (order_id, (created_height, latest_data))
+            })
+            .collect();
+
+        order_data.sort_by_key(|(_, (height, _data))| Reverse(*height));
+        if offset >= order_data.len() {
+            return Ok(vec![]);
+        }
+
+        let latest_orders = order_data[offset..std::cmp::min(offset + len, order_data.len())]
+            .iter()
+            .map(|(order_id, (_, data))| (**order_id, (*data).clone()))
+            .collect();
+
+        Ok(latest_orders)
+    }
+
     fn get_latest_pool_ids(
         &self,
         len: u32,

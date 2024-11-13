@@ -366,8 +366,19 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRo<'a> {
     }
 
     async fn get_order(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError> {
-        let mut conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
         let res = conn.get_order(order_id, &self.chain_config).await?;
+
+        Ok(res)
+    }
+
+    async fn get_all_orders(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_orders_by_height(len, offset, &self.chain_config).await?;
 
         Ok(res)
     }
