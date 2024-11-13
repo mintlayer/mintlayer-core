@@ -12,7 +12,6 @@ import { AccountType, WalletInfo } from "../types/Types";
 const WalletActions = (props: {
   currentWallet: WalletInfo | undefined;
   currentAccount: AccountType | undefined;
-  showNewAccountModal: boolean;
   activeTab: string;
   currentAccountId: number;
   handleUpdateCurrentAccount: (index: string, address: string) => void;
@@ -23,14 +22,10 @@ const WalletActions = (props: {
   handleRemoveWallet: (wallet_id: string) => void;
 }) => {
   const [showEncryptWalletModal, setShowEncryptWalletModal] = useState(false);
-  const [showNewAccountModal, setShowNewAccountModal] = useState(
-    props.showNewAccountModal
-  );
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [walletState, setWalletState] = useState(
     props.currentWallet?.encryption
   );
-  const [accountName, setAccountName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [unLockPassword, setUnLockPassword] = useState("");
@@ -129,10 +124,6 @@ const WalletActions = (props: {
     }
   };
 
-  const handleCreateWallet = () => {
-    setShowNewAccountModal(false);
-  };
-
   const handleUnlock = async () => {
     try {
       const result = await invoke("update_encryption_wrapper", {
@@ -161,17 +152,11 @@ const WalletActions = (props: {
 
   const handleCloseWallet = async (wallet_id: number) => {
     try {
-      const result: { wallet_id: string } = await invoke(
-        "close_wallet_wrapper",
-        {
-          wallet_id: wallet_id,
-        }
-      );
-      if (result) {
-        console.log(result);
-        props.handleRemoveWallet(result?.wallet_id);
-        notify("Wallet closed successfully.", "info");
-      }
+      const result: string = await invoke("close_wallet_wrapper", {
+        walletId: wallet_id,
+      });
+      props.handleRemoveWallet(result);
+      notify("Wallet closed successfully.", "info");
     } catch (error) {
       notify(new String(error).toString(), "error");
     }
@@ -211,35 +196,6 @@ const WalletActions = (props: {
               onClick={() => handleEncryptWallet()}
             >
               Encrypt Wallet
-            </button>
-          </div>
-        </div>
-      )}
-      {showNewAccountModal && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="absolute inset-0 bg-black opacity-50"></div>
-          <div className="bg-white rounded-lg shadow-lg z-10 p-4 max-w-lg mx-auto relative space-y-4">
-            {/* Close Button */}
-            <button
-              className="absolute top-2 right-2 bg-transparent border-none shadow-none focus:outline-none "
-              onClick={() => setShowEncryptWalletModal(false)}
-            >
-              <IoCloseSharp />
-            </button>
-            <h2 className="text-lg font-bold mb-4">New Account</h2>
-            <input
-              placeholder="Enter a name"
-              type="text"
-              className="w-full rounded rounded-lg"
-              value={accountName}
-              onChange={(e) => setAccountName(e.target.value)}
-            />
-
-            <button
-              className="bg-green-400 text-black w-full px-2 py-1 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
-              onClick={() => handleCreateWallet()}
-            >
-              Create
             </button>
           </div>
         </div>

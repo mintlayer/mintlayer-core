@@ -49,6 +49,7 @@ function Home() {
   const [mnemonic, setMnemonic] = useState("");
   const [currentAccountId, setCurrentAccountId] = useState(0);
   const [currentWalletId, setCurrentWalletId] = useState(0);
+  const [accountName, setAccountName] = useState("");
 
   const [showMnemonicModal, setShowMnemonicModal] = useState(false);
   const [showRecoverWalletModal, setShowRecoverWalletModal] = useState(false);
@@ -59,7 +60,6 @@ function Home() {
     const init_node = async () => {
       try {
         if (netMode !== "" && walletMode !== "") {
-          console.log("netMode: ", netMode, "walletMode: ", walletMode);
           const result = await invoke("initialize_node", {
             network: netMode,
             mode: walletMode,
@@ -84,7 +84,6 @@ function Home() {
       Object.values(currentWallet?.accounts ? currentWallet.accounts : {})[0]
     );
     if (currentWallet) {
-      console.log(currentWallet);
       setWalletsInfo((prevWallets) => {
         return prevWallets.map((walletItem, index) => {
           if (index === currentWalletId) {
@@ -115,7 +114,6 @@ function Home() {
   const createNewWallet = () => {
     try {
       const newMnemonic = bip39.generateMnemonic(wordlist, 256);
-      console.log(newMnemonic);
       setMnemonic(newMnemonic);
       setShowMnemonicModal(true);
     } catch (error) {
@@ -133,7 +131,6 @@ function Home() {
       });
 
       if (path) {
-        console.log("Selected file path is: ", path);
         setLoading(true);
 
         try {
@@ -150,7 +147,6 @@ function Home() {
           );
 
           if (walletInfo) {
-            console.log("wallet info is: ", walletInfo);
             setWalletsInfo([...walletsInfo, walletInfo]);
             notify("Wallet created successfully!", "success");
           } else {
@@ -185,7 +181,6 @@ function Home() {
       });
 
       if (path) {
-        console.log("Selected file path is: ", path);
         setLoading(true);
 
         try {
@@ -251,7 +246,6 @@ function Home() {
           },
         });
         if (walletInfo) {
-          console.log(walletInfo);
           setWalletsInfo([...walletsInfo, walletInfo]);
           notify("Wallet opened successfully", "success");
         } else {
@@ -315,6 +309,23 @@ function Home() {
     setCurrentAccountId(0);
   };
 
+  const handleCreateNewAccount = async () => {
+    try {
+      const result = await invoke("new_account_wrapper", {
+        request: {
+          name: accountName,
+          wallet_id: currentWalletId,
+        },
+      });
+      if (result) {
+        console.log("account creating result is ", result);
+      }
+    } catch (error) {
+      notify(new String(error).toString(), "error");
+    }
+    setShowNewAccountModal(false);
+  };
+
   return (
     <div className="home-page">
       <ToastContainer />
@@ -323,6 +334,35 @@ function Home() {
           <div className="absolute inset-0 bg-black opacity-50"></div>
           <div className="bg-opacity-50 z-10 p-6 max-w-lg mx-auto relative space-y-4">
             <div className="loader px-10">Opening wallet. Please wait.</div>
+          </div>
+        </div>
+      )}
+      {showNewAccountModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black opacity-50"></div>
+          <div className="bg-white rounded-lg shadow-lg z-10 p-4 max-w-lg mx-auto relative space-y-4">
+            {/* Close Button */}
+            <button
+              className="absolute top-2 right-2 bg-transparent border-none shadow-none focus:outline-none "
+              onClick={() => setShowNewAccountModal(false)}
+            >
+              <IoCloseSharp />
+            </button>
+            <h2 className="text-lg font-bold mb-4">New Account</h2>
+            <input
+              placeholder="Enter a name"
+              type="text"
+              className="w-full rounded rounded-lg"
+              value={accountName}
+              onChange={(e) => setAccountName(e.target.value)}
+            />
+
+            <button
+              className="bg-green-400 text-black w-full px-2 py-1 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
+              onClick={() => handleCreateNewAccount()}
+            >
+              Create
+            </button>
           </div>
         </div>
       )}
@@ -675,7 +715,6 @@ function Home() {
                       currentWallet={currentWallet}
                       currentAccount={currentAccount}
                       currentAccountId={currentAccountId}
-                      showNewAccountModal={showNewAccountModal}
                       activeTab={activeTab}
                       handleUpdateCurrentAccount={
                         handleUpdateCurrentAccountAddresses

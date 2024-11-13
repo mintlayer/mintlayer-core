@@ -86,3 +86,9 @@ export type AddressInfo = {
   index: number;
   address: string;
 };
+
+export type NewAccountResultType = {
+  wallet_id: string;
+  account_id: string;
+  account_info: AccountType;
+};

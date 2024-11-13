@@ -182,7 +182,6 @@ pub struct InitializedNode {
     pub chain_info: ChainInfo,
 }
 
-/// `UnboundedSender` wrapper, used to make sure there is o nly one instance and it doesn't get cloned
 
 fn parse_coin_amount(chain_config: &ChainConfig, value: &str) -> Option<Amount> {
     Amount::from_fixedpoint_str(value, chain_config.coin_decimals())
@@ -225,7 +224,6 @@ pub async fn node_initialize(
     network: InitNetwork,
     mode: WalletMode,
 ) -> Result<BackendControls, Error> {
-    // Set up logging if not already configured.
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var(
             "RUST_LOG",
@@ -233,24 +231,20 @@ pub async fn node_initialize(
         );
     }
 
-    // Initialize node library options using command line arguments.
     let mut opts = node_lib::Options::from_args(std::env::args_os());
     opts.command = match network {
         InitNetwork::Mainnet => Some(Command::Mainnet(RunOptions::default())),
         InitNetwork::Testnet => Some(Command::Testnet(RunOptions::default())),
     };
 
-    // Initialize logging for the application.
     logging::init_logging();
     logging::log::info!("Command line options: {opts:?}");
 
-    // Create communication channels.
     let (request_tx, request_rx) = unbounded_channel();
     let (event_tx, event_rx) = unbounded_channel();
     let (low_priority_event_tx, low_priority_event_rx) = unbounded_channel();
     let (wallet_updated_tx, wallet_updated_rx) = unbounded_channel();
 
-    // Match the wallet mode to determine hot or cold configuration.
     let (chain_config, chain_info, backend) = match mode {
         WalletMode::Hot => {
             let setup_result = node_lib::setup(opts, true).await?;
@@ -287,9 +281,8 @@ pub async fn node_initialize(
 
             match Arc::try_unwrap(backend) {
                 Ok(backend) => {
-                    // Now you can call the run function that requires a Backend
                     backend_impl::run(
-                        backend, // This is now a Backend instance
+                        backend, 
                         request_rx,
                         wallet_updated_rx,
                         _chainstate_event_handler,
@@ -298,9 +291,7 @@ pub async fn node_initialize(
                     .await;
                 }
                 Err(arc) => {
-                    // Handle the case where there are other references
                     eprintln!("Failed to unwrap Arc<Backend>: still has other references");
-                    // You can still use `arc` here, which is still an Arc<Backend>
                 }
             }
             (chain_config, chain_info, backend_clone)
@@ -366,7 +357,6 @@ async fn add_create_wallet_wrapper(
     state: tauri::State<'_, AppState>,
     request: OpenCreateWalletRequest,
 ) -> Result<WalletInfo, String> {
-    // Parse and prepare variables before acquiring the lock
     let mnemonic = wallet_controller::mnemonic::Mnemonic::parse(request.mnemonic).map_err(|e| {
         let error_message = e.to_string();
         println!("Error parsing mnemonic: {}", error_message);
@@ -383,17 +373,14 @@ async fn add_create_wallet_wrapper(
 
     let import = ImportOrCreate::from_bool(request.import);
 
-    // Acquire the write lock for the shortest duration possible
     let result = {
         let mut backend_guard = state.backend.write().await;
         let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
         let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
 
-        // Perform the operation while holding the lock
         backend.add_create_wallet(file_path, mnemonic, wallet_type, import).await
     };
 
-    // Handle the result after releasing the lock
     match result {
         Ok(wallet_info) => {
             println!("Wallet created successfully: {:?}", wallet_info);
@@ -423,12 +410,9 @@ async fn add_open_wallet_wrapper(
         let mut backend_guard = state.backend.write().await;
         let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
         let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
-
-        // Perform the operation while holding the lock
         backend.add_open_wallet(file_path, wallet_type).await
     };
 
-    // Handle the result after releasing the lock
     match result {
         Ok(wallet_info) => {
             println!("Wallet created successfully: {:?}", wallet_info);
@@ -462,7 +446,6 @@ async fn send_amount_wrapper(
             address: request.address,
         };
 
-        // Perform the operation while holding the lock
         backend.send_amount(request).await
     };
 
@@ -492,7 +475,6 @@ async fn new_address_wrapper(
         let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
         let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
 
-        // Perform the operation while holding the lock
         backend.new_address(wallet_id, account_id).await
     };
 
@@ -518,14 +500,13 @@ async fn update_encryption_wrapper(
     let update_encryption_action =
         match EncryptionAction::from_str(&request.action, request.password.as_deref()) {
             Some(action) => action,
-            None => return Err("Invalid action or missing password".into()), // Handle invalid action
+            None => return Err("Invalid action or missing password".into()), 
         };
     let result = {
         let mut backend_guard = state.backend.write().await;
         let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
         let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
 
-        // Perform the operation while holding the lock
         backend.update_encryption(wallet_id, update_encryption_action).await
     };
 
@@ -554,13 +535,11 @@ async fn close_wallet_wrapper(
         let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
         let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
 
-        // Perform the operation while holding the lock
         if let Some(wallet) = backend.wallets.remove(&wallet_id) {
-            // Await the shutdown and return its result
-            wallet.shutdown().await; // Handle shutdown result
-            Ok(()) // Return Ok if shutdown is successful
+            wallet.shutdown().await; 
+            Ok(())
         } else {
-            Err("Wallet not found".into()) // Handle case where wallet is not found
+            Err("Wallet not found".into()) 
         }
     };
 
