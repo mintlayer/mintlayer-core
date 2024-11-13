@@ -617,6 +617,7 @@ async fn calculate_tx_fee_and_collect_token_info<T: ApiServerStorageWrite>(
                 AccountCommand::ConcludeOrder(_) | AccountCommand::FillOrder(_, _, _) => None,
             },
         })
+        .chain(tx.outputs().iter().map(get_referenced_token_ids))
         .fold(BTreeSet::new(), |mut x, mut y| {
             x.append(&mut y);
             x
