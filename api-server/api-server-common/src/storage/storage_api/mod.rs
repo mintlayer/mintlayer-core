@@ -602,6 +602,12 @@ pub trait ApiServerStorageRead: Sync {
     ) -> Result<BTreeMap<CoinOrTokenStatistic, Amount>, ApiServerStorageError>;
 
     async fn get_order(&self, order_id: OrderId) -> Result<Option<Order>, ApiServerStorageError>;
+
+    async fn get_all_orders(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]
