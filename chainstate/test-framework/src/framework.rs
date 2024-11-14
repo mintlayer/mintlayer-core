@@ -220,7 +220,7 @@ impl TestFramework {
     ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
         let mut prev_block_id = *parent_block;
         let result = || -> Result<Vec<Id<GenBlock>>, ChainstateError> {
-            let mut ids = Vec::new();
+            let mut ids = Vec::with_capacity(blocks_count);
             for _ in 0..blocks_count {
                 let block = self
                     .make_block_builder()
@@ -251,7 +251,7 @@ impl TestFramework {
     ) -> Result<Vec<Id<GenBlock>>, ChainstateError> {
         let mut prev_block_id = *parent_block;
         let result = || -> Result<Vec<Id<GenBlock>>, ChainstateError> {
-            let mut ids = Vec::new();
+            let mut ids = Vec::with_capacity(blocks_count);
             let target_block_time = self.chain_config().target_block_spacing();
             for _ in 0..blocks_count {
                 self.progress_time_seconds_since_epoch(target_block_time.as_secs());

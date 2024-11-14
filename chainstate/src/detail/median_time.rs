@@ -82,7 +82,7 @@ mod test {
         initial_prev: Id<GenBlock>,
         initial_time: BlockTimestampInternalType,
     ) -> Vec<Block> {
-        let mut res = vec![];
+        let mut res = Vec::with_capacity(count);
         let mut prev = initial_prev;
         let mut time = initial_time;
         for _ in 0..count {

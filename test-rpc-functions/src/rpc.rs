@@ -342,7 +342,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         let coin_decimal_factor = 10u128.pow(coin_decimals as u32);
         let mut amount_to_spend = (amount_to_spend as u128) * coin_decimal_factor;
         let fee_per_tx = (fee_per_tx as u128) * coin_decimal_factor;
-        let mut transactions = vec![];
+        let mut transactions = Vec::with_capacity(num_transactions as usize);
         for _ in 0..num_transactions {
             let inputs =
                 vec![TxInput::from_utxo(OutPointSourceId::Transaction(input_tx_id), input_idx)];

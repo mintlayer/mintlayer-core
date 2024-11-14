@@ -191,8 +191,7 @@ async fn main() {
     let run_options = DnsServerRunOptions::parse();
     let result = run(run_options).await;
 
-    if let Err(err) = result {
-        eprintln!("DnsServer failed: {err:?}");
-        std::process::exit(1)
-    }
+    let Err(err) = result;
+    eprintln!("DnsServer failed: {err:?}");
+    std::process::exit(1)
 }
