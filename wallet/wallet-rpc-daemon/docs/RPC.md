@@ -230,7 +230,327 @@ Parameters:
 
 Returns:
 ```
-[ json, .. ]
+[ {
+    "outpoint": {
+        "source_id": EITHER OF
+             1) {
+                    "type": "Transaction",
+                    "content": { "tx_id": hex string },
+                }
+             2) {
+                    "type": "BlockReward",
+                    "content": { "block_id": hex string },
+                },
+        "index": number,
+    },
+    "output": EITHER OF
+         1) {
+                "type": "Transfer",
+                "content": {
+                    "value": EITHER OF
+                         1) {
+                                "type": "Coin",
+                                "content": { "amount": {
+                                    "atoms": number string,
+                                    "decimal": decimal string,
+                                } },
+                            }
+                         2) {
+                                "type": "Token",
+                                "content": {
+                                    "id": bech32 string,
+                                    "amount": {
+                                        "atoms": number string,
+                                        "decimal": decimal string,
+                                    },
+                                },
+                            },
+                    "destination": bech32 string,
+                },
+            }
+         2) {
+                "type": "LockThenTransfer",
+                "content": {
+                    "value": EITHER OF
+                         1) {
+                                "type": "Coin",
+                                "content": { "amount": {
+                                    "atoms": number string,
+                                    "decimal": decimal string,
+                                } },
+                            }
+                         2) {
+                                "type": "Token",
+                                "content": {
+                                    "id": bech32 string,
+                                    "amount": {
+                                        "atoms": number string,
+                                        "decimal": decimal string,
+                                    },
+                                },
+                            },
+                    "destination": bech32 string,
+                    "timelock": EITHER OF
+                         1) {
+                                "type": "UntilHeight",
+                                "content": number,
+                            }
+                         2) {
+                                "type": "UntilTime",
+                                "content": { "timestamp": number },
+                            }
+                         3) {
+                                "type": "ForBlockCount",
+                                "content": number,
+                            }
+                         4) {
+                                "type": "ForSeconds",
+                                "content": number,
+                            },
+                },
+            }
+         3) {
+                "type": "Burn",
+                "content": { "value": EITHER OF
+                     1) {
+                            "type": "Coin",
+                            "content": { "amount": {
+                                "atoms": number string,
+                                "decimal": decimal string,
+                            } },
+                        }
+                     2) {
+                            "type": "Token",
+                            "content": {
+                                "id": bech32 string,
+                                "amount": {
+                                    "atoms": number string,
+                                    "decimal": decimal string,
+                                },
+                            },
+                        } },
+            }
+         4) {
+                "type": "CreateStakePool",
+                "content": {
+                    "pool_id": bech32 string,
+                    "data": {
+                        "pledge": {
+                            "atoms": number string,
+                            "decimal": decimal string,
+                        },
+                        "staker": bech32 string,
+                        "vrf_public_key": bech32 string,
+                        "decommission_key": bech32 string,
+                        "margin_ratio_per_thousand": string,
+                        "cost_per_block": {
+                            "atoms": number string,
+                            "decimal": decimal string,
+                        },
+                    },
+                },
+            }
+         5) {
+                "type": "ProduceBlockFromStake",
+                "content": {
+                    "destination": bech32 string,
+                    "pool_id": bech32 string,
+                },
+            }
+         6) {
+                "type": "CreateDelegationId",
+                "content": {
+                    "destination": bech32 string,
+                    "pool_id": bech32 string,
+                },
+            }
+         7) {
+                "type": "DelegateStaking",
+                "content": {
+                    "amount": {
+                        "atoms": number string,
+                        "decimal": decimal string,
+                    },
+                    "delegation_id": bech32 string,
+                },
+            }
+         8) {
+                "type": "IssueFungibleToken",
+                "content": { "data": {
+                    "token_ticker": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "number_of_decimals": number,
+                    "metadata_uri": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "total_supply": EITHER OF
+                         1) {
+                                "type": "Fixed",
+                                "content": { "amount": {
+                                    "atoms": number string,
+                                    "decimal": decimal string,
+                                } },
+                            }
+                         2) { "type": "Lockable" }
+                         3) { "type": "Unlimited" },
+                    "authority": bech32 string,
+                    "is_freezable": bool,
+                } },
+            }
+         9) {
+                "type": "IssueNft",
+                "content": {
+                    "token_id": bech32 string,
+                    "data": { "metadata": {
+                        "creator": EITHER OF
+                             1) bech32 string
+                             2) null,
+                        "name": {
+                            "text": EITHER OF
+                                 1) string
+                                 2) null,
+                            "hex": hex string,
+                        },
+                        "description": {
+                            "text": EITHER OF
+                                 1) string
+                                 2) null,
+                            "hex": hex string,
+                        },
+                        "ticker": {
+                            "text": EITHER OF
+                                 1) string
+                                 2) null,
+                            "hex": hex string,
+                        },
+                        "icon_uri": EITHER OF
+                             1) {
+                                    "text": EITHER OF
+                                         1) string
+                                         2) null,
+                                    "hex": hex string,
+                                }
+                             2) null,
+                        "additional_metadata_uri": EITHER OF
+                             1) {
+                                    "text": EITHER OF
+                                         1) string
+                                         2) null,
+                                    "hex": hex string,
+                                }
+                             2) null,
+                        "media_uri": EITHER OF
+                             1) {
+                                    "text": EITHER OF
+                                         1) string
+                                         2) null,
+                                    "hex": hex string,
+                                }
+                             2) null,
+                        "media_hash": hex string,
+                    } },
+                    "destination": bech32 string,
+                },
+            }
+        10) {
+                "type": "DataDeposit",
+                "content": { "data": hex string },
+            }
+        11) {
+                "type": "Htlc",
+                "content": {
+                    "value": EITHER OF
+                         1) {
+                                "type": "Coin",
+                                "content": { "amount": {
+                                    "atoms": number string,
+                                    "decimal": decimal string,
+                                } },
+                            }
+                         2) {
+                                "type": "Token",
+                                "content": {
+                                    "id": bech32 string,
+                                    "amount": {
+                                        "atoms": number string,
+                                        "decimal": decimal string,
+                                    },
+                                },
+                            },
+                    "htlc": {
+                        "secret_hash": hex string,
+                        "spend_key": bech32 string,
+                        "refund_timelock": EITHER OF
+                             1) {
+                                    "type": "UntilHeight",
+                                    "content": number,
+                                }
+                             2) {
+                                    "type": "UntilTime",
+                                    "content": { "timestamp": number },
+                                }
+                             3) {
+                                    "type": "ForBlockCount",
+                                    "content": number,
+                                }
+                             4) {
+                                    "type": "ForSeconds",
+                                    "content": number,
+                                },
+                        "refund_key": bech32 string,
+                    },
+                },
+            }
+        12) {
+                "type": "CreateOrder",
+                "content": {
+                    "authority": bech32 string,
+                    "ask_value": EITHER OF
+                         1) {
+                                "type": "Coin",
+                                "content": { "amount": {
+                                    "atoms": number string,
+                                    "decimal": decimal string,
+                                } },
+                            }
+                         2) {
+                                "type": "Token",
+                                "content": {
+                                    "id": bech32 string,
+                                    "amount": {
+                                        "atoms": number string,
+                                        "decimal": decimal string,
+                                    },
+                                },
+                            },
+                    "give_value": EITHER OF
+                         1) {
+                                "type": "Coin",
+                                "content": { "amount": {
+                                    "atoms": number string,
+                                    "decimal": decimal string,
+                                } },
+                            }
+                         2) {
+                                "type": "Token",
+                                "content": {
+                                    "id": bech32 string,
+                                    "amount": {
+                                        "atoms": number string,
+                                        "decimal": decimal string,
+                                    },
+                                },
+                            },
+                },
+            },
+}, .. ]
 ```
 
 ### Method `account_balance`
@@ -282,7 +602,327 @@ Parameters:
 
 Returns:
 ```
-[ json, .. ]
+[ {
+    "outpoint": {
+        "source_id": EITHER OF
+             1) {
+                    "type": "Transaction",
+                    "content": { "tx_id": hex string },
+                }
+             2) {
+                    "type": "BlockReward",
+                    "content": { "block_id": hex string },
+                },
+        "index": number,
+    },
+    "output": EITHER OF
+         1) {
+                "type": "Transfer",
+                "content": {
+                    "value": EITHER OF
+                         1) {
+                                "type": "Coin",
+                                "content": { "amount": {
+                                    "atoms": number string,
+                                    "decimal": decimal string,
+                                } },
+                            }
+                         2) {
+                                "type": "Token",
+                                "content": {
+                                    "id": bech32 string,
+                                    "amount": {
+                                        "atoms": number string,
+                                        "decimal": decimal string,
+                                    },
+                                },
+                            },
+                    "destination": bech32 string,
+                },
+            }
+         2) {
+                "type": "LockThenTransfer",
+                "content": {
+                    "value": EITHER OF
+                         1) {
+                                "type": "Coin",
+                                "content": { "amount": {
+                                    "atoms": number string,
+                                    "decimal": decimal string,
+                                } },
+                            }
+                         2) {
+                                "type": "Token",
+                                "content": {
+                                    "id": bech32 string,
+                                    "amount": {
+                                        "atoms": number string,
+                                        "decimal": decimal string,
+                                    },
+                                },
+                            },
+                    "destination": bech32 string,
+                    "timelock": EITHER OF
+                         1) {
+                                "type": "UntilHeight",
+                                "content": number,
+                            }
+                         2) {
+                                "type": "UntilTime",
+                                "content": { "timestamp": number },
+                            }
+                         3) {
+                                "type": "ForBlockCount",
+                                "content": number,
+                            }
+                         4) {
+                                "type": "ForSeconds",
+                                "content": number,
+                            },
+                },
+            }
+         3) {
+                "type": "Burn",
+                "content": { "value": EITHER OF
+                     1) {
+                            "type": "Coin",
+                            "content": { "amount": {
+                                "atoms": number string,
+                                "decimal": decimal string,
+                            } },
+                        }
+                     2) {
+                            "type": "Token",
+                            "content": {
+                                "id": bech32 string,
+                                "amount": {
+                                    "atoms": number string,
+                                    "decimal": decimal string,
+                                },
+                            },
+                        } },
+            }
+         4) {
+                "type": "CreateStakePool",
+                "content": {
+                    "pool_id": bech32 string,
+                    "data": {
+                        "pledge": {
+                            "atoms": number string,
+                            "decimal": decimal string,
+                        },
+                        "staker": bech32 string,
+                        "vrf_public_key": bech32 string,
+                        "decommission_key": bech32 string,
+                        "margin_ratio_per_thousand": string,
+                        "cost_per_block": {
+                            "atoms": number string,
+                            "decimal": decimal string,
+                        },
+                    },
+                },
+            }
+         5) {
+                "type": "ProduceBlockFromStake",
+                "content": {
+                    "destination": bech32 string,
+                    "pool_id": bech32 string,
+                },
+            }
+         6) {
+                "type": "CreateDelegationId",
+                "content": {
+                    "destination": bech32 string,
+                    "pool_id": bech32 string,
+                },
+            }
+         7) {
+                "type": "DelegateStaking",
+                "content": {
+                    "amount": {
+                        "atoms": number string,
+                        "decimal": decimal string,
+                    },
+                    "delegation_id": bech32 string,
+                },
+            }
+         8) {
+                "type": "IssueFungibleToken",
+                "content": { "data": {
+                    "token_ticker": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "number_of_decimals": number,
+                    "metadata_uri": {
+                        "text": EITHER OF
+                             1) string
+                             2) null,
+                        "hex": hex string,
+                    },
+                    "total_supply": EITHER OF
+                         1) {
+                                "type": "Fixed",
+                                "content": { "amount": {
+                                    "atoms": number string,
+                                    "decimal": decimal string,
+                                } },
+                            }
+                         2) { "type": "Lockable" }
+                         3) { "type": "Unlimited" },
+                    "authority": bech32 string,
+                    "is_freezable": bool,
+                } },
+            }
+         9) {
+                "type": "IssueNft",
+                "content": {
+                    "token_id": bech32 string,
+                    "data": { "metadata": {
+                        "creator": EITHER OF
+                             1) bech32 string
+                             2) null,
+                        "name": {
+                            "text": EITHER OF
+                                 1) string
+                                 2) null,
+                            "hex": hex string,
+                        },
+                        "description": {
+                            "text": EITHER OF
+                                 1) string
+                                 2) null,
+                            "hex": hex string,
+                        },
+                        "ticker": {
+                            "text": EITHER OF
+                                 1) string
+                                 2) null,
+                            "hex": hex string,
+                        },
+                        "icon_uri": EITHER OF
+                             1) {
+                                    "text": EITHER OF
+                                         1) string
+                                         2) null,
+                                    "hex": hex string,
+                                }
+                             2) null,
+                        "additional_metadata_uri": EITHER OF
+                             1) {
+                                    "text": EITHER OF
+                                         1) string
+                                         2) null,
+                                    "hex": hex string,
+                                }
+                             2) null,
+                        "media_uri": EITHER OF
+                             1) {
+                                    "text": EITHER OF
+                                         1) string
+                                         2) null,
+                                    "hex": hex string,
+                                }
+                             2) null,
+                        "media_hash": hex string,
+                    } },
+                    "destination": bech32 string,
+                },
+            }
+        10) {
+                "type": "DataDeposit",
+                "content": { "data": hex string },
+            }
+        11) {
+                "type": "Htlc",
+                "content": {
+                    "value": EITHER OF
+                         1) {
+                                "type": "Coin",
+                                "content": { "amount": {
+                                    "atoms": number string,
+                                    "decimal": decimal string,
+                                } },
+                            }
+                         2) {
+                                "type": "Token",
+                                "content": {
+                                    "id": bech32 string,
+                                    "amount": {
+                                        "atoms": number string,
+                                        "decimal": decimal string,
+                                    },
+                                },
+                            },
+                    "htlc": {
+                        "secret_hash": hex string,
+                        "spend_key": bech32 string,
+                        "refund_timelock": EITHER OF
+                             1) {
+                                    "type": "UntilHeight",
+                                    "content": number,
+                                }
+                             2) {
+                                    "type": "UntilTime",
+                                    "content": { "timestamp": number },
+                                }
+                             3) {
+                                    "type": "ForBlockCount",
+                                    "content": number,
+                                }
+                             4) {
+                                    "type": "ForSeconds",
+                                    "content": number,
+                                },
+                        "refund_key": bech32 string,
+                    },
+                },
+            }
+        12) {
+                "type": "CreateOrder",
+                "content": {
+                    "authority": bech32 string,
+                    "ask_value": EITHER OF
+                         1) {
+                                "type": "Coin",
+                                "content": { "amount": {
+                                    "atoms": number string,
+                                    "decimal": decimal string,
+                                } },
+                            }
+                         2) {
+                                "type": "Token",
+                                "content": {
+                                    "id": bech32 string,
+                                    "amount": {
+                                        "atoms": number string,
+                                        "decimal": decimal string,
+                                    },
+                                },
+                            },
+                    "give_value": EITHER OF
+                         1) {
+                                "type": "Coin",
+                                "content": { "amount": {
+                                    "atoms": number string,
+                                    "decimal": decimal string,
+                                } },
+                            }
+                         2) {
+                                "type": "Token",
+                                "content": {
+                                    "id": bech32 string,
+                                    "amount": {
+                                        "atoms": number string,
+                                        "decimal": decimal string,
+                                    },
+                                },
+                            },
+                },
+            },
+}, .. ]
 ```
 
 ### Method `node_submit_transaction`

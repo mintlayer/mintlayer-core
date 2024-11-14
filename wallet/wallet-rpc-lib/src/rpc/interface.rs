@@ -38,14 +38,16 @@ use wallet_types::with_locked::WithLocked;
 
 use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
-    CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
-    MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewOrder, NewTransaction, NftMetadata,
-    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
-    RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
-    RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    CreatedWallet, DelegationInfo, HexEncoded, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
+    NewAccountInfo, NewDelegation, NewOrder, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
+    PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract, RpcInspectTransaction,
+    RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
+    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
     VrfPublicKeyInfo,
 };
+
+use super::types::UtxoInfo;
 
 #[rpc::rpc(server)]
 trait WalletEventsRpc {
@@ -324,7 +326,7 @@ trait WalletRpc {
         utxo_types: Vec<RpcUtxoType>,
         utxo_states: Vec<RpcUtxoState>,
         with_locked: Option<WithLocked>,
-    ) -> rpc::RpcResult<Vec<JsonValue>>;
+    ) -> rpc::RpcResult<Vec<UtxoInfo>>;
 
     /// Get the total balance in the selected account in this wallet. See available options to include more categories, like locked coins.
     #[method(name = "account_balance")]
@@ -337,7 +339,7 @@ trait WalletRpc {
 
     /// Lists all the utxos owned by this account
     #[method(name = "account_utxos")]
-    async fn get_utxos(&self, account: AccountArg) -> rpc::RpcResult<Vec<JsonValue>>;
+    async fn get_utxos(&self, account: AccountArg) -> rpc::RpcResult<Vec<UtxoInfo>>;
 
     /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network
     #[method(name = "node_submit_transaction")]

@@ -44,11 +44,11 @@ use crate::{
     rpc::{ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc, WalletRpcServer},
     types::{
         AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
-        CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
-        MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-        NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
-        RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
-        RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+        CreatedWallet, DelegationInfo, HexEncoded, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
+        NewAccountInfo, NewDelegation, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
+        PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcInspectTransaction,
+        RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
+        SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
         UtxoInfo, VrfPublicKeyInfo,
     },
@@ -423,7 +423,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         utxo_types: Vec<RpcUtxoType>,
         utxo_states: Vec<RpcUtxoState>,
         with_locked: Option<WithLocked>,
-    ) -> rpc::RpcResult<Vec<JsonValue>> {
+    ) -> rpc::RpcResult<Vec<UtxoInfo>> {
         let utxo_types = (&utxo_types.iter().map(UtxoType::from).collect::<Vec<_>>())
             .try_into()
             .unwrap_or(UtxoTypes::ALL);
@@ -444,8 +444,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         let result = utxos
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
-                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config)
-                    .map(serde_json::to_value);
+                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config);
                 rpc::handle_result(result)
             })
             .collect::<Result<Vec<_>, _>>();
@@ -453,7 +452,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         rpc::handle_result(result)
     }
 
-    async fn get_utxos(&self, account_arg: AccountArg) -> rpc::RpcResult<Vec<JsonValue>> {
+    async fn get_utxos(&self, account_arg: AccountArg) -> rpc::RpcResult<Vec<UtxoInfo>> {
         let utxos = self
             .get_utxos(
                 account_arg.index::<N>()?,
@@ -466,8 +465,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         let result = utxos
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
-                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config)
-                    .map(serde_json::to_value);
+                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config);
                 rpc::handle_result(result)
             })
             .collect::<Result<Vec<_>, _>>();

@@ -386,7 +386,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         utxo_types: Vec<UtxoType>,
         utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
-    ) -> Result<Vec<serde_json::Value>, Self::Error> {
+    ) -> Result<Vec<UtxoInfo>, Self::Error> {
         let utxos = self
             .wallet_rpc
             .get_multisig_utxos(
@@ -402,11 +402,9 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
                 UtxoInfo::new(utxo_outpoint, tx_ouput, self.wallet_rpc.chain_config())
-                    .map(serde_json::to_value)
             })
-            .collect::<Result<Result<Vec<_>, _>, _>>()
-            .map_err(WalletRpcHandlesClientError::AddressError)?
-            .map_err(WalletRpcHandlesClientError::SerializationError)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(WalletRpcHandlesClientError::AddressError)
     }
 
     async fn get_utxos(
@@ -415,7 +413,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         utxo_types: Vec<UtxoType>,
         utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
-    ) -> Result<Vec<serde_json::Value>, Self::Error> {
+    ) -> Result<Vec<UtxoInfo>, Self::Error> {
         let utxos = self
             .wallet_rpc
             .get_utxos(
@@ -431,11 +429,9 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
                 UtxoInfo::new(utxo_outpoint, tx_ouput, self.wallet_rpc.chain_config())
-                    .map(serde_json::to_value)
             })
-            .collect::<Result<Result<Vec<_>, _>, _>>()
-            .map_err(WalletRpcHandlesClientError::AddressError)?
-            .map_err(WalletRpcHandlesClientError::SerializationError)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(WalletRpcHandlesClientError::AddressError)
     }
 
     async fn submit_raw_transaction(

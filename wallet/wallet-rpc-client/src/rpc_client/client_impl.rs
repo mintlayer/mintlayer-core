@@ -49,7 +49,7 @@ use wallet_rpc_lib::{
         RpcHashedTimelockContract, RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-        VrfPublicKeyInfo,
+        UtxoInfo, VrfPublicKeyInfo,
     },
     ColdWalletRpcClient, WalletRpcClient,
 };
@@ -355,7 +355,7 @@ impl WalletInterface for ClientWalletRpc {
         utxo_types: Vec<UtxoType>,
         utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
-    ) -> Result<Vec<serde_json::Value>, Self::Error> {
+    ) -> Result<Vec<UtxoInfo>, Self::Error> {
         WalletRpcClient::get_multisig_utxos(
             &self.http_client,
             account_index.into(),
@@ -373,7 +373,7 @@ impl WalletInterface for ClientWalletRpc {
         _utxo_types: Vec<UtxoType>,
         _utxo_states: Vec<UtxoState>,
         _with_locked: WithLocked,
-    ) -> Result<Vec<serde_json::Value>, Self::Error> {
+    ) -> Result<Vec<UtxoInfo>, Self::Error> {
         WalletRpcClient::get_utxos(&self.http_client, account_index.into())
             .await
             .map_err(WalletRpcError::ResponseError)

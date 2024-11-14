@@ -39,7 +39,7 @@ use wallet_rpc_lib::types::{
     NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
     RpcInspectTransaction, RpcSignatureStatus, RpcStandaloneAddresses, RpcTokenId,
     SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
-    StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, VrfPublicKeyInfo,
+    StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
 };
 use wallet_types::with_locked::WithLocked;
 
@@ -186,7 +186,7 @@ pub trait WalletInterface {
         utxo_types: Vec<UtxoType>,
         utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
-    ) -> Result<Vec<serde_json::Value>, Self::Error>;
+    ) -> Result<Vec<UtxoInfo>, Self::Error>;
 
     async fn get_utxos(
         &self,
@@ -194,7 +194,7 @@ pub trait WalletInterface {
         utxo_types: Vec<UtxoType>,
         utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
-    ) -> Result<Vec<serde_json::Value>, Self::Error>;
+    ) -> Result<Vec<UtxoInfo>, Self::Error>;
 
     async fn submit_raw_transaction(
         &self,

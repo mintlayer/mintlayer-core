@@ -48,8 +48,8 @@ use common::{
             TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination,
-        OrderData, OutPointSourceId, SignedTransaction, SignedTransactionIntent, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        OrderData, OutPointSourceId, SignedTransaction, SignedTransactionIntent, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
         self, amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, Id, Idable, H256,

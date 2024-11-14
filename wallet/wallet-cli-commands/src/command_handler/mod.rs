@@ -870,8 +870,7 @@ where
                         CliUtxoState::to_wallet_states(utxo_states),
                         with_locked.to_wallet_type(),
                     )
-                    .await
-                    .map(serde_json::Value::Array)?;
+                    .await?;
                 Ok(ConsoleCommand::Print(
                     serde_json::to_string(&utxos).expect("ok"),
                 ))
@@ -1176,8 +1175,7 @@ where
                         CliUtxoState::to_wallet_states(utxo_states),
                         with_locked.to_wallet_type(),
                     )
-                    .await
-                    .map(serde_json::Value::Array)?;
+                    .await?;
                 Ok(ConsoleCommand::Print(
                     serde_json::to_string(&utxos).expect("ok"),
                 ))
