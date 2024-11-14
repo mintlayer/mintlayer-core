@@ -55,8 +55,6 @@ const TESTNET_STAKER_REWARD_AND_TOKENS_FEE_FORK_HEIGHT: BlockHeight = BlockHeigh
 const TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::new(297_550);
 // The fork, at which order outputs become valid
 const TESTNET_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(325_180);
-// The fork, at which rules for validating frozen tokens changed
-const MAINNET_FROZEN_TOKENS_VALIDATION_FORK_HEIGHT: BlockHeight = BlockHeight::new(254_740);
 // The fork, at which txs with htlc and orders outputs become valid
 const MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(254_740);
 
@@ -177,19 +175,6 @@ impl ChainType {
                             FrozenTokensValidationVersion::V0,
                             HtlcActivated::No,
                             OrdersActivated::No,
-                        ),
-                    ),
-                    (
-                        MAINNET_FROZEN_TOKENS_VALIDATION_FORK_HEIGHT,
-                        ChainstateUpgrade::new(
-                            TokenIssuanceVersion::V1,
-                            RewardDistributionVersion::V1,
-                            TokensFeeVersion::V1,
-                            DataDepositFeeVersion::V1,
-                            ChangeTokenMetadataUriActivated::Yes,
-                            FrozenTokensValidationVersion::V1,
-                            HtlcActivated::Yes,
-                            OrdersActivated::Yes,
                         ),
                     ),
                     (
