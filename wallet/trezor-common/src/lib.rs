@@ -393,3 +393,12 @@ pub enum TxInput {
     #[codec(index = 2)]
     AccountCommand(#[codec(compact)] u64, AccountCommand),
 }
+
+#[cfg(test)]
+extern crate std;
+
+#[cfg(test)]
+use std::prelude::v1::*;
+
+#[cfg(test)]
+mod tests;
