@@ -16,7 +16,7 @@
 use std::{collections::BTreeMap, ops::Sub};
 
 use api_server_common::storage::storage_api::{
-    block_aux_data::BlockAuxData, TransactionInfo, TxAdditionalInfo,
+    block_aux_data::BlockAuxData, Order, TransactionInfo, TxAdditionalInfo,
 };
 use common::{
     address::Address,
@@ -24,8 +24,8 @@ use common::{
         block::ConsensusData,
         output_value::OutputValue,
         tokens::{IsTokenUnfreezable, NftIssuance, TokenId, TokenTotalSupply},
-        AccountCommand, AccountSpending, Block, ChainConfig, Destination, OutPointSourceId,
-        Transaction, TxInput, TxOutput, UtxoOutPoint,
+        AccountCommand, AccountSpending, Block, ChainConfig, Destination, OrderId,
+        OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Idable},
     Uint256,
@@ -474,4 +474,28 @@ pub fn to_json_string(bytes: &[u8]) -> serde_json::Value {
             })
         }
     }
+}
+
+pub fn order_to_json(
+    chain_config: &ChainConfig,
+    order_id: OrderId,
+    order: &Order,
+    decimals: &BTreeMap<CoinOrTokenId, u8>,
+) -> serde_json::Value {
+    let order_id = Address::new(chain_config, order_id).expect("no error in encoding");
+    let conclude_destination = Address::new(chain_config, order.conclude_destination.clone())
+        .expect("no error in encoding");
+    let give_currency_decimals = *decimals.get(&order.give_currency).expect("must be present");
+    let ask_currency_decimals = *decimals.get(&order.ask_currency).expect("must be present");
+
+    json!({
+        "order_id": order_id.as_str(),
+        "conclude_destination": conclude_destination.as_str(),
+        "give_currency": coins_or_token_to_json(&order.give_currency, chain_config),
+        "initially_given": amount_to_json(order.initially_given, give_currency_decimals),
+        "give_balance": amount_to_json(order.give_balance, give_currency_decimals),
+        "ask_currency": coins_or_token_to_json(&order.ask_currency, chain_config),
+        "initially_asked": amount_to_json(order.initially_asked, ask_currency_decimals),
+        "ask_balance": amount_to_json(order.ask_balance, ask_currency_decimals),
+    })
 }
