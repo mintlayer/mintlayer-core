@@ -56,9 +56,9 @@ const TESTNET_HTLC_AND_DATA_DEPOSIT_FEE_FORK_HEIGHT: BlockHeight = BlockHeight::
 // The fork, at which order outputs become valid
 const TESTNET_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(325_180);
 // The fork, at which rules for validating frozen tokens changed
-const MAINNET_FROZEN_TOKENS_VALIDATION_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
+const MAINNET_FROZEN_TOKENS_VALIDATION_FORK_HEIGHT: BlockHeight = BlockHeight::new(254_740);
 // The fork, at which txs with htlc and orders outputs become valid
-const MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(99_999_999);
+const MAINNET_HTLC_AND_ORDERS_FORK_HEIGHT: BlockHeight = BlockHeight::new(254_740);
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
