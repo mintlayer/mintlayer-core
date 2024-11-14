@@ -15,8 +15,8 @@
 
 use crate::{
     api::json_helpers::{
-        amount_to_json, block_header_to_json, coins_or_token_to_json, to_tx_json_with_block_info,
-        tx_to_json, txoutput_to_json, utxo_outpoint_to_json, TokenDecimals,
+        self, amount_to_json, block_header_to_json, to_tx_json_with_block_info, tx_to_json,
+        txoutput_to_json, utxo_outpoint_to_json, TokenDecimals,
     },
     error::{
         ApiServerWebServerClientError, ApiServerWebServerError, ApiServerWebServerForbiddenError,
@@ -26,7 +26,7 @@ use crate::{
 };
 use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead, BlockInfo,
-    CoinOrTokenStatistic, TransactionInfo,
+    CoinOrTokenStatistic, Order, TransactionInfo,
 };
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
@@ -39,7 +39,7 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp,
         tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId},
-        Block, Destination, SignedTransaction, Transaction,
+        Block, ChainConfig, Destination, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
@@ -123,9 +123,8 @@ pub fn routes<
         .route("/token/ticker/:ticker", get(token_ids_by_ticker))
         .route("/nft/:id", get(nft));
 
-    // FIXME: /order/:id
     // FIXME: order by trading pair
-    router.route("/order", get(orders))
+    router.route("/order", get(orders)).route("/order/:id", get(order))
 }
 
 async fn forbidden_request() -> Result<(), ApiServerWebServerError> {
@@ -1311,6 +1310,97 @@ pub async fn token_ids_by_ticker<T: ApiServerStorage>(
     Ok(Json(serde_json::Value::Array(token_ids)))
 }
 
+async fn collect_token_decimals_for_orders(
+    db_tx: &impl ApiServerStorageRead,
+    orders: impl Iterator<Item = &Order>,
+    chain_config: &ChainConfig,
+) -> Result<BTreeMap<CoinOrTokenId, u8>, ApiServerWebServerError> {
+    let get_token_id = |currency| match currency {
+        CoinOrTokenId::Coin => None,
+        CoinOrTokenId::TokenId(id) => Some(id),
+    };
+
+    // Grep decimals for all tokens encountered in orders
+    let token_decimals = {
+        let mut token_ids = BTreeSet::<TokenId>::new();
+        for data in orders {
+            if let Some(token_id) = get_token_id(data.give_currency) {
+                token_ids.insert(token_id);
+            }
+            if let Some(token_id) = get_token_id(data.ask_currency) {
+                token_ids.insert(token_id);
+            }
+        }
+
+        get_tokens_decimals(db_tx, token_ids.iter().copied()).await?
+    };
+
+    let mut token_decimals = token_decimals
+        .into_iter()
+        .map(|(id, decimals)| (CoinOrTokenId::TokenId(id), decimals))
+        .collect::<BTreeMap<_, _>>();
+    token_decimals.insert(CoinOrTokenId::Coin, chain_config.coin_decimals());
+
+    Ok(token_decimals)
+}
+
+async fn get_tokens_decimals(
+    db_tx: &impl ApiServerStorageRead,
+    token_ids: impl Iterator<Item = TokenId>,
+) -> Result<BTreeMap<TokenId, u8>, ApiServerWebServerError> {
+    let mut token_decimals = BTreeMap::new();
+    for token_id in token_ids {
+        let decimals = db_tx
+            .get_token_num_decimals(token_id)
+            .await
+            .map_err(|e| {
+                logging::log::error!("internal error: {e}");
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                )
+            })?
+            .ok_or(ApiServerWebServerError::NotFound(
+                ApiServerWebServerNotFoundError::TokenNotFound,
+            ))?;
+        token_decimals.insert(token_id, decimals);
+    }
+    Ok(token_decimals)
+}
+
+pub async fn order<T: ApiServerStorage>(
+    Path(order_id): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let order_id = Address::from_string(&state.chain_config, &order_id)
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidOrderId)
+        })?
+        .into_object();
+
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let order = db_tx
+        .get_order(order_id)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::OrderNotFound,
+        ))?;
+
+    let decimals =
+        collect_token_decimals_for_orders(&db_tx, std::iter::once(&order), &state.chain_config)
+            .await?;
+
+    let result = json_helpers::order_to_json(&state.chain_config, order_id, &order, &decimals);
+    Ok(Json(result))
+}
+
 pub async fn orders<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
@@ -1352,66 +1442,15 @@ pub async fn orders<T: ApiServerStorage>(
         ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
     })?;
 
-    let get_token_id = |currency| match currency {
-        CoinOrTokenId::Coin => None,
-        CoinOrTokenId::TokenId(id) => Some(id),
-    };
-
-    // Grep decimals for all tokens encountered in orders
-    let token_decimals = {
-        let mut token_ids = BTreeSet::<TokenId>::new();
-        for (_, data) in &orders {
-            if let Some(token_id) = get_token_id(data.give_currency) {
-                token_ids.insert(token_id);
-            }
-            if let Some(token_id) = get_token_id(data.ask_currency) {
-                token_ids.insert(token_id);
-            }
-        }
-
-        let mut token_decimals = BTreeMap::new();
-        for token_id in token_ids {
-            let decimals = db_tx
-                .get_token_num_decimals(token_id)
-                .await
-                .map_err(|e| {
-                    logging::log::error!("internal error: {e}");
-                    ApiServerWebServerError::ServerError(
-                        ApiServerWebServerServerError::InternalServerError,
-                    )
-                })?
-                .ok_or(ApiServerWebServerError::NotFound(
-                    ApiServerWebServerNotFoundError::TokenNotFound,
-                ))?;
-            token_decimals.insert(token_id, decimals);
-        }
-        token_decimals
-    };
-
-    let get_decimals_for_currency = |currency| {
-        get_token_id(currency).map_or_else(
-            || state.chain_config.coin_decimals(),
-            |token_id| *token_decimals.get(&token_id).expect("must be present"),
-        )
-    };
+    let decimals = collect_token_decimals_for_orders(
+        &db_tx,
+        orders.iter().map(|(_, order)| order),
+        &state.chain_config,
+    )
+    .await?;
 
     let orders = orders.into_iter().map(|(order_id, data)| {
-        let order_id = Address::new(&state.chain_config, order_id).expect("no error in encoding");
-        let conclude_destination = Address::new(&state.chain_config, data.conclude_destination)
-            .expect("no error in encoding");
-        let give_currency_decimals = get_decimals_for_currency(data.give_currency);
-        let ask_currency_decimals = get_decimals_for_currency(data.ask_currency);
-
-        json!({
-            "order_id": order_id.as_str(),
-            "conclude_destination": conclude_destination.as_str(),
-            "give_currency": coins_or_token_to_json(&data.give_currency, &state.chain_config),
-            "initially_given": amount_to_json(data.initially_given, give_currency_decimals),
-            "give_balance": amount_to_json(data.give_balance, give_currency_decimals),
-            "ask_currency": coins_or_token_to_json(&data.ask_currency, &state.chain_config),
-            "initially_asked": amount_to_json(data.initially_asked, ask_currency_decimals),
-            "ask_balance": amount_to_json(data.ask_balance, ask_currency_decimals),
-        })
+        json_helpers::order_to_json(&state.chain_config, order_id, &data, &decimals)
     });
 
     Ok(Json(orders.collect::<Vec<_>>()))
