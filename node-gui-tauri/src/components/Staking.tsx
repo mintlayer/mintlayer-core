@@ -1,34 +1,19 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { AiOutlineCopy } from "react-icons/ai";
 import { IoCloseSharp } from "react-icons/io5";
+import { notify } from "../utils/util";
+import { AccountType, WalletInfo } from "../types/Types";
 
-const Staking = () => {
-  const stakingPoolInfo = [
-    {
-      pool_address: "tpool2134rfwer23r23r2ewr23r23r",
-      margin_ratio: "50%",
-      cost_per_block: 10,
-      pool_balance: 50000,
-    },
-    {
-      pool_address: "tpool2134rfwer23r23r2ewr23r23r",
-      margin_ratio: "50%",
-      cost_per_block: 10,
-      pool_balance: 50000,
-    },
-    {
-      pool_address: "tpool2134rfwer23r23r2ewr23r23r",
-      margin_ratio: "50%",
-      cost_per_block: 10,
-      pool_balance: 50000,
-    },
-    {
-      pool_address: "tpool2134rfwer23r23r2ewr23r23r",
-      margin_ratio: "50%",
-      cost_per_block: 10,
-      pool_balance: 50000,
-    },
-  ];
+const Staking = (props: {
+  currentAccount: AccountType | undefined;
+  currentWallet: WalletInfo | undefined;
+  currentAccountId: number | undefined;
+  currentWalletId: string | undefined;
+}) => {
+  const [poolInfo, setPoolInfo] = useState(
+    props.currentAccount?.staking_balance
+  );
   const [pledgeAmount, setPledgeAmount] = useState(0);
   const [costPerBlock, setCostPerBlock] = useState(0);
   const [marginRatio, setMarginRatio] = useState(0);
@@ -43,6 +28,27 @@ const Staking = () => {
   const handleDecommission = () => {
     setShowDecommissionModal(false);
   };
+
+  const handleCreateStakingPool = async () => {
+    try {
+      const result = await invoke("stake_amount_wrapper", {
+        stake_request: {
+          wallet_id: props.currentWalletId,
+          account_id: props.currentAccountId,
+          pledge_amount: pledgeAmount,
+          mpt: marginRatio,
+          cost_per_block: costPerBlock,
+          decommission_address: decommissionAddress,
+        },
+      });
+      if (result) {
+        console.log(result);
+      }
+    } catch (error) {
+      notify(new String(error).toString(), "error");
+    }
+  };
+
   return (
     <div className="container overflow-y-auto px-4 pt-1 py-2">
       {showDecommissionModal && (
@@ -125,10 +131,10 @@ const Staking = () => {
           </tr>
         </thead>
         <tbody>
-          {stakingPoolInfo.map((stakeInfo, index) => {
+          {Object.values(poolInfo ? poolInfo : {}).map((stakeInfo, index) => {
             return (
               <tr
-                key={stakeInfo.pool_address}
+                key={stakeInfo.pool_id}
                 className="hover:bg-gray-50 transition duration-200"
               >
                 <td className="py-2 px-4 border-b border-gray-200">
@@ -137,12 +143,12 @@ const Staking = () => {
                 <td className="py-2 px-4 border-b border-gray-200">
                   <div className="flex justify-between space-x-2">
                     <p>
-                      {stakeInfo.pool_address.slice(0, 9)}...
-                      {stakeInfo.pool_address.slice(-4)}
+                      {stakeInfo.pool_id.slice(0, 9)}...
+                      {stakeInfo.pool_id.slice(-4)}
                     </p>
                     <button
                       onClick={() =>
-                        navigator.clipboard.writeText(stakeInfo.pool_address)
+                        navigator.clipboard.writeText(stakeInfo.pool_id)
                       }
                       className="flex items-center justify-center p-0 bg-transparent border-none shadow-none focus:outline-none"
                     >
@@ -151,13 +157,13 @@ const Staking = () => {
                   </div>
                 </td>
                 <td className="py-2 px-4 border-b border-gray-200">
-                  {stakeInfo.margin_ratio}
+                  {stakeInfo.margin_ratio_per_thousand}
                 </td>
                 <td className="py-2 px-4 border-b border-gray-200">
-                  {stakeInfo.cost_per_block}
+                  {stakeInfo.cost_per_block.decimal}
                 </td>
                 <td className="py-2 px-4 border-b border-gray-200">
-                  {stakeInfo.pool_balance}
+                  {stakeInfo.balance.decimal}
                 </td>
                 <td className="py-2 px-4 border-b border-gray-200">
                   <button className="py-1 px-4 border text-[#E02424] border-[#E02424] bg-white rounded-lg transition-all duration-200 hover:outline-none hover:bg-[#E02424] hover:text-white hover:border-[#E02424]">
@@ -217,7 +223,10 @@ const Staking = () => {
         />
       </div>
       <div>
-        <button className="w-60 py-1 px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black mt-8 mb-8">
+        <button
+          onClick={handleCreateStakingPool}
+          className="w-60 py-1 px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black mt-8 mb-8"
+        >
           Create Staking Pool
         </button>
       </div>

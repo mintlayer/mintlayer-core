@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { IoCloseSharp } from "react-icons/io5";
 import { invoke } from "@tauri-apps/api/core";
+import { notify } from "../utils/util";
 const Send = (props: { walletId: number; accountId: number }) => {
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState("");
@@ -17,6 +18,7 @@ const Send = (props: { walletId: number; accountId: number }) => {
       });
       if (transactionInfo) {
         console.log("trasaction info is =========>", transactionInfo);
+        notify(`Sent ${amount} to ${address} successfully!`, "info");
         setShowConfirmModal(true);
       }
     } catch (error) {}
@@ -33,7 +35,7 @@ const Send = (props: { walletId: number; accountId: number }) => {
               <IoCloseSharp />
             </button>
             <h2 className="text-lg font-bold mb-4">Transaction Info</h2>
-            <p className="mb-4">Your Wallet Mnemonic</p>
+            <p className="mb-4">Transaction Address: {}</p>
 
             <button
               className="bg-green-400 text-black w-full px-4 py-2 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"

@@ -7,6 +7,7 @@ import { wordlist } from "@scure/bip39/wordlists/english";
 import { RiInformation2Line } from "react-icons/ri";
 import { PiShareNetworkBold } from "react-icons/pi";
 import { ToastContainer } from "react-toastify";
+import _ from "lodash";
 import "react-toastify/dist/ReactToastify.css";
 
 import { IoCloseSharp } from "react-icons/io5";
@@ -22,9 +23,8 @@ import AccountIcom from "../assets/account_icon.png";
 import { notify } from "../utils/util";
 import SummaryTab from "../components/Summary";
 import NetworkingTab from "../components/Networking";
-import { AccountType, WalletInfo } from "../types/Types";
+import { AccountType, NewAccountResultType, WalletInfo } from "../types/Types";
 import WalletActions from "../components/WalletActions";
-import Staking from "../components/Staking";
 
 function Home() {
   const InitNetwork = {
@@ -80,36 +80,41 @@ function Home() {
   }, [walletsInfo]);
 
   useEffect(() => {
-    setCurrentAccount(
-      Object.values(currentWallet?.accounts ? currentWallet.accounts : {})[0]
-    );
     if (currentWallet) {
+      const firstAccount = Object.values(currentWallet.accounts || {})[0];
+      if (!_.isEqual(firstAccount, currentAccount)) {
+        setCurrentAccount(firstAccount);
+      }
+
+      console.log("current wallet is ", currentWallet);
       setWalletsInfo((prevWallets) => {
-        return prevWallets.map((walletItem, index) => {
-          if (index === currentWalletId) {
-            return currentWallet; // Ensure a valid WalletInfo is returned
-          } else {
-            return walletItem;
-          }
-        });
+        const updatedWallets = [...prevWallets];
+        updatedWallets[currentWalletId] = currentWallet; // Update the specific wallet
+        return updatedWallets;
       });
     }
-  }, [currentWallet]);
+  }, [currentWallet, currentWalletId]);
 
   useEffect(() => {
     if (currentAccount) {
-      setCurrentWallet(
-        (prevWallet) =>
-          ({
+      console.log("current account is ", currentAccountId, currentAccount);
+      setCurrentWallet((prevWallet) => {
+        // Only update if the account is different
+        if (
+          !_.isEqual(prevWallet?.accounts?.[currentAccountId], currentAccount)
+        ) {
+          return {
             ...prevWallet,
             accounts: {
               ...prevWallet?.accounts,
               [currentAccountId]: currentAccount,
             },
-          } as WalletInfo)
-      );
+          } as WalletInfo;
+        }
+        return prevWallet; // Return previous wallet if no change
+      });
     }
-  }, [currentAccount]);
+  }, [currentAccount, currentAccountId]);
 
   const createNewWallet = () => {
     try {
@@ -309,9 +314,22 @@ function Home() {
     setCurrentAccountId(0);
   };
 
+  const addAccount = (accountId: string, accountInfo: AccountType) => {
+    setCurrentWallet(
+      (prevWallet) =>
+        ({
+          ...prevWallet,
+          accounts: {
+            ...prevWallet?.accounts,
+            [accountId]: accountInfo,
+          },
+        } as WalletInfo)
+    );
+  };
+
   const handleCreateNewAccount = async () => {
     try {
-      const result = await invoke("new_account_wrapper", {
+      const result: NewAccountResultType = await invoke("new_account_wrapper", {
         request: {
           name: accountName,
           wallet_id: currentWalletId,
@@ -319,6 +337,8 @@ function Home() {
       });
       if (result) {
         console.log("account creating result is ", result);
+        addAccount(result.account_id, result.account_info);
+        notify("Account created successfully!", "success");
       }
     } catch (error) {
       notify(new String(error).toString(), "error");
@@ -583,6 +603,7 @@ function Home() {
                         </button>
                         <select
                           onChange={(e) => {
+                            setCurrentAccountId(parseInt(e.target.value));
                             setCurrentAccount(
                               Object.values(
                                 currentWallet?.accounts
@@ -590,11 +611,8 @@ function Home() {
                                   : {}
                               )[parseInt(e.target.value)]
                             );
-                            setCurrentAccountId(parseInt(e.target.value));
                           }}
-                          value={
-                            currentAccount?.name ? currentAccount.name : ""
-                          }
+                          value={currentAccountId}
                           className="block w-[16vw] bg-white px-2 w-[14vw] border-gray-300 text-gray-700 py-2  rounded-lg shadow-sm focus:outline-none  "
                         >
                           {Object.entries(
@@ -604,8 +622,8 @@ function Home() {
                                   .accounts
                               : {}
                           ).map(([index, account]) => (
-                            <option key={index} value={account?.name}>
-                              Account {index}
+                            <option key={index} value={index}>
+                              {account.name ? account.name : "Account " + index}
                             </option>
                           ))}
                         </select>
@@ -725,7 +743,6 @@ function Home() {
                       handleRemoveWallet={handleRemoveWallet}
                     />
                   )}
-                  {currentTab === "staking" && <Staking />}
                 </div>
               </div>
             </div>

@@ -157,6 +157,13 @@ pub struct NewAccountRequest {
     name: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NewAccountResult {
+    wallet_id: WalletId,
+    account_id: AccountId,
+    account_info: AccountInfo,
+}
+
 impl Default for AppState {
     fn default() -> Self {
         AppState {
@@ -181,7 +188,6 @@ pub struct InitializedNode {
     pub chain_config: Arc<ChainConfig>,
     pub chain_info: ChainInfo,
 }
-
 
 fn parse_coin_amount(chain_config: &ChainConfig, value: &str) -> Option<Amount> {
     Amount::from_fixedpoint_str(value, chain_config.coin_decimals())
@@ -282,7 +288,7 @@ pub async fn node_initialize(
             match Arc::try_unwrap(backend) {
                 Ok(backend) => {
                     backend_impl::run(
-                        backend, 
+                        backend,
                         request_rx,
                         wallet_updated_rx,
                         _chainstate_event_handler,
@@ -500,7 +506,7 @@ async fn update_encryption_wrapper(
     let update_encryption_action =
         match EncryptionAction::from_str(&request.action, request.password.as_deref()) {
             Some(action) => action,
-            None => return Err("Invalid action or missing password".into()), 
+            None => return Err("Invalid action or missing password".into()),
         };
     let result = {
         let mut backend_guard = state.backend.write().await;
@@ -536,10 +542,10 @@ async fn close_wallet_wrapper(
         let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
 
         if let Some(wallet) = backend.wallets.remove(&wallet_id) {
-            wallet.shutdown().await; 
+            wallet.shutdown().await;
             Ok(())
         } else {
-            Err("Wallet not found".into()) 
+            Err("Wallet not found".into())
         }
     };
 
@@ -732,7 +738,7 @@ async fn send_delegation_to_address_wrapper(
 async fn new_account_wrapper(
     state: tauri::State<'_, AppState>,
     request: NewAccountRequest,
-) -> Result<(WalletId, AccountId, AccountInfo), String> {
+) -> Result<NewAccountResult, String> {
     let wallet_id = WalletId::from_u64(request.wallet_id);
     let result = {
         let mut backend_guard = state.backend.write().await;
@@ -744,7 +750,11 @@ async fn new_account_wrapper(
     match result {
         Ok(account_info) => {
             println!("Account created successfully: {:?}", account_info);
-            Ok(account_info)
+            Ok(NewAccountResult {
+                wallet_id: account_info.0,
+                account_id: account_info.1,
+                account_info: account_info.2,
+            })
         }
         Err(e) => {
             let error_message = e.to_string();

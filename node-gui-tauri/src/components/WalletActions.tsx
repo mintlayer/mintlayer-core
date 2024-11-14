@@ -314,7 +314,14 @@ const WalletActions = (props: {
           accountId={props.currentAccountId}
         />
       )}
-      {props.activeTab === "staking" && <Staking />}
+      {props.activeTab === "staking" && (
+        <Staking
+          currentAccount={props.currentAccount}
+          currentWallet={props.currentWallet}
+          currentAccountId={props.currentAccountId}
+          currentWalletId = {props.currentWallet?.wallet_id}
+        />
+      )}
       {props.activeTab === "delegation" && <Delegation />}
       {props.activeTab === "console" && <Console />}
     </div>
