@@ -32,9 +32,8 @@ use self::hashable::{SignatureHashableElement, SignatureHashableInputs};
 use super::{DestinationSigError, Signable};
 
 fn hash_encoded_if_some<T: Encode>(val: &Option<T>, stream: &mut DefaultHashAlgoStream) {
-    match val {
-        Some(ref v) => hash_encoded_to(&v, stream),
-        None => (),
+    if let Some(v) = val {
+        hash_encoded_to(&v, stream)
     }
 }
 
