@@ -8543,16 +8543,12 @@ dependencies = [
 name = "trezor-common"
 version = "1.0.2"
 dependencies = [
- "bitcoin-bech32",
- "expect-test",
- "indoc",
+ "common",
+ "crypto",
  "num-derive",
  "num-traits",
  "parity-scale-codec",
- "proptest",
  "rstest",
- "serde_test",
- "serial_test",
  "test-utils",
 ]
 
