@@ -152,7 +152,6 @@ async fn ok(#[case] seed: Seed) {
                 let mut blocks = vec![];
                 blocks.push(block.clone());
                 for delegation in &delegations {
-                    blocks.reserve_extract(delegation.3.len());
                     for block in &delegation.3 {
                         blocks.push(block.clone());
                     }

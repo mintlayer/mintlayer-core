@@ -48,7 +48,7 @@ fn test_scale_vectors() {
     let dec = SimpleWrapper::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(vector)));
-    let mut vector = Vec::with_capacity(2048);
+    let mut vector = Vec::new();
     for _ in 0..1024 {
         vector.push((
             -11i8,

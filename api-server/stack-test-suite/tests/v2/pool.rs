@@ -145,7 +145,6 @@ async fn ok(#[case] seed: Seed) {
                 for pool in &pools {
                     blocks.push(pool.3.clone());
                     for delegation in &pool.2 {
-                        blocks.reserve_extract(delegation.3.len());
                         for block in &delegation.3 {
                             blocks.push(block.clone());
                         }
