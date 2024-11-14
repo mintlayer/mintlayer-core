@@ -137,7 +137,7 @@ export async function run_test() {
     try {
       verify_challenge(different_address, Network.Testnet, challenge, message);
     } catch (e) {
-      if (!e.includes("Public key to address mismatch")) {
+      if (!e.includes("Public key to public key hash mismatch")) {
         throw e;
       }
       console.log("Tested verify with different address successfully");
@@ -1366,7 +1366,7 @@ function test_signed_transaction_intent() {
       verify_transaction_intent(message, signed_intent, [pubkeyhash_addr2, pubkey_addr1], Network.Regtest);
       throw new Error("Mismatched addresses worked somehow!");
     } catch (e) {
-      if (!e.includes("Public key to address mismatch")) {
+      if (!e.includes("Public key to public key hash mismatch")) {
         throw e;
       }
     }

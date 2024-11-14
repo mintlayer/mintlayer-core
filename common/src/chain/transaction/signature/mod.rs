@@ -58,8 +58,8 @@ pub enum DestinationSigError {
     DecodingWitnessFailed,
     #[error("Signature verification failed")]
     SignatureVerificationFailed,
-    #[error("Public key to address mismatch")]
-    PublicKeyToAddressMismatch,
+    #[error("Public key to public key hash mismatch")]
+    PublicKeyToHashMismatch,
     #[error("Address authorization decoding failed")]
     AddressAuthDecodingFailed(String),
     #[error("Signature decoding failed")]

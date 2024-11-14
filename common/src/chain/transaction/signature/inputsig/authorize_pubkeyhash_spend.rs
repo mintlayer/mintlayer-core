@@ -49,7 +49,7 @@ pub fn verify_public_key_hash_spending(
 ) -> Result<(), DestinationSigError> {
     let calculated_addr = PublicKeyHash::from(&sig_components.public_key);
     if calculated_addr != *spendee_addr {
-        return Err(DestinationSigError::PublicKeyToAddressMismatch);
+        return Err(DestinationSigError::PublicKeyToHashMismatch);
     }
     let msg = sighash.encode();
     if !sig_components.public_key.verify_message(&sig_components.signature, &msg) {
@@ -67,7 +67,7 @@ pub fn sign_public_key_hash_spending<R: Rng + CryptoRng>(
     let public_key = PublicKey::from_private_key(private_key);
     let calculated_addr = PublicKeyHash::from(&public_key);
     if calculated_addr != *spendee_addr {
-        return Err(DestinationSigError::PublicKeyToAddressMismatch);
+        return Err(DestinationSigError::PublicKeyToHashMismatch);
     }
     sign_public_key_hash_spending_impl(private_key, public_key, sighash, rng)
 }

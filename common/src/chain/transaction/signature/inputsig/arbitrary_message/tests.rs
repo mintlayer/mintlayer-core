@@ -212,7 +212,7 @@ fn verify_wrong_destination(#[case] seed: Seed) {
         (
             &dest_addr,
             &dest_addr2,
-            &assert_result(Err(DestinationSigError::PublicKeyToAddressMismatch)),
+            &assert_result(Err(DestinationSigError::PublicKeyToHashMismatch)),
         ),
         (
             &dest_addr,

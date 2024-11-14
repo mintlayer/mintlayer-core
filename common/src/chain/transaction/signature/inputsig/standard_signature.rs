@@ -237,7 +237,7 @@ mod test {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn produce_signature_address_mismatch(#[case] seed: Seed) {
+    fn produce_signature_pub_key_hash_mismatch(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
@@ -251,7 +251,7 @@ mod test {
 
         for sighash_type in sig_hash_types() {
             assert_eq!(
-                Err(DestinationSigError::PublicKeyToAddressMismatch),
+                Err(DestinationSigError::PublicKeyToHashMismatch),
                 StandardInputSignature::produce_uniparty_signature_for_input(
                     &private_key,
                     sighash_type,
