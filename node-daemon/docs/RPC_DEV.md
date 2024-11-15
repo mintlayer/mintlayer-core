@@ -1,6 +1,6 @@
 # RPC documentation for Mintlayer node developer functions
 
-Version `0.7.0`.
+Version `1.0.0`.
 
 These functions are used for testing and only enabled in regtest.
 
