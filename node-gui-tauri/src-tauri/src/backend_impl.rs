@@ -678,7 +678,7 @@ impl Backend {
         AddressInfo::new(wallet_id, account_id, &index, address)
     }
 
-    async fn toggle_staking(
+    pub async fn toggle_staking(
         &mut self,
         wallet_id: WalletId,
         account_id: AccountId,

@@ -6,7 +6,9 @@ const Send = (props: { walletId: number; accountId: number }) => {
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const handleSend = async () => {
+  const handleSend = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
     try {
       const transactionInfo = await invoke("send_amount_wrapper", {
         request: {
@@ -19,12 +21,32 @@ const Send = (props: { walletId: number; accountId: number }) => {
       if (transactionInfo) {
         console.log("trasaction info is =========>", transactionInfo);
         notify(`Sent ${amount} to ${address} successfully!`, "info");
-        setShowConfirmModal(true);
       }
-    } catch (error) {}
+    } catch (error) {
+      notify(new String(error).toString(), "error");
+    }
   };
   return (
     <div className="container mx-auto p-2">
+      <style>{`
+        /* Hide the spin buttons for WebKit-based browsers */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+
+        /* Hide the spin buttons for Firefox */
+        input[type="number"] {
+          -moz-appearance: textfield;
+        }
+
+        /* Adjust the position of the clear button */
+        .input-container button {
+          right: 36px; /* Adjust this value as needed */
+        }
+      `}</style>
+
       {showConfirmModal && (
         <div className="bg-white rounded-lg shadow-lg z-10 p-6 max-w-lg mx-auto relative space-y-4">
           <>
@@ -47,7 +69,7 @@ const Send = (props: { walletId: number; accountId: number }) => {
         </div>
       )}
       <form
-        onSubmit={handleSend}
+        onSubmit={(e) => handleSend(e)}
         className="flex flex-col items-center space-y-2"
       >
         <p className="text-lg font-semibold text-left w-60">Address</p>
@@ -57,11 +79,14 @@ const Send = (props: { walletId: number; accountId: number }) => {
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             placeholder="Enter address"
-            className="w-60 shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 rounded-lg py-2 px-3"
+            className="w-80 shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 rounded-lg py-2 px-3"
           />
           <button
-            className="absolute inset-y-0 right-0 hover:outline-none text-gray-800 p-2 rounded focus:outline-none"
-            onClick={() => setAddress("")}
+            className="absolute inset-y-0 right-0 hover:outline-none text-gray-800 p-2 rounded focus:outline-none shadow-none"
+            onClick={(e) => {
+              e.preventDefault();
+              setAddress("");
+            }}
           >
             <IoCloseSharp />
           </button>
@@ -70,8 +95,11 @@ const Send = (props: { walletId: number; accountId: number }) => {
         <p className="text-lg font-semibold text-left w-60">Amount</p>
         <div className="relative">
           <button
-            className="absolute inset-y-0 right-0 hover:outline-none text-gray-800 p-2 rounded focus:outline-none"
-            onClick={() => setAmount("")}
+            className="absolute inset-y-0 right-0 hover:outline-none text-gray-800 p-2 rounded focus:outline-none shadow-none"
+            onClick={(e) => {
+              e.preventDefault();
+              setAmount("");
+            }}
           >
             <IoCloseSharp />
           </button>
@@ -81,7 +109,7 @@ const Send = (props: { walletId: number; accountId: number }) => {
             min={0}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="Enter amount"
-            className="w-60 shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 rounded-lg py-2 px-3"
+            className="w-80 shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300 rounded-lg py-2 px-3"
           />
         </div>
 

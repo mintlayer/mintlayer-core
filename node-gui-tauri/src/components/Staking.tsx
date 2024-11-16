@@ -3,7 +3,11 @@ import { useState } from "react";
 import { AiOutlineCopy } from "react-icons/ai";
 import { IoCloseSharp } from "react-icons/io5";
 import { notify } from "../utils/util";
-import { AccountType, WalletInfo } from "../types/Types";
+import {
+  AccountType,
+  WalletInfo,
+  ToggleStakingResultType,
+} from "../types/Types";
 
 const Staking = (props: {
   currentAccount: AccountType | undefined;
@@ -18,12 +22,36 @@ const Staking = (props: {
   const [costPerBlock, setCostPerBlock] = useState(0);
   const [marginRatio, setMarginRatio] = useState(0);
   const [decommissionAddress, setDecommissionAddress] = useState("");
-  const [isStakingStared, setIsStakingStared] = useState(false);
+  const [isStakingStarted, setIsStakingStarted] = useState(false);
   const [showDecommissionModal, setShowDecommissionModal] = useState(false);
   const [poolAddress, setPoolAddress] = useState("");
   const [receiveAddress, setReceiveAddress] = useState("");
-  const handleStaking = () => {
-    setIsStakingStared((started) => !started);
+  const handleStaking = async () => {
+    try {
+      const result: ToggleStakingResultType = await invoke(
+        "toggle_stakig_wrapper",
+        {
+          requst: {
+            wallet_id: parseInt(
+              props.currentWalletId ? props.currentWalletId : "0"
+            ),
+            account_id: props.currentAccountId ? props.currentAccountId : 0,
+            enabled: !isStakingStarted,
+          },
+        }
+      );
+      if (result) {
+        console.log(result);
+        setIsStakingStarted(result.enabled);
+        notify(
+          result.enabled ? "Staking started" : "Staking stopped",
+          "notify"
+        );
+      }
+    } catch (error) {
+      notify(new String(error).toString(), "error");
+    }
+    setIsStakingStarted((started) => !started);
   };
   const handleDecommission = () => {
     setShowDecommissionModal(false);
@@ -32,12 +60,14 @@ const Staking = (props: {
   const handleCreateStakingPool = async () => {
     try {
       const result = await invoke("stake_amount_wrapper", {
-        stake_request: {
-          wallet_id: props.currentWalletId,
-          account_id: props.currentAccountId,
-          pledge_amount: pledgeAmount,
-          mpt: marginRatio,
-          cost_per_block: costPerBlock,
+        request: {
+          wallet_id: parseInt(
+            props.currentWalletId ? props.currentWalletId : "0"
+          ),
+          account_id: props.currentAccountId ? props.currentAccountId : 0, // Change to parseInt
+          pledge_amount: pledgeAmount.toString(),
+          mpt: marginRatio.toString(),
+          cost_per_block: costPerBlock.toString(),
           decommission_address: decommissionAddress,
         },
       });
@@ -51,6 +81,19 @@ const Staking = (props: {
 
   return (
     <div className="container overflow-y-auto px-4 pt-1 py-2">
+      <style>{`
+        /* Hide the spin buttons for WebKit-based browsers */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+
+        /* Hide the spin buttons for Firefox */
+        input[type="number"] {
+          -moz-appearance: textfield;
+        }
+      `}</style>
       {showDecommissionModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="absolute inset-0 bg-black opacity-50"></div>
@@ -95,19 +138,19 @@ const Staking = (props: {
       <div className="border border-gray-200 rounded rounded-lg w-full py-6">
         <p className="font-bold text-lg text-center">RUN STAKING POOLS</p>
         <p className="text-center py-6">
-          {isStakingStared
+          {isStakingStarted
             ? "Staking is active"
             : "Staking has not yet started"}
         </p>
         <button
           className={
-            isStakingStared
+            isStakingStarted
               ? "py-1 px-4 border text-[#E02424] border-[#E02424] bg-white rounded-lg transition-all duration-200 hover:outline-none hover:bg-[#E02424] hover:text-white hover:border-[#E02424]"
               : "w-40 py-1 px-2 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black "
           }
           onClick={handleStaking}
         >
-          {isStakingStared ? "STOP STAKING" : "BEGIN STAKING"}
+          {isStakingStarted ? "STOP STAKING" : "BEGIN STAKING"}
         </button>
       </div>
       <p className="text-lg text-start py-8">Staking Pool Summary</p>
@@ -207,18 +250,20 @@ const Staking = (props: {
         <input
           type="number"
           placeholder="Enter amount"
+          step="0.001"
+          min={0}
           className="rounded rounded-lg"
           value={marginRatio}
-          onChange={(e) => setMarginRatio(parseInt(e.target.value))}
+          onChange={(e) => setMarginRatio(parseFloat(e.target.value))}
         />
       </div>
       <div className="container pt-4 pb-2">
         <p className="text-start">Decommission</p>
         <input
-          type="number"
           placeholder="Enter address"
-          className="rounded rounded-lg"
+          className="rounded rounded-lg border-black p-2"
           value={decommissionAddress}
+          type="text"
           onChange={(e) => setDecommissionAddress(e.target.value)}
         />
       </div>

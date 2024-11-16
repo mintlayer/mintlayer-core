@@ -164,6 +164,20 @@ pub struct NewAccountResult {
     account_info: AccountInfo,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ToggleStakingRequest {
+    wallet_id: u64,
+    account_id: U31,
+    enabled: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ToggleStakingResult {
+    wallet_id: WalletId,
+    account_id: AccountId,
+    enabled: bool,
+}
+
 impl Default for AppState {
     fn default() -> Self {
         AppState {
@@ -561,17 +575,17 @@ async fn close_wallet_wrapper(
 #[tauri::command]
 async fn stake_amount_wrapper(
     state: tauri::State<'_, AppState>,
-    stake_request: StakeAmountRequest,
+    request: StakeAmountRequest,
 ) -> Result<TransactionInfo, String> {
-    let wallet_id = WalletId::from_u64(stake_request.wallet_id);
-    let account_id = AccountId::new(stake_request.account_id);
+    let wallet_id = WalletId::from_u64(request.wallet_id);
+    let account_id = AccountId::new(request.account_id);
     let stake_request = StakeRequest {
         wallet_id: wallet_id,
         account_id: account_id,
-        pledge_amount: stake_request.pledge_amount,
-        mpt: stake_request.mpt,
-        cost_per_block: stake_request.cost_per_block,
-        decommission_address: stake_request.decommission_address,
+        pledge_amount: request.pledge_amount,
+        mpt: request.mpt,
+        cost_per_block: request.cost_per_block,
+        decommission_address: request.decommission_address,
     };
 
     let result = {
@@ -764,6 +778,37 @@ async fn new_account_wrapper(
     }
 }
 
+#[tauri::command]
+async fn toggle_stakig_wrapper(
+    state: tauri::State<'_, AppState>,
+    request: ToggleStakingRequest,
+) -> Result<ToggleStakingResult, String> {
+    let wallet_id = WalletId::from_u64(request.wallet_id);
+    let account_id = AccountId::new(request.account_id);
+    let result = {
+        let mut backend_guard = state.backend.write().await;
+        let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
+        let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
+        backend.toggle_staking(wallet_id, account_id, request.enabled).await
+    };
+
+    match result {
+        Ok(account_info) => {
+            println!("Account created successfully: {:?}", account_info);
+            Ok(ToggleStakingResult {
+                wallet_id: account_info.0,
+                account_id: account_info.1,
+                enabled: account_info.2,
+            })
+        }
+        Err(e) => {
+            let error_message = e.to_string();
+            println!("Error sending delegation: {}", error_message);
+            Err(error_message)
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -786,7 +831,8 @@ pub fn run() {
             create_delegation_wrapper,
             delegate_staking_wrapper,
             send_delegation_to_address_wrapper,
-            new_account_wrapper
+            new_account_wrapper,
+            toggle_stakig_wrapper
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

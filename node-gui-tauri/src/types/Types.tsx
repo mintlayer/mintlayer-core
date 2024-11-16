@@ -92,3 +92,9 @@ export type NewAccountResultType = {
   account_id: string;
   account_info: AccountType;
 };
+
+export type ToggleStakingResultType = {
+  wallet_id: string;
+  account_id: string;
+  enabled: boolean;
+};
