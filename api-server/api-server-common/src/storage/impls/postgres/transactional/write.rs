@@ -690,4 +690,16 @@ impl<'a> ApiServerStorageRead for ApiServerPostgresTransactionalRw<'a> {
 
         Ok(res)
     }
+
+    async fn get_orders_for_trading_pair(
+        &self,
+        pair: (CoinOrTokenId, CoinOrTokenId),
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
+        let conn = QueryFromConnection::new(self.connection.as_ref().expect(CONN_ERR));
+        let res = conn.get_orders_for_trading_pair(pair, len, offset, &self.chain_config).await?;
+
+        Ok(res)
+    }
 }

@@ -105,6 +105,8 @@ pub enum ApiServerWebServerClientError {
     InvalidInTopX,
     #[error("Invalid order Id")]
     InvalidOrderId,
+    #[error("Invalid order trading pair")]
+    InvalidOrderTradingPair,
 }
 
 #[allow(dead_code)]

@@ -510,4 +510,13 @@ impl<'t> ApiServerStorageRead for ApiServerInMemoryStorageTransactionalRw<'t> {
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
         self.transaction.get_orders_by_height(len, offset)
     }
+
+    async fn get_orders_for_trading_pair(
+        &self,
+        pair: (CoinOrTokenId, CoinOrTokenId),
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
+        self.transaction.get_orders_for_trading_pair(pair, len, offset)
+    }
 }

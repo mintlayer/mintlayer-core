@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rand::CryptoRng;
 use serialization::extras::non_empty_vec::DataOrNoVec;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -26,7 +27,8 @@ use api_server_common::storage::{
         block_aux_data::{BlockAuxData, BlockWithExtraData},
         ApiServerStorage, ApiServerStorageError, ApiServerStorageRead, ApiServerStorageWrite,
         ApiServerTransactionRw, BlockInfo, CoinOrTokenStatistic, Delegation, FungibleTokenData,
-        LockedUtxo, Order, TransactionInfo, TxAdditionalInfo, Utxo, UtxoLock, UtxoWithExtraInfo,
+        LockedUtxo, Order, TransactionInfo, Transactional, TxAdditionalInfo, Utxo, UtxoLock,
+        UtxoWithExtraInfo,
     },
 };
 use crypto::{
@@ -1368,79 +1370,201 @@ where
     }
 
     // test orders
+    orders(&mut rng, &mut storage).await;
+
+    Ok(())
+}
+
+async fn orders<'a, S: for<'b> Transactional<'b>>(
+    rng: &mut (impl Rng + CryptoRng),
+    storage: &'a mut S,
+) {
     {
         let db_tx = storage.transaction_ro().await.unwrap();
-
-        let order1_id = OrderId::new(H256::random_using(&mut rng));
-        let order = db_tx.get_order(order1_id).await.unwrap();
+        let random_order_id = OrderId::new(H256::random_using(rng));
+        let order = db_tx.get_order(random_order_id).await.unwrap();
         assert!(order.is_none());
 
         let orders = db_tx.get_all_orders(10, 0).await.unwrap();
         assert!(orders.is_empty());
-
-        drop(db_tx);
-
-        let random_token_id = TokenId::new(H256::random_using(&mut rng));
-        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-        let conclude_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
-        let block_height = BlockHeight::new(rng.gen_range(1..100));
-        let give_amount = Amount::from_atoms(rng.gen_range(1000..10000));
-        let ask_amount = Amount::from_atoms(rng.gen_range(1000..10000));
-
-        let order1 = Order {
-            creation_block_height: block_height,
-            conclude_destination,
-            give_currency: CoinOrTokenId::TokenId(random_token_id),
-            initially_given: give_amount,
-            give_balance: give_amount,
-            ask_currency: CoinOrTokenId::Coin,
-            initially_asked: ask_amount,
-            ask_balance: ask_amount,
-            next_nonce: AccountNonce::new(rng.gen::<u64>()),
-        };
-
-        let mut db_tx = storage.transaction_rw().await.unwrap();
-
-        db_tx.set_order_at_height(order1_id, &order1, block_height).await.unwrap();
-
-        let returned_order = db_tx.get_order(order1_id).await.unwrap().unwrap();
-        assert_eq!(returned_order, order1);
-
-        let order2_id = OrderId::new(H256::random_using(&mut rng));
-        let random_token_id = TokenId::new(H256::random_using(&mut rng));
-        let (_, pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-        let conclude_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
-        let block_height = BlockHeight::new(rng.gen_range(100..1000));
-        let give_amount = Amount::from_atoms(rng.gen_range(1000..10000));
-        let ask_amount = Amount::from_atoms(rng.gen_range(1000..10000));
-        let order2 = Order {
-            creation_block_height: block_height,
-            conclude_destination,
-            give_currency: CoinOrTokenId::Coin,
-            initially_given: give_amount,
-            give_balance: give_amount,
-            ask_currency: CoinOrTokenId::TokenId(random_token_id),
-            initially_asked: ask_amount,
-            ask_balance: ask_amount,
-            next_nonce: AccountNonce::new(rng.gen::<u64>()),
-        };
-
-        db_tx.set_order_at_height(order2_id, &order2, block_height).await.unwrap();
-
-        let order2_filled = order2.fill(Amount::from_atoms(1));
-        db_tx
-            .set_order_at_height(order2_id, &order2_filled, block_height.next_height())
-            .await
-            .unwrap();
-
-        let all_orders = db_tx.get_all_orders(10, 0).await.unwrap();
-        assert_eq!(
-            all_orders,
-            vec![(order2_id, order2_filled), (order1_id, order1)]
-        );
     }
 
-    Ok(())
+    let token1 = TokenId::new(H256::random_using(rng));
+    let token2 = TokenId::new(H256::random_using(rng));
+
+    let (order1_id, order1) = random_order(
+        rng,
+        BlockHeight::new(1),
+        CoinOrTokenId::Coin,
+        CoinOrTokenId::TokenId(token1),
+    );
+    let (order2_id, order2) = random_order(
+        rng,
+        BlockHeight::new(2),
+        CoinOrTokenId::TokenId(token1),
+        CoinOrTokenId::TokenId(token2),
+    );
+    let (order3_id, order3) = random_order(
+        rng,
+        BlockHeight::new(3),
+        CoinOrTokenId::Coin,
+        CoinOrTokenId::TokenId(token2),
+    );
+    let (order4_id, order4) = random_order(
+        rng,
+        BlockHeight::new(4),
+        CoinOrTokenId::TokenId(token2),
+        CoinOrTokenId::TokenId(token1),
+    );
+    let (order5_id, order5) = random_order(
+        rng,
+        BlockHeight::new(5),
+        CoinOrTokenId::TokenId(token1),
+        CoinOrTokenId::Coin,
+    );
+    let (order6_id, order6) = random_order(
+        rng,
+        BlockHeight::new(6),
+        CoinOrTokenId::TokenId(token1),
+        CoinOrTokenId::TokenId(token2),
+    );
+
+    let mut db_tx = storage.transaction_rw().await.unwrap();
+
+    let block_height = BlockHeight::new(rng.gen_range(100..1000));
+
+    db_tx
+        .set_order_at_height(order1_id, &order1, BlockHeight::new(1))
+        .await
+        .unwrap();
+    let returned_order = db_tx.get_order(order1_id).await.unwrap().unwrap();
+    assert_eq!(returned_order, order1);
+
+    db_tx
+        .set_order_at_height(order2_id, &order2, BlockHeight::new(2))
+        .await
+        .unwrap();
+    let returned_order = db_tx.get_order(order2_id).await.unwrap().unwrap();
+    assert_eq!(returned_order, order2);
+
+    db_tx
+        .set_order_at_height(order3_id, &order3, BlockHeight::new(3))
+        .await
+        .unwrap();
+    let returned_order = db_tx.get_order(order3_id).await.unwrap().unwrap();
+    assert_eq!(returned_order, order3);
+
+    db_tx
+        .set_order_at_height(order4_id, &order4, BlockHeight::new(4))
+        .await
+        .unwrap();
+    let returned_order = db_tx.get_order(order4_id).await.unwrap().unwrap();
+    assert_eq!(returned_order, order4);
+
+    db_tx
+        .set_order_at_height(order5_id, &order5, BlockHeight::new(5))
+        .await
+        .unwrap();
+    let returned_order = db_tx.get_order(order5_id).await.unwrap().unwrap();
+    assert_eq!(returned_order, order5);
+
+    db_tx
+        .set_order_at_height(order6_id, &order6, BlockHeight::new(6))
+        .await
+        .unwrap();
+    let returned_order = db_tx.get_order(order6_id).await.unwrap().unwrap();
+    assert_eq!(returned_order, order6);
+
+    // Get all
+    let all_orders = db_tx.get_all_orders(10, 0).await.unwrap();
+    assert_eq!(all_orders.len(), 6);
+    assert_eq!(
+        all_orders,
+        vec![
+            (order6_id, order6.clone()),
+            (order5_id, order5.clone()),
+            (order4_id, order4.clone()),
+            (order3_id, order3.clone()),
+            (order2_id, order2.clone()),
+            (order1_id, order1.clone()),
+        ]
+    );
+
+    // Fill one order
+    let order2_filled = order2.fill(Amount::from_atoms(1));
+    db_tx
+        .set_order_at_height(order2_id, &order2_filled, block_height.next_height())
+        .await
+        .unwrap();
+
+    // Get per page
+    let all_orders_page_1 = db_tx.get_all_orders(3, 0).await.unwrap();
+    assert_eq!(
+        all_orders_page_1,
+        vec![
+            (order6_id, order6.clone()),
+            (order5_id, order5.clone()),
+            (order4_id, order4.clone())
+        ]
+    );
+
+    let all_orders_page_2 = db_tx.get_all_orders(3, 3).await.unwrap();
+    assert_eq!(
+        all_orders_page_2,
+        vec![
+            (order3_id, order3),
+            (order2_id, order2_filled.clone()),
+            (order1_id, order1.clone())
+        ]
+    );
+
+    // Check trading pairs
+    let ml_tkn1 = db_tx
+        .get_orders_for_trading_pair((CoinOrTokenId::Coin, CoinOrTokenId::TokenId(token1)), 10, 0)
+        .await
+        .unwrap();
+    assert_eq!(ml_tkn1, vec![(order5_id, order5), (order1_id, order1),]);
+
+    let tkn2_tkn1 = db_tx
+        .get_orders_for_trading_pair(
+            (
+                CoinOrTokenId::TokenId(token2),
+                CoinOrTokenId::TokenId(token1),
+            ),
+            10,
+            0,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        tkn2_tkn1,
+        vec![(order6_id, order6), (order4_id, order4), (order2_id, order2_filled)]
+    );
+}
+
+fn random_order(
+    rng: &mut (impl Rng + CryptoRng),
+    creation_height: BlockHeight,
+    ask_currency: CoinOrTokenId,
+    give_currency: CoinOrTokenId,
+) -> (OrderId, Order) {
+    let order_id = OrderId::new(H256::random_using(rng));
+    let (_, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let conclude_destination = Destination::PublicKeyHash(PublicKeyHash::from(&pk));
+    let give_amount = Amount::from_atoms(rng.gen_range(1000..10000));
+    let ask_amount = Amount::from_atoms(rng.gen_range(1000..10000));
+    let order = Order {
+        creation_block_height: creation_height,
+        conclude_destination,
+        give_currency,
+        initially_given: give_amount,
+        give_balance: give_amount,
+        ask_currency,
+        initially_asked: ask_amount,
+        ask_balance: ask_amount,
+        next_nonce: AccountNonce::new(rng.gen::<u64>()),
+    };
+    (order_id, order)
 }
 
 pub fn build_tests<S, Fut, F: Fn() -> Fut + Send + Sync + 'static>(
