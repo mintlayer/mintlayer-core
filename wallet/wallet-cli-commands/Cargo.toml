@@ -15,6 +15,7 @@ crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 mempool = { path = "../../mempool" }
 p2p-types = { path = "../../p2p/types" }
+serde = { version = "1", features = ["derive"] }
 node-comm = { path = "../wallet-node-client" }
 rpc = { path = "../../rpc" }
 randomness = { path = "../../randomness" }

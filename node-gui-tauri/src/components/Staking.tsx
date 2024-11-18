@@ -18,6 +18,7 @@ const Staking = (props: {
   const [poolInfo, setPoolInfo] = useState(
     props.currentAccount?.staking_balance
   );
+  const [currentPoolId, setCurrentPoolId] = useState("");
   const [pledgeAmount, setPledgeAmount] = useState(0);
   const [costPerBlock, setCostPerBlock] = useState(0);
   const [marginRatio, setMarginRatio] = useState(0);
@@ -53,7 +54,24 @@ const Staking = (props: {
     }
     setIsStakingStarted((started) => !started);
   };
-  const handleDecommission = () => {
+  const handleDecommission = async () => {
+    try {
+      const result = await invoke("decommission_pool_wrapper", {
+        request: {
+          wallet_id: parseInt(
+            props.currentWalletId ? props.currentWalletId : "0"
+          ),
+          account_id: props.currentAccountId ? props.currentAccountId : 0, // Change to parseInt
+          pool_id: currentPoolId,
+        },
+      });
+      if (result) {
+        console.log(result);
+        notify("Pool decommissioned", "info");
+      }
+    } catch (error) {
+      notify(new String(error).toString(), "error");
+    }
     setShowDecommissionModal(false);
   };
 
@@ -73,6 +91,7 @@ const Staking = (props: {
       });
       if (result) {
         console.log(result);
+        notify("Delegation is created successfully", "info");
       }
     } catch (error) {
       notify(new String(error).toString(), "error");
@@ -209,7 +228,13 @@ const Staking = (props: {
                   {stakeInfo.balance.decimal}
                 </td>
                 <td className="py-2 px-4 border-b border-gray-200">
-                  <button className="py-1 px-4 border text-[#E02424] border-[#E02424] bg-white rounded-lg transition-all duration-200 hover:outline-none hover:bg-[#E02424] hover:text-white hover:border-[#E02424]">
+                  <button
+                    onClick={() => {
+                      setShowDecommissionModal(true);
+                      setCurrentPoolId(stakeInfo.pool_id);
+                    }}
+                    className="py-1 px-4 border text-[#E02424] border-[#E02424] bg-white rounded-lg transition-all duration-200 hover:outline-none hover:bg-[#E02424] hover:text-white hover:border-[#E02424]"
+                  >
                     DECOMMISSION
                   </button>
                 </td>

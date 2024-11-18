@@ -33,6 +33,7 @@ use common::{
 };
 use crypto::key::{hdkd::u31::U31, PrivateKey, PublicKey};
 use p2p_types::{bannable_address::BannableAddress, PeerId};
+use serde::{Deserialize, Serialize};
 use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 
@@ -798,7 +799,7 @@ pub enum ManageableWalletCommand {
     WalletCommands(WalletCommand),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ConsoleCommand {
     Print(String),
     ClearScreen,

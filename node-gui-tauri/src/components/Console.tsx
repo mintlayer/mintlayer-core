@@ -2,8 +2,15 @@ import { useState } from "react";
 import { AiOutlineCopy } from "react-icons/ai";
 
 import { RiDeleteBinLine } from "react-icons/ri";
+import { notify } from "../utils/util";
+import { invoke } from "@tauri-apps/api/core";
+import { AccountType, WalletInfo } from "../types/Types";
 
-const Console = () => {
+const Console = (props: {
+  currentAccount: AccountType | undefined;
+  currentAccountId: number;
+  currentWallet: WalletInfo | undefined;
+}) => {
   const [text, setText] = useState("");
   const [command, setCommand] = useState("");
   const handleDelete = () => {
@@ -11,6 +18,25 @@ const Console = () => {
   };
   const handleCopy = () => {
     navigator.clipboard.writeText(text);
+  };
+
+  const handleSendCommand = async () => {
+    try {
+      const result = await invoke("handle_console_command_wrapper", {
+        request: {
+          wallet_id: props.currentWallet?.wallet_id
+            ? props.currentWallet?.wallet_id
+            : "",
+          account_id: props.currentAccountId,
+          command: command,
+        },
+      });
+      if (result) {
+        console.log(result);
+      }
+    } catch (error) {
+      notify(new String(error).toString(), "error");
+    }
   };
   return (
     <div className="container border-1px border-gray-100 space-y-4 pt-1">
@@ -48,7 +74,10 @@ const Console = () => {
           value={command}
           onChange={(e) => setCommand(e.target.value)}
         />
-        <button className="w-[5rem] py-1 px-4 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black ">
+        <button
+          onClick={handleSendCommand}
+          className="w-[5rem] py-1 px-4 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black "
+        >
           Send
         </button>
       </div>

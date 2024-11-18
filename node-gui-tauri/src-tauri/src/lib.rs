@@ -43,6 +43,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::async_runtime::RwLock;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use wallet_cli_commands::ConsoleCommand;
 use wallet_types::wallet_type::WalletType;
 
 struct AppState {
@@ -169,6 +170,13 @@ pub struct ToggleStakingRequest {
     wallet_id: u64,
     account_id: U31,
     enabled: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ConsoleRequest {
+    wallet_id: u64,
+    account_id: U31,
+    command: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -809,6 +817,33 @@ async fn toggle_stakig_wrapper(
     }
 }
 
+#[tauri::command]
+async fn handle_console_command_wrapper(
+    state: tauri::State<'_, AppState>,
+    request: ConsoleRequest,
+) -> Result<ConsoleCommand, String> {
+    let wallet_id = WalletId::from_u64(request.wallet_id);
+    let account_id = AccountId::new(request.account_id);
+    let result = {
+        let mut backend_guard = state.backend.write().await;
+        let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
+        let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
+        backend.handle_console_command(wallet_id, account_id, request.command).await
+    };
+
+    match result {
+        Ok(command) => {
+            println!("Console command executed successfully: {:?}", command);
+            Ok(command)
+        }
+        Err(e) => {
+            let error_message = e.to_string();
+            println!("Error executing console command: {}", error_message);
+            Err(error_message)
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -832,7 +867,8 @@ pub fn run() {
             delegate_staking_wrapper,
             send_delegation_to_address_wrapper,
             new_account_wrapper,
-            toggle_stakig_wrapper
+            toggle_stakig_wrapper,
+            handle_console_command_wrapper
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

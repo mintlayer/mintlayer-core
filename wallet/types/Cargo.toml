@@ -13,6 +13,7 @@ crypto = { path = "../../crypto/" }
 rpc-description = { path = "../../rpc/description" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
+serde = { version = "1", features = ["derive"] }
 storage = { path = "../../storage" }
 utils = { path = "../../utils" }
 
@@ -20,7 +21,6 @@ bip39 = { workspace = true, default-features = false, features = ["std", "zeroiz
 hex.workspace = true
 itertools.workspace = true
 parity-scale-codec.workspace = true
-serde.workspace = true
 thiserror.workspace = true
 zeroize.workspace = true
 

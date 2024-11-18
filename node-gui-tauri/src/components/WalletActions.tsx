@@ -319,11 +319,23 @@ const WalletActions = (props: {
           currentAccount={props.currentAccount}
           currentWallet={props.currentWallet}
           currentAccountId={props.currentAccountId}
-          currentWalletId = {props.currentWallet?.wallet_id}
+          currentWalletId={props.currentWallet?.wallet_id}
         />
       )}
-      {props.activeTab === "delegation" && <Delegation />}
-      {props.activeTab === "console" && <Console />}
+      {props.activeTab === "delegation" && (
+        <Delegation
+          currentAccount={props.currentAccount}
+          currentAccountId={props.currentAccountId}
+          currentWallet={props.currentWallet}
+        />
+      )}
+      {props.activeTab === "console" && (
+        <Console
+          currentAccount={props.currentAccount}
+          currentWallet={props.currentWallet}
+          currentAccountId={props.currentAccountId}
+        />
+      )}
     </div>
   );
 };

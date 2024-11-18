@@ -1070,7 +1070,7 @@ impl Backend {
         }
     }
 
-    async fn handle_console_command(
+    pub async fn handle_console_command(
         &mut self,
         wallet_id: WalletId,
         account_id: AccountId,
