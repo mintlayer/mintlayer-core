@@ -608,6 +608,13 @@ pub trait ApiServerStorageRead: Sync {
         len: u32,
         offset: u32,
     ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError>;
+
+    async fn get_orders_for_trading_pair(
+        &self,
+        pair: (CoinOrTokenId, CoinOrTokenId),
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError>;
 }
 
 #[async_trait::async_trait]

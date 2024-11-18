@@ -671,6 +671,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
+        // Index for searching for trading pairs
+        self.just_execute(
+            "CREATE INDEX orders_currencies_index ON ml.orders (ask_currency, give_currency);",
+        )
+        .await?;
+
         logging::log::info!("Done creating database tables");
 
         Ok(())
@@ -2269,6 +2275,39 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
                 LIMIT $2;
             "#,
                 &[&offset, &len],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            .into_iter()
+            .map(|row| -> Result<(OrderId, Order), ApiServerStorageError> {
+                 decode_order_from_row(&row, chain_config)
+            })
+            .collect()
+    }
+
+    pub async fn get_orders_for_trading_pair(
+        &self,
+        pair: (CoinOrTokenId, CoinOrTokenId),
+        len: u32,
+        offset: u32,
+        chain_config: &ChainConfig,
+    ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
+        let len = len as i64;
+        let offset = offset as i64;
+        self.tx
+            .query(
+                r#"
+                SELECT sub.order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
+                FROM (
+                    SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, block_height, ROW_NUMBER() OVER(PARTITION BY order_id ORDER BY block_height DESC) as newest
+                    FROM ml.orders
+                ) AS sub
+                WHERE newest = 1 AND ((ask_currency = $1 AND give_currency = $2) OR (ask_currency = $2 AND give_currency = $1))
+                ORDER BY creation_block_height DESC
+                OFFSET $3
+                LIMIT $4;
+            "#,
+                &[&pair.0.encode(), &pair.1.encode(), &offset, &len],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
