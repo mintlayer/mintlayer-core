@@ -27,7 +27,7 @@ use common::chain::{
 };
 use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
 use wallet_storage::{
-    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
+    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageReadWriteUnlocked,
 };
 use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, signature_status::SignatureStatus,
@@ -120,7 +120,7 @@ pub trait SignerProvider {
         chain_config: Arc<ChainConfig>,
         account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageReadWriteUnlocked,
     ) -> WalletResult<Account<Self::K>>;
 
     fn load_account_from_database(
