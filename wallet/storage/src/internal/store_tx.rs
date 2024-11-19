@@ -731,6 +731,8 @@ impl<'st, B: storage::Backend> crate::TransactionRoUnlocked for StoreTxRoUnlocke
     }
 }
 
+impl<'st, B: storage::Backend> crate::WalletStorageReadWriteLocked for StoreTxRw<'st, B> {}
+
 impl<'st, B: storage::Backend> crate::TransactionRwLocked for StoreTxRw<'st, B> {
     fn commit(self) -> crate::Result<()> {
         self.storage.commit().map_err(Into::into)
@@ -740,6 +742,9 @@ impl<'st, B: storage::Backend> crate::TransactionRwLocked for StoreTxRw<'st, B> 
         self.storage.abort()
     }
 }
+
+impl<'st, B: storage::Backend> crate::WalletStorageReadWriteLocked for StoreTxRwUnlocked<'st, B> {}
+impl<'st, B: storage::Backend> crate::WalletStorageReadWriteUnlocked for StoreTxRwUnlocked<'st, B> {}
 
 impl<'st, B: storage::Backend> crate::TransactionRwUnlocked for StoreTxRwUnlocked<'st, B> {
     fn commit(self) -> crate::Result<()> {

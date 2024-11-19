@@ -75,8 +75,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ops::{Add, Sub};
 use std::sync::Arc;
 use wallet_storage::{
-    StoreTxRw, WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
-    WalletStorageWriteUnlocked,
+    StoreTxRw, WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageReadWriteLocked,
+    WalletStorageWriteLocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::utxo_types::{get_utxo_type, UtxoState, UtxoStates, UtxoType, UtxoTypes};
 use wallet_types::wallet_tx::{BlockData, TxData, TxState};
@@ -1955,7 +1955,7 @@ impl<K: AccountKeyChains> Account<K> {
     pub fn scan_new_inmempool_transactions(
         &mut self,
         transactions: &[SignedTransaction],
-        db_tx: &mut impl WalletStorageWriteLocked,
+        db_tx: &mut impl WalletStorageReadWriteLocked,
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         self.scan_new_unconfirmed_transactions(
@@ -1969,7 +1969,7 @@ impl<K: AccountKeyChains> Account<K> {
     pub fn scan_new_inactive_transactions(
         &mut self,
         transactions: &[SignedTransaction],
-        db_tx: &mut impl WalletStorageWriteLocked,
+        db_tx: &mut impl WalletStorageReadWriteLocked,
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         self.scan_new_unconfirmed_transactions(
@@ -1984,7 +1984,7 @@ impl<K: AccountKeyChains> Account<K> {
         &mut self,
         transactions: &[SignedTransaction],
         make_tx_state: fn(u64) -> TxState,
-        db_tx: &mut impl WalletStorageWriteLocked,
+        db_tx: &mut impl WalletStorageReadWriteLocked,
         wallet_events: &impl WalletEvents,
     ) -> WalletResult<()> {
         let account_id = self.get_account_id();
