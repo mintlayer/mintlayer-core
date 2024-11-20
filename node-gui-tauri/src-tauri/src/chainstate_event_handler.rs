@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use super::{backend_impl::Backend, messages::BackendEvent};
+use super::messages::BackendEvent;
 use chainstate::ChainstateEvent;
 use once_cell::sync::OnceCell;
 use tauri::{AppHandle, Emitter as _};

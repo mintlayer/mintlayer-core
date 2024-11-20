@@ -110,3 +110,32 @@ export type ChainInfoType = {
   };
   is_initial_block_download: boolean;
 };
+
+export type ChainInfoEventPayloadType = {
+  ChainInfo: ChainInfoType;
+};
+
+export type PeerDisconnected = {
+  P2p: {
+    PeerDisConnected: number;
+  };
+};
+
+export type PeerConnected = {
+  P2p: {
+    PeerConnected: {
+      id: number;
+      services: number;
+      address: string;
+      inbound: boolean;
+      user_agent: number[];
+      software_version: {
+        major: number;
+        minor: number;
+        patch: number;
+      };
+    };
+  };
+};
+
+export type P2p = PeerConnected | PeerDisconnected;

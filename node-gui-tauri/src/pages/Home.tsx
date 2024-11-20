@@ -26,8 +26,11 @@ import SummaryTab from "../components/Summary";
 import NetworkingTab from "../components/Networking";
 import {
   AccountType,
+  ChainInfoEventPayloadType,
   ChainInfoType,
   NewAccountResultType,
+  P2p,
+  PeerConnected,
   WalletInfo,
 } from "../types/Types";
 import WalletActions from "../components/WalletActions";
@@ -50,6 +53,9 @@ function Home() {
     walletsInfo?.[0]
   );
   const [chainInfo, setChainInfo] = useState<ChainInfoType | undefined>();
+  const [p2pInfo, setP2pInfo] = useState<
+    PeerConnected["P2p"]["PeerConnected"][]
+  >([]);
   const [currentTab, setCurrentTab] = useState("summary");
   const [activeTab, setActiveTab] = useState("transactions");
   const [currentAccount, setCurrentAccount] = useState<AccountType>();
@@ -130,13 +136,37 @@ function Home() {
 
   const p2pEventListener = async () => {
     await listen("p2p_event", (event) => {
-      console.log("Received p2p event:", event);
+      const newP2pInfo = event.payload as P2p;
+
+      if ("PeerConnected" in newP2pInfo.P2p) {
+        const peerInfo = newP2pInfo.P2p.PeerConnected;
+        console.log("peerInfo is =>", peerInfo.address);
+        setP2pInfo((prevP2pInfo) => {
+          const exists = prevP2pInfo.some(
+            (peer) => peer.address === peerInfo.address
+          );
+
+          if (!exists) {
+            return [...prevP2pInfo, peerInfo]; // Add new peer
+          } else {
+            return prevP2pInfo; // Return unchanged state
+          }
+        });
+      } else if ("PeerDisconnected" in newP2pInfo) {
+        const peerId = newP2pInfo.PeerDisconnected as number;
+        setP2pInfo((prevP2pInfo) =>
+          prevP2pInfo.filter((peer) => peer.id !== peerId)
+        );
+      }
     });
   };
 
   const chainStateEventListener = async () => {
     await listen("chain_state_event", (event) => {
-      console.log("Received chain state event:", event);
+      console.log("Received chain state event:", event.payload);
+      const newChainInfo: ChainInfoEventPayloadType =
+        event.payload as ChainInfoEventPayloadType;
+      setChainInfo(newChainInfo.ChainInfo);
     });
   };
   const createNewWallet = () => {
@@ -752,7 +782,9 @@ function Home() {
                   {currentTab === "summary" && (
                     <SummaryTab network={netMode} chainInfo={chainInfo} />
                   )}
-                  {currentTab === "network" && <NetworkingTab />}
+                  {currentTab === "network" && (
+                    <NetworkingTab peerInfo={p2pInfo} />
+                  )}
                   {currentTab === "transactions" && (
                     <WalletActions
                       currentWallet={currentWallet}
