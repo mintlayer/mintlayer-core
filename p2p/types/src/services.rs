@@ -27,7 +27,7 @@ impl Service {
     pub const ALL: [Service; 3] = [Service::Transactions, Service::Blocks, Service::PeerAddresses];
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Encode, Decode)]
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Encode, Decode, serde::Serialize)]
 pub struct Services(u64);
 
 impl Services {

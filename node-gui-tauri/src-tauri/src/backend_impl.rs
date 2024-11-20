@@ -25,8 +25,10 @@ use futures::{stream::FuturesOrdered, TryStreamExt};
 use logging::log;
 use node_comm::rpc_client::ColdWalletClient;
 use node_lib::node_controller::NodeController;
+use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serialization::hex_encoded::HexEncoded;
+use tauri::AppHandle;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use wallet::{account::transaction_list::TransactionList, wallet::Error, WalletError};
 use wallet_cli_commands::{
@@ -1340,6 +1342,7 @@ pub async fn run(
     mut wallet_updated_rx: UnboundedReceiver<WalletId>,
     mut chainstate_event_handler: ChainstateEventHandler,
     mut p2p_event_handler: P2pEventHandler,
+    global_app_handle: OnceCell<AppHandle>,
 ) {
     loop {
         tokio::select! {
@@ -1363,12 +1366,12 @@ pub async fn run(
                 backend.wallet_updated(wallet_id);
             }
 
-            () = chainstate_event_handler.run() => {
+            () = chainstate_event_handler.run(global_app_handle.clone()) => {
                 log::debug!("Chainstate channel closed, looks like the node has stopped");
                 return
             }
 
-            () = p2p_event_handler.run() => {
+            () = p2p_event_handler.run(global_app_handle.clone()) => {
                 log::debug!("P2P channel closed, looks like the node has stopped");
                 return
             }

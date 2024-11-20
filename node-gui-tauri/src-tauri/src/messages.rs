@@ -266,7 +266,7 @@ pub enum BackendRequest {
     Shutdown,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum BackendEvent {
     ChainInfo(ChainInfo),
     P2p(P2pEvent),

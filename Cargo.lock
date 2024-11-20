@@ -5381,6 +5381,7 @@ dependencies = [
  "mempool",
  "node-comm",
  "node-lib",
+ "once_cell",
  "p2p",
  "rfd 0.14.1",
  "serde",

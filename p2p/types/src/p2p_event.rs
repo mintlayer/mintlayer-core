@@ -18,10 +18,10 @@ use std::sync::Arc;
 use common::primitives::{semver::SemVer, user_agent::UserAgent};
 
 use crate::{peer_id::PeerId, services::Services};
-
+use serde::Serialize;
 pub type P2pEventHandler = Arc<dyn Fn(P2pEvent) + Send + Sync>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum P2pEvent {
     PeerConnected {
         id: PeerId,

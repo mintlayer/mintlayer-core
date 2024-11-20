@@ -23,7 +23,7 @@ const MAX_LENGTH: usize = 24;
 ///
 /// Used to validate the submitted string.
 /// The string cannot be too long and can only contain ASCII alphanumeric or punctuation characters.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, serde::Serialize)]
 pub struct UserAgent(Vec<u8>);
 
 pub fn mintlayer_core_user_agent() -> UserAgent {

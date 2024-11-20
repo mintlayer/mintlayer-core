@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
+use super::messages::BackendEvent;
+use once_cell::sync::OnceCell;
 use p2p::{interface::p2p_interface::P2pInterface, P2pEvent};
+use std::sync::Arc;
 use subsystem::Handle;
+use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use utils::tap_log::TapLog;
-
-use super::{backend_impl::Backend, messages::BackendEvent};
 
 pub struct P2pEventHandler {
     p2p_event_rx: UnboundedReceiver<P2pEvent>,
@@ -52,13 +52,16 @@ impl P2pEventHandler {
         }
     }
 
-    pub async fn run(&mut self) {
+    pub async fn run(&mut self, global_app_handle: OnceCell<AppHandle>) {
         // Must be cancel-safe!
         loop {
             let p2p_event_opt = self.p2p_event_rx.recv().await;
             match p2p_event_opt {
                 Some(event) => {
-                    Backend::send_event(&self.event_tx, BackendEvent::P2p(event));
+                    let event_data = BackendEvent::P2p(event);
+                    if let Some(app_handle) = global_app_handle.get() {
+                        app_handle.emit("p2p_event", event_data ).unwrap();
+                    }
                 }
                 None => {
                     // Node is stopped

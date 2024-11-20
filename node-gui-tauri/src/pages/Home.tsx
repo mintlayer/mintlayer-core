@@ -1,6 +1,7 @@
 import { useEffect, useState, MouseEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { exit } from "@tauri-apps/plugin-process";
+import { listen } from "@tauri-apps/api/event";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import * as bip39 from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
@@ -48,7 +49,7 @@ function Home() {
   const [currentWallet, setCurrentWallet] = useState<WalletInfo | undefined>(
     walletsInfo?.[0]
   );
-  const [chainInfo, setChainInfo] = useState<ChainInfoType| undefined>();
+  const [chainInfo, setChainInfo] = useState<ChainInfoType | undefined>();
   const [currentTab, setCurrentTab] = useState("summary");
   const [activeTab, setActiveTab] = useState("transactions");
   const [currentAccount, setCurrentAccount] = useState<AccountType>();
@@ -80,6 +81,8 @@ function Home() {
       }
     };
     init_node();
+    chainStateEventListener();
+    p2pEventListener();
   }, [netMode, walletMode]);
 
   useEffect(() => {
@@ -125,6 +128,17 @@ function Home() {
     }
   }, [currentAccount, currentAccountId]);
 
+  const p2pEventListener = async () => {
+    await listen("p2p_event", (event) => {
+      console.log("Received p2p event:", event);
+    });
+  };
+
+  const chainStateEventListener = async () => {
+    await listen("chain_state_event", (event) => {
+      console.log("Received chain state event:", event);
+    });
+  };
   const createNewWallet = () => {
     try {
       const newMnemonic = bip39.generateMnemonic(wordlist, 256);

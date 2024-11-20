@@ -15,11 +15,12 @@
 
 use std::sync::Arc;
 
+use super::{backend_impl::Backend, messages::BackendEvent};
 use chainstate::ChainstateEvent;
+use once_cell::sync::OnceCell;
+use tauri::{AppHandle, Emitter as _};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use utils::tap_log::TapLog;
-
-use super::{backend_impl::Backend, messages::BackendEvent};
 
 pub struct ChainstateEventHandler {
     chainstate: chainstate::ChainstateHandle,
@@ -55,7 +56,7 @@ impl ChainstateEventHandler {
         }
     }
 
-    pub async fn run(&mut self) {
+    pub async fn run(&mut self, global_app_handle: OnceCell<AppHandle>) {
         // Must be cancel-safe!
         loop {
             // The `chain_info_updated` field is needed because `run` must be cancel-safe.
@@ -66,7 +67,10 @@ impl ChainstateEventHandler {
                     .call(|this| this.info().expect("Chainstate::info should not fail"))
                     .await
                     .expect("Chainstate::info should not fail");
-                Backend::send_event(&self.event_tx, BackendEvent::ChainInfo(chain_info));
+                let event_data = BackendEvent::ChainInfo(chain_info);
+                if let Some(app_handle) = global_app_handle.get() {
+                    app_handle.emit("chain_state_event", event_data).unwrap();
+                }
                 self.chain_info_updated = false;
             }
 

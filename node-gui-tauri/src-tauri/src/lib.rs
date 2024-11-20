@@ -37,11 +37,13 @@ use messages::{
     SendRequest, StakeRequest, TransactionInfo, WalletId, WalletInfo,
 };
 use node_lib::{Command, RunOptions};
+use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::async_runtime::RwLock;
+use tauri::AppHandle;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use wallet_cli_commands::ConsoleCommand;
 use wallet_types::wallet_type::WalletType;
@@ -50,6 +52,8 @@ struct AppState {
     initialized_node: RwLock<Option<InitializedNode>>,
     backend: RwLock<Option<Arc<Backend>>>,
 }
+
+static global_app_handle: OnceCell<AppHandle> = OnceCell::new();
 
 pub struct BackendControls {
     pub initialized_node: InitializedNode,
@@ -238,8 +242,9 @@ async fn initialize_node(
         "Cold" => WalletMode::Cold,
         _ => return Err("Invalid wallet mode selection".into()),
     };
-    let backend_controls =
-        node_initialize(net_type, wallet_type).await.map_err(|e| e.to_string())?;
+    let backend_controls = node_initialize(state.clone(), net_type, wallet_type)
+        .await
+        .map_err(|e| e.to_string())?;
     let mut guard = state.initialized_node.write().await;
     *guard = Some(backend_controls.initialized_node);
 
@@ -253,6 +258,7 @@ async fn initialize_node(
     }
 }
 pub async fn node_initialize(
+    state: tauri::State<'_, AppState>,
     network: InitNetwork,
     mode: WalletMode,
 ) -> Result<BackendControls, Error> {
@@ -317,6 +323,7 @@ pub async fn node_initialize(
                     wallet_updated_rx,
                     _chainstate_event_handler,
                     _p2p_event_handler,
+                    global_app_handle.clone(),
                 )
                 .await;
             });
@@ -862,6 +869,15 @@ pub fn run() {
             toggle_stakig_wrapper,
             handle_console_command_wrapper
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|_app_handle, event| match event {
+            tauri::RunEvent::Ready => {
+                println!("Window loaded");
+                global_app_handle
+                    .set(_app_handle.clone())
+                    .expect("Failed to set global app handle");
+            }
+            _ => {}
+        });
 }
