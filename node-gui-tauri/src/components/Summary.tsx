@@ -1,4 +1,9 @@
-const SummaryTab = (props: any) => {
+import { ChainInfoType } from "../types/Types";
+
+const SummaryTab = (props: {
+  network: string;
+  chainInfo: ChainInfoType | undefined;
+}) => {
   return (
     <div className="m-8 rounded rounded-lg bg-white p-8">
       <p className="py-10">
@@ -20,7 +25,7 @@ const SummaryTab = (props: any) => {
               Best Block ID
             </td>
             <td className="py-2 px-4 font-semibold text-gray-600">
-              {props.network}
+              {props.chainInfo?.best_block_id}
             </td>
           </tr>
           <tr key="bestblockheight" className="border-b">
@@ -28,7 +33,7 @@ const SummaryTab = (props: any) => {
               Best Block Height
             </td>
             <td className="py-2 px-4 font-semibold text-gray-600">
-              {props.network}
+              {props.chainInfo?.best_block_height}
             </td>
           </tr>
           <tr key="bestblocktimestamp" className="border-b">
@@ -36,7 +41,7 @@ const SummaryTab = (props: any) => {
               Best Block Timestamp (UTC)
             </td>
             <td className="py-2 px-4 font-semibold text-gray-600">
-              {props.network}
+              {props.chainInfo?.best_block_timestamp.timestamp}
             </td>
           </tr>
         </tbody>

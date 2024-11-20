@@ -98,3 +98,15 @@ export type ToggleStakingResultType = {
   account_id: string;
   enabled: boolean;
 };
+
+export type ChainInfoType = {
+  best_block_height: number;
+  best_block_id: string;
+  best_block_timestamp: {
+    timestamp: number;
+  };
+  median_time: {
+    timestamp: number;
+  };
+  is_initial_block_download: boolean;
+};

@@ -23,7 +23,12 @@ import AccountIcom from "../assets/account_icon.png";
 import { notify } from "../utils/util";
 import SummaryTab from "../components/Summary";
 import NetworkingTab from "../components/Networking";
-import { AccountType, NewAccountResultType, WalletInfo } from "../types/Types";
+import {
+  AccountType,
+  ChainInfoType,
+  NewAccountResultType,
+  WalletInfo,
+} from "../types/Types";
 import WalletActions from "../components/WalletActions";
 
 function Home() {
@@ -43,6 +48,7 @@ function Home() {
   const [currentWallet, setCurrentWallet] = useState<WalletInfo | undefined>(
     walletsInfo?.[0]
   );
+  const [chainInfo, setChainInfo] = useState<ChainInfoType| undefined>();
   const [currentTab, setCurrentTab] = useState("summary");
   const [activeTab, setActiveTab] = useState("transactions");
   const [currentAccount, setCurrentAccount] = useState<AccountType>();
@@ -60,14 +66,17 @@ function Home() {
     const init_node = async () => {
       try {
         if (netMode !== "" && walletMode !== "") {
-          const result = await invoke("initialize_node", {
+          const result: ChainInfoType = await invoke("initialize_node", {
             network: netMode,
             mode: walletMode,
           });
           console.log("Chain info: ", result);
+          setChainInfo(result);
+          notify("Node initialized", "info");
         }
       } catch (err) {
         console.error("Error initializing node: ", err);
+        notify("Error occured while initializing node", "error");
       }
     };
     init_node();
@@ -726,7 +735,9 @@ function Home() {
                       <span className="pl-2">Networking</span>
                     </button>
                   </div>
-                  {currentTab === "summary" && <SummaryTab network={netMode} />}
+                  {currentTab === "summary" && (
+                    <SummaryTab network={netMode} chainInfo={chainInfo} />
+                  )}
                   {currentTab === "network" && <NetworkingTab />}
                   {currentTab === "transactions" && (
                     <WalletActions
