@@ -26,7 +26,7 @@ const COOKIE_PASSWORD_LEN: usize = 32;
 const COOKIE_USERNAME: &str = "__cookie__";
 
 // TODO: Add support for hashed passwords (--rpcauth in Bitcoin Core)
-
+#[derive(Clone)]
 pub struct RpcCreds {
     username: String,
     password: String,

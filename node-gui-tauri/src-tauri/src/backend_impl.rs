@@ -27,10 +27,7 @@ use node_comm::rpc_client::ColdWalletClient;
 use node_lib::node_controller::NodeController;
 use serde::{Deserialize, Serialize};
 use serialization::hex_encoded::HexEncoded;
-use tokio::{
-    sync::mpsc::{UnboundedReceiver, UnboundedSender},
-    task::JoinHandle,
-};
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use wallet::{account::transaction_list::TransactionList, wallet::Error, WalletError};
 use wallet_cli_commands::{
     get_repl_command, parse_input, CommandHandler, ConsoleCommand, ManageableWalletCommand,
@@ -89,6 +86,7 @@ const TRANSACTION_LIST_PAGE_COUNT: usize = 10;
 /// This is to avoid getting trimmed off the lower end if the mempool runs out of memory
 const IN_TOP_X_MB: usize = 5;
 
+#[derive(Clone)]
 enum GuiHotColdController {
     Hot(
         WalletRpc<WalletHandlesClient>,
@@ -100,6 +98,7 @@ enum GuiHotColdController {
     ),
 }
 
+#[derive(Clone)]
 pub struct WalletData {
     controller: GuiHotColdController,
     best_block: (Id<GenBlock>, BlockHeight),
@@ -129,6 +128,7 @@ impl WalletData {
     }
 }
 
+#[derive(Clone)]
 enum ColdHotNodeController {
     Cold,
     Hot(NodeController),
@@ -152,6 +152,7 @@ impl ColdHotNodeController {
     }
 }
 
+#[derive(Clone)]
 struct AccountData {
     /// How many transactions the user has seen and scrolled (can be 0, 10, 20, etc).
     /// The variable is stored here so that the backend can send transaction list updates automatically.
@@ -162,6 +163,7 @@ struct AccountData {
     update_pool_balance_and_delegations: bool,
 }
 
+#[derive(Clone)]
 pub struct Backend {
     chain_config: Arc<ChainConfig>,
 
@@ -177,8 +179,7 @@ pub struct Backend {
 
     controller: ColdHotNodeController,
 
-    manager_join_handle: JoinHandle<()>,
-
+    // manager_join_handle: JoinHandle<()>,
     pub wallets: BTreeMap<WalletId, WalletData>,
 }
 
@@ -189,7 +190,7 @@ impl Backend {
         low_priority_event_tx: UnboundedSender<BackendEvent>,
         wallet_updated_tx: UnboundedSender<WalletId>,
         controller: NodeController,
-        manager_join_handle: JoinHandle<()>,
+        // manager_join_handle: JoinHandle<()>,
     ) -> Self {
         Self {
             chain_config,
@@ -197,7 +198,7 @@ impl Backend {
             low_priority_event_tx,
             wallet_updated_tx,
             controller: ColdHotNodeController::Hot(controller),
-            manager_join_handle,
+            // manager_join_handle,
             wallets: BTreeMap::new(),
         }
     }
@@ -207,7 +208,7 @@ impl Backend {
         event_tx: UnboundedSender<BackendEvent>,
         low_priority_event_tx: UnboundedSender<BackendEvent>,
         wallet_updated_tx: UnboundedSender<WalletId>,
-        manager_join_handle: JoinHandle<()>,
+        // manager_join_handle: JoinHandle<()>,
     ) -> Self {
         Self {
             controller: ColdHotNodeController::Cold,
@@ -215,7 +216,7 @@ impl Backend {
             event_tx,
             low_priority_event_tx,
             wallet_updated_tx,
-            manager_join_handle,
+            // manager_join_handle,
             wallets: BTreeMap::new(),
         }
     }
@@ -1106,7 +1107,7 @@ impl Backend {
 
     async fn shutdown(self) {
         self.controller.shutdown();
-        self.manager_join_handle.await.expect("Shutdown failed");
+        // self.manager_join_handle.await.expect("Shutdown failed");
     }
 
     async fn update_wallets(&mut self) {
@@ -1345,15 +1346,15 @@ pub async fn run(
             // Make event loop more efficient
             biased;
 
-            request_opt = request_rx.recv() => {
-                let request = request_opt.expect("UI channel closed unexpectedly");
-                if matches!(request, BackendRequest::Shutdown) {
-                    backend.shutdown().await;
-                    return;
-                } else {
-                    backend.process_request(request).await;
-                }
-            }
+            // request_opt = request_rx.recv() => {
+            //     let request = request_opt.expect("UI channel closed unexpectedly");
+            //     if matches!(request, BackendRequest::Shutdown) {
+            //         backend.shutdown().await;
+            //         return;
+            //     } else {
+            //         backend.process_request(request).await;
+            //     }
+            // }
 
             // Start this before starting the remaining background tasks
             // to reduce the chance of tasks being canceled (for efficiency)
@@ -1393,15 +1394,15 @@ pub async fn run_cold(
             // Make event loop more efficient
             biased;
 
-            request_opt = request_rx.recv() => {
-                let request = request_opt.expect("UI channel closed unexpectedly");
-                if matches!(request, BackendRequest::Shutdown) {
-                    backend.shutdown().await;
-                    return;
-                } else {
-                    backend.process_request(request).await;
-                }
-            }
+            // request_opt = request_rx.recv() => {
+            //     let request = request_opt.expect("UI channel closed unexpectedly");
+            //     if matches!(request, BackendRequest::Shutdown) {
+            //         backend.shutdown().await;
+            //         return;
+            //     } else {
+            //         backend.process_request(request).await;
+            //     }
+            // }
 
             // Start this before starting the remaining background tasks
             // to reduce the chance of tasks being canceled (for efficiency)

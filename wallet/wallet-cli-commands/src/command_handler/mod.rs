@@ -56,7 +56,7 @@ use super::{
     },
     ColdWalletCommand, ConsoleCommand, WalletCommand,
 };
-
+#[derive(Clone)]
 pub struct CommandHandler<W> {
     config: ControllerConfig,
 

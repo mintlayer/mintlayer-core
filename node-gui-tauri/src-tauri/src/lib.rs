@@ -227,7 +227,7 @@ async fn initialize_node(
     state: tauri::State<'_, AppState>,
     network: &str,
     mode: &str,
-) -> Result<String, String> {
+) -> Result<ChainInfo, String> {
     let net_type = match network {
         "Mainnet" => InitNetwork::Mainnet,
         "Testnet" => InitNetwork::Testnet,
@@ -246,7 +246,11 @@ async fn initialize_node(
     let mut guard_backend = state.backend.write().await;
     *guard_backend = Some(backend_controls.backend);
 
-    Ok("Node Initialized".to_string())
+    if let Some(node) = &*guard {
+        Ok(node.chain_info.clone())
+    } else {
+        Err("backend is not initialized".into())
+    }
 }
 pub async fn node_initialize(
     network: InitNetwork,
@@ -296,33 +300,29 @@ pub async fn node_initialize(
                 controller.chainstate.call(|this| Arc::clone(this.get_chain_config())).await?;
             let chain_info = controller.chainstate.call(|this| this.info()).await??;
 
-            let backend = Arc::new(backend_impl::Backend::new_hot(
+            let backend = backend_impl::Backend::new_hot(
                 Arc::clone(&chain_config),
                 event_tx,
                 low_priority_event_tx,
                 wallet_updated_tx,
                 controller,
-                manager_join_handle,
-            ));
+                // manager_join_handle,
+            );
 
-            let backend_clone = Arc::clone(&backend);
+            let backend_clone = backend.clone();
+            tokio::spawn(async move {
+                backend_impl::run(
+                    backend,
+                    request_rx,
+                    wallet_updated_rx,
+                    _chainstate_event_handler,
+                    _p2p_event_handler,
+                )
+                .await;
+            });
 
-            match Arc::try_unwrap(backend) {
-                Ok(backend) => {
-                    backend_impl::run(
-                        backend,
-                        request_rx,
-                        wallet_updated_rx,
-                        _chainstate_event_handler,
-                        _p2p_event_handler,
-                    )
-                    .await;
-                }
-                Err(arc) => {
-                    eprintln!("Failed to unwrap Arc<Backend>: still has other references");
-                }
-            }
-            (chain_config, chain_info, backend_clone)
+            let backend_arc = Arc::new(backend_clone);
+            (chain_config, chain_info, backend_arc)
         }
         WalletMode::Cold => {
             let chain_config = Arc::new(match network {
@@ -339,31 +339,23 @@ pub async fn node_initialize(
 
             let manager_join_handle = tokio::spawn(async move {});
 
-            let backend = Arc::new(backend_impl::Backend::new_cold(
+            let backend = backend_impl::Backend::new_cold(
                 Arc::clone(&chain_config),
                 event_tx,
                 low_priority_event_tx,
                 wallet_updated_tx,
-                manager_join_handle,
-            ));
+                // manager_join_handle,
+            );
 
-            let backend_clone = Arc::clone(&backend);
+            let backend_clone = backend.clone();
 
             tokio::spawn(async move {
-                match Arc::try_unwrap(backend) {
-                    Ok(backend) => {
-                        backend_impl::run_cold(backend, request_rx, wallet_updated_rx).await;
-                    }
-                    Err(arc) => {
-                        eprintln!("Failed to unwrap Arc<Backend> still has other references");
-                    }
-                }
+                backend_impl::run_cold(backend, request_rx, wallet_updated_rx).await;
             });
-
-            (chain_config, chain_info, backend_clone)
+            let backend_arc = Arc::new(backend_clone);
+            (chain_config, chain_info, backend_arc)
         }
     };
-
     let initialized_node = InitializedNode {
         chain_config: Arc::clone(&chain_config),
         chain_info,

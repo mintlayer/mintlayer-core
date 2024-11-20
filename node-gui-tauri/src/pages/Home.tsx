@@ -64,7 +64,7 @@ function Home() {
             network: netMode,
             mode: walletMode,
           });
-          console.log(result);
+          console.log("Chain info: ", result);
         }
       } catch (err) {
         console.error("Error initializing node: ", err);

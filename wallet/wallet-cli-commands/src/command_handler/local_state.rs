@@ -21,6 +21,7 @@ use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
 use crate::errors::WalletCliCommandError;
 
+#[derive(Clone)]
 pub struct CliWalletState {
     wallet_id: H256,
     account_names: Vec<Option<String>>,
@@ -47,6 +48,7 @@ impl CliWalletState {
 
 /// This struct ensures we keep the local state in sync with the state of the wallet we are
 /// connected to, as it can change through another interface like RPC communication
+#[derive(Clone)]
 pub struct WalletWithState<W> {
     // the CliWalletState if there is a loaded wallet
     state: Option<CliWalletState>,

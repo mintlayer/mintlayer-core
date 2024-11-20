@@ -27,8 +27,19 @@ const Staking = (props: {
   const [showDecommissionModal, setShowDecommissionModal] = useState(false);
   const [poolAddress, setPoolAddress] = useState("");
   const [receiveAddress, setReceiveAddress] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
+  const [showConfirmTransactionModal, setShowConfirmTransactionModal] =
+    useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const handleStaking = async () => {
     try {
+      setLoadingMessage(
+        isStakingStarted
+          ? "Stopping Staking. Please wait."
+          : "Starting Staking, Please wait."
+      );
+      setIsLoading(true);
       const result: ToggleStakingResultType = await invoke(
         "toggle_stakig_wrapper",
         {
@@ -48,14 +59,22 @@ const Staking = (props: {
           result.enabled ? "Staking started" : "Staking stopped",
           "notify"
         );
+        setIsLoading(false);
       }
     } catch (error) {
-      notify(new String(error).toString(), "error");
+      const regex = /Wallet error: (.+)/;
+      const errorMessage = new String(error).match(regex);
+      if (errorMessage) {
+        notify(errorMessage[1], "error");
+      }
     }
     setIsStakingStarted((started) => !started);
+    setIsLoading(false);
   };
   const handleDecommission = async () => {
     try {
+      setLoadingMessage("Decommissioning Staking Pool. Please wait.");
+      setIsLoading(true);
       const result = await invoke("decommission_pool_wrapper", {
         request: {
           wallet_id: parseInt(
@@ -63,6 +82,7 @@ const Staking = (props: {
           ),
           account_id: props.currentAccountId ? props.currentAccountId : 0, // Change to parseInt
           pool_id: currentPoolId,
+          output_address: receiveAddress,
         },
       });
       if (result) {
@@ -70,13 +90,20 @@ const Staking = (props: {
         notify("Pool decommissioned", "info");
       }
     } catch (error) {
-      notify(new String(error).toString(), "error");
+      const regex = /Wallet error: (.+)/;
+      const errorMessage = new String(error).match(regex);
+      if (errorMessage) {
+        notify(errorMessage[1], "error");
+      }
     }
     setShowDecommissionModal(false);
+    setIsLoading(false);
   };
 
   const handleCreateStakingPool = async () => {
     try {
+      setLoadingMessage("Creating Staking Pool. Please wait");
+      setIsLoading(true);
       const result = await invoke("stake_amount_wrapper", {
         request: {
           wallet_id: parseInt(
@@ -94,8 +121,13 @@ const Staking = (props: {
         notify("Delegation is created successfully", "info");
       }
     } catch (error) {
-      notify(new String(error).toString(), "error");
+      const regex = /Wallet error: (.+)/;
+      const errorMessage = new String(error).match(regex);
+      if (errorMessage) {
+        notify(errorMessage[1], "error");
+      }
     }
+    setIsLoading(false);
   };
 
   return (
@@ -113,6 +145,14 @@ const Staking = (props: {
           -moz-appearance: textfield;
         }
       `}</style>
+      {isLoading && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black opacity-50"></div>
+          <div className="bg-opacity-50 z-10 p-6 max-w-lg mx-auto relative space-y-4">
+            <div className="loader px-10">{loadingMessage}</div>
+          </div>
+        </div>
+      )}
       {showDecommissionModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="absolute inset-0 bg-black opacity-50"></div>
@@ -124,11 +164,13 @@ const Staking = (props: {
             >
               <IoCloseSharp />
             </button>
-            <h2 className="text-lg font-bold mb-4">Encrypt Wallet</h2>
+            <h2 className="text-lg font-bold mb-4">
+              Decommission Staking Pool
+            </h2>
             <p className="text-start">Pool address to decommission</p>
 
             <input
-              placeholder="Enter password"
+              placeholder="Enter address"
               type="text"
               className="w-full rounded rounded-lg"
               value={poolAddress}
@@ -139,7 +181,7 @@ const Staking = (props: {
             </p>
 
             <input
-              placeholder="Repeat password"
+              placeholder="Enter address"
               type="text"
               className="w-full rounded rounded-lg"
               value={receiveAddress}
@@ -150,6 +192,98 @@ const Staking = (props: {
               onClick={handleDecommission}
             >
               Decommission
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showConfirmTransactionModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black opacity-50"></div>
+          <div className="bg-white rounded-lg shadow-lg z-10 p-4 max-w-lg mx-auto relative space-y-4">
+            {/* Close Button */}
+            <button
+              className="absolute top-2 right-2 bg-transparent border-none shadow-none focus:outline-none "
+              onClick={() => setShowConfirmTransactionModal(false)}
+            >
+              <IoCloseSharp />
+            </button>
+            <h2 className="text-lg font-bold mb-4">Confirm Transaction</h2>
+            <p className="text-start text-bold">Transaction summary</p>
+            <div>
+              <p className="text-start text-bold">TRANSACTION ID</p>
+              <p className="text-start">
+                f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99
+              </p>
+            </div>
+            <div>
+              <p className="text-start text-bold">BEGIN OF INPUTS</p>
+              <p className="text-start">
+                -Transaction(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
+              </p>
+            </div>
+            <div>
+              <p className="text-start  text-bold">END OF INPUTS</p>
+            </div>
+            <div>
+              <p className="text-start">BEGIN OF OUTPUTS</p>
+              <p className="text-start">
+                -CreateStakePool(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99),
+                Pledge(80000)
+              </p>
+              <p className="text-start">
+                -Staker(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
+              </p>
+              <p className="text-start">
+                -VRFPubKey(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
+              </p>
+              <p className="text-start">
+                -DecommissionKey(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
+              </p>
+              <p className="text-start">
+                -CostPerBlock(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
+              </p>
+              <p className="text-start">
+                -Transfer(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
+              </p>
+            </div>
+            <div>
+              <p className="text-start text-bold">END OF OUTPUTS</p>
+            </div>
+            <button
+              className="bg-green-400 text-black w-full px-2 py-1 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
+              onClick={() => {
+                setShowConfirmTransactionModal(false);
+                setShowSuccessModal(true);
+              }}
+            >
+              Confirm and Broadcast
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showSuccessModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black opacity-50"></div>
+          <div className="bg-white rounded-lg shadow-lg z-10 p-4 max-w-lg mx-auto relative space-y-4">
+            {/* Close Button */}
+            <button
+              className="absolute top-2 right-2 bg-transparent border-none shadow-none focus:outline-none "
+              onClick={() => setShowSuccessModal(false)}
+            >
+              <IoCloseSharp />
+            </button>
+            <h2 className="text-lg font-bold mb-4">Success</h2>
+            <p className="text-start">
+              Please wait for your transaction to be included in a block
+            </p>
+
+            <button
+              className="bg-green-400 text-black w-full px-2 py-1 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
+              onClick={() => setShowSuccessModal(false)}
+            >
+              Okay
             </button>
           </div>
         </div>
@@ -283,7 +417,7 @@ const Staking = (props: {
         />
       </div>
       <div className="container pt-4 pb-2">
-        <p className="text-start">Decommission</p>
+        <p className="text-start">Decommission address</p>
         <input
           placeholder="Enter address"
           className="rounded rounded-lg border-black p-2"

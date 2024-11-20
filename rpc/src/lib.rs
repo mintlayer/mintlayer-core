@@ -115,6 +115,7 @@ impl Builder {
 }
 
 /// The RPC subsystem
+#[derive(Clone)]
 pub struct Rpc {
     http: (SocketAddr, ServerHandle),
     // Stored here to remove the cookie file when the node is stopped

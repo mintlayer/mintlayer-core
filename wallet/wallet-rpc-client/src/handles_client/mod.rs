@@ -55,6 +55,7 @@ use wallet_types::{
 
 use crate::wallet_rpc_traits::{PartialOrSignedTx, SignRawTransactionResult, WalletInterface};
 
+#[derive(Clone)]
 pub struct WalletRpcHandlesClient<N: Clone> {
     wallet_rpc: WalletRpc<N>,
     server_rpc: Option<rpc::Rpc>,
