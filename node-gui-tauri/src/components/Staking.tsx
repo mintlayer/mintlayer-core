@@ -15,9 +15,9 @@ const Staking = (props: {
   currentAccountId: number | undefined;
   currentWalletId: string | undefined;
 }) => {
-  const [poolInfo, setPoolInfo] = useState(
-    props.currentAccount?.staking_balance
-  );
+  // const [poolInfo, setPoolInfo] = useState(
+  //   props.currentAccount?.staking_balance
+  // );
   const [currentPoolId, setCurrentPoolId] = useState("");
   const [pledgeAmount, setPledgeAmount] = useState(0);
   const [costPerBlock, setCostPerBlock] = useState(0);
@@ -327,7 +327,11 @@ const Staking = (props: {
           </tr>
         </thead>
         <tbody>
-          {Object.values(poolInfo ? poolInfo : {}).map((stakeInfo, index) => {
+          {Object.values(
+            props.currentAccount?.staking_balance
+              ? props.currentAccount?.staking_balance
+              : {}
+          ).map((stakeInfo, index) => {
             return (
               <tr
                 key={stakeInfo.pool_id}

@@ -41,7 +41,11 @@ const SummaryTab = (props: {
               Best Block Timestamp (UTC)
             </td>
             <td className="py-2 px-4 font-semibold text-gray-600">
-              {props.chainInfo?.best_block_timestamp.timestamp}
+              {new Date(
+                props.chainInfo?.best_block_timestamp.timestamp
+                  ? props.chainInfo.best_block_timestamp.timestamp
+                  : 0
+              ).toUTCString()}
             </td>
           </tr>
         </tbody>
