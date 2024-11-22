@@ -87,7 +87,7 @@ const Staking = (props: {
       });
       if (result) {
         console.log(result);
-        notify("Pool decommissioned", "info");
+        notify("Pool decommissioned", "success");
       }
     } catch (error) {
       const regex = /Wallet error: (.+)/;
@@ -118,7 +118,7 @@ const Staking = (props: {
       });
       if (result) {
         console.log(result);
-        notify("Delegation is created successfully", "info");
+        notify("Staking Pool is created successfully", "success");
       }
     } catch (error) {
       const regex = /Wallet error: (.+)/;

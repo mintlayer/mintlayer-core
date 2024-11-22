@@ -24,7 +24,7 @@ const Addresses = (props: {
           addressInfo.index.toString(),
           addressInfo.address
         );
-        notify("New address added", "info");
+        notify("New address added", "success");
       }
       setIsLoading(false);
     } catch (err: any) {

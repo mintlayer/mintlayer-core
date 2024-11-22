@@ -62,7 +62,7 @@ const WalletActions = (props: {
           "EnabledUnlocked"
         );
         setShowEncryptWalletModal(false);
-        notify("Wallet encrypted successfully.", "info");
+        notify("Wallet encrypted successfully.", "success");
       }
     } catch (error) {
       notify(new String(error).toString(), "error");
@@ -91,7 +91,7 @@ const WalletActions = (props: {
             props.currentWallet?.wallet_id ? props.currentWallet.wallet_id : "",
             "Disabled"
           );
-          notify("Wallet encryption disabled successfully.", "info");
+          notify("Wallet encryption disabled successfully.", "success");
         }
       } catch (error) {
         notify(new String(error).toString(), "error");
@@ -117,7 +117,7 @@ const WalletActions = (props: {
           props.currentWallet?.wallet_id ? props.currentWallet.wallet_id : "",
           "EnabledLocked"
         );
-        notify("Wallet locked successfully.", "info");
+        notify("Wallet locked successfully.", "success");
       }
     } catch (err) {
       notify(new String(err).toString(), "error");
@@ -141,7 +141,7 @@ const WalletActions = (props: {
           props.currentWallet?.wallet_id ? props.currentWallet.wallet_id : "",
           "EnabledUnlocked"
         );
-        notify("Wallet unlocked successfully.", "info");
+        notify("Wallet unlocked successfully.", "success");
       }
     } catch (err) {
       notify(new String(err).toString(), "error");
@@ -156,7 +156,7 @@ const WalletActions = (props: {
         walletId: wallet_id,
       });
       props.handleRemoveWallet(result);
-      notify("Wallet closed successfully.", "info");
+      notify("Wallet closed successfully.", "success");
     } catch (error) {
       notify(new String(error).toString(), "error");
     }
@@ -233,7 +233,9 @@ const WalletActions = (props: {
         <div>
           <span className="flex inline-block space-x-2">
             <div className="font-thin">My balance: </div>
-            <div className="font-bold">{} ML</div>
+            <div className="font-bold">
+              {props.currentAccount?.balance.coins.decimal} TML
+            </div>
           </span>
         </div>
         <div className="space-x-2">

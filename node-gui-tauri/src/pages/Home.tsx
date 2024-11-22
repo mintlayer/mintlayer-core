@@ -140,7 +140,6 @@ function Home() {
 
       if ("PeerConnected" in newP2pInfo.P2p) {
         const peerInfo = newP2pInfo.P2p.PeerConnected;
-        console.log("peerInfo is =>", peerInfo.address);
         setP2pInfo((prevP2pInfo) => {
           const exists = prevP2pInfo.some(
             (peer) => peer.address === peerInfo.address
@@ -163,7 +162,6 @@ function Home() {
 
   const chainStateEventListener = async () => {
     await listen("chain_state_event", (event) => {
-      console.log("Received chain state event:", event.payload);
       const newChainInfo: ChainInfoEventPayloadType =
         event.payload as ChainInfoEventPayloadType;
       setChainInfo(newChainInfo.ChainInfo);
@@ -304,6 +302,7 @@ function Home() {
           },
         });
         if (walletInfo) {
+          console.log("walletInfo is ==========>", walletInfo);
           setWalletsInfo([...walletsInfo, walletInfo]);
           notify("Wallet opened successfully", "success");
         } else {

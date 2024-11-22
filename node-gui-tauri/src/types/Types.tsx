@@ -139,3 +139,49 @@ export type PeerConnected = {
 };
 
 export type P2p = PeerConnected | PeerDisconnected;
+
+export type Transaction = {
+  V1: {
+    version: number | null; // Assuming version can be a number or null
+    flags: number; // Assuming flags is a number
+    inputs: Input[]; // Array of Input objects
+    outputs: Output[]; // Array of Output objects
+  };
+};
+
+export type Input = {
+  Utxo: {
+    id: {
+      Transaction: string; // Transaction ID as a string
+    };
+    index: number; // Index as a number
+  };
+};
+
+export type Output = {
+  Transfer: [
+    {
+      Coin: {
+        atoms: string; // Atoms as a string (could be a large number)
+      };
+    },
+    string // The destination as a string
+  ];
+};
+
+export type Signature = {
+  Standard: {
+    sighash_type: number; // Sighash type as a number
+    raw_signature: number[]; // Raw signature as an array of numbers
+  };
+};
+
+export type Tx = {
+  transaction: Transaction; // Transaction object
+  signatures: Signature[]; // Array of Signature objects
+};
+
+export type Data = {
+  wallet_id: number; // Wallet ID as a number
+  tx: Tx; // Transaction object
+};
