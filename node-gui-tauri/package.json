@@ -16,9 +16,13 @@
     "@tauri-apps/plugin-fs": "~2",
     "@tauri-apps/plugin-process": "~2",
     "@tauri-apps/plugin-shell": ">=2.0.0",
+    "@types/crypto-js": "^4.2.2",
     "@types/lodash": "^4.17.13",
+    "@types/node": "^22.9.1",
     "Buffer": "^0.0.0",
     "bip39": "^3.1.0",
+    "crypto": "^1.0.1",
+    "crypto-js": "^4.2.0",
     "flowbite": "^2.5.2",
     "flowbite-react": "^0.10.2",
     "lodash": "^4.17.21",
@@ -38,5 +42,9 @@
     "tailwindcss": "^3.4.13",
     "typescript": "^5.2.2",
     "vite": "^5.4.8"
+  },
+  "browser": {
+    "crypto": false,
+    "stream": false
   }
 }

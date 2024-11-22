@@ -21,13 +21,14 @@ mod p2p_event_handler;
 mod wallet_events;
 
 use self::error::BackendError;
-use self::messages::{BackendEvent, BackendRequest};
+use self::messages::BackendEvent;
 use crate::chainstate_event_handler::ChainstateEventHandler;
 use crate::p2p_event_handler::P2pEventHandler;
 use anyhow::{Error, Result};
 use backend_impl::{Backend, ImportOrCreate};
 use chainstate::ChainInfo;
 use common::address::{Address, AddressError};
+use common::chain::SignedTransaction;
 use common::chain::{ChainConfig, DelegationId, Destination};
 use common::primitives::{Amount, BlockHeight};
 use crypto::key::hdkd::u31::U31;
@@ -44,21 +45,18 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::async_runtime::RwLock;
 use tauri::AppHandle;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use wallet_cli_commands::ConsoleCommand;
 use wallet_types::wallet_type::WalletType;
-
 struct AppState {
     initialized_node: RwLock<Option<InitializedNode>>,
     backend: RwLock<Option<Arc<Backend>>>,
 }
 
-static global_app_handle: OnceCell<AppHandle> = OnceCell::new();
+static GLOBAL_APP_HANDLE: OnceCell<AppHandle> = OnceCell::new();
 
 pub struct BackendControls {
     pub initialized_node: InitializedNode,
-    pub backend_sender: BackendSender,
-    pub backend_receiver: UnboundedReceiver<BackendEvent>,
     pub low_priority_backend_receiver: UnboundedReceiver<BackendEvent>,
     pub backend: Arc<Backend>,
 }
@@ -75,10 +73,6 @@ pub enum InitNetwork {
 pub enum WalletMode {
     Cold,
     Hot,
-}
-#[derive(Debug)]
-pub struct BackendSender {
-    request_tx: UnboundedSender<BackendRequest>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -190,6 +184,12 @@ pub struct ToggleStakingResult {
     enabled: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SubmitTransactionRequest {
+    tx: SignedTransaction,
+    wallet_id: u64,
+}
+
 impl Default for AppState {
     fn default() -> Self {
         AppState {
@@ -198,17 +198,6 @@ impl Default for AppState {
         }
     }
 }
-
-impl BackendSender {
-    fn new(request_tx: UnboundedSender<BackendRequest>) -> Self {
-        Self { request_tx }
-    }
-
-    pub fn send(&self, msg: BackendRequest) {
-        let _ = self.request_tx.send(msg);
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct InitializedNode {
     pub chain_config: Arc<ChainConfig>,
@@ -257,8 +246,8 @@ async fn initialize_node(
         Err("backend is not initialized".into())
     }
 }
-pub async fn node_initialize(
-    state: tauri::State<'_, AppState>,
+async fn node_initialize(
+    _state: tauri::State<'_, AppState>,
     network: InitNetwork,
     mode: WalletMode,
 ) -> Result<BackendControls, Error> {
@@ -278,8 +267,6 @@ pub async fn node_initialize(
     logging::init_logging();
     logging::log::info!("Command line options: {opts:?}");
 
-    let (request_tx, request_rx) = unbounded_channel();
-    let (event_tx, event_rx) = unbounded_channel();
     let (low_priority_event_tx, low_priority_event_rx) = unbounded_channel();
     let (wallet_updated_tx, wallet_updated_rx) = unbounded_channel();
 
@@ -296,11 +283,11 @@ pub async fn node_initialize(
             };
 
             let controller = node.controller().clone();
-            let manager_join_handle = tokio::spawn(async move { node.main().await });
+            tokio::spawn(async move { node.main().await });
 
             let _chainstate_event_handler =
-                ChainstateEventHandler::new(controller.chainstate.clone(), event_tx.clone()).await;
-            let _p2p_event_handler = P2pEventHandler::new(&controller.p2p, event_tx.clone()).await;
+                ChainstateEventHandler::new(controller.chainstate.clone()).await;
+            let _p2p_event_handler = P2pEventHandler::new(&controller.p2p).await;
 
             let chain_config =
                 controller.chainstate.call(|this| Arc::clone(this.get_chain_config())).await?;
@@ -308,7 +295,6 @@ pub async fn node_initialize(
 
             let backend = backend_impl::Backend::new_hot(
                 Arc::clone(&chain_config),
-                event_tx,
                 low_priority_event_tx,
                 wallet_updated_tx,
                 controller,
@@ -319,11 +305,10 @@ pub async fn node_initialize(
             tokio::spawn(async move {
                 backend_impl::run(
                     backend,
-                    request_rx,
                     wallet_updated_rx,
                     _chainstate_event_handler,
                     _p2p_event_handler,
-                    global_app_handle.clone(),
+                    GLOBAL_APP_HANDLE.clone(),
                 )
                 .await;
             });
@@ -344,11 +329,10 @@ pub async fn node_initialize(
                 is_initial_block_download: false,
             };
 
-            let manager_join_handle = tokio::spawn(async move {});
+            tokio::spawn(async move {});
 
             let backend = backend_impl::Backend::new_cold(
                 Arc::clone(&chain_config),
-                event_tx,
                 low_priority_event_tx,
                 wallet_updated_tx,
                 // manager_join_handle,
@@ -357,7 +341,7 @@ pub async fn node_initialize(
             let backend_clone = backend.clone();
 
             tokio::spawn(async move {
-                backend_impl::run_cold(backend, request_rx, wallet_updated_rx).await;
+                backend_impl::run_cold(backend, wallet_updated_rx).await;
             });
             let backend_arc = Arc::new(backend_clone);
             (chain_config, chain_info, backend_arc)
@@ -370,8 +354,6 @@ pub async fn node_initialize(
 
     let backend_controls = BackendControls {
         initialized_node,
-        backend_sender: BackendSender::new(request_tx),
-        backend_receiver: event_rx,
         low_priority_backend_receiver: low_priority_event_rx,
         backend: backend,
     };
@@ -843,6 +825,51 @@ async fn handle_console_command_wrapper(
     }
 }
 
+#[tauri::command]
+async fn submit_transaction_wrapper(
+    state: tauri::State<'_, AppState>,
+    request: SubmitTransactionRequest,
+) -> Result<WalletId, String> {
+    let wallet_id = WalletId::from_u64(request.wallet_id);
+    let result = {
+        let mut backend_guard = state.backend.write().await;
+        let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
+        let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
+        backend.submit_transaction(wallet_id, request.tx).await
+    };
+
+    match result {
+        Ok(command) => {
+            println!("Transaction submitted successfully: {:?}", command);
+            Ok(command)
+        }
+        Err(e) => {
+            let error_message = e.to_string();
+            println!("Error submitting transaction: {}", error_message);
+            Err(error_message)
+        }
+    }
+}
+
+
+#[tauri::command]
+async fn shutdown_wrapper(state: tauri::State<'_, AppState>) -> Result<(), String> {
+    // Lock the backend state and get a mutable reference
+    let mut backend_guard = state.backend.write().await;
+    
+    // Check if the backend is initialized and get a mutable reference
+    let backend_arc = backend_guard.as_mut().ok_or_else(|| "Backend not initialized".to_string())?;
+    
+    // Attempt to get a mutable reference to the backend
+    let backend = Arc::get_mut(backend_arc).ok_or_else(|| "Cannot get mutable reference".to_string())?;
+    
+    // Await the shutdown operation
+    <backend_impl::Backend as Clone>::clone(&backend).shutdown().await;
+
+    // If everything succeeded, return Ok
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -867,14 +894,16 @@ pub fn run() {
             send_delegation_to_address_wrapper,
             new_account_wrapper,
             toggle_stakig_wrapper,
-            handle_console_command_wrapper
+            handle_console_command_wrapper,
+            submit_transaction_wrapper,
+            shutdown_wrapper
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|_app_handle, event| match event {
             tauri::RunEvent::Ready => {
                 println!("Window loaded");
-                global_app_handle
+                GLOBAL_APP_HANDLE
                     .set(_app_handle.clone())
                     .expect("Failed to set global app handle");
             }

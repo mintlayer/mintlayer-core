@@ -19,19 +19,15 @@ use p2p::{interface::p2p_interface::P2pInterface, P2pEvent};
 use std::sync::Arc;
 use subsystem::Handle;
 use tauri::{AppHandle, Emitter};
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use utils::tap_log::TapLog;
 
 pub struct P2pEventHandler {
     p2p_event_rx: UnboundedReceiver<P2pEvent>,
-    event_tx: UnboundedSender<BackendEvent>,
 }
 
 impl P2pEventHandler {
-    pub async fn new(
-        p2p: &Handle<dyn P2pInterface>,
-        event_tx: UnboundedSender<BackendEvent>,
-    ) -> Self {
+    pub async fn new(p2p: &Handle<dyn P2pInterface>) -> Self {
         // TODO: Fix race in p2p events subscribe (if some peers are connected before the subscription is complete)
 
         let (p2p_event_tx, p2p_event_rx) = unbounded_channel();
@@ -46,10 +42,7 @@ impl P2pEventHandler {
         .expect("Failed to subscribe to P2P event")
         .expect("Failed to subscribe to P2P event");
 
-        Self {
-            p2p_event_rx,
-            event_tx,
-        }
+        Self { p2p_event_rx }
     }
 
     pub async fn run(&mut self, global_app_handle: OnceCell<AppHandle>) {
@@ -60,7 +53,7 @@ impl P2pEventHandler {
                 Some(event) => {
                     let event_data = BackendEvent::P2p(event);
                     if let Some(app_handle) = global_app_handle.get() {
-                        app_handle.emit("p2p_event", event_data ).unwrap();
+                        app_handle.emit("p2p_event", event_data).unwrap();
                     }
                 }
                 None => {

@@ -49,7 +49,7 @@ use super::{
     chainstate_event_handler::ChainstateEventHandler,
     error::BackendError,
     messages::{
-        AccountId, AccountInfo, AddressInfo, BackendEvent, BackendRequest, CreateDelegationRequest,
+        AccountId, AccountInfo, AddressInfo, BackendEvent, CreateDelegationRequest,
         DecommissionPoolRequest, DelegateStakingRequest, EncryptionAction, EncryptionState,
         SendDelegateToAddressRequest, SendRequest, StakeRequest, TransactionInfo, WalletId,
         WalletInfo,
@@ -168,27 +168,15 @@ struct AccountData {
 #[derive(Clone)]
 pub struct Backend {
     chain_config: Arc<ChainConfig>,
-
-    /// The bounded sender is used so that the UI is not overloaded with messages.
-    /// With an unbounded sender, high latency was experienced when wallet scan was enabled.
-    event_tx: UnboundedSender<BackendEvent>,
-    /// Low priority event_tx for sending wallet updates when new blocks are scanned
-    /// without this the queue can get filled up with updates when the wallet is far behind
-    /// and user events interacting with the wallet can start lagging
     low_priority_event_tx: UnboundedSender<BackendEvent>,
-
     wallet_updated_tx: UnboundedSender<WalletId>,
-
     controller: ColdHotNodeController,
-
-    // manager_join_handle: JoinHandle<()>,
     pub wallets: BTreeMap<WalletId, WalletData>,
 }
 
 impl Backend {
     pub fn new_hot(
         chain_config: Arc<ChainConfig>,
-        event_tx: UnboundedSender<BackendEvent>,
         low_priority_event_tx: UnboundedSender<BackendEvent>,
         wallet_updated_tx: UnboundedSender<WalletId>,
         controller: NodeController,
@@ -196,7 +184,6 @@ impl Backend {
     ) -> Self {
         Self {
             chain_config,
-            event_tx,
             low_priority_event_tx,
             wallet_updated_tx,
             controller: ColdHotNodeController::Hot(controller),
@@ -207,7 +194,6 @@ impl Backend {
 
     pub fn new_cold(
         chain_config: Arc<ChainConfig>,
-        event_tx: UnboundedSender<BackendEvent>,
         low_priority_event_tx: UnboundedSender<BackendEvent>,
         wallet_updated_tx: UnboundedSender<WalletId>,
         // manager_join_handle: JoinHandle<()>,
@@ -215,7 +201,6 @@ impl Backend {
         Self {
             controller: ColdHotNodeController::Cold,
             chain_config,
-            event_tx,
             low_priority_event_tx,
             wallet_updated_tx,
             // manager_join_handle,
@@ -930,7 +915,7 @@ impl Backend {
         Ok(TransactionInfo { wallet_id, tx })
     }
 
-    async fn submit_transaction(
+    pub async fn submit_transaction(
         &mut self,
         wallet_id: WalletId,
         tx: SignedTransaction,
@@ -943,7 +928,7 @@ impl Backend {
         Ok(wallet_id)
     }
 
-    async fn load_transaction_list(
+    pub async fn load_transaction_list(
         &mut self,
         wallet_id: WalletId,
         account_id: AccountId,
@@ -970,108 +955,108 @@ impl Backend {
             .map_err(|e| BackendError::WalletError(e.to_string()))
     }
 
-    async fn process_request(&mut self, request: BackendRequest) {
-        match request {
-            BackendRequest::OpenWallet {
-                file_path,
-                wallet_type,
-            } => {
-                let open_res = self.add_open_wallet(file_path, wallet_type).await;
-                Self::send_event(&self.event_tx, BackendEvent::OpenWallet(open_res));
-            }
-            BackendRequest::RecoverWallet {
-                mnemonic,
-                file_path,
-                import,
-                wallet_type,
-            } => {
-                let import_res =
-                    self.add_create_wallet(file_path, mnemonic, wallet_type, import).await;
-                Self::send_event(&self.event_tx, BackendEvent::ImportWallet(import_res));
-            }
-            BackendRequest::CloseWallet(wallet_id) => {
-                if let Some(wallet) = self.wallets.remove(&wallet_id) {
-                    wallet.shutdown().await;
-                    Self::send_event(&self.event_tx, BackendEvent::CloseWallet(wallet_id));
-                }
-            }
+    // async fn process_request(&mut self, request: BackendRequest) {
+    //     match request {
+    //         BackendRequest::OpenWallet {
+    //             file_path,
+    //             wallet_type,
+    //         } => {
+    //             let open_res = self.add_open_wallet(file_path, wallet_type).await;
+    //             Self::send_event(&self.event_tx, BackendEvent::OpenWallet(open_res));
+    //         }
+    //         BackendRequest::RecoverWallet {
+    //             mnemonic,
+    //             file_path,
+    //             import,
+    //             wallet_type,
+    //         } => {
+    //             let import_res =
+    //                 self.add_create_wallet(file_path, mnemonic, wallet_type, import).await;
+    //             Self::send_event(&self.event_tx, BackendEvent::ImportWallet(import_res));
+    //         }
+    //         BackendRequest::CloseWallet(wallet_id) => {
+    //             if let Some(wallet) = self.wallets.remove(&wallet_id) {
+    //                 wallet.shutdown().await;
+    //                 Self::send_event(&self.event_tx, BackendEvent::CloseWallet(wallet_id));
+    //             }
+    //         }
 
-            BackendRequest::UpdateEncryption { wallet_id, action } => {
-                let res = self.update_encryption(wallet_id, action).await;
-                Self::send_event(&self.event_tx, BackendEvent::UpdateEncryption(res));
-            }
+    //         BackendRequest::UpdateEncryption { wallet_id, action } => {
+    //             let res = self.update_encryption(wallet_id, action).await;
+    //             Self::send_event(&self.event_tx, BackendEvent::UpdateEncryption(res));
+    //         }
 
-            BackendRequest::NewAccount { wallet_id, name } => {
-                let res = self.new_account(wallet_id, name).await;
-                Self::send_event(&self.event_tx, BackendEvent::NewAccount(res));
-            }
+    //         BackendRequest::NewAccount { wallet_id, name } => {
+    //             let res = self.new_account(wallet_id, name).await;
+    //             Self::send_event(&self.event_tx, BackendEvent::NewAccount(res));
+    //         }
 
-            BackendRequest::NewAddress(wallet_id, account_id) => {
-                let address_res = self.new_address(wallet_id, account_id).await;
-                Self::send_event(&self.event_tx, BackendEvent::NewAddress(address_res));
-            }
-            BackendRequest::ToggleStaking(wallet_id, account_id, enabled) => {
-                let toggle_res = self.toggle_staking(wallet_id, account_id, enabled).await;
-                Self::send_event(&self.event_tx, BackendEvent::ToggleStaking(toggle_res));
-            }
-            BackendRequest::SendAmount(send_request) => {
-                let send_res = self.send_amount(send_request).await;
-                Self::send_event(&self.event_tx, BackendEvent::SendAmount(send_res));
-            }
-            BackendRequest::StakeAmount(stake_request) => {
-                let stake_res = self.stake_amount(stake_request).await;
-                Self::send_event(&self.event_tx, BackendEvent::StakeAmount(stake_res));
-            }
-            BackendRequest::DecommissionPool(decommission_request) => {
-                let stake_res = self.decommission_pool(decommission_request).await;
-                Self::send_event(&self.event_tx, BackendEvent::DecommissionPool(stake_res));
-            }
-            BackendRequest::CreateDelegation(request) => {
-                let result = self.create_delegation(request).await;
-                Self::send_event(&self.event_tx, BackendEvent::CreateDelegation(result));
-            }
-            BackendRequest::DelegateStaking(request) => {
-                let delegation_id = request.delegation_id;
-                let result = self.delegate_staking(request).await.map(|tx| (tx, delegation_id));
-                Self::send_event(&self.event_tx, BackendEvent::DelegateStaking(result));
-            }
-            BackendRequest::SendDelegationToAddress(request) => {
-                let result = self.send_delegation_to_address(request).await;
-                Self::send_event(
-                    &self.event_tx,
-                    BackendEvent::SendDelegationToAddress(result),
-                );
-            }
-            BackendRequest::SubmitTx { wallet_id, tx } => {
-                let result = self.submit_transaction(wallet_id, tx).await;
-                Self::send_event(&self.event_tx, BackendEvent::Broadcast(result));
-            }
-            BackendRequest::TransactionList {
-                wallet_id,
-                account_id,
-                skip,
-            } => {
-                let transaction_list_res =
-                    self.load_transaction_list(wallet_id, account_id, skip).await;
-                Self::send_event(
-                    &self.event_tx,
-                    BackendEvent::TransactionList(wallet_id, account_id, transaction_list_res),
-                );
-            }
-            BackendRequest::ConsoleCommand {
-                wallet_id,
-                account_id,
-                command,
-            } => {
-                let res = self.handle_console_command(wallet_id, account_id, command).await;
-                Self::send_event(
-                    &self.event_tx,
-                    BackendEvent::ConsoleResponse(wallet_id, account_id, res),
-                );
-            }
-            BackendRequest::Shutdown => unreachable!(),
-        }
-    }
+    //         BackendRequest::NewAddress(wallet_id, account_id) => {
+    //             let address_res = self.new_address(wallet_id, account_id).await;
+    //             Self::send_event(&self.event_tx, BackendEvent::NewAddress(address_res));
+    //         }
+    //         BackendRequest::ToggleStaking(wallet_id, account_id, enabled) => {
+    //             let toggle_res = self.toggle_staking(wallet_id, account_id, enabled).await;
+    //             Self::send_event(&self.event_tx, BackendEvent::ToggleStaking(toggle_res));
+    //         }
+    //         BackendRequest::SendAmount(send_request) => {
+    //             let send_res = self.send_amount(send_request).await;
+    //             Self::send_event(&self.event_tx, BackendEvent::SendAmount(send_res));
+    //         }
+    //         BackendRequest::StakeAmount(stake_request) => {
+    //             let stake_res = self.stake_amount(stake_request).await;
+    //             Self::send_event(&self.event_tx, BackendEvent::StakeAmount(stake_res));
+    //         }
+    //         BackendRequest::DecommissionPool(decommission_request) => {
+    //             let stake_res = self.decommission_pool(decommission_request).await;
+    //             Self::send_event(&self.event_tx, BackendEvent::DecommissionPool(stake_res));
+    //         }
+    //         BackendRequest::CreateDelegation(request) => {
+    //             let result = self.create_delegation(request).await;
+    //             Self::send_event(&self.event_tx, BackendEvent::CreateDelegation(result));
+    //         }
+    //         BackendRequest::DelegateStaking(request) => {
+    //             let delegation_id = request.delegation_id;
+    //             let result = self.delegate_staking(request).await.map(|tx| (tx, delegation_id));
+    //             Self::send_event(&self.event_tx, BackendEvent::DelegateStaking(result));
+    //         }
+    //         BackendRequest::SendDelegationToAddress(request) => {
+    //             let result = self.send_delegation_to_address(request).await;
+    //             Self::send_event(
+    //                 &self.event_tx,
+    //                 BackendEvent::SendDelegationToAddress(result),
+    //             );
+    //         }
+    //         BackendRequest::SubmitTx { wallet_id, tx } => {
+    //             let result = self.submit_transaction(wallet_id, tx).await;
+    //             Self::send_event(&self.event_tx, BackendEvent::Broadcast(result));
+    //         }
+    //         BackendRequest::TransactionList {
+    //             wallet_id,
+    //             account_id,
+    //             skip,
+    //         } => {
+    //             let transaction_list_res =
+    //                 self.load_transaction_list(wallet_id, account_id, skip).await;
+    //             Self::send_event(
+    //                 &self.event_tx,
+    //                 BackendEvent::TransactionList(wallet_id, account_id, transaction_list_res),
+    //             );
+    //         }
+    //         BackendRequest::ConsoleCommand {
+    //             wallet_id,
+    //             account_id,
+    //             command,
+    //         } => {
+    //             let res = self.handle_console_command(wallet_id, account_id, command).await;
+    //             Self::send_event(
+    //                 &self.event_tx,
+    //                 BackendEvent::ConsoleResponse(wallet_id, account_id, res),
+    //             );
+    //         }
+    //         BackendRequest::Shutdown => unreachable!(),
+    //     }
+    // }
 
     pub async fn handle_console_command(
         &mut self,
@@ -1107,7 +1092,7 @@ impl Backend {
         _ = event_tx.send(event);
     }
 
-    async fn shutdown(self) {
+    pub async fn shutdown(self) {
         self.controller.shutdown();
         // self.manager_join_handle.await.expect("Shutdown failed");
     }
@@ -1338,7 +1323,6 @@ where
 
 pub async fn run(
     mut backend: Backend,
-    mut request_rx: UnboundedReceiver<BackendRequest>,
     mut wallet_updated_rx: UnboundedReceiver<WalletId>,
     mut chainstate_event_handler: ChainstateEventHandler,
     mut p2p_event_handler: P2pEventHandler,
@@ -1387,11 +1371,7 @@ pub async fn run(
     }
 }
 
-pub async fn run_cold(
-    mut backend: Backend,
-    mut request_rx: UnboundedReceiver<BackendRequest>,
-    mut wallet_updated_rx: UnboundedReceiver<WalletId>,
-) {
+pub async fn run_cold(mut backend: Backend, mut wallet_updated_rx: UnboundedReceiver<WalletId>) {
     loop {
         tokio::select! {
             // Make event loop more efficient

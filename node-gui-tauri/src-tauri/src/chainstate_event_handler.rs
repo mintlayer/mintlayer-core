@@ -19,20 +19,18 @@ use super::messages::BackendEvent;
 use chainstate::ChainstateEvent;
 use once_cell::sync::OnceCell;
 use tauri::{AppHandle, Emitter as _};
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use utils::tap_log::TapLog;
 
 pub struct ChainstateEventHandler {
     chainstate: chainstate::ChainstateHandle,
     chainstate_event_rx: UnboundedReceiver<ChainstateEvent>,
-    event_tx: UnboundedSender<BackendEvent>,
     chain_info_updated: bool,
 }
 
 impl ChainstateEventHandler {
     pub async fn new(
         chainstate: chainstate::ChainstateHandle,
-        event_tx: UnboundedSender<BackendEvent>,
     ) -> Self {
         let (chainstate_event_tx, chainstate_event_rx) = unbounded_channel();
         chainstate
@@ -51,7 +49,6 @@ impl ChainstateEventHandler {
         Self {
             chainstate,
             chainstate_event_rx,
-            event_tx,
             chain_info_updated: false,
         }
     }
