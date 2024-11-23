@@ -714,7 +714,7 @@ async fn send_delegation_to_address_wrapper(
         delegation_id: send_delegation_request.delegation_id,
     };
 
-    let result = {
+    let result: std::result::Result<TransactionInfo, BackendError> = {
         let mut backend_guard = state.backend.write().await;
         let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
         let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;

@@ -316,6 +316,11 @@ function Home() {
   };
 
   const handleExit = async () => {
+    try {
+      await invoke("shutdown_wrapper");
+    } catch (error) {
+      console.error("Error shutting down node", error);
+    }
     await exit();
   };
 
@@ -789,6 +794,7 @@ function Home() {
                       currentWallet={currentWallet}
                       currentAccount={currentAccount}
                       currentAccountId={currentAccountId}
+                      chainInfo={chainInfo}
                       activeTab={activeTab}
                       handleUpdateCurrentAccount={
                         handleUpdateCurrentAccountAddresses

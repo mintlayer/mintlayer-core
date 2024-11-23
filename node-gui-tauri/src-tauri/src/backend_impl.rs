@@ -215,7 +215,7 @@ impl Backend {
         }
     }
 
-    async fn get_account_info<T: NodeInterface + Clone + Send + Sync + Debug + 'static>(
+    pub async fn get_account_info<T: NodeInterface + Clone + Send + Sync + Debug + 'static>(
         controller: &WalletRpc<T>,
         account_index: U31,
     ) -> Result<(AccountId, AccountInfo), BackendError> {
@@ -954,109 +954,6 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))
     }
-
-    // async fn process_request(&mut self, request: BackendRequest) {
-    //     match request {
-    //         BackendRequest::OpenWallet {
-    //             file_path,
-    //             wallet_type,
-    //         } => {
-    //             let open_res = self.add_open_wallet(file_path, wallet_type).await;
-    //             Self::send_event(&self.event_tx, BackendEvent::OpenWallet(open_res));
-    //         }
-    //         BackendRequest::RecoverWallet {
-    //             mnemonic,
-    //             file_path,
-    //             import,
-    //             wallet_type,
-    //         } => {
-    //             let import_res =
-    //                 self.add_create_wallet(file_path, mnemonic, wallet_type, import).await;
-    //             Self::send_event(&self.event_tx, BackendEvent::ImportWallet(import_res));
-    //         }
-    //         BackendRequest::CloseWallet(wallet_id) => {
-    //             if let Some(wallet) = self.wallets.remove(&wallet_id) {
-    //                 wallet.shutdown().await;
-    //                 Self::send_event(&self.event_tx, BackendEvent::CloseWallet(wallet_id));
-    //             }
-    //         }
-
-    //         BackendRequest::UpdateEncryption { wallet_id, action } => {
-    //             let res = self.update_encryption(wallet_id, action).await;
-    //             Self::send_event(&self.event_tx, BackendEvent::UpdateEncryption(res));
-    //         }
-
-    //         BackendRequest::NewAccount { wallet_id, name } => {
-    //             let res = self.new_account(wallet_id, name).await;
-    //             Self::send_event(&self.event_tx, BackendEvent::NewAccount(res));
-    //         }
-
-    //         BackendRequest::NewAddress(wallet_id, account_id) => {
-    //             let address_res = self.new_address(wallet_id, account_id).await;
-    //             Self::send_event(&self.event_tx, BackendEvent::NewAddress(address_res));
-    //         }
-    //         BackendRequest::ToggleStaking(wallet_id, account_id, enabled) => {
-    //             let toggle_res = self.toggle_staking(wallet_id, account_id, enabled).await;
-    //             Self::send_event(&self.event_tx, BackendEvent::ToggleStaking(toggle_res));
-    //         }
-    //         BackendRequest::SendAmount(send_request) => {
-    //             let send_res = self.send_amount(send_request).await;
-    //             Self::send_event(&self.event_tx, BackendEvent::SendAmount(send_res));
-    //         }
-    //         BackendRequest::StakeAmount(stake_request) => {
-    //             let stake_res = self.stake_amount(stake_request).await;
-    //             Self::send_event(&self.event_tx, BackendEvent::StakeAmount(stake_res));
-    //         }
-    //         BackendRequest::DecommissionPool(decommission_request) => {
-    //             let stake_res = self.decommission_pool(decommission_request).await;
-    //             Self::send_event(&self.event_tx, BackendEvent::DecommissionPool(stake_res));
-    //         }
-    //         BackendRequest::CreateDelegation(request) => {
-    //             let result = self.create_delegation(request).await;
-    //             Self::send_event(&self.event_tx, BackendEvent::CreateDelegation(result));
-    //         }
-    //         BackendRequest::DelegateStaking(request) => {
-    //             let delegation_id = request.delegation_id;
-    //             let result = self.delegate_staking(request).await.map(|tx| (tx, delegation_id));
-    //             Self::send_event(&self.event_tx, BackendEvent::DelegateStaking(result));
-    //         }
-    //         BackendRequest::SendDelegationToAddress(request) => {
-    //             let result = self.send_delegation_to_address(request).await;
-    //             Self::send_event(
-    //                 &self.event_tx,
-    //                 BackendEvent::SendDelegationToAddress(result),
-    //             );
-    //         }
-    //         BackendRequest::SubmitTx { wallet_id, tx } => {
-    //             let result = self.submit_transaction(wallet_id, tx).await;
-    //             Self::send_event(&self.event_tx, BackendEvent::Broadcast(result));
-    //         }
-    //         BackendRequest::TransactionList {
-    //             wallet_id,
-    //             account_id,
-    //             skip,
-    //         } => {
-    //             let transaction_list_res =
-    //                 self.load_transaction_list(wallet_id, account_id, skip).await;
-    //             Self::send_event(
-    //                 &self.event_tx,
-    //                 BackendEvent::TransactionList(wallet_id, account_id, transaction_list_res),
-    //             );
-    //         }
-    //         BackendRequest::ConsoleCommand {
-    //             wallet_id,
-    //             account_id,
-    //             command,
-    //         } => {
-    //             let res = self.handle_console_command(wallet_id, account_id, command).await;
-    //             Self::send_event(
-    //                 &self.event_tx,
-    //                 BackendEvent::ConsoleResponse(wallet_id, account_id, res),
-    //             );
-    //         }
-    //         BackendRequest::Shutdown => unreachable!(),
-    //     }
-    // }
 
     pub async fn handle_console_command(
         &mut self,

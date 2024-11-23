@@ -8,12 +8,13 @@ import Transactions from "./Transactions";
 import { IoCloseSharp } from "react-icons/io5";
 import { invoke } from "@tauri-apps/api/core";
 import { notify } from "../utils/util";
-import { AccountType, WalletInfo } from "../types/Types";
+import { AccountType, ChainInfoType, WalletInfo } from "../types/Types";
 const WalletActions = (props: {
   currentWallet: WalletInfo | undefined;
   currentAccount: AccountType | undefined;
   activeTab: string;
   currentAccountId: number;
+  chainInfo: ChainInfoType | undefined;
   handleUpdateCurrentAccount: (index: string, address: string) => void;
   handleUpdateCurrentWalletEncryptionState: (
     wallet_id: string,
@@ -310,6 +311,7 @@ const WalletActions = (props: {
       )}
       {props.activeTab === "send" && (
         <Send
+          currentAccount={props.currentAccount}
           walletId={parseInt(
             props.currentWallet?.wallet_id ? props.currentWallet.wallet_id : "0"
           )}
@@ -318,6 +320,7 @@ const WalletActions = (props: {
       )}
       {props.activeTab === "staking" && (
         <Staking
+          chainInfo={props.chainInfo}
           currentAccount={props.currentAccount}
           currentWallet={props.currentWallet}
           currentAccountId={props.currentAccountId}

@@ -2,14 +2,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { AiOutlineCopy } from "react-icons/ai";
 import { IoCloseSharp } from "react-icons/io5";
-import { notify } from "../utils/util";
+import { encodeToHash, notify } from "../utils/util";
 import {
   AccountType,
   WalletInfo,
   ToggleStakingResultType,
+  Data,
+  ChainInfoType,
 } from "../types/Types";
 
 const Staking = (props: {
+  chainInfo: ChainInfoType | undefined;
   currentAccount: AccountType | undefined;
   currentWallet: WalletInfo | undefined;
   currentAccountId: number | undefined;
@@ -27,6 +30,7 @@ const Staking = (props: {
   const [showDecommissionModal, setShowDecommissionModal] = useState(false);
   const [poolAddress, setPoolAddress] = useState("");
   const [receiveAddress, setReceiveAddress] = useState("");
+  const [transactionInfo, setTransactionInfo] = useState<Data>();
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [showConfirmTransactionModal, setShowConfirmTransactionModal] =
@@ -104,7 +108,7 @@ const Staking = (props: {
     try {
       setLoadingMessage("Creating Staking Pool. Please wait");
       setIsLoading(true);
-      const result = await invoke("stake_amount_wrapper", {
+      const result: Data = await invoke("stake_amount_wrapper", {
         request: {
           wallet_id: parseInt(
             props.currentWalletId ? props.currentWalletId : "0"
@@ -117,8 +121,9 @@ const Staking = (props: {
         },
       });
       if (result) {
-        console.log(result);
-        notify("Staking Pool is created successfully", "success");
+        console.log("trasaction info is =========>", result);
+        setTransactionInfo(result);
+        setShowConfirmTransactionModal(true);
       }
     } catch (error) {
       const regex = /Wallet error: (.+)/;
@@ -213,13 +218,24 @@ const Staking = (props: {
             <div>
               <p className="text-start text-bold">TRANSACTION ID</p>
               <p className="text-start">
-                f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99
+                {encodeToHash(
+                  JSON.stringify(
+                    transactionInfo?.tx.transaction.V1
+                      ? transactionInfo.tx.transaction.V1
+                      : {}
+                  )
+                )}
               </p>
             </div>
             <div>
               <p className="text-start text-bold">BEGIN OF INPUTS</p>
               <p className="text-start">
-                -Transaction(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
+                -Transaction(
+                {
+                  transactionInfo?.tx.transaction.V1.inputs[0].Utxo.id
+                    .Transaction
+                }
+                )
               </p>
             </div>
             <div>
@@ -228,23 +244,14 @@ const Staking = (props: {
             <div>
               <p className="text-start">BEGIN OF OUTPUTS</p>
               <p className="text-start">
-                -CreateStakePool(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99),
-                Pledge(80000)
+                -CreateStakePool(Id(tpool{})), Pledge(
+                {pledgeAmount})
               </p>
+              <p className="text-start">-Staker({decommissionAddress})</p>
+              <p className="text-start">-Margin Ratio({marginRatio * 100}%)</p>
+              <p className="text-start">-CostPerBlock({costPerBlock})</p>
               <p className="text-start">
-                -Staker(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
-              </p>
-              <p className="text-start">
-                -VRFPubKey(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
-              </p>
-              <p className="text-start">
-                -DecommissionKey(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
-              </p>
-              <p className="text-start">
-                -CostPerBlock(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
-              </p>
-              <p className="text-start">
-                -Transfer(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
+                -Transfer({props.currentAccount?.addresses[0]})
               </p>
             </div>
             <div>

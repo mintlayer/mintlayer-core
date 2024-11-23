@@ -1,9 +1,13 @@
 import { useState } from "react";
 import { IoCloseSharp } from "react-icons/io5";
 import { invoke } from "@tauri-apps/api/core";
-import {  notify } from "../utils/util";
-import { Data } from "../types/Types";
-const Send = (props: { walletId: number; accountId: number }) => {
+import { notify } from "../utils/util";
+import { AccountType, Data } from "../types/Types";
+const Send = (props: {
+  currentAccount: AccountType | undefined;
+  walletId: number;
+  accountId: number;
+}) => {
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState("");
   const [transactionInfo, setTransactionInfo] = useState<Data | undefined>();
@@ -25,6 +29,21 @@ const Send = (props: { walletId: number; accountId: number }) => {
         setTransactionInfo(transactionResult);
         setShowConfirmModal(true);
       }
+    } catch (error) {
+      notify(new String(error).toString(), "error");
+    }
+  };
+
+  const handleConfirmTransaction = async () => {
+    try {
+      await invoke("submit_transaction_wrapper", {
+        request: {
+          wallet_id: props.walletId,
+          tx: transactionInfo?.tx,
+        },
+      });
+      notify("Transaction confirmed successfully!", "success");
+      setShowConfirmModal(false);
     } catch (error) {
       notify(new String(error).toString(), "error");
     }
@@ -53,7 +72,7 @@ const Send = (props: { walletId: number; accountId: number }) => {
       {showConfirmModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="absolute inset-0 bg-black opacity-50"></div>
-          <div className="bg-white rounded-lg shadow-lg z-10 p-4 max-w-lg mx-auto relative space-y-4">
+          <div className="bg-white rounded-lg shadow-lg z-10 p-4 max-w-xl mx-auto relative space-y-4">
             {/* Close Button */}
             <button
               className="absolute top-2 right-2 bg-transparent border-none shadow-none focus:outline-none "
@@ -61,18 +80,12 @@ const Send = (props: { walletId: number; accountId: number }) => {
             >
               <IoCloseSharp />
             </button>
-            <h2 className="text-lg font-bold mb-4">Confirm Transaction</h2>
-            <p className="text-start text-bold">Transaction summary</p>
-            <div>
-              <p className="text-start text-bold">TRANSACTION ID</p>
-              <p className="text-start">
-                {/* {hashEncoded(transactionInfo?.tx.transaction.V1)} */}
-              </p>
-            </div>
+            <h2 className="text-xl font-bold mb-4">Confirm Transaction</h2>
+            <p className="text-start text-lg text-bold">Transaction summary</p>
             <div>
               <p className="text-start text-bold">BEGIN OF INPUTS</p>
-              <p className="text-start">
-                -Transaction({""}
+              <p className="text-start whitespace-nowrap overflow-x-auto">
+                -Transaction ({""}
                 {
                   transactionInfo?.tx.transaction.V1.inputs[0].Utxo.id
                     .Transaction
@@ -86,24 +99,15 @@ const Send = (props: { walletId: number; accountId: number }) => {
             </div>
             <div>
               <p className="text-start">BEGIN OF OUTPUTS</p>
-              <p className="text-start">
-                -CreateStakePool(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99),
-                Pledge(80000)
+              <p className="text-start whitespace-nowrap">
+                -Transfer({address}, {amount}),
               </p>
               <p className="text-start">
-                -Staker(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
-              </p>
-              <p className="text-start">
-                -VRFPubKey(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
-              </p>
-              <p className="text-start">
-                -DecommissionKey(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
-              </p>
-              <p className="text-start">
-                -CostPerBlock(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
-              </p>
-              <p className="text-start">
-                -Transfer(f93c0a4be023c70ae6103dcc96a14eeb5294585abac50a8864f0d48933223d99)
+                -Transfer({props.currentAccount?.addresses[0]},{" "}
+                {props.currentAccount?.balance.coins.atoms
+                  ? props.currentAccount.balance.coins.atoms
+                  : 0 - parseInt(amount)}
+                ),
               </p>
             </div>
             <div>
@@ -112,6 +116,7 @@ const Send = (props: { walletId: number; accountId: number }) => {
             <button
               className="bg-green-400 text-black w-full px-2 py-1 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
               onClick={() => {
+                handleConfirmTransaction();
                 setShowConfirmModal(false);
               }}
             >

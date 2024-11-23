@@ -158,14 +158,34 @@ export type Input = {
   };
 };
 
-export type Output = {
+export type Output = CreateStakePoolOutput | TransferOutput;
+
+export type CreateStakePoolOutput = {
+  CreateStakePool: [
+    string,
+    {
+      pledge: {
+        atoms: string;
+      };
+      staker: string;
+      vrf_public_key: string;
+      decomission_key: string;
+      margin_ratio_per_thousand: string;
+      cost_per_block: {
+        atoms: string;
+      };
+    }
+  ];
+};
+
+export type TransferOutput = {
   Transfer: [
     {
       Coin: {
-        atoms: string; // Atoms as a string (could be a large number)
+        atoms: string;
       };
     },
-    string // The destination as a string
+    string
   ];
 };
 

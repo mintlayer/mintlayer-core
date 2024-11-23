@@ -1,30 +1,17 @@
 import { toast } from "react-toastify";
-// import * as crypto from 'crypto-js';
+import * as blake from 'blakejs';
+import {bech32m} from 'bech32';
 
-// type H256 = Buffer;
-// const defaultHashAlgo = 'blake2b';
+export const encodeToHash = (data: string)=>{
+  const hash = blake.blake2bHex(data, undefined ,32);
+  console.log('hash value is===>', hash)
+  return hash;
+}
 
-// export const defaultHash = (data:Buffer|Uint8Array):H256 =>{
-//   const hash = crypto.createHash(defaultHashAlgo);
-//   hash.update(data);
-//   return hash.digest();
-// }
-
-// export function hashEncodedTo<T>(value: T, hasher: any):void{
-//   const encodedValue = encode(value);
-//   hasher.update(encodedValue);
-// }
-
-// export function hashEncoded<T>(value:T):H256{
-//   const hasher = crypto.createHash(defaultHashAlgo);
-//   hashEncodedTo(value, hasher);
-//   return hasher.digest();
-// }
-
-// function encode<T>(value: T): Buffer {
-//   // Convert the value to a Buffer. This is a placeholder implementation.
-//   return Buffer.from(JSON.stringify(value));
-// }
+export const encode = (prefix: string, data: ArrayLike<number>)=>{
+  let address = bech32m.encode(prefix, data);
+  return address;
+}
 
 export   const notify = (message: string, type: string) => {
     console.log("notification is displayed");
