@@ -38,11 +38,17 @@ const Console = (props: {
       );
       if (result) {
         console.log(result);
-        setText((text) => text + result.Print);
+        setText((text) => text + "\n" + result.Print);
       }
     } catch (error) {
       console.log(error);
       notify(new String(error).toString(), "error");
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      handleSendCommand();
     }
   };
   return (
@@ -74,12 +80,13 @@ const Console = (props: {
           readOnly
         />
       </div>
-      <div className="justify-between flex space-x-4 border border-gray-100">
+      <div className="justify-between flex rounded rounded-lg space-x-4 border border-gray-100">
         <input
-          className="rounded rounded-lg border border-gray-100 w-full"
+          className=" w-full"
           placeholder="Type here ..."
           value={command}
           onChange={(e) => setCommand(e.target.value)}
+          onKeyDown={(event) => handleKeyDown(event)}
         />
         <button
           onClick={handleSendCommand}
