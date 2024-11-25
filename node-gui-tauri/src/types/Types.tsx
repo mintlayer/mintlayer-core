@@ -161,6 +161,10 @@ export type Input = {
 export type Output =
   | CreateStakePoolOutput
   | TransferOutput
+  | LockThenTransferOutput
+  | DelegateStakingOutput
+  | IssueFungibleTokenOutput
+  | ProduceBlockFromStakeOutput
   | CreateDelegationId;
 
 export type CreateStakePoolOutput = {
@@ -194,6 +198,37 @@ export type TransferOutput = {
     },
     string
   ];
+};
+
+export type LockThenTransferOutput = {
+  LockThenTransfer: [
+    string,
+    {
+      Coin: {
+        atoms: string;
+      };
+    },
+    string
+  ];
+};
+
+export type DelegateStakingOutput = {
+  DelegateStakingType: [
+    {
+      Coin: {
+        atoms: string;
+      };
+    },
+    string
+  ];
+};
+
+export type ProduceBlockFromStakeOutput = {
+  ProduceBlockFromStake: [string, string];
+};
+
+export type IssueFungibleTokenOutput = {
+  IssueFungibleToken: [string];
 };
 
 export type Signature = {

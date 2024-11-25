@@ -65,7 +65,7 @@ const Staking = (props: {
         setIsStakingStarted(result.enabled);
         notify(
           result.enabled ? "Staking started" : "Staking stopped",
-          "notify"
+          "success"
         );
         setIsLoading(false);
       }
@@ -261,59 +261,97 @@ const Staking = (props: {
             </div>
             <div>
               <p className="text-start">BEGIN OF OUTPUTS</p>
-              <p className="text-start">
-                -CreateStakePool(Id(
-                {encode(
-                  "tpool",
-                  encodeToBytesForAddress(
-                    new String(
+              {transactionInfo?.tx.transaction.V1.outputs.find(
+                (output) => "CreateStakePool" in output
+              ) ? (
+                <>
+                  <p className="text-start">
+                    -CreateStakePool(Id(
+                    {encode(
+                      "tpool",
+                      encodeToBytesForAddress(
+                        new String(
+                          transactionInfo?.tx.transaction.V1.outputs.find(
+                            (output) => "CreateStakePool" in output
+                          )?.CreateStakePool[0]
+                        ).toString()
+                      )
+                    )}
+                    )), Pledge(
+                    {pledgeAmount})
+                  </p>
+                  <p className="text-start">
+                    -Staker(
+                    {encode(
+                      "tpmt",
+                      encodeToBytesForAddress(
+                        new String(
+                          transactionInfo?.tx.transaction.V1.outputs.find(
+                            (output) => "CreateStakePool" in output
+                          )?.CreateStakePool[1].staker
+                        ).toString()
+                      )
+                    )}
+                    )
+                  </p>
+                  <p className="text-start">
+                    -Margin Ratio({marginRatio * 100}%)
+                  </p>
+                  <p className="text-start">-CostPerBlock({costPerBlock})</p>
+                  <p className="text-start">
+                    -Transfer(
+                    {encode(
+                      "tmt",
+                      encodeToBytesForAddress(
+                        new String(
+                          transactionInfo?.tx.transaction.V1.outputs.find(
+                            (output) => "Transfer" in output
+                          )?.Transfer[1]
+                        ).toString()
+                      )
+                    )}
+                    ,{" "}
+                    {parseInt(
+                      new String(
+                        transactionInfo?.tx.transaction.V1.outputs.find(
+                          (output) => "Transfer" in output
+                        )?.Transfer[0].Coin.atoms
+                      ).toString()
+                    ) / 1000000000000}
+                    )
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-start">
+                    -LockThenTransfer(
+                    {encode(
+                      "tpool",
+                      encodeToBytesForAddress(
+                        new String(
+                          transactionInfo?.tx.transaction.V1.outputs.find(
+                            (output) => "LockThenTransfer" in output
+                          )?.LockThenTransfer[0]
+                        ).toString()
+                      )
+                    )}
+                    ),{" "}
+                    {parseInt(
+                      new String(
+                        transactionInfo?.tx.transaction.V1.outputs.find(
+                          (output) => "LockThenTransfer" in output
+                        )?.LockThenTransfer[1].Coin.atoms
+                      ).toString()
+                    ) / 1000000000000}
+                    {", "}
+                    {new String(
                       transactionInfo?.tx.transaction.V1.outputs.find(
-                        (output) => "CreateStakePool" in output
-                      )?.CreateStakePool[0]
-                    ).toString()
-                  )
-                )}
-                )), Pledge(
-                {pledgeAmount})
-              </p>
-              <p className="text-start">
-                -Staker(
-                {encode(
-                  "tpmt",
-                  encodeToBytesForAddress(
-                    new String(
-                      transactionInfo?.tx.transaction.V1.outputs.find(
-                        (output) => "CreateStakePool" in output
-                      )?.CreateStakePool[1].staker
-                    ).toString()
-                  )
-                )}
-                )
-              </p>
-              <p className="text-start">-Margin Ratio({marginRatio * 100}%)</p>
-              <p className="text-start">-CostPerBlock({costPerBlock})</p>
-              <p className="text-start">
-                -Transfer(
-                {encode(
-                  "tmt",
-                  encodeToBytesForAddress(
-                    new String(
-                      transactionInfo?.tx.transaction.V1.outputs.find(
-                        (output) => "Transfer" in output
-                      )?.Transfer[1]
-                    ).toString()
-                  )
-                )}
-                ,{" "}
-                {parseInt(
-                  new String(
-                    transactionInfo?.tx.transaction.V1.outputs.find(
-                      (output) => "Transfer" in output
-                    )?.Transfer[0].Coin.atoms
-                  ).toString()
-                ) / 1000000000000}
-                )
-              </p>
+                        (output) => "LockThenTransfer" in output
+                      )?.LockThenTransfer[2]
+                    ).toString()}
+                  </p>
+                </>
+              )}
             </div>
             <div>
               <p className="text-start text-bold">END OF OUTPUTS</p>
