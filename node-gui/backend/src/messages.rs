@@ -30,7 +30,7 @@ use p2p::P2pEvent;
 use wallet::account::transaction_list::TransactionList;
 use wallet_cli_commands::ConsoleCommand;
 use wallet_controller::types::Balances;
-use wallet_rpc_lib::types::PoolInfo;
+use wallet_rpc_lib::types::{HexEncoded, PoolInfo};
 use wallet_types::wallet_type::WalletType;
 
 use super::{BackendError, ImportOrCreate};
@@ -162,7 +162,7 @@ pub struct SendDelegateToAddressRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransactionInfo {
     pub wallet_id: WalletId,
-    pub tx: SignedTransaction,
+    pub tx: HexEncoded<SignedTransaction>,
 }
 
 #[derive(Debug)]
@@ -220,7 +220,7 @@ pub enum BackendRequest {
 
     SubmitTx {
         wallet_id: WalletId,
-        tx: SignedTransaction,
+        tx: HexEncoded<SignedTransaction>,
     },
 
     TransactionList {

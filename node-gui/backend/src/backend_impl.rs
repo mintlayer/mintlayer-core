@@ -720,7 +720,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id, tx })
+        Ok(TransactionInfo {
+            wallet_id,
+            tx: HexEncoded::new(tx),
+        })
     }
 
     async fn stake_amount(
@@ -768,7 +771,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id, tx })
+        Ok(TransactionInfo {
+            wallet_id,
+            tx: HexEncoded::new(tx),
+        })
     }
 
     async fn decommission_pool(
@@ -797,7 +803,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id, tx })
+        Ok(TransactionInfo {
+            wallet_id,
+            tx: HexEncoded::new(tx),
+        })
     }
 
     async fn create_delegation(
@@ -826,7 +835,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id, tx })
+        Ok(TransactionInfo {
+            wallet_id,
+            tx: HexEncoded::new(tx),
+        })
     }
 
     async fn delegate_staking(
@@ -862,7 +874,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id, tx })
+        Ok(TransactionInfo {
+            wallet_id,
+            tx: HexEncoded::new(tx),
+        })
     }
 
     async fn send_delegation_to_address(
@@ -902,16 +917,19 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id, tx })
+        Ok(TransactionInfo {
+            wallet_id,
+            tx: HexEncoded::new(tx),
+        })
     }
 
     async fn submit_transaction(
         &mut self,
         wallet_id: WalletId,
-        tx: SignedTransaction,
+        tx: HexEncoded<SignedTransaction>,
     ) -> Result<WalletId, BackendError> {
         self.hot_wallet(wallet_id)?
-            .submit_raw_transaction(HexEncoded::new(tx), false, Default::default())
+            .submit_raw_transaction(tx, false, Default::default())
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
