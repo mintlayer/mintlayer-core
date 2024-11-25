@@ -1227,7 +1227,7 @@ pub async fn token_ids_by_ticker<T: ApiServerStorage>(
     Ok(Json(serde_json::Value::Array(token_ids)))
 }
 
-async fn collect_token_decimals_for_orders(
+async fn collect_currency_decimals_for_orders(
     db_tx: &impl ApiServerStorageRead,
     orders: impl Iterator<Item = &Order>,
     chain_config: &ChainConfig,
@@ -1311,7 +1311,7 @@ pub async fn order<T: ApiServerStorage>(
         ))?;
 
     let decimals =
-        collect_token_decimals_for_orders(&db_tx, std::iter::once(&order), &state.chain_config)
+        collect_currency_decimals_for_orders(&db_tx, std::iter::once(&order), &state.chain_config)
             .await?;
 
     let result = json_helpers::order_to_json(&state.chain_config, order_id, &order, &decimals);
@@ -1337,7 +1337,7 @@ pub async fn orders<T: ApiServerStorage>(
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
-    let decimals = collect_token_decimals_for_orders(
+    let decimals = collect_currency_decimals_for_orders(
         &db_tx,
         orders.iter().map(|(_, order)| order),
         &state.chain_config,
@@ -1402,7 +1402,7 @@ pub async fn order_pair<T: ApiServerStorage>(
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?;
 
-    let decimals = collect_token_decimals_for_orders(
+    let decimals = collect_currency_decimals_for_orders(
         &db_tx,
         orders.iter().map(|(_, order)| order),
         &state.chain_config,

@@ -2264,11 +2264,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .query(
                 r#"
-                SELECT sub.order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
+                SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
                 FROM (
                     SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, block_height, ROW_NUMBER() OVER(PARTITION BY order_id ORDER BY block_height DESC) as newest
                     FROM ml.orders
-                ) AS sub
+                )
                 WHERE newest = 1
                 ORDER BY creation_block_height DESC
                 OFFSET $1
@@ -2297,11 +2297,11 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         self.tx
             .query(
                 r#"
-                SELECT sub.order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
+                SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
                 FROM (
                     SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, block_height, ROW_NUMBER() OVER(PARTITION BY order_id ORDER BY block_height DESC) as newest
                     FROM ml.orders
-                ) AS sub
+                )
                 WHERE newest = 1 AND ((ask_currency = $1 AND give_currency = $2) OR (ask_currency = $2 AND give_currency = $1))
                 ORDER BY creation_block_height DESC
                 OFFSET $3
@@ -2323,16 +2323,16 @@ fn decode_order_from_row(
     data: &tokio_postgres::Row,
     chain_config: &ChainConfig,
 ) -> Result<(OrderId, Order), ApiServerStorageError> {
-    let order_id: String = data.get(0);
-    let initially_asked: String = data.get(1);
-    let ask_balance: String = data.get(2);
-    let ask_currency: Vec<u8> = data.get(3);
-    let initially_given: String = data.get(4);
-    let give_balance: String = data.get(5);
-    let give_currency: Vec<u8> = data.get(6);
-    let conclude_destination: Vec<u8> = data.get(7);
-    let next_nonce: Vec<u8> = data.get(8);
-    let creation_block_height: i64 = data.get(9);
+    let order_id: String = data.get("order_id");
+    let initially_asked: String = data.get("initially_asked");
+    let ask_balance: String = data.get("ask_balance");
+    let ask_currency: Vec<u8> = data.get("ask_currency");
+    let initially_given: String = data.get("initially_given");
+    let give_balance: String = data.get("give_balance");
+    let give_currency: Vec<u8> = data.get("give_currency");
+    let conclude_destination: Vec<u8> = data.get("conclude_destination");
+    let next_nonce: Vec<u8> = data.get("next_nonce");
+    let creation_block_height: i64 = data.get("creation_block_height");
 
     let order_id = Address::<OrderId>::from_string(chain_config, order_id)
         .map_err(|_| ApiServerStorageError::AddressableError)?

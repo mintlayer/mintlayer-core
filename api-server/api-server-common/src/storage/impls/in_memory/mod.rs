@@ -351,6 +351,10 @@ impl ApiServerInMemoryStorage {
         let len = len as usize;
         let offset = offset as usize;
 
+        if offset >= self.orders_table.len() {
+            return Ok(vec![]);
+        }
+
         let mut order_data: Vec<_> = self
             .orders_table
             .iter()
@@ -362,9 +366,6 @@ impl ApiServerInMemoryStorage {
             .collect();
 
         order_data.sort_by_key(|(_, (height, _data))| Reverse(*height));
-        if offset >= order_data.len() {
-            return Ok(vec![]);
-        }
 
         let latest_orders = order_data[offset..std::cmp::min(offset + len, order_data.len())]
             .iter()
@@ -395,10 +396,11 @@ impl ApiServerInMemoryStorage {
             })
             .collect();
 
-        order_data.sort_by_key(|(_, (height, _data))| Reverse(*height));
         if offset >= order_data.len() {
             return Ok(vec![]);
         }
+
+        order_data.sort_by_key(|(_, (height, _data))| Reverse(*height));
 
         let latest_orders = order_data[offset..std::cmp::min(offset + len, order_data.len())]
             .iter()
