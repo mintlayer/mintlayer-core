@@ -1491,7 +1491,7 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(
     );
 
     // Fill one order
-    let order2_filled = order2.fill(Amount::from_atoms(1));
+    let order2_filled = order2.clone().fill(Amount::from_atoms(1));
     db_tx
         .set_order_at_height(order2_id, &order2_filled, block_height.next_height())
         .await
@@ -1512,7 +1512,7 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(
     assert_eq!(
         all_orders_page_2,
         vec![
-            (order3_id, order3),
+            (order3_id, order3.clone()),
             (order2_id, order2_filled.clone()),
             (order1_id, order1.clone())
         ]
@@ -1523,7 +1523,10 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(
         .get_orders_for_trading_pair((CoinOrTokenId::Coin, CoinOrTokenId::TokenId(token1)), 10, 0)
         .await
         .unwrap();
-    assert_eq!(ml_tkn1, vec![(order5_id, order5), (order1_id, order1),]);
+    assert_eq!(
+        ml_tkn1,
+        vec![(order5_id, order5.clone()), (order1_id, order1.clone())]
+    );
 
     let tkn2_tkn1 = db_tx
         .get_orders_for_trading_pair(
@@ -1538,7 +1541,27 @@ async fn orders<'a, S: for<'b> Transactional<'b>>(
         .unwrap();
     assert_eq!(
         tkn2_tkn1,
-        vec![(order6_id, order6), (order4_id, order4), (order2_id, order2_filled)]
+        vec![
+            (order6_id, order6.clone()),
+            (order4_id, order4.clone()),
+            (order2_id, order2_filled)
+        ]
+    );
+
+    // Delete filled order
+    db_tx.del_orders_above_height(block_height).await.unwrap();
+    let all_orders = db_tx.get_all_orders(10, 0).await.unwrap();
+    assert_eq!(all_orders.len(), 6);
+    assert_eq!(
+        all_orders,
+        vec![
+            (order6_id, order6),
+            (order5_id, order5),
+            (order4_id, order4),
+            (order3_id, order3),
+            (order2_id, order2),
+            (order1_id, order1),
+        ]
     );
 }
 
