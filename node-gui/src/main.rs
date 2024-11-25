@@ -15,15 +15,12 @@
 
 #![windows_subsystem = "windows"]
 
-mod backend;
 mod main_window;
 mod widgets;
 
 use std::convert::identity;
 use std::env;
 
-use backend::messages::{BackendEvent, BackendRequest};
-use backend::{node_initialize, BackendControls, BackendSender};
 use common::time_getter::TimeGetter;
 use iced::advanced::graphics::core::window;
 use iced::widget::{column, container, row, text, tooltip, Text};
@@ -31,6 +28,10 @@ use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced::{font, Subscription};
 use iced_aw::widgets::cupertino::cupertino_spinner::CupertinoSpinner;
 use main_window::{MainWindow, MainWindowMessage};
+use node_gui_backend::{
+    messages::{BackendEvent, BackendRequest},
+    node_initialize, BackendControls, BackendSender, InitNetwork, WalletMode,
+};
 use tokio::sync::mpsc::UnboundedReceiver;
 
 const COLD_WALLET_TOOLTIP_TEXT: &str =
@@ -61,18 +62,6 @@ enum MintlayerNodeGUI {
     Loading(WalletMode),
     Loaded(BackendSender, MainWindow),
     IntializationError(String),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum InitNetwork {
-    Mainnet,
-    Testnet,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum WalletMode {
-    Cold,
-    Hot,
 }
 
 #[derive(Debug)]

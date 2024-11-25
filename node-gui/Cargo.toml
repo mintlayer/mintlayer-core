@@ -12,20 +12,16 @@ authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh
 [dependencies]
 chainstate = { path = "../chainstate" }
 common = { path = "../common" }
-crypto = { path = "../crypto" }
 logging = { path = "../logging" }
-mempool = { path = "../mempool" }
+node-gui-backend = { path = "./backend" }
 node-lib = { path = "../node-lib" }
 node-comm = { path = "../wallet/wallet-node-client" }
 p2p = { path = "../p2p" }
 serialization = { path = "../serialization" }
-subsystem = { path = "../subsystem" }
 utils = { path = "../utils" }
 wallet = { path = "../wallet" }
 wallet-controller = { path = "../wallet/wallet-controller" }
 wallet-types = { path = "../wallet/types" }
-wallet-rpc-lib = { path = "../wallet/wallet-rpc-lib"}
-wallet-rpc-client = { path = "../wallet/wallet-rpc-client"}
 wallet-cli-commands = { path = "../wallet/wallet-cli-commands"}
 
 anyhow.workspace = true

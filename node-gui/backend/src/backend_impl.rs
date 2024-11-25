@@ -45,8 +45,6 @@ use wallet_types::{
     seed_phrase::StoreSeedPhrase, wallet_type::WalletType, with_locked::WithLocked,
 };
 
-use crate::main_window::ImportOrCreate;
-
 use super::{
     chainstate_event_handler::ChainstateEventHandler,
     error::BackendError,
@@ -59,6 +57,7 @@ use super::{
     p2p_event_handler::P2pEventHandler,
     parse_address, parse_coin_amount,
     wallet_events::GuiWalletEvents,
+    ImportOrCreate,
 };
 
 const TRANSACTION_LIST_PAGE_COUNT: usize = 10;

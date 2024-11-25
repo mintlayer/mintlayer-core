@@ -19,7 +19,7 @@ use iced::{
 };
 use iced_aw::{Grid, GridRow};
 
-use crate::backend::messages::AccountInfo;
+use node_gui_backend::messages::AccountInfo;
 
 use super::WalletMessage;
 

@@ -23,18 +23,18 @@ use common::{
 use iced::{widget::Text, window, Command, Element};
 use iced_aw::widgets::Modal;
 use logging::log;
+use node_gui_backend::{
+    messages::{
+        BackendEvent, BackendRequest, EncryptionAction, TransactionInfo, WalletId, WalletInfo,
+    },
+    BackendSender, ImportOrCreate, InitializedNode,
+};
 use p2p::{net::types::services::Services, types::peer_id::PeerId, P2pEvent};
 use rfd::AsyncFileDialog;
 use wallet_cli_commands::ConsoleCommand;
 use wallet_types::wallet_type::WalletType;
 
 use crate::{
-    backend::{
-        messages::{
-            BackendEvent, BackendRequest, EncryptionAction, TransactionInfo, WalletId, WalletInfo,
-        },
-        BackendSender, InitializedNode,
-    },
     main_window::{main_menu::MenuMessage, main_widget::MainWidgetMessage},
     widgets::{
         confirm_broadcast::new_confirm_broadcast,
@@ -143,21 +143,6 @@ pub struct MainWindow {
     /// Without this it is possible to open multiple file dialogs (which we don't want).
     file_dialog_active: bool,
     wallet_msg: Option<WalletMessage>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum ImportOrCreate {
-    Import,
-    Create,
-}
-
-impl ImportOrCreate {
-    pub fn skip_syncing(&self) -> bool {
-        match self {
-            Self::Create => true,
-            Self::Import => false,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

@@ -13,17 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::ChainConfig;
 use iced::{
     widget::{button, container, row, tooltip, tooltip::Position, Column, Text},
     Alignment, Element, Length,
 };
 use iced_aw::{Grid, GridRow};
 
-use crate::{
-    backend::messages::AccountInfo,
-    main_window::{print_block_timestamp, print_coin_amount},
-};
+use common::chain::ChainConfig;
+use node_gui_backend::messages::AccountInfo;
+
+use crate::main_window::{print_block_timestamp, print_coin_amount};
 
 use super::WalletMessage;
 

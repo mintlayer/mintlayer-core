@@ -18,11 +18,9 @@ use iced_aw::{TabLabel, Tabs};
 use variant_count::VariantCount;
 use wallet_types::wallet_type::WalletType;
 
-use crate::{
-    backend::{messages::WalletId, BackendSender},
-    main_window::NodeState,
-    WalletMode,
-};
+use node_gui_backend::{messages::WalletId, BackendSender};
+
+use crate::{main_window::NodeState, WalletMode};
 
 use self::{
     cold_wallet::ColdWalletTab,

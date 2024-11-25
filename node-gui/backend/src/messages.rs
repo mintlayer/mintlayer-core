@@ -33,9 +33,7 @@ use wallet_controller::types::Balances;
 use wallet_rpc_lib::types::PoolInfo;
 use wallet_types::wallet_type::WalletType;
 
-use crate::main_window::ImportOrCreate;
-
-use super::BackendError;
+use super::{BackendError, ImportOrCreate};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WalletId(u64);

@@ -4503,16 +4503,42 @@ dependencies = [
  "chainstate",
  "chrono",
  "common",
- "crypto",
  "futures",
  "iced",
  "iced_aw",
+ "logging",
+ "node-comm",
+ "node-gui-backend",
+ "node-lib",
+ "p2p",
+ "rfd",
+ "serialization",
+ "thiserror",
+ "tokio",
+ "utils",
+ "variant_count",
+ "wallet",
+ "wallet-cli-commands",
+ "wallet-controller",
+ "wallet-types",
+ "winres",
+]
+
+[[package]]
+name = "node-gui-backend"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "chainstate",
+ "chrono",
+ "common",
+ "crypto",
+ "futures",
  "logging",
  "mempool",
  "node-comm",
  "node-lib",
  "p2p",
- "rfd",
  "serialization",
  "subsystem",
  "thiserror",
@@ -4525,7 +4551,6 @@ dependencies = [
  "wallet-rpc-client",
  "wallet-rpc-lib",
  "wallet-types",
- "winres",
 ]
 
 [[package]]
