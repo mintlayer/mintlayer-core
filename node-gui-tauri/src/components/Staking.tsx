@@ -2,7 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { AiOutlineCopy } from "react-icons/ai";
 import { IoCloseSharp } from "react-icons/io5";
-import { encodeToHash, notify } from "../utils/util";
+import {
+  encode,
+  encodeToBytesForAddress,
+  encodeToHash,
+  notify,
+} from "../utils/util";
 import {
   AccountType,
   WalletInfo,
@@ -47,7 +52,7 @@ const Staking = (props: {
       const result: ToggleStakingResultType = await invoke(
         "toggle_stakig_wrapper",
         {
-          requst: {
+          request: {
             wallet_id: parseInt(
               props.currentWalletId ? props.currentWalletId : "0"
             ),
@@ -57,7 +62,6 @@ const Staking = (props: {
         }
       );
       if (result) {
-        console.log(result);
         setIsStakingStarted(result.enabled);
         notify(
           result.enabled ? "Staking started" : "Staking stopped",
@@ -66,13 +70,9 @@ const Staking = (props: {
         setIsLoading(false);
       }
     } catch (error) {
-      const regex = /Wallet error: (.+)/;
-      const errorMessage = new String(error).match(regex);
-      if (errorMessage) {
-        notify(errorMessage[1], "error");
-      }
+      const errorMessage = new String(error);
+      notify(errorMessage.toString(), "error");
     }
-    setIsStakingStarted((started) => !started);
     setIsLoading(false);
   };
   const handleDecommission = async () => {
@@ -90,7 +90,6 @@ const Staking = (props: {
         },
       });
       if (result) {
-        console.log(result);
         notify("Pool decommissioned", "success");
       }
     } catch (error) {
@@ -133,6 +132,22 @@ const Staking = (props: {
       }
     }
     setIsLoading(false);
+  };
+  const handleConfirmTransaction = async () => {
+    try {
+      const result = await invoke("submit_transaction_wrapper", {
+        request: {
+          wallet_id: props.currentWalletId,
+          account_id: props.currentAccountId,
+          tx: transactionInfo?.tx,
+        },
+      });
+      console.log("sending amount transaction result is ========>", result);
+      notify("Transaction confirmed successfully!", "success");
+      setShowSuccessModal(true);
+    } catch (error) {
+      notify(new String(error).toString(), "error");
+    }
   };
 
   return (
@@ -205,7 +220,10 @@ const Staking = (props: {
       {showConfirmTransactionModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="absolute inset-0 bg-black opacity-50"></div>
-          <div className="bg-white rounded-lg shadow-lg z-10 p-4 max-w-lg mx-auto relative space-y-4">
+          <div
+            className="bg-white rounded-lg shadow-lg z-10 p-4 max-w-lg mx-auto relative space-y-4"
+            style={{ minWidth: "300px", maxWidth: "90%" }}
+          >
             {/* Close Button */}
             <button
               className="absolute top-2 right-2 bg-transparent border-none shadow-none focus:outline-none "
@@ -230,7 +248,7 @@ const Staking = (props: {
             <div>
               <p className="text-start text-bold">BEGIN OF INPUTS</p>
               <p className="text-start">
-                -Transaction(
+                -Transaction({"0x"}
                 {
                   transactionInfo?.tx.transaction.V1.inputs[0].Utxo.id
                     .Transaction
@@ -244,14 +262,57 @@ const Staking = (props: {
             <div>
               <p className="text-start">BEGIN OF OUTPUTS</p>
               <p className="text-start">
-                -CreateStakePool(Id(tpool{})), Pledge(
+                -CreateStakePool(Id(
+                {encode(
+                  "tpool",
+                  encodeToBytesForAddress(
+                    new String(
+                      transactionInfo?.tx.transaction.V1.outputs.find(
+                        (output) => "CreateStakePool" in output
+                      )?.CreateStakePool[0]
+                    ).toString()
+                  )
+                )}
+                )), Pledge(
                 {pledgeAmount})
               </p>
-              <p className="text-start">-Staker({decommissionAddress})</p>
+              <p className="text-start">
+                -Staker(
+                {encode(
+                  "tpmt",
+                  encodeToBytesForAddress(
+                    new String(
+                      transactionInfo?.tx.transaction.V1.outputs.find(
+                        (output) => "CreateStakePool" in output
+                      )?.CreateStakePool[1].staker
+                    ).toString()
+                  )
+                )}
+                )
+              </p>
               <p className="text-start">-Margin Ratio({marginRatio * 100}%)</p>
               <p className="text-start">-CostPerBlock({costPerBlock})</p>
               <p className="text-start">
-                -Transfer({props.currentAccount?.addresses[0]})
+                -Transfer(
+                {encode(
+                  "tmt",
+                  encodeToBytesForAddress(
+                    new String(
+                      transactionInfo?.tx.transaction.V1.outputs.find(
+                        (output) => "Transfer" in output
+                      )?.Transfer[1]
+                    ).toString()
+                  )
+                )}
+                ,{" "}
+                {parseInt(
+                  new String(
+                    transactionInfo?.tx.transaction.V1.outputs.find(
+                      (output) => "Transfer" in output
+                    )?.Transfer[0].Coin.atoms
+                  ).toString()
+                ) / 1000000000000}
+                )
               </p>
             </div>
             <div>
@@ -260,8 +321,8 @@ const Staking = (props: {
             <button
               className="bg-green-400 text-black w-full px-2 py-1 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
               onClick={() => {
+                handleConfirmTransaction();
                 setShowConfirmTransactionModal(false);
-                setShowSuccessModal(true);
               }}
             >
               Confirm and Broadcast

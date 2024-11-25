@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { IoCloseSharp } from "react-icons/io5";
 import { invoke } from "@tauri-apps/api/core";
-import { notify } from "../utils/util";
+import { encodeToHash, notify } from "../utils/util";
 import { AccountType, Data } from "../types/Types";
 const Send = (props: {
   currentAccount: AccountType | undefined;
@@ -36,12 +36,14 @@ const Send = (props: {
 
   const handleConfirmTransaction = async () => {
     try {
-      await invoke("submit_transaction_wrapper", {
+      const result = await invoke("submit_transaction_wrapper", {
         request: {
           wallet_id: props.walletId,
+          account_id: props.accountId,
           tx: transactionInfo?.tx,
         },
       });
+      console.log("sending amount transaction result is ========>", result);
       notify("Transaction confirmed successfully!", "success");
       setShowConfirmModal(false);
     } catch (error) {
@@ -72,7 +74,10 @@ const Send = (props: {
       {showConfirmModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="absolute inset-0 bg-black opacity-50"></div>
-          <div className="bg-white rounded-lg shadow-lg z-10 p-4 max-w-xl mx-auto relative space-y-4">
+          <div
+            className="bg-white rounded-lg shadow-lg z-10 p-4 max-w-xl mx-auto relative space-y-4"
+            style={{ minWidth: "300px", maxWidth: "90%" }}
+          >
             {/* Close Button */}
             <button
               className="absolute top-2 right-2 bg-transparent border-none shadow-none focus:outline-none "
@@ -84,8 +89,15 @@ const Send = (props: {
             <p className="text-start text-lg text-bold">Transaction summary</p>
             <div>
               <p className="text-start text-bold">BEGIN OF INPUTS</p>
-              <p className="text-start whitespace-nowrap overflow-x-auto">
-                -Transaction ({""}
+              <p className="text-start whitespace-nowrap">
+                -Transaction id ({""}
+                {encodeToHash(
+                  JSON.stringify(transactionInfo?.tx.transaction.V1)
+                )}
+                )
+              </p>
+              <p className="text-start whitespace-nowrap">
+                -Transaction ({"0x"}
                 {
                   transactionInfo?.tx.transaction.V1.inputs[0].Utxo.id
                     .Transaction

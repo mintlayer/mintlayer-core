@@ -1,8 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { AiOutlineCopy } from "react-icons/ai";
-import { AccountType, WalletInfo } from "../types/Types";
-import { notify } from "../utils/util";
+import { AccountType, Data, WalletInfo } from "../types/Types";
+import {
+  encode,
+  encodeToBytesForAddress,
+  encodeToHash,
+  notify,
+} from "../utils/util";
 import { IoCloseSharp } from "react-icons/io5";
 
 const Delegation = (props: {
@@ -10,24 +15,7 @@ const Delegation = (props: {
   currentAccountId: number;
   currentWallet: WalletInfo | undefined;
 }) => {
-  const delegations = [
-    {
-      delegation_address: "tdlg1reswefwe09fwefwef9wef",
-      pool_address: "tpool1frwewsefwewefw09wef",
-      delegation_balance: "320.0020342",
-    },
-    {
-      delegation_address: "tdlg1reswefwe09fwefwef9wef",
-      pool_address: "tpool1frwewsefwewefw09wef",
-      delegation_balance: "320.0020342",
-    },
-    {
-      delegation_address: "tdlg1reswefwe09fwefwef9wef",
-      pool_address: "tpool1frwewsefwewefw09wef",
-      delegation_balance: "320.0020342",
-    },
-  ];
-
+  const [transactionInfo, setTransactionInfo] = useState<Data>();
   const [poolAddress, setPoolAddress] = useState("");
   const [delegationAddress, setDelegationAddress] = useState("");
   const [showDepositModal, setShowDepositModal] = useState(false);
@@ -36,7 +24,14 @@ const Delegation = (props: {
   const [withdrawAddress, setWithdrawAddress] = useState("");
   const [currentDelegationId, setCurrentDelegationId] = useState("");
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
+  const [showConfirmTransactionModal, setShowConfirmTransactionModal] =
+    useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const handleDeposit = async () => {
+    setLoadingMessage("Depositing to delegation. Please wait.");
+    setIsLoading(true);
     try {
       const result = await invoke("delegate_staking_wrapper", {
         request: {
@@ -54,8 +49,11 @@ const Delegation = (props: {
     } catch (error) {
       notify(new String(error).toString(), "error");
     }
+    setIsLoading(false);
   };
   const handleWithdraw = async () => {
+    setLoadingMessage("Withdrawing from delegation. Please wait.");
+    setIsLoading(true);
     try {
       const result = await invoke("send_delegation_to_address_wrapper", {
         request: {
@@ -74,6 +72,7 @@ const Delegation = (props: {
     } catch (error) {
       notify(new String(error).toString(), "error");
     }
+    setIsLoading(false);
   };
 
   const handleSelectAllAmount = () => {
@@ -85,8 +84,10 @@ const Delegation = (props: {
   };
 
   const handleCreateDelegation = async () => {
+    setLoadingMessage("Creating Delegation. Please wait");
+    setIsLoading(true);
     try {
-      const result = await invoke("create_deletation_wrapper", {
+      const result: Data = await invoke("create_delegation_wrapper", {
         request: {
           wallet_id: parseInt(
             props.currentWallet?.wallet_id ? props.currentWallet.wallet_id : "0"
@@ -98,13 +99,183 @@ const Delegation = (props: {
       });
       if (result) {
         console.log(result);
+        setTransactionInfo(result);
+        setShowConfirmTransactionModal(true);
+        setIsLoading(false);
       }
+    } catch (error) {
+      notify(new String(error).toString(), "error");
+      setIsLoading(false);
+    }
+  };
+
+  const handleConfirmTransaction = async () => {
+    try {
+      const result = await invoke("submit_transaction_wrapper", {
+        request: {
+          wallet_id: props.currentWallet?.wallet_id,
+          account_id: props.currentAccountId,
+          tx: transactionInfo?.tx,
+        },
+      });
+      console.log("sending amount transaction result is ========>", result);
+      notify("Transaction confirmed successfully!", "success");
+      setShowSuccessModal(true);
     } catch (error) {
       notify(new String(error).toString(), "error");
     }
   };
+
   return (
     <div className="container pt-0 p-4 shadow-1">
+      {isLoading && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black opacity-50"></div>
+          <div className="bg-opacity-50 z-10 p-6 max-w-lg mx-auto relative space-y-4">
+            <div className="loader px-10">{loadingMessage}</div>
+          </div>
+        </div>
+      )}
+      {showConfirmTransactionModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black opacity-50"></div>
+          <div
+            className="bg-white rounded-lg shadow-lg z-10 p-4 max-w-lg mx-auto relative space-y-4"
+            style={{
+              display: "inline-block",
+              minWidth: "300px",
+              maxWidth: "65%",
+              whiteSpace: "wrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {/* Close Button */}
+            <button
+              className="absolute top-2 right-2 bg-transparent border-none shadow-none focus:outline-none "
+              onClick={() => setShowConfirmTransactionModal(false)}
+            >
+              <IoCloseSharp />
+            </button>
+            <h2 className="text-lg font-bold mb-4">Confirm Transaction</h2>
+            <p className="text-start text-bold">Transaction summary</p>
+            <div>
+              <p className="text-start text-bold">TRANSACTION ID</p>
+              <p className="text-start">
+                {encodeToHash(
+                  JSON.stringify(
+                    transactionInfo?.tx.transaction.V1
+                      ? transactionInfo.tx.transaction.V1
+                      : {}
+                  )
+                )}
+              </p>
+            </div>
+            <div>
+              <p className="text-start text-bold">BEGIN OF INPUTS</p>
+              <p className="text-start">
+                -Transaction({"0x"}
+                {
+                  transactionInfo?.tx.transaction.V1.inputs[0].Utxo.id
+                    .Transaction
+                }
+                )
+              </p>
+            </div>
+            <div>
+              <p className="text-start  text-bold">END OF INPUTS</p>
+            </div>
+            <div>
+              <p className="text-start">BEGIN OF OUTPUTS</p>
+              <p className="text-start">
+                -CreateDelegationId(Owner(
+                {encode(
+                  "tmt",
+                  encodeToBytesForAddress(
+                    new String(
+                      transactionInfo?.tx.transaction.V1.outputs.find(
+                        (output) => "CreateDelegationId" in output
+                      )?.CreateDelegationId[0]
+                    ).toString()
+                  )
+                )}
+                ), StakingPool(
+                {encode(
+                  "tpool",
+                  encodeToBytesForAddress(
+                    new String(
+                      transactionInfo?.tx.transaction.V1.outputs.find(
+                        (output) => "CreateDelegationId" in output
+                      )?.CreateDelegationId[1]
+                    ).toString()
+                  )
+                )}
+                ))
+              </p>
+
+              <p className="text-start">
+                -Transfer(
+                {encode(
+                  "tmt",
+                  encodeToBytesForAddress(
+                    new String(
+                      transactionInfo?.tx.transaction.V1.outputs.find(
+                        (output) => "Transfer" in output
+                      )?.Transfer[1]
+                    ).toString()
+                  )
+                )}
+                ,{" "}
+                {parseInt(
+                  new String(
+                    transactionInfo?.tx.transaction.V1.outputs.find(
+                      (output) => "Transfer" in output
+                    )?.Transfer[0].Coin.atoms
+                  ).toString()
+                ) / 1000000000000}
+                )
+              </p>
+            </div>
+            <div>
+              <p className="text-start text-bold">END OF OUTPUTS</p>
+            </div>
+            <button
+              className="bg-green-400 text-black w-full px-2 py-1 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
+              onClick={() => {
+                handleConfirmTransaction();
+                setShowConfirmTransactionModal(false);
+              }}
+            >
+              Confirm and Broadcast
+            </button>
+          </div>
+        </div>
+      )}
+      {showSuccessModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black opacity-50"></div>
+          <div className="bg-white rounded-lg shadow-lg z-10 p-4 max-w-lg mx-auto relative space-y-4">
+            {/* Close Button */}
+            <button
+              className="absolute top-2 right-2 bg-transparent border-none shadow-none focus:outline-none "
+              onClick={() => setShowSuccessModal(false)}
+            >
+              <IoCloseSharp />
+            </button>
+            <h2 className="text-lg font-bold mb-4">Success</h2>
+            <p className="text-start">
+              Please wait for your transaction to be included in a block
+            </p>
+
+            <button
+              className="bg-green-400 text-black w-full px-2 py-1 rounded-lg hover:bg-[#000000] hover:text-green-400 transition duration-200"
+              onClick={() => setShowSuccessModal(false)}
+            >
+              Okay
+            </button>
+          </div>
+        </div>
+      )}
       {showDepositModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="absolute inset-0 bg-black opacity-50">Deposit</div>
@@ -207,24 +378,24 @@ const Delegation = (props: {
           </tr>
         </thead>
         <tbody>
-          {delegations.map((delegationInfo) => {
+          {Object.entries(
+            props.currentAccount?.delegations_balance
+              ? props.currentAccount.delegations_balance
+              : {}
+          ).map(([key, [pool_id, amount]]) => {
             return (
               <tr
-                key={delegationInfo.pool_address}
+                key={key}
                 className="hover:bg-gray-50 transition duration-200"
               >
                 <td className="py-2 px-4 border-b border-gray-200">
                   <div className="flex justify-between space-x-2">
                     <p>
-                      {delegationInfo.delegation_address.slice(0, 9)}...
-                      {delegationInfo.delegation_address.slice(-4)}
+                      {pool_id.slice(0, 9)}...
+                      {pool_id.slice(-4)}
                     </p>
                     <button
-                      onClick={() =>
-                        navigator.clipboard.writeText(
-                          delegationInfo.delegation_address
-                        )
-                      }
+                      onClick={() => navigator.clipboard.writeText(pool_id)}
                       className="flex items-center justify-center p-0 bg-transparent border-none shadow-none focus:outline-none"
                     >
                       <AiOutlineCopy />
@@ -232,18 +403,18 @@ const Delegation = (props: {
                   </div>
                 </td>
                 <td className="py-2 px-4 border-b border-gray-200">
-                  {delegationInfo.pool_address.slice(0, 8)}...
-                  {delegationInfo.pool_address.slice(-4)}
+                  {pool_id.slice(0, 8)}...
+                  {pool_id.slice(-4)}
                 </td>
                 <td className="py-2 px-4 border-b border-gray-200">
-                  {delegationInfo.delegation_balance}
+                  {amount.atoms}
                 </td>
 
                 <td className="py-2 px-4 border-b border-gray-200 flex justify-between space-x-2">
                   <button
                     onClick={() => {
                       setShowDepositModal(true);
-                      setCurrentDelegationId(delegationInfo.delegation_address);
+                      setCurrentDelegationId(pool_id);
                     }}
                     className="px-2 py-1 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black "
                   >
@@ -252,7 +423,7 @@ const Delegation = (props: {
                   <button
                     onClick={() => {
                       setShowWithdrawModal(true);
-                      setCurrentDelegationId(delegationInfo.delegation_address);
+                      setCurrentDelegationId(pool_id);
                     }}
                     className="px-2 py-1 rounded-lg bg-[#69EE96] text-[#000000] rounded hover:text-[#69EE96] hover:bg-black "
                   >

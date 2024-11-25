@@ -158,7 +158,10 @@ export type Input = {
   };
 };
 
-export type Output = CreateStakePoolOutput | TransferOutput;
+export type Output =
+  | CreateStakePoolOutput
+  | TransferOutput
+  | CreateDelegationId;
 
 export type CreateStakePoolOutput = {
   CreateStakePool: [
@@ -176,6 +179,10 @@ export type CreateStakePoolOutput = {
       };
     }
   ];
+};
+
+export type CreateDelegationId = {
+  CreateDelegationId: [string, string];
 };
 
 export type TransferOutput = {
@@ -204,4 +211,8 @@ export type Tx = {
 export type Data = {
   wallet_id: number; // Wallet ID as a number
   tx: Tx; // Transaction object
+};
+
+export type ConsoleResultType = {
+  Print: string;
 };

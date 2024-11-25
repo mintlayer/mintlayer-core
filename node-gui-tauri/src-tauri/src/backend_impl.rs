@@ -130,6 +130,13 @@ impl WalletData {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SubmitTransactionResult {
+    wallet_id: WalletId,
+    account_id: AccountId,
+    account_info: AccountInfo,
+}
+
 #[derive(Clone)]
 enum ColdHotNodeController {
     Cold,
@@ -215,7 +222,7 @@ impl Backend {
         }
     }
 
-    pub async fn get_account_info<T: NodeInterface + Clone + Send + Sync + Debug + 'static>(
+    async fn get_account_info<T: NodeInterface + Clone + Send + Sync + Debug + 'static>(
         controller: &WalletRpc<T>,
         account_index: U31,
     ) -> Result<(AccountId, AccountInfo), BackendError> {
@@ -918,14 +925,21 @@ impl Backend {
     pub async fn submit_transaction(
         &mut self,
         wallet_id: WalletId,
+        account_id: U31,
         tx: SignedTransaction,
-    ) -> Result<WalletId, BackendError> {
+    ) -> Result<SubmitTransactionResult, BackendError> {
         self.hot_wallet(wallet_id)?
             .submit_raw_transaction(HexEncoded::new(tx), false, Default::default())
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
+        let wallet = self
+            .wallets
+            .get_mut(&wallet_id)
+            .ok_or(BackendError::UnknownWalletIndex(wallet_id))?;
 
-        Ok(wallet_id)
+        let hot_wallet = wallet.hot_wallet().ok_or(BackendError::ColdWallet)?;
+        let (account_id, account_info) = Self::get_account_info(hot_wallet, account_id).await?;
+        Ok(SubmitTransactionResult{wallet_id, account_id, account_info})
     }
 
     pub async fn load_transaction_list(

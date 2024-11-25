@@ -188,6 +188,7 @@ pub struct ToggleStakingResult {
 pub struct SubmitTransactionRequest {
     tx: SignedTransaction,
     wallet_id: u64,
+    account_id: U31,
 }
 
 impl Default for AppState {
@@ -600,15 +601,15 @@ async fn stake_amount_wrapper(
 #[tauri::command]
 async fn decommission_pool_wrapper(
     state: tauri::State<'_, AppState>,
-    decommission_request: DecommissionStakingPoolRequest,
+    request: DecommissionStakingPoolRequest,
 ) -> Result<TransactionInfo, String> {
-    let wallet_id = WalletId::from_u64(decommission_request.wallet_id);
-    let account_id = AccountId::new(decommission_request.account_id);
+    let wallet_id = WalletId::from_u64(request.wallet_id);
+    let account_id = AccountId::new(request.account_id);
     let decommission_request = DecommissionPoolRequest {
         wallet_id: wallet_id,
         account_id: account_id,
-        pool_id: decommission_request.pool_id,
-        output_address: decommission_request.output_address,
+        pool_id: request.pool_id,
+        output_address: request.output_address,
     };
 
     let result = {
@@ -634,15 +635,15 @@ async fn decommission_pool_wrapper(
 #[tauri::command]
 async fn create_delegation_wrapper(
     state: tauri::State<'_, AppState>,
-    delegation_request: DelegationCreateRequest,
+    request: DelegationCreateRequest,
 ) -> Result<TransactionInfo, String> {
-    let wallet_id = WalletId::from_u64(delegation_request.wallet_id);
-    let account_id = AccountId::new(delegation_request.account_id);
+    let wallet_id = WalletId::from_u64(request.wallet_id);
+    let account_id = AccountId::new(request.account_id);
     let delegation_request = CreateDelegationRequest {
         wallet_id: wallet_id,
         account_id: account_id,
-        pool_id: delegation_request.pool_id,
-        delegation_address: delegation_request.delegation_address,
+        pool_id: request.pool_id,
+        delegation_address: request.delegation_address,
     };
 
     let result = {
@@ -668,15 +669,15 @@ async fn create_delegation_wrapper(
 #[tauri::command]
 async fn delegate_staking_wrapper(
     state: tauri::State<'_, AppState>,
-    delegation_request: StakingDelegateRequest,
+    request: StakingDelegateRequest,
 ) -> Result<TransactionInfo, String> {
-    let wallet_id = WalletId::from_u64(delegation_request.wallet_id);
-    let account_id = AccountId::new(delegation_request.account_id);
+    let wallet_id = WalletId::from_u64(request.wallet_id);
+    let account_id = AccountId::new(request.account_id);
     let delegation_request = DelegateStakingRequest {
         wallet_id: wallet_id,
         account_id: account_id,
-        delegation_id: delegation_request.delegation_id,
-        delegation_amount: delegation_request.delegation_amount,
+        delegation_id: request.delegation_id,
+        delegation_amount: request.delegation_amount,
     };
 
     let result = {
@@ -702,16 +703,16 @@ async fn delegate_staking_wrapper(
 #[tauri::command]
 async fn send_delegation_to_address_wrapper(
     state: tauri::State<'_, AppState>,
-    send_delegation_request: SendDelegateRequest,
+    request: SendDelegateRequest,
 ) -> Result<TransactionInfo, String> {
-    let wallet_id = WalletId::from_u64(send_delegation_request.wallet_id);
-    let account_id = AccountId::new(send_delegation_request.account_id);
+    let wallet_id = WalletId::from_u64(request.wallet_id);
+    let account_id = AccountId::new(request.account_id);
     let send_delegation_request = SendDelegateToAddressRequest {
         wallet_id: wallet_id,
         account_id: account_id,
-        address: send_delegation_request.address,
-        amount: send_delegation_request.amount,
-        delegation_id: send_delegation_request.delegation_id,
+        address: request.address,
+        amount: request.amount,
+        delegation_id: request.delegation_id,
     };
 
     let result: std::result::Result<TransactionInfo, BackendError> = {
@@ -829,13 +830,13 @@ async fn handle_console_command_wrapper(
 async fn submit_transaction_wrapper(
     state: tauri::State<'_, AppState>,
     request: SubmitTransactionRequest,
-) -> Result<WalletId, String> {
+) -> Result<backend_impl::SubmitTransactionResult, String> {
     let wallet_id = WalletId::from_u64(request.wallet_id);
     let result = {
         let mut backend_guard = state.backend.write().await;
         let backend_arc = backend_guard.as_mut().ok_or("Backend not initialized")?;
         let backend = Arc::get_mut(backend_arc).ok_or("Cannot get mutable reference")?;
-        backend.submit_transaction(wallet_id, request.tx).await
+        backend.submit_transaction(wallet_id, request.account_id, request.tx).await
     };
 
     match result {
@@ -851,18 +852,19 @@ async fn submit_transaction_wrapper(
     }
 }
 
-
 #[tauri::command]
 async fn shutdown_wrapper(state: tauri::State<'_, AppState>) -> Result<(), String> {
     // Lock the backend state and get a mutable reference
     let mut backend_guard = state.backend.write().await;
-    
+
     // Check if the backend is initialized and get a mutable reference
-    let backend_arc = backend_guard.as_mut().ok_or_else(|| "Backend not initialized".to_string())?;
-    
+    let backend_arc =
+        backend_guard.as_mut().ok_or_else(|| "Backend not initialized".to_string())?;
+
     // Attempt to get a mutable reference to the backend
-    let backend = Arc::get_mut(backend_arc).ok_or_else(|| "Cannot get mutable reference".to_string())?;
-    
+    let backend =
+        Arc::get_mut(backend_arc).ok_or_else(|| "Cannot get mutable reference".to_string())?;
+
     // Await the shutdown operation
     <backend_impl::Backend as Clone>::clone(&backend).shutdown().await;
 

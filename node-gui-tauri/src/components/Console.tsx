@@ -4,7 +4,7 @@ import { AiOutlineCopy } from "react-icons/ai";
 import { RiDeleteBinLine } from "react-icons/ri";
 import { notify } from "../utils/util";
 import { invoke } from "@tauri-apps/api/core";
-import { AccountType, WalletInfo } from "../types/Types";
+import { AccountType, ConsoleResultType, WalletInfo } from "../types/Types";
 
 const Console = (props: {
   currentAccount: AccountType | undefined;
@@ -22,19 +22,26 @@ const Console = (props: {
 
   const handleSendCommand = async () => {
     try {
-      const result = await invoke("handle_console_command_wrapper", {
-        request: {
-          wallet_id: props.currentWallet?.wallet_id
-            ? props.currentWallet?.wallet_id
-            : "",
-          account_id: props.currentAccountId,
-          command: command,
-        },
-      });
+      const result: ConsoleResultType = await invoke(
+        "handle_console_command_wrapper",
+        {
+          request: {
+            wallet_id: parseInt(
+              props.currentWallet?.wallet_id
+                ? props.currentWallet?.wallet_id
+                : "0"
+            ),
+            account_id: props.currentAccountId,
+            command: command,
+          },
+        }
+      );
       if (result) {
         console.log(result);
+        setText((text) => text + result.Print);
       }
     } catch (error) {
+      console.log(error);
       notify(new String(error).toString(), "error");
     }
   };
