@@ -39,7 +39,11 @@ use crypto::{
     },
     vrf::VRFPublicKey,
 };
-use futures::{stream::FuturesUnordered, TryStreamExt};
+use futures::{
+    future::{self, BoxFuture},
+    stream::FuturesUnordered,
+    FutureExt, TryStreamExt,
+};
 use itertools::Itertools;
 use logging::log;
 use mempool::FeeRate;
@@ -299,19 +303,21 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.issue_new_token(
-                    account_index,
-                    TokenIssuance::V1(TokenIssuanceV1 {
-                        token_ticker,
-                        number_of_decimals,
-                        metadata_uri,
-                        total_supply: token_total_supply,
-                        authority: address.into_object(),
-                        is_freezable,
-                    }),
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+                wallet
+                    .issue_new_token(
+                        account_index,
+                        TokenIssuance::V1(TokenIssuanceV1 {
+                            token_ticker,
+                            number_of_decimals,
+                            metadata_uri,
+                            total_supply: token_total_supply,
+                            authority: address.into_object(),
+                            is_freezable,
+                        }),
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -327,13 +333,15 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.issue_new_nft(
-                    account_index,
-                    address,
-                    metadata,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+                wallet
+                    .issue_new_nft(
+                        account_index,
+                        address,
+                        metadata,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -351,16 +359,20 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
-                token_info.check_can_be_used()?;
-                wallet.mint_tokens(
-                    account_index,
-                    token_info,
-                    amount,
-                    address,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+                  token_info: UnconfirmedTokenInfo| {
+                if let Err(err) = token_info.check_can_be_used() {
+                    return future::err(err).boxed();
+                };
+                wallet
+                    .mint_tokens(
+                        account_index,
+                        token_info,
+                        amount,
+                        address,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -376,15 +388,19 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
-                token_info.check_can_be_used()?;
-                wallet.unmint_tokens(
-                    account_index,
-                    token_info,
-                    amount,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+                  token_info: UnconfirmedTokenInfo| {
+                if let Err(err) = token_info.check_can_be_used() {
+                    return future::err(err).boxed();
+                };
+                wallet
+                    .unmint_tokens(
+                        account_index,
+                        token_info,
+                        amount,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -400,14 +416,18 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
-                token_info.check_can_be_used()?;
-                wallet.lock_token_supply(
-                    account_index,
-                    token_info,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+                  token_info: UnconfirmedTokenInfo| {
+                if let Err(err) = token_info.check_can_be_used() {
+                    return future::err(err).boxed();
+                };
+                wallet
+                    .lock_token_supply(
+                        account_index,
+                        token_info,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -426,14 +446,16 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
-                wallet.freeze_token(
-                    account_index,
-                    token_info,
-                    is_token_unfreezable,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+                  token_info: UnconfirmedTokenInfo| {
+                wallet
+                    .freeze_token(
+                        account_index,
+                        token_info,
+                        is_token_unfreezable,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -450,13 +472,15 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
-                wallet.unfreeze_token(
-                    account_index,
-                    token_info,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+                  token_info: UnconfirmedTokenInfo| {
+                wallet
+                    .unfreeze_token(
+                        account_index,
+                        token_info,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -475,14 +499,19 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
-                wallet.change_token_authority(
-                    account_index,
-                    token_info,
-                    address,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+                  token_info: UnconfirmedTokenInfo| {
+                if let Err(err) = token_info.check_can_be_used() {
+                    return future::err(err).boxed();
+                };
+                wallet
+                    .change_token_authority(
+                        account_index,
+                        token_info,
+                        address,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -499,14 +528,16 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
-                wallet.change_token_metadata_uri(
-                    account_index,
-                    token_info,
-                    metadata_uri,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+                  token_info: UnconfirmedTokenInfo| {
+                wallet
+                    .change_token_metadata_uri(
+                        account_index,
+                        token_info,
+                        metadata_uri,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -524,15 +555,17 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.create_transaction_to_addresses(
-                    account_index,
-                    outputs,
-                    SelectedInputs::Utxos(vec![]),
-                    BTreeMap::new(),
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    &BTreeMap::new(),
-                )
+                wallet
+                    .create_transaction_to_addresses(
+                        account_index,
+                        outputs,
+                        SelectedInputs::Utxos(vec![]),
+                        BTreeMap::new(),
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        BTreeMap::new(),
+                    )
+                    .boxed()
             },
         )
         .await
@@ -556,15 +589,17 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.create_transaction_to_addresses(
-                    account_index,
-                    [output],
-                    SelectedInputs::Utxos(selected_utxos),
-                    BTreeMap::new(),
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    &BTreeMap::new(),
-                )
+                wallet
+                    .create_transaction_to_addresses(
+                        account_index,
+                        [output],
+                        SelectedInputs::Utxos(selected_utxos),
+                        BTreeMap::new(),
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        BTreeMap::new(),
+                    )
+                    .boxed()
             },
         )
         .await
@@ -600,13 +635,15 @@ where
                   _consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.create_sweep_transaction(
-                    account_index,
-                    destination_address,
-                    filtered_inputs,
-                    current_fee_rate,
-                    additional_utxo_infos,
-                )
+                wallet
+                    .create_sweep_transaction(
+                        account_index,
+                        destination_address,
+                        filtered_inputs,
+                        current_fee_rate,
+                        additional_utxo_infos,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -639,13 +676,15 @@ where
                   _consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.create_sweep_from_delegation_transaction(
-                    account_index,
-                    destination_address,
-                    delegation_id,
-                    delegation_share,
-                    current_fee_rate,
-                )
+                wallet
+                    .create_sweep_from_delegation_transaction(
+                        account_index,
+                        destination_address,
+                        delegation_id,
+                        delegation_share,
+                        current_fee_rate,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -868,12 +907,14 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.create_delegation(
-                    account_index,
-                    output,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                )
+                wallet
+                    .create_delegation(
+                        account_index,
+                        output,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -892,15 +933,17 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.create_transaction_to_addresses(
-                    account_index,
-                    [output],
-                    SelectedInputs::Utxos(vec![]),
-                    BTreeMap::new(),
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    &BTreeMap::new(),
-                )
+                wallet
+                    .create_transaction_to_addresses(
+                        account_index,
+                        [output],
+                        SelectedInputs::Utxos(vec![]),
+                        BTreeMap::new(),
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        BTreeMap::new(),
+                    )
+                    .boxed()
             },
         )
         .await
@@ -930,14 +973,16 @@ where
                   _consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.create_transaction_to_addresses_from_delegation(
-                    account_index,
-                    address,
-                    amount,
-                    delegation_id,
-                    delegation_share,
-                    current_fee_rate,
-                )
+                wallet
+                    .create_transaction_to_addresses_from_delegation(
+                        account_index,
+                        address,
+                        amount,
+                        delegation_id,
+                        delegation_share,
+                        current_fee_rate,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -958,8 +1003,10 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31,
-                  token_info: &UnconfirmedTokenInfo| {
-                token_info.check_can_be_used()?;
+                  token_info: UnconfirmedTokenInfo| {
+                if let Err(err) = token_info.check_can_be_used() {
+                    return future::err(err).boxed();
+                };
                 let additional_info = BTreeMap::from_iter([(
                     PoolOrTokenId::TokenId(token_info.token_id()),
                     UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
@@ -967,15 +1014,17 @@ where
                         ticker: token_info.token_ticker().to_vec(),
                     }),
                 )]);
-                wallet.create_transaction_to_addresses(
-                    account_index,
-                    [output],
-                    SelectedInputs::Utxos(vec![]),
-                    BTreeMap::new(),
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    &additional_info,
-                )
+                wallet
+                    .create_transaction_to_addresses(
+                        account_index,
+                        [output],
+                        SelectedInputs::Utxos(vec![]),
+                        BTreeMap::new(),
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        additional_info,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -994,17 +1043,52 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.create_stake_pool_tx(
-                    account_index,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    StakePoolDataArguments {
-                        amount,
-                        margin_ratio_per_thousand,
-                        cost_per_block,
-                        decommission_key,
-                    },
-                )
+                wallet
+                    .create_stake_pool_tx(
+                        account_index,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        StakePoolDataArguments {
+                            amount,
+                            margin_ratio_per_thousand,
+                            cost_per_block,
+                            decommission_key,
+                        },
+                    )
+                    .boxed()
+            },
+        )
+        .await
+    }
+
+    pub async fn async_decommission_stake_pool(
+        &mut self,
+        pool_id: PoolId,
+        output_address: Option<Destination>,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        let staker_balance = self
+            .rpc_client
+            .get_staker_balance(pool_id)
+            .await
+            .map_err(ControllerError::NodeCallError)?
+            .ok_or(ControllerError::WalletError(WalletError::UnknownPoolId(
+                pool_id,
+            )))?;
+
+        self.create_and_send_tx(
+            move |current_fee_rate: FeeRate,
+                  _consolidate_fee_rate: FeeRate,
+                  wallet: &mut RuntimeWallet<B>,
+                  account_index: U31| {
+                wallet
+                    .decommission_stake_pool(
+                        account_index,
+                        pool_id,
+                        staker_balance,
+                        output_address,
+                        current_fee_rate,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -1030,13 +1114,15 @@ where
                   _consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.decommission_stake_pool(
-                    account_index,
-                    pool_id,
-                    staker_balance,
-                    output_address,
-                    current_fee_rate,
-                )
+                wallet
+                    .decommission_stake_pool(
+                        account_index,
+                        pool_id,
+                        staker_balance,
+                        output_address,
+                        current_fee_rate,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -1067,6 +1153,7 @@ where
                 output_address,
                 current_fee_rate,
             )
+            .await
             .map_err(ControllerError::WalletError)
     }
 
@@ -1079,14 +1166,17 @@ where
         let (current_fee_rate, consolidate_fee_rate) =
             self.get_current_and_consolidation_fee_rate().await?;
 
-        let result = self.wallet.create_htlc_tx(
-            self.account_index,
-            output_value,
-            htlc,
-            current_fee_rate,
-            consolidate_fee_rate,
-            additional_utxo_infos,
-        )?;
+        let result = self
+            .wallet
+            .create_htlc_tx(
+                self.account_index,
+                output_value,
+                htlc,
+                current_fee_rate,
+                consolidate_fee_rate,
+                additional_utxo_infos,
+            )
+            .await?;
         Ok(result)
     }
 
@@ -1104,15 +1194,17 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.create_order_tx(
-                    account_index,
-                    ask_value,
-                    give_value,
-                    conclude_key,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    &additional_info,
-                )
+                wallet
+                    .create_order_tx(
+                        account_index,
+                        ask_value,
+                        give_value,
+                        conclude_key,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        additional_info,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -1131,15 +1223,17 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.create_conclude_order_tx(
-                    account_index,
-                    order_id,
-                    order_info,
-                    output_address,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    &additional_info,
-                )
+                wallet
+                    .create_conclude_order_tx(
+                        account_index,
+                        order_id,
+                        order_info,
+                        output_address,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        additional_info,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -1159,16 +1253,18 @@ where
                   consolidate_fee_rate: FeeRate,
                   wallet: &mut RuntimeWallet<B>,
                   account_index: U31| {
-                wallet.create_fill_order_tx(
-                    account_index,
-                    order_id,
-                    order_info,
-                    fill_amount_in_ask_currency,
-                    output_address,
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                    &additional_info,
-                )
+                wallet
+                    .create_fill_order_tx(
+                        account_index,
+                        order_id,
+                        order_info,
+                        fill_amount_in_ask_currency,
+                        output_address,
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                        additional_info,
+                    )
+                    .boxed()
             },
         )
         .await
@@ -1227,16 +1323,18 @@ where
 
         self.wallet
             .sign_raw_transaction(self.account_index, ptx)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn sign_challenge(
+    pub async fn sign_challenge(
         &mut self,
         challenge: Vec<u8>,
         destination: Destination,
     ) -> Result<ArbitraryMessageSignature, ControllerError<T>> {
         self.wallet
             .sign_challenge(self.account_index, challenge, destination)
+            .await
             .map_err(ControllerError::WalletError)
     }
 
@@ -1290,12 +1388,19 @@ where
     }
 
     /// Create a transaction and broadcast it
-    async fn create_and_send_tx<E, F>(
+    async fn create_and_send_tx<E, Fun>(
         &mut self,
-        tx_maker: F,
+        tx_maker: Fun,
     ) -> Result<SignedTransaction, ControllerError<T>>
     where
-        F: FnOnce(FeeRate, FeeRate, &mut RuntimeWallet<B>, U31) -> Result<SignedTransaction, E>,
+        Fun: FnOnce(
+                FeeRate,
+                FeeRate,
+                &mut RuntimeWallet<B>,
+                U31,
+            ) -> BoxFuture<Result<SignedTransaction, E>>
+            + Send
+            + 'static,
         ControllerError<T>: From<E>,
     {
         let (current_fee_rate, consolidate_fee_rate) =
@@ -1306,7 +1411,8 @@ where
             consolidate_fee_rate,
             self.wallet,
             self.account_index,
-        )?;
+        )
+        .await?;
 
         self.broadcast_to_mempool_if_needed(tx).await
     }
@@ -1315,12 +1421,14 @@ where
     /// check if that token can be used i.e. not frozen
     async fn create_and_send_token_tx<
         F: FnOnce(
-            FeeRate,
-            FeeRate,
-            &mut RuntimeWallet<B>,
-            U31,
-            &UnconfirmedTokenInfo,
-        ) -> WalletResult<SignedTransaction>,
+                FeeRate,
+                FeeRate,
+                &mut RuntimeWallet<B>,
+                U31,
+                UnconfirmedTokenInfo,
+            ) -> BoxFuture<WalletResult<SignedTransaction>>
+            + Send
+            + 'static,
     >(
         &mut self,
         token_info: RPCTokenInfo,
@@ -1336,8 +1444,9 @@ where
             consolidate_fee_rate,
             self.wallet,
             self.account_index,
-            &token_freezable_info,
+            token_freezable_info,
         )
+        .await
         .map_err(ControllerError::WalletError)?;
 
         self.broadcast_to_mempool_if_needed(tx).await
@@ -1363,11 +1472,13 @@ where
     async fn create_and_send_tx_with_id<
         ID,
         F: FnOnce(
-            FeeRate,
-            FeeRate,
-            &mut RuntimeWallet<B>,
-            U31,
-        ) -> WalletResult<(ID, SignedTransaction)>,
+                FeeRate,
+                FeeRate,
+                &mut RuntimeWallet<B>,
+                U31,
+            ) -> BoxFuture<WalletResult<(ID, SignedTransaction)>>
+            + Send
+            + 'static,
     >(
         &mut self,
         tx_maker: F,
@@ -1381,6 +1492,7 @@ where
             self.wallet,
             self.account_index,
         )
+        .await
         .map_err(ControllerError::WalletError)?;
 
         let tx = self.broadcast_to_mempool_if_needed(tx).await?;

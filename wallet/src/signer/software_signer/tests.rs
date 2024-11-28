@@ -51,7 +51,10 @@ const MNEMONIC: &str =
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_message(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_message(#[case] seed: Seed) {
+    use wallet_storage::TransactionRwUnlocked;
+
     let mut rng = make_seedable_rng(seed);
 
     let config = Arc::new(create_regtest());
@@ -75,6 +78,8 @@ fn sign_message(#[case] seed: Seed) {
     let destination = account.get_new_address(&mut db_tx, ReceiveFunds).unwrap().1.into_object();
     let mut signer = SoftwareSigner::new(config.clone(), DEFAULT_ACCOUNT_INDEX);
     let message = vec![rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>()];
+    db_tx.commit().unwrap();
+    let db_tx = db.local_rw_unlocked().read_only_store();
     let res = signer
         .sign_challenge(
             message.clone(),
@@ -82,6 +87,7 @@ fn sign_message(#[case] seed: Seed) {
             account.key_chain(),
             &db_tx,
         )
+        .await
         .unwrap();
 
     let message_challenge = produce_message_challenge(&message);
@@ -91,7 +97,8 @@ fn sign_message(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_transaction(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_transaction(#[case] seed: Seed) {
     use std::num::NonZeroU8;
 
     use common::{
@@ -110,6 +117,7 @@ fn sign_transaction(#[case] seed: Seed) {
     };
     use crypto::vrf::VRFPrivateKey;
     use serialization::extras::non_empty_vec::DataOrNoVec;
+    use wallet_storage::TransactionRwUnlocked;
 
     let mut rng = make_seedable_rng(seed);
 
@@ -376,8 +384,10 @@ fn sign_transaction(#[case] seed: Seed) {
     let additional_info = BTreeMap::new();
     let ptx = req.into_partially_signed_tx(&additional_info).unwrap();
 
+    db_tx.commit().unwrap();
+    let db_tx = db.local_rw_unlocked().read_only_store();
     let mut signer = SoftwareSigner::new(chain_config.clone(), DEFAULT_ACCOUNT_INDEX);
-    let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).unwrap();
+    let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).await.unwrap();
 
     eprintln!("num inputs in tx: {} {:?}", inputs.len(), ptx.witnesses());
     assert!(ptx.all_signatures_available());

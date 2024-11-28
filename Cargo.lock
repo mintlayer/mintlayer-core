@@ -8546,11 +8546,13 @@ dependencies = [
 name = "wallet"
 version = "1.0.0"
 dependencies = [
+ "async-trait",
  "bip39",
  "chainstate",
  "common",
  "consensus",
  "crypto",
+ "futures",
  "hex",
  "itertools 0.13.0",
  "logging",
@@ -8567,6 +8569,7 @@ dependencies = [
  "tempfile",
  "test-utils",
  "thiserror",
+ "tokio",
  "trezor-client",
  "tx-verifier",
  "utils",
