@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use common::chain::{
     signature::{
         inputsig::{
@@ -27,7 +28,7 @@ use common::chain::{
 };
 use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
 use wallet_storage::{
-    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
+    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageReadWriteUnlocked,
 };
 use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, signature_status::SignatureStatus,
@@ -86,13 +87,14 @@ type SignerResult<T> = Result<T, SignerError>;
 
 /// Signer trait responsible for signing transactions or challenges using a software or hardware
 /// wallet
+#[async_trait]
 pub trait Signer {
     /// sign a partially signed transaction and return the before and after signature statuses
-    fn sign_tx(
+    async fn sign_tx(
         &mut self,
         tx: PartiallySignedTransaction,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: &(impl WalletStorageReadUnlocked + Sync),
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
@@ -100,18 +102,18 @@ pub trait Signer {
     )>;
 
     /// sign an arbitrary message for a destination known to this key chain
-    fn sign_challenge(
+    async fn sign_challenge(
         &mut self,
         message: Vec<u8>,
         destination: Destination,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: &(impl WalletStorageReadUnlocked + Sync),
     ) -> SignerResult<ArbitraryMessageSignature>;
 }
 
 pub trait SignerProvider {
     type S: Signer;
-    type K: AccountKeyChains;
+    type K: AccountKeyChains + Sync;
 
     fn provide(&mut self, chain_config: Arc<ChainConfig>, account_index: U31) -> Self::S;
 
@@ -120,7 +122,7 @@ pub trait SignerProvider {
         chain_config: Arc<ChainConfig>,
         account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageReadWriteUnlocked,
     ) -> WalletResult<Account<Self::K>>;
 
     fn load_account_from_database(

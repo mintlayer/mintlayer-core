@@ -18,6 +18,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use async_trait::async_trait;
 use common::{
     address::Address,
     chain::{
@@ -77,7 +78,7 @@ use trezor_client::{
 };
 use utils::ensure;
 use wallet_storage::{
-    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
+    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageReadWriteUnlocked,
 };
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
@@ -244,12 +245,13 @@ impl TrezorSigner {
     }
 }
 
+#[async_trait]
 impl Signer for TrezorSigner {
-    fn sign_tx(
+    async fn sign_tx(
         &mut self,
         ptx: PartiallySignedTransaction,
-        key_chain: &impl AccountKeyChains,
-        _db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        _db_tx: &(impl WalletStorageReadUnlocked + Sync),
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
@@ -408,12 +410,12 @@ impl Signer for TrezorSigner {
         Ok((ptx.with_witnesses(witnesses), prev_statuses, new_statuses))
     }
 
-    fn sign_challenge(
+    async fn sign_challenge(
         &mut self,
         message: Vec<u8>,
         destination: Destination,
-        key_chain: &impl AccountKeyChains,
-        _db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        _db_tx: &(impl WalletStorageReadUnlocked + Sync),
     ) -> SignerResult<ArbitraryMessageSignature> {
         let data = match key_chain.find_public_key(&destination) {
             Some(FoundPubKey::Hierarchy(xpub)) => {
@@ -1181,7 +1183,7 @@ impl SignerProvider for TrezorSignerProvider {
         chain_config: Arc<ChainConfig>,
         account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageReadWriteUnlocked,
     ) -> WalletResult<Account<Self::K>> {
         let account_pubkey = self.fetch_extended_pub_key(&chain_config, account_index)?;
 

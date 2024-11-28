@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use common::chain::{
     htlc::HtlcSecret,
     signature::{
@@ -45,7 +46,7 @@ use itertools::Itertools;
 use randomness::make_true_rng;
 use wallet_storage::{
     StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
-    WalletStorageWriteUnlocked,
+    WalletStorageReadWriteUnlocked,
 };
 use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
@@ -253,12 +254,13 @@ impl SoftwareSigner {
     }
 }
 
+#[async_trait]
 impl Signer for SoftwareSigner {
-    fn sign_tx(
+    async fn sign_tx(
         &mut self,
         ptx: PartiallySignedTransaction,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: &(impl WalletStorageReadUnlocked + Sync),
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
@@ -359,12 +361,12 @@ impl Signer for SoftwareSigner {
         Ok((ptx.with_witnesses(witnesses), prev_statuses, new_statuses))
     }
 
-    fn sign_challenge(
+    async fn sign_challenge(
         &mut self,
         message: Vec<u8>,
         destination: Destination,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: &(impl WalletStorageReadUnlocked + Sync),
     ) -> SignerResult<ArbitraryMessageSignature> {
         let private_key = self
             .get_private_key_for_destination(&destination, key_chain, db_tx)?
@@ -441,7 +443,7 @@ impl SignerProvider for SoftwareSignerProvider {
         chain_config: Arc<ChainConfig>,
         next_account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageReadWriteUnlocked,
     ) -> WalletResult<Account<AccountKeyChainImplSoftware>> {
         let lookahead_size = db_tx.get_lookahead_size()?;
         let account_key_chain = self.master_key_chain.create_account_key_chain(

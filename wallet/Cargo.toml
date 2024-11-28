@@ -28,7 +28,9 @@ wallet-storage = { path = "./storage" }
 wallet-types = { path = "./types" }
 trezor-client = { git = "https://github.com/mintlayer/mintlayer-trezor-firmware", branch = "feature/mintlayer-pk", features = ["bitcoin", "mintlayer"], optional = true }
 
+async-trait.workspace = true
 bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
+futures = { workspace = true, default-features = false }
 hex.workspace = true
 itertools.workspace = true
 parity-scale-codec.workspace = true
@@ -38,6 +40,7 @@ zeroize.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 
 rstest.workspace = true
 tempfile.workspace = true

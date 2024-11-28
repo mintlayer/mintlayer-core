@@ -28,7 +28,9 @@ use crypto::{
     key::{extended::ExtendedPublicKey, PrivateKey},
     symkey::SymmetricKey,
 };
-pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
+pub use internal::{
+    Store, StoreLocalReadWriteUnlocked, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked,
+};
 use std::collections::BTreeMap;
 
 use wallet_types::{
@@ -137,7 +139,7 @@ pub trait WalletStorageEncryptionRead {
 }
 
 /// Modifying operations on persistent wallet data
-pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
+pub trait WalletStorageWriteLocked {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> Result<()>;
     fn set_wallet_type(&mut self, wallet_type: WalletType) -> Result<()>;
@@ -192,7 +194,7 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
         id: &AccountDerivationPathId,
         content: &ExtendedPublicKey,
     ) -> Result<()>;
-    fn det_public_key(&mut self, id: &AccountDerivationPathId) -> Result<()>;
+    fn del_public_key(&mut self, id: &AccountDerivationPathId) -> Result<()>;
     fn set_median_time(&mut self, median_time: BlockTimestamp) -> Result<()>;
     fn set_lookahead_size(&mut self, lookahead_size: u32) -> Result<()>;
     fn clear_public_keys(&mut self) -> Result<()>;
@@ -200,7 +202,7 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
 }
 
 /// Modifying operations on persistent wallet data with access to encrypted data
-pub trait WalletStorageWriteUnlocked: WalletStorageReadUnlocked + WalletStorageWriteLocked {
+pub trait WalletStorageWriteUnlocked: WalletStorageWriteLocked {
     fn set_root_key(&mut self, content: &RootKeys) -> Result<()>;
     fn del_root_key(&mut self) -> Result<()>;
     fn set_seed_phrase(&mut self, seed_phrase: SerializableSeedPhrase) -> Result<()>;
@@ -221,6 +223,13 @@ pub trait WalletStorageEncryptionWrite {
     fn encrypt_seed_phrase(&mut self, new_encryption_key: &Option<SymmetricKey>) -> Result<()>;
 }
 
+pub trait WalletStorageReadWriteLocked: WalletStorageReadLocked + WalletStorageWriteLocked {}
+
+pub trait WalletStorageReadWriteUnlocked:
+    WalletStorageReadUnlocked + WalletStorageWriteUnlocked + WalletStorageReadWriteLocked
+{
+}
+
 /// Marker trait for types where read/write operations are run in a transaction
 pub trait IsTransaction: is_transaction_seal::Seal {}
 
@@ -237,7 +246,7 @@ pub trait TransactionRoUnlocked: WalletStorageReadUnlocked + IsTransaction {
 }
 
 /// Operations on read-write transactions
-pub trait TransactionRwLocked: WalletStorageWriteLocked + IsTransaction {
+pub trait TransactionRwLocked: WalletStorageReadWriteLocked + IsTransaction {
     /// Abort the transaction
     fn abort(self);
 
@@ -246,7 +255,7 @@ pub trait TransactionRwLocked: WalletStorageWriteLocked + IsTransaction {
 }
 
 /// Operations on read-write transactions
-pub trait TransactionRwUnlocked: WalletStorageWriteUnlocked + IsTransaction {
+pub trait TransactionRwUnlocked: WalletStorageReadWriteUnlocked + IsTransaction {
     /// Abort the transaction
     fn abort(self);
 
@@ -284,7 +293,10 @@ pub trait Transactional<'t> {
     ) -> Result<Self::TransactionRwUnlocked>;
 }
 
-pub trait WalletStorage: WalletStorageWriteLocked + for<'tx> Transactional<'tx> + Send {}
+pub trait WalletStorage:
+    WalletStorageWriteLocked + WalletStorageReadLocked + for<'tx> Transactional<'tx> + Send
+{
+}
 
 pub type DefaultBackend = storage_sqlite::Sqlite;
 pub type WalletStorageTxRwImpl<'st> = StoreTxRw<'st, storage_sqlite::Sqlite>;
