@@ -15,6 +15,7 @@
 
 #[allow(deprecated)]
 use iced::widget::Component;
+
 use iced::{
     alignment::Horizontal,
     widget::{self, container, text, Button, Text},

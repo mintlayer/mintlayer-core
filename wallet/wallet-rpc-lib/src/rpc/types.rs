@@ -97,7 +97,7 @@ pub enum RpcError<N: NodeInterface> {
     EmptyMnemonic,
 
     #[error("Cannot specify a mnemonic or passphrase when using a hardware wallet")]
-    HardwareWalletWithMnemonic,
+    HardwareWalletWithMnemonicOrPassphrase,
 
     #[error("Invalid hardware wallet selection")]
     InvalidHardwareWallet,

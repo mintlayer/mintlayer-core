@@ -50,7 +50,7 @@ use crypto::key::{
     extended::ExtendedPublicKey,
     hdkd::{chain_code::ChainCode, derivable::Derivable, u31::U31},
     secp256k1::{extended_keys::Secp256k1ExtendedPublicKey, Secp256k1PublicKey},
-    Signature,
+    Signature, SignatureError,
 };
 use itertools::Itertools;
 use serialization::Encode;
@@ -102,6 +102,10 @@ pub enum TrezorError {
     NoDeviceFound,
     #[error("Trezor device error: {0}")]
     DeviceError(String),
+    #[error("Invalid public key returned from trezor")]
+    InvalidKey,
+    #[error("Invalid Signature error: {0}")]
+    SignatureError(#[from] SignatureError),
 }
 
 pub struct TrezorSigner {
@@ -126,7 +130,7 @@ impl TrezorSigner {
         secret: Option<HtlcSecret>,
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<(Option<InputWitness>, SignatureStatus)> {
-        let add_secret = |sig: StandardInputSignature| {
+        let add_secret_if_needed = |sig: StandardInputSignature| {
             let sig = if let Some(htlc_secret) = secret {
                 let sig_with_secret = AuthorizedHashedTimelockContractSpend::Secret(
                     htlc_secret,
@@ -149,13 +153,17 @@ impl TrezorSigner {
             )),
             Destination::PublicKeyHash(_) => {
                 if let Some(signature) = signature.first() {
-                    let pk =
-                        key_chain.find_public_key(destination).expect("found").into_public_key();
-                    let mut signature = signature.signature.clone();
-                    signature.insert(0, 0);
-                    let sig = Signature::from_data(signature)?;
+                    let pk = key_chain
+                        .find_public_key(destination)
+                        .ok_or(SignerError::DestinationNotFromThisWallet)?
+                        .into_public_key();
+                    let sig = Signature::from_raw_data(&signature.signature)
+                        .map_err(TrezorError::SignatureError)?;
                     let sig = AuthorizedPublicKeyHashSpend::new(pk, sig);
-                    let sig = add_secret(StandardInputSignature::new(sighash_type, sig.encode()));
+                    let sig = add_secret_if_needed(StandardInputSignature::new(
+                        sighash_type,
+                        sig.encode(),
+                    ));
 
                     Ok((Some(sig), SignatureStatus::FullySigned))
                 } else {
@@ -164,11 +172,13 @@ impl TrezorSigner {
             }
             Destination::PublicKey(_) => {
                 if let Some(signature) = signature.first() {
-                    let mut signature = signature.signature.clone();
-                    signature.insert(0, 0);
-                    let sig = Signature::from_data(signature)?;
+                    let sig = Signature::from_raw_data(&signature.signature)
+                        .map_err(TrezorError::SignatureError)?;
                     let sig = AuthorizedPublicKeySpend::new(sig);
-                    let sig = add_secret(StandardInputSignature::new(sighash_type, sig.encode()));
+                    let sig = add_secret_if_needed(StandardInputSignature::new(
+                        sighash_type,
+                        sig.encode(),
+                    ));
 
                     Ok((Some(sig), SignatureStatus::FullySigned))
                 } else {
@@ -182,9 +192,8 @@ impl TrezorSigner {
 
                     for sig in signature {
                         if let Some(idx) = sig.multisig_idx {
-                            let mut signature = sig.signature.clone();
-                            signature.insert(0, 0);
-                            let sig = Signature::from_data(signature)?;
+                            let sig = Signature::from_raw_data(&sig.signature)
+                                .map_err(TrezorError::SignatureError)?;
                             current_signatures.add_signature(idx as u8, sig);
                         }
                     }
@@ -214,7 +223,7 @@ impl TrezorSigner {
                         }
                     };
 
-                    let sig = add_secret(StandardInputSignature::new(
+                    let sig = add_secret_if_needed(StandardInputSignature::new(
                         sighash_type,
                         current_signatures.encode(),
                     ));
@@ -313,9 +322,8 @@ impl Signer for TrezorSigner {
                                 if let Some(signature) = new_signatures.get(i) {
                                 for sig in signature {
                                     if let Some(idx) = sig.multisig_idx {
-                                        let mut signature = sig.signature.clone();
-                                        signature.insert(0, 0);
-                                        let sig = Signature::from_data(signature)?;
+                                        let sig = Signature::from_raw_data(&sig.signature)
+                                            .map_err(TrezorError::SignatureError)?;
                                         current_signatures.add_signature(idx as u8, sig);
                                     }
                                 }
@@ -424,9 +432,7 @@ impl Signer for TrezorSigner {
                     .map(|c| c.into_encoded_index())
                     .collect();
 
-                let addr = Address::new(&self.chain_config, destination.clone())
-                    .expect("addressable")
-                    .into_string();
+                let addr = Address::new(&self.chain_config, destination.clone())?.into_string();
 
                 let sig = self
                     .client
@@ -434,9 +440,8 @@ impl Signer for TrezorSigner {
                     .expect("poisoned lock")
                     .mintlayer_sign_message(address_n, addr, message.to_vec())
                     .map_err(|err| TrezorError::DeviceError(err.to_string()))?;
-                let mut signature = sig;
-                signature.insert(0, 0);
-                let signature = Signature::from_data(signature)?;
+                let signature =
+                    Signature::from_raw_data(&sig).map_err(TrezorError::SignatureError)?;
 
                 match &destination {
                     Destination::PublicKey(_) => AuthorizedPublicKeySpend::new(signature).encode(),
@@ -497,12 +502,9 @@ fn to_trezor_input_msgs(
             (TxInput::Utxo(outpoint), Some(_), Some(dest)) => {
                 to_trezor_utxo_input(outpoint, chain_config, dest, key_chain)
             }
-            (TxInput::Account(outpoint), _, Some(dest)) => Ok(to_trezor_account_input(
-                chain_config,
-                dest,
-                key_chain,
-                outpoint,
-            )),
+            (TxInput::Account(outpoint), _, Some(dest)) => {
+                to_trezor_account_input(chain_config, dest, key_chain, outpoint)
+            }
             (TxInput::AccountCommand(nonce, command), _, Some(dest)) => {
                 to_trezor_account_command_input(chain_config, dest, key_chain, nonce, command)
             }
@@ -520,90 +522,67 @@ fn to_trezor_account_command_input(
     command: &AccountCommand,
 ) -> SignerResult<MintlayerTxInput> {
     let mut inp_req = MintlayerAccountCommandTxInput::new();
-    inp_req
-        .set_address(Address::new(chain_config, dest.clone()).expect("addressable").into_string());
+    inp_req.set_address(Address::new(chain_config, dest.clone())?.into_string());
     inp_req.address_n = destination_to_address_paths(key_chain, dest);
     inp_req.set_nonce(nonce.value());
     match command {
         AccountCommand::MintTokens(token_id, amount) => {
             let mut req = MintlayerMintTokens::new();
-            req.set_token_id(
-                Address::new(chain_config, *token_id).expect("addressable").into_string(),
-            );
+            req.set_token_id(Address::new(chain_config, *token_id)?.into_string());
             req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
 
             inp_req.mint = Some(req).into();
         }
         AccountCommand::UnmintTokens(token_id) => {
             let mut req = MintlayerUnmintTokens::new();
-            req.set_token_id(
-                Address::new(chain_config, *token_id).expect("addressable").into_string(),
-            );
+            req.set_token_id(Address::new(chain_config, *token_id)?.into_string());
 
             inp_req.unmint = Some(req).into();
         }
         AccountCommand::FreezeToken(token_id, unfreezable) => {
             let mut req = MintlayerFreezeToken::new();
-            req.set_token_id(
-                Address::new(chain_config, *token_id).expect("addressable").into_string(),
-            );
+            req.set_token_id(Address::new(chain_config, *token_id)?.into_string());
             req.set_is_token_unfreezabe(unfreezable.as_bool());
 
             inp_req.freeze_token = Some(req).into();
         }
         AccountCommand::UnfreezeToken(token_id) => {
             let mut req = MintlayerUnfreezeToken::new();
-            req.set_token_id(
-                Address::new(chain_config, *token_id).expect("addressable").into_string(),
-            );
+            req.set_token_id(Address::new(chain_config, *token_id)?.into_string());
 
             inp_req.unfreeze_token = Some(req).into();
         }
         AccountCommand::LockTokenSupply(token_id) => {
             let mut req = MintlayerLockTokenSupply::new();
-            req.set_token_id(
-                Address::new(chain_config, *token_id).expect("addressable").into_string(),
-            );
+            req.set_token_id(Address::new(chain_config, *token_id)?.into_string());
 
             inp_req.lock_token_supply = Some(req).into();
         }
         AccountCommand::ChangeTokenAuthority(token_id, dest) => {
             let mut req = MintlayerChangeTokenAuhtority::new();
-            req.set_token_id(
-                Address::new(chain_config, *token_id).expect("addressable").into_string(),
-            );
-            req.set_destination(
-                Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
-            );
+            req.set_token_id(Address::new(chain_config, *token_id)?.into_string());
+            req.set_destination(Address::new(chain_config, dest.clone())?.into_string());
 
             inp_req.change_token_authority = Some(req).into();
         }
         AccountCommand::ChangeTokenMetadataUri(token_id, uri) => {
             let mut req = MintlayerChangeTokenMetadataUri::new();
-            req.set_token_id(
-                Address::new(chain_config, *token_id).expect("addressable").into_string(),
-            );
+            req.set_token_id(Address::new(chain_config, *token_id)?.into_string());
             req.set_metadata_uri(uri.clone());
 
             inp_req.change_token_metadata_uri = Some(req).into();
         }
         AccountCommand::ConcludeOrder(order_id) => {
             let mut req = MintlayerConcludeOrder::new();
-            req.set_order_id(
-                Address::new(chain_config, *order_id).expect("addressable").into_string(),
-            );
+            req.set_order_id(Address::new(chain_config, *order_id)?.into_string());
 
             inp_req.conclude_order = Some(req).into();
         }
         AccountCommand::FillOrder(order_id, amount, dest) => {
             let mut req = MintlayerFillOrder::new();
-            req.set_order_id(
-                Address::new(chain_config, *order_id).expect("addressable").into_string(),
-            );
+            req.set_order_id(Address::new(chain_config, *order_id)?.into_string());
             req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
-            req.set_destination(
-                Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
-            );
+            req.set_destination(Address::new(chain_config, dest.clone())?.into_string());
 
             inp_req.fill_order = Some(req).into();
         }
@@ -618,17 +597,14 @@ fn to_trezor_account_input(
     dest: &Destination,
     key_chain: &impl AccountKeyChains,
     outpoint: &common::chain::AccountOutPoint,
-) -> MintlayerTxInput {
+) -> SignerResult<MintlayerTxInput> {
     let mut inp_req = MintlayerAccountTxInput::new();
-    inp_req
-        .set_address(Address::new(chain_config, dest.clone()).expect("addressable").into_string());
+    inp_req.set_address(Address::new(chain_config, dest.clone())?.into_string());
     inp_req.address_n = destination_to_address_paths(key_chain, dest);
     inp_req.set_nonce(outpoint.nonce().value());
     match outpoint.account() {
         AccountSpending::DelegationBalance(delegation_id, amount) => {
-            inp_req.set_delegation_id(
-                Address::new(chain_config, *delegation_id).expect("addressable").into_string(),
-            );
+            inp_req.set_delegation_id(Address::new(chain_config, *delegation_id)?.into_string());
             let mut value = MintlayerOutputValue::new();
             value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
             inp_req.value = Some(value).into();
@@ -636,7 +612,7 @@ fn to_trezor_account_input(
     }
     let mut inp = MintlayerTxInput::new();
     inp.account = Some(inp_req).into();
-    inp
+    Ok(inp)
 }
 
 fn to_trezor_utxo_input(
@@ -659,8 +635,7 @@ fn to_trezor_utxo_input(
     inp_req.set_prev_hash(id.to_vec());
     inp_req.set_prev_index(outpoint.output_index());
 
-    inp_req
-        .set_address(Address::new(chain_config, dest.clone()).expect("addressable").into_string());
+    inp_req.set_address(Address::new(chain_config, dest.clone())?.into_string());
     inp_req.address_n = destination_to_address_paths(key_chain, dest);
 
     let mut inp = MintlayerTxInput::new();
@@ -741,9 +716,11 @@ fn to_trezor_utxo_msgs(
     chain_config: &ChainConfig,
 ) -> SignerResult<BTreeMap<[u8; 32], BTreeMap<u32, MintlayerTxOutput>>> {
     let mut utxos: BTreeMap<[u8; 32], BTreeMap<u32, MintlayerTxOutput>> = BTreeMap::new();
+
     for (utxo, inp) in ptx.input_utxos().iter().zip(ptx.tx().inputs()) {
-        match (inp, utxo) {
-            (TxInput::Utxo(outpoint), Some(utxo)) => {
+        match inp {
+            TxInput::Utxo(outpoint) => {
+                let utxo = utxo.as_ref().ok_or(SignerError::MissingUtxo)?;
                 let id = match outpoint.source_id() {
                     OutPointSourceId::Transaction(id) => id.to_hash().0,
                     OutPointSourceId::BlockReward(id) => id.to_hash().0,
@@ -751,11 +728,7 @@ fn to_trezor_utxo_msgs(
                 let out = to_trezor_output_msg(chain_config, &utxo.utxo, &utxo.additional_info)?;
                 utxos.entry(id).or_default().insert(outpoint.output_index(), out);
             }
-            (TxInput::Utxo(_), None) => unimplemented!("missing utxo"),
-            (TxInput::Account(_) | TxInput::AccountCommand(_, _), Some(_)) => {
-                panic!("can't have accounts as UTXOs")
-            }
-            (TxInput::Account(_) | TxInput::AccountCommand(_, _), _) => {}
+            TxInput::Account(_) | TxInput::AccountCommand(_, _) => {}
         }
     }
 
@@ -776,9 +749,7 @@ fn to_trezor_output_msg(
                 chain_config,
             )?)
             .into();
-            out_req.set_address(
-                Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
-            );
+            out_req.set_address(Address::new(chain_config, dest.clone())?.into_string());
 
             let mut out = MintlayerTxOutput::new();
             out.transfer = Some(out_req).into();
@@ -792,9 +763,7 @@ fn to_trezor_output_msg(
                 chain_config,
             )?)
             .into();
-            out_req.set_address(
-                Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
-            );
+            out_req.set_address(Address::new(chain_config, dest.clone())?.into_string());
 
             out_req.lock = Some(to_trezor_output_lock(lock)).into();
 
@@ -817,21 +786,15 @@ fn to_trezor_output_msg(
         }
         TxOutput::CreateDelegationId(dest, pool_id) => {
             let mut out_req = MintlayerCreateDelegationIdTxOutput::new();
-            out_req.set_pool_id(
-                Address::new(chain_config, *pool_id).expect("addressable").into_string(),
-            );
-            out_req.set_destination(
-                Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
-            );
+            out_req.set_pool_id(Address::new(chain_config, *pool_id)?.into_string());
+            out_req.set_destination(Address::new(chain_config, dest.clone())?.into_string());
             let mut out = MintlayerTxOutput::new();
             out.create_delegation_id = Some(out_req).into();
             out
         }
         TxOutput::DelegateStaking(amount, delegation_id) => {
             let mut out_req = MintlayerDelegateStakingTxOutput::new();
-            out_req.set_delegation_id(
-                Address::new(chain_config, *delegation_id).expect("addressable").into_string(),
-            );
+            out_req.set_delegation_id(Address::new(chain_config, *delegation_id)?.into_string());
             out_req.set_amount(amount.into_atoms().to_be_bytes().to_vec());
             let mut out = MintlayerTxOutput::new();
             out.delegate_staking = Some(out_req).into();
@@ -839,25 +802,16 @@ fn to_trezor_output_msg(
         }
         TxOutput::CreateStakePool(pool_id, pool_data) => {
             let mut out_req = MintlayerCreateStakePoolTxOutput::new();
-            out_req.set_pool_id(
-                Address::new(chain_config, *pool_id).expect("addressable").into_string(),
-            );
+            out_req.set_pool_id(Address::new(chain_config, *pool_id)?.into_string());
 
             out_req.set_pledge(pool_data.pledge().into_atoms().to_be_bytes().to_vec());
-            out_req.set_staker(
-                Address::new(chain_config, pool_data.staker().clone())
-                    .expect("addressable")
-                    .into_string(),
-            );
+            out_req
+                .set_staker(Address::new(chain_config, pool_data.staker().clone())?.into_string());
             out_req.set_decommission_key(
-                Address::new(chain_config, pool_data.decommission_key().clone())
-                    .expect("addressable")
-                    .into_string(),
+                Address::new(chain_config, pool_data.decommission_key().clone())?.into_string(),
             );
             out_req.set_vrf_public_key(
-                Address::new(chain_config, pool_data.vrf_public_key().clone())
-                    .expect("addressable")
-                    .into_string(),
+                Address::new(chain_config, pool_data.vrf_public_key().clone())?.into_string(),
             );
             out_req
                 .set_cost_per_block(pool_data.cost_per_block().into_atoms().to_be_bytes().to_vec());
@@ -871,12 +825,17 @@ fn to_trezor_output_msg(
         }
         TxOutput::ProduceBlockFromStake(dest, pool_id) => {
             let mut out_req = MintlayerProduceBlockFromStakeTxOutput::new();
-            out_req.set_pool_id(
-                Address::new(chain_config, *pool_id).expect("addressable").into_string(),
-            );
-            out_req.set_destination(
-                Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
-            );
+            out_req.set_pool_id(Address::new(chain_config, *pool_id)?.into_string());
+            out_req.set_destination(Address::new(chain_config, dest.clone())?.into_string());
+            let staker_balance = additional_info
+                .as_ref()
+                .and_then(|info| match info {
+                    UtxoAdditionalInfo::PoolInfo { staker_balance } => Some(staker_balance),
+                    UtxoAdditionalInfo::TokenInfo(_)
+                    | UtxoAdditionalInfo::CreateOrder { ask: _, give: _ } => None,
+                })
+                .ok_or(SignerError::MissingUtxoExtraInfo)?;
+            out_req.set_staker_balance(staker_balance.into_atoms().to_be_bytes().to_vec());
             let mut out = MintlayerTxOutput::new();
             out.produce_block_from_stake = Some(out_req).into();
             out
@@ -887,9 +846,7 @@ fn to_trezor_output_msg(
             match token_data.as_ref() {
                 TokenIssuance::V1(data) => {
                     out_req.set_authority(
-                        Address::new(chain_config, data.authority.clone())
-                            .expect("addressable")
-                            .into_string(),
+                        Address::new(chain_config, data.authority.clone())?.into_string(),
                     );
                     out_req.set_token_ticker(data.token_ticker.clone());
                     out_req.set_metadata_uri(data.metadata_uri.clone());
@@ -919,12 +876,8 @@ fn to_trezor_output_msg(
         }
         TxOutput::IssueNft(token_id, nft_data, dest) => {
             let mut out_req = MintlayerIssueNftTxOutput::new();
-            out_req.set_token_id(
-                Address::new(chain_config, *token_id).expect("addressable").into_string(),
-            );
-            out_req.set_destination(
-                Address::new(chain_config, dest.clone()).expect("addressable").into_string(),
-            );
+            out_req.set_token_id(Address::new(chain_config, *token_id)?.into_string());
+            out_req.set_destination(Address::new(chain_config, dest.clone())?.into_string());
             match nft_data.as_ref() {
                 NftIssuance::V0(data) => {
                     //
@@ -950,8 +903,7 @@ fn to_trezor_output_msg(
                             Address::new(
                                 chain_config,
                                 Destination::PublicKey(creator.public_key.clone()),
-                            )
-                            .expect("addressable")
+                            )?
                             .into_string(),
                         );
                     }
@@ -978,16 +930,10 @@ fn to_trezor_output_msg(
             .into();
             out_req.secret_hash = Some(lock.secret_hash.as_bytes().to_vec());
 
-            out_req.set_spend_key(
-                Address::new(chain_config, lock.spend_key.clone())
-                    .expect("addressable")
-                    .into_string(),
-            );
-            out_req.set_refund_key(
-                Address::new(chain_config, lock.refund_key.clone())
-                    .expect("addressable")
-                    .into_string(),
-            );
+            out_req
+                .set_spend_key(Address::new(chain_config, lock.spend_key.clone())?.into_string());
+            out_req
+                .set_refund_key(Address::new(chain_config, lock.refund_key.clone())?.into_string());
 
             out_req.refund_timelock = Some(to_trezor_output_lock(&lock.refund_timelock)).into();
 
@@ -999,9 +945,7 @@ fn to_trezor_output_msg(
             let mut out_req = MintlayerCreateOrderTxOutput::new();
 
             out_req.set_conclude_key(
-                Address::new(chain_config, data.conclude_key().clone())
-                    .expect("addressable")
-                    .into_string(),
+                Address::new(chain_config, data.conclude_key().clone())?.into_string(),
             );
 
             match additional_info {
@@ -1049,9 +993,7 @@ fn to_trezor_output_value_with_token_info(
             let mut value = MintlayerOutputValue::new();
             value.set_amount(amount.into_atoms().to_be_bytes().to_vec());
             let mut token_value = MintlayerTokenOutputValue::new();
-            token_value.set_token_id(
-                Address::new(chain_config, *token_id).expect("addressable").into_string(),
-            );
+            token_value.set_token_id(Address::new(chain_config, *token_id)?.into_string());
             match &token_info {
                 Some(info) => {
                     token_value.set_number_of_decimals(info.num_decimals as u32);
@@ -1125,7 +1067,7 @@ impl TrezorSignerProvider {
         &self,
         chain_config: &Arc<ChainConfig>,
         account_index: U31,
-    ) -> Result<ExtendedPublicKey, WalletError> {
+    ) -> SignerResult<ExtendedPublicKey> {
         let derivation_path = make_account_path(chain_config, account_index);
         let account_path =
             derivation_path.as_slice().iter().map(|c| c.into_encoded_index()).collect();
@@ -1139,7 +1081,8 @@ impl TrezorSignerProvider {
         let account_pubkey = Secp256k1ExtendedPublicKey::new(
             derivation_path,
             chain_code,
-            Secp256k1PublicKey::from_bytes(&xpub.public_key.serialize()).expect(""),
+            Secp256k1PublicKey::from_bytes(&xpub.public_key.serialize())
+                .map_err(|_| SignerError::TrezorError(TrezorError::InvalidKey))?,
         );
         let account_pubkey = ExtendedPublicKey::new(account_pubkey);
         Ok(account_pubkey)
@@ -1175,7 +1118,8 @@ fn find_trezor_device() -> Result<Trezor, TrezorError> {
         .into_iter()
         .find(|device| device.model == Model::Trezor)
         .ok_or(TrezorError::NoDeviceFound)?;
-    let client = device.connect().map_err(|e| TrezorError::DeviceError(e.to_string()))?;
+    let mut client = device.connect().map_err(|e| TrezorError::DeviceError(e.to_string()))?;
+    client.init_device(None).map_err(|e| TrezorError::DeviceError(e.to_string()))?;
     Ok(client)
 }
 

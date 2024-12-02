@@ -37,7 +37,10 @@ use serialization::DecodeAll;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::TxInfo;
 use wallet_controller::{
-    types::{Balances, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
+    types::{
+        Balances, CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo,
+        WalletTypeArgs,
+    },
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::{
@@ -83,11 +86,18 @@ impl WalletInterface for ClientWalletRpc {
     async fn create_wallet(
         &self,
         path: PathBuf,
-        store_seed_phrase: bool,
-        mnemonic: Option<String>,
-        passphrase: Option<String>,
-        hardware_wallet: Option<HardwareWalletType>,
+        wallet_args: WalletTypeArgs,
     ) -> Result<CreatedWallet, Self::Error> {
+        let (mnemonic, passphrase, store_seed_phrase, hardware_wallet) = match wallet_args {
+            WalletTypeArgs::Software {
+                mnemonic,
+                passphrase,
+                store_seed_phrase,
+            } => (mnemonic, passphrase, store_seed_phrase.should_save(), None),
+            #[cfg(feature = "trezor")]
+            WalletTypeArgs::Trezor => (None, None, false, Some(HardwareWalletType::Trezor)),
+        };
+
         ColdWalletRpcClient::create_wallet(
             &self.http_client,
             path.to_string_lossy().to_string(),

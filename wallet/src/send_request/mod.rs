@@ -332,7 +332,7 @@ impl SendRequest {
     }
 }
 
-/// Find aditional data for TxOutput, mainly for UI purposes
+/// Find additional data for TxOutput, mainly for UI purposes
 fn find_additional_info(
     utxo: &TxOutput,
     additional_info: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
@@ -388,7 +388,7 @@ fn find_token_additional_info(
                 UtxoAdditionalInfo::TokenInfo(data) => Ok(Some(data.clone())),
                 UtxoAdditionalInfo::PoolInfo { staker_balance: _ }
                 | UtxoAdditionalInfo::CreateOrder { ask: _, give: _ } => {
-                    Err(WalletError::MissmatchedTokenAdditionalData(*token_id))
+                    Err(WalletError::MismatchedTokenAdditionalData(*token_id))
                 }
             })?,
     }
