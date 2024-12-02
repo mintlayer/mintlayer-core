@@ -351,26 +351,7 @@ impl Backend {
             }
             #[cfg(feature = "trezor")]
             (WalletType::Trezor, ColdHotNodeController::Cold) => {
-                let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
-
-                let (wallet_rpc, command_handler, best_block, accounts_info, accounts_data) = self
-                    .create_wallet(
-                        client,
-                        file_path.clone(),
-                        wallet_args,
-                        import,
-                        wallet_events,
-                    )
-                    .await?;
-
-                let wallet_data = WalletData {
-                    controller: GuiHotColdController::Cold(wallet_rpc, command_handler),
-                    accounts: accounts_data,
-                    best_block,
-                    updated: false,
-                };
-
-                (wallet_data, accounts_info, best_block)
+                return Err(BackendError::ColdTrezorNotSupported)
             }
             (WalletType::Hot, ColdHotNodeController::Cold) => {
                 return Err(BackendError::HotNotSupported)
@@ -577,32 +558,7 @@ impl Backend {
                 }
                 #[cfg(feature = "trezor")]
                 (WalletType::Trezor, ColdHotNodeController::Cold) => {
-                    let client = make_cold_wallet_rpc_client(Arc::clone(&self.chain_config));
-
-                    let (
-                        wallet_rpc,
-                        command_handler,
-                        encryption_state,
-                        best_block,
-                        accounts_info,
-                        accounts_data,
-                    ) = self
-                        .open_wallet(
-                            client,
-                            file_path.clone(),
-                            wallet_events,
-                            Some(HardwareWalletType::Trezor),
-                        )
-                        .await?;
-
-                    let wallet_data = WalletData {
-                        controller: GuiHotColdController::Cold(wallet_rpc, command_handler),
-                        accounts: accounts_data,
-                        best_block,
-                        updated: false,
-                    };
-
-                    (wallet_data, accounts_info, best_block, encryption_state)
+                    return Err(BackendError::ColdTrezorNotSupported)
                 }
                 (WalletType::Hot, ColdHotNodeController::Cold) => {
                     return Err(BackendError::HotNotSupported)

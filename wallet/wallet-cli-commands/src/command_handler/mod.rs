@@ -33,7 +33,7 @@ use node_comm::node_traits::NodeInterface;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use utils::qrcode::{QrCode, QrCodeError};
 use wallet::version::get_version;
-use wallet_controller::types::GenericTokenTransfer;
+use wallet_controller::types::{GenericTokenTransfer, WalletTypeArgs};
 use wallet_rpc_client::wallet_rpc_traits::{PartialOrSignedTx, WalletInterface};
 use wallet_rpc_lib::types::{
     Balances, ComposedTransaction, ControllerConfig, MnemonicInfo, NewTransaction, NftMetadata,
@@ -45,7 +45,9 @@ use wallet_rpc_lib::types::{
 use crate::helper_types::CliHardwareWalletType;
 #[cfg(feature = "trezor")]
 use wallet_rpc_lib::types::HardwareWalletType;
-use wallet_types::partially_signed_transaction::PartiallySignedTransaction;
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
+};
 
 use crate::{
     errors::WalletCliCommandError, helper_types::parse_generic_token_transfer,
@@ -152,22 +154,21 @@ where
                 passphrase,
                 hardware_wallet,
             } => {
-                let hardware_wallet = hardware_wallet.map(|t| match t {
-                    #[cfg(feature = "trezor")]
-                    CliHardwareWalletType::Trezor => HardwareWalletType::Trezor,
-                });
-
-                let newly_generated_mnemonic = self
-                    .wallet()
-                    .await?
-                    .create_wallet(
-                        wallet_path,
-                        whether_to_store_seed_phrase.map_or(false, |x| x.to_bool()),
+                let store_seed_phrase =
+                    whether_to_store_seed_phrase.map_or(StoreSeedPhrase::DoNotStore, Into::into);
+                let wallet_args = hardware_wallet.map_or(
+                    WalletTypeArgs::Software {
                         mnemonic,
                         passphrase,
-                        hardware_wallet,
-                    )
-                    .await?;
+                        store_seed_phrase,
+                    },
+                    |t| match t {
+                        #[cfg(feature = "trezor")]
+                        CliHardwareWalletType::Trezor => WalletTypeArgs::Trezor,
+                    },
+                );
+                let newly_generated_mnemonic =
+                    self.wallet().await?.create_wallet(wallet_path, wallet_args).await?;
 
                 self.wallet.update_wallet::<N>().await;
 

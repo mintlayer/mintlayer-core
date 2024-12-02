@@ -263,8 +263,8 @@ pub enum WalletError {
     MissingPoolAdditionalData(PoolId),
     #[error("Missing additional data for Token {0}")]
     MissingTokenAdditionalData(TokenId),
-    #[error("Missmatched additional data for token {0}")]
-    MissmatchedTokenAdditionalData(TokenId),
+    #[error("Mismatched additional data for token {0}")]
+    MismatchedTokenAdditionalData(TokenId),
     #[error("Unsupported operation for a Hardware wallet")]
     UnsupportedHardwareWalletOperation,
 }

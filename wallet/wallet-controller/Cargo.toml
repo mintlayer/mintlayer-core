@@ -21,8 +21,6 @@ rpc-description = { path = "../../rpc/description" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
 storage = { path = "../../storage" }
-storage-inmemory = { path = "../../storage/inmemory" }
-pos-accounting = { path = "../../pos-accounting" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
 wallet = { path = ".." }

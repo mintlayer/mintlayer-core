@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::main_window::ImportOrCreate;
 use iced::{
     alignment::Horizontal,
     widget::{self, container, text, Button, Component, Text},
     Element, Length, Theme,
 };
 use iced_aw::Card;
+use node_gui_backend::ImportOrCreate;
 
 pub struct CreateHwWalletDialog<Message> {
     on_import: Box<dyn Fn() -> Message>,

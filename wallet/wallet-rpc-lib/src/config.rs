@@ -22,6 +22,8 @@ use common::chain::config::{
 use crypto::key::hdkd::u31::U31;
 use rpc::{rpc_creds::RpcCreds, RpcAuthData};
 
+use crate::types::HardwareWalletType;
+
 #[derive(Clone)]
 pub enum NodeRpc {
     ColdWallet,
@@ -45,6 +47,9 @@ pub struct WalletServiceConfig {
     /// Force change the wallet type from hot to cold or from cold to hot
     pub force_change_wallet_type: bool,
 
+    /// Specified if the wallet file is of a hardware wallet type e.g. Trezor
+    pub hardware_wallet_type: Option<HardwareWalletType>,
+
     /// Start staking for account after starting the wallet
     pub start_staking_for_account: Vec<U31>,
 
@@ -58,6 +63,7 @@ impl WalletServiceConfig {
         wallet_file: Option<PathBuf>,
         force_change_wallet_type: bool,
         start_staking_for_account: Vec<U31>,
+        hardware_wallet_type: Option<HardwareWalletType>,
     ) -> Self {
         Self {
             chain_config: Arc::new(common::chain::config::Builder::new(chain_type).build()),
@@ -65,6 +71,7 @@ impl WalletServiceConfig {
             force_change_wallet_type,
             start_staking_for_account,
             node_rpc: NodeRpc::ColdWallet,
+            hardware_wallet_type,
         }
     }
 

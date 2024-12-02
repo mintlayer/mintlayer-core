@@ -114,7 +114,7 @@ where
                     mnemonic.is_none()
                         && passphrase.is_none()
                         && store_seed_phrase == StoreSeedPhrase::DoNotStore,
-                    RpcError::<N>::HardwareWalletWithMnemonic
+                    RpcError::<N>::HardwareWalletWithMnemonicOrPassphrase
                 );
                 WalletTypeArgs::Trezor
             }
@@ -161,7 +161,7 @@ where
                     mnemonic.is_none()
                         && passphrase.is_none()
                         && store_seed_phrase == StoreSeedPhrase::DoNotStore,
-                    RpcError::<N>::HardwareWalletWithMnemonic
+                    RpcError::<N>::HardwareWalletWithMnemonicOrPassphrase
                 );
                 WalletTypeArgs::Trezor
             }
