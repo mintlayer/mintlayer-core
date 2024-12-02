@@ -343,6 +343,73 @@ impl ApiServerInMemoryStorage {
         Ok(order)
     }
 
+    fn get_orders_by_height(
+        &self,
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
+        let len = len as usize;
+        let offset = offset as usize;
+
+        if offset >= self.orders_table.len() {
+            return Ok(vec![]);
+        }
+
+        let mut order_data: Vec<_> = self
+            .orders_table
+            .iter()
+            .map(|(order_id, by_height)| {
+                let created_height = by_height.keys().next().expect("not empty");
+                let latest_data = by_height.values().last().expect("not empty");
+                (order_id, (created_height, latest_data))
+            })
+            .collect();
+
+        order_data.sort_by_key(|(_, (height, _data))| Reverse(*height));
+
+        let latest_orders = order_data[offset..std::cmp::min(offset + len, order_data.len())]
+            .iter()
+            .map(|(order_id, (_, data))| (**order_id, (*data).clone()))
+            .collect();
+
+        Ok(latest_orders)
+    }
+
+    fn get_orders_for_trading_pair(
+        &self,
+        pair: (CoinOrTokenId, CoinOrTokenId),
+        len: u32,
+        offset: u32,
+    ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
+        let len = len as usize;
+        let offset = offset as usize;
+
+        let mut order_data: Vec<_> = self
+            .orders_table
+            .iter()
+            .filter_map(|(id, by_height)| {
+                let created_height = by_height.keys().next().expect("not empty");
+                let latest_data = by_height.values().last().expect("not empty");
+                ((latest_data.ask_currency == pair.0 && latest_data.give_currency == pair.1)
+                    || (latest_data.ask_currency == pair.1 && latest_data.give_currency == pair.0))
+                    .then_some((*id, (*created_height, latest_data.clone())))
+            })
+            .collect();
+
+        if offset >= order_data.len() {
+            return Ok(vec![]);
+        }
+
+        order_data.sort_by_key(|(_, (height, _data))| Reverse(*height));
+
+        let latest_orders = order_data[offset..std::cmp::min(offset + len, order_data.len())]
+            .iter()
+            .map(|(order_id, (_, data))| (*order_id, (*data).clone()))
+            .collect();
+
+        Ok(latest_orders)
+    }
+
     fn get_latest_pool_ids(
         &self,
         len: u32,

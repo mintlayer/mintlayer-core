@@ -15,7 +15,7 @@
 
 use crate::{
     api::json_helpers::{
-        amount_to_json, block_header_to_json, to_tx_json_with_block_info, tx_to_json,
+        self, amount_to_json, block_header_to_json, to_tx_json_with_block_info, tx_to_json,
         txoutput_to_json, utxo_outpoint_to_json, TokenDecimals,
     },
     error::{
@@ -26,7 +26,7 @@ use crate::{
 };
 use api_server_common::storage::storage_api::{
     block_aux_data::BlockAuxData, ApiServerStorage, ApiServerStorageRead, BlockInfo,
-    CoinOrTokenStatistic, TransactionInfo,
+    CoinOrTokenStatistic, Order, TransactionInfo,
 };
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
@@ -38,8 +38,8 @@ use common::{
     address::Address,
     chain::{
         block::timestamp::BlockTimestamp,
-        tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable},
-        Block, Destination, SignedTransaction, Transaction,
+        tokens::{IsTokenFreezable, IsTokenFrozen, IsTokenUnfreezable, TokenId},
+        Block, ChainConfig, Destination, SignedTransaction, Transaction,
     },
     primitives::{Amount, BlockHeight, CoinOrTokenId, Id, Idable, H256},
 };
@@ -47,7 +47,13 @@ use hex::ToHex;
 use serde::Deserialize;
 use serde_json::json;
 use serialization::hex_encoded::HexEncoded;
-use std::{collections::BTreeMap, ops::Sub, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::Sub,
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
+};
 use utils::ensure;
 
 use crate::ApiServerWebServerState;
@@ -111,11 +117,16 @@ pub fn routes<
         .route("/statistics/coin", get(coin_statistics))
         .route("/statistics/token/:id", get(token_statistics));
 
-    router
+    let router = router
         .route("/token", get(token_ids))
         .route("/token/:id", get(token))
         .route("/token/ticker/:ticker", get(token_ids_by_ticker))
-        .route("/nft/:id", get(nft))
+        .route("/nft/:id", get(nft));
+
+    router
+        .route("/order", get(orders))
+        .route("/order/:id", get(order))
+        .route("/order/pair/:pair", get(order_pair))
 }
 
 async fn forbidden_request() -> Result<(), ApiServerWebServerError> {
@@ -426,32 +437,7 @@ pub async fn transactions<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    const OFFSET: &str = "offset";
-    const ITEMS: &str = "items";
-    const DEFAULT_NUM_ITEMS: u32 = 10;
-    const MAX_NUM_ITEMS: u32 = 100;
-
-    let offset = params
-        .get(OFFSET)
-        .map(|offset| u32::from_str(offset))
-        .transpose()
-        .map_err(|_| {
-            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidOffset)
-        })?
-        .unwrap_or_default();
-
-    let items = params
-        .get(ITEMS)
-        .map(|items| u32::from_str(items))
-        .transpose()
-        .map_err(|_| {
-            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
-        })?
-        .unwrap_or(DEFAULT_NUM_ITEMS);
-    ensure!(
-        items <= MAX_NUM_ITEMS,
-        ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
-    );
+    let offset_and_items = get_offset_and_items(&params)?;
 
     let txs = state
         .db
@@ -461,7 +447,7 @@ pub async fn transactions<T: ApiServerStorage>(
             logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .get_transactions_with_block(items, offset)
+        .get_transactions_with_block(offset_and_items.items, offset_and_items.offset)
         .await
         .map_err(|e| {
             logging::log::error!("internal error: {e}");
@@ -782,33 +768,7 @@ pub async fn pools<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    const OFFSET: &str = "offset";
-    const ITEMS: &str = "items";
-    const DEFAULT_NUM_ITEMS: u32 = 10;
-    const MAX_NUM_ITEMS: u32 = 100;
     const SORT: &str = "sort";
-
-    let offset = params
-        .get(OFFSET)
-        .map(|offset| u32::from_str(offset))
-        .transpose()
-        .map_err(|_| {
-            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidOffset)
-        })?
-        .unwrap_or_default();
-
-    let items = params
-        .get(ITEMS)
-        .map(|items| u32::from_str(items))
-        .transpose()
-        .map_err(|_| {
-            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
-        })?
-        .unwrap_or(DEFAULT_NUM_ITEMS);
-    ensure!(
-        items <= MAX_NUM_ITEMS,
-        ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
-    );
 
     let sort = params
         .get(SORT)
@@ -816,18 +776,28 @@ pub async fn pools<T: ApiServerStorage>(
         .transpose()?
         .unwrap_or(PoolSorting::ByHeight);
 
+    let offset_and_items = get_offset_and_items(&params)?;
+
     let db_tx = state.db.transaction_ro().await.map_err(|e| {
         logging::log::error!("internal error: {e}");
         ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
     })?;
 
     let pools = match sort {
-        PoolSorting::ByHeight => db_tx.get_latest_pool_data(items, offset).await.map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?,
+        PoolSorting::ByHeight => db_tx
+            .get_latest_pool_data(offset_and_items.items, offset_and_items.offset)
+            .await
+            .map_err(|e| {
+                logging::log::error!("internal error: {e}");
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                )
+            })?,
         PoolSorting::ByPledge => db_tx
-            .get_pool_data_with_largest_staker_balance(items, offset)
+            .get_pool_data_with_largest_staker_balance(
+                offset_and_items.items,
+                offset_and_items.offset,
+            )
             .await
             .map_err(|e| {
                 logging::log::error!("internal error: {e}");
@@ -1151,10 +1121,10 @@ pub async fn coin_statistics<T: ApiServerStorage>(
 }
 
 pub async fn token_statistics<T: ApiServerStorage>(
-    Path(delegation_id): Path<String>,
+    Path(token_id): Path<String>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    let token_id = Address::from_string(&state.chain_config, delegation_id)
+    let token_id = Address::from_string(&state.chain_config, token_id)
         .map_err(|_| {
             ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidTokenId)
         })?
@@ -1194,32 +1164,8 @@ pub async fn token_ids<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
-    const OFFSET: &str = "offset";
-    const ITEMS: &str = "items";
-    const DEFAULT_NUM_ITEMS: u32 = 10;
-    const MAX_NUM_ITEMS: u32 = 100;
+    let offset_and_items = get_offset_and_items(&params)?;
 
-    let offset = params
-        .get(OFFSET)
-        .map(|offset| u32::from_str(offset))
-        .transpose()
-        .map_err(|_| {
-            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidOffset)
-        })?
-        .unwrap_or_default();
-
-    let items = params
-        .get(ITEMS)
-        .map(|items| u32::from_str(items))
-        .transpose()
-        .map_err(|_| {
-            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
-        })?
-        .unwrap_or(DEFAULT_NUM_ITEMS);
-    ensure!(
-        items <= MAX_NUM_ITEMS,
-        ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
-    );
     let token_ids: Vec<_> = state
         .db
         .transaction_ro()
@@ -1228,7 +1174,7 @@ pub async fn token_ids<T: ApiServerStorage>(
             logging::log::error!("internal error: {e}");
             ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
         })?
-        .get_token_ids(items, offset)
+        .get_token_ids(offset_and_items.items, offset_and_items.offset)
         .await
         .map_err(|e| {
             logging::log::error!("internal error: {e}");
@@ -1250,6 +1196,234 @@ pub async fn token_ids_by_ticker<T: ApiServerStorage>(
     Query(params): Query<BTreeMap<String, String>>,
     State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
 ) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let offset_and_items = get_offset_and_items(&params)?;
+
+    let token_ids: Vec<_> = state
+        .db
+        .transaction_ro()
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .get_token_ids_by_ticker(
+            offset_and_items.items,
+            offset_and_items.offset,
+            ticker.as_bytes(),
+        )
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .into_iter()
+        .map(|token_id| {
+            serde_json::Value::String(
+                Address::new(&state.chain_config, token_id).expect("addressable").into_string(),
+            )
+        })
+        .collect();
+
+    Ok(Json(serde_json::Value::Array(token_ids)))
+}
+
+async fn collect_currency_decimals_for_orders(
+    db_tx: &impl ApiServerStorageRead,
+    orders: impl Iterator<Item = &Order>,
+    chain_config: &ChainConfig,
+) -> Result<BTreeMap<CoinOrTokenId, u8>, ApiServerWebServerError> {
+    let get_token_id = |currency| match currency {
+        CoinOrTokenId::Coin => None,
+        CoinOrTokenId::TokenId(id) => Some(id),
+    };
+
+    // Grep decimals for all tokens encountered in orders
+    let token_decimals = {
+        let mut token_ids = BTreeSet::<TokenId>::new();
+        for data in orders {
+            if let Some(token_id) = get_token_id(data.give_currency) {
+                token_ids.insert(token_id);
+            }
+            if let Some(token_id) = get_token_id(data.ask_currency) {
+                token_ids.insert(token_id);
+            }
+        }
+
+        get_tokens_decimals(db_tx, token_ids.iter().copied()).await?
+    };
+
+    let mut token_decimals = token_decimals
+        .into_iter()
+        .map(|(id, decimals)| (CoinOrTokenId::TokenId(id), decimals))
+        .collect::<BTreeMap<_, _>>();
+    token_decimals.insert(CoinOrTokenId::Coin, chain_config.coin_decimals());
+
+    Ok(token_decimals)
+}
+
+async fn get_tokens_decimals(
+    db_tx: &impl ApiServerStorageRead,
+    token_ids: impl Iterator<Item = TokenId>,
+) -> Result<BTreeMap<TokenId, u8>, ApiServerWebServerError> {
+    let mut token_decimals = BTreeMap::new();
+    for token_id in token_ids {
+        let decimals = db_tx
+            .get_token_num_decimals(token_id)
+            .await
+            .map_err(|e| {
+                logging::log::error!("internal error: {e}");
+                ApiServerWebServerError::ServerError(
+                    ApiServerWebServerServerError::InternalServerError,
+                )
+            })?
+            .ok_or(ApiServerWebServerError::NotFound(
+                ApiServerWebServerNotFoundError::TokenNotFound,
+            ))?;
+        token_decimals.insert(token_id, decimals);
+    }
+    Ok(token_decimals)
+}
+
+pub async fn order<T: ApiServerStorage>(
+    Path(order_id): Path<String>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let order_id = Address::from_string(&state.chain_config, &order_id)
+        .map_err(|_| {
+            ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidOrderId)
+        })?
+        .into_object();
+
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let order = db_tx
+        .get_order(order_id)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?
+        .ok_or(ApiServerWebServerError::NotFound(
+            ApiServerWebServerNotFoundError::OrderNotFound,
+        ))?;
+
+    let decimals =
+        collect_currency_decimals_for_orders(&db_tx, std::iter::once(&order), &state.chain_config)
+            .await?;
+
+    let result = json_helpers::order_to_json(&state.chain_config, order_id, &order, &decimals);
+    Ok(Json(result))
+}
+
+pub async fn orders<T: ApiServerStorage>(
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let offset_and_items = get_offset_and_items(&params)?;
+
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let orders = db_tx
+        .get_all_orders(offset_and_items.items, offset_and_items.offset)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    let decimals = collect_currency_decimals_for_orders(
+        &db_tx,
+        orders.iter().map(|(_, order)| order),
+        &state.chain_config,
+    )
+    .await?;
+
+    let orders = orders.into_iter().map(|(order_id, data)| {
+        json_helpers::order_to_json(&state.chain_config, order_id, &data, &decimals)
+    });
+
+    Ok(Json(orders.collect::<Vec<_>>()))
+}
+
+pub async fn order_pair<T: ApiServerStorage>(
+    Path(pair): Path<String>,
+    Query(params): Query<BTreeMap<String, String>>,
+    State(state): State<ApiServerWebServerState<Arc<T>, Arc<impl TxSubmitClient>>>,
+) -> Result<impl IntoResponse, ApiServerWebServerError> {
+    let parse_currency = |s: &str| -> Result<CoinOrTokenId, ApiServerWebServerError> {
+        if s.to_uppercase() == state.chain_config.coin_ticker() {
+            Ok(CoinOrTokenId::Coin)
+        } else {
+            let token_id = Address::from_string(&state.chain_config, s)
+                .map_err(|_| {
+                    ApiServerWebServerError::ClientError(
+                        ApiServerWebServerClientError::InvalidTokenId,
+                    )
+                })?
+                .into_object();
+            Ok(CoinOrTokenId::TokenId(token_id))
+        }
+    };
+
+    let parse_trading_pair =
+        |s: &str| -> Result<(CoinOrTokenId, CoinOrTokenId), ApiServerWebServerError> {
+            let parts: Vec<_> = s.split("_").collect();
+            ensure!(
+                parts.len() == 2,
+                ApiServerWebServerError::ClientError(
+                    ApiServerWebServerClientError::InvalidOrderTradingPair
+                )
+            );
+            let first = parse_currency(parts[0])?;
+            let second = parse_currency(parts[1])?;
+            Ok((first, second))
+        };
+
+    let pair = parse_trading_pair(&pair)?;
+
+    let offset_and_items = get_offset_and_items(&params)?;
+
+    let db_tx = state.db.transaction_ro().await.map_err(|e| {
+        logging::log::error!("internal error: {e}");
+        ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+    })?;
+
+    let orders = db_tx
+        .get_orders_for_trading_pair(pair, offset_and_items.items, offset_and_items.offset)
+        .await
+        .map_err(|e| {
+            logging::log::error!("internal error: {e}");
+            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
+        })?;
+
+    let decimals = collect_currency_decimals_for_orders(
+        &db_tx,
+        orders.iter().map(|(_, order)| order),
+        &state.chain_config,
+    )
+    .await?;
+
+    let orders = orders.into_iter().map(|(order_id, data)| {
+        json_helpers::order_to_json(&state.chain_config, order_id, &data, &decimals)
+    });
+
+    Ok(Json(orders.collect::<Vec<_>>()))
+}
+
+struct OffsetAndItems {
+    offset: u32,
+    items: u32,
+}
+
+fn get_offset_and_items(
+    params: &BTreeMap<String, String>,
+) -> Result<OffsetAndItems, ApiServerWebServerError> {
     const OFFSET: &str = "offset";
     const ITEMS: &str = "items";
     const DEFAULT_NUM_ITEMS: u32 = 10;
@@ -1276,27 +1450,6 @@ pub async fn token_ids_by_ticker<T: ApiServerStorage>(
         items <= MAX_NUM_ITEMS,
         ApiServerWebServerError::ClientError(ApiServerWebServerClientError::InvalidNumItems)
     );
-    let token_ids: Vec<_> = state
-        .db
-        .transaction_ro()
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?
-        .get_token_ids_by_ticker(items, offset, ticker.as_bytes())
-        .await
-        .map_err(|e| {
-            logging::log::error!("internal error: {e}");
-            ApiServerWebServerError::ServerError(ApiServerWebServerServerError::InternalServerError)
-        })?
-        .into_iter()
-        .map(|token_id| {
-            serde_json::Value::String(
-                Address::new(&state.chain_config, token_id).expect("addressable").into_string(),
-            )
-        })
-        .collect();
 
-    Ok(Json(serde_json::Value::Array(token_ids)))
+    Ok(OffsetAndItems { offset, items })
 }

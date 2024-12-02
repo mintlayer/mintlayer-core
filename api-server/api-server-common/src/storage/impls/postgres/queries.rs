@@ -671,6 +671,12 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
         )
         .await?;
 
+        // Index for searching for trading pairs
+        self.just_execute(
+            "CREATE INDEX orders_currencies_index ON ml.orders (ask_currency, give_currency);",
+        )
+        .await?;
+
         logging::log::info!("Done creating database tables");
 
         Ok(())
@@ -2162,21 +2168,21 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
     }
 
     pub async fn get_order(
-        &mut self,
+        &self,
         order_id: OrderId,
         chain_config: &ChainConfig,
     ) -> Result<Option<Order>, ApiServerStorageError> {
-        let order_id = Address::new(chain_config, order_id)
+        let order_id_addr = Address::new(chain_config, order_id)
             .map_err(|_| ApiServerStorageError::AddressableError)?;
         let row = self
             .tx
             .query_opt(
-                r#"SELECT initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
+                r#"SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
                 FROM ml.orders
                 WHERE order_id = $1
                 AND block_height = (SELECT MAX(block_height) FROM ml.orders WHERE order_id = $1);
                 "#,
-                &[&order_id.as_str()],
+                &[&order_id_addr.as_str()],
             )
             .await
             .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?;
@@ -2186,78 +2192,9 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
             None => return Ok(None),
         };
 
-        let initially_asked: String = data.get(0);
-        let ask_balance: String = data.get(1);
-        let ask_currency: Vec<u8> = data.get(2);
-        let initially_given: String = data.get(3);
-        let give_balance: String = data.get(4);
-        let give_currency: Vec<u8> = data.get(5);
-        let conclude_destination: Vec<u8> = data.get(6);
-        let next_nonce: Vec<u8> = data.get(7);
-        let creation_block_height: i64 = data.get(8);
+        let (decoded_order_id, order) = decode_order_from_row(&data, chain_config)?;
+        assert_eq!(order_id, decoded_order_id);
 
-        let initially_asked = Amount::from_fixedpoint_str(&initially_asked, 0).ok_or_else(|| {
-            ApiServerStorageError::DeserializationError(format!(
-                "Deserialization failed for order {order_id}: invalid initial ask balance {initially_asked}"
-            ))
-        })?;
-
-        let ask_balance = Amount::from_fixedpoint_str(&ask_balance, 0).ok_or_else(|| {
-            ApiServerStorageError::DeserializationError(format!(
-                "Deserialization failed for order {order_id}: invalid ask balance {ask_balance}"
-            ))
-        })?;
-
-        let ask_currency =
-            CoinOrTokenId::decode_all(&mut ask_currency.as_slice()).map_err(|e| {
-                ApiServerStorageError::DeserializationError(format!(
-                    "Deserialization failed for order {order_id}: {e}"
-                ))
-            })?;
-
-        let initially_given = Amount::from_fixedpoint_str(&initially_given, 0).ok_or_else(|| {
-            ApiServerStorageError::DeserializationError(format!(
-                "Deserialization failed for order {order_id}: invalid initial give balance {initially_given}"
-            ))
-        })?;
-
-        let give_balance = Amount::from_fixedpoint_str(&give_balance, 0).ok_or_else(|| {
-            ApiServerStorageError::DeserializationError(format!(
-                "Deserialization failed for order {order_id}: invalid give balance {give_balance}"
-            ))
-        })?;
-
-        let give_currency =
-            CoinOrTokenId::decode_all(&mut give_currency.as_slice()).map_err(|e| {
-                ApiServerStorageError::DeserializationError(format!(
-                    "Deserialization failed for order {order_id}: {e}"
-                ))
-            })?;
-
-        let conclude_destination = Destination::decode_all(&mut conclude_destination.as_slice())
-            .map_err(|e| {
-                ApiServerStorageError::DeserializationError(format!(
-                    "Deserialization failed for order {order_id}: {e}"
-                ))
-            })?;
-
-        let next_nonce = AccountNonce::decode_all(&mut next_nonce.as_slice()).map_err(|e| {
-            ApiServerStorageError::DeserializationError(format!(
-                "Deserialization failed for order {order_id}: {e}"
-            ))
-        })?;
-
-        let order = Order {
-            creation_block_height: BlockHeight::new(creation_block_height as u64),
-            conclude_destination,
-            ask_balance,
-            initially_asked,
-            ask_currency,
-            give_balance,
-            give_currency,
-            initially_given,
-            next_nonce,
-        };
         Ok(Some(order))
     }
 
@@ -2315,6 +2252,153 @@ impl<'a, 'b> QueryFromConnection<'a, 'b> {
 
         Ok(())
     }
+
+    pub async fn get_orders_by_height(
+        &self,
+        len: u32,
+        offset: u32,
+        chain_config: &ChainConfig,
+    ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
+        let len = len as i64;
+        let offset = offset as i64;
+        self.tx
+            .query(
+                r#"
+                SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
+                FROM (
+                    SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, block_height, ROW_NUMBER() OVER(PARTITION BY order_id ORDER BY block_height DESC) as newest
+                    FROM ml.orders
+                )
+                WHERE newest = 1
+                ORDER BY creation_block_height DESC
+                OFFSET $1
+                LIMIT $2;
+            "#,
+                &[&offset, &len],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            .into_iter()
+            .map(|row| -> Result<(OrderId, Order), ApiServerStorageError> {
+                 decode_order_from_row(&row, chain_config)
+            })
+            .collect()
+    }
+
+    pub async fn get_orders_for_trading_pair(
+        &self,
+        pair: (CoinOrTokenId, CoinOrTokenId),
+        len: u32,
+        offset: u32,
+        chain_config: &ChainConfig,
+    ) -> Result<Vec<(OrderId, Order)>, ApiServerStorageError> {
+        let len = len as i64;
+        let offset = offset as i64;
+        self.tx
+            .query(
+                r#"
+                SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height
+                FROM (
+                    SELECT order_id, initially_asked, ask_balance, ask_currency, initially_given, give_balance, give_currency, conclude_destination, next_nonce, creation_block_height, block_height, ROW_NUMBER() OVER(PARTITION BY order_id ORDER BY block_height DESC) as newest
+                    FROM ml.orders
+                )
+                WHERE newest = 1 AND ((ask_currency = $1 AND give_currency = $2) OR (ask_currency = $2 AND give_currency = $1))
+                ORDER BY creation_block_height DESC
+                OFFSET $3
+                LIMIT $4;
+            "#,
+                &[&pair.0.encode(), &pair.1.encode(), &offset, &len],
+            )
+            .await
+            .map_err(|e| ApiServerStorageError::LowLevelStorageError(e.to_string()))?
+            .into_iter()
+            .map(|row| -> Result<(OrderId, Order), ApiServerStorageError> {
+                 decode_order_from_row(&row, chain_config)
+            })
+            .collect()
+    }
+}
+
+fn decode_order_from_row(
+    data: &tokio_postgres::Row,
+    chain_config: &ChainConfig,
+) -> Result<(OrderId, Order), ApiServerStorageError> {
+    let order_id: String = data.get("order_id");
+    let initially_asked: String = data.get("initially_asked");
+    let ask_balance: String = data.get("ask_balance");
+    let ask_currency: Vec<u8> = data.get("ask_currency");
+    let initially_given: String = data.get("initially_given");
+    let give_balance: String = data.get("give_balance");
+    let give_currency: Vec<u8> = data.get("give_currency");
+    let conclude_destination: Vec<u8> = data.get("conclude_destination");
+    let next_nonce: Vec<u8> = data.get("next_nonce");
+    let creation_block_height: i64 = data.get("creation_block_height");
+
+    let order_id = Address::<OrderId>::from_string(chain_config, order_id)
+        .map_err(|_| ApiServerStorageError::AddressableError)?
+        .into_object();
+
+    let initially_asked = Amount::from_fixedpoint_str(&initially_asked, 0).ok_or_else(|| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Deserialization failed for order {order_id}: invalid initial ask balance {initially_asked}"
+            ))
+        })?;
+
+    let ask_balance = Amount::from_fixedpoint_str(&ask_balance, 0).ok_or_else(|| {
+        ApiServerStorageError::DeserializationError(format!(
+            "Deserialization failed for order {order_id}: invalid ask balance {ask_balance}"
+        ))
+    })?;
+
+    let ask_currency = CoinOrTokenId::decode_all(&mut ask_currency.as_slice()).map_err(|e| {
+        ApiServerStorageError::DeserializationError(format!(
+            "Deserialization failed for order {order_id}: {e}"
+        ))
+    })?;
+
+    let initially_given = Amount::from_fixedpoint_str(&initially_given, 0).ok_or_else(|| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Deserialization failed for order {order_id}: invalid initial give balance {initially_given}"
+            ))
+        })?;
+
+    let give_balance = Amount::from_fixedpoint_str(&give_balance, 0).ok_or_else(|| {
+        ApiServerStorageError::DeserializationError(format!(
+            "Deserialization failed for order {order_id}: invalid give balance {give_balance}"
+        ))
+    })?;
+
+    let give_currency = CoinOrTokenId::decode_all(&mut give_currency.as_slice()).map_err(|e| {
+        ApiServerStorageError::DeserializationError(format!(
+            "Deserialization failed for order {order_id}: {e}"
+        ))
+    })?;
+
+    let conclude_destination = Destination::decode_all(&mut conclude_destination.as_slice())
+        .map_err(|e| {
+            ApiServerStorageError::DeserializationError(format!(
+                "Deserialization failed for order {order_id}: {e}"
+            ))
+        })?;
+
+    let next_nonce = AccountNonce::decode_all(&mut next_nonce.as_slice()).map_err(|e| {
+        ApiServerStorageError::DeserializationError(format!(
+            "Deserialization failed for order {order_id}: {e}"
+        ))
+    })?;
+
+    let order = Order {
+        creation_block_height: BlockHeight::new(creation_block_height as u64),
+        conclude_destination,
+        ask_balance,
+        initially_asked,
+        ask_currency,
+        give_balance,
+        give_currency,
+        initially_given,
+        next_nonce,
+    };
+    Ok((order_id, order))
 }
 
 fn amount_to_str(amount: Amount) -> String {

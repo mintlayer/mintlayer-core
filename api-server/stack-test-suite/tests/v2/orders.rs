@@ -177,3 +177,171 @@ async fn create_fill_conclude_order(#[case] seed: Seed) {
 
     task.abort();
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn order_pairs(#[case] seed: Seed) {
+    use common::{chain::tokens::TokenId, primitives::H256};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+
+    let task = tokio::spawn(async move {
+        let web_server_state = {
+            let mut rng = make_seedable_rng(seed);
+
+            let chain_config = create_unit_test_config();
+
+            let chainstate_blocks = {
+                let mut tf = TestFramework::builder(&mut rng)
+                    .with_chain_config(chain_config.clone())
+                    .build();
+
+                // Issue and mint some tokens to create an order with different currencies
+                let issue_and_mint_result =
+                    helpers::issue_and_mint_tokens_from_genesis(&mut rng, &mut tf);
+
+                // Create order
+                let order_data = OrderData::new(
+                    Destination::AnyoneCanSpend,
+                    OutputValue::Coin(Amount::from_atoms(10)),
+                    OutputValue::TokenV1(issue_and_mint_result.token_id, Amount::from_atoms(10)),
+                );
+                let order_id = make_order_id(&issue_and_mint_result.tokens_outpoint);
+                let tx_1 = TransactionBuilder::new()
+                    .add_input(
+                        TxInput::Utxo(issue_and_mint_result.tokens_outpoint),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::CreateOrder(Box::new(order_data)))
+                    .build();
+
+                let block1 = tf.make_block_builder().add_transaction(tx_1.clone()).build(&mut rng);
+                tf.process_block(block1.clone(), BlockSource::Local).unwrap();
+
+                _ = tx.send((
+                    Address::new(&chain_config, order_id).unwrap().into_string(),
+                    chain_config.coin_ticker().to_owned(),
+                    Address::new(&chain_config, issue_and_mint_result.token_id)
+                        .unwrap()
+                        .into_string(),
+                ));
+
+                vec![issue_and_mint_result.issue_block, issue_and_mint_result.mint_block, block1]
+            };
+
+            let storage = {
+                let mut storage = TransactionalApiServerInMemoryStorage::new(&chain_config);
+
+                let mut db_tx = storage.transaction_rw().await.unwrap();
+                db_tx.reinitialize_storage(&chain_config).await.unwrap();
+                db_tx.commit().await.unwrap();
+
+                storage
+            };
+
+            let chain_config = Arc::new(chain_config);
+            let mut local_node = BlockchainState::new(Arc::clone(&chain_config), storage);
+            local_node.scan_genesis(chain_config.genesis_block()).await.unwrap();
+            local_node.scan_blocks(BlockHeight::new(0), chainstate_blocks).await.unwrap();
+
+            ApiServerWebServerState {
+                db: Arc::new(local_node.storage().clone_storage().await),
+                chain_config: Arc::clone(&chain_config),
+                rpc: Arc::new(DummyRPC {}),
+                cached_values: Arc::new(CachedValues {
+                    feerate_points: RwLock::new((get_time(), vec![])),
+                }),
+                time_getter: Default::default(),
+            }
+        };
+
+        web_server(listener, web_server_state, true).await
+    });
+
+    let (order_id, ml, tkn) = rx.await.unwrap();
+
+    // ML_TKN
+    {
+        let url = format!("/api/v2/order/pair/{}_{}?offset=0&items={}", ml, tkn, 1);
+
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+
+        let body = response.text().await.unwrap();
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let arr_body = body.as_array().unwrap();
+
+        assert_eq!(arr_body.len(), 1);
+        assert_eq!(
+            arr_body[0].as_object().unwrap().get("order_id").unwrap(),
+            &serde_json::Value::String(order_id.clone())
+        );
+    }
+
+    // TKN_ML
+    {
+        let url = format!("/api/v2/order/pair/{}_{}?offset=0&items={}", tkn, ml, 1);
+
+        let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+
+        let body = response.text().await.unwrap();
+        let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let arr_body = body.as_array().unwrap();
+
+        assert_eq!(arr_body.len(), 1);
+        assert_eq!(
+            arr_body[0].as_object().unwrap().get("order_id").unwrap(),
+            &serde_json::Value::String(order_id)
+        );
+    }
+
+    let mut rng = make_seedable_rng(seed);
+
+    // Random ticker
+    let random_ticker = test_utils::random_ascii_alphanumeric_string(&mut rng, 3..5);
+    let url = format!(
+        "/api/v2/order/pair/{}_{}?offset=0&items={}",
+        random_ticker, ml, 1
+    );
+
+    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 400);
+
+    let body = response.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+
+    assert_eq!(body["error"].as_str().unwrap(), "Invalid token Id");
+
+    // Random token
+    let chain_config = create_unit_test_config();
+    let random_token_id = TokenId::new(H256::random_using(&mut rng));
+    let random_token_id = Address::new(&chain_config, random_token_id).unwrap().into_string();
+
+    let url = format!(
+        "/api/v2/order/pair/{}_{}?offset=0&items={}",
+        random_token_id, ml, 1
+    );
+
+    let response = reqwest::get(format!("http://{}:{}{url}", addr.ip(), addr.port()))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let body = response.text().await.unwrap();
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let arr_body = body.as_array().unwrap();
+    assert!(arr_body.is_empty());
+
+    task.abort();
+}

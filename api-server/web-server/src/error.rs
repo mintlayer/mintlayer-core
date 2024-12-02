@@ -65,6 +65,8 @@ pub enum ApiServerWebServerNotFoundError {
     TokenNotFound,
     #[error("NFT not found")]
     NftNotFound,
+    #[error("Order not found")]
+    OrderNotFound,
 }
 
 #[derive(Debug, Error, Serialize)]
@@ -101,6 +103,10 @@ pub enum ApiServerWebServerClientError {
     InvalidNftId,
     #[error("Invalid in top X MB query parameter")]
     InvalidInTopX,
+    #[error("Invalid order Id")]
+    InvalidOrderId,
+    #[error("Invalid order trading pair")]
+    InvalidOrderTradingPair,
 }
 
 #[allow(dead_code)]
