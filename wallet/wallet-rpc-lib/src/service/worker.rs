@@ -193,7 +193,7 @@ where
         );
         let wallet_type = args.wallet_type(self.node_rpc.is_cold_wallet_node());
         let (computed_args, wallet_created) =
-            args.parse_mnemonic().map_err(RpcError::InvalidMnemonic)?;
+            args.parse_or_generate_mnemonic_if_needed().map_err(RpcError::InvalidMnemonic)?;
 
         let wallet = if scan_blockchain {
             WalletController::recover_wallet(

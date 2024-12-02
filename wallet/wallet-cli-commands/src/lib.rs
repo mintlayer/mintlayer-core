@@ -19,7 +19,8 @@ mod helper_types;
 
 pub use command_handler::CommandHandler;
 pub use errors::WalletCliCommandError;
-use helper_types::{CliHardwareWalletType, YesNo};
+pub use helper_types::CliHardwareWalletType;
+use helper_types::YesNo;
 use rpc::description::{Described, Module};
 use wallet_rpc_lib::{types::NodeInterface, ColdWalletRpcDescription, WalletRpcDescription};
 
@@ -65,7 +66,8 @@ pub enum WalletManagementCommand {
         passphrase: Option<String>,
 
         /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
-        /// the software wallet
+        /// the software wallet. Cannot specify a mnemonic or passphrase here, input them on the
+        /// hardware wallet instead when initializing the device.
         #[arg(long, conflicts_with_all(["mnemonic", "passphrase"]))]
         hardware_wallet: Option<CliHardwareWalletType>,
     },
@@ -76,14 +78,14 @@ pub enum WalletManagementCommand {
         wallet_path: PathBuf,
 
         /// If 'store-seed-phrase', the seed-phrase will be stored in the wallet file.
-        /// If 'do-not-store-seed-phrase', the seed-phrase will only be printed on the screen.
         /// Not storing the seed-phrase can be seen as a security measure
         /// to ensure sufficient secrecy in case that seed-phrase is reused
         /// elsewhere if this wallet is compromised.
         #[arg(required_unless_present("hardware_wallet"))]
         whether_to_store_seed_phrase: Option<CliStoreSeedPhrase>,
 
-        /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
+        /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument).
+        #[arg(required_unless_present("hardware_wallet"))]
         mnemonic: Option<String>,
 
         /// Passphrase along the mnemonic
@@ -91,8 +93,9 @@ pub enum WalletManagementCommand {
         passphrase: Option<String>,
 
         /// Create a wallet using a connected hardware wallet. Only the public keys will be kept in
-        /// the software wallet
-        #[arg(long, conflicts_with_all(["mnemonic", "passphrase"]))]
+        /// the software wallet. Cannot specify a mnemonic or passphrase here, input them on the
+        /// hardware wallet instead when initializing the device.
+        #[arg(long, conflicts_with_all(["passphrase"]))]
         hardware_wallet: Option<CliHardwareWalletType>,
     },
 

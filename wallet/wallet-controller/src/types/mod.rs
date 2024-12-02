@@ -188,7 +188,7 @@ impl WalletTypeArgs {
         }
     }
 
-    pub fn parse_mnemonic(
+    pub fn parse_or_generate_mnemonic_if_needed(
         self,
     ) -> Result<(WalletTypeArgsComputed, CreatedWallet), mnemonic::Error> {
         match self {

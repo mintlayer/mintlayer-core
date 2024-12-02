@@ -308,45 +308,22 @@ where
     pub async fn get_delegations(
         &self,
     ) -> Result<Vec<(DelegationId, PoolId, Amount)>, ControllerError<T>> {
-        let delegations = match &self.wallet {
-            RuntimeWallet::Software(w) => {
-                let delegations =
-                    w.get_delegations(self.account_index).map_err(ControllerError::WalletError)?;
-                let tasks: FuturesUnordered<_> = delegations
-                    .into_iter()
-                    .map(|(delegation_id, delegation_data)| {
-                        self.get_delegation_share(delegation_data, *delegation_id).map(|res| {
-                            res.map(|opt| {
-                                opt.map(|(delegation_id, amount)| {
-                                    (delegation_id, delegation_data.pool_id, amount)
-                                })
-                            })
+        let tasks: FuturesUnordered<_> = self
+            .wallet
+            .get_delegations(self.account_index)
+            .map_err(ControllerError::WalletError)?
+            .map(|(delegation_id, delegation_data)| {
+                self.get_delegation_share(delegation_data, *delegation_id).map(|res| {
+                    res.map(|opt| {
+                        opt.map(|(delegation_id, amount)| {
+                            (delegation_id, delegation_data.pool_id, amount)
                         })
                     })
-                    .collect();
+                })
+            })
+            .collect();
 
-                tasks.try_collect::<Vec<_>>().await?.into_iter().flatten().collect()
-            }
-            #[cfg(feature = "trezor")]
-            RuntimeWallet::Trezor(w) => {
-                let delegations =
-                    w.get_delegations(self.account_index).map_err(ControllerError::WalletError)?;
-                let tasks: FuturesUnordered<_> = delegations
-                    .into_iter()
-                    .map(|(delegation_id, delegation_data)| {
-                        self.get_delegation_share(delegation_data, *delegation_id).map(|res| {
-                            res.map(|opt| {
-                                opt.map(|(delegation_id, amount)| {
-                                    (delegation_id, delegation_data.pool_id, amount)
-                                })
-                            })
-                        })
-                    })
-                    .collect();
-
-                tasks.try_collect::<Vec<_>>().await?.into_iter().flatten().collect()
-            }
-        };
+        let delegations = tasks.try_collect::<Vec<_>>().await?.into_iter().flatten().collect();
 
         Ok(delegations)
     }
