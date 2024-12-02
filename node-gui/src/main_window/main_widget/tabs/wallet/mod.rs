@@ -39,10 +39,10 @@ use iced_aw::tab_bar::TabLabel;
 use common::chain::DelegationId;
 use node_gui_backend::{
     messages::{
-        AccountId, BackendRequest, CreateDelegationRequest, DecommissionPoolRequest,
-        DelegateStakingRequest, SendDelegateToAddressRequest, SendRequest, StakeRequest, WalletId,
+        BackendRequest, CreateDelegationRequest, DecommissionPoolRequest, DelegateStakingRequest,
+        SendDelegateToAddressRequest, SendRequest, StakeRequest, WalletId,
     },
-    BackendSender,
+    AccountId, BackendSender,
 };
 use wallet_controller::DEFAULT_ACCOUNT_INDEX;
 use wallet_types::wallet_type::WalletType;

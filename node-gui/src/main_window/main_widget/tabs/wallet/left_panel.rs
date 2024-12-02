@@ -18,7 +18,7 @@ use iced::{
     Alignment, Element, Length,
 };
 
-use node_gui_backend::messages::{AccountId, WalletInfo};
+use node_gui_backend::{messages::WalletInfo, AccountId};
 use wallet_types::wallet_type::WalletType;
 
 use crate::main_window::NodeState;

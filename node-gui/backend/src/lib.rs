@@ -21,6 +21,9 @@ mod error;
 mod p2p_event_handler;
 mod wallet_events;
 
+mod account_id;
+pub use account_id::AccountId;
+
 use chainstate::ChainInfo;
 use common::address::{Address, AddressError};
 use common::chain::{ChainConfig, Destination};

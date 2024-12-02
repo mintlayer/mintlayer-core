@@ -46,10 +46,11 @@ use wallet_types::{
 };
 
 use super::{
+    account_id::AccountId,
     chainstate_event_handler::ChainstateEventHandler,
     error::BackendError,
     messages::{
-        AccountId, AccountInfo, AddressInfo, BackendEvent, BackendRequest, CreateDelegationRequest,
+        AccountInfo, AddressInfo, BackendEvent, BackendRequest, CreateDelegationRequest,
         DecommissionPoolRequest, DelegateStakingRequest, EncryptionAction, EncryptionState,
         SendDelegateToAddressRequest, SendRequest, StakeRequest, TransactionInfo, WalletId,
         WalletInfo,

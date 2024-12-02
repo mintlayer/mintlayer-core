@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::messages::{AccountId, WalletId};
+use super::{account_id::AccountId, messages::WalletId};
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum BackendError {

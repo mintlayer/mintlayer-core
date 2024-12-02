@@ -20,14 +20,14 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use serde::{de::Error, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use chainstate::ChainInfo;
 use common::{
     chain::{DelegationId, GenBlock, PoolId, SignedTransaction},
     primitives::{Amount, BlockHeight, Id},
 };
-use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
+use crypto::key::hdkd::child_number::ChildNumber;
 use p2p::P2pEvent;
 use serialization::hex_encoded::hex_encoded_serialization;
 use wallet::account::transaction_list::TransactionList;
@@ -36,7 +36,7 @@ use wallet_controller::types::Balances;
 use wallet_rpc_lib::types::PoolInfo;
 use wallet_types::wallet_type::WalletType;
 
-use super::{BackendError, ImportOrCreate};
+use super::{AccountId, BackendError, ImportOrCreate};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct WalletId(u64);
@@ -46,35 +46,6 @@ static NEXT_WALLET_ID: AtomicU64 = AtomicU64::new(0);
 impl WalletId {
     pub fn new() -> Self {
         Self(NEXT_WALLET_ID.fetch_add(1, Ordering::Relaxed))
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AccountId(U31);
-
-impl AccountId {
-    pub fn new(index: U31) -> Self {
-        Self(index)
-    }
-
-    pub fn account_index(&self) -> U31 {
-        self.0
-    }
-}
-
-impl Serialize for AccountId {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.0.into_u32().serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for AccountId {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let i = u32::deserialize(deserializer)?;
-        let i = U31::from_u32(i).ok_or(D::Error::custom(format!(
-            "Integer has invalid value for AccountId ({i})"
-        )))?;
-        Ok(Self::new(i))
     }
 }
 

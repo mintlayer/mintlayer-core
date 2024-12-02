@@ -36,3 +36,9 @@ serde_with.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 variant_count.workspace = true
+
+[dev-dependencies]
+test-utils = { path = "../../test-utils" }
+
+rstest.workspace = true
+serde_json.workspace = true
