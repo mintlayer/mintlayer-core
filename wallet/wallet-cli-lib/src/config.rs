@@ -20,6 +20,7 @@ use common::chain::config::{regtest_options::ChainConfigOptions, ChainType};
 use crypto::key::hdkd::u31::U31;
 use utils::clap_utils;
 use utils_networking::NetworkAddressWithPort;
+use wallet_rpc_lib::cmdline::CliHardwareWalletType;
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum Network {
@@ -83,6 +84,10 @@ pub struct CliArgs {
     /// Force change the wallet type from hot to cold or from cold to hot
     #[clap(long, requires("wallet_file"))]
     pub force_change_wallet_type: bool,
+
+    /// Specified if the wallet file is of a hardware wallet type e.g. Trezor
+    #[arg(long, requires("wallet_file"))]
+    pub hardware_wallet: Option<CliHardwareWalletType>,
 
     /// DEPRECATED: use start_staking_for_account instead!
     /// Start staking for the DEFAULT account after starting the wallet

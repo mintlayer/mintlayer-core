@@ -29,7 +29,9 @@ use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::TxInfo;
 use wallet_controller::{
-    types::{CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
+    types::{
+        CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo, WalletTypeArgs,
+    },
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::types::{
@@ -70,10 +72,7 @@ pub trait WalletInterface {
     async fn create_wallet(
         &self,
         path: PathBuf,
-        store_seed_phrase: bool,
-        mnemonic: Option<String>,
-        passphrase: Option<String>,
-        hardware_wallet: Option<HardwareWalletType>,
+        wallet_args: WalletTypeArgs,
     ) -> Result<CreatedWallet, Self::Error>;
 
     async fn recover_wallet(

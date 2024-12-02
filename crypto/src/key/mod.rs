@@ -30,7 +30,10 @@ pub use signature::Signature;
 use self::key_holder::{PrivateKeyHolder, PublicKeyHolder};
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub enum SignatureError {}
+pub enum SignatureError {
+    #[error("Failed to construct a valid signature")]
+    SignatureConstructionError,
+}
 
 #[must_use]
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]

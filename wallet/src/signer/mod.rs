@@ -15,17 +15,24 @@
 
 use std::sync::Arc;
 
-use common::chain::{
-    signature::{
-        inputsig::{
-            arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
-            classical_multisig::multisig_partial_signature::PartiallySignedMultisigStructureError,
+use common::{
+    address::AddressError,
+    chain::{
+        signature::{
+            inputsig::{
+                arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
+                classical_multisig::multisig_partial_signature::PartiallySignedMultisigStructureError,
+            },
+            DestinationSigError,
         },
-        DestinationSigError,
+        ChainConfig, Destination, SignedTransactionIntent, SignedTransactionIntentError,
+        Transaction,
     },
-    ChainConfig, Destination, SignedTransactionIntent, SignedTransactionIntentError, Transaction,
 };
-use crypto::key::hdkd::{derivable::DerivationError, u31::U31};
+use crypto::key::{
+    hdkd::{derivable::DerivationError, u31::U31},
+    SignatureError,
+};
 use wallet_storage::{
     WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
@@ -82,6 +89,10 @@ pub enum SignerError {
     UnsupportedTokensV0,
     #[error("Invalid TxOutput type as UTXO, cannot be spent")]
     InvalidUtxo,
+    #[error("Address error: {0}")]
+    AddressError(#[from] AddressError),
+    #[error("Signature error: {0}")]
+    SignatureError(#[from] SignatureError),
 }
 
 type SignerResult<T> = Result<T, SignerError>;

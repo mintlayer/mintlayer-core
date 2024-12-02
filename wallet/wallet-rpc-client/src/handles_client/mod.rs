@@ -125,41 +125,10 @@ where
     async fn create_wallet(
         &self,
         path: PathBuf,
-        store_seed_phrase: bool,
-        mnemonic: Option<String>,
-        passphrase: Option<String>,
-        hardware_wallet: Option<HardwareWalletType>,
+        wallet_args: WalletTypeArgs,
     ) -> Result<CreatedWallet, Self::Error> {
-        let store_seed_phrase = if store_seed_phrase {
-            StoreSeedPhrase::Store
-        } else {
-            StoreSeedPhrase::DoNotStore
-        };
-
-        let args = match hardware_wallet {
-            None => WalletTypeArgs::Software {
-                mnemonic,
-                passphrase,
-                store_seed_phrase,
-            },
-            #[cfg(feature = "trezor")]
-            Some(HardwareWalletType::Trezor) => {
-                ensure!(
-                    mnemonic.is_none()
-                        && passphrase.is_none()
-                        && store_seed_phrase == StoreSeedPhrase::DoNotStore,
-                    RpcError::HardwareWalletWithMnemonic
-                );
-                WalletTypeArgs::Trezor
-            }
-            #[cfg(not(feature = "trezor"))]
-            Some(_) => {
-                return Err(RpcError::<N>::InvalidHardwareWallet)?;
-            }
-        };
-
         self.wallet_rpc
-            .create_wallet(path, args, ScanBlockchain::SkipScanning)
+            .create_wallet(path, wallet_args, ScanBlockchain::SkipScanning)
             .await
             .map(Into::into)
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
@@ -191,7 +160,7 @@ where
                     mnemonic.is_none()
                         && passphrase.is_none()
                         && store_seed_phrase == StoreSeedPhrase::DoNotStore,
-                    RpcError::HardwareWalletWithMnemonic
+                    RpcError::HardwareWalletWithMnemonicOrPassphrase
                 );
                 WalletTypeArgs::Trezor
             }

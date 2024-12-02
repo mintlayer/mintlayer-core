@@ -106,19 +106,19 @@ fn make_menu_file<'a>(wallet_mode: WalletMode) -> Item<'a, MenuMessage, Theme, i
             WalletMode::Hot => {
                 let menu = vec![
                     menu_item(
-                        "Create new Hot wallet",
+                        "Create new Software wallet",
                         MenuMessage::CreateNewWallet {
                             wallet_type: WalletType::Hot,
                         },
                     ),
                     menu_item(
-                        "Recover Hot wallet",
+                        "Recover Software wallet",
                         MenuMessage::RecoverWallet {
                             wallet_type: WalletType::Hot,
                         },
                     ),
                     menu_item(
-                        "Open Hot wallet",
+                        "Open Software wallet",
                         MenuMessage::OpenWallet {
                             wallet_type: WalletType::Hot,
                         },
