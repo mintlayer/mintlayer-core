@@ -31,7 +31,6 @@ use node_gui_backend::{
 };
 use p2p::{net::types::services::Services, types::peer_id::PeerId, P2pEvent};
 use rfd::AsyncFileDialog;
-use serialization::hex_encoded::HexEncoded;
 use wallet_cli_commands::ConsoleCommand;
 use wallet_types::wallet_type::WalletType;
 
@@ -188,7 +187,7 @@ pub enum MainWindowMessage {
 
     SubmitTx {
         wallet_id: WalletId,
-        tx: HexEncoded<SignedTransaction>,
+        tx: SignedTransaction,
     },
 
     CopyToClipboard(String),

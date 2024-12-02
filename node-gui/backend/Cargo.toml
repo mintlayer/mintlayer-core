@@ -31,6 +31,8 @@ wallet-cli-commands = { path = "../../wallet/wallet-cli-commands"}
 anyhow.workspace = true
 chrono.workspace = true
 futures.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_with.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 variant_count.workspace = true

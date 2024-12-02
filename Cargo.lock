@@ -4539,6 +4539,8 @@ dependencies = [
  "node-comm",
  "node-lib",
  "p2p",
+ "serde",
+ "serde_with",
  "serialization",
  "subsystem",
  "thiserror",

@@ -20,6 +20,8 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+use serde::{Deserialize, Serialize};
+
 use chainstate::ChainInfo;
 use common::{
     chain::{DelegationId, GenBlock, PoolId, SignedTransaction},
@@ -27,15 +29,16 @@ use common::{
 };
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use p2p::P2pEvent;
+use serialization::hex_encoded::hex_encoded_serialization;
 use wallet::account::transaction_list::TransactionList;
 use wallet_cli_commands::ConsoleCommand;
 use wallet_controller::types::Balances;
-use wallet_rpc_lib::types::{HexEncoded, PoolInfo};
+use wallet_rpc_lib::types::PoolInfo;
 use wallet_types::wallet_type::WalletType;
 
 use super::{BackendError, ImportOrCreate};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct WalletId(u64);
 
 static NEXT_WALLET_ID: AtomicU64 = AtomicU64::new(0);
@@ -159,10 +162,11 @@ pub struct SendDelegateToAddressRequest {
     pub delegation_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TransactionInfo {
     pub wallet_id: WalletId,
-    pub tx: HexEncoded<SignedTransaction>,
+    #[serde(with = "hex_encoded_serialization")]
+    pub tx: SignedTransaction,
 }
 
 #[derive(Debug)]
@@ -220,7 +224,7 @@ pub enum BackendRequest {
 
     SubmitTx {
         wallet_id: WalletId,
-        tx: HexEncoded<SignedTransaction>,
+        tx: SignedTransaction,
     },
 
     TransactionList {
