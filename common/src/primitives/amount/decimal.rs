@@ -65,7 +65,9 @@ impl DecimalAmount {
 
     /// Convert to amount using given number of decimals
     pub fn to_amount(self, decimals: u8) -> Option<Amount> {
-        Some(Amount::from_atoms(self.with_decimals(decimals)?.mantissa))
+        Some(Amount::from_atoms(
+            self.without_padding().with_decimals(decimals)?.mantissa,
+        ))
     }
 
     /// Change the number of decimals. Can only increase decimals, otherwise we risk losing digits.
@@ -320,5 +322,31 @@ mod test {
     fn parse_err(#[case] s: &str, #[case] expected_err: ParseError) {
         let err = s.parse::<DecimalAmount>().expect_err("parsing succeeded");
         assert_eq!(err, expected_err);
+    }
+
+    #[test]
+    fn to_amount() {
+        let dec_amount1 = DecimalAmount::from_uint_decimal(12345, 2);
+        let dec_amount2 = DecimalAmount::from_uint_decimal(1234500, 4);
+
+        assert!(dec_amount1.is_same(&dec_amount2.without_padding()));
+
+        let amount = dec_amount1.to_amount(0);
+        assert!(amount.is_none());
+        let amount = dec_amount1.to_amount(2);
+        assert_eq!(amount, Some(Amount::from_atoms(12345)));
+        let amount = dec_amount1.to_amount(3);
+        assert_eq!(amount, Some(Amount::from_atoms(123450)));
+        let amount = dec_amount1.to_amount(4);
+        assert_eq!(amount, Some(Amount::from_atoms(1234500)));
+
+        let amount = dec_amount2.to_amount(0);
+        assert!(amount.is_none());
+        let amount = dec_amount2.to_amount(2);
+        assert_eq!(amount, Some(Amount::from_atoms(12345)));
+        let amount = dec_amount2.to_amount(3);
+        assert_eq!(amount, Some(Amount::from_atoms(123450)));
+        let amount = dec_amount2.to_amount(4);
+        assert_eq!(amount, Some(Amount::from_atoms(1234500)));
     }
 }
