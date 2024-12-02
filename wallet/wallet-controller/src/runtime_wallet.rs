@@ -1265,4 +1265,19 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
             }
         }
     }
+
+    pub fn get_delegations(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<Box<dyn Iterator<Item = (&DelegationId, &DelegationData)> + '_>> {
+        match self {
+            RuntimeWallet::Software(w) => w
+                .get_delegations(account_index)
+                .map(|it| -> Box<dyn Iterator<Item = _>> { Box::new(it) }),
+            #[cfg(feature = "trezor")]
+            RuntimeWallet::Trezor(w) => w
+                .get_delegations(account_index)
+                .map(|it| -> Box<dyn Iterator<Item = _>> { Box::new(it) }),
+        }
+    }
 }

@@ -91,16 +91,16 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
     }
 }
 
-/// Get any referenced token by this output
+/// Get any token referenced by this output
 /// ignore tokens V0
 pub fn get_referenced_token_ids(output: &TxOutput) -> BTreeSet<TokenId> {
     match output {
         TxOutput::Transfer(v, _)
         | TxOutput::LockThenTransfer(v, _, _)
         | TxOutput::Burn(v)
-        | TxOutput::Htlc(v, _) => referenced_token_id(v),
+        | TxOutput::Htlc(v, _) => referenced_token_id(v).into_iter().collect(),
         | TxOutput::CreateOrder(data) => {
-            let mut tokens = referenced_token_id(data.ask());
+            let mut tokens: BTreeSet<_> = referenced_token_id(data.ask()).into_iter().collect();
             tokens.extend(referenced_token_id(data.give()));
             tokens
         }
@@ -114,9 +114,9 @@ pub fn get_referenced_token_ids(output: &TxOutput) -> BTreeSet<TokenId> {
     }
 }
 
-fn referenced_token_id(v: &OutputValue) -> BTreeSet<TokenId> {
+fn referenced_token_id(v: &OutputValue) -> Option<TokenId> {
     match v {
-        OutputValue::Coin(_) | OutputValue::TokenV0(_) => BTreeSet::new(),
-        OutputValue::TokenV1(token_id, _) => BTreeSet::from_iter([*token_id]),
+        OutputValue::Coin(_) | OutputValue::TokenV0(_) => None,
+        OutputValue::TokenV1(token_id, _) => Some(*token_id),
     }
 }
