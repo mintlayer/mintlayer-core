@@ -20,7 +20,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use serde::{Deserialize, Serialize};
+use serde::{de::Error, Deserialize, Serialize};
 
 use chainstate::ChainInfo;
 use common::{
@@ -62,7 +62,23 @@ impl AccountId {
     }
 }
 
-#[derive(Debug, Clone)]
+impl Serialize for AccountId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.into_u32().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for AccountId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let i = u32::deserialize(deserializer)?;
+        let i = U31::from_u32(i).ok_or(D::Error::custom(format!(
+            "Integer has invalid value for AccountId ({i})"
+        )))?;
+        Ok(Self::new(i))
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct WalletInfo {
     pub wallet_id: WalletId,
     pub path: PathBuf,
@@ -72,7 +88,7 @@ pub struct WalletInfo {
     pub wallet_type: WalletType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct AccountInfo {
     pub name: Option<String>,
     pub addresses: BTreeMap<u32, String>,
@@ -83,7 +99,7 @@ pub struct AccountInfo {
     pub transaction_list: TransactionList,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct AddressInfo {
     pub wallet_id: WalletId,
     pub account_id: AccountId,
@@ -162,7 +178,7 @@ pub struct SendDelegateToAddressRequest {
     pub delegation_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TransactionInfo {
     pub wallet_id: WalletId,
     #[serde(with = "hex_encoded_serialization")]
@@ -177,7 +193,7 @@ pub enum EncryptionAction {
     Lock,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum EncryptionState {
     EnabledLocked,
     EnabledUnlocked,
