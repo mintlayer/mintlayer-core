@@ -555,8 +555,12 @@ class WalletCliController(WalletCliControllerBase):
         output = await self._write_command(
             f"token-make-tx-to-send-with-intent {token_id} {destination} {amount} {intent}\n")
 
-        pattern = r'The hex encoded transaction is:\n([0-9a-fA-F]+)\n\nThe hex encoded signed transaction intent is:\n([0-9a-fA-F]+)'
+        pattern = (
+            r'The hex encoded transaction is:\n([0-9a-fA-F]+)\n\n'
+            r'The transaction id is:\n([0-9a-fA-F]+)\n\n'
+            r'The hex encoded signed transaction intent is:\n([0-9a-fA-F]+)'
+        )
         match = re.search(pattern, output)
         assert match is not None
 
-        return (match.group(1), match.group(2))
+        return (match.group(1), match.group(2), match.group(3))

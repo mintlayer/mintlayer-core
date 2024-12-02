@@ -180,7 +180,7 @@ class WalletTxIntent(BitcoinTestFramework):
             ]
 
             intent_str = "the_intent"
-            (tx, signed_intent) = await wallet.make_tx_to_send_tokens_with_intent(token_id, dest_addr, tokens_to_send, intent_str)
+            (tx, tx_id, signed_intent) = await wallet.make_tx_to_send_tokens_with_intent(token_id, dest_addr, tokens_to_send, intent_str)
             self.generate_block()
 
             tx_inputs = await self.get_tx_inputs(wallet, tx)
@@ -194,7 +194,8 @@ class WalletTxIntent(BitcoinTestFramework):
                 tx_input_destinations.append(dest)
 
             # Send the tx
-            tx_id = await wallet.submit_transaction_return_id(tx)
+            tx_id_when_submitting = await wallet.submit_transaction_return_id(tx)
+            assert tx_id == tx_id_when_submitting
             self.generate_block()
             await assert_balances(coin=coin_amount, token=token_amount-tokens_to_send)
 

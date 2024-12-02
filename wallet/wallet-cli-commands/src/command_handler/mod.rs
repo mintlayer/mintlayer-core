@@ -24,7 +24,7 @@ use common::{
         partially_signed_transaction::PartiallySignedTransaction, ChainConfig, Destination,
         SignedTransaction, TxOutput, UtxoOutPoint,
     },
-    primitives::H256,
+    primitives::{Idable as _, H256},
     text_summary::TextSummary,
 };
 use crypto::key::hdkd::u31::U31;
@@ -1415,14 +1415,16 @@ where
                         self.config,
                     )
                     .await?;
+                let tx_id = signed_tx.as_ref().transaction().get_id();
 
-                let mut output = format!("The hex encoded transaction is:\n{signed_tx}\n");
-
-                writeln!(
-                    &mut output,
-                    "\nThe hex encoded signed transaction intent is:\n{signed_intent}\n"
-                )
-                .expect("Writing to a memory buffer should not fail");
+                let output = format!(
+                    concat!(
+                        "The hex encoded transaction is:\n{}\n\n",
+                        "The transaction id is:\n{:x}\n\n",
+                        "The hex encoded signed transaction intent is:\n{}\n"
+                    ),
+                    signed_tx, tx_id, signed_intent
+                );
 
                 Ok(ConsoleCommand::Print(output))
             }
