@@ -22,6 +22,51 @@ pub enum WalletType {
     Cold,
     #[codec(index = 1)]
     Hot,
+    #[cfg(feature = "trezor")]
+    #[codec(index = 2)]
+    Trezor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum WalletControllerMode {
+    Cold,
+    Hot,
+}
+
+impl Display for WalletControllerMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Hot => write!(f, "Hot"),
+            Self::Cold => write!(f, "Cold"),
+        }
+    }
+}
+
+impl WalletType {
+    /// Check if current Wallet type is compatible to be opened as the other wallet type
+    pub fn is_compatible(&self, other: WalletControllerMode) -> bool {
+        match (*self, other) {
+            (Self::Hot, WalletControllerMode::Hot) | (Self::Cold, WalletControllerMode::Cold) => {
+                true
+            }
+            (Self::Hot, WalletControllerMode::Cold) | (Self::Cold, WalletControllerMode::Hot) => {
+                false
+            }
+            #[cfg(feature = "trezor")]
+            (Self::Trezor, WalletControllerMode::Hot) => true,
+            #[cfg(feature = "trezor")]
+            (Self::Trezor, WalletControllerMode::Cold) => false,
+        }
+    }
+}
+
+impl From<WalletControllerMode> for WalletType {
+    fn from(value: WalletControllerMode) -> Self {
+        match value {
+            WalletControllerMode::Hot => WalletType::Hot,
+            WalletControllerMode::Cold => WalletType::Cold,
+        }
+    }
 }
 
 impl Display for WalletType {
@@ -29,6 +74,8 @@ impl Display for WalletType {
         match self {
             Self::Hot => write!(f, "Hot"),
             Self::Cold => write!(f, "Cold"),
+            #[cfg(feature = "trezor")]
+            Self::Trezor => write!(f, "Trezor"),
         }
     }
 }

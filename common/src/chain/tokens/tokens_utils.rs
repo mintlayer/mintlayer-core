@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
 use super::{TokenData, TokenId};
 use crate::{
     chain::{output_value::OutputValue, AccountCommand, TxInput, TxOutput},
@@ -86,5 +88,35 @@ pub fn is_token_or_nft_issuance(output: &TxOutput) -> bool {
         | TxOutput::Htlc(_, _)
         | TxOutput::CreateOrder(_) => false,
         TxOutput::IssueFungibleToken(_) | TxOutput::IssueNft(_, _, _) => true,
+    }
+}
+
+/// Get any token referenced by this output
+/// ignore tokens V0
+pub fn get_referenced_token_ids(output: &TxOutput) -> BTreeSet<TokenId> {
+    match output {
+        TxOutput::Transfer(v, _)
+        | TxOutput::LockThenTransfer(v, _, _)
+        | TxOutput::Burn(v)
+        | TxOutput::Htlc(v, _) => referenced_token_id(v).into_iter().collect(),
+        | TxOutput::CreateOrder(data) => {
+            let mut tokens: BTreeSet<_> = referenced_token_id(data.ask()).into_iter().collect();
+            tokens.extend(referenced_token_id(data.give()));
+            tokens
+        }
+        TxOutput::CreateStakePool(_, _)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _)
+        | TxOutput::DataDeposit(_)
+        | TxOutput::IssueFungibleToken(_) => BTreeSet::new(),
+        TxOutput::IssueNft(token_id, _, _) => BTreeSet::from_iter([*token_id]),
+    }
+}
+
+fn referenced_token_id(v: &OutputValue) -> Option<TokenId> {
+    match v {
+        OutputValue::Coin(_) | OutputValue::TokenV0(_) => None,
+        OutputValue::TokenV1(token_id, _) => Some(*token_id),
     }
 }

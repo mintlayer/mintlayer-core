@@ -20,6 +20,7 @@ node-comm = { path = "../wallet-node-client" }
 rpc-description = { path = "../../rpc/description" }
 randomness = { path = "../../randomness" }
 serialization = { path = "../../serialization" }
+storage = { path = "../../storage" }
 utils = { path = "../../utils" }
 utils-networking = { path = "../../utils/networking" }
 wallet = { path = ".." }
@@ -42,3 +43,6 @@ test-utils = { path = "../../test-utils" }
 
 anyhow.workspace = true
 rstest.workspace = true
+
+[features]
+trezor = ["wallet-types/trezor"]

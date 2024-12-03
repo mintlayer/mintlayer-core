@@ -21,13 +21,13 @@ use iced::{
 use iced_aw::Card;
 
 pub struct WalletMnemonicDialog<Message> {
-    generated_mnemonic_opt: Option<wallet_controller::mnemonic::Mnemonic>,
+    generated_mnemonic_opt: Option<String>,
     on_import: Box<dyn Fn(String) -> Message>,
     on_close: Box<dyn Fn() -> Message>,
 }
 
 pub fn wallet_mnemonic_dialog<Message>(
-    generated_mnemonic_opt: Option<wallet_controller::mnemonic::Mnemonic>,
+    generated_mnemonic_opt: Option<String>,
     on_import: Box<dyn Fn(String) -> Message>,
     on_close: Box<dyn Fn() -> Message>,
 ) -> WalletMnemonicDialog<Message> {
@@ -67,7 +67,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletMnemonicDialog
             ImportEvent::Ok => {
                 state.importing = true;
                 let mnemonic = match &self.generated_mnemonic_opt {
-                    Some(generated_mnemonic) => generated_mnemonic.to_string(),
+                    Some(generated_mnemonic) => generated_mnemonic.clone(),
                     None => state.entered_mnemonic.clone(),
                 };
                 Some((self.on_import)(mnemonic))
@@ -78,7 +78,7 @@ impl<Message> Component<Message, Theme, iced::Renderer> for WalletMnemonicDialog
 
     fn view(&self, state: &Self::State) -> Element<Self::Event, Theme, iced::Renderer> {
         let (mnemonic, action_text) = match &self.generated_mnemonic_opt {
-            Some(generated_mnemonic) => (generated_mnemonic.to_string(), "Create"),
+            Some(generated_mnemonic) => (generated_mnemonic.clone(), "Create"),
             None => (state.entered_mnemonic.clone(), "Recover"),
         };
 

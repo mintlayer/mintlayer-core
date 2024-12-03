@@ -25,6 +25,7 @@ use common::{
 };
 use rpc::RpcAuthData;
 use test_utils::{test_dir::TestRoot, test_root};
+use wallet::signer::software_signer::SoftwareSignerProvider;
 use wallet_controller::NodeRpcClient;
 use wallet_rpc_lib::{config::WalletServiceConfig, types::AccountArg, WalletHandle, WalletService};
 use wallet_test_node::{RPC_PASSWORD, RPC_USERNAME};
@@ -33,7 +34,7 @@ pub use randomness::Rng;
 pub use rpc::test_support::{ClientT, Subscription, SubscriptionClientT};
 pub use serde_json::Value as JsonValue;
 pub use test_utils::random::{make_seedable_rng, Seed};
-use wallet_types::wallet_type::WalletType;
+use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType};
 
 pub const ACCOUNT0_ARG: AccountArg = AccountArg(0);
 pub const ACCOUNT1_ARG: AccountArg = AccountArg(1);
@@ -67,11 +68,17 @@ impl TestFramework {
             let _wallet = wallet::Wallet::create_new_wallet(
                 Arc::clone(&chain_config),
                 db,
-                wallet_test_node::MNEMONIC,
-                None,
-                wallet_types::seed_phrase::StoreSeedPhrase::DoNotStore,
                 (BlockHeight::new(0), chain_config.genesis_block_id()),
                 WalletType::Hot,
+                |db_tx| {
+                    Ok(SoftwareSignerProvider::new_from_mnemonic(
+                        chain_config.clone(),
+                        db_tx,
+                        wallet_test_node::MNEMONIC,
+                        None,
+                        StoreSeedPhrase::DoNotStore,
+                    )?)
+                },
             )
             .unwrap();
 
@@ -103,10 +110,11 @@ impl TestFramework {
 
         // Start the wallet service
         let (wallet_service, rpc_server) = {
-            let ws_config = WalletServiceConfig::new(chain_type, Some(wallet_path), false, vec![])
-                .with_regtest_options(chain_config_options)
-                .unwrap()
-                .with_custom_chain_config(chain_config.clone());
+            let ws_config =
+                WalletServiceConfig::new(chain_type, Some(wallet_path), false, vec![], None)
+                    .with_regtest_options(chain_config_options)
+                    .unwrap()
+                    .with_custom_chain_config(chain_config.clone());
             let bind_addr = "127.0.0.1:0".parse().unwrap();
             let rpc_config = wallet_rpc_lib::config::WalletRpcConfig {
                 bind_addr,

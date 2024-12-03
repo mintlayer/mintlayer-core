@@ -24,7 +24,8 @@ use logging::log;
 use node_comm::node_traits::NodeInterface;
 use utils::{once_destructor::OnceDestructor, set_flag::SetFlag};
 use wallet::{
-    wallet::WalletSyncingState, wallet_events::WalletEvents, DefaultWallet, WalletResult,
+    signer::SignerProvider, wallet::WalletSyncingState, wallet_events::WalletEvents, Wallet,
+    WalletResult,
 };
 
 use crate::ControllerError;
@@ -52,7 +53,11 @@ pub trait SyncingWallet {
     fn update_median_time(&mut self, median_time: BlockTimestamp) -> WalletResult<()>;
 }
 
-impl SyncingWallet for DefaultWallet {
+impl<B, P> SyncingWallet for Wallet<B, P>
+where
+    B: storage::Backend + 'static,
+    P: SignerProvider,
+{
     fn syncing_state(&self) -> WalletSyncingState {
         self.get_syncing_state()
     }
