@@ -1268,8 +1268,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         self.broadcast_to_mempool_if_needed(tx).await
     }
 
-    /// Create and broadcast a transaction that uses a token,
-    /// check if that token can be used i.e. not frozen.
+    /// Create a transaction that uses a token, check if that token can be used i.e. not frozen.
     async fn create_token_tx<F, R>(
         &mut self,
         token_info: &RPCTokenInfo,
@@ -1310,7 +1309,7 @@ impl<'a, T: NodeInterface, W: WalletEvents> SyncedController<'a, T, W> {
         Ok(tx)
     }
 
-    /// Create and broadcast a transaction that uses token,
+    /// Create and broadcast a transaction that uses a token,
     /// check if that token can be used i.e. not frozen.
     async fn create_and_send_token_tx<
         F: FnOnce(
