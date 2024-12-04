@@ -17,9 +17,9 @@ randomness = { path = "../randomness" }
 serialization = { path = "../serialization" }
 utils = { path = "../utils" }
 
-thiserror.workspace = true
 parity-scale-codec.workspace = true
-variant_count.workspace = true
+strum.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }

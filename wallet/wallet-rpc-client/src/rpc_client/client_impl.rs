@@ -25,7 +25,8 @@ use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        Block, GenBlock, SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -48,7 +49,7 @@ use wallet_rpc_lib::{
         RpcHashedTimelockContract, RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId,
         SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
-        VrfPublicKeyInfo,
+        UtxoInfo, VrfPublicKeyInfo,
     },
     ColdWalletRpcClient, WalletRpcClient,
 };
@@ -354,7 +355,7 @@ impl WalletInterface for ClientWalletRpc {
         utxo_types: Vec<UtxoType>,
         utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
-    ) -> Result<Vec<serde_json::Value>, Self::Error> {
+    ) -> Result<Vec<UtxoInfo>, Self::Error> {
         WalletRpcClient::get_multisig_utxos(
             &self.http_client,
             account_index.into(),
@@ -372,7 +373,7 @@ impl WalletInterface for ClientWalletRpc {
         _utxo_types: Vec<UtxoType>,
         _utxo_states: Vec<UtxoState>,
         _with_locked: WithLocked,
-    ) -> Result<Vec<serde_json::Value>, Self::Error> {
+    ) -> Result<Vec<UtxoInfo>, Self::Error> {
         WalletRpcClient::get_utxos(&self.http_client, account_index.into())
             .await
             .map_err(WalletRpcError::ResponseError)
@@ -869,6 +870,35 @@ impl WalletInterface for ClientWalletRpc {
             token_id.into(),
             address.into(),
             amount.into(),
+            options,
+        )
+        .await
+        .map_err(WalletRpcError::ResponseError)
+    }
+
+    async fn make_tx_for_sending_tokens_with_intent(
+        &self,
+        account_index: U31,
+        token_id: String,
+        address: String,
+        amount: DecimalAmount,
+        intent: String,
+        config: ControllerConfig,
+    ) -> Result<
+        (
+            HexEncoded<SignedTransaction>,
+            HexEncoded<SignedTransactionIntent>,
+        ),
+        Self::Error,
+    > {
+        let options = TransactionOptions::from_controller_config(&config);
+        WalletRpcClient::make_tx_for_sending_tokens_with_intent(
+            &self.http_client,
+            account_index.into(),
+            token_id.into(),
+            address.into(),
+            amount.into(),
+            intent,
             options,
         )
         .await

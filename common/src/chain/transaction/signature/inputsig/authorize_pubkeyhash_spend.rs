@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::key::{PublicKey, Signature};
+use crypto::key::{PrivateKey, PublicKey, Signature};
 use randomness::{CryptoRng, Rng};
 use serialization::{Decode, DecodeAll, Encode};
 
@@ -42,14 +42,14 @@ impl AuthorizedPublicKeyHashSpend {
     }
 }
 
-pub fn verify_address_spending(
+pub fn verify_public_key_hash_spending(
     spendee_addr: &PublicKeyHash,
     sig_components: &AuthorizedPublicKeyHashSpend,
     sighash: &H256,
 ) -> Result<(), DestinationSigError> {
     let calculated_addr = PublicKeyHash::from(&sig_components.public_key);
     if calculated_addr != *spendee_addr {
-        return Err(DestinationSigError::PublicKeyToAddressMismatch);
+        return Err(DestinationSigError::PublicKeyToHashMismatch);
     }
     let msg = sighash.encode();
     if !sig_components.public_key.verify_message(&sig_components.signature, &msg) {
@@ -58,8 +58,8 @@ pub fn verify_address_spending(
     Ok(())
 }
 
-pub fn sign_address_spending<R: Rng + CryptoRng>(
-    private_key: &crypto::key::PrivateKey,
+pub fn sign_public_key_hash_spending<R: Rng + CryptoRng>(
+    private_key: &PrivateKey,
     spendee_addr: &PublicKeyHash,
     sighash: &H256,
     rng: R,
@@ -67,8 +67,28 @@ pub fn sign_address_spending<R: Rng + CryptoRng>(
     let public_key = PublicKey::from_private_key(private_key);
     let calculated_addr = PublicKeyHash::from(&public_key);
     if calculated_addr != *spendee_addr {
-        return Err(DestinationSigError::PublicKeyToAddressMismatch);
+        return Err(DestinationSigError::PublicKeyToHashMismatch);
     }
+    sign_public_key_hash_spending_impl(private_key, public_key, sighash, rng)
+}
+
+pub fn sign_public_key_hash_spending_unchecked<R: Rng + CryptoRng>(
+    private_key: &PrivateKey,
+    sighash: &H256,
+    rng: R,
+) -> Result<AuthorizedPublicKeyHashSpend, DestinationSigError> {
+    let public_key = PublicKey::from_private_key(private_key);
+    sign_public_key_hash_spending_impl(private_key, public_key, sighash, rng)
+}
+
+fn sign_public_key_hash_spending_impl<R: Rng + CryptoRng>(
+    private_key: &PrivateKey,
+    public_key: PublicKey,
+    sighash: &H256,
+    rng: R,
+) -> Result<AuthorizedPublicKeyHashSpend, DestinationSigError> {
+    debug_assert_eq!(public_key, PublicKey::from_private_key(private_key));
+
     let msg = sighash.encode();
     let signature = private_key
         .sign_message(&msg, rng)
@@ -239,7 +259,7 @@ mod test {
             let sighash =
                 signature_hash(witness.sighash_type(), &tx, &inputs_utxos_refs, input).unwrap();
 
-            verify_address_spending(&pubkey_hash, &spender_signature, &sighash)
+            verify_public_key_hash_spending(&pubkey_hash, &spender_signature, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }
     }
@@ -275,7 +295,7 @@ mod test {
             let sighash =
                 signature_hash(witness.sighash_type(), &tx, &inputs_utxos_refs, input).unwrap();
 
-            sign_address_spending(&private_key, &pubkey_hash, &sighash, &mut rng)
+            sign_public_key_hash_spending(&private_key, &pubkey_hash, &sighash, &mut rng)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }
     }

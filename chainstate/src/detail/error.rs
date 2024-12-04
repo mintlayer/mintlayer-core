@@ -32,7 +32,7 @@ use common::{
         config::MagicBytes,
         Block, GenBlock, PoolId,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{time::Time, Amount, BlockHeight, Id},
 };
 use consensus::ConsensusVerificationError;
 
@@ -143,8 +143,12 @@ pub enum CheckBlockError {
     },
     #[error("Block time ({0:?}) must be equal or higher than the median of its ancestors ({1:?})")]
     BlockTimeOrderInvalid(BlockTimestamp, BlockTimestamp),
-    #[error("Block {0} time too far into the future")]
-    BlockFromTheFuture(Id<Block>),
+    #[error("Block {block_id} time too far into the future (block timestamp = {block_timestamp}, current time = {current_time})")]
+    BlockFromTheFuture {
+        block_id: Id<Block>,
+        block_timestamp: BlockTimestamp,
+        current_time: Time,
+    },
     #[error("Block size is too large: {0}")]
     BlockSizeError(#[from] BlockSizeError),
     #[error("Check transaction failed: {0}")]

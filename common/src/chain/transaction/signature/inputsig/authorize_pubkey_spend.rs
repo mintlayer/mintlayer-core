@@ -48,7 +48,7 @@ pub fn verify_public_key_spending(
     Ok(())
 }
 
-pub fn sign_pubkey_spending<R: Rng + CryptoRng>(
+pub fn sign_public_key_spending<R: Rng + CryptoRng>(
     private_key: &crypto::key::PrivateKey,
     spendee_pubkey: &crypto::key::PublicKey,
     sighash: &H256,
@@ -233,7 +233,7 @@ mod test {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn test_sign_pubkey_spending(#[case] seed: Seed) {
+    fn test_sign_public_key_spending(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, public_key) =
@@ -259,7 +259,7 @@ mod test {
             .unwrap();
             let sighash =
                 signature_hash(witness.sighash_type(), &tx, &inputs_utxos_refs, input).unwrap();
-            sign_pubkey_spending(&private_key, &public_key, &sighash, &mut rng)
+            sign_public_key_spending(&private_key, &public_key, &sighash, &mut rng)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }
     }

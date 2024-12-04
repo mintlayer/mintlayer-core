@@ -19,43 +19,55 @@ pub mod checkpoints_data;
 pub mod emission_schedule;
 pub mod regtest;
 pub mod regtest_options;
-pub use builder::Builder;
 
-use crypto::key::PublicKey;
-use crypto::vrf::VRFPublicKey;
-use emission_schedule::CoinUnit;
-pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular};
-use utils::const_nz_u64;
-
-use std::fmt::{Debug, Display};
-use std::{net::SocketAddr, num::NonZeroU64, sync::Arc, time::Duration};
+use std::{
+    fmt::{Debug, Display},
+    net::SocketAddr,
+    num::NonZeroU64,
+    sync::Arc,
+    time::Duration,
+};
 
 use hex::FromHex;
-
 use serialization::{Decode, Encode};
 
-use crate::chain::block::timestamp::BlockTimestamp;
-use crate::chain::transaction::Destination;
-use crate::chain::upgrades::NetUpgrades;
-use crate::chain::PoWChainConfig;
-use crate::chain::TxOutput;
-use crate::chain::{GenBlock, Genesis};
-use crate::primitives::id::{Id, Idable, WithId};
-use crate::primitives::per_thousand::PerThousand;
-use crate::primitives::semver::SemVer;
-use crate::primitives::BlockCount;
-use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
-use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
-
-use self::checkpoints::Checkpoints;
-use self::emission_schedule::DEFAULT_INITIAL_MINT;
-use super::output_value::OutputValue;
-use super::{stakelock::StakePoolData, RequiredConsensus};
-use super::{
-    ChainstateUpgrade, ChangeTokenMetadataUriActivated, ConsensusUpgrade, DataDepositFeeVersion,
-    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, RewardDistributionVersion,
-    TokenIssuanceVersion, TokensFeeVersion,
+use crypto::{
+    key::{
+        hdkd::{child_number::ChildNumber, u31::U31},
+        PublicKey,
+    },
+    vrf::VRFPublicKey,
 };
+use strum::EnumIter;
+use utils::const_nz_u64;
+
+use crate::{
+    chain::{
+        block::timestamp::BlockTimestamp, transaction::Destination, upgrades::NetUpgrades,
+        GenBlock, Genesis, PoWChainConfig, TxOutput,
+    },
+    primitives::{
+        id::{Id, Idable, WithId},
+        per_thousand::PerThousand,
+        semver::SemVer,
+        Amount, BlockCount, BlockDistance, BlockHeight, H256,
+    },
+};
+
+use super::{
+    output_value::OutputValue, stakelock::StakePoolData, ChainstateUpgrade,
+    ChangeTokenMetadataUriActivated, ConsensusUpgrade, DataDepositFeeVersion, DestinationTag,
+    FrozenTokensValidationVersion, HtlcActivated, OrdersActivated, RequiredConsensus,
+    RewardDistributionVersion, TokenIssuanceVersion, TokensFeeVersion,
+};
+
+use self::{
+    checkpoints::Checkpoints,
+    emission_schedule::{CoinUnit, DEFAULT_INITIAL_MINT},
+};
+
+pub use builder::Builder;
+pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V1: Duration = Duration::from_secs(120);
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET_V2: Duration = Duration::from_secs(30);
@@ -110,7 +122,7 @@ impl Debug for MagicBytes {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, EnumIter)]
 pub enum ChainType {
     Mainnet,
     Testnet,
@@ -119,8 +131,6 @@ pub enum ChainType {
 }
 
 impl ChainType {
-    pub const ALL: [ChainType; 4] = [Self::Mainnet, Self::Testnet, Self::Regtest, Self::Signet];
-
     pub const MAINNET_MAGIC_BYTES: MagicBytes = MagicBytes::new([0xB0, 0x07, 0x5F, 0xA0]);
     pub const TESTNET_MAGIC_BYTES: MagicBytes = MagicBytes::new([0x2b, 0x7e, 0x19, 0xf8]);
     pub const REGTEST_MAGIC_BYTES: MagicBytes = MagicBytes::new([0xaa, 0xbb, 0xcc, 0xdd]);
@@ -220,35 +230,35 @@ impl ChainType {
     }
 }
 
-fn address_prefix(chain_type: ChainType, destination: &Destination) -> &'static str {
+fn address_prefix(chain_type: ChainType, destination_tag: DestinationTag) -> &'static str {
     match chain_type {
-        ChainType::Mainnet => match destination {
-            Destination::AnyoneCanSpend => "mxanyonecanspend",
-            Destination::PublicKeyHash(_) => "mtc",
-            Destination::PublicKey(_) => "mptc",
-            Destination::ScriptHash(_) => "mstc",
-            Destination::ClassicMultisig(_) => "mmtc",
+        ChainType::Mainnet => match destination_tag {
+            DestinationTag::AnyoneCanSpend => "mxanyonecanspend",
+            DestinationTag::PublicKeyHash => "mtc",
+            DestinationTag::PublicKey => "mptc",
+            DestinationTag::ScriptHash => "mstc",
+            DestinationTag::ClassicMultisig => "mmtc",
         },
-        ChainType::Testnet => match destination {
-            Destination::AnyoneCanSpend => "txanyonecanspend",
-            Destination::PublicKeyHash(_) => "tmt",
-            Destination::PublicKey(_) => "tpmt",
-            Destination::ScriptHash(_) => "tstc",
-            Destination::ClassicMultisig(_) => "tmtc",
+        ChainType::Testnet => match destination_tag {
+            DestinationTag::AnyoneCanSpend => "txanyonecanspend",
+            DestinationTag::PublicKeyHash => "tmt",
+            DestinationTag::PublicKey => "tpmt",
+            DestinationTag::ScriptHash => "tstc",
+            DestinationTag::ClassicMultisig => "tmtc",
         },
-        ChainType::Regtest => match destination {
-            Destination::AnyoneCanSpend => "rxanyonecanspend",
-            Destination::PublicKeyHash(_) => "rmt",
-            Destination::PublicKey(_) => "rpmt",
-            Destination::ScriptHash(_) => "rstc",
-            Destination::ClassicMultisig(_) => "rmtc",
+        ChainType::Regtest => match destination_tag {
+            DestinationTag::AnyoneCanSpend => "rxanyonecanspend",
+            DestinationTag::PublicKeyHash => "rmt",
+            DestinationTag::PublicKey => "rpmt",
+            DestinationTag::ScriptHash => "rstc",
+            DestinationTag::ClassicMultisig => "rmtc",
         },
-        ChainType::Signet => match destination {
-            Destination::AnyoneCanSpend => "sxanyonecanspend",
-            Destination::PublicKeyHash(_) => "smt",
-            Destination::PublicKey(_) => "spmt",
-            Destination::ScriptHash(_) => "sstc",
-            Destination::ClassicMultisig(_) => "smtc",
+        ChainType::Signet => match destination_tag {
+            DestinationTag::AnyoneCanSpend => "sxanyonecanspend",
+            DestinationTag::PublicKeyHash => "smt",
+            DestinationTag::PublicKey => "spmt",
+            DestinationTag::ScriptHash => "sstc",
+            DestinationTag::ClassicMultisig => "smtc",
         },
     }
 }
@@ -298,8 +308,8 @@ pub struct ChainConfig {
 impl ChainConfig {
     /// Bech32m addresses in this chain will use this prefix
     #[must_use]
-    pub fn destination_address_prefix(&self, destination: &Destination) -> &'static str {
-        address_prefix(self.chain_type, destination)
+    pub fn destination_address_prefix(&self, destination_tag: DestinationTag) -> &'static str {
+        address_prefix(self.chain_type, destination_tag)
     }
 
     #[must_use]
@@ -974,6 +984,7 @@ mod tests {
 
     use super::*;
     use rstest::rstest;
+    use strum::IntoEnumIterator as _;
     use tests::checkpoints_data::make_testnet_checkpoints;
 
     #[test]
@@ -1004,7 +1015,7 @@ mod tests {
 
     #[test]
     fn chain_type_magic_bytes_correspondense() {
-        for chain_type in ChainType::ALL {
+        for chain_type in ChainType::iter() {
             let magic_bytes = chain_type.magic_bytes();
             let chain_type_from_magic_bytes = ChainType::from_magic_bytes(magic_bytes);
             assert_eq!(chain_type_from_magic_bytes, Some(chain_type));
@@ -1229,7 +1240,7 @@ mod tests {
 
     #[test]
     fn test_genesis_in_checkpoints() {
-        for chain_type in ChainType::ALL {
+        for chain_type in ChainType::iter() {
             let config = Builder::new(chain_type).build();
             let checkpoint_at_0 =
                 config.height_checkpoints().checkpoint_at_height(&BlockHeight::zero()).unwrap();

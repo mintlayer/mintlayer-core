@@ -148,7 +148,7 @@ fn effective_pool_balance_impl(
     //
     // Maximizing the gains from a pool with pledges:
     //     As a function of the total stake (sigma = pledge + delegations), the pool's effective balance is a concave down parabola.
-    //     The maximum point is very close to sigma = s/2 if sigma << z. Meaning: pledge = delegations maximizes the
+    //     The maximum point is very close to s = sigma/2 if sigma << z. Meaning: pledge = delegations maximizes the
     //     effective balance.
     //     The true peak can be calculated by calculating the derivative of the function and equating it to zero. The
     //     result there is s_max = z⋅sigma/(2⋅(z-sigma)), where s_max is the pledge that maximizes the effective balance.

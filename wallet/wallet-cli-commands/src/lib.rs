@@ -422,12 +422,27 @@ pub enum WalletCommand {
 
     #[clap(name = "token-send")]
     SendTokensToAddress {
-        /// The token id of the tokens to be sent
+        /// The token id of the tokens to be sent.
         token_id: String,
-        /// The destination address receiving the tokens
+        /// The destination address receiving the tokens.
         address: String,
-        /// The amount of tokens to be sent
+        /// The amount of tokens to be sent.
         amount: DecimalAmount,
+    },
+
+    #[clap(name = "token-make-tx-to-send-with-intent")]
+    #[clap(hide = true)]
+    MakeTxToSendTokensToAddressWithIntent {
+        /// The token id of the tokens to be sent.
+        token_id: String,
+        /// The destination address receiving the tokens.
+        address: String,
+        /// The amount of tokens to be sent.
+        amount: DecimalAmount,
+        /// The message declaring the intent of the transaction.
+        ///
+        /// The signed intent will be printed separately, it's not a part of the transaction itself.
+        intent: String,
     },
 
     /// Create a transaction for sending tokens from a multisig address to other addresses, returning the change to

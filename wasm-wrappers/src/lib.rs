@@ -16,6 +16,9 @@
 use std::{num::NonZeroU8, str::FromStr};
 
 use bip39::Language;
+use gloo_utils::format::JsValueSerdeExt as _;
+use wasm_bindgen::prelude::*;
+
 use common::{
     address::{pubkeyhash::PublicKeyHash, traits::Addressable, Address},
     chain::{
@@ -28,7 +31,6 @@ use common::{
             inputsig::{
                 arbitrary_message::{produce_message_challenge, ArbitraryMessageSignature},
                 authorize_hashed_timelock_contract_spend::AuthorizedHashedTimelockContractSpend,
-                authorize_pubkeyhash_spend::AuthorizedPublicKeyHashSpend,
                 classical_multisig::authorize_classical_multisig::{
                     sign_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
                 },
@@ -46,11 +48,11 @@ use common::{
             TokenId, TokenIssuance, TokenIssuanceV1, TokenTotalSupply,
         },
         AccountCommand, AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, Destination,
-        OrderData, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        OrderData, OutPointSourceId, SignedTransaction, SignedTransactionIntent, Transaction,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{
-        self, amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, Idable, H256,
+        self, amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, Id, Idable, H256,
     },
     size_estimation::{input_signature_size_from_destination, tx_size_with_outputs},
 };
@@ -61,7 +63,6 @@ use crypto::key::{
 };
 use error::Error;
 use serialization::{Decode, DecodeAll, Encode};
-use wasm_bindgen::prelude::*;
 
 pub mod error;
 
@@ -101,6 +102,7 @@ impl Amount {
 }
 
 #[wasm_bindgen]
+#[derive(Debug, Copy, Clone)]
 /// The network, for which an operation to be done. Mainnet, testnet, etc.
 pub enum Network {
     Mainnet,
@@ -343,25 +345,33 @@ pub fn verify_signature_for_spending(
     Ok(verifcation_result)
 }
 
-/// Given a message and a private key, create and sign a challenge with the given private key
+/// Given a message and a private key, create and sign a challenge with the given private key.
 /// This kind of signature is to be used when signing challenges.
 #[wasm_bindgen]
 pub fn sign_challenge(private_key: &[u8], message: &[u8]) -> Result<Vec<u8>, Error> {
     let private_key = PrivateKey::decode_all(&mut &private_key[..])
         .map_err(|_| Error::InvalidPrivateKeyEncoding)?;
 
-    let challenge = produce_message_challenge(message);
-    let public_key = PublicKey::from_private_key(&private_key);
-
-    let signature = private_key.sign_message(&challenge.encode(), randomness::make_true_rng())?;
-    let signature = AuthorizedPublicKeyHashSpend::new(public_key, signature);
-    Ok(signature.encode())
+    let signature = ArbitraryMessageSignature::produce_uniparty_signature_as_pub_key_hash_spending(
+        &private_key,
+        message,
+        randomness::make_true_rng(),
+    )?;
+    Ok(signature.into_raw())
 }
 
-/// Given a signed challenge, an address and a message. Verify that
+/// Given a signed challenge, an address and a message, verify that
 /// the signature is produced by signing the message with the private key
 /// that derived the given public key.
-/// Note that this function is used for verifying messages related challenges.
+/// This function is used for verifying messages-related challenges.
+///
+/// Note: for signatures that were created by `sign_challenge`, the provided address must be
+/// a 'pubkeyhash' address.
+///
+/// Note: currently this function never returns `false` - it either returns `true` or fails with an error.
+// TODO: this has to be changed; the function should either just return `()` (but then it'll be inconsistent
+// with `verify_signature_for_spending`, which returns a proper boolean) or return `verify_signature(...).is_ok()`
+// (but then the caller will lose the information about the reason for the failure).
 #[wasm_bindgen]
 pub fn verify_challenge(
     address: &str,
@@ -382,9 +392,92 @@ fn parse_addressable<T: Addressable>(
     address: &str,
 ) -> Result<T, Error> {
     let addressable = Address::from_string(chain_config, address)
-        .map_err(|_| Error::InvalidAddressable)?
+        .map_err(|_| Error::InvalidAddressable {
+            addressable: address.to_owned(),
+        })?
         .into_object();
     Ok(addressable)
+}
+
+/// Return the message that has to be signed to produce a signed transaction intent.
+#[wasm_bindgen]
+pub fn make_transaction_intent_message_to_sign(
+    intent: &str,
+    transaction_id: &str,
+) -> Result<Vec<u8>, Error> {
+    let transaction_id =
+        Id::new(H256::from_str(transaction_id).map_err(|_| Error::InvalidTransactionId)?);
+    let message_to_sign = SignedTransactionIntent::get_message_to_sign(intent, &transaction_id);
+
+    Ok(message_to_sign.into_bytes())
+}
+
+/// Return a `SignedTransactionIntent` object as bytes given the message and encoded signatures.
+///
+/// Note: to produce a valid signed intent one is expected to sign the corresponding message by private keys
+/// corresponding to each input of the transaction.
+///
+/// Parameters:
+/// `signed_message` - this must have been produced by `make_transaction_intent_message_to_sign`.
+/// `signatures` - this should be an array of arrays of bytes, each of them representing an individual signature
+/// of `signed_message` produced by `sign_challenge` using the private key for the corresponding input destination
+/// of the transaction. The number of signatures must be equal to the number of inputs in the transaction.
+#[wasm_bindgen]
+pub fn encode_signed_transaction_intent(
+    signed_message: &[u8],
+    // Note: we could also accept it as `Vec<JsValue>` where the inner JsValue would represent `Vec<u8>`.
+    // But such "semi-structured" approach doesn't make much sense (and accepting `Vec<Vec<u8>>` directly is not allowed).
+    signatures: &JsValue,
+) -> Result<Vec<u8>, Error> {
+    let signed_message_str = String::from_utf8(signed_message.to_owned())
+        .map_err(|_| Error::SignedTransactionIntentMessageIsNotAValidString)?;
+    let signatures: Vec<Vec<u8>> =
+        signatures.into_serde().map_err(|err| Error::JsValueNotArrayOfArraysOfBytes {
+            error: err.to_string(),
+        })?;
+
+    let signed_intent =
+        SignedTransactionIntent::from_components_unchecked(signed_message_str, signatures);
+
+    Ok(signed_intent.encode())
+}
+
+/// Verify a signed transaction intent.
+///
+/// Parameters:
+/// `expected_signed_message` - the message that is supposed to be signed; this must have been
+/// produced by `make_transaction_intent_message_to_sign`.
+/// `encoded_signed_intent` - the signed transaction intent produced by `encode_signed_transaction_intent`.
+/// `input_destinations` - an array of addresses (strings), corresponding to the transaction's input destinations
+/// (note that this function treats "pub key" and "pub key hash" addresses interchangeably, so it's ok to pass
+/// one instead of the other).
+/// `network` - the network being used (needed to decode the addresses).
+#[wasm_bindgen]
+pub fn verify_transaction_intent(
+    expected_signed_message: &[u8],
+    mut encoded_signed_intent: &[u8],
+    input_destinations: Vec<String>,
+    network: Network,
+) -> Result<(), Error> {
+    let expected_signed_message_str = String::from_utf8(expected_signed_message.to_owned())
+        .map_err(|_| Error::SignedTransactionIntentMessageIsNotAValidString)?;
+    let chain_config = Builder::new(network.into()).build();
+
+    let signed_intent = SignedTransactionIntent::decode_all(&mut encoded_signed_intent)
+        .map_err(|_| Error::InvalidSignedTransactionIntent)?;
+
+    let input_destinations = input_destinations
+        .iter()
+        .map(|addr| parse_addressable::<Destination>(&chain_config, addr))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    signed_intent.verify(
+        &chain_config,
+        &input_destinations,
+        &expected_signed_message_str,
+    )?;
+
+    Ok(())
 }
 
 /// Given a destination address, an amount and a network type (mainnet, testnet, etc), this function
@@ -946,8 +1039,11 @@ pub fn estimate_transaction_size(
     for destination in input_utxos_destinations {
         let destination = parse_addressable::<Destination>(&chain_config, &destination)?;
         let signature_size =
-            input_signature_size_from_destination(&destination, Option::<&_>::None)
-                .map_err(|_| Error::InvalidAddressable)?;
+            input_signature_size_from_destination(&destination, Option::<&_>::None).map_err(
+                |err| Error::TransactionSizeEstimationError {
+                    error: err.to_string(),
+                },
+            )?;
 
         total_size += signature_size;
     }
@@ -1157,7 +1253,7 @@ pub fn encode_witness_htlc_multisig(
                     AuthorizedHashedTimelockContractSpend::from_data(sig.raw_signature())?;
                 match htlc_spend {
                     AuthorizedHashedTimelockContractSpend::Secret(_, _) => {
-                        return Err(Error::ProduceSignatureError(
+                        return Err(Error::DestinationSigError(
                             DestinationSigError::InvalidSignatureEncoding,
                         ));
                     }

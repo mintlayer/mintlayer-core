@@ -20,8 +20,8 @@ use common::{
     address::{dehexify::dehexify_all_addresses, AddressError},
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, Transaction, TxOutput,
-        UtxoOutPoint,
+        tokens::IsTokenUnfreezable, Block, GenBlock, SignedTransaction, SignedTransactionIntent,
+        Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id, Idable, H256},
 };
@@ -386,7 +386,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         utxo_types: Vec<UtxoType>,
         utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
-    ) -> Result<Vec<serde_json::Value>, Self::Error> {
+    ) -> Result<Vec<UtxoInfo>, Self::Error> {
         let utxos = self
             .wallet_rpc
             .get_multisig_utxos(
@@ -402,11 +402,9 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
                 UtxoInfo::new(utxo_outpoint, tx_ouput, self.wallet_rpc.chain_config())
-                    .map(serde_json::to_value)
             })
-            .collect::<Result<Result<Vec<_>, _>, _>>()
-            .map_err(WalletRpcHandlesClientError::AddressError)?
-            .map_err(WalletRpcHandlesClientError::SerializationError)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(WalletRpcHandlesClientError::AddressError)
     }
 
     async fn get_utxos(
@@ -415,7 +413,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
         utxo_types: Vec<UtxoType>,
         utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
-    ) -> Result<Vec<serde_json::Value>, Self::Error> {
+    ) -> Result<Vec<UtxoInfo>, Self::Error> {
         let utxos = self
             .wallet_rpc
             .get_utxos(
@@ -431,11 +429,9 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
                 UtxoInfo::new(utxo_outpoint, tx_ouput, self.wallet_rpc.chain_config())
-                    .map(serde_json::to_value)
             })
-            .collect::<Result<Result<Vec<_>, _>, _>>()
-            .map_err(WalletRpcHandlesClientError::AddressError)?
-            .map_err(WalletRpcHandlesClientError::SerializationError)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(WalletRpcHandlesClientError::AddressError)
     }
 
     async fn submit_raw_transaction(
@@ -994,6 +990,35 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             )
             .await
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
+    async fn make_tx_for_sending_tokens_with_intent(
+        &self,
+        account_index: U31,
+        token_id: String,
+        address: String,
+        amount: DecimalAmount,
+        intent: String,
+        config: ControllerConfig,
+    ) -> Result<
+        (
+            HexEncoded<SignedTransaction>,
+            HexEncoded<SignedTransactionIntent>,
+        ),
+        Self::Error,
+    > {
+        self.wallet_rpc
+            .create_transaction_for_sending_tokens_with_intent(
+                account_index,
+                token_id.into(),
+                address.into(),
+                amount.into(),
+                intent,
+                config,
+            )
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+            .map(|(tx, intent)| (HexEncoded::new(tx), HexEncoded::new(intent)))
     }
 
     async fn make_tx_to_send_tokens_from_multisig_address(

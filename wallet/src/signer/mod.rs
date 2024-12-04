@@ -19,7 +19,7 @@ use common::chain::{
         inputsig::arbitrary_message::{ArbitraryMessageSignature, SignArbitraryMessageError},
         DestinationSigError,
     },
-    Destination,
+    Destination, SignedTransactionIntent, SignedTransactionIntentError, Transaction,
 };
 use crypto::key::hdkd::derivable::DerivationError;
 use wallet_types::signature_status::SignatureStatus;
@@ -43,8 +43,10 @@ pub enum SignerError {
     KeyChainError(#[from] KeyChainError),
     #[error("Destination does not belong to this wallet")]
     DestinationNotFromThisWallet,
-    #[error("{0}")]
+    #[error("Error signing arbitrary message: {0}")]
     SignArbitraryMessageError(#[from] SignArbitraryMessageError),
+    #[error("Signed transaction intent error: {0}")]
+    SignedTransactionIntentError(#[from] SignedTransactionIntentError),
 }
 
 type SignerResult<T> = Result<T, SignerError>;
@@ -52,7 +54,7 @@ type SignerResult<T> = Result<T, SignerError>;
 /// Signer trait responsible for signing transactions or challenges using a software or hardware
 /// wallet
 pub trait Signer {
-    /// sign a partially signed transaction and return the before and after signature statuses
+    /// Sign a partially signed transaction and return the before and after signature statuses.
     fn sign_tx(
         &self,
         tx: PartiallySignedTransaction,
@@ -63,11 +65,22 @@ pub trait Signer {
         Vec<SignatureStatus>,
     )>;
 
-    /// sign an arbitrary message for a destination known to this key chain
+    /// Sign an arbitrary message for a destination known to this key chain.
     fn sign_challenge(
         &self,
-        message: Vec<u8>,
-        destination: Destination,
+        message: &[u8],
+        destination: &Destination,
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<ArbitraryMessageSignature>;
+
+    /// Sign a transaction intent. The number of `input_destinations` must be the same as
+    /// the number of inputs in the transaction; all of the destinations must be known
+    /// to this key chain.
+    fn sign_transaction_intent(
+        &self,
+        transaction: &Transaction,
+        input_destinations: &[Destination],
+        intent: &str,
+        key_chain: &impl AccountKeyChains,
+    ) -> SignerResult<SignedTransactionIntent>;
 }

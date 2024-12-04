@@ -37,6 +37,9 @@ pub use utxo_outpoint::*;
 pub mod partially_signed_transaction;
 pub mod signed_transaction;
 
+pub mod signed_transaction_intent;
+pub use signed_transaction_intent::*;
+
 pub mod output;
 pub use output::*;
 

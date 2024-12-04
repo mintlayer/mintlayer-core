@@ -40,7 +40,9 @@ use rpc::description::HasValueHint;
 use wallet::account::PoolData;
 
 pub use chainstate::{
-    rpc::{RpcSignedTransaction, RpcTxOutput, RpcUtxoOutpoint},
+    rpc::{
+        RpcOutputValueIn, RpcOutputValueOut, RpcSignedTransaction, RpcTxOutput, RpcUtxoOutpoint,
+    },
     ChainInfo,
 };
 pub use common::{
@@ -316,7 +318,7 @@ impl VrfPublicKeyInfo {
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, HasValueHint)]
 pub struct UtxoInfo {
     pub outpoint: RpcUtxoOutpoint,
     pub output: RpcTxOutput,

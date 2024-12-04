@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{signature::DestinationSigError, TransactionCreationError};
+use common::chain::{
+    signature::{inputsig::arbitrary_message::SignArbitraryMessageError, DestinationSigError},
+    SignedTransactionIntentError, TransactionCreationError,
+};
 use wasm_bindgen::JsValue;
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -32,8 +35,10 @@ pub enum Error {
     InvalidKeyIndex,
     #[error("Invalid outpoint ID encoding")]
     InvalidOutpointId,
-    #[error("Invalid addressable encoding")]
-    InvalidAddressable,
+    #[error("Invalid addressable: {addressable}")]
+    InvalidAddressable { addressable: String },
+    #[error("Transaction size estimation error: {error}")]
+    TransactionSizeEstimationError { error: String },
     #[error("NFT Creator needs to be a public key address")]
     InvalidCreatorPublicKey,
     #[error("Invalid amount")]
@@ -52,12 +57,16 @@ pub enum Error {
     InvalidWitness,
     #[error("Invalid transaction encoding")]
     InvalidTransaction,
+    #[error("Invalid transaction id encoding")]
+    InvalidTransactionId,
     #[error("The number of signatures does not match the number of inputs")]
     InvalidWitnessCount,
     #[error("Invalid htlc secret encoding")]
     InvalidHtlcSecret,
     #[error("Invalid htlc secret hash encoding")]
     InvalidHtlcSecretHash,
+    #[error("Invalid signed transaction intent encoding")]
+    InvalidSignedTransactionIntent,
     #[error("No input outpoint found in transaction")]
     NoInputOutpointFound,
     #[error("Invalid multisig challenge encoding")]
@@ -74,10 +83,20 @@ pub enum Error {
     TokenIssuanceError(#[from] tx_verifier::error::TokenIssuanceError),
     #[error("Transaction creation error: {0}")]
     TransactionCreationError(#[from] TransactionCreationError),
-    #[error("Produce signature error: {0}")]
-    ProduceSignatureError(#[from] DestinationSigError),
+    #[error("Signature error: {0}")]
+    DestinationSigError(#[from] DestinationSigError),
     #[error("No UTXO input found in the provided inputs")]
     NoUtxoInInputs,
+    #[error("Invalid message signature encoding")]
+    InvalidMessageSignature,
+    #[error("Arbitrary message signing error: {0}")]
+    SignArbitraryMessageError(#[from] SignArbitraryMessageError),
+    #[error("Error decoding a JsValue as an array of arrays of bytes: {error}")]
+    JsValueNotArrayOfArraysOfBytes { error: String },
+    #[error("Signed transaction intent error: {0}")]
+    SignedTransactionIntentError(#[from] SignedTransactionIntentError),
+    #[error("Signed transaction intent message is not a valid string")]
+    SignedTransactionIntentMessageIsNotAValidString,
 }
 
 // This is required to make an error readable in JavaScript

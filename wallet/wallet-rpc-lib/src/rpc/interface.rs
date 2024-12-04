@@ -21,7 +21,8 @@ use common::{
     chain::{
         block::timestamp::BlockTimestamp, tokens::TokenId,
         transaction::partially_signed_transaction::PartiallySignedTransaction, Block, DelegationId,
-        Destination, GenBlock, OrderId, PoolId, SignedTransaction, Transaction, TxOutput,
+        Destination, GenBlock, OrderId, PoolId, SignedTransaction, SignedTransactionIntent,
+        Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id},
 };
@@ -37,14 +38,16 @@ use wallet_types::with_locked::WithLocked;
 
 use crate::types::{
     AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
-    CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
-    MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewOrder, NewTransaction, NftMetadata,
-    NodeVersion, PoolInfo, PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract,
-    RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
-    RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    CreatedWallet, DelegationInfo, HexEncoded, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
+    NewAccountInfo, NewDelegation, NewOrder, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
+    PublicKeyInfo, RpcAmountIn, RpcHashedTimelockContract, RpcInspectTransaction,
+    RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
+    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
     VrfPublicKeyInfo,
 };
+
+use super::types::UtxoInfo;
 
 #[rpc::rpc(server)]
 trait WalletEventsRpc {
@@ -107,7 +110,7 @@ trait ColdWalletRpc {
     #[method(name = "wallet_lock_private_keys")]
     async fn lock_private_key_encryption(&self) -> rpc::RpcResult<()>;
 
-    /// Show the seed phrase for the loaded wallet if it has been s
+    /// Show the seed phrase for the loaded wallet if it has been stored.
     #[method(name = "wallet_show_seed_phrase")]
     async fn get_seed_phrase(&self) -> rpc::RpcResult<Option<SeedWithPassPhrase>>;
 
@@ -323,7 +326,7 @@ trait WalletRpc {
         utxo_types: Vec<RpcUtxoType>,
         utxo_states: Vec<RpcUtxoState>,
         with_locked: Option<WithLocked>,
-    ) -> rpc::RpcResult<Vec<JsonValue>>;
+    ) -> rpc::RpcResult<Vec<UtxoInfo>>;
 
     /// Get the total balance in the selected account in this wallet. See available options to include more categories, like locked coins.
     #[method(name = "account_balance")]
@@ -336,7 +339,7 @@ trait WalletRpc {
 
     /// Lists all the utxos owned by this account
     #[method(name = "account_utxos")]
-    async fn get_utxos(&self, account: AccountArg) -> rpc::RpcResult<Vec<JsonValue>>;
+    async fn get_utxos(&self, account: AccountArg) -> rpc::RpcResult<Vec<UtxoInfo>>;
 
     /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network
     #[method(name = "node_submit_transaction")]
@@ -594,7 +597,8 @@ trait WalletRpc {
     ) -> rpc::RpcResult<NewTransaction>;
 
     /// Lock the circulating supply for the token. THIS IS IRREVERSIBLE.
-    /// Tokens that can be locked will lose the ability to mint/unmint them
+    ///
+    /// Once locked, tokens lose the ability to be minted/unminted.
     #[method(name = "token_lock_supply")]
     async fn lock_token_supply(
         &self,
@@ -628,7 +632,7 @@ trait WalletRpc {
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
 
-    /// Send a given token amount to a given address. The wallet will automatically calculate the required information
+    /// Send the given token amount to the given address. The wallet will automatically calculate the required information.
     #[method(name = "token_send")]
     async fn send_tokens(
         &self,
@@ -638,6 +642,30 @@ trait WalletRpc {
         amount: RpcAmountIn,
         options: TransactionOptions,
     ) -> rpc::RpcResult<NewTransaction>;
+
+    /// Create a transaction for sending tokens to the given address, without submitting it.
+    /// The wallet will automatically calculate the required information.
+    ///
+    /// The "intent" is an arbitrary string that will be concatenated with the id of the created transaction
+    /// and signed by all the keys that were used to sign the transaction itself; this can be used to declare
+    /// the intent of the transaction.
+    /// E.g. when bridging Mintlayer tokens to another chain, you need to send tokens to an address provided
+    /// by the bridge and provide the bridge with the destination address on the foreign chain where you want
+    /// to receive them. In this case you will set "intent" to this foreign destination address; the signed intent
+    /// will then serve as a proof to the bridge that the provided destination address is what it's meant to be.
+    #[method(name = "token_make_tx_for_sending_with_intent")]
+    async fn make_tx_for_sending_tokens_with_intent(
+        &self,
+        account: AccountArg,
+        token_id: RpcAddress<TokenId>,
+        address: RpcAddress<Destination>,
+        amount: RpcAmountIn,
+        intent: String,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<(
+        HexEncoded<SignedTransaction>,
+        HexEncoded<SignedTransactionIntent>,
+    )>;
 
     /// Create a transaction for sending tokens from a multisig address to other addresses, returning the change to
     /// the original multisig address.

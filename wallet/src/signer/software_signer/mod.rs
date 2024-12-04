@@ -35,7 +35,7 @@ use common::chain::{
         sighash::{sighashtype::SigHashType, signature_hash},
         DestinationSigError,
     },
-    ChainConfig, Destination, Transaction, TxOutput,
+    ChainConfig, Destination, SignedTransactionIntent, Transaction, TxOutput,
 };
 use crypto::key::{
     extended::{ExtendedPrivateKey, ExtendedPublicKey},
@@ -341,22 +341,41 @@ impl<'a, T: WalletStorageReadUnlocked> Signer for SoftwareSigner<'a, T> {
 
     fn sign_challenge(
         &self,
-        message: Vec<u8>,
-        destination: Destination,
+        message: &[u8],
+        destination: &Destination,
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<ArbitraryMessageSignature> {
         let private_key = self
-            .get_private_key_for_destination(&destination, key_chain)?
+            .get_private_key_for_destination(destination, key_chain)?
             .ok_or(SignerError::DestinationNotFromThisWallet)?;
 
         let sig = ArbitraryMessageSignature::produce_uniparty_signature(
             &private_key,
-            &destination,
-            &message,
+            destination,
+            message,
             make_true_rng(),
         )?;
 
         Ok(sig)
+    }
+
+    fn sign_transaction_intent(
+        &self,
+        transaction: &Transaction,
+        input_destinations: &[Destination],
+        intent: &str,
+        key_chain: &impl AccountKeyChains,
+    ) -> SignerResult<SignedTransactionIntent> {
+        SignedTransactionIntent::produce_from_transaction(
+            transaction,
+            input_destinations,
+            intent,
+            |dest| {
+                self.get_private_key_for_destination(dest, key_chain)?
+                    .ok_or(SignerError::DestinationNotFromThisWallet)
+            },
+            make_true_rng(),
+        )
     }
 }
 

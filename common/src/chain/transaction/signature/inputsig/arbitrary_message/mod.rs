@@ -28,17 +28,18 @@ use crate::{
 
 use super::{
     authorize_pubkey_spend::{
-        sign_pubkey_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
+        sign_public_key_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
     },
     authorize_pubkeyhash_spend::{
-        sign_address_spending, verify_address_spending, AuthorizedPublicKeyHashSpend,
+        sign_public_key_hash_spending, sign_public_key_hash_spending_unchecked,
+        verify_public_key_hash_spending, AuthorizedPublicKeyHashSpend,
     },
     classical_multisig::authorize_classical_multisig::{
         verify_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
     },
 };
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum SignArbitraryMessageError {
     #[error("Destination signature error: {0}")]
     DestinationSigError(#[from] DestinationSigError),
@@ -73,8 +74,8 @@ impl ArbitraryMessageSignature {
         Self { raw_signature }
     }
 
-    pub fn to_hex(self) -> String {
-        hex::encode(self.raw_signature)
+    pub fn to_hex(&self) -> String {
+        self.as_ref().to_hex()
     }
 
     pub fn as_raw(&self) -> &[u8] {
@@ -85,35 +86,17 @@ impl ArbitraryMessageSignature {
         self.raw_signature
     }
 
+    pub fn as_ref(&self) -> ArbitraryMessageSignatureRef<'_> {
+        ArbitraryMessageSignatureRef::from_data(&self.raw_signature)
+    }
+
     pub fn verify_signature(
         &self,
         chain_config: &ChainConfig,
         destination: &Destination,
         challenge: &H256,
     ) -> Result<(), DestinationSigError> {
-        match destination {
-            Destination::PublicKeyHash(addr) => {
-                let sig_components = AuthorizedPublicKeyHashSpend::from_data(&self.raw_signature)?;
-                verify_address_spending(addr, &sig_components, challenge)?
-            }
-            Destination::PublicKey(pubkey) => {
-                let sig_components = AuthorizedPublicKeySpend::from_data(&self.raw_signature)?;
-                verify_public_key_spending(pubkey, &sig_components, challenge)?
-            }
-            Destination::ScriptHash(_) => return Err(DestinationSigError::Unsupported),
-            Destination::AnyoneCanSpend => {
-                // AnyoneCanSpend makes no sense for signing and verification.
-                return Err(
-                    DestinationSigError::AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
-                );
-            }
-            Destination::ClassicMultisig(h) => {
-                let sig_components =
-                    AuthorizedClassicalMultisigSpend::from_data(&self.raw_signature)?;
-                verify_classical_multisig_spending(chain_config, h, &sig_components, challenge)?
-            }
-        }
-        Ok(())
+        self.as_ref().verify_signature(chain_config, destination, challenge)
     }
 
     pub fn produce_uniparty_signature<R: Rng + CryptoRng>(
@@ -125,12 +108,12 @@ impl ArbitraryMessageSignature {
         let challenge = produce_message_challenge(message);
         let signature =
             match destination {
-                Destination::PublicKeyHash(addr) => {
-                    let sig = sign_address_spending(private_key, addr, &challenge, rng)?;
+                Destination::PublicKeyHash(pubkeyhash) => {
+                    let sig = sign_public_key_hash_spending(private_key, pubkeyhash, &challenge, rng)?;
                     sig.encode()
                 }
                 Destination::PublicKey(pubkey) => {
-                    let sig = sign_pubkey_spending(private_key, pubkey, &challenge, rng)?;
+                    let sig = sign_public_key_spending(private_key, pubkey, &challenge, rng)?;
                     sig.encode()
                 }
                 Destination::ScriptHash(_) => return Err(SignArbitraryMessageError::Unsupported),
@@ -147,6 +130,70 @@ impl ArbitraryMessageSignature {
         Ok(Self {
             raw_signature: signature,
         })
+    }
+
+    pub fn produce_uniparty_signature_as_pub_key_hash_spending<R: Rng + CryptoRng>(
+        private_key: &crypto::key::PrivateKey,
+        message: &[u8],
+        rng: R,
+    ) -> Result<Self, SignArbitraryMessageError> {
+        let challenge = produce_message_challenge(message);
+        let signature = sign_public_key_hash_spending_unchecked(private_key, &challenge, rng)?;
+        let signature = signature.encode();
+
+        Ok(Self {
+            raw_signature: signature,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct ArbitraryMessageSignatureRef<'a> {
+    raw_signature: &'a [u8],
+}
+
+impl<'a> ArbitraryMessageSignatureRef<'a> {
+    pub fn from_data(raw_signature: &'a [u8]) -> Self {
+        Self { raw_signature }
+    }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.raw_signature)
+    }
+
+    pub fn as_raw(&self) -> &[u8] {
+        self.raw_signature
+    }
+
+    pub fn verify_signature(
+        &self,
+        chain_config: &ChainConfig,
+        destination: &Destination,
+        challenge: &H256,
+    ) -> Result<(), DestinationSigError> {
+        match destination {
+            Destination::PublicKeyHash(addr) => {
+                let sig_components = AuthorizedPublicKeyHashSpend::from_data(self.raw_signature)?;
+                verify_public_key_hash_spending(addr, &sig_components, challenge)?
+            }
+            Destination::PublicKey(pubkey) => {
+                let sig_components = AuthorizedPublicKeySpend::from_data(self.raw_signature)?;
+                verify_public_key_spending(pubkey, &sig_components, challenge)?
+            }
+            Destination::ScriptHash(_) => return Err(DestinationSigError::Unsupported),
+            Destination::AnyoneCanSpend => {
+                // AnyoneCanSpend makes no sense for signing and verification.
+                return Err(
+                    DestinationSigError::AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
+                );
+            }
+            Destination::ClassicMultisig(h) => {
+                let sig_components =
+                    AuthorizedClassicalMultisigSpend::from_data(self.raw_signature)?;
+                verify_classical_multisig_spending(chain_config, h, &sig_components, challenge)?
+            }
+        }
+        Ok(())
     }
 }
 

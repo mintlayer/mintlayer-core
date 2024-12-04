@@ -1286,12 +1286,12 @@ dependencies = [
  "serialization",
  "storage-failing",
  "storage-inmemory",
+ "strum",
  "test-utils",
  "tokens-accounting",
  "tx-verifier",
  "utils",
  "utxo",
- "variant_count",
 ]
 
 [[package]]
@@ -1573,11 +1573,11 @@ dependencies = [
  "serial_test",
  "serialization",
  "static_assertions",
+ "strum",
  "test-utils",
  "thiserror",
  "typename",
  "utils",
- "variant_count",
 ]
 
 [[package]]
@@ -2833,6 +2833,19 @@ name = "glob"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
+
+[[package]]
+name = "gloo-utils"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b5555354113b18c547c1d3a98fbf7fb32a9ff4f6fa112ce823a21641a0ba3aa"
+dependencies = [
+ "js-sys",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "web-sys",
+]
 
 [[package]]
 name = "glow"
@@ -4514,11 +4527,11 @@ dependencies = [
  "p2p",
  "rfd",
  "serialization",
+ "strum",
  "subsystem",
  "thiserror",
  "tokio",
  "utils",
- "variant_count",
  "wallet",
  "wallet-cli-commands",
  "wallet-controller",
@@ -4979,10 +4992,10 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
+ "strum",
  "test-utils",
  "thiserror",
  "utils",
- "variant_count",
 ]
 
 [[package]]
@@ -5441,11 +5454,11 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
+ "strum",
  "test-utils",
  "thiserror",
  "typename",
  "utils",
- "variant_count",
 ]
 
 [[package]]
@@ -7285,6 +7298,9 @@ name = "strum"
 version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
+dependencies = [
+ "strum_macros",
+]
 
 [[package]]
 name = "strum_macros"
@@ -7657,10 +7673,10 @@ dependencies = [
  "randomness",
  "rstest",
  "serialization",
+ "strum",
  "test-utils",
  "thiserror",
  "utils",
- "variant_count",
 ]
 
 [[package]]
@@ -8355,16 +8371,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 
 [[package]]
-name = "variant_count"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aae2faf80ac463422992abf4de234731279c058aaf33171ca70277c98406b124"
-dependencies = [
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8891,6 +8897,7 @@ dependencies = [
  "consensus",
  "crypto",
  "getrandom 0.2.15",
+ "gloo-utils",
  "hex",
  "randomness",
  "rstest",
@@ -8899,6 +8906,7 @@ dependencies = [
  "thiserror",
  "tx-verifier",
  "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

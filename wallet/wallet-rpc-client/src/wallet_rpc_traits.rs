@@ -19,7 +19,8 @@ use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        Block, GenBlock, SignedTransaction, Transaction, TxOutput, UtxoOutPoint,
+        Block, GenBlock, SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -38,7 +39,7 @@ use wallet_rpc_lib::types::{
     NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
     RpcInspectTransaction, RpcSignatureStatus, RpcStandaloneAddresses, RpcTokenId,
     SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
-    StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, VrfPublicKeyInfo,
+    StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
 };
 use wallet_types::with_locked::WithLocked;
 
@@ -185,7 +186,7 @@ pub trait WalletInterface {
         utxo_types: Vec<UtxoType>,
         utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
-    ) -> Result<Vec<serde_json::Value>, Self::Error>;
+    ) -> Result<Vec<UtxoInfo>, Self::Error>;
 
     async fn get_utxos(
         &self,
@@ -193,7 +194,7 @@ pub trait WalletInterface {
         utxo_types: Vec<UtxoType>,
         utxo_states: Vec<UtxoState>,
         with_locked: WithLocked,
-    ) -> Result<Vec<serde_json::Value>, Self::Error>;
+    ) -> Result<Vec<UtxoInfo>, Self::Error>;
 
     async fn submit_raw_transaction(
         &self,
@@ -446,6 +447,22 @@ pub trait WalletInterface {
         amount: DecimalAmount,
         config: ControllerConfig,
     ) -> Result<NewTransaction, Self::Error>;
+
+    async fn make_tx_for_sending_tokens_with_intent(
+        &self,
+        account_index: U31,
+        token_id: String,
+        address: String,
+        amount: DecimalAmount,
+        intent: String,
+        config: ControllerConfig,
+    ) -> Result<
+        (
+            HexEncoded<SignedTransaction>,
+            HexEncoded<SignedTransactionIntent>,
+        ),
+        Self::Error,
+    >;
 
     async fn make_tx_to_send_tokens_from_multisig_address(
         &self,

@@ -23,7 +23,7 @@ use common::{
         partially_signed_transaction::PartiallySignedTransaction,
         tokens::{IsTokenUnfreezable, TokenId},
         Block, DelegationId, Destination, GenBlock, OrderId, PoolId, SignedTransaction,
-        Transaction, TxOutput,
+        SignedTransactionIntent, Transaction, TxOutput,
     },
     primitives::{time::Time, BlockHeight, Id, Idable},
 };
@@ -44,11 +44,11 @@ use crate::{
     rpc::{ColdWalletRpcServer, WalletEventsRpcServer, WalletRpc, WalletRpcServer},
     types::{
         AccountArg, AddressInfo, AddressWithUsageInfo, Balances, ChainInfo, ComposedTransaction,
-        CreatedWallet, DelegationInfo, HexEncoded, JsonValue, LegacyVrfPublicKeyInfo,
-        MaybeSignedTransaction, NewAccountInfo, NewDelegation, NewTransaction, NftMetadata,
-        NodeVersion, PoolInfo, PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString,
-        RpcInspectTransaction, RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState,
-        RpcUtxoType, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+        CreatedWallet, DelegationInfo, HexEncoded, LegacyVrfPublicKeyInfo, MaybeSignedTransaction,
+        NewAccountInfo, NewDelegation, NewTransaction, NftMetadata, NodeVersion, PoolInfo,
+        PublicKeyInfo, RpcAddress, RpcAmountIn, RpcHexString, RpcInspectTransaction,
+        RpcStandaloneAddresses, RpcTokenId, RpcUtxoOutpoint, RpcUtxoState, RpcUtxoType,
+        SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
         StandaloneAddressWithDetails, TokenMetadata, TransactionOptions, TxOptionsOverrides,
         UtxoInfo, VrfPublicKeyInfo,
     },
@@ -423,7 +423,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         utxo_types: Vec<RpcUtxoType>,
         utxo_states: Vec<RpcUtxoState>,
         with_locked: Option<WithLocked>,
-    ) -> rpc::RpcResult<Vec<JsonValue>> {
+    ) -> rpc::RpcResult<Vec<UtxoInfo>> {
         let utxo_types = (&utxo_types.iter().map(UtxoType::from).collect::<Vec<_>>())
             .try_into()
             .unwrap_or(UtxoTypes::ALL);
@@ -444,8 +444,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         let result = utxos
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
-                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config)
-                    .map(serde_json::to_value);
+                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config);
                 rpc::handle_result(result)
             })
             .collect::<Result<Vec<_>, _>>();
@@ -453,7 +452,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         rpc::handle_result(result)
     }
 
-    async fn get_utxos(&self, account_arg: AccountArg) -> rpc::RpcResult<Vec<JsonValue>> {
+    async fn get_utxos(&self, account_arg: AccountArg) -> rpc::RpcResult<Vec<UtxoInfo>> {
         let utxos = self
             .get_utxos(
                 account_arg.index::<N>()?,
@@ -466,8 +465,7 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         let result = utxos
             .into_iter()
             .map(|(utxo_outpoint, tx_ouput)| {
-                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config)
-                    .map(serde_json::to_value);
+                let result = UtxoInfo::new(utxo_outpoint, tx_ouput, &self.chain_config);
                 rpc::handle_result(result)
             })
             .collect::<Result<Vec<_>, _>>();
@@ -965,6 +963,37 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         rpc::handle_result(
             self.send_tokens(account_arg.index::<N>()?, token_id, address, amount, config)
                 .await,
+        )
+    }
+
+    async fn make_tx_for_sending_tokens_with_intent(
+        &self,
+        account_arg: AccountArg,
+        token_id: RpcAddress<TokenId>,
+        address: RpcAddress<Destination>,
+        amount: RpcAmountIn,
+        intent: String,
+        options: TransactionOptions,
+    ) -> rpc::RpcResult<(
+        HexEncoded<SignedTransaction>,
+        HexEncoded<SignedTransactionIntent>,
+    )> {
+        let config = ControllerConfig {
+            in_top_x_mb: options.in_top_x_mb(),
+            broadcast_to_mempool: true,
+        };
+
+        rpc::handle_result(
+            self.create_transaction_for_sending_tokens_with_intent(
+                account_arg.index::<N>()?,
+                token_id,
+                address,
+                amount,
+                intent,
+                config,
+            )
+            .await
+            .map(|(tx, intent)| (HexEncoded::new(tx), HexEncoded::new(intent))),
         )
     }
 

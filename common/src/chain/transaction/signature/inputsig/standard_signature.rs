@@ -31,10 +31,11 @@ use crate::{
 
 use super::{
     authorize_pubkey_spend::{
-        sign_pubkey_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
+        sign_public_key_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
     },
     authorize_pubkeyhash_spend::{
-        sign_address_spending, verify_address_spending, AuthorizedPublicKeyHashSpend,
+        sign_public_key_hash_spending, verify_public_key_hash_spending,
+        AuthorizedPublicKeyHashSpend,
     },
     classical_multisig::{
         authorize_classical_multisig::{
@@ -77,7 +78,7 @@ impl StandardInputSignature {
         match outpoint_destination {
             Destination::PublicKeyHash(addr) => {
                 let sig_components = AuthorizedPublicKeyHashSpend::from_data(&self.raw_signature)?;
-                verify_address_spending(addr, &sig_components, sighash)?
+                verify_public_key_hash_spending(addr, &sig_components, sighash)?
             }
             Destination::PublicKey(pubkey) => {
                 let sig_components = AuthorizedPublicKeySpend::from_data(&self.raw_signature)?;
@@ -111,11 +112,11 @@ impl StandardInputSignature {
         let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num)?;
         let serialized_sig = match outpoint_destination {
             Destination::PublicKeyHash(ref addr) => {
-                let sig = sign_address_spending(private_key, addr, &sighash, rng)?;
+                let sig = sign_public_key_hash_spending(private_key, addr, &sighash, rng)?;
                 sig.encode()
             }
             Destination::PublicKey(ref pubkey) => {
-                let sig = sign_pubkey_spending(private_key, pubkey, &sighash, rng)?;
+                let sig = sign_public_key_spending(private_key, pubkey, &sighash, rng)?;
                 sig.encode()
             }
             Destination::ScriptHash(_) => return Err(DestinationSigError::Unsupported),
@@ -143,6 +144,8 @@ impl StandardInputSignature {
         inputs_utxos: &[Option<&TxOutput>],
         input_num: usize,
     ) -> Result<Self, DestinationSigError> {
+        use super::classical_multisig::multisig_partial_signature::SigsVerifyResult;
+
         let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num)?;
         let message = sighash.encode();
 
@@ -152,9 +155,13 @@ impl StandardInputSignature {
         let verification_result = verifier.verify_signatures(chain_config)?;
 
         match verification_result {
-            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => (),
-            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::Incomplete => return Err(DestinationSigError::IncompleteClassicalMultisigAuthorization),
-            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::Invalid => return Err(DestinationSigError::InvalidClassicalMultisigAuthorization),
+            SigsVerifyResult::CompleteAndValid => (),
+            SigsVerifyResult::Incomplete => {
+                return Err(DestinationSigError::IncompleteClassicalMultisigAuthorization)
+            }
+            SigsVerifyResult::Invalid => {
+                return Err(DestinationSigError::InvalidClassicalMultisigAuthorization)
+            }
         }
 
         let serialized_sig = authorization.encode();
@@ -230,7 +237,7 @@ mod test {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn produce_signature_address_mismatch(#[case] seed: Seed) {
+    fn produce_signature_pub_key_hash_mismatch(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
@@ -244,7 +251,7 @@ mod test {
 
         for sighash_type in sig_hash_types() {
             assert_eq!(
-                Err(DestinationSigError::PublicKeyToAddressMismatch),
+                Err(DestinationSigError::PublicKeyToHashMismatch),
                 StandardInputSignature::produce_uniparty_signature_for_input(
                     &private_key,
                     sighash_type,

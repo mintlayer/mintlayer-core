@@ -23,7 +23,7 @@ use common::{
 };
 use randomness::Rng;
 use serialization::{Decode, Encode};
-use variant_count::VariantCount;
+use strum::EnumCount;
 
 use crate::{data::TokenData, error::Result};
 
@@ -76,7 +76,7 @@ pub struct ChangeTokenMetadataUriUndo {
 }
 
 #[must_use]
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, VariantCount)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, EnumCount)]
 pub enum TokenAccountingUndo {
     #[codec(index = 0)]
     IssueToken(IssueTokenUndo),

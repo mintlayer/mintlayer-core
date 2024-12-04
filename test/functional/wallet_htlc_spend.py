@@ -17,7 +17,7 @@
 """Wallet htlc spend with a secret test
 
 * Create 2 wallets for Alice and Bob
-* Alice mints some tokens and creates an output that locks that tokens in htlc
+* Alice mints some tokens and creates an output that locks those tokens in htlc
 * Bob creates an output that locks coins in htlc
 * Check that Alice cannot spend her htlc output even with the secret
 * Check that Bob cannot spend Alice's htlc without the secret

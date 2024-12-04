@@ -25,7 +25,7 @@ from tempfile import NamedTemporaryFile
 from typing import Optional, List, Tuple, Union
 
 from test_framework.util import assert_in
-from test_framework.wallet_controller_common import PartialSigInfo, TokenTxOutput, UtxoOutpoint
+from test_framework.wallet_controller_common import PartialSigInfo, TokenTxOutput, UtxoOutpoint, WalletCliControllerBase
 
 
 TEN_MB = 10*2**20
@@ -68,8 +68,7 @@ class AccountInfo:
     name: Optional[str]
 
 
-class WalletCliController:
-
+class WalletCliController(WalletCliControllerBase):
     def __init__(self, node, config, log, wallet_args: List[str] = [], chain_config_args: List[str] = []):
         self.log = log
         self.node = node
@@ -272,6 +271,11 @@ class WalletCliController:
         j = json.loads(output)
 
         return [UtxoOutpoint(id=match["outpoint"]["source_id"]["content"]["tx_id"], index=int(match["outpoint"]["index"])) for match in j]
+
+    # Note: probably this function should have been called `list_utxos` and the current `list_utxos` have a more specific name.
+    async def list_utxos_raw(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
+        output = await self._write_command(f"account-utxos {utxo_types} {with_locked} {''.join(utxo_states)}\n")
+        return json.loads(output)
 
     async def list_multisig_utxos(self, utxo_types: str = '', with_locked: str = '', utxo_states: List[str] = []) -> List[UtxoOutpoint]:
         output = await self._write_command(f"standalone-multisig-utxos {utxo_types} {with_locked} {''.join(utxo_states)}\n")
@@ -544,3 +548,19 @@ class WalletCliController:
         ]
 
         return (tx, siginfo)
+
+    async def make_tx_to_send_tokens_with_intent(
+            self, token_id: str, destination: str, amount: Union[float, str], intent: str):
+
+        output = await self._write_command(
+            f"token-make-tx-to-send-with-intent {token_id} {destination} {amount} {intent}\n")
+
+        pattern = (
+            r'The hex encoded transaction is:\n([0-9a-fA-F]+)\n\n'
+            r'The transaction id is:\n([0-9a-fA-F]+)\n\n'
+            r'The hex encoded signed transaction intent is:\n([0-9a-fA-F]+)'
+        )
+        match = re.search(pattern, output)
+        assert match is not None
+
+        return (match.group(1), match.group(2), match.group(3))

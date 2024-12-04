@@ -24,7 +24,7 @@ use common::{
         partially_signed_transaction::PartiallySignedTransaction, ChainConfig, Destination,
         SignedTransaction, TxOutput, UtxoOutPoint,
     },
-    primitives::H256,
+    primitives::{Idable as _, H256},
     text_summary::TextSummary,
 };
 use crypto::key::hdkd::u31::U31;
@@ -870,8 +870,7 @@ where
                         CliUtxoState::to_wallet_states(utxo_states),
                         with_locked.to_wallet_type(),
                     )
-                    .await
-                    .map(serde_json::Value::Array)?;
+                    .await?;
                 Ok(ConsoleCommand::Print(
                     serde_json::to_string(&utxos).expect("ok"),
                 ))
@@ -1176,8 +1175,7 @@ where
                         CliUtxoState::to_wallet_states(utxo_states),
                         with_locked.to_wallet_type(),
                     )
-                    .await
-                    .map(serde_json::Value::Array)?;
+                    .await?;
                 Ok(ConsoleCommand::Print(
                     serde_json::to_string(&utxos).expect("ok"),
                 ))
@@ -1398,6 +1396,37 @@ where
                     .await?;
 
                 Ok(Self::new_tx_submitted_command(new_tx))
+            }
+
+            WalletCommand::MakeTxToSendTokensToAddressWithIntent {
+                token_id,
+                address,
+                amount,
+                intent,
+            } => {
+                let (wallet, selected_account) = wallet_and_selected_acc(&mut self.wallet).await?;
+                let (signed_tx, signed_intent) = wallet
+                    .make_tx_for_sending_tokens_with_intent(
+                        selected_account,
+                        token_id,
+                        address,
+                        amount,
+                        intent,
+                        self.config,
+                    )
+                    .await?;
+                let tx_id = signed_tx.as_ref().transaction().get_id();
+
+                let output = format!(
+                    concat!(
+                        "The hex encoded transaction is:\n{}\n\n",
+                        "The transaction id is:\n{:x}\n\n",
+                        "The hex encoded signed transaction intent is:\n{}\n"
+                    ),
+                    signed_tx, tx_id, signed_intent
+                );
+
+                Ok(ConsoleCommand::Print(output))
             }
 
             WalletCommand::MakeTxToSendTokensFromMultisigAddress {

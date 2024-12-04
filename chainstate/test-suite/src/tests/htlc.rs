@@ -168,7 +168,7 @@ fn spend_htlc_with_secret(#[case] seed: Seed) {
                     ConnectTransactionError::InputCheck(InputCheckError::new(
                         0,
                         tx_verifier::error::ScriptError::Signature(
-                            DestinationSigError::PublicKeyToAddressMismatch
+                            DestinationSigError::PublicKeyToHashMismatch
                         )
                     ))
                 ))

@@ -68,6 +68,46 @@ fn sign_verify_supported_destinations(#[case] seed: Seed) {
     }
 }
 
+// Check that `produce_uniparty_signature_as_pub_key_hash_spending` gives the same result as
+// `produce_uniparty_signature` does for `Destination::PublicKeyHash`.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn produce_uniparty_signature_as_pub_key_hash_spending_matches_produce_uniparty_signature(
+    #[case] seed: Seed,
+) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = chain::config::create_testnet();
+
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let message: Vec<u8> = (20..40).map(|_| rng.gen()).collect();
+    let message_challenge = produce_message_challenge(&message);
+
+    let destination_addr = Destination::PublicKeyHash(PublicKeyHash::from(&public_key));
+    // Use the identical rng for both of the signer calls to be able to compare the signatures.
+    let signer_rng_seed = rng.gen();
+
+    let sig1 = ArbitraryMessageSignature::produce_uniparty_signature(
+        &private_key,
+        &destination_addr,
+        &message,
+        test_utils::random::make_seedable_rng(signer_rng_seed),
+    )
+    .unwrap();
+    sig1.verify_signature(&chain_config, &destination_addr, &message_challenge)
+        .unwrap();
+
+    let sig2 = ArbitraryMessageSignature::produce_uniparty_signature_as_pub_key_hash_spending(
+        &private_key,
+        &message,
+        test_utils::random::make_seedable_rng(signer_rng_seed),
+    )
+    .unwrap();
+
+    assert_eq!(sig1, sig2);
+}
+
 // Try to sign and verify using a destination that is unsupported for signing and/or verification.
 // Specific errors should be produced in each case.
 #[rstest]
@@ -172,7 +212,7 @@ fn verify_wrong_destination(#[case] seed: Seed) {
         (
             &dest_addr,
             &dest_addr2,
-            &assert_result(Err(DestinationSigError::PublicKeyToAddressMismatch)),
+            &assert_result(Err(DestinationSigError::PublicKeyToHashMismatch)),
         ),
         (
             &dest_addr,
@@ -308,7 +348,7 @@ fn verify_corrupted_signature(#[case] seed: Seed) {
 // 1) Construct a message containing tx data that would normally be hashed when signing
 // a transaction.
 // 2) As a sanity check, hash the message and use one of the "standard" functions
-// (sign_pubkey_spending) to produce a tx signature; check that the signature is indeed correct.
+// (sign_public_key_spending) to produce a tx signature; check that the signature is indeed correct.
 // 3) Sign the message via SignedArbitraryMessage::produce_uniparty_signature; check that the
 // result is NOT a valid transaction signature.
 #[rstest]
@@ -357,7 +397,7 @@ fn signing_transactions_shouldnt_work(#[case] seed: Seed) {
         let expected_hash = signature_hash(sighash_type, &tx, &[Some(&input_utxo)], 0).unwrap();
         assert_eq!(tx_data_hash, expected_hash);
 
-        let raw_sig = sign_pubkey_spending(&private_key, &public_key, &tx_data_hash, &mut rng)
+        let raw_sig = sign_public_key_spending(&private_key, &public_key, &tx_data_hash, &mut rng)
             .unwrap()
             .encode();
 

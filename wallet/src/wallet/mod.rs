@@ -51,8 +51,8 @@ use common::chain::tokens::{
 };
 use common::chain::{
     make_order_id, AccountNonce, Block, ChainConfig, DelegationId, Destination, GenBlock, OrderId,
-    OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction, Transaction,
-    TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
+    OutPointSourceId, PoolId, RpcOrderInfo, SignedTransaction, SignedTransactionIntent,
+    Transaction, TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::id::{hash_encoded, WithId};
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -976,15 +976,15 @@ impl<B: storage::Backend> Wallet<B> {
         }
     }
 
-    fn for_account_rw_unlocked_and_check_tx_custom_error(
+    fn for_account_rw_unlocked_and_check_tx_generic<AddlData>(
         &mut self,
         account_index: U31,
-        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<SendRequest>,
+        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<(SendRequest, AddlData)>,
         error_mapper: impl FnOnce(WalletError) -> WalletError,
-    ) -> WalletResult<SignedTransaction> {
+    ) -> WalletResult<(SignedTransaction, AddlData)> {
         let (_, block_height) = self.get_best_block_for_account(account_index)?;
         self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
-            let request = f(account, db_tx)?;
+            let (request, additional_data) = f(account, db_tx)?;
 
             let ptx = request.into_partially_signed_tx()?;
 
@@ -1019,7 +1019,7 @@ impl<B: storage::Backend> Wallet<B> {
                 .map_err(|e| error_mapper(WalletError::TransactionCreation(e)))?;
 
             check_transaction(chain_config, block_height.next_height(), &tx)?;
-            Ok(tx)
+            Ok((tx, additional_data))
         })
     }
 
@@ -1028,7 +1028,13 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<SendRequest>,
     ) -> WalletResult<SignedTransaction> {
-        self.for_account_rw_unlocked_and_check_tx_custom_error(account_index, f, |err| err)
+        Ok(self
+            .for_account_rw_unlocked_and_check_tx_generic(
+                account_index,
+                |account, db_tx| Ok((f(account, db_tx)?, ())),
+                |err| err,
+            )?
+            .0)
     }
 
     fn get_account(&self, account_index: U31) -> WalletResult<&Account> {
@@ -1360,21 +1366,91 @@ impl<B: storage::Backend> Wallet<B> {
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
-        let request = SendRequest::new().with_outputs(outputs);
-        let latest_median_time = self.latest_median_time;
-        self.for_account_rw_unlocked_and_check_tx(account_index, |account, db_tx| {
-            account.process_send_request_and_sign(
-                db_tx,
-                request,
+        Ok(self
+            .create_transaction_to_addresses_impl(
+                account_index,
+                outputs,
                 inputs,
                 change_addresses,
-                latest_median_time,
-                CurrentFeeRate {
-                    current_fee_rate,
-                    consolidate_fee_rate,
-                },
-            )
-        })
+                current_fee_rate,
+                consolidate_fee_rate,
+                |_s| (),
+            )?
+            .0)
+    }
+
+    /// Same as `create_transaction_to_addresses`, but it also allows to specify the "intent" for the transaction,
+    /// which will be concatenated with the transaction id and signed with all the keys used to sign the transaction's inputs.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_transaction_to_addresses_with_intent(
+        &mut self,
+        account_index: U31,
+        outputs: impl IntoIterator<Item = TxOutput>,
+        inputs: SelectedInputs,
+        change_addresses: BTreeMap<Currency, Address<Destination>>,
+        intent: String,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+    ) -> WalletResult<(SignedTransaction, SignedTransactionIntent)> {
+        let (signed_tx, input_destinations) = self.create_transaction_to_addresses_impl(
+            account_index,
+            outputs,
+            inputs,
+            change_addresses,
+            current_fee_rate,
+            consolidate_fee_rate,
+            |send_request| send_request.destinations().to_owned(),
+        )?;
+
+        let signed_intent =
+            self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
+                let signer =
+                    SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);
+
+                Ok(signer.sign_transaction_intent(
+                    signed_tx.transaction(),
+                    &input_destinations,
+                    &intent,
+                    account.key_chain(),
+                )?)
+            })?;
+
+        Ok((signed_tx, signed_intent))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn create_transaction_to_addresses_impl<AddlData>(
+        &mut self,
+        account_index: U31,
+        outputs: impl IntoIterator<Item = TxOutput>,
+        inputs: SelectedInputs,
+        change_addresses: BTreeMap<Currency, Address<Destination>>,
+        current_fee_rate: FeeRate,
+        consolidate_fee_rate: FeeRate,
+        additional_data_getter: impl Fn(&SendRequest) -> AddlData,
+    ) -> WalletResult<(SignedTransaction, AddlData)> {
+        let request = SendRequest::new().with_outputs(outputs);
+        let latest_median_time = self.latest_median_time;
+        self.for_account_rw_unlocked_and_check_tx_generic(
+            account_index,
+            |account, db_tx| {
+                let send_request = account.process_send_request_and_sign(
+                    db_tx,
+                    request,
+                    inputs,
+                    change_addresses,
+                    latest_median_time,
+                    CurrentFeeRate {
+                        current_fee_rate,
+                        consolidate_fee_rate,
+                    },
+                )?;
+
+                let additional_data = additional_data_getter(&send_request);
+                Ok((send_request, additional_data))
+            },
+            |err| err,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1737,19 +1813,24 @@ impl<B: storage::Backend> Wallet<B> {
         output_address: Option<Destination>,
         current_fee_rate: FeeRate,
     ) -> WalletResult<SignedTransaction> {
-        self.for_account_rw_unlocked_and_check_tx_custom_error(
-            account_index,
-            |account, db_tx| {
-                account.decommission_stake_pool(
-                    db_tx,
-                    pool_id,
-                    pool_balance,
-                    output_address,
-                    current_fee_rate,
-                )
-            },
-            |_err| WalletError::PartiallySignedTransactionInDecommissionCommand,
-        )
+        Ok(self
+            .for_account_rw_unlocked_and_check_tx_generic(
+                account_index,
+                |account, db_tx| {
+                    Ok((
+                        account.decommission_stake_pool(
+                            db_tx,
+                            pool_id,
+                            pool_balance,
+                            output_address,
+                            current_fee_rate,
+                        )?,
+                        (),
+                    ))
+                },
+                |_err| WalletError::PartiallySignedTransactionInDecommissionCommand,
+            )?
+            .0)
     }
 
     pub fn decommission_stake_pool_request(
@@ -1912,8 +1993,8 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn sign_challenge(
         &mut self,
         account_index: U31,
-        challenge: Vec<u8>,
-        destination: Destination,
+        challenge: &[u8],
+        destination: &Destination,
     ) -> WalletResult<ArbitraryMessageSignature> {
         self.for_account_rw_unlocked(account_index, |account, db_tx, chain_config| {
             let signer = SoftwareSigner::new(db_tx, Arc::new(chain_config.clone()), account_index);

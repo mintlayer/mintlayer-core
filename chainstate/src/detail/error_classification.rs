@@ -172,7 +172,7 @@ impl BlockProcessingErrorClassification for CheckBlockError {
             | CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(_, _, _)
             | CheckBlockError::InvalidParent { .. } => BlockProcessingErrorClass::BadBlock,
 
-            CheckBlockError::BlockFromTheFuture(_) => {
+            CheckBlockError::BlockFromTheFuture { .. } => {
                 BlockProcessingErrorClass::TemporarilyBadBlock
             }
 

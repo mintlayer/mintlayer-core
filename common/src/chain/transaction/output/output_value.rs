@@ -94,7 +94,6 @@ impl RpcOutputValue {
             }),
         }
     }
-
     pub fn amount(&self) -> Amount {
         match self {
             RpcOutputValue::Coin { amount } | RpcOutputValue::Token { id: _, amount } => *amount,
