@@ -35,7 +35,6 @@ serde = { workspace = true, features = ["derive"] }
 serde_with.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-variant_count.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../../test-utils" }
