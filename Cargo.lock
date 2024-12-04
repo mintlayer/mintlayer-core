@@ -8052,6 +8052,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "trezor-common"
+version = "0.7.0"
+dependencies = [
+ "common",
+ "crypto",
+ "num-derive",
+ "num-traits",
+ "parity-scale-codec",
+ "rstest",
+ "test-utils",
+]
+
+[[package]]
 name = "trust-dns-client"
 version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

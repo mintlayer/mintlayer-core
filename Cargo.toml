@@ -66,6 +66,7 @@ members = [
   "utils/networking",                   # Various async/tokio utilities.
   "utxo",                               # Utxo and related utilities (cache, undo, etc.).
   "wallet",                             # Wallet primitives.
+  "wallet/trezor-common",               # Code used by Trezor firmware repository.
   "wallet/wallet-cli",                  # Wallet CLI/REPL binary.
   "wallet/wallet-cli-lib",              # Wallet CLI/REPL lib.
   "wallet/wallet-cli-commands",         # Wallet CLI/REPL commands.
