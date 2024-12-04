@@ -20,24 +20,25 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+use serde::{Deserialize, Serialize};
+
 use chainstate::ChainInfo;
 use common::{
     chain::{DelegationId, GenBlock, PoolId, SignedTransaction},
     primitives::{Amount, BlockHeight, Id},
 };
-use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
+use crypto::key::hdkd::child_number::ChildNumber;
 use p2p::P2pEvent;
+use serialization::hex_encoded::hex_encoded_serialization;
 use wallet::account::transaction_list::TransactionList;
 use wallet_cli_commands::ConsoleCommand;
 use wallet_controller::types::Balances;
 use wallet_rpc_lib::types::PoolInfo;
 use wallet_types::wallet_type::WalletType;
 
-use crate::main_window::ImportOrCreate;
+use super::{AccountId, BackendError, ImportOrCreate};
 
-use super::BackendError;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct WalletId(u64);
 
 static NEXT_WALLET_ID: AtomicU64 = AtomicU64::new(0);
@@ -48,20 +49,7 @@ impl WalletId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct AccountId(U31);
-
-impl AccountId {
-    pub fn new(index: U31) -> Self {
-        Self(index)
-    }
-
-    pub fn account_index(&self) -> U31 {
-        self.0
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WalletInfo {
     pub wallet_id: WalletId,
     pub path: PathBuf,
@@ -71,7 +59,7 @@ pub struct WalletInfo {
     pub wallet_type: WalletType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct AccountInfo {
     pub name: Option<String>,
     pub addresses: BTreeMap<u32, String>,
@@ -82,7 +70,7 @@ pub struct AccountInfo {
     pub transaction_list: TransactionList,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct AddressInfo {
     pub wallet_id: WalletId,
     pub account_id: AccountId,
@@ -161,9 +149,10 @@ pub struct SendDelegateToAddressRequest {
     pub delegation_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TransactionInfo {
     pub wallet_id: WalletId,
+    #[serde(with = "hex_encoded_serialization")]
     pub tx: SignedTransaction,
 }
 
@@ -175,7 +164,7 @@ pub enum EncryptionAction {
     Lock,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum EncryptionState {
     EnabledLocked,
     EnabledUnlocked,

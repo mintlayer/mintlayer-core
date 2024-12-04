@@ -1,0 +1,44 @@
+[package]
+name = "node-gui-backend"
+description = "Mintlayer Node GUI backend"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chainstate = { path = "../../chainstate" }
+common = { path = "../../common" }
+crypto = { path = "../../crypto" }
+logging = { path = "../../logging" }
+mempool = { path = "../../mempool" }
+node-lib = { path = "../../node-lib" }
+node-comm = { path = "../../wallet/wallet-node-client" }
+p2p = { path = "../../p2p" }
+serialization = { path = "../../serialization" }
+subsystem = { path = "../../subsystem" }
+utils = { path = "../../utils" }
+wallet = { path = "../../wallet" }
+wallet-controller = { path = "../../wallet/wallet-controller" }
+wallet-types = { path = "../../wallet/types" }
+wallet-rpc-lib = { path = "../../wallet/wallet-rpc-lib"}
+wallet-rpc-client = { path = "../../wallet/wallet-rpc-client"}
+wallet-cli-commands = { path = "../../wallet/wallet-cli-commands"}
+
+anyhow.workspace = true
+chrono.workspace = true
+futures.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_with.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+variant_count.workspace = true
+
+[dev-dependencies]
+test-utils = { path = "../../test-utils" }
+
+rstest.workspace = true
+serde_json.workspace = true

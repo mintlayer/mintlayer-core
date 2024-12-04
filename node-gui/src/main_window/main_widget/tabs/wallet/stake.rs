@@ -13,17 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{address::Address, chain::ChainConfig, primitives::DecimalAmount};
 use iced::{
     widget::{button, column, container, row, text_input, tooltip, tooltip::Position, Text},
     Alignment, Element, Length,
 };
 use iced_aw::{Grid, GridRow};
 
-use crate::{
-    backend::messages::AccountInfo,
-    main_window::{print_coin_amount, print_margin_ratio},
-};
+use common::{address::Address, chain::ChainConfig, primitives::DecimalAmount};
+use node_gui_backend::messages::AccountInfo;
+
+use crate::main_window::{print_coin_amount, print_margin_ratio};
 
 use super::WalletMessage;
 const MIN_PLEDGE_AMOUNT_TOOLTIP_TEXT: &str = "This is the minimum amount that must be pledged in a pool. \

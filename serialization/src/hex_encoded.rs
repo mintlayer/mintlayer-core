@@ -18,7 +18,7 @@ use std::{fmt::Display, str::FromStr};
 use crate::hex::{HexDecode, HexEncode, HexError};
 
 /// Wrapper that serializes objects as hex encoded string for `serde`
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HexEncoded<T>(T);
 
 impl<T> HexEncoded<T> {
@@ -74,4 +74,23 @@ impl<T: serialization_core::Encode> Display for HexEncoded<T> {
 
 impl<T> rpc_description::HasValueHint for HexEncoded<T> {
     const HINT_SER: rpc_description::ValueHint = rpc_description::ValueHint::HEX_STRING;
+}
+
+pub mod hex_encoded_serialization {
+    use super::HexEncoded;
+    use crate::{Decode, Encode};
+    use serde::{Deserialize, Serialize};
+
+    pub fn serialize<T: Encode, S: serde::Serializer>(
+        t: &T,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        HexEncoded::new(t).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, T: Decode, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<T, D::Error> {
+        HexEncoded::<T>::deserialize(deserializer).map(|hex| hex.take())
+    }
 }

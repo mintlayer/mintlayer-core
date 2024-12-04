@@ -16,12 +16,10 @@
 pub mod tabs;
 
 use iced::{Command, Element};
+use node_gui_backend::{messages::WalletId, BackendSender};
 use wallet_types::wallet_type::WalletType;
 
-use crate::{
-    backend::{messages::WalletId, BackendSender},
-    WalletMode,
-};
+use crate::WalletMode;
 
 use super::NodeState;
 

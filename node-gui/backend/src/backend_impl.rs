@@ -45,13 +45,12 @@ use wallet_types::{
     seed_phrase::StoreSeedPhrase, wallet_type::WalletType, with_locked::WithLocked,
 };
 
-use crate::main_window::ImportOrCreate;
-
 use super::{
+    account_id::AccountId,
     chainstate_event_handler::ChainstateEventHandler,
     error::BackendError,
     messages::{
-        AccountId, AccountInfo, AddressInfo, BackendEvent, BackendRequest, CreateDelegationRequest,
+        AccountInfo, AddressInfo, BackendEvent, BackendRequest, CreateDelegationRequest,
         DecommissionPoolRequest, DelegateStakingRequest, EncryptionAction, EncryptionState,
         SendDelegateToAddressRequest, SendRequest, StakeRequest, TransactionInfo, WalletId,
         WalletInfo,
@@ -59,6 +58,7 @@ use super::{
     p2p_event_handler::P2pEventHandler,
     parse_address, parse_coin_amount,
     wallet_events::GuiWalletEvents,
+    ImportOrCreate,
 };
 
 const TRANSACTION_LIST_PAGE_COUNT: usize = 10;

@@ -15,18 +15,20 @@
 
 use std::collections::BTreeMap;
 
-use common::{
-    address::Address,
-    chain::{ChainConfig, DelegationId},
-    primitives::DecimalAmount,
-};
 use iced::{
     widget::{button, column, container, row, text_input, tooltip, tooltip::Position, Text},
     Element, Length,
 };
 use iced_aw::{Grid, GridRow};
 
-use crate::{backend::messages::AccountInfo, main_window::print_coin_amount};
+use common::{
+    address::Address,
+    chain::{ChainConfig, DelegationId},
+    primitives::DecimalAmount,
+};
+use node_gui_backend::messages::AccountInfo;
+
+use crate::main_window::print_coin_amount;
 
 use super::{stake::MATURITY_PERIOD_TOOLTIP_TEXT, WalletMessage};
 

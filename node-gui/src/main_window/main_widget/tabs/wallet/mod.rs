@@ -14,7 +14,6 @@
 // limitations under the License.
 
 mod addresses;
-mod console;
 mod delegation;
 mod left_panel;
 mod send;
@@ -22,10 +21,11 @@ mod stake;
 mod top_panel;
 mod transactions;
 
+mod console;
+pub use console::CONSOLE_OUTPUT_ID;
+
 use std::collections::BTreeMap;
 
-use common::chain::DelegationId;
-pub use console::CONSOLE_OUTPUT_ID;
 use iced::{
     widget::{
         column, container, horizontal_rule, pane_grid, row,
@@ -35,20 +35,19 @@ use iced::{
     Command, Element, Length,
 };
 use iced_aw::tab_bar::TabLabel;
+
+use common::chain::DelegationId;
+use node_gui_backend::{
+    messages::{
+        BackendRequest, CreateDelegationRequest, DecommissionPoolRequest, DelegateStakingRequest,
+        SendDelegateToAddressRequest, SendRequest, StakeRequest, WalletId,
+    },
+    AccountId, BackendSender,
+};
 use wallet_controller::DEFAULT_ACCOUNT_INDEX;
 use wallet_types::wallet_type::WalletType;
 
-use crate::{
-    backend::{
-        messages::{
-            AccountId, BackendRequest, CreateDelegationRequest, DecommissionPoolRequest,
-            DelegateStakingRequest, SendDelegateToAddressRequest, SendRequest, StakeRequest,
-            WalletId,
-        },
-        BackendSender,
-    },
-    main_window::NodeState,
-};
+use crate::main_window::NodeState;
 
 use super::{Tab, TabsMessage};
 
@@ -240,7 +239,7 @@ impl WalletTab {
             }
 
             WalletMessage::GetNewAddress => {
-                backend_sender.send(crate::backend::messages::BackendRequest::NewAddress(
+                backend_sender.send(BackendRequest::NewAddress(
                     self.wallet_id,
                     self.selected_account,
                 ));

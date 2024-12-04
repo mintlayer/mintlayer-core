@@ -21,6 +21,9 @@ mod error;
 mod p2p_event_handler;
 mod wallet_events;
 
+mod account_id;
+pub use account_id::AccountId;
+
 use chainstate::ChainInfo;
 use common::address::{Address, AddressError};
 use common::chain::{ChainConfig, Destination};
@@ -31,12 +34,38 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use crate::backend::chainstate_event_handler::ChainstateEventHandler;
-use crate::backend::p2p_event_handler::P2pEventHandler;
-use crate::{InitNetwork, WalletMode};
+use crate::chainstate_event_handler::ChainstateEventHandler;
+use crate::p2p_event_handler::P2pEventHandler;
 
 use self::error::BackendError;
 use self::messages::{BackendEvent, BackendRequest};
+
+#[derive(Debug, Clone, Copy)]
+pub enum InitNetwork {
+    Mainnet,
+    Testnet,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ImportOrCreate {
+    Import,
+    Create,
+}
+
+impl ImportOrCreate {
+    pub fn skip_syncing(&self) -> bool {
+        match self {
+            Self::Create => true,
+            Self::Import => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum WalletMode {
+    Cold,
+    Hot,
+}
 
 #[derive(Debug)]
 pub struct BackendControls {

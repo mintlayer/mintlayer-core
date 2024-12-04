@@ -17,12 +17,11 @@ use iced::{
     widget::{button, column, pick_list, progress_bar, row, text, tooltip, Column, Text},
     Alignment, Element, Length,
 };
+
+use node_gui_backend::{messages::WalletInfo, AccountId};
 use wallet_types::wallet_type::WalletType;
 
-use crate::{
-    backend::messages::{AccountId, WalletInfo},
-    main_window::NodeState,
-};
+use crate::main_window::NodeState;
 
 use super::{SelectedPanel, WalletMessage};
 
