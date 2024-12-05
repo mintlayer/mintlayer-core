@@ -63,7 +63,12 @@ pub enum PeerManagerEvent {
     /// Increases the ban score of a peer by the given amount.
     ///
     /// The peer is discouraged if the new score exceeds the corresponding threshold.
-    AdjustPeerScore(PeerId, u32, oneshot_nofail::Sender<crate::Result<()>>),
+    AdjustPeerScore {
+        peer_id: PeerId,
+        adjust_by: u32,
+        reason: String,
+        response_sender: oneshot_nofail::Sender<crate::Result<()>>,
+    },
 
     /// New tip block received.
     ///

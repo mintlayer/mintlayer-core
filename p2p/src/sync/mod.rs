@@ -301,7 +301,7 @@ where
                     }
                 }
             }
-            Err(_) => match origin {
+            Err(err) => match origin {
                 TxOrigin::Remote(remote_origin) => {
                     // Punish the original peer for submitting an invalid transaction according
                     // to mempool ban score.
@@ -310,8 +310,12 @@ where
                         let (response_sender, _response_receiver) =
                             crate::utils::oneshot_nofail::channel();
                         let peer_id = remote_origin.peer_id();
-                        let event =
-                            PeerManagerEvent::AdjustPeerScore(peer_id, ban_score, response_sender);
+                        let event = PeerManagerEvent::AdjustPeerScore {
+                            peer_id,
+                            adjust_by: ban_score,
+                            reason: err.to_string(),
+                            response_sender,
+                        };
                         self.peer_mgr_event_sender
                             .send(event)
                             .map_err(|_| P2pError::ChannelClosed)?;

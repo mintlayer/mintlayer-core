@@ -1328,6 +1328,15 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
             // Chain trust is higher than the best block
             self.reorganize(&current_best_block_index.block_id(), new_block_index)?;
+
+            if new_block_index.prev_block_id() != &current_best_block_index.block_id() {
+                log::info!(
+                    "Chain reorganized, previous best block is {:x}, new best block is {:x}",
+                    current_best_block_index.block_id(),
+                    new_block_index.block_id()
+                );
+            }
+
             return Ok(true);
         }
 

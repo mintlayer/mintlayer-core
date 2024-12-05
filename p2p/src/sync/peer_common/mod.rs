@@ -63,17 +63,13 @@ pub async fn handle_message_processing_result(
         | P2pError::SyncError(_)) => {
             let ban_score = e.ban_score();
             if ban_score > 0 {
-                log::info!(
-                    "[peer id = {}] Adjusting peer's score by {}: {:?}",
-                    peer_id,
-                    ban_score,
-                    e,
-                );
-
                 let (sender, receiver) = oneshot_nofail::channel();
-                peer_mgr_event_sender.send(PeerManagerEvent::AdjustPeerScore(
-                    peer_id, ban_score, sender,
-                ))?;
+                peer_mgr_event_sender.send(PeerManagerEvent::AdjustPeerScore {
+                    peer_id,
+                    adjust_by: ban_score,
+                    reason: e.to_string(),
+                    response_sender: sender,
+                })?;
                 receiver.await?.or_else(|e| match e {
                     P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
                     e => Err(e),

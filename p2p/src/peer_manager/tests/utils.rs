@@ -282,11 +282,12 @@ pub async fn adjust_peer_score(
     let (result_sender, result_receiver) = oneshot_nofail::channel();
 
     peer_mgr_event_sender
-        .send(PeerManagerEvent::AdjustPeerScore(
+        .send(PeerManagerEvent::AdjustPeerScore {
             peer_id,
-            score_adjustment,
-            result_sender,
-        ))
+            adjust_by: score_adjustment,
+            reason: "Test".to_owned(),
+            response_sender: result_sender,
+        })
         .unwrap();
 
     result_receiver.await.unwrap().unwrap();

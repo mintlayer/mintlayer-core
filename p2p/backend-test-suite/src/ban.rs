@@ -150,10 +150,15 @@ where
     });
 
     match peer_mgr_event_receiver.recv().await {
-        Some(PeerManagerEvent::AdjustPeerScore(peer_id, score, _)) => {
+        Some(PeerManagerEvent::AdjustPeerScore {
+            peer_id,
+            adjust_by,
+            reason: _,
+            response_sender: _,
+        }) => {
             assert_eq!(peer_id, peer_info2.peer_id);
             assert_eq!(
-                score,
+                adjust_by,
                 P2pError::ChainstateError(ChainstateError::ProcessBlockError(
                     BlockError::CheckBlockFailed(CheckBlockError::BlockTimeOrderInvalid(
                         BlockTimestamp::from_int_seconds(4),

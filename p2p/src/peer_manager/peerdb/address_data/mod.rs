@@ -43,7 +43,7 @@ pub const PURGE_REACHABLE_FAIL_COUNT: u32 =
 /// -ln(0.0000000000000035527136788) which is about 33.
 const MAX_DELAY_FACTOR: u32 = 30;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AddressState {
     Connected {},
 
@@ -102,6 +102,10 @@ impl AddressData {
             },
             reserved,
         }
+    }
+
+    pub fn state(&self) -> &AddressState {
+        &self.state
     }
 
     pub fn reserved(&self) -> bool {
