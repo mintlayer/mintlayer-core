@@ -1215,6 +1215,13 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletInterface
             .map_err(WalletRpcHandlesClientError::WalletRpcError)
     }
 
+    async fn undiscourage_address(&self, address: BannableAddress) -> Result<(), Self::Error> {
+        self.wallet_rpc
+            .undiscourage_address(address)
+            .await
+            .map_err(WalletRpcHandlesClientError::WalletRpcError)
+    }
+
     async fn peer_count(&self) -> Result<usize, Self::Error> {
         self.wallet_rpc
             .peer_count()

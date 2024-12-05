@@ -2194,6 +2194,21 @@ Returns:
 ], .. ]
 ```
 
+### Method `node_undiscourage_peer_address`
+
+Undiscourage address in the node
+
+
+Parameters:
+```
+{ "address": string }
+```
+
+Returns:
+```
+nothing
+```
+
 ### Method `node_peer_count`
 
 Get the number of connected peer in the node

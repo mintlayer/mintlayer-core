@@ -382,6 +382,9 @@ impl NodeInterface for MockNode {
     async fn p2p_list_discouraged(&self) -> Result<Vec<(BannableAddress, Time)>, Self::Error> {
         unreachable!()
     }
+    async fn p2p_undiscourage(&self, _address: BannableAddress) -> Result<(), Self::Error> {
+        unreachable!()
+    }
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {
         unreachable!()
     }

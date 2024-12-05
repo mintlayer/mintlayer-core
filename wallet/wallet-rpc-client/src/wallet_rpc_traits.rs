@@ -544,6 +544,8 @@ pub trait WalletInterface {
         &self,
     ) -> Result<Vec<(BannableAddress, common::primitives::time::Time)>, Self::Error>;
 
+    async fn undiscourage_address(&self, address: BannableAddress) -> Result<(), Self::Error>;
+
     async fn peer_count(&self) -> Result<usize, Self::Error>;
 
     async fn connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error>;

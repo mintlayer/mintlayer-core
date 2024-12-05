@@ -60,6 +60,10 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref().list_discouraged().await
     }
 
+    async fn undiscourage(&mut self, addr: BannableAddress) -> crate::Result<()> {
+        self.deref_mut().undiscourage(addr).await
+    }
+
     async fn get_peer_count(&self) -> crate::Result<usize> {
         self.deref().get_peer_count().await
     }

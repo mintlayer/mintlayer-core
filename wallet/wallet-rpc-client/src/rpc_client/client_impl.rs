@@ -1089,6 +1089,12 @@ impl WalletInterface for ClientWalletRpc {
             .map_err(WalletRpcError::ResponseError)
     }
 
+    async fn undiscourage_address(&self, address: BannableAddress) -> Result<(), Self::Error> {
+        WalletRpcClient::undiscourage_address(&self.http_client, address)
+            .await
+            .map_err(WalletRpcError::ResponseError)
+    }
+
     async fn peer_count(&self) -> Result<usize, Self::Error> {
         WalletRpcClient::peer_count(&self.http_client)
             .await
