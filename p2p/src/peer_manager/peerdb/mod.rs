@@ -604,6 +604,13 @@ impl<S: PeerDbStorage> PeerDb<S> {
         self.discouraged_addresses.insert(address, discourage_till);
     }
 
+    pub fn undiscourage(&mut self, address: &BannableAddress) {
+        update_db(&self.storage, |tx| tx.del_discouraged_address(address))
+            .expect("removing discouraged address is expected to succeed");
+
+        self.discouraged_addresses.remove(address);
+    }
+
     pub fn is_address_banned_or_discouraged(&self, address: &BannableAddress) -> bool {
         self.is_address_banned(address) || self.is_address_discouraged(address)
     }

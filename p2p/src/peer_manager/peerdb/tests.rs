@@ -120,6 +120,51 @@ fn ban_peer(#[case] seed: Seed) {
     assert_addr_consistency(&peerdb);
 }
 
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn unban_peer_manually(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let db_store = peerdb_inmemory_store();
+    let time_getter = BasicTestTimeGetter::new();
+    let chain_config = create_unit_test_config();
+    let ban_duration = Duration::from_secs(60);
+    let mut peerdb = PeerDb::<_>::new(
+        &chain_config,
+        Arc::new(test_p2p_config_with_ban_config(BanConfig {
+            discouragement_duration: Duration::from_secs(600).into(),
+            discouragement_threshold: Default::default(),
+        })),
+        time_getter.get_time_getter(),
+        db_store,
+    )
+    .unwrap();
+
+    let address = TestAddressMaker::new_random_address(&mut rng);
+    peerdb.ban(address.as_bannable(), ban_duration);
+
+    // The address is banned.
+    assert!(peerdb.is_address_banned(&address.as_bannable()));
+    let banned_addresses = peerdb.storage.transaction_ro().unwrap().get_banned_addresses().unwrap();
+    assert_eq!(banned_addresses.len(), 1);
+    assert_eq!(banned_addresses[0].0, address.as_bannable());
+    assert_eq!(
+        banned_addresses[0].1,
+        (time_getter.get_time_getter().get_time() + ban_duration).unwrap()
+    );
+
+    peerdb.unban(&address.as_bannable());
+
+    // The address is no longer banned.
+    assert!(!peerdb.is_address_banned(&address.as_bannable()));
+    let banned_addresses = peerdb.storage.transaction_ro().unwrap().get_banned_addresses().unwrap();
+    assert_eq!(banned_addresses.len(), 0);
+
+    assert_addr_consistency(&peerdb);
+}
+
 // Ban the peer twice, check that the second duration overrides the first one.
 #[tracing::instrument(skip(seed))]
 #[rstest]
@@ -267,6 +312,53 @@ fn discourage_peer(#[case] seed: Seed) {
     assert!(!peerdb.is_address_banned(&address.as_bannable()));
     let banned_addresses = peerdb.storage.transaction_ro().unwrap().get_banned_addresses().unwrap();
     assert_eq!(banned_addresses.len(), 0);
+
+    assert_addr_consistency(&peerdb);
+}
+
+#[tracing::instrument(skip(seed))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn undiscourage_peer_manually(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let db_store = peerdb_inmemory_store();
+    let time_getter = BasicTestTimeGetter::new();
+    let chain_config = create_unit_test_config();
+    let discouragement_duration = Duration::from_secs(60);
+    let mut peerdb = PeerDb::<_>::new(
+        &chain_config,
+        Arc::new(test_p2p_config_with_ban_config(BanConfig {
+            discouragement_duration: discouragement_duration.into(),
+            discouragement_threshold: Default::default(),
+        })),
+        time_getter.get_time_getter(),
+        db_store,
+    )
+    .unwrap();
+
+    let address = TestAddressMaker::new_random_address(&mut rng);
+    peerdb.discourage(address.as_bannable());
+
+    // The address is discouraged.
+    assert!(peerdb.is_address_discouraged(&address.as_bannable()));
+    let discouraged_addresses =
+        peerdb.storage.transaction_ro().unwrap().get_discouraged_addresses().unwrap();
+    assert_eq!(discouraged_addresses.len(), 1);
+    assert_eq!(discouraged_addresses[0].0, address.as_bannable());
+    assert_eq!(
+        discouraged_addresses[0].1,
+        (time_getter.get_time_getter().get_time() + discouragement_duration).unwrap()
+    );
+
+    peerdb.undiscourage(&address.as_bannable());
+
+    // The address is no longer discouraged.
+    assert!(!peerdb.is_address_discouraged(&address.as_bannable()));
+    let discouraged_addresses =
+        peerdb.storage.transaction_ro().unwrap().get_discouraged_addresses().unwrap();
+    assert_eq!(discouraged_addresses.len(), 0);
 
     assert_addr_consistency(&peerdb);
 }

@@ -117,6 +117,7 @@ pub trait NodeInterface {
     ) -> Result<(), Self::Error>;
     async fn p2p_unban(&self, address: BannableAddress) -> Result<(), Self::Error>;
     async fn p2p_list_discouraged(&self) -> Result<Vec<(BannableAddress, Time)>, Self::Error>;
+    async fn p2p_undiscourage(&self, address: BannableAddress) -> Result<(), Self::Error>;
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error>;
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error>;
     async fn p2p_get_reserved_nodes(&self) -> Result<Vec<SocketAddress>, Self::Error>;

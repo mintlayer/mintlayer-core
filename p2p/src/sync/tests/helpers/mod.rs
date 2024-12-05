@@ -358,6 +358,7 @@ impl TestNode {
                     | PeerManagerEvent::Ban(_, _, _)
                     | PeerManagerEvent::Unban(_, _)
                     | PeerManagerEvent::ListDiscouraged(_)
+                    | PeerManagerEvent::Undiscourage(_, _)
                     | PeerManagerEvent::EnableNetworking { .. }
                     | PeerManagerEvent::GenericQuery(_)
                     | PeerManagerEvent::GenericMut(_) => {
@@ -642,6 +643,7 @@ pub enum PeerManagerEventDesc {
     Ban(BannableAddress, Duration),
     Unban(BannableAddress),
     ListDiscouraged,
+    Undiscourage(BannableAddress),
     EnableNetworking {
         enable: bool,
     },
@@ -695,6 +697,7 @@ impl From<&PeerManagerEvent> for PeerManagerEventDesc {
             PeerManagerEvent::Ban(addr, duration, _) => PeerManagerEventDesc::Ban(*addr, *duration),
             PeerManagerEvent::Unban(addr, _) => PeerManagerEventDesc::Unban(*addr),
             PeerManagerEvent::ListDiscouraged(_) => PeerManagerEventDesc::ListDiscouraged,
+            PeerManagerEvent::Undiscourage(addr, _) => PeerManagerEventDesc::Undiscourage(*addr),
             PeerManagerEvent::EnableNetworking {
                 enable,
                 response_sender: _,

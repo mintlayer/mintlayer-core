@@ -229,6 +229,10 @@ impl NodeInterface for ColdWalletClient {
         Err(ColdWalletRpcError::NotAvailable)
     }
 
+    async fn p2p_undiscourage(&self, _address: BannableAddress) -> Result<(), Self::Error> {
+        Err(ColdWalletRpcError::NotAvailable)
+    }
+
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {
         Err(ColdWalletRpcError::NotAvailable)
     }

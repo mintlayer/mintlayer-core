@@ -787,6 +787,10 @@ trait WalletRpc {
         &self,
     ) -> rpc::RpcResult<Vec<(BannableAddress, common::primitives::time::Time)>>;
 
+    /// Undiscourage address in the node
+    #[method(name = "node_undiscourage_peer_address")]
+    async fn undiscourage_address(&self, address: BannableAddress) -> rpc::RpcResult<()>;
+
     /// Get the number of connected peer in the node
     #[method(name = "node_peer_count")]
     async fn peer_count(&self) -> rpc::RpcResult<usize>;

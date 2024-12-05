@@ -654,6 +654,9 @@ pub enum WalletCommand {
     #[clap(name = "node-list-discouraged-peers")]
     ListDiscouraged,
 
+    #[clap(name = "node-undiscourage-peer-address")]
+    Undiscourage { address: BannableAddress },
+
     #[clap(name = "node-peer-count")]
     PeerCount,
 

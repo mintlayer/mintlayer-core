@@ -36,6 +36,7 @@ pub trait P2pInterface: Send + Sync {
     async fn unban(&mut self, addr: BannableAddress) -> crate::Result<()>;
 
     async fn list_discouraged(&self) -> crate::Result<Vec<(BannableAddress, Time)>>;
+    async fn undiscourage(&mut self, addr: BannableAddress) -> crate::Result<()>;
 
     async fn get_peer_count(&self) -> crate::Result<usize>;
     async fn get_bind_addresses(&self) -> crate::Result<Vec<SocketAddress>>;

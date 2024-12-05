@@ -306,6 +306,11 @@ impl NodeInterface for NodeRpcClient {
             .await
             .map_err(NodeRpcError::ResponseError)
     }
+    async fn p2p_undiscourage(&self, address: BannableAddress) -> Result<(), Self::Error> {
+        P2pRpcClient::undiscourage(&self.http_client, address)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
 
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {
         P2pRpcClient::get_peer_count(&self.http_client)

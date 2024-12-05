@@ -2172,6 +2172,10 @@ impl<N: NodeInterface + Clone + Send + Sync + 'static> WalletRpc<N> {
         self.node.p2p_list_discouraged().await.map_err(RpcError::RpcError)
     }
 
+    pub async fn undiscourage_address(&self, address: BannableAddress) -> WRpcResult<(), N> {
+        self.node.p2p_undiscourage(address).await.map_err(RpcError::RpcError)
+    }
+
     pub async fn peer_count(&self) -> WRpcResult<usize, N> {
         self.node.p2p_get_peer_count().await.map_err(RpcError::RpcError)
     }

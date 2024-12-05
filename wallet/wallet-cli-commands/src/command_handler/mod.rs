@@ -1718,6 +1718,10 @@ where
 
                 Ok(ConsoleCommand::Print(msg))
             }
+            WalletCommand::Undiscourage { address } => {
+                self.wallet().await?.undiscourage_address(address).await?;
+                Ok(ConsoleCommand::Print("Success".to_owned()))
+            }
 
             WalletCommand::PeerCount => {
                 let peer_count = self.wallet().await?.peer_count().await?;
