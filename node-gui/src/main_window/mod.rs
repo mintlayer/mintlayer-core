@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, convert::identity, path::PathBuf, sync::Arc, ti
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, ChainConfig, SignedTransaction},
+    chain::{block::timestamp::BlockTimestamp, ChainConfig},
     primitives::{per_thousand::PerThousand, semver::SemVer, user_agent::UserAgent, Amount},
 };
 use iced::{widget::Text, window, Command, Element};
@@ -25,7 +25,8 @@ use iced_aw::widgets::Modal;
 use logging::log;
 use node_gui_backend::{
     messages::{
-        BackendEvent, BackendRequest, EncryptionAction, TransactionInfo, WalletId, WalletInfo,
+        BackendEvent, BackendRequest, EncryptionAction, Transaction, TransactionInfo, WalletId,
+        WalletInfo,
     },
     BackendSender, ImportOrCreate, InitializedNode,
 };
@@ -187,7 +188,7 @@ pub enum MainWindowMessage {
 
     SubmitTx {
         wallet_id: WalletId,
-        tx: SignedTransaction,
+        tx: Transaction,
     },
 
     CopyToClipboard(String),

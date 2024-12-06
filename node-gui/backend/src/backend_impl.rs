@@ -52,8 +52,8 @@ use super::{
     messages::{
         AccountInfo, AddressInfo, BackendEvent, BackendRequest, CreateDelegationRequest,
         DecommissionPoolRequest, DelegateStakingRequest, EncryptionAction, EncryptionState,
-        SendDelegateToAddressRequest, SendRequest, StakeRequest, TransactionInfo, WalletId,
-        WalletInfo,
+        SendDelegateToAddressRequest, SendRequest, StakeRequest, Transaction, TransactionInfo,
+        WalletId, WalletInfo,
     },
     p2p_event_handler::P2pEventHandler,
     parse_address, parse_coin_amount,
@@ -721,7 +721,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id, tx })
+        Ok(TransactionInfo {
+            wallet_id,
+            tx: Transaction::new(tx),
+        })
     }
 
     async fn stake_amount(
@@ -769,7 +772,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id, tx })
+        Ok(TransactionInfo {
+            wallet_id,
+            tx: Transaction::new(tx),
+        })
     }
 
     async fn decommission_pool(
@@ -798,7 +804,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id, tx })
+        Ok(TransactionInfo {
+            wallet_id,
+            tx: Transaction::new(tx),
+        })
     }
 
     async fn create_delegation(
@@ -827,7 +836,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id, tx })
+        Ok(TransactionInfo {
+            wallet_id,
+            tx: Transaction::new(tx),
+        })
     }
 
     async fn delegate_staking(
@@ -863,7 +875,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id, tx })
+        Ok(TransactionInfo {
+            wallet_id,
+            tx: Transaction::new(tx),
+        })
     }
 
     async fn send_delegation_to_address(
@@ -903,7 +918,10 @@ impl Backend {
             .await
             .map_err(|e| BackendError::WalletError(e.to_string()))?;
 
-        Ok(TransactionInfo { wallet_id, tx })
+        Ok(TransactionInfo {
+            wallet_id,
+            tx: Transaction::new(tx),
+        })
     }
 
     async fn submit_transaction(
@@ -1019,7 +1037,7 @@ impl Backend {
                 );
             }
             BackendRequest::SubmitTx { wallet_id, tx } => {
-                let result = self.submit_transaction(wallet_id, tx).await;
+                let result = self.submit_transaction(wallet_id, tx.take_tx()).await;
                 Self::send_event(&self.event_tx, BackendEvent::Broadcast(result));
             }
             BackendRequest::TransactionList {
