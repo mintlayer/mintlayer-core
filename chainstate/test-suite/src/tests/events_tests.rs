@@ -225,13 +225,13 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
         let errors_guard = errors.lock().unwrap();
         assert_eq!(errors_guard.len(), 1);
         assert_matches!(
-            errors_guard[0],
+            &errors_guard[0],
             BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture {
                 block_id,
                 block_timestamp: _,
                 current_time: _
             })
-            if block_id == second_block_id
+            if block_id == &second_block_id
         );
     });
 }
