@@ -24,8 +24,9 @@ use serde::{Deserialize, Serialize};
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{DelegationId, GenBlock, PoolId, SignedTransaction},
+    chain::{ChainConfig, DelegationId, GenBlock, PoolId, SignedTransaction},
     primitives::{Amount, BlockHeight, Id},
+    text_summary::TextSummary,
 };
 use crypto::key::hdkd::child_number::ChildNumber;
 use p2p::P2pEvent;
@@ -149,11 +150,30 @@ pub struct SendDelegateToAddressRequest {
     pub delegation_id: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Transaction {
+    #[serde(with = "hex_encoded_serialization")]
+    tx: SignedTransaction,
+}
+
+impl Transaction {
+    pub fn new(tx: SignedTransaction) -> Self {
+        Self { tx }
+    }
+
+    pub fn take_tx(self) -> SignedTransaction {
+        self.tx
+    }
+
+    pub fn text_summary(&self, config: &ChainConfig) -> String {
+        self.tx.transaction().text_summary(config)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TransactionInfo {
     pub wallet_id: WalletId,
-    #[serde(with = "hex_encoded_serialization")]
-    pub tx: SignedTransaction,
+    pub tx: Transaction,
 }
 
 #[derive(Debug)]
@@ -211,7 +231,7 @@ pub enum BackendRequest {
 
     SubmitTx {
         wallet_id: WalletId,
-        tx: SignedTransaction,
+        tx: Transaction,
     },
 
     TransactionList {
