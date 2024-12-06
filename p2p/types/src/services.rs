@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use serde::Serialize;
 use serialization::{Decode, Encode};
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
@@ -27,7 +28,7 @@ impl Service {
     pub const ALL: [Service; 3] = [Service::Transactions, Service::Blocks, Service::PeerAddresses];
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Encode, Decode)]
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Encode, Decode, Serialize)]
 pub struct Services(u64);
 
 impl Services {

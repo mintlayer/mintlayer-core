@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use serde::Serialize;
 use serialization::{Decode, Encode};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, Copy, Clone, Serialize)]
 pub struct SemVer {
     pub major: u8,
     pub minor: u8,
