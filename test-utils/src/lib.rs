@@ -132,14 +132,17 @@ pub fn merge_btree_maps<K: Ord, V>(map1: BTreeMap<K, V>, map2: BTreeMap<K, V>) -
 #[macro_export]
 macro_rules! assert_matches_return_val {
     ($in:expr, $pattern:pat $(if $guard:expr)?, $out:expr) => {
-        match $in {
-            $pattern $(if $guard)? => $out,
-            _ => {
-                panic!(
-                    "Assertion failed: expression {:?} doesn't match pattern {}",
-                    $in,
-                    stringify!($pattern)
-                )
+        {
+            let to_match = $in;
+            match to_match {
+                $pattern $(if $guard)? => $out,
+                _ => {
+                    panic!(
+                        "Assertion failed: expression {:?} doesn't match pattern {}",
+                        to_match,
+                        stringify!($pattern)
+                    )
+                }
             }
         }
     };
