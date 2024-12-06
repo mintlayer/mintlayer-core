@@ -813,7 +813,7 @@ pub enum ManageableWalletCommand {
     WalletCommands(WalletCommand),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub enum ConsoleCommand {
     Print(String),
     ClearScreen,
