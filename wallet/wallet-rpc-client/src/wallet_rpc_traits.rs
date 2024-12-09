@@ -18,9 +18,8 @@ use std::{collections::BTreeMap, num::NonZeroUsize, path::PathBuf};
 use chainstate::{rpc::RpcOutputValueIn, ChainInfo};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, partially_signed_transaction::PartiallySignedTransaction,
-        Block, GenBlock, SignedTransaction, SignedTransactionIntent, Transaction, TxOutput,
-        UtxoOutPoint,
+        block::timestamp::BlockTimestamp, Block, GenBlock, SignedTransaction,
+        SignedTransactionIntent, Transaction, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, DecimalAmount, Id},
 };
@@ -30,18 +29,22 @@ use serialization::hex_encoded::HexEncoded;
 use utils_networking::IpOrSocketAddress;
 use wallet::account::TxInfo;
 use wallet_controller::{
-    types::{CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo},
+    types::{
+        CreatedBlockInfo, GenericTokenTransfer, SeedWithPassPhrase, WalletInfo, WalletTypeArgs,
+    },
     ConnectedPeer, ControllerConfig, UtxoState, UtxoType,
 };
 use wallet_rpc_lib::types::{
     AddressInfo, AddressWithUsageInfo, Balances, BlockInfo, ComposedTransaction, CreatedWallet,
-    DelegationInfo, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation, NewOrder,
-    NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo, RpcHashedTimelockContract,
-    RpcInspectTransaction, RpcSignatureStatus, RpcStandaloneAddresses, RpcTokenId,
-    SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
+    DelegationInfo, HardwareWalletType, LegacyVrfPublicKeyInfo, NewAccountInfo, NewDelegation,
+    NewOrder, NewTransaction, NftMetadata, NodeVersion, PoolInfo, PublicKeyInfo,
+    RpcHashedTimelockContract, RpcInspectTransaction, RpcSignatureStatus, RpcStandaloneAddresses,
+    RpcTokenId, SendTokensFromMultisigAddressResult, StakePoolBalance, StakingStatus,
     StandaloneAddressWithDetails, TokenMetadata, TxOptionsOverrides, UtxoInfo, VrfPublicKeyInfo,
 };
-use wallet_types::with_locked::WithLocked;
+use wallet_types::{
+    partially_signed_transaction::PartiallySignedTransaction, with_locked::WithLocked,
+};
 
 pub enum PartialOrSignedTx {
     Partial(PartiallySignedTransaction),
@@ -69,9 +72,16 @@ pub trait WalletInterface {
     async fn create_wallet(
         &self,
         path: PathBuf,
+        wallet_args: WalletTypeArgs,
+    ) -> Result<CreatedWallet, Self::Error>;
+
+    async fn recover_wallet(
+        &self,
+        path: PathBuf,
         store_seed_phrase: bool,
         mnemonic: Option<String>,
         passphrase: Option<String>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<CreatedWallet, Self::Error>;
 
     async fn open_wallet(
@@ -79,6 +89,7 @@ pub trait WalletInterface {
         path: PathBuf,
         password: Option<String>,
         force_migrate_wallet_type: Option<bool>,
+        hardware_wallet: Option<HardwareWalletType>,
     ) -> Result<(), Self::Error>;
 
     async fn close_wallet(&self) -> Result<(), Self::Error>;

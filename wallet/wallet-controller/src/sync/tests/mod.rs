@@ -25,7 +25,7 @@ use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
-        DelegationId, OrderId, PoolId, RpcOrderInfo, SignedTransaction, Transaction,
+        DelegationId, Destination, OrderId, PoolId, RpcOrderInfo, SignedTransaction, Transaction,
     },
     primitives::{time::Time, Amount},
 };
@@ -46,7 +46,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use tokio::sync::mpsc;
 use utils_networking::IpOrSocketAddress;
 use wallet::wallet_events::WalletEventsNoOp;
-use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, wallet_type::WalletType};
+use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, wallet_type::WalletControllerMode};
 
 use super::*;
 
@@ -202,8 +202,8 @@ impl MockNode {
 impl NodeInterface for MockNode {
     type Error = NodeRpcError;
 
-    fn is_cold_wallet_node(&self) -> WalletType {
-        WalletType::Hot
+    fn is_cold_wallet_node(&self) -> WalletControllerMode {
+        WalletControllerMode::Hot
     }
 
     async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
@@ -272,6 +272,13 @@ impl NodeInterface for MockNode {
     }
 
     async fn get_staker_balance(&self, _pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        unreachable!()
+    }
+
+    async fn get_pool_decommission_destination(
+        &self,
+        _pool_id: PoolId,
+    ) -> Result<Option<Destination>, Self::Error> {
         unreachable!()
     }
 
