@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use common::chain::{
     htlc::HtlcSecret,
     signature::{
@@ -252,12 +253,13 @@ impl SoftwareSigner {
     }
 }
 
+#[async_trait]
 impl Signer for SoftwareSigner {
-    fn sign_tx(
+    async fn sign_tx(
         &mut self,
         ptx: PartiallySignedTransaction,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: &(impl WalletStorageReadUnlocked + Sync),
     ) -> SignerResult<(
         PartiallySignedTransaction,
         Vec<SignatureStatus>,
@@ -357,12 +359,12 @@ impl Signer for SoftwareSigner {
         Ok((ptx.with_witnesses(witnesses), prev_statuses, new_statuses))
     }
 
-    fn sign_challenge(
+    async fn sign_challenge(
         &mut self,
         message: &[u8],
         destination: &Destination,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: &(impl WalletStorageReadUnlocked + Sync),
     ) -> SignerResult<ArbitraryMessageSignature> {
         let private_key = self
             .get_private_key_for_destination(destination, key_chain, db_tx)?
@@ -378,13 +380,13 @@ impl Signer for SoftwareSigner {
         Ok(sig)
     }
 
-    fn sign_transaction_intent(
+    async fn sign_transaction_intent(
         &mut self,
         transaction: &Transaction,
         input_destinations: &[Destination],
         intent: &str,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        db_tx: &(impl WalletStorageReadUnlocked + Sync),
     ) -> SignerResult<SignedTransactionIntent> {
         SignedTransactionIntent::produce_from_transaction(
             transaction,

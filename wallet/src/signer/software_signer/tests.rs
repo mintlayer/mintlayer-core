@@ -30,32 +30,35 @@ fn software_signer(chain_config: Arc<ChainConfig>, account_index: U31) -> Softwa
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_message(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_message(#[case] seed: Seed) {
     use crate::signer::tests::generic_tests::test_sign_message;
 
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_message(&mut rng, software_signer);
+    test_sign_message(&mut rng, software_signer).await;
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_transaction_intent(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_transaction_intent(#[case] seed: Seed) {
     use crate::signer::tests::generic_tests::test_sign_transaction_intent;
 
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_transaction_intent(&mut rng, software_signer);
+    test_sign_transaction_intent(&mut rng, software_signer).await;
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_transaction(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_transaction(#[case] seed: Seed) {
     use crate::signer::tests::generic_tests::test_sign_transaction;
 
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_transaction(&mut rng, software_signer);
+    test_sign_transaction(&mut rng, software_signer).await;
 }
