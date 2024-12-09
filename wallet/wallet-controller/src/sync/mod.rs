@@ -55,7 +55,7 @@ pub trait SyncingWallet {
 
 impl<B, P> SyncingWallet for Wallet<B, P>
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     fn syncing_state(&self) -> WalletSyncingState {

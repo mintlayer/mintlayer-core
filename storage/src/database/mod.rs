@@ -27,7 +27,7 @@ use crate::schema::{self, Schema};
 use serialization::{encoded::Encoded, Encode, EncodeLike};
 use storage_core::{
     backend::{self, TxRw, WriteOps},
-    Backend, DbMapId,
+    Backend, DbMapId, SharedBackend,
 };
 
 /// The main storage type
@@ -67,12 +67,15 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
         let _schema = std::marker::PhantomData;
         Ok(Self { backend, _schema })
     }
+}
 
+impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     /// Create new storage with given backend and raw dump
     pub fn new_from_dump(backend: B, dump: raw::StorageContents<Sch>) -> crate::Result<Self> {
-        let backend = backend.open(storage_core::types::construct::db_desc(Sch::desc_iter()))?;
+        let mut backend =
+            backend.open(storage_core::types::construct::db_desc(Sch::desc_iter()))?;
         let _schema = std::marker::PhantomData;
-        let mut dbtx = backend::BackendImpl::transaction_rw(&backend, None)?;
+        let mut dbtx = backend::BackendImpl::transaction_rw(&mut backend, None)?;
 
         for (map_id, map_values) in dump {
             for (key, val) in map_values {
@@ -92,8 +95,24 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     }
 
     /// Start a read-write transaction
-    pub fn transaction_rw(&self, size: Option<usize>) -> crate::Result<TransactionRw<'_, B, Sch>> {
-        let dbtx = backend::BackendImpl::transaction_rw(&self.backend, size)?;
+    pub fn transaction_rw(
+        &mut self,
+        size: Option<usize>,
+    ) -> crate::Result<TransactionRw<'_, B, Sch>> {
+        let dbtx = backend::BackendImpl::transaction_rw(&mut self.backend, size)?;
+        let _schema = std::marker::PhantomData;
+        Ok(TransactionRw { dbtx, _schema })
+    }
+}
+
+pub trait StorageSharedWrite<B: Backend, Sch> {
+    fn transaction_rw(&self, size: Option<usize>) -> crate::Result<TransactionRw<'_, B, Sch>>;
+}
+
+impl<B: SharedBackend, Sch: Schema> StorageSharedWrite<B, Sch> for Storage<B, Sch> {
+    /// Start a read-write transaction from a shared reference to self.
+    fn transaction_rw(&self, size: Option<usize>) -> crate::Result<TransactionRw<'_, B, Sch>> {
+        let dbtx = backend::SharedBackendImpl::transaction_rw(&self.backend, size)?;
         let _schema = std::marker::PhantomData;
         Ok(TransactionRw { dbtx, _schema })
     }

@@ -45,10 +45,10 @@ mod iter_sort_preserving_numbers {
         }
     }
 
-    pub fn test1<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    pub fn test1<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
         use test_schema1::{Schema, TestMap};
 
-        let storage = Storage::<_, Schema>::new(backend_fn()).unwrap();
+        let mut storage = Storage::<_, Schema>::new(backend_factory.create()).unwrap();
 
         with_rng_seed(move |seed| {
             let mut rng = make_seedable_rng(seed);
@@ -111,10 +111,10 @@ mod iter_sort_preserving_numbers {
         }
     }
 
-    pub fn test2<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
+    pub fn test2<B: Backend, F: BackendFactory<B>>(backend_factory: Arc<F>) {
         use test_schema2::{Schema, TestMap};
 
-        let storage = Storage::<_, Schema>::new(backend_fn()).unwrap();
+        let mut storage = Storage::<_, Schema>::new(backend_factory.create()).unwrap();
 
         with_rng_seed(move |seed| {
             let mut rng = make_seedable_rng(seed);
@@ -164,4 +164,4 @@ mod iter_sort_preserving_numbers {
     }
 }
 
-tests![iter_sort_preserving_numbers::test1, iter_sort_preserving_numbers::test2];
+common_tests![iter_sort_preserving_numbers::test1, iter_sort_preserving_numbers::test2];

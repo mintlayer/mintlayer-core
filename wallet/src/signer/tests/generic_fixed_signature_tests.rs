@@ -125,8 +125,10 @@ lazy_static::lazy_static! {
     };
 }
 
-pub fn test_fixed_signatures_generic<MkS, S>(rng: &mut (impl Rng + CryptoRng), make_signer: MkS)
-where
+pub async fn test_fixed_signatures_generic<MkS, S>(
+    rng: &mut (impl Rng + CryptoRng),
+    make_signer: MkS,
+) where
     MkS: Fn(Arc<ChainConfig>, U31) -> S,
     S: Signer,
 {
@@ -157,7 +159,7 @@ where
             .build(),
     );
 
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+    let mut db = Store::new(DefaultBackend::new_in_memory()).unwrap();
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let master_key_chain = MasterKeyChain::new_from_mnemonic(
@@ -378,9 +380,10 @@ where
             orig_ptx,
             &tokens_additional_info,
             account.key_chain(),
-            &db_tx,
+            &mut db_tx,
             tx_block_height,
         )
+        .await
         .unwrap();
     assert!(ptx.all_signatures_available());
 
@@ -432,7 +435,7 @@ where
 /// 2) v1 order inputs;
 /// 3) htlc inputs;
 /// 4) v1 input commitments.
-pub fn test_fixed_signatures_generic2<MkS, S>(
+pub async fn test_fixed_signatures_generic2<MkS, S>(
     rng: &mut (impl Rng + CryptoRng),
     input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS,
@@ -475,7 +478,7 @@ pub fn test_fixed_signatures_generic2<MkS, S>(
             .build(),
     );
 
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+    let mut db = Store::new(DefaultBackend::new_in_memory()).unwrap();
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let mut account1 = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
@@ -921,9 +924,10 @@ pub fn test_fixed_signatures_generic2<MkS, S>(
             ptx,
             &tokens_additional_info,
             account1.key_chain(),
-            &db_tx,
+            &mut db_tx,
             tx_block_height,
         )
+        .await
         .unwrap();
     assert!(ptx.all_signatures_available());
 
@@ -934,9 +938,10 @@ pub fn test_fixed_signatures_generic2<MkS, S>(
             ptx,
             &tokens_additional_info,
             account2.key_chain(),
-            &db_tx,
+            &mut db_tx,
             tx_block_height,
         )
+        .await
         .unwrap();
     assert!(ptx.all_signatures_available());
 
@@ -1687,7 +1692,7 @@ fn make_htlc_uniparty_pub_key_hash_refund_sig(
     StandardInputSignature::new(SigHashType::ALL.try_into().unwrap(), spend.encode())
 }
 
-fn new_dest_from_account<K: AccountKeyChains>(
+fn new_dest_from_account<K: AccountKeyChains + Sync>(
     account: &mut Account<K>,
     db_tx: &mut impl TransactionRwUnlocked,
     purpose: KeyPurpose,
@@ -1695,7 +1700,7 @@ fn new_dest_from_account<K: AccountKeyChains>(
     account.get_new_address(db_tx, purpose).unwrap().1.into_object()
 }
 
-fn new_pub_key_from_account<K: AccountKeyChains>(
+fn new_pub_key_from_account<K: AccountKeyChains + Sync>(
     account: &mut Account<K>,
     db_tx: &mut impl TransactionRwUnlocked,
     purpose: KeyPurpose,
@@ -1704,7 +1709,7 @@ fn new_pub_key_from_account<K: AccountKeyChains>(
     find_pub_key_for_pkh_dest(&dest, &*account)
 }
 
-fn find_pub_key_for_pkh_dest<K: AccountKeyChains>(
+fn find_pub_key_for_pkh_dest<K: AccountKeyChains + Sync>(
     dest: &Destination,
     account: &Account<K>,
 ) -> PublicKey {

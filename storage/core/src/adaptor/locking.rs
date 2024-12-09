@@ -176,6 +176,12 @@ impl<T: CoreOps + Sync + Send + 'static> backend::BackendImpl for TransactionLoc
         Ok(TxRo(self.db.read().expect("lock to be alive")))
     }
 
+    fn transaction_rw(&mut self, size: Option<usize>) -> crate::Result<Self::TxRw<'_>> {
+        <Self as backend::SharedBackendImpl>::transaction_rw(self, size)
+    }
+}
+
+impl<T: CoreOps + Sync + Send + 'static> backend::SharedBackendImpl for TransactionLockImpl<T> {
     fn transaction_rw(&self, _size: Option<usize>) -> crate::Result<Self::TxRw<'_>> {
         Ok(TxRw {
             db: self.db.write().expect("lock to be alive"),

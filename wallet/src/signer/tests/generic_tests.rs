@@ -85,7 +85,7 @@ pub enum MessageToSign {
     Predefined(Vec<u8>),
 }
 
-pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
+pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     rng: &mut (impl Rng + CryptoRng),
     message_to_sign: MessageToSign,
     make_signer: MkS1,
@@ -97,7 +97,7 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     S2: Signer,
 {
     let chain_config = Arc::new(create_regtest());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+    let mut db = Store::new(DefaultBackend::new_in_memory()).unwrap();
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let mut account = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
@@ -143,7 +143,8 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
 
         let mut signer = make_signer(chain_config.clone(), account.account_index());
         let res = signer
-            .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
+            .sign_challenge(&message, &destination, account.key_chain(), &mut db_tx)
+            .await
             .unwrap();
         res.verify_signature(&chain_config, &destination, &message_challenge).unwrap();
 
@@ -152,7 +153,8 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
                 make_another_signer(chain_config.clone(), account.account_index());
 
             let another_res = another_signer
-                .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
+                .sign_challenge(&message, &destination, account.key_chain(), &mut db_tx)
+                .await
                 .unwrap();
             another_res
                 .verify_signature(&chain_config, &destination, &message_challenge)
@@ -174,14 +176,15 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
             &message,
             &random_pk_destination,
             account.key_chain(),
-            &db_tx,
+            &mut db_tx,
         )
+        .await
         .unwrap_err();
 
     assert_eq!(err, SignerError::DestinationNotFromThisWallet);
 }
 
-pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
+pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
     rng: &mut (impl Rng + CryptoRng),
     make_signer: MkS1,
     make_another_signer: Option<MkS2>,
@@ -192,7 +195,7 @@ pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
     S2: Signer,
 {
     let chain_config = Arc::new(create_regtest());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+    let mut db = Store::new(DefaultBackend::new_in_memory()).unwrap();
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let mut account = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
@@ -259,8 +262,9 @@ pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
             &input_destinations,
             &intent,
             account.key_chain(),
-            &db_tx,
+            &mut db_tx,
         )
+        .await
         .unwrap();
     res.verify(&chain_config, &input_destinations, &expected_signed_message)
         .unwrap();
@@ -273,8 +277,9 @@ pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
                 &input_destinations,
                 &intent,
                 account.key_chain(),
-                &db_tx,
+                &mut db_tx,
             )
+            .await
             .unwrap();
         another_res
             .verify(&chain_config, &input_destinations, &expected_signed_message)
@@ -294,14 +299,15 @@ pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
             &input_destinations,
             &intent,
             account.key_chain(),
-            &db_tx,
+            &mut db_tx,
         )
+        .await
         .unwrap_err();
 
     assert_eq!(err, SignerError::DestinationNotFromThisWallet);
 }
 
-pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
+pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     rng: &mut (impl Rng + CryptoRng),
     input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS1,
@@ -346,7 +352,7 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             .build(),
     );
 
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+    let mut db = Store::new(DefaultBackend::new_in_memory()).unwrap();
     let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let mut account = account_from_mnemonic(&chain_config, &mut db_tx, DEFAULT_ACCOUNT_INDEX);
@@ -794,9 +800,10 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             orig_ptx.clone(),
             &tokens_additional_info,
             account.key_chain(),
-            &db_tx,
+            &mut db_tx,
             tx_block_height,
         )
+        .await
         .unwrap();
     if first_account_can_sign_htlc {
         assert!(ptx.all_signatures_available());
@@ -809,9 +816,10 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 orig_ptx,
                 &tokens_additional_info,
                 account.key_chain(),
-                &db_tx,
+                &mut db_tx,
                 tx_block_height,
             )
+            .await
             .unwrap();
         if first_account_can_sign_htlc {
             assert!(another_ptx.all_signatures_available());
@@ -885,9 +893,10 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             orig_ptx.clone(),
             &tokens_additional_info,
             account2.key_chain(),
-            &db_tx,
+            &mut db_tx,
             tx_block_height,
         )
+        .await
         .unwrap();
     assert!(ptx.all_signatures_available());
 
@@ -899,9 +908,10 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
                 orig_ptx,
                 &tokens_additional_info,
                 account2.key_chain(),
-                &db_tx,
+                &mut db_tx,
                 tx_block_height,
             )
+            .await
             .unwrap();
         assert!(another_ptx.all_signatures_available());
 

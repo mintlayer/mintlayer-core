@@ -24,6 +24,7 @@ use common::{
     chain::{Block, ChainConfig},
     primitives::BlockHeight,
 };
+use wallet_storage::{DefaultBackend, Store};
 use wallet_types::{seed_phrase::StoreSeedPhrase, wallet_type::WalletType};
 
 use crate::{
@@ -59,9 +60,44 @@ pub fn create_wallet_with_mnemonic(
     .unwrap()
 }
 
+pub fn create_named_in_memory_backend(db_name: &str) -> DefaultBackend {
+    DefaultBackend::new_named_in_memory(db_name)
+}
+
+pub fn create_named_in_memory_store(db_name: &str) -> Store<DefaultBackend> {
+    Store::new(create_named_in_memory_backend(db_name)).unwrap()
+}
+
+pub fn create_wallet_with_mnemonic_and_named_db(
+    chain_config: Arc<ChainConfig>,
+    mnemonic: &str,
+    db_name: &str,
+) -> DefaultWallet {
+    let db = create_named_in_memory_store(db_name);
+    let genesis_block_id = chain_config.genesis_block_id();
+    Wallet::create_new_wallet(
+        chain_config.clone(),
+        db,
+        (BlockHeight::new(0), genesis_block_id),
+        WalletType::Hot,
+        |db_tx| {
+            Ok(SoftwareSignerProvider::new_from_mnemonic(
+                chain_config,
+                db_tx,
+                mnemonic,
+                None,
+                StoreSeedPhrase::DoNotStore,
+            )?)
+        },
+    )
+    .unwrap()
+    .wallet()
+    .unwrap()
+}
+
 pub fn scan_wallet<B, P>(wallet: &mut Wallet<B, P>, height: BlockHeight, blocks: Vec<Block>)
 where
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
     P: SignerProvider,
 {
     for account in wallet.get_best_block().keys() {

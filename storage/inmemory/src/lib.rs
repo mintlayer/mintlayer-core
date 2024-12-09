@@ -74,6 +74,10 @@ impl backend::Backend for InMemory {
     }
 }
 
+impl backend::SharedBackend for InMemory {
+    type ImplHelper = <InMemory as backend::Backend>::Impl;
+}
+
 impl InMemory {
     /// Create a new in-memory storage backend
     pub fn new() -> Self {

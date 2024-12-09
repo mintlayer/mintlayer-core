@@ -27,6 +27,7 @@ utxo = { path = "../utxo" }
 wallet-storage = { path = "./storage" }
 wallet-types = { path = "./types" }
 
+async-trait.workspace = true
 bip39 = { workspace = true, default-features = false, features = [
   "std",
   "zeroize",
@@ -43,6 +44,13 @@ zeroize.workspace = true
 [dev-dependencies]
 chainstate-test-framework = { path = "../chainstate/test-framework" }
 test-utils = { path = "../test-utils" }
+tokio = { workspace = true, default-features = false, features = [
+  "io-util",
+  "macros",
+  "net",
+  "rt",
+  "sync",
+] }
 
 ctor.workspace = true
 lazy_static.workspace = true

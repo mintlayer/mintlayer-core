@@ -18,7 +18,7 @@ use std::{collections::BTreeMap, sync::Mutex};
 use rstest::rstest;
 
 use memsize::MemSize;
-use storage_core::backend::{Backend, BackendImpl, ReadOps, TxRw, WriteOps};
+use storage_core::backend::{Backend, BackendImpl, ReadOps, SharedBackendImpl, TxRw, WriteOps};
 use test_utils::random::{make_seedable_rng, CryptoRng, Rng, Seed};
 
 use super::*;

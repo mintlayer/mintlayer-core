@@ -33,7 +33,8 @@ use crate::signer::tests::{
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_sign_message(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sign_message(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     test_sign_message_generic(
@@ -41,16 +42,18 @@ fn test_sign_message(#[case] seed: Seed) {
         MessageToSign::Random,
         make_software_signer,
         no_another_signer(),
-    );
+    )
+    .await;
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_sign_transaction_intent(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sign_transaction_intent(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    test_sign_transaction_intent_generic(&mut rng, make_software_signer, no_another_signer());
+    test_sign_transaction_intent_generic(&mut rng, make_software_signer, no_another_signer()).await;
 }
 
 #[rstest]
@@ -58,7 +61,8 @@ fn test_sign_transaction_intent(#[case] seed: Seed) {
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
 #[trace]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
-fn test_sign_transaction(
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_sign_transaction(
     #[case] seed: Seed,
     #[case] input_commitments_version: SighashInputCommitmentVersion,
 ) {
@@ -69,16 +73,18 @@ fn test_sign_transaction(
         input_commitments_version,
         make_software_signer,
         no_another_signer(),
-    );
+    )
+    .await;
 }
 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn test_fixed_signatures(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_fixed_signatures(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    test_fixed_signatures_generic(&mut rng, make_deterministic_software_signer);
+    test_fixed_signatures_generic(&mut rng, make_deterministic_software_signer).await;
 }
 
 #[rstest]
@@ -86,7 +92,8 @@ fn test_fixed_signatures(#[case] seed: Seed) {
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V0)]
 #[trace]
 #[case(Seed::from_entropy(), SighashInputCommitmentVersion::V1)]
-fn test_fixed_signatures2(
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_fixed_signatures2(
     #[case] seed: Seed,
     #[case] input_commitments_version: SighashInputCommitmentVersion,
 ) {
@@ -114,5 +121,6 @@ fn test_fixed_signatures_htlc_refunding(
         &mut rng,
         input_commitments_version,
         make_deterministic_software_signer,
-    );
+    )
+    .await;
 }

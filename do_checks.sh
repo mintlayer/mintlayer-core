@@ -14,17 +14,21 @@ cargo fmt --check -- --config newline_style=Unix
 cargo deny check --allow duplicate --hide-inclusion-graph
 
 # Checks enabled everywhere, including tests, benchmarks.
-# Note about "uninlined_format_args": this is about changing `format!("{}", x)` to `format!("{x}")`.
+# Note:
+# 1) "uninlined_format_args" is about changing `format!("{}", x)` to `format!("{x}")`.
 #   Most of the time this makes the code look better, but:
 #     * there are way too many places like this;
 #     * in some cases it may lead to uglier code; in particular, when the format string is already
 #       quite long.
 #   So we disable it for now.
+# 2) "manual_is_multiple_of" - starting from v1.90 clippy insists that `x % 2 == 0` should be
+#   replaced with `x.is_multiple_of(2)`, which is a questionable improvement.
 cargo clippy --all-features --workspace --all-targets -- \
     -D warnings \
     -A clippy::unnecessary_literal_unwrap \
     -A clippy::new_without_default \
     -A clippy::uninlined_format_args \
+    -A clippy::manual_is_multiple_of \
     -D clippy::implicit_saturating_sub \
     -D clippy::implicit_clone \
     -D clippy::map_unwrap_or \

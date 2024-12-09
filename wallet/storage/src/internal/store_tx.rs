@@ -379,6 +379,141 @@ impl_read_ops!(StoreTxRw);
 impl_read_ops!(StoreTxRoUnlocked);
 impl_read_ops!(StoreTxRwUnlocked);
 
+impl<T> WalletStorageReadLocked for &mut T
+where
+    T: WalletStorageReadLocked,
+{
+    fn get_storage_version(&self) -> crate::Result<u32> {
+        (**self).get_storage_version()
+    }
+
+    fn get_wallet_type(&self) -> crate::Result<WalletType> {
+        (**self).get_wallet_type()
+    }
+
+    fn get_chain_info(&self) -> crate::Result<ChainInfo> {
+        (**self).get_chain_info()
+    }
+
+    fn get_transaction(&self, id: &AccountWalletTxId) -> crate::Result<Option<WalletTx>> {
+        (**self).get_transaction(id)
+    }
+
+    fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>> {
+        (**self).get_accounts_info()
+    }
+
+    fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<String>> {
+        (**self).get_address(id)
+    }
+
+    fn get_addresses(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<AccountDerivationPathId, String>> {
+        (**self).get_addresses(account_id)
+    }
+
+    fn check_root_keys_sanity(&self) -> crate::Result<()> {
+        (**self).check_root_keys_sanity()
+    }
+
+    /// Collect and return all transactions from the storage
+    fn get_transactions(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<Vec<(AccountWalletTxId, WalletTx)>> {
+        (**self).get_transactions(account_id)
+    }
+
+    /// Collect and return all signed transactions from the storage
+    fn get_user_transactions(&self) -> crate::Result<Vec<SignedTransaction>> {
+        (**self).get_user_transactions()
+    }
+
+    fn get_account_unconfirmed_tx_counter(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<Option<u64>> {
+        (**self).get_account_unconfirmed_tx_counter(account_id)
+    }
+
+    fn get_account_vrf_public_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<Option<AccountVrfKeys>> {
+        (**self).get_account_vrf_public_keys(account_id)
+    }
+
+    fn get_account_standalone_watch_only_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<Destination, StandaloneWatchOnlyKey>> {
+        (**self).get_account_standalone_watch_only_keys(account_id)
+    }
+
+    fn get_account_standalone_multisig_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<Destination, StandaloneMultisig>> {
+        (**self).get_account_standalone_multisig_keys(account_id)
+    }
+
+    fn get_account_standalone_private_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<Vec<(AccountPublicKey, Option<String>)>> {
+        (**self).get_account_standalone_private_keys(account_id)
+    }
+
+    fn get_keychain_usage_state(
+        &self,
+        id: &AccountKeyPurposeId,
+    ) -> crate::Result<Option<KeychainUsageState>> {
+        (**self).get_keychain_usage_state(id)
+    }
+
+    fn get_vrf_keychain_usage_state(
+        &self,
+        id: &AccountId,
+    ) -> crate::Result<Option<KeychainUsageState>> {
+        (**self).get_vrf_keychain_usage_state(id)
+    }
+
+    fn get_keychain_usage_states(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<AccountKeyPurposeId, KeychainUsageState>> {
+        (**self).get_keychain_usage_states(account_id)
+    }
+
+    fn get_public_key(
+        &self,
+        id: &AccountDerivationPathId,
+    ) -> crate::Result<Option<ExtendedPublicKey>> {
+        (**self).get_public_key(id)
+    }
+
+    fn get_public_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> crate::Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>> {
+        (**self).get_public_keys(account_id)
+    }
+
+    fn get_median_time(&self) -> crate::Result<Option<BlockTimestamp>> {
+        (**self).get_median_time()
+    }
+
+    fn get_lookahead_size(&self) -> crate::Result<u32> {
+        (**self).get_lookahead_size()
+    }
+
+    fn get_hardware_wallet_data(&self) -> crate::Result<Option<hw_data::HardwareWalletData>> {
+        (**self).get_hardware_wallet_data()
+    }
+}
+
 impl<B: storage::Backend> WalletStorageEncryptionRead for StoreTxRo<'_, B> {
     fn get_encryption_key_kdf_challenge(&self) -> crate::Result<Option<KdfChallenge>> {
         self.read_value::<well_known::EncryptionKeyKdfChallenge>()
@@ -407,6 +542,7 @@ impl<B: storage::Backend> WalletStorageEncryptionRead for StoreTxRo<'_, B> {
             })?
     }
 }
+
 macro_rules! impl_read_unlocked_ops {
     ($TxType:ident) => {
         /// Wallet data storage transaction
@@ -444,6 +580,26 @@ macro_rules! impl_read_unlocked_ops {
 
 impl_read_unlocked_ops!(StoreTxRoUnlocked);
 impl_read_unlocked_ops!(StoreTxRwUnlocked);
+
+impl<T> WalletStorageReadUnlocked for &mut T
+where
+    T: WalletStorageReadUnlocked,
+{
+    fn get_root_key(&self) -> crate::Result<Option<RootKeys>> {
+        (**self).get_root_key()
+    }
+
+    fn get_seed_phrase(&self) -> crate::Result<Option<SerializableSeedPhrase>> {
+        (**self).get_seed_phrase()
+    }
+
+    fn get_account_standalone_private_key(
+        &self,
+        account_pubkey: &AccountPublicKey,
+    ) -> crate::Result<Option<PrivateKey>> {
+        (**self).get_account_standalone_private_key(account_pubkey)
+    }
+}
 
 macro_rules! impl_write_ops {
     ($TxType:ident) => {
@@ -599,7 +755,7 @@ macro_rules! impl_write_ops {
                 self.write::<db::DBPubKeys, _, _, _>(id, pub_key)
             }
 
-            fn det_public_key(&mut self, id: &AccountDerivationPathId) -> crate::Result<()> {
+            fn del_public_key(&mut self, id: &AccountDerivationPathId) -> crate::Result<()> {
                 self.storage.get_mut::<db::DBPubKeys, _>().del(id).map_err(Into::into)
             }
 

@@ -220,7 +220,7 @@ impl<N, W, B> Controller<N, W, B>
 where
     N: NodeInterface + Clone + Send + Sync + 'static,
     W: WalletEvents,
-    B: storage::Backend + 'static,
+    B: storage::BackendWithSendableTransactions + 'static,
 {
     pub async fn new(
         chain_config: Arc<ChainConfig>,
@@ -500,7 +500,7 @@ where
     }
 
     /// Delete the seed phrase if stored in the database
-    pub fn delete_seed_phrase(&self) -> Result<Option<SeedWithPassPhrase>, ControllerError<N>> {
+    pub fn delete_seed_phrase(&mut self) -> Result<Option<SeedWithPassPhrase>, ControllerError<N>> {
         self.wallet
             .delete_seed_phrase()
             .map(|opt| opt.map(SeedWithPassPhrase::from_serializable_seed_phrase))

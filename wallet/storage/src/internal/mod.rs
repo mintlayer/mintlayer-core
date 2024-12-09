@@ -154,18 +154,6 @@ impl<B: storage::Backend> Store<B> {
     }
 }
 
-impl<B: storage::Backend> Clone for Store<B>
-where
-    B::Impl: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            storage: self.storage.clone(),
-            encryption_state: self.encryption_state.clone(),
-        }
-    }
-}
-
 impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
     type TransactionRoLocked = StoreTxRo<'tx, B>;
     type TransactionRwLocked = StoreTxRw<'tx, B>;
@@ -191,7 +179,7 @@ impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
     }
 
     fn transaction_rw<'st: 'tx>(
-        &'st self,
+        &'st mut self,
         size: Option<usize>,
     ) -> crate::Result<Self::TransactionRwLocked> {
         self.storage
@@ -201,7 +189,7 @@ impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
     }
 
     fn transaction_rw_unlocked<'st: 'tx>(
-        &'st self,
+        &'st mut self,
         size: Option<usize>,
     ) -> crate::Result<Self::TransactionRwUnlocked> {
         match self.encryption_state {

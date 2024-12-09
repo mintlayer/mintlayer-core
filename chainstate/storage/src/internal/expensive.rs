@@ -21,7 +21,7 @@ use storage::MakeMapRef;
 use utils::log_error;
 use utxo::Utxo;
 
-impl<B: storage::Backend> StoreTxRo<'_, B> {
+impl<B: storage::SharedBackend> StoreTxRo<'_, B> {
     /// Dump raw database contents
     #[log_error]
     pub fn dump_raw(&self) -> crate::Result<storage::raw::StorageContents<Schema>> {

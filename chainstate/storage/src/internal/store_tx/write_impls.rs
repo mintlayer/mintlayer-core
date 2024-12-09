@@ -36,7 +36,7 @@ use utxo::{Utxo, UtxosBlockUndo, UtxosStorageWrite};
 
 use super::db;
 
-impl<B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'_, B> {
+impl<B: storage::SharedBackend> BlockchainStorageWrite for StoreTxRw<'_, B> {
     #[log_error]
     fn set_storage_version(&mut self, version: ChainstateStorageVersion) -> crate::Result<()> {
         self.write_value::<well_known::StoreVersion>(&version)
@@ -219,7 +219,7 @@ impl<B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'_, B> {
     }
 }
 
-impl<B: storage::Backend> EpochStorageWrite for StoreTxRw<'_, B> {
+impl<B: storage::SharedBackend> EpochStorageWrite for StoreTxRw<'_, B> {
     #[log_error]
     fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()> {
         self.write::<db::DBEpochData, _, _, _>(epoch_index, epoch_data)
@@ -231,7 +231,7 @@ impl<B: storage::Backend> EpochStorageWrite for StoreTxRw<'_, B> {
     }
 }
 
-impl<B: storage::Backend> UtxosStorageWrite for StoreTxRw<'_, B> {
+impl<B: storage::SharedBackend> UtxosStorageWrite for StoreTxRw<'_, B> {
     #[log_error]
     fn set_utxo(&mut self, outpoint: &UtxoOutPoint, entry: Utxo) -> crate::Result<()> {
         self.write::<db::DBUtxo, _, _, _>(outpoint, entry)
@@ -248,7 +248,7 @@ impl<B: storage::Backend> UtxosStorageWrite for StoreTxRw<'_, B> {
     }
 }
 
-impl<B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for StoreTxRw<'_, B> {
+impl<B: storage::SharedBackend> PoSAccountingStorageWrite<TipStorageTag> for StoreTxRw<'_, B> {
     #[log_error]
     fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()> {
         self.write::<db::DBAccountingPoolBalancesTip, _, _, _>(pool_id, amount)
@@ -320,7 +320,7 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for StoreTxRw
     }
 }
 
-impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for StoreTxRw<'_, B> {
+impl<B: storage::SharedBackend> PoSAccountingStorageWrite<SealedStorageTag> for StoreTxRw<'_, B> {
     #[log_error]
     fn set_pool_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()> {
         self.write::<db::DBAccountingPoolBalancesSealed, _, _, _>(pool_id, amount)
@@ -392,7 +392,7 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for StoreT
     }
 }
 
-impl<B: storage::Backend> TokensAccountingStorageWrite for StoreTxRw<'_, B> {
+impl<B: storage::SharedBackend> TokensAccountingStorageWrite for StoreTxRw<'_, B> {
     #[log_error]
     fn set_token_data(
         &mut self,
@@ -418,7 +418,7 @@ impl<B: storage::Backend> TokensAccountingStorageWrite for StoreTxRw<'_, B> {
     }
 }
 
-impl<B: storage::Backend> OrdersAccountingStorageWrite for StoreTxRw<'_, B> {
+impl<B: storage::SharedBackend> OrdersAccountingStorageWrite for StoreTxRw<'_, B> {
     #[log_error]
     fn set_order_data(&mut self, id: &OrderId, data: &OrderData) -> crate::Result<()> {
         self.write::<db::DBOrdersData, _, _, _>(id, data)

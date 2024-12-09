@@ -18,6 +18,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use async_trait::async_trait;
 use itertools::{izip, Itertools};
 
 use common::{
@@ -185,7 +186,7 @@ pub struct TrezorSigner {
     chain_config: Arc<ChainConfig>,
     client: Arc<Mutex<Trezor>>,
     session_id: Vec<u8>,
-    sig_aux_data_provider: Mutex<Box<dyn SigAuxDataProvider>>,
+    sig_aux_data_provider: Mutex<Box<dyn SigAuxDataProvider + Send>>,
 }
 
 impl TrezorSigner {
@@ -206,7 +207,7 @@ impl TrezorSigner {
         chain_config: Arc<ChainConfig>,
         client: Arc<Mutex<Trezor>>,
         session_id: Vec<u8>,
-        sig_aux_data_provider: Box<dyn SigAuxDataProvider>,
+        sig_aux_data_provider: Box<dyn SigAuxDataProvider + Send>,
     ) -> Self {
         Self {
             chain_config,
@@ -222,7 +223,7 @@ impl TrezorSigner {
     /// the function will attempt to reconnect to the Trezor device once before returning an error.
     fn check_session(
         &mut self,
-        db_tx: &impl WalletStorageReadLocked,
+        db_tx: &mut impl WalletStorageReadLocked,
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<()> {
         let mut client = self.client.lock().expect("poisoned lock");
@@ -260,7 +261,7 @@ impl TrezorSigner {
     fn perform_trezor_operation<F, R>(
         &mut self,
         operation: F,
-        db_tx: &impl WalletStorageReadLocked,
+        db_tx: &mut impl WalletStorageReadLocked,
         key_chain: &impl AccountKeyChains,
     ) -> SignerResult<R>
     where
@@ -508,13 +509,14 @@ fn find_trezor_device_from_db(
     }
 }
 
+#[async_trait]
 impl Signer for TrezorSigner {
-    fn sign_tx(
+    async fn sign_tx(
         &mut self,
         ptx: PartiallySignedTransaction,
         tokens_additional_info: &TokensAdditionalInfo,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        mut db_tx: impl WalletStorageReadUnlocked + Send,
         block_height: BlockHeight,
     ) -> SignerResult<(
         PartiallySignedTransaction,
@@ -526,7 +528,7 @@ impl Signer for TrezorSigner {
             tokens_additional_info,
             key_chain,
             &self.chain_config,
-            db_tx,
+            &db_tx,
         )?;
         let outputs = self.to_trezor_output_msgs(&ptx, tokens_additional_info)?;
         let utxos = to_trezor_utxo_msgs(&ptx, tokens_additional_info, &self.chain_config)?;
@@ -557,7 +559,7 @@ impl Signer for TrezorSigner {
                     input_commitment_version,
                 )
             },
-            db_tx,
+            &mut db_tx,
             key_chain,
         )?;
 
@@ -749,12 +751,12 @@ impl Signer for TrezorSigner {
         Ok((ptx.with_witnesses(witnesses)?, prev_statuses, new_statuses))
     }
 
-    fn sign_challenge(
+    async fn sign_challenge(
         &mut self,
         message: &[u8],
         destination: &Destination,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        mut db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<ArbitraryMessageSignature> {
         let data = match key_chain.find_public_key(destination) {
             Some(FoundPubKey::Hierarchy(xpub)) => {
@@ -796,7 +798,7 @@ impl Signer for TrezorSigner {
                             message.to_vec(),
                         )
                     },
-                    db_tx,
+                    &mut db_tx,
                     key_chain,
                 )?;
 
@@ -846,13 +848,13 @@ impl Signer for TrezorSigner {
         Ok(sig)
     }
 
-    fn sign_transaction_intent(
+    async fn sign_transaction_intent(
         &mut self,
         transaction: &Transaction,
         input_destinations: &[Destination],
         intent: &str,
-        key_chain: &impl AccountKeyChains,
-        db_tx: &impl WalletStorageReadUnlocked,
+        key_chain: &(impl AccountKeyChains + Sync),
+        mut db_tx: impl WalletStorageReadUnlocked + Send,
     ) -> SignerResult<SignedTransactionIntent> {
         let tx_id = transaction.get_id();
         let message_to_sign = SignedTransactionIntent::get_message_to_sign(intent, &tx_id);
@@ -860,7 +862,9 @@ impl Signer for TrezorSigner {
         let mut signatures = Vec::with_capacity(input_destinations.len());
         for dest in input_destinations {
             let dest = SignedTransactionIntent::normalize_destination(dest);
-            let sig = self.sign_challenge(message_to_sign.as_bytes(), &dest, key_chain, db_tx)?;
+            let sig = self
+                .sign_challenge(message_to_sign.as_bytes(), &dest, key_chain, &mut db_tx)
+                .await?;
             signatures.push(sig.into_raw());
         }
 
