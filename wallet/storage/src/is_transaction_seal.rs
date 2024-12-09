@@ -20,3 +20,4 @@ impl<B: storage::Backend> Seal for crate::internal::StoreTxRo<'_, B> {}
 impl<B: storage::Backend> Seal for crate::internal::StoreTxRw<'_, B> {}
 impl<B: storage::Backend> Seal for crate::internal::StoreTxRoUnlocked<'_, B> {}
 impl<B: storage::Backend> Seal for crate::internal::StoreTxRwUnlocked<'_, B> {}
+impl<B: storage::Backend> Seal for crate::internal::StoreLocalReadWriteUnlocked<B> {}
