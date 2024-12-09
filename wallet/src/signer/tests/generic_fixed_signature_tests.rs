@@ -123,8 +123,10 @@ lazy_static::lazy_static! {
     };
 }
 
-pub fn test_fixed_signatures_generic<MkS, S>(rng: &mut (impl Rng + CryptoRng), make_signer: MkS)
-where
+pub async fn test_fixed_signatures_generic<MkS, S>(
+    rng: &mut (impl Rng + CryptoRng),
+    make_signer: MkS,
+) where
     MkS: Fn(Arc<ChainConfig>, U31) -> S,
     S: Signer,
 {
@@ -370,15 +372,18 @@ where
     );
     let orig_ptx = req.into_partially_signed_tx(ptx_additional_info).unwrap();
 
+    db_tx.commit().unwrap();
+    let db_tx = db.local_rw_unlocked();
     let mut signer = make_signer(chain_config.clone(), account.account_index());
     let (ptx, _, _) = signer
         .sign_tx(
             orig_ptx,
             &tokens_additional_info,
             account.key_chain(),
-            &db_tx,
+            &db_tx.read_only_store(),
             tx_block_height,
         )
+        .await
         .unwrap();
     assert!(ptx.all_signatures_available());
 
@@ -430,7 +435,7 @@ where
 /// 2) v1 order inputs;
 /// 3) htlc inputs;
 /// 4) v1 input commitments.
-pub fn test_fixed_signatures_generic2<MkS, S>(
+pub async fn test_fixed_signatures_generic2<MkS, S>(
     rng: &mut (impl Rng + CryptoRng),
     input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS,
@@ -913,15 +918,18 @@ pub fn test_fixed_signatures_generic2<MkS, S>(
         .map(|comm| comm.deep_clone())
         .collect_vec();
 
+    db_tx.commit().unwrap();
+    let db_tx = db.local_rw_unlocked();
     let mut signer = make_signer(chain_config.clone(), account1.account_index());
     let (ptx, _, _) = signer
         .sign_tx(
             ptx,
             &tokens_additional_info,
             account1.key_chain(),
-            &db_tx,
+            &db_tx.read_only_store(),
             tx_block_height,
         )
+        .await
         .unwrap();
     assert!(ptx.all_signatures_available());
 
@@ -932,9 +940,10 @@ pub fn test_fixed_signatures_generic2<MkS, S>(
             ptx,
             &tokens_additional_info,
             account2.key_chain(),
-            &db_tx,
+            &db_tx.read_only_store(),
             tx_block_height,
         )
+        .await
         .unwrap();
     assert!(ptx.all_signatures_available());
 
@@ -1250,7 +1259,7 @@ fn make_htlc_multisig_spend_sig<'a>(
     StandardInputSignature::new(sighash_type, spend.encode())
 }
 
-fn new_dest_from_account<K: AccountKeyChains>(
+fn new_dest_from_account<K: AccountKeyChains + Sync>(
     account: &mut Account<K>,
     db_tx: &mut impl TransactionRwUnlocked,
     purpose: KeyPurpose,
@@ -1258,7 +1267,7 @@ fn new_dest_from_account<K: AccountKeyChains>(
     account.get_new_address(db_tx, purpose).unwrap().1.into_object()
 }
 
-fn new_pub_key_from_account<K: AccountKeyChains>(
+fn new_pub_key_from_account<K: AccountKeyChains + Sync>(
     account: &mut Account<K>,
     db_tx: &mut impl TransactionRwUnlocked,
     purpose: KeyPurpose,
@@ -1267,7 +1276,7 @@ fn new_pub_key_from_account<K: AccountKeyChains>(
     find_pub_key_for_pkh_dest(&dest, &*account)
 }
 
-fn find_pub_key_for_pkh_dest<K: AccountKeyChains>(
+fn find_pub_key_for_pkh_dest<K: AccountKeyChains + Sync>(
     dest: &Destination,
     account: &Account<K>,
 ) -> PublicKey {
