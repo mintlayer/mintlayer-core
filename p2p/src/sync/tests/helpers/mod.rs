@@ -258,9 +258,14 @@ impl TestNode {
         let future = async {
             loop {
                 match self.peer_manager_event_receiver.recv().await.unwrap() {
-                    PeerManagerEvent::AdjustPeerScore(peer, score, sender) => {
-                        sender.send(Ok(()));
-                        break (peer, score);
+                    PeerManagerEvent::AdjustPeerScore {
+                        peer_id,
+                        adjust_by,
+                        reason: _,
+                        response_sender,
+                    } => {
+                        response_sender.send(Ok(()));
+                        break (peer_id, adjust_by);
                     }
                     PeerManagerEvent::PeerBlockSyncStatusUpdate { .. } => {}
                     e => panic!("Expected peer score adjustment, received: {e:?}"),
@@ -350,7 +355,7 @@ impl TestNode {
                     | PeerManagerEvent::GetPeerCount(_)
                     | PeerManagerEvent::GetBindAddresses(_)
                     | PeerManagerEvent::GetConnectedPeers(_)
-                    | PeerManagerEvent::AdjustPeerScore(_, _, _)
+                    | PeerManagerEvent::AdjustPeerScore { .. }
                     | PeerManagerEvent::GetReserved(_)
                     | PeerManagerEvent::AddReserved(_, _)
                     | PeerManagerEvent::RemoveReserved(_, _)
@@ -659,12 +664,15 @@ impl From<&PeerManagerEvent> for PeerManagerEventDesc {
             PeerManagerEvent::GetPeerCount(_) => PeerManagerEventDesc::GetPeerCount,
             PeerManagerEvent::GetBindAddresses(_) => PeerManagerEventDesc::GetBindAddresses,
             PeerManagerEvent::GetConnectedPeers(_) => PeerManagerEventDesc::GetConnectedPeers,
-            PeerManagerEvent::AdjustPeerScore(peer_id, score, _) => {
-                PeerManagerEventDesc::AdjustPeerScore {
-                    peer_id: *peer_id,
-                    score: *score,
-                }
-            }
+            PeerManagerEvent::AdjustPeerScore {
+                peer_id,
+                adjust_by,
+                reason: _,
+                response_sender: _,
+            } => PeerManagerEventDesc::AdjustPeerScore {
+                peer_id: *peer_id,
+                score: *adjust_by,
+            },
             PeerManagerEvent::NewTipReceived { peer_id, block_id } => {
                 PeerManagerEventDesc::NewTipReceived {
                     peer_id: *peer_id,
