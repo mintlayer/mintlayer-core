@@ -24,7 +24,10 @@ mod password;
 use password::{challenge_to_sym_key, password_to_sym_key};
 
 mod store_tx;
-pub use store_tx::{StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
+pub use store_tx::{
+    StoreLocalReadOnlyUnlocked, StoreLocalReadWriteUnlocked, StoreTxRo, StoreTxRoUnlocked,
+    StoreTxRw, StoreTxRwUnlocked,
+};
 
 use self::store_tx::EncryptionState;
 
@@ -151,6 +154,10 @@ impl<B: storage::Backend> Store<B> {
     /// Dump raw database contents
     pub fn dump_raw(&self) -> crate::Result<storage::raw::StorageContents<Schema>> {
         self.storage.transaction_ro()?.dump_raw().map_err(crate::Error::from)
+    }
+
+    pub fn local_rw_unlocked(&self) -> StoreLocalReadWriteUnlocked<B> {
+        StoreLocalReadWriteUnlocked::new(self.clone())
     }
 }
 
