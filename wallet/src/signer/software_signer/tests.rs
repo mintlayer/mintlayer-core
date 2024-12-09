@@ -86,6 +86,74 @@ fn sign_message(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn sign_transaction_intent(#[case] seed: Seed) {
+    use common::primitives::Idable;
+
+    let mut rng = make_seedable_rng(seed);
+
+    let config = Arc::new(create_regtest());
+    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
+
+    let master_key_chain = MasterKeyChain::new_from_mnemonic(
+        config.clone(),
+        &mut db_tx,
+        MNEMONIC,
+        None,
+        StoreSeedPhrase::DoNotStore,
+    )
+    .unwrap();
+
+    let key_chain = master_key_chain
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX, LOOKAHEAD_SIZE)
+        .unwrap();
+    let mut account = Account::new(config.clone(), &mut db_tx, key_chain, None).unwrap();
+
+    let mut signer = SoftwareSigner::new(config.clone(), DEFAULT_ACCOUNT_INDEX);
+
+    let inputs: Vec<TxInput> = (0..rng.gen_range(1..5))
+        .map(|_| {
+            let source_id = if rng.gen_bool(0.5) {
+                Id::<Transaction>::new(H256::random_using(&mut rng)).into()
+            } else {
+                Id::<GenBlock>::new(H256::random_using(&mut rng)).into()
+            };
+            TxInput::from_utxo(source_id, rng.next_u32())
+        })
+        .collect();
+    let input_destinations: Vec<_> = (0..inputs.len())
+        .map(|_| account.get_new_address(&mut db_tx, ReceiveFunds).unwrap().1.into_object())
+        .collect();
+
+    let tx = Transaction::new(
+        0,
+        inputs,
+        vec![TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(rng.gen())),
+            account.get_new_address(&mut db_tx, Change).unwrap().1.into_object(),
+        )],
+    )
+    .unwrap();
+
+    let intent: String = [rng.gen::<char>(), rng.gen::<char>(), rng.gen::<char>()].iter().collect();
+    let res = signer
+        .sign_transaction_intent(
+            &tx,
+            &input_destinations,
+            &intent,
+            account.key_chain(),
+            &db_tx,
+        )
+        .unwrap();
+
+    let expected_signed_message =
+        SignedTransactionIntent::get_message_to_sign(&intent, &tx.get_id());
+    res.verify(&config, &input_destinations, &expected_signed_message).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn sign_transaction(#[case] seed: Seed) {
     use std::num::NonZeroU8;
 

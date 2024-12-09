@@ -1454,6 +1454,7 @@ where
         intent: String,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> WalletResult<(SignedTransaction, SignedTransactionIntent)> {
         let (signed_tx, input_destinations) = self.create_transaction_to_addresses_impl(
             account_index,
@@ -1463,7 +1464,7 @@ where
             current_fee_rate,
             consolidate_fee_rate,
             |send_request| send_request.destinations().to_owned(),
-            &BTreeMap::new(), // FIXME
+            additional_utxo_infos,
         )?;
 
         let signed_intent = self.for_account_rw_unlocked(
