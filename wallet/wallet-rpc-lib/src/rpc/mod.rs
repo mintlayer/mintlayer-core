@@ -874,6 +874,7 @@ where
                         .synced_controller(account_index, config)
                         .await?
                         .sign_challenge(&challenge, &destination)
+                        .await
                         .map_err(RpcError::Controller)
                 })
             })
@@ -1303,7 +1304,8 @@ where
                     controller
                         .synced_controller(account_index, config)
                         .await?
-                        .decommission_stake_pool(pool_id, output_address)
+                        // .decommission_stake_pool(pool_id, output_address)
+                        .async_decommission_stake_pool(pool_id, output_address)
                         .await
                         .map_err(RpcError::Controller)
                 })

@@ -120,7 +120,7 @@ pub struct Account<K> {
     account_info: AccountInfo,
 }
 
-impl<K: AccountKeyChains> Account<K> {
+impl<K: AccountKeyChains + Sync> Account<K> {
     /// Create a new account by providing a key chain
     pub fn new(
         chain_config: Arc<ChainConfig>,
@@ -654,7 +654,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn process_send_request_and_sign(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         request: SendRequest,
         inputs: SelectedInputs,
         change_addresses: BTreeMap<Currency, Address<Destination>>,
@@ -676,7 +676,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     fn decommission_stake_pool_impl(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         pool_id: PoolId,
         pool_balance: Amount,
         output_address: Option<Destination>,
@@ -739,7 +739,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn decommission_stake_pool(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         pool_id: PoolId,
         pool_balance: Amount,
         output_address: Option<Destination>,
@@ -756,7 +756,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn decommission_stake_pool_request(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         pool_id: PoolId,
         pool_balance: Amount,
         output_address: Option<Destination>,
@@ -900,7 +900,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn create_htlc_tx(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         output_value: OutputValue,
         htlc: HashedTimelockContract,
         median_time: BlockTimestamp,
@@ -923,7 +923,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn create_order_tx(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         ask_value: OutputValue,
         give_value: OutputValue,
         conclude_address: Address<Destination>,
@@ -949,7 +949,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn create_conclude_order_tx(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         order_id: OrderId,
         order_info: RpcOrderInfo,
         output_address: Option<Destination>,
@@ -1002,7 +1002,7 @@ impl<K: AccountKeyChains> Account<K> {
     #[allow(clippy::too_many_arguments)]
     pub fn create_fill_order_tx(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         order_id: OrderId,
         order_info: RpcOrderInfo,
         fill_amount_in_ask_currency: Amount,
@@ -1058,7 +1058,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn create_issue_nft_tx(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         nft_issue_arguments: IssueNftArguments,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
@@ -1119,7 +1119,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn mint_tokens(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         token_info: &UnconfirmedTokenInfo,
         address: Address<Destination>,
         amount: Amount,
@@ -1147,7 +1147,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn unmint_tokens(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         token_info: &UnconfirmedTokenInfo,
         amount: Amount,
         median_time: BlockTimestamp,
@@ -1174,7 +1174,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn lock_token_supply(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         token_info: &UnconfirmedTokenInfo,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
@@ -1198,7 +1198,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn freeze_token(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         token_info: &UnconfirmedTokenInfo,
         is_token_unfreezable: IsTokenUnfreezable,
         median_time: BlockTimestamp,
@@ -1225,7 +1225,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn unfreeze_token(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         token_info: &UnconfirmedTokenInfo,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
@@ -1249,7 +1249,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn change_token_authority(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         token_info: &UnconfirmedTokenInfo,
         address: Address<Destination>,
         median_time: BlockTimestamp,
@@ -1276,7 +1276,7 @@ impl<K: AccountKeyChains> Account<K> {
 
     pub fn change_token_metadata_uri(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         token_info: &UnconfirmedTokenInfo,
         metadata_uri: Vec<u8>,
         median_time: BlockTimestamp,
@@ -1304,7 +1304,7 @@ impl<K: AccountKeyChains> Account<K> {
         authority: Destination,
         tx_input: TxInput,
         outputs: Vec<TxOutput>,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
     ) -> Result<SendRequest, WalletError> {
@@ -2128,7 +2128,7 @@ struct PreselectedInputAmounts {
     pub burn: Amount,
 }
 
-impl<K: AccountKeyChains + VRFAccountKeyChains> Account<K> {
+impl<K: AccountKeyChains + VRFAccountKeyChains + Sync> Account<K> {
     fn get_vrf_public_key(
         &mut self,
         db_tx: &mut impl WalletStorageWriteLocked,
@@ -2199,7 +2199,7 @@ impl<K: AccountKeyChains + VRFAccountKeyChains> Account<K> {
 
     pub fn create_stake_pool_tx(
         &mut self,
-        db_tx: &mut impl WalletStorageWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         stake_pool_arguments: StakePoolDataArguments,
         median_time: BlockTimestamp,
         fee_rate: CurrentFeeRate,
