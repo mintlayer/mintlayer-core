@@ -69,7 +69,7 @@ use crate::{
     Account, SendRequest,
 };
 
-pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
+pub async fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
     rng: &mut (impl Rng + CryptoRng),
     make_signer: MkS1,
     make_another_signer: Option<MkS2>,
@@ -105,6 +105,9 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
         .unwrap();
     let standalone_pk_destination = Destination::PublicKey(standalone_pk);
 
+    db_tx.commit().unwrap();
+    let db_tx = db.local_rw_unlocked().read_only_store();
+
     for destination in [pkh_destination, pk_destination, standalone_pk_destination] {
         let message = vec![rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>()];
         let message_challenge = produce_message_challenge(&message);
@@ -112,6 +115,7 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
         let mut signer = make_signer(chain_config.clone(), account.account_index());
         let res = signer
             .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
+            .await
             .unwrap();
         res.verify_signature(&chain_config, &destination, &message_challenge).unwrap();
 
@@ -121,6 +125,7 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
 
             let another_res = another_signer
                 .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
+                .await
                 .unwrap();
             another_res
                 .verify_signature(&chain_config, &destination, &message_challenge)
@@ -144,12 +149,13 @@ pub fn test_sign_message_generic<MkS1, MkS2, S1, S2>(
             account.key_chain(),
             &db_tx,
         )
+        .await
         .unwrap_err();
 
     assert_eq!(err, SignerError::DestinationNotFromThisWallet);
 }
 
-pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
+pub async fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
     rng: &mut (impl Rng + CryptoRng),
     make_signer: MkS1,
     make_another_signer: Option<MkS2>,
@@ -215,6 +221,9 @@ pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
     )
     .unwrap();
 
+    db_tx.commit().unwrap();
+    let db_tx = db.local_rw_unlocked().read_only_store();
+
     let intent: String = [rng.gen::<char>(), rng.gen::<char>(), rng.gen::<char>()].iter().collect();
     log::debug!("Generated intent: `{intent}`");
     let expected_signed_message =
@@ -229,6 +238,7 @@ pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
             account.key_chain(),
             &db_tx,
         )
+        .await
         .unwrap();
     res.verify(&chain_config, &input_destinations, &expected_signed_message)
         .unwrap();
@@ -243,6 +253,7 @@ pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
                 account.key_chain(),
                 &db_tx,
             )
+            .await
             .unwrap();
         another_res
             .verify(&chain_config, &input_destinations, &expected_signed_message)
@@ -264,12 +275,13 @@ pub fn test_sign_transaction_intent_generic<MkS1, MkS2, S1, S2>(
             account.key_chain(),
             &db_tx,
         )
+        .await
         .unwrap_err();
 
     assert_eq!(err, SignerError::DestinationNotFromThisWallet);
 }
 
-pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
+pub async fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
     rng: &mut (impl Rng + CryptoRng),
     input_commitments_version: SighashInputCommitmentVersion,
     make_signer: MkS1,
@@ -693,6 +705,9 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
         );
     let orig_ptx = req.into_partially_signed_tx(additional_info).unwrap();
 
+    db_tx.commit().unwrap();
+    let db_tx = db.local_rw_unlocked().read_only_store();
+
     let mut signer = make_signer(chain_config.clone(), account.account_index());
     let (ptx, _, _) = signer
         .sign_tx(
@@ -701,13 +716,16 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             &db_tx,
             tx_block_height,
         )
+        .await
         .unwrap();
+
     assert!(ptx.all_signatures_available());
 
     if let Some(make_another_signer) = &make_another_signer {
         let mut another_signer = make_another_signer(chain_config.clone(), account.account_index());
         let (another_ptx, _, _) = another_signer
             .sign_tx(orig_ptx, account.key_chain(), &db_tx, tx_block_height)
+            .await
             .unwrap();
         assert!(another_ptx.all_signatures_available());
 
@@ -772,6 +790,7 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             &db_tx,
             tx_block_height,
         )
+        .await
         .unwrap();
     assert!(ptx.all_signatures_available());
 
@@ -780,6 +799,7 @@ pub fn test_sign_transaction_generic<MkS1, MkS2, S1, S2>(
             make_another_signer(chain_config.clone(), account2.account_index());
         let (another_ptx, _, _) = another_signer
             .sign_tx(orig_ptx, account2.key_chain(), &db_tx, tx_block_height)
+            .await
             .unwrap();
         assert!(another_ptx.all_signatures_available());
 
@@ -825,7 +845,7 @@ fn random_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
     Destination::PublicKey(pk)
 }
 
-fn destination_from_account<K: AccountKeyChains>(
+fn destination_from_account<K: AccountKeyChains + Sync>(
     account: &mut Account<K>,
     db_tx: &mut impl TransactionRwUnlocked,
     rng: &mut impl Rng,

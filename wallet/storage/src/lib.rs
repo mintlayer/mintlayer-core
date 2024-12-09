@@ -28,7 +28,10 @@ use crypto::{
     key::{extended::ExtendedPublicKey, PrivateKey},
     symkey::SymmetricKey,
 };
-pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
+pub use internal::{
+    Store, StoreLocalReadOnlyUnlocked, StoreLocalReadWriteUnlocked, StoreTxRo, StoreTxRoUnlocked,
+    StoreTxRw, StoreTxRwUnlocked,
+};
 use std::collections::BTreeMap;
 
 use wallet_types::{
@@ -194,7 +197,7 @@ pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
         id: &AccountDerivationPathId,
         content: &ExtendedPublicKey,
     ) -> Result<()>;
-    fn det_public_key(&mut self, id: &AccountDerivationPathId) -> Result<()>;
+    fn del_public_key(&mut self, id: &AccountDerivationPathId) -> Result<()>;
     fn set_median_time(&mut self, median_time: BlockTimestamp) -> Result<()>;
     fn set_lookahead_size(&mut self, lookahead_size: u32) -> Result<()>;
     fn clear_public_keys(&mut self) -> Result<()>;
