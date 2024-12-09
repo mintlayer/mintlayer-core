@@ -44,7 +44,7 @@ use common::{
         AccountCommand, AccountSpending, ChainConfig, Destination, OutPointSourceId,
         SignedTransactionIntent, Transaction, TxInput, TxOutput,
     },
-    primitives::H256,
+    primitives::{Idable, H256},
 };
 use crypto::key::{
     extended::ExtendedPublicKey,
@@ -478,13 +478,25 @@ impl Signer for TrezorSigner {
 
     fn sign_transaction_intent(
         &mut self,
-        _transaction: &Transaction,
-        _input_destinations: &[Destination],
-        _intent: &str,
-        _key_chain: &impl AccountKeyChains,
-        _db_tx: &impl WalletStorageReadUnlocked,
+        transaction: &Transaction,
+        input_destinations: &[Destination],
+        intent: &str,
+        key_chain: &impl AccountKeyChains,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> SignerResult<SignedTransactionIntent> {
-        unimplemented!("FIXME")
+        let tx_id = transaction.get_id();
+        let message_to_sign = SignedTransactionIntent::get_message_to_sign(intent, &tx_id);
+
+        let mut signatures = Vec::with_capacity(input_destinations.len());
+        for dest in input_destinations {
+            let sig = self.sign_challenge(message_to_sign.as_bytes(), dest, key_chain, db_tx)?;
+            signatures.push(sig.into_raw());
+        }
+
+        Ok(SignedTransactionIntent::new_unchecked(
+            message_to_sign,
+            signatures,
+        ))
     }
 }
 

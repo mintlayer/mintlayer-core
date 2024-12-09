@@ -1213,6 +1213,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
         intent: String,
         current_fee_rate: FeeRate,
         consolidate_fee_rate: FeeRate,
+        additional_utxo_infos: &BTreeMap<PoolOrTokenId, UtxoAdditionalInfo>,
     ) -> WalletResult<(SignedTransaction, SignedTransactionIntent)> {
         match self {
             RuntimeWallet::Software(w) => w.create_transaction_to_addresses_with_intent(
@@ -1223,6 +1224,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 intent,
                 current_fee_rate,
                 consolidate_fee_rate,
+                additional_utxo_infos,
             ),
             #[cfg(feature = "trezor")]
             RuntimeWallet::Trezor(w) => w.create_transaction_to_addresses_with_intent(
@@ -1233,6 +1235,7 @@ impl<B: storage::Backend + 'static> RuntimeWallet<B> {
                 intent,
                 current_fee_rate,
                 consolidate_fee_rate,
+                additional_utxo_infos,
             ),
         }
     }
