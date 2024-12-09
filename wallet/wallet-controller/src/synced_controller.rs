@@ -998,6 +998,13 @@ where
                   account_index: U31,
                   token_info: &UnconfirmedTokenInfo| {
                 token_info.check_can_be_used()?;
+                let additional_info = BTreeMap::from_iter([(
+                    PoolOrTokenId::TokenId(token_info.token_id()),
+                    UtxoAdditionalInfo::TokenInfo(TokenAdditionalInfo {
+                        num_decimals: token_info.num_decimals(),
+                        ticker: token_info.token_ticker().to_vec(),
+                    }),
+                )]);
                 wallet.create_transaction_to_addresses_with_intent(
                     account_index,
                     [output],
@@ -1006,6 +1013,7 @@ where
                     intent,
                     current_fee_rate,
                     consolidate_fee_rate,
+                    &additional_info,
                 )
             },
         )

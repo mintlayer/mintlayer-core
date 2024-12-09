@@ -66,6 +66,13 @@ pub struct SignedTransactionIntent {
 }
 
 impl SignedTransactionIntent {
+    pub fn new_unchecked(signed_message: String, signatures: Vec<Vec<u8>>) -> Self {
+        Self {
+            signed_message,
+            signatures,
+        }
+    }
+
     /// Create a signed intent given the id of the transaction and its input destinations.
     ///
     /// Only PublicKeyHash and PublicKey destinations are supported by this function.
