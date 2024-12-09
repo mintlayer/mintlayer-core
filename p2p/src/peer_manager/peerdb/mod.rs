@@ -375,9 +375,10 @@ impl<S: PeerDbStorage> PeerDb<S> {
     }
 
     /// Add a new peer address
-    pub fn peer_discovered(&mut self, address: SocketAddress) {
-        #[allow(clippy::map_entry)]
-        if !self.addresses.contains_key(&address) {
+    pub fn peer_discovered(&mut self, address: SocketAddress) -> bool {
+        let is_new = !self.addresses.contains_key(&address);
+
+        if is_new {
             log::debug!("New address discovered: {}", address.to_string());
 
             debug_assert!(
@@ -392,6 +393,8 @@ impl<S: PeerDbStorage> PeerDb<S> {
                 );
             }
         }
+
+        is_new
     }
 
     /// Report outbound connection failure
@@ -525,13 +528,17 @@ impl<S: PeerDbStorage> PeerDb<S> {
             .entry(address)
             .or_insert_with(|| AddressData::new(false, false, now));
 
-        log::debug!(
-            "Updating address {} state to {:?}",
-            address.to_string(),
-            transition,
-        );
+        let old_state = address_data.state().clone();
 
         address_data.transition_to(transition, now, &mut make_pseudo_rng());
+
+        log::debug!(
+            "Address {} state changed: {:?}, old state = {:?}, new state = {:?}",
+            address.to_string(),
+            transition,
+            old_state,
+            address_data.state()
+        );
     }
 
     pub fn is_reserved_node(&self, address: &SocketAddress) -> bool {
@@ -670,7 +677,7 @@ impl<S: PeerDbStorage> PeerDbInterface for PeerDb<S> {
     }
 
     fn peer_discovered(&mut self, address: SocketAddress) {
-        self.peer_discovered(address)
+        self.peer_discovered(address);
     }
 }
 

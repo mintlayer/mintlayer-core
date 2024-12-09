@@ -124,7 +124,7 @@ where
     assert!(pm2.is_whitelisted_node(PeerRole::Inbound, &addr1));
 
     // automatic ban
-    pm2.adjust_peer_score(peer_id, 1000);
+    pm2.adjust_peer_score(peer_id, 1000, "Test");
     assert!(!pm2.peerdb.is_address_banned(&addr1.as_bannable()));
 }
 
