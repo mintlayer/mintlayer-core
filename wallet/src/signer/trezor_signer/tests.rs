@@ -48,7 +48,10 @@ const MNEMONIC: &str =
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_message(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_message(#[case] seed: Seed) {
+    use wallet_storage::TransactionRwUnlocked;
+
     let mut rng = make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_regtest());
@@ -76,8 +79,11 @@ fn sign_message(#[case] seed: Seed) {
 
     let mut signer = TrezorSigner::new(chain_config.clone(), Arc::new(Mutex::new(client)));
     let message = vec![rng.gen::<u8>(), rng.gen::<u8>(), rng.gen::<u8>()];
+    db_tx.commit().unwrap();
+    let db_tx = db.local_rw_unlocked().read_only_store();
     let res = signer
         .sign_challenge(&message, &destination, account.key_chain(), &db_tx)
+        .await
         .unwrap();
 
     let message_challenge = produce_message_challenge(&message);
@@ -87,8 +93,10 @@ fn sign_message(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_transaction_intent(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_transaction_intent(#[case] seed: Seed) {
     use common::primitives::Idable;
+    use wallet_storage::TransactionRwUnlocked;
 
     let mut rng = make_seedable_rng(seed);
 
@@ -140,6 +148,9 @@ fn sign_transaction_intent(#[case] seed: Seed) {
     )
     .unwrap();
 
+    db_tx.commit().unwrap();
+    let db_tx = db.local_rw_unlocked().read_only_store();
+
     let intent: String = [rng.gen::<char>(), rng.gen::<char>(), rng.gen::<char>()].iter().collect();
     let res = signer
         .sign_transaction_intent(
@@ -149,6 +160,7 @@ fn sign_transaction_intent(#[case] seed: Seed) {
             account.key_chain(),
             &db_tx,
         )
+        .await
         .unwrap();
 
     let expected_signed_message =
@@ -159,7 +171,8 @@ fn sign_transaction_intent(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn sign_transaction(#[case] seed: Seed) {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn sign_transaction(#[case] seed: Seed) {
     use std::num::NonZeroU8;
 
     use common::{
@@ -172,6 +185,7 @@ fn sign_transaction(#[case] seed: Seed) {
     };
     use crypto::vrf::VRFPrivateKey;
     use serialization::extras::non_empty_vec::DataOrNoVec;
+    use wallet_storage::TransactionRwUnlocked;
 
     let mut rng = make_seedable_rng(seed);
 
@@ -442,8 +456,10 @@ fn sign_transaction(#[case] seed: Seed) {
     assert!(!devices.is_empty());
     let client = devices.pop().unwrap().connect().unwrap();
 
+    db_tx.commit().unwrap();
+    let db_tx = db.local_rw_unlocked().read_only_store();
     let mut signer = TrezorSigner::new(chain_config.clone(), Arc::new(Mutex::new(client)));
-    let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).unwrap();
+    let (ptx, _, _) = signer.sign_tx(ptx, account.key_chain(), &db_tx).await.unwrap();
 
     eprintln!("num inputs in tx: {} {:?}", inputs.len(), ptx.witnesses());
     assert!(ptx.all_signatures_available());
