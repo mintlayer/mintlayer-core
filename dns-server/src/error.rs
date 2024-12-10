@@ -15,9 +15,9 @@
 
 use std::net::AddrParseError;
 
+use hickory_client::proto::error::ProtoError;
 use p2p::{error::P2pError, peer_manager::peerdb_common};
 use thiserror::Error;
-use trust_dns_client::proto::error::ProtoError;
 use utils::try_as::TryAsRef;
 
 #[derive(Error, Debug)]

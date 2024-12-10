@@ -120,9 +120,9 @@ pub enum BlockError {
 // implement the Error trait.
 #[derive(Debug, Display, PartialEq, Eq, Clone)]
 pub enum DbCommittingContext {
-    #[display(fmt = "committing block {}", _0)]
+    #[display("committing block {}", _0)]
     Block(Id<Block>),
-    #[display(fmt = "committing block status for block {}", _0)]
+    #[display("committing block status for block {}", _0)]
     BlockStatus(Id<Block>),
 }
 

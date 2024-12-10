@@ -23,18 +23,14 @@ use std::{
 
 use common::{chain::ChainConfig, primitives::per_thousand::PerThousand};
 use futures::never::Never;
-use itertools::Itertools;
-use logging::log;
-use randomness::{make_pseudo_rng, Rng, SliceRandom};
-use tokio::{net::UdpSocket, sync::mpsc};
-use trust_dns_client::{
+use hickory_client::{
     proto::rr::{LowerName, RrKey},
     rr::{
         rdata::{NS, SOA},
         Name, RData, RecordSet, RecordType,
     },
 };
-use trust_dns_server::{
+use hickory_server::{
     authority::{
         AuthLookup, Authority, Catalog, LookupError, LookupOptions, MessageRequest, UpdateResult,
         ZoneType,
@@ -43,6 +39,10 @@ use trust_dns_server::{
     store::in_memory::InMemoryAuthority,
     ServerFuture,
 };
+use itertools::Itertools;
+use logging::log;
+use randomness::{make_pseudo_rng, Rng, SliceRandom};
+use tokio::{net::UdpSocket, sync::mpsc};
 use utils::{atomics::RelaxedAtomicU32, make_config_setting};
 
 use crate::{
@@ -122,7 +122,7 @@ impl DnsServer {
     pub async fn run(self) -> crate::Result<Never> {
         let DnsServer {
             auth,
-            server,
+            mut server,
             mut cmd_rx,
         } = self;
 
