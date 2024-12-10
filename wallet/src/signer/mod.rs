@@ -35,7 +35,7 @@ use crypto::key::{
     SignatureError,
 };
 use wallet_storage::{
-    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageReadWriteUnlocked,
+    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, signature_status::SignatureStatus,
@@ -147,7 +147,7 @@ pub trait SignerProvider {
         chain_config: Arc<ChainConfig>,
         account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageReadWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
     ) -> WalletResult<Account<Self::K>>;
 
     fn load_account_from_database(

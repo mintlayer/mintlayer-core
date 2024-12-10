@@ -78,7 +78,7 @@ use trezor_client::{
 };
 use utils::ensure;
 use wallet_storage::{
-    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageReadWriteUnlocked,
+    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteUnlocked,
 };
 use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
@@ -1151,7 +1151,7 @@ impl SignerProvider for TrezorSignerProvider {
         chain_config: Arc<ChainConfig>,
         account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageReadWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
     ) -> WalletResult<Account<Self::K>> {
         let account_pubkey = self.fetch_extended_pub_key(&chain_config, account_index)?;
 
