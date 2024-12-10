@@ -168,6 +168,11 @@ impl Transaction {
     pub fn text_summary(&self, config: &ChainConfig) -> String {
         self.tx.transaction().text_summary(config)
     }
+
+    pub fn to_json(&self, config: &ChainConfig) -> Result<serde_json::Value, BackendError> {
+        common::address::dehexify::to_dehexified_json(config, self.tx.transaction())
+            .map_err(|e| BackendError::JsonError(e.to_string()))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
