@@ -390,6 +390,8 @@ where
     fn announce_address(&mut self, peer_id: PeerId, address: SocketAddress) {
         let peer = self.peers.get_mut(&peer_id).expect("peer must be known");
         if !peer.announced_addresses.contains(&address) {
+            log::debug!("Announcing address {address} to peer {peer_id}");
+
             Self::send_peer_message(
                 &mut self.peer_connectivity_handle,
                 peer_id,
@@ -406,6 +408,11 @@ where
         peer: &PeerContext,
     ) {
         if let Some(discovered_addr) = peer.discovered_own_address.as_ref() {
+            log::debug!(
+                "Sending own address {discovered_addr} to peer {}",
+                peer.info.peer_id
+            );
+
             Self::send_peer_message(
                 peer_connectivity_handle,
                 peer.info.peer_id,
@@ -442,7 +449,12 @@ where
     /// Adjust peer score
     ///
     /// Discourage the peer if the score reaches the corresponding threshold.
-    fn adjust_peer_score(&mut self, peer_id: PeerId, score: u32) {
+    fn adjust_peer_score(
+        &mut self,
+        peer_id: PeerId,
+        score: u32,
+        reason: &(impl std::fmt::Display + ?Sized),
+    ) {
         let peer = match self.peers.get(&peer_id) {
             Some(peer) => peer,
             None => return,
@@ -450,7 +462,10 @@ where
 
         if self.is_whitelisted_node(peer.peer_role, &peer.peer_address) {
             log::info!(
-                "Not adjusting peer score for the whitelisted peer {peer_id}, adjustment {score}",
+                "[peer id = {}] Ignoring peer score adjustment because the peer is whitelisted (adjustment: {}, reason: {})",
+                peer_id,
+                score,
+                reason
             );
             return;
         }
@@ -463,8 +478,11 @@ where
         peer.score = peer.score.saturating_add(score);
 
         log::info!(
-            "Adjusting peer score for peer {peer_id}, adjustment {score}, new score {}",
-            peer.score
+            "[peer id = {}] Adjusting peer score by {}, new score: {}, reason: {}",
+            peer_id,
+            score,
+            peer.score,
+            reason
         );
 
         if let Some(o) = self.observer.as_mut() {
@@ -481,7 +499,12 @@ where
     ///
     /// Note that currently intermediate scores are not stored in the peer db, so this call will
     /// only make any effect if the passed score is bigger than the threshold.
-    fn adjust_peer_score_on_failed_handshake(&mut self, peer_address: SocketAddress, score: u32) {
+    fn adjust_peer_score_on_failed_handshake(
+        &mut self,
+        peer_address: SocketAddress,
+        score: u32,
+        reason: &(impl std::fmt::Display + ?Sized),
+    ) {
         let whitelisted_node =
             self.pending_outbound_connects
                 .get(&peer_address)
@@ -493,10 +516,23 @@ where
                 });
         if whitelisted_node {
             log::info!(
-                "Not adjusting peer score for the whitelisted peer at address {peer_address}, adjustment {score}",
+                concat!(
+                    "Ignoring peer score adjustment on failed handshake for peer at address {} ",
+                    "because the peer is whitelisted (adjustment: {}, reason: {})"
+                ),
+                peer_address,
+                score,
+                reason,
             );
             return;
         }
+
+        log::info!(
+            "Adjusting peer score of a peer at address {} by {} on failed handshake, reason: {}",
+            peer_address,
+            score,
+            reason
+        );
 
         if let Some(o) = self.observer.as_mut() {
             o.on_peer_ban_score_adjustment(peer_address, score);
@@ -1193,10 +1229,20 @@ where
     /// Fill PeerDb with addresses from the DNS seed servers
     async fn query_dns_seed(&mut self) {
         let addresses = self.dns_seed.obtain_addresses().await;
-        log::debug!("Dns seed queried, addresses = {addresses:?}");
+
+        let mut new_addr_count = 0;
         for addr in &addresses {
-            self.peerdb.peer_discovered(*addr);
+            if self.peerdb.peer_discovered(*addr) {
+                new_addr_count += 1;
+            }
         }
+
+        log::info!(
+            "Dns seed queried, {} total addresses obtained, {} of which are new",
+            addresses.len(),
+            new_addr_count
+        );
+        log::debug!("Addresses from the dns server: {addresses:?}");
 
         self.last_dns_query_time = Some(self.time_getter.get_time());
     }
@@ -1526,8 +1572,7 @@ where
     fn handle_addr_list_response(&mut self, peer_id: PeerId, addresses: Vec<PeerAddress>) {
         let res = self.try_handle_addr_list_response(peer_id, addresses);
         if let Err(err) = res {
-            log::debug!("try_handle_addr_list_response failed: {err}");
-            self.adjust_peer_score(peer_id, err.ban_score());
+            self.adjust_peer_score(peer_id, err.ban_score(), &err);
         }
     }
 
@@ -1592,9 +1637,13 @@ where
             PeerManagerEvent::Disconnect(peer_id, peerdb_action, reason, response_sender) => {
                 self.disconnect(peer_id, peerdb_action, reason, Some(response_sender));
             }
-            PeerManagerEvent::AdjustPeerScore(peer_id, score, response_sender) => {
-                log::debug!("adjust peer {peer_id} score: {score}");
-                self.adjust_peer_score(peer_id, score);
+            PeerManagerEvent::AdjustPeerScore {
+                peer_id,
+                adjust_by,
+                reason,
+                response_sender,
+            } => {
+                self.adjust_peer_score(peer_id, adjust_by, &reason);
                 response_sender.send(Ok(()));
             }
             PeerManagerEvent::NewTipReceived { peer_id, block_id } => {
@@ -1729,13 +1778,13 @@ where
                 self.handle_outbound_error(peer_address, error);
             }
             ConnectivityEvent::Misbehaved { peer_id, error } => {
-                self.adjust_peer_score(peer_id, error.ban_score());
+                self.adjust_peer_score(peer_id, error.ban_score(), &error);
             }
             ConnectivityEvent::MisbehavedOnHandshake {
                 peer_address,
                 error,
             } => {
-                self.adjust_peer_score_on_failed_handshake(peer_address, error.ban_score());
+                self.adjust_peer_score_on_failed_handshake(peer_address, error.ban_score(), &error);
             }
         }
     }
@@ -2044,7 +2093,7 @@ where
     }
 
     fn load_predefined_addresses(&mut self) {
-        log::debug!("Loading predefined addresses into peerdb");
+        log::info!("Loading predefined peer addresses");
 
         for addr in self.chain_config.predefined_peer_addresses() {
             self.peerdb.peer_discovered(SocketAddress::new(*addr));

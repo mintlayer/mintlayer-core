@@ -316,7 +316,7 @@ impl TestNodeGroup {
                         | PeerManagerEvent::GetPeerCount(_)
                         | PeerManagerEvent::GetBindAddresses(_)
                         | PeerManagerEvent::GetConnectedPeers(_)
-                        | PeerManagerEvent::AdjustPeerScore(_, _, _)
+                        | PeerManagerEvent::AdjustPeerScore { .. }
                         | PeerManagerEvent::GetReserved(_)
                         | PeerManagerEvent::AddReserved(_, _)
                         | PeerManagerEvent::RemoveReserved(_, _)

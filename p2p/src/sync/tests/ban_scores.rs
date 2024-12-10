@@ -61,8 +61,13 @@ async fn peer_handle_result() {
     logging::spawn_in_current_span(async move {
         while let Some(event) = peer_mgr_event_receiver.recv().await {
             match event {
-                crate::PeerManagerEvent::AdjustPeerScore(_, _, score) => {
-                    score.send(Ok(()));
+                crate::PeerManagerEvent::AdjustPeerScore {
+                    peer_id: _,
+                    adjust_by: _,
+                    reason: _,
+                    response_sender,
+                } => {
+                    response_sender.send(Ok(()));
                 }
                 e => unreachable!("Unexpected event: {e:?}"),
             }
