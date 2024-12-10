@@ -1185,6 +1185,10 @@ impl<N: NodeInterface + Clone + Send + Sync + Debug + 'static> WalletRpcServer f
         rpc::handle_result(self.list_discouraged().await)
     }
 
+    async fn undiscourage_address(&self, address: BannableAddress) -> rpc::RpcResult<()> {
+        rpc::handle_result(self.undiscourage_address(address).await)
+    }
+
     async fn peer_count(&self) -> rpc::RpcResult<usize> {
         rpc::handle_result(self.peer_count().await)
     }

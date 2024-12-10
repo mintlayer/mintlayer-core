@@ -1664,6 +1664,10 @@ where
             PeerManagerEvent::ListDiscouraged(response_sender) => {
                 response_sender.send(self.peerdb.list_discouraged().collect())
             }
+            PeerManagerEvent::Undiscourage(address, response_sender) => {
+                self.peerdb.undiscourage(&address);
+                response_sender.send(Ok(()));
+            }
             PeerManagerEvent::EnableNetworking {
                 enable,
                 response_sender,

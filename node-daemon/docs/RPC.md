@@ -969,7 +969,10 @@ nothing
 
 List peers that have been discouraged.
 
-Discouraged peers are peers that have misbehaved in the network.
+Discouragement is similar to banning, except that inbound connections from such peers
+are still allowed.
+
+Peers are discouraged automatically if they misbehave.
 
 
 Parameters:
@@ -986,6 +989,21 @@ Returns:
         nanos number,
     ] },
 ], .. ]
+```
+
+### Method `p2p_undiscourage`
+
+Undiscourage a previously discouraged peer by their IP address.
+
+
+Parameters:
+```
+{ "address": string }
+```
+
+Returns:
+```
+nothing
 ```
 
 ### Method `p2p_get_peer_count`

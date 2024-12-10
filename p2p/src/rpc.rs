@@ -56,9 +56,16 @@ trait P2pRpc {
 
     /// List peers that have been discouraged.
     ///
-    /// Discouraged peers are peers that have misbehaved in the network.
+    /// Discouragement is similar to banning, except that inbound connections from such peers
+    /// are still allowed.
+    ///
+    /// Peers are discouraged automatically if they misbehave.
     #[method(name = "list_discouraged")]
     async fn list_discouraged(&self) -> RpcResult<Vec<(BannableAddress, Time)>>;
+
+    /// Undiscourage a previously discouraged peer by their IP address.
+    #[method(name = "undiscourage")]
+    async fn undiscourage(&self, address: BannableAddress) -> RpcResult<()>;
 
     /// Get the number of peers connected to this node.
     #[method(name = "get_peer_count")]
@@ -132,6 +139,11 @@ impl P2pRpcServer for super::P2pHandle {
 
     async fn list_discouraged(&self) -> RpcResult<Vec<(BannableAddress, Time)>> {
         let res = self.call_async(|this| this.list_discouraged()).await;
+        rpc::handle_result(res)
+    }
+
+    async fn undiscourage(&self, address: BannableAddress) -> RpcResult<()> {
+        let res = self.call_async_mut(move |this| this.undiscourage(address)).await;
         rpc::handle_result(res)
     }
 

@@ -370,6 +370,10 @@ impl NodeInterface for WalletHandlesClient {
         let list = self.p2p.call_async(move |this| this.list_discouraged()).await??;
         Ok(list)
     }
+    async fn p2p_undiscourage(&self, address: BannableAddress) -> Result<(), Self::Error> {
+        self.p2p.call_async_mut(move |this| this.undiscourage(address)).await??;
+        Ok(())
+    }
 
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error> {
         let peers = self.p2p.call_async(move |this| this.get_connected_peers()).await??;

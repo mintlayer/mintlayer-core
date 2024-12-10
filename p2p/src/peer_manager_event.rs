@@ -109,6 +109,7 @@ pub enum PeerManagerEvent {
     Unban(BannableAddress, oneshot_nofail::Sender<crate::Result<()>>),
 
     ListDiscouraged(oneshot_nofail::Sender<Vec<(BannableAddress, Time)>>),
+    Undiscourage(BannableAddress, oneshot_nofail::Sender<crate::Result<()>>),
 
     EnableNetworking {
         enable: bool,

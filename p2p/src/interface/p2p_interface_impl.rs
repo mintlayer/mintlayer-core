@@ -97,6 +97,14 @@ where
         response_receiver.await?
     }
 
+    async fn undiscourage(&mut self, addr: BannableAddress) -> crate::Result<()> {
+        let (response_sender, response_receiver) = oneshot_nofail::channel();
+        self.peer_mgr_event_sender
+            .send(PeerManagerEvent::Undiscourage(addr, response_sender))
+            .map_err(|_| P2pError::ChannelClosed)?;
+        response_receiver.await?
+    }
+
     async fn list_discouraged(&self) -> crate::Result<Vec<(BannableAddress, Time)>> {
         let (response_sender, response_receiver) = oneshot_nofail::channel();
         self.peer_mgr_event_sender

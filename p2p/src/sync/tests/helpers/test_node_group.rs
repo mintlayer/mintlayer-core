@@ -324,6 +324,7 @@ impl TestNodeGroup {
                         | PeerManagerEvent::Ban(_, _, _)
                         | PeerManagerEvent::Unban(_, _)
                         | PeerManagerEvent::ListDiscouraged(_)
+                        | PeerManagerEvent::Undiscourage(_, _)
                         | PeerManagerEvent::EnableNetworking { .. }
                         | PeerManagerEvent::GenericQuery(_)
                         | PeerManagerEvent::GenericMut(_) => {
