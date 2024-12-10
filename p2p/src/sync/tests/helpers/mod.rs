@@ -45,7 +45,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use mempool::{MempoolConfig, MempoolHandle};
+use mempool::{event::TransactionProcessed, MempoolConfig, MempoolHandle};
 use networking::transport::TcpTransportSocket;
 use p2p_test_utils::{expect_future_val, expect_no_recv, expect_recv, SHORT_TIMEOUT};
 use p2p_types::{bannable_address::BannableAddress, socket_address::SocketAddress};
@@ -59,7 +59,7 @@ use crate::{
     message::{BlockSyncMessage, HeaderList, TransactionSyncMessage},
     net::types::SyncingEvent,
     protocol::{choose_common_protocol_version, ProtocolVersion},
-    sync::{subscribe_to_new_tip, Observer, SyncManager},
+    sync::{subscribe_to_new_tip, subscribe_to_tx_processed, Observer, SyncManager},
     test_helpers::test_p2p_config,
     types::peer_id::PeerId,
     MessagingService, NetworkingService, P2pConfig, P2pError, P2pEventHandler, PeerManagerEvent,
@@ -85,7 +85,8 @@ pub struct TestNode {
     subsystem_manager_handle: ManagerJoinHandle,
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
-    _new_tip_receiver: UnboundedReceiver<Id<Block>>,
+    new_tip_receiver: UnboundedReceiver<Id<Block>>,
+    tx_processed_receiver: UnboundedReceiver<TransactionProcessed>,
     sync_mgr_notification_receiver: UnboundedReceiver<SyncManagerNotification>,
     protocol_version: ProtocolVersion,
 }
@@ -150,6 +151,7 @@ impl TestNode {
         });
 
         let new_tip_receiver = subscribe_to_new_tip(&sync_manager_chainstate_handle).await.unwrap();
+        let tx_processed_receiver = subscribe_to_tx_processed(&mempool_handle).await.unwrap();
 
         Self {
             peer_id: PeerId::new(),
@@ -164,7 +166,8 @@ impl TestNode {
             subsystem_manager_handle,
             chainstate_handle,
             mempool_handle,
-            _new_tip_receiver: new_tip_receiver,
+            new_tip_receiver,
+            tx_processed_receiver,
             sync_mgr_notification_receiver,
             protocol_version,
         }
@@ -274,6 +277,20 @@ impl TestNode {
         };
 
         expect_future_val!(future)
+    }
+
+    pub async fn receive_new_tip_event(&mut self) -> Id<Block> {
+        expect_recv!(self.new_tip_receiver)
+    }
+
+    pub async fn receive_transaction_processed_event_from_mempool(
+        &mut self,
+    ) -> TransactionProcessed {
+        expect_recv!(self.tx_processed_receiver)
+    }
+
+    pub async fn assert_no_transaction_processed_event_from_mempool(&mut self) {
+        expect_no_recv!(self.tx_processed_receiver);
     }
 
     /// Expect a `Disconnect` event from the peer manager.

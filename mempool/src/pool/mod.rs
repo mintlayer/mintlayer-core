@@ -139,19 +139,6 @@ impl<M> Mempool<M> {
     pub fn has_work(&self) -> bool {
         !self.work_queue.is_empty()
     }
-
-    fn as_tx_pool_and_finalizer(&mut self) -> (&mut TxPool<M>, TxFinalizer) {
-        let Self {
-            tx_pool,
-            orphans,
-            work_queue,
-            events_broadcast,
-            clock,
-        } = self;
-
-        let finalizer = TxFinalizer::new(orphans, clock, events_broadcast, work_queue);
-        (tx_pool, finalizer)
-    }
 }
 
 // Mempool Interface and Event Reactions
@@ -168,9 +155,14 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
             TxTrustPolicy::Untrusted => (),
         }
 
-        let (tx_pool, mut finalizer) = self.as_tx_pool_and_finalizer();
+        let mut finalizer = TxFinalizer::new(
+            &mut self.orphans,
+            &self.clock,
+            &mut self.work_queue,
+            TxFinalizerEventsMode::Broadcast(&mut self.events_broadcast),
+        );
 
-        tx_pool.add_transaction(transaction, |outcome, tx_pool| {
+        self.tx_pool.add_transaction(transaction, |outcome, tx_pool| {
             finalizer.finalize_tx(tx_pool, outcome)
         })?
     }
@@ -238,9 +230,14 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
     fn on_new_tip(&mut self, block_id: Id<Block>, height: BlockHeight) -> Result<(), ReorgError> {
         log::info!("New block tip: {block_id:?} at height {height}");
 
-        let (tx_pool, mut finalizer) = self.as_tx_pool_and_finalizer();
+        let mut finalizer = TxFinalizer::new(
+            &mut self.orphans,
+            &self.clock,
+            &mut self.work_queue,
+            TxFinalizerEventsMode::Silent,
+        );
 
-        tx_pool.reorg(block_id, height, |outcome, tx_pool| {
+        self.tx_pool.reorg(block_id, height, |outcome, tx_pool| {
             match finalizer.finalize_tx(tx_pool, outcome) {
                 Ok(status) => log::debug!("Transaction status after reorg: {status}"),
                 Err(error) => log::debug!("Transaction no longer validates after reorg: {error}"),
@@ -324,22 +321,27 @@ impl EventsBroadcast {
 struct TxFinalizer<'a> {
     orphan_pool: &'a mut TxOrphanPool,
     cur_time: Time,
-    events_broadcast: &'a mut EventsBroadcast,
     work_queue: &'a mut WorkQueue,
+    events_mode: TxFinalizerEventsMode<'a>,
+}
+
+enum TxFinalizerEventsMode<'a> {
+    Silent,
+    Broadcast(&'a mut EventsBroadcast),
 }
 
 impl<'a> TxFinalizer<'a> {
     pub fn new(
         orphan_pool: &'a mut TxOrphanPool,
         clock: &TimeGetter,
-        events_broadcast: &'a mut EventsBroadcast,
         work_queue: &'a mut WorkQueue,
+        events_mode: TxFinalizerEventsMode<'a>,
     ) -> Self {
         Self {
             orphan_pool,
             cur_time: clock.get_time(),
-            events_broadcast,
             work_queue,
+            events_mode,
         }
     }
 
@@ -356,9 +358,17 @@ impl<'a> TxFinalizer<'a> {
                 log::trace!("Added transaction {tx_id}");
 
                 self.enqueue_children(transaction.tx_entry());
-                let event = event::TransactionProcessed::accepted(tx_id, relay_policy, origin);
-                let event = event.into();
-                self.events_broadcast.broadcast(event);
+
+                match &mut self.events_mode {
+                    TxFinalizerEventsMode::Silent => {}
+                    TxFinalizerEventsMode::Broadcast(events_broadcast) => {
+                        let event =
+                            event::TransactionProcessed::accepted(tx_id, relay_policy, origin);
+                        let event = event.into();
+                        events_broadcast.broadcast(event);
+                    }
+                }
+
                 Ok(TxStatus::InMempool)
             }
             TxAdditionOutcome::Duplicate { transaction } => {
@@ -370,11 +380,16 @@ impl<'a> TxFinalizer<'a> {
                 let origin = transaction.origin();
                 log::trace!("Rejected transaction {tx_id}, checking orphan status");
 
-                self.try_add_orphan(tx_pool, transaction, error).inspect_err(|err| {
-                    let event = event::TransactionProcessed::rejected(tx_id, err.clone(), origin);
-                    let event = event.into();
-                    self.events_broadcast.broadcast(event);
-                })
+                self.try_add_orphan(tx_pool, transaction, error)
+                    .inspect_err(|err| match &mut self.events_mode {
+                        TxFinalizerEventsMode::Silent => {}
+                        TxFinalizerEventsMode::Broadcast(events_broadcast) => {
+                            let event =
+                                event::TransactionProcessed::rejected(tx_id, err.clone(), origin);
+                            let event = event.into();
+                            events_broadcast.broadcast(event);
+                        }
+                    })
             }
         }
     }
