@@ -21,6 +21,8 @@ pub enum BackendError {
     WalletError(String),
     #[error("RPC error: {0}")]
     RpcError(String),
+    #[error("Json error: {0}")]
+    JsonError(String),
     #[error("Unknown wallet index: {0:?}")]
     UnknownWalletIndex(WalletId),
     #[error("Unknown account index: {0:?}/{0:?}")]

@@ -32,6 +32,7 @@ anyhow.workspace = true
 chrono.workspace = true
 futures.workspace = true
 serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
 serde_with.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
@@ -40,4 +41,3 @@ tokio.workspace = true
 test-utils = { path = "../../test-utils" }
 
 rstest.workspace = true
-serde_json.workspace = true
