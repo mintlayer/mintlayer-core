@@ -46,7 +46,7 @@ use itertools::Itertools;
 use randomness::make_true_rng;
 use wallet_storage::{
     StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
-    WalletStorageReadWriteUnlocked,
+    WalletStorageWriteUnlocked,
 };
 use wallet_types::{
     partially_signed_transaction::PartiallySignedTransaction, seed_phrase::StoreSeedPhrase,
@@ -463,7 +463,7 @@ impl SignerProvider for SoftwareSignerProvider {
         chain_config: Arc<ChainConfig>,
         next_account_index: U31,
         name: Option<String>,
-        db_tx: &mut impl WalletStorageReadWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
     ) -> WalletResult<Account<AccountKeyChainImplSoftware>> {
         let lookahead_size = db_tx.get_lookahead_size()?;
         let account_key_chain = self.master_key_chain.create_account_key_chain(

@@ -71,8 +71,8 @@ pub use wallet_storage::Error;
 use wallet_storage::{
     DefaultBackend, Store, StoreLocalReadWriteUnlocked, StoreTxRo, StoreTxRw, StoreTxRwUnlocked,
     TransactionRoLocked, TransactionRwLocked, TransactionRwUnlocked, Transactional,
-    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageReadWriteLocked,
-    WalletStorageReadWriteUnlocked, WalletStorageWriteLocked, WalletStorageWriteUnlocked,
+    WalletStorageReadLocked, WalletStorageReadUnlocked, WalletStorageWriteLocked,
+    WalletStorageWriteUnlocked,
 };
 use wallet_types::account_info::{StandaloneAddressDetails, StandaloneAddresses};
 use wallet_types::chain_info::ChainInfo;
@@ -672,7 +672,7 @@ where
 
     fn reset_wallet_transactions(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageReadWriteLocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
     ) -> WalletResult<()> {
         db_tx.clear_transactions()?;
         db_tx.clear_addresses()?;
@@ -703,7 +703,7 @@ where
 
     fn reset_wallet_transactions_and_load(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageReadWriteLocked,
+        db_tx: &mut impl WalletStorageWriteLocked,
         signer_provider: &P,
     ) -> WalletResult<BTreeMap<U31, Account<P::K>>> {
         Self::reset_wallet_transactions(chain_config.clone(), db_tx)?;
@@ -725,7 +725,7 @@ where
 
     fn migrate_next_unused_account(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageReadWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
         signer_provider: &mut P,
     ) -> Result<(), WalletError> {
         let accounts_info = db_tx.get_accounts_info()?;
@@ -903,7 +903,7 @@ where
     fn create_next_unused_account(
         next_account_index: U31,
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut impl WalletStorageReadWriteUnlocked,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
         name: Option<String>,
         signer_provider: &mut P,
     ) -> WalletResult<(U31, Account<P::K>)> {
